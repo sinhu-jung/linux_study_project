@@ -1,0 +1,285 @@
+{
+  "include/uapi/linux/byteorder/little_endian.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 107,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1251",
+        "symbols": [
+          "__cpu_to_be32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1253",
+        "symbols": [
+          "__le32_to_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1254",
+        "symbols": [
+          "__constant_htonl"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1255",
+        "symbols": [
+          "__cpu_to_be32p"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1257",
+        "symbols": [
+          "__cpu_to_le32s"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      }
+    ]
+  },
+  "include/uapi/linux/byteorder/big_endian.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 107,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1252",
+        "symbols": [
+          "__cpu_to_le32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1256",
+        "symbols": [
+          "__cpu_to_le32p"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1258",
+        "symbols": [
+          "__cpu_to_le32s"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      }
+    ]
+  },
+  "include/linux/byteorder/generic.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 207,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1259",
+        "symbols": [
+          "htonl"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1260",
+        "symbols": [
+          "le32_add_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1261",
+        "symbols": [
+          "le32_add_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1262",
+        "symbols": [
+          "be32_add_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1263",
+        "symbols": [
+          "be16_add_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1264",
+        "symbols": [
+          "cpu_to_le32_array"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1265",
+        "symbols": [
+          "cpu_to_be32_array"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1266",
+        "symbols": [
+          "be32_to_cpu_array"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1267",
+        "symbols": [
+          "le32_add_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      },
+      {
+        "lesson": "os1268",
+        "symbols": [
+          "le32_to_cpu_array"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      }
+    ]
+  },
+  "include/linux/byteorder/little_endian.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 12,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1267",
+        "symbols": [
+          "_LINUX_BYTEORDER_LITTLE_ENDIAN_H"
+        ],
+        "sections": [
+          "포함 경로"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      }
+    ]
+  },
+  "include/linux/byteorder/big_endian.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 12,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1267",
+        "symbols": [
+          "_LINUX_BYTEORDER_BIG_ENDIAN_H"
+        ],
+        "sections": [
+          "포함 경로"
+        ],
+        "review": "Whole LE/BE UAPI and generic and Linux wrapper headers read and authored: same-order identity/opposite swap, 16/32/64 widths and direction, typed __le/__be and __force vs runtime conversion, constant/private argument constraints, twelve aligned pointer getters without original mutation, same-order no-op s argument still evaluates vs swap mutable s and no atomicity, network32/16 aliases, 36public aliases, six decode-add-encode helpers/modulo truncation/no saturation or checksum, LE32inplace vs BE32separate src-dst arrays/element counts/zero/canaries/forward partial-overlap hazard, wrapperinclude/config definition-presence warnings, historical unaligned commentary vs actual typed dereference/get_unaligned. Exact full UAPI+generic with whole swab dependencies: LE selection5900071 and BE selection5800071 checks each optimized andASanUBSan;100000 inputs/eachwidth value+constant+inverse+pointer+mutator+six adds/network,LEhost actual BEbyte memory reference, arrays0..16 andoutsidecanaries, oncepublicarg/no-opargument eval,16wrap. Const encoded add compile rejected both. BEselection numerical model on nativeLE host, not nativeBE memory, Sparse, allarchitecture config, atomicity/MMIO/invalid addresses or partial-overlap safety proof."
+      }
+    ]
+  }
+}

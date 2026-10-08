@@ -1,0 +1,279 @@
+{
+  "scripts/dtc/libfdt/fdt_sw.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 384,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2317",
+        "symbols": [
+          "fdt_sw_probe_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 순차 생성·magic으로 작성 상태 구별. 순차 writer는 작성 중 FDT_SW_MAGIC을 요구합니다. 완성 FDT_MAGIC이면 BADSTATE, 다른 magic이면 BADMAGIC입니다. VALID_INPUT 전제가 있으면 이 검사를 생략합니다. 완성 자료에 다시 sequential append를 하는 것과 작성 중 자료를 read-write API로 수정하는 것은 서로 다른 상태 계약입니다. create 뒤와 finish 뒤 같은 probe를 비교합니다. 실제 fixture는 default assumption으로 실행하며 상태 flag가 곧 전체 tag 계층 검증은 아니라는 점을 적습니다."
+      },
+      {
+        "lesson": "os2318",
+        "symbols": [
+          "fdt_sw_probe_memrsv_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 작성 단계·예약 목록 phase marker. 예약 목록 단계는 작성 magic이고 off_dt_strings가 0인 상태입니다. create 뒤 add_reservemap_entry/finish_reservemap만 허용하며 marker가 바뀌면 BADSTATE입니다. 같은 header field를 아직 문자열 위치가 아닌 상태 표시로 사용하는 기술입니다. reserve 종료 뒤 새 reserve entry 추가가 거부되는 fixture를 읽습니다. marker 값0을 완성 DTB의 정상 strings 위치로 해석하지 않습니다."
+      },
+      {
+        "lesson": "os2319",
+        "symbols": [
+          "fdt_sw_probe_struct_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 작성 단계·structure phase와 probe macro. structure 작성 단계는 off_dt_strings==totalsize marker를 요구합니다. node/property/finish가 이 단계에서 동작합니다. FDT_SW_PROBE_STRUCT 등 macro는 내부 err를 선언하고 실패하면 호출자 함수에서 return하므로 값만 계산하는 함수 호출과 제어 흐름이 다릅니다. 예약 종료 전 begin_node의 BADSTATE를 확인합니다. macro 확장을 읽고 return이 macro 내부의 독립 함수가 아니라 사용하는 함수에서 나간다는 점을 주석에 적습니다."
+      },
+      {
+        "lesson": "os2320",
+        "symbols": [
+          "sw_flags"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 작성 flag·last compatible field 임시 사용. 작성 중 last_comp_version field는 실제 호환 version이 아니라 create flags를 보관합니다. sw_flags는 이 값을 읽으며 magic이 작성 상태라는 전제를 주석으로 적습니다. finish가 정상 호환 version으로 다시 쓰므로 단계에 따라 같은 field의 해석이 달라집니다. flags0/1에서 create 직후 field 값과 finish 뒤16을 비교합니다. 중간 buffer를 완성 header처럼 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2321",
+        "symbols": [
+          "fdt_grab_space_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 공간 확보·앞 structure와 뒤 strings 사이. structure는 앞에서 증가하고 strings는 buffer 끝에서 역방향 증가합니다. grab_space는 총 공간에서 structure 시작과 문자열 크기를 빼고 현재 structure size+len이 남은 공간 안인지 및 합산 wrap를 검사합니다. 성공이면 크기를 늘리고 이전 structure 끝 pointer를 반환합니다. 앞 header/reserve와 뒤 strings 사이의 빈 구간을 그림으로 적습니다. 실패 시 크기를 늘리지 않는 순서와 byte 단위를 확인합니다."
+      },
+      {
+        "lesson": "os2322",
+        "symbols": [
+          "fdt_create_with_flags"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB create·header와 reserve entry 정렬. header 크기를 reserve entry 크기16의 배수로 올려40→48을 얻습니다. buffer가48보다 작으면 NOSPACE, 알려지지 않은 flag bit가 있으면 BADFLAGS입니다. 이 검사를 통과한 뒤 전체 bufsize를 0으로 채우고 작성 header를 설정합니다. 이 최소48은 완성 root tree 전체가 들어가는 크기와 다릅니다. 47 실패/48 초기화 가능을 비교하고 빈 tree 완성에는 terminator/root/END가 추가로 필요함을 계산합니다. 오류 전 buffer snapshot이 유지되는 fixture를 확인합니다."
+      },
+      {
+        "lesson": "os2323",
+        "symbols": [
+          "fdt_create"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB create·기본 flag와 초기 header 값. fdt_create는 create_with_flags의 flags0 wrapper입니다. 작성 magic, 최신 version17, lastcomp에는 flags, total에는 capacity, reserve/structure 시작에는48, strings marker에는0이 설정됩니다. structure와 strings 크기는 먼저 전체 buffer를 0으로 채운 상태에서 시작합니다. 초기 total256과 최종 compact total을 비교합니다. 반환0은 초기화 성공이며 아직 소비할 완성 DTB가 아님을 적습니다."
+      },
+      {
+        "lesson": "os2324",
+        "symbols": [
+          "fdt_resize"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB resize·head와 tail의 두 구간 보존. resize는 작성 중 자료의 head=off_struct+size_struct와 tail=size_strings를 계산합니다. 음수 목적 크기와 head+tail을 담지 못하는 공간은 NOSPACE입니다. 기본 검사는 기존 head+tail이 old total을 넘는 내부 불일치도 INTERNAL로 거부합니다. head와 tail 사이 여유 공간 전체를 복사하는 함수가 아닙니다. 실제 fixture의 reserve+structure head와 끝 문자열 tail을 분리해 snapshot을 비교합니다. 목적 capacity 변경과 완성 pack의 차이를 적습니다."
+      },
+      {
+        "lesson": "os2325",
+        "symbols": [
+          "fdt_resize"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB resize·겹침 방향에 따른 memmove 순서. 새 buffer가 old보다 낮거나 같으면 head를 먼저, 높으면 tail을 먼저 memmove합니다. 각 구간은 memmove로 겹침을 처리하지만 두 이동의 순서도 다른 구간을 덮지 않게 해야 합니다. 성공 뒤 목적 totalsize를 바꾸고 nonzero strings marker는 새 capacity로 조정합니다. 같은 arena 안의 앞/뒤/same buffer resize를 실제 원본으로 실행했습니다. pointer 비교와 overlap 자료의 보존을 byte oracle로 읽으며 임의 부족한 메모리까지 허용된다고 해석하지 않습니다."
+      },
+      {
+        "lesson": "os2326",
+        "symbols": [
+          "fdt_add_reservemap_entry"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB reserve entry·64비트 주소와 크기의 저장. 예약 단계에서 현재 structure 시작 위치에16바이트 entry를 씁니다. 주소와 크기를 각각 big-endian64로 저장하고 structure 시작을16 증가시킵니다. 이 기록은 OS에 예약 정보를 전달하는 자료 표현이며 함수 호출 자체가 물리 page allocator에서 메모리를 예약하지는 않습니다. addr0x1000/size0x200을 실제 생성 DTB의48/56 offset에서 읽어 대조합니다. entry 수와 struct offset의 관계를 계산합니다."
+      },
+      {
+        "lesson": "os2327",
+        "symbols": [
+          "fdt_finish_reservemap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB reserve 종료·0/0 terminator와 phase 전이. 종료는 add_reservemap_entry(0,0)를 호출해 terminator를 쓰고 성공일 때 strings marker를 totalsize로 바꿉니다. terminator 공간도16바이트 필요합니다. 실패면 marker를 바꾸지 않고 해당 오류를 반환하므로 예약 작성 상태와 structure 단계의 전이를 성공 여부와 연결합니다. 64바이트 buffer에서 첫 entry 뒤 terminator가 부족한 사례를 풉니다. 성공 fixture의0/0 entry를 독립 load로 확인합니다."
+      },
+      {
+        "lesson": "os2328",
+        "symbols": [
+          "fdt_begin_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB node 시작·NUL 이름과 4바이트 padding. node 시작은 structure phase 검사 뒤 strlen(name)+1을 구하고 tag header와 이름을4바이트 정렬한 공간을 확보합니다. BEGIN_NODE를 big-endian으로 쓰고 이름은 NUL까지 복사합니다. 별도 child depth counter를 이 함수가 유지하는 것은 아니므로 호출자가 올바른 nesting 순서를 만들어야 합니다. 빈 root는 tag4+정렬된 빈 이름4로8바이트입니다. a도 이름2가4로 정렬돼8인 실제 offset을 계산합니다."
+      },
+      {
+        "lesson": "os2329",
+        "symbols": [
+          "fdt_end_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB node 종료·고정 END_NODE tag. node 종료는 structure phase와4바이트 공간을 확인해 END_NODE를 씁니다. 이름이나 길이 field는 없습니다. phase 검사 자체가 matching BEGIN_NODE의 깊이를 세는 검사라고 해석하지 않고 caller가 올바른 계층을 유지해야 합니다. root→child→child end→root end 순서를 적습니다. END_NODE와 전체 structure 끝의 FDT_END를 구별해 주석을 답니다."
+      },
+      {
+        "lesson": "os2330",
+        "symbols": [
+          "fdt_add_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 문자열 추가·buffer 끝에서 역방향 성장. strtab 기준은 작성 buffer의 끝입니다. 기존 크기에 strlen(s)+1을 더한 offset을 확보하고 그만큼 뒤로 간 곳에 NUL 문자열을 씁니다. 성공은 음수 offset, 실패는0을 반환합니다. 작성 property의 nameoff는 이 임시 기준으로 저장되며 최종 strings 시작 기준과 다릅니다. answer 길이7이면 첫 offset은-7입니다. 문자열 크기와 structure 끝의 충돌 조건을 읽고 bounded NUL 문자열 및 표현 가능한 길이의 caller 계약을 확인합니다."
+      },
+      {
+        "lesson": "os2331",
+        "symbols": [
+          "fdt_find_add_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 문자열 dedup·suffix 재사용과 allocated. 현재 stringtable에서 NUL까지 같은 byte sequence를 찾으면 기존 음수 offset을 반환하고 allocated0을 유지합니다. 못 찾으면 allocated1로 새 문자열을 추가합니다. byte 검색은 문자열 시작뿐 아니라 suffix도 재사용할 수 있어 foobar 속의 bar 위치가 결과가 됩니다. 서로 다른 node의 foobar/bar 이름을 생성해 최종 table7바이트와 nameoff0/3을 확인합니다. 중복 property 이름인지와 string storage 재사용인지를 구별합니다."
+      },
+      {
+        "lesson": "os2332",
+        "symbols": [
+          "fdt_del_last_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 문자열 rollback·마지막 크기만 되돌리기. 오류 시 새로 추가한 마지막 이름의 strlen+1을 strings size에서 뺍니다. 물리 byte를 지우거나 모든 이전 변경을 원복하는 transaction은 아닙니다. 그 공간을 사용 영역 밖으로 돌려놓는 metadata rollback이며 마지막 추가의 순서 조건이 필요합니다. property 공간 부족 뒤 새 hello 이름의 크기가0으로 돌아가는 fixture를 읽습니다. 여유 공간 byte의 상태와 논리적인 사용 문자열 범위를 구별합니다."
+      },
+      {
+        "lesson": "os2333",
+        "symbols": [
+          "fdt_property_placeholder"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB placeholder·이름 추가와 property 공간 확보. 먼저 이름을 dedup하거나 추가한 다음 header12+정렬된 value len 공간을 확보합니다. nameoff0이면 NOSPACE, property 공간이 부족하면 새로 할당한 이름만 rollback합니다. 이미 존재한 이름을 재사용한 경우 이전 table의 크기를 줄이지 않습니다. 실패 때 valp는 새 값으로 설정하지 않습니다. 신규 hello 추가 뒤 큰 value 실패와 기존 foo 재사용 뒤 실패를 비교합니다. fixture는 strings size/structure size 및 valp sentinel을 확인합니다."
+      },
+      {
+        "lesson": "os2334",
+        "symbols": [
+          "fdt_property_placeholder"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 생성 flag·이름 dedup 생략의 시간·공간 tradeoff. NO_NAME_DEDUP flag는 이름 검색을 생략하고 매 property마다 이름을 추가합니다. 검색 비용을 줄이는 대신 같은 이름이 여러 번 저장되어 문자열 table이 커질 수 있습니다. property 이름의 의미나 tree 계층을 바꾸는 flag가 아니라 저장 중복 제거 정책입니다. root와 child에 answer 이름을 쓴 fixture에서 기본7바이트와 flag1의14바이트를 비교합니다. 최종 nameoff가 달라도 각 이름의 해석이 같은지 확인합니다."
+      },
+      {
+        "lesson": "os2335",
+        "symbols": [
+          "fdt_property_placeholder"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB placeholder 성공·data pointer와 endian 책임. 성공이면 PROP tag, 임시 nameoff, 원래 byte len을 big-endian field로 쓰고 valp에 data 영역 pointer를 반환합니다. value byte를 해석하거나 자동 endian 변환하는 일반 함수가 아닙니다. 정수 값은 caller 또는 u32/u64 wrapper가 format에 맞게 인코딩해야 합니다. placeholder len4에 fdt32_st로43을 기록한 실제 fixture를 읽습니다. 정렬된 예약 용량과 len field의 실제 의미를 구별합니다."
+      },
+      {
+        "lesson": "os2336",
+        "symbols": [
+          "fdt_property"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB property 쓰기·placeholder 뒤 byte 복사. 일반 property는 placeholder를 호출하고 오류면 반환합니다. 성공한 data pointer에 len 바이트를 memcpy하고0입니다. 자동 크기 추론이나 값 format 판단을 하지 않으며 accessible value, 비음수 표현 가능한 길이 및 memcpy의 overlap 계약을 caller가 지켜야 합니다. fdt_property_u32 wrapper가 변환한42의 네 byte를 실제 생성 blob에서 읽습니다. 기존 inplace 교체와 sequential 새 property 생성의 차이를 적습니다."
+      },
+      {
+        "lesson": "os2337",
+        "symbols": [
+          "fdt_finish"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB finish·END 추가와 문자열 block 이동. finish는 structure phase에서 FDT_END word를 추가하고 뒤에 있던 strings를 structure 끝으로 memmove합니다. strings offset을 새 위치로 갱신해 reserve→structure→strings의 compact 자료를 만듭니다. 여유 capacity의 byte를 모두 없애는 별도 allocator 반환 동작은 아닙니다. reserve 두 entry로 struct80, structure60, strings7이면 최종 totalsize147을 계산합니다. 처음 capacity256과 필요한 형식 길이를 비교합니다."
+      },
+      {
+        "lesson": "os2338",
+        "symbols": [
+          "fdt_finish"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB finish·임시 음수 nameoff를 최종 기준으로 변환. structure의 tag를 순회해 PROP마다 임시 nameoff에 전체 strings size를 더합니다. 끝 기준 음수 offset을 새 strings 시작 기준 nonnegative offset으로 바꾸는 기준점 변환입니다. 실제 NUL 이름을 다시 검색해 각 property를 연결하는 알고리즘이 아닙니다. 기본 answer -7+7=0, dedup 생략 때 첫 -7+14=7과 다음 -14+14=0을 계산합니다. property 이름이 저장된 순서와 table base를 연결합니다."
+      },
+      {
+        "lesson": "os2339",
+        "symbols": [
+          "fdt_finish"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB finish·최종 header와 반복 writer 거부. tag 순회 nextoffset이 음수면 오류를 반환합니다. 정상 완료면 totalsize를 새 strings끝으로 줄이고 lastcomp16과 완성 magic을 씁니다. 이후 sequential writer는 BADSTATE입니다. tag bounds 검사와 완전한 root/nesting 의미 검증을 같은 것으로 설명하지 않습니다. 실제 생성 fixture를 fdt_check_header와 core child 순회로 다시 읽습니다. finish 뒤 begin_node 거부를 확인하고 소비 단계의 추가 유효성 계약을 적습니다."
+      },
+      {
+        "lesson": "os2340",
+        "symbols": [
+          "fdt_finish"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB finish 실패·이미 시작한 변경의 범위. END 공간 부족은 추가 전에 NOSPACE이지만 이후 tag 순회 오류는 END 추가와 문자열 이동 및 일부 nameoff 변경 후일 수 있습니다. 이 함수에는 전체 snapshot rollback이 없습니다. 모든 오류 경로가 buffer 불변이라는 가정을 하지 않고 실패 단계와 상태를 확인해야 합니다. 공간 확보 실패와 이동 후 오류의 위치를 본문에서 표시합니다. 실행 fixture는 유효 구조와 선택 NOSPACE를 검산했으며 모든 손상 자료의 실패 후 상태를 실행한 것은 아닙니다."
+      }
+    ]
+  }
+}

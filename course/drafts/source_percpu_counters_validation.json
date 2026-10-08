@@ -1,0 +1,216 @@
+{
+  "draft_lessons": 21,
+  "questions": 42,
+  "anchors": [
+    {
+      "planned_lesson": "os956",
+      "title": "CPU별 근사 카운터·중앙 합계와 로컬 잔여값",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 22,
+        "end": 47,
+        "anchor": "percpu_counter"
+      }
+    },
+    {
+      "planned_lesson": "os957",
+      "title": "CPU별 카운터 배열 초기화·공유 할당의 요소 간격",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 188,
+        "end": 213,
+        "anchor": "__percpu_counter_init_many"
+      }
+    },
+    {
+      "planned_lesson": "os958",
+      "title": "카운터 초기화 매크로·호출 지점 lockdep 클래스",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 37,
+        "end": 62,
+        "anchor": "percpu_counter_init_many"
+      }
+    },
+    {
+      "planned_lesson": "os959",
+      "title": "카운터 묶음 해제·첫 포인터의 소유권",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 227,
+        "end": 252,
+        "anchor": "percpu_counter_destroy_many"
+      }
+    },
+    {
+      "planned_lesson": "os960",
+      "title": "카운터 재설정·possible CPU의 잔여값 지우기",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 60,
+        "end": 86,
+        "anchor": "percpu_counter_set"
+      }
+    },
+    {
+      "planned_lesson": "os961",
+      "title": "로컬 비교교환 batch·IRQ 사이의 결정과 갱신",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 93,
+        "end": 119,
+        "anchor": "percpu_counter_add_batch"
+      }
+    },
+    {
+      "planned_lesson": "os962",
+      "title": "IRQ 차단 batch fallback·조건 검사와 수정의 한 구간",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 120,
+        "end": 145,
+        "anchor": "percpu_counter_add_batch"
+      }
+    },
+    {
+      "planned_lesson": "os963",
+      "title": "현재 CPU 잔여값 동기화·batch 감소 전 오차 정리",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 146,
+        "end": 171,
+        "anchor": "percpu_counter_sync"
+      }
+    },
+    {
+      "planned_lesson": "os964",
+      "title": "전체 합산 읽기·online과 dying CPU의 합집합",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 171,
+        "end": 196,
+        "anchor": "__percpu_counter_sum"
+      }
+    },
+    {
+      "planned_lesson": "os965",
+      "title": "근사 비교의 오차 경계·가까우면 전체 합산",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 292,
+        "end": 326,
+        "anchor": "__percpu_counter_compare"
+      }
+    },
+    {
+      "planned_lesson": "os966",
+      "title": "제한 카운터 빠른 갱신·전체 불확실성 범위",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 327,
+        "end": 352,
+        "anchor": "__percpu_counter_limited_add"
+      }
+    },
+    {
+      "planned_lesson": "os967",
+      "title": "제한 카운터 느린 갱신·거절과 정밀 재검사",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 327,
+        "end": 352,
+        "anchor": "__percpu_counter_limited_add"
+      }
+    },
+    {
+      "planned_lesson": "os968",
+      "title": "기본 batch 조정·온라인 CPU 수와 최소 32",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 258,
+        "end": 283,
+        "anchor": "compute_batch_value"
+      }
+    },
+    {
+      "planned_lesson": "os969",
+      "title": "CPU 종료 fold·전역 카운터 목록의 두 잠금",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 266,
+        "end": 291,
+        "anchor": "percpu_counter_cpu_dead"
+      }
+    },
+    {
+      "planned_lesson": "os970",
+      "title": "카운터 debug 객체·active free 복구와 정상 생명주기",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 22,
+        "end": 47,
+        "anchor": "percpu_counter_fixup_free"
+      }
+    },
+    {
+      "planned_lesson": "os971",
+      "title": "카운터 hotplug 초기 등록·호출 여부가 다른 두 상태",
+      "path": "lib/percpu_counter.c",
+      "excerpt": {
+        "start": 394,
+        "end": 407,
+        "anchor": "percpu_counter_startup"
+      }
+    },
+    {
+      "planned_lesson": "os972",
+      "title": "중앙·합산 positive 읽기·SMP와 UP의 음수 차이",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 118,
+        "end": 143,
+        "anchor": "percpu_counter_read_positive"
+      }
+    },
+    {
+      "planned_lesson": "os973",
+      "title": "로컬 전용 카운터 갱신·INT_MAX batch와 드문 읽기",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 92,
+        "end": 117,
+        "anchor": "percpu_counter_add_local"
+      }
+    },
+    {
+      "planned_lesson": "os974",
+      "title": "단일 CPU 카운터·배열 없이 IRQ-safe 중앙 변경",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 188,
+        "end": 213,
+        "anchor": "percpu_counter_add"
+      }
+    },
+    {
+      "planned_lesson": "os975",
+      "title": "단일 CPU 제한 갱신·정확한 count와 상·하한",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 198,
+        "end": 223,
+        "anchor": "percpu_counter_limited_add"
+      }
+    },
+    {
+      "planned_lesson": "os976",
+      "title": "공통 inc·dec·sub wrapper·부호와 단위의 계약",
+      "path": "include/linux/percpu_counter.h",
+      "excerpt": {
+        "start": 275,
+        "end": 286,
+        "anchor": "percpu_counter_sub"
+      }
+    }
+  ]
+}

@@ -1,0 +1,236 @@
+{
+  "include/asm-generic/barrier.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 306,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1630",
+        "symbols": [
+          "mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1631",
+        "symbols": [
+          "nop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1632",
+        "symbols": [
+          "mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1633",
+        "symbols": [
+          "dma_rmb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1634",
+        "symbols": [
+          "rmb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1635",
+        "symbols": [
+          "__smp_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1636",
+        "symbols": [
+          "smp_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1637",
+        "symbols": [
+          "smp_store_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1638",
+        "symbols": [
+          "smp_mb__before_atomic"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1639",
+        "symbols": [
+          "smp_store_release"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1640",
+        "symbols": [
+          "smp_load_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1641",
+        "symbols": [
+          "virt_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1642",
+        "symbols": [
+          "virt_store_release"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1643",
+        "symbols": [
+          "smp_cond_load_relaxed"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1644",
+        "symbols": [
+          "smp_acquire__after_ctrl_dep"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1645",
+        "symbols": [
+          "pmem_wmb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1646",
+        "symbols": [
+          "io_stop_wc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1647",
+        "symbols": [
+          "smp_mb__after_switch_mm"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1648",
+        "symbols": [
+          "mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      },
+      {
+        "lesson": "os1649",
+        "symbols": [
+          "smp_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole genericbarrier306lines read/authored20lessons40workedquestions: newportdefault compiler vsCPU/device, assemblyguard/nop vsbarrier/sleep, __mb/rmb/wmb and__dma marker-beforearch anddefaultmb/rmb/wmb aliases, private__smp defaults/nestedmarker vsprimitivecounts, CONFIG_SMP vsUPpublic compiler andUPdevice orderingstillrequired, store_mb WRITEthenMB/publicmarker/UPcompiler vsrelease, beforeafteratomic RMW notreadset anddeathmark-ref example, private release typeassert/full-beforewrite andpublicUP/SMPmarker, acquire scalar READsnapshot/typeassert/MB/cast andUPcompiler, guestalwaysprivateSMP despiteUP hostSMP andvirtstore/load/atomic helpers, condition VAL/READONCE/cpu_relax/noqueue-scheduler-timeout andordinaryptronce, control dependency load-store plusRMBload-load/archspeculationoverride, pmemdurability-vsordering/defaultwmb noactualdurabilityproof, WCmergepurpose/defaultempty/nomappingperformanceproof, afterswitch_mmdefaultsmpmb vsimplicitarchoverride, publicdefinition vs__instrumentation path/includeoverride. Fixed memory-barriers.txt1880..1990 read only forstore/RMW/DMAconsistentdescriptorownership/MMIOexclusion/pmemdurability/WCcontract; notwhole docrecord. Wholeoriginalheader explicitcompiler/KCSAN/arch/scalartype/READWRITEONCE/nativeordinaryptr/thirdrelaxcondition models37000 assertions each12builds (6configsUP-SMP/default-arch-privateoverride ×O2/ASanUBSan),1000repeats, assemblyC exclusioncompiled; onlyoriginalnative nop asm invoked. No physicalCPU/DMA/cache/persistence/WC/switchMM/TLB/trueKCSAN/LKMM/native32/fulltype orallinputproof."
+      }
+    ],
+    "fixture": "data/source_checks/source-generic-barrier-harness-manifest.json"
+  }
+}

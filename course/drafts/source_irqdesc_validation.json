@@ -1,0 +1,606 @@
+{
+  "draft_lessons": 60,
+  "questions": 120,
+  "anchors": [
+    {
+      "planned_lesson": "os2828",
+      "title": "IRQ 기본 affinity: boot CPU 보존",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 27,
+        "end": 52,
+        "anchor": "irq_affinity_setup"
+      }
+    },
+    {
+      "planned_lesson": "os2829",
+      "title": "IRQ 기본 affinity 초기화: 빈 mask의 fallback",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "init_irq_default_affinity"
+      }
+    },
+    {
+      "planned_lesson": "os2830",
+      "title": "IRQ CPU masks 할당: 단계별 실패 정리",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 54,
+        "end": 79,
+        "anchor": "alloc_masks"
+      }
+    },
+    {
+      "planned_lesson": "os2831",
+      "title": "Descriptor SMP 초기화: 복사와 pending clear",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 80,
+        "end": 105,
+        "anchor": "desc_smp_init"
+      }
+    },
+    {
+      "planned_lesson": "os2832",
+      "title": "Descriptor masks 해제: 구성별 자원 반환",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 95,
+        "end": 120,
+        "anchor": "free_masks"
+      }
+    },
+    {
+      "planned_lesson": "os2833",
+      "title": "Descriptor 기본 상태: 사용 전 안전한 초기값",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 114,
+        "end": 139,
+        "anchor": "desc_set_defaults"
+      }
+    },
+    {
+      "planned_lesson": "os2834",
+      "title": "Maple Tree IRQ 저장소: 빈 연속 범위 탐색",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 151,
+        "end": 176,
+        "anchor": "irq_find_free_area"
+      }
+    },
+    {
+      "planned_lesson": "os2835",
+      "title": "Maple Tree IRQ 순회: offset 포함과 sentinel",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 160,
+        "end": 185,
+        "anchor": "irq_find_at_or_after"
+      }
+    },
+    {
+      "planned_lesson": "os2836",
+      "title": "IRQ tree 삽입: 단일 번호와 경고 정책",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 171,
+        "end": 196,
+        "anchor": "irq_insert_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2837",
+      "title": "IRQ tree 삭제: 조회 제거와 메모리 수명",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 177,
+        "end": 202,
+        "anchor": "delete_irq_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2838",
+      "title": "Descriptor 자원 초기화: 잠금·waitqueue·RCU",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 187,
+        "end": 212,
+        "anchor": "init_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2839",
+      "title": "Sysfs CPU 통계: bounded 쉼표 출력",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 226,
+        "end": 251,
+        "anchor": "per_cpu_count_show"
+      }
+    },
+    {
+      "planned_lesson": "os2840",
+      "title": "Sysfs chip 이름: 잠금과 빈 출력",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 246,
+        "end": 271,
+        "anchor": "chip_name_show"
+      }
+    },
+    {
+      "planned_lesson": "os2841",
+      "title": "Sysfs hwirq: domain 조건의 번호",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 263,
+        "end": 288,
+        "anchor": "hwirq_show"
+      }
+    },
+    {
+      "planned_lesson": "os2842",
+      "title": "Sysfs trigger 표시: level 또는 edge",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 278,
+        "end": 303,
+        "anchor": "type_show"
+      }
+    },
+    {
+      "planned_lesson": "os2843",
+      "title": "Sysfs wakeup 표시: 정책 조회",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 294,
+        "end": 319,
+        "anchor": "wakeup_show"
+      }
+    },
+    {
+      "planned_lesson": "os2844",
+      "title": "Sysfs flow 이름: NULL과 bounded 출력",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 310,
+        "end": 335,
+        "anchor": "name_show"
+      }
+    },
+    {
+      "planned_lesson": "os2845",
+      "title": "Sysfs action 목록: 잠금 안의 순회",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 325,
+        "end": 350,
+        "anchor": "actions_show"
+      }
+    },
+    {
+      "planned_lesson": "os2846",
+      "title": "IRQ sysfs 추가: 비핵심 실패와 표시",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 366,
+        "end": 391,
+        "anchor": "irq_sysfs_add"
+      }
+    },
+    {
+      "planned_lesson": "os2847",
+      "title": "IRQ sysfs 삭제: 등록 성공의 조건",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 381,
+        "end": 406,
+        "anchor": "irq_sysfs_del"
+      }
+    },
+    {
+      "planned_lesson": "os2848",
+      "title": "IRQ sysfs 초기화: sparse 할당과 직렬화",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 393,
+        "end": 418,
+        "anchor": "irq_sysfs_init"
+      }
+    },
+    {
+      "planned_lesson": "os2849",
+      "title": "Sparse IRQ 조회: Maple Tree pointer",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 427,
+        "end": 452,
+        "anchor": "irq_to_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2850",
+      "title": "Sparse mutex 획득: 외부 tree lock",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 435,
+        "end": 460,
+        "anchor": "irq_lock_sparse"
+      }
+    },
+    {
+      "planned_lesson": "os2851",
+      "title": "Sparse mutex 해제: 획득과 균형",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 440,
+        "end": 465,
+        "anchor": "irq_unlock_sparse"
+      }
+    },
+    {
+      "planned_lesson": "os2852",
+      "title": "Sparse descriptor 할당: NUMA와 초기화 실패",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 445,
+        "end": 470,
+        "anchor": "alloc_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2853",
+      "title": "Kobject 최종 release: 내부 자원과 객체",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 465,
+        "end": 496,
+        "anchor": "irq_kobj_release"
+      }
+    },
+    {
+      "planned_lesson": "os2854",
+      "title": "RCU 지연 callback: kobject put 위임",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 474,
+        "end": 499,
+        "anchor": "delayed_free_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2855",
+      "title": "Sparse descriptor free: 노출 제거 후 RCU",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 481,
+        "end": 506,
+        "anchor": "free_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2856",
+      "title": "연속 sparse 할당: affinity 검증과 역정리",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 509,
+        "end": 534,
+        "anchor": "alloc_descs"
+      }
+    },
+    {
+      "planned_lesson": "os2857",
+      "title": "Sparse 번호 상한 확장: 최대 한계",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 554,
+        "end": 579,
+        "anchor": "irq_expand_nr_irqs"
+      }
+    },
+    {
+      "planned_lesson": "os2858",
+      "title": "Sparse early IRQ: architecture 사전 번호",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 562,
+        "end": 587,
+        "anchor": "early_irq_init"
+      }
+    },
+    {
+      "planned_lesson": "os2859",
+      "title": "고정 배열 early IRQ: 전부 초기화와 오류 prefix 정리",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 600,
+        "end": 625,
+        "anchor": "early_irq_init"
+      }
+    },
+    {
+      "planned_lesson": "os2860",
+      "title": "고정 배열 IRQ 조회: 번호 경계",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 628,
+        "end": 653,
+        "anchor": "irq_to_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2861",
+      "title": "고정 배열 free: 기본 상태 재설정",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 634,
+        "end": 659,
+        "anchor": "free_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2862",
+      "title": "고정 배열 alloc: owner와 tree 연결",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 645,
+        "end": 670,
+        "anchor": "alloc_descs"
+      }
+    },
+    {
+      "planned_lesson": "os2863",
+      "title": "고정 배열 상한: 확장 지원 없음",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 660,
+        "end": 685,
+        "anchor": "irq_expand_nr_irqs"
+      }
+    },
+    {
+      "planned_lesson": "os2864",
+      "title": "고정 IRQ mark: allocated tree에 연결",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 665,
+        "end": 690,
+        "anchor": "irq_mark_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2865",
+      "title": "Legacy descriptor 초기화: free 경로 재사용",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 673,
+        "end": 704,
+        "anchor": "irq_init_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2866",
+      "title": "Descriptor dispatch: 유효성·hard IRQ 계약",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 681,
+        "end": 706,
+        "anchor": "handle_irq_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2867",
+      "title": "Logical IRQ dispatch: 번호 조회 위임",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 705,
+        "end": 730,
+        "anchor": "generic_handle_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2868",
+      "title": "Safe IRQ dispatch: local mask와 문맥의 차이",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 722,
+        "end": 747,
+        "anchor": "generic_handle_irq_safe"
+      }
+    },
+    {
+      "planned_lesson": "os2869",
+      "title": "Domain IRQ dispatch: hardware mapping",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 746,
+        "end": 771,
+        "anchor": "generic_handle_domain_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2870",
+      "title": "Safe domain dispatch: 상태 복원과 오류",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 764,
+        "end": 789,
+        "anchor": "generic_handle_domain_irq_safe"
+      }
+    },
+    {
+      "planned_lesson": "os2871",
+      "title": "Domain NMI dispatch: 경고와 진행",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 787,
+        "end": 812,
+        "anchor": "generic_handle_domain_nmi"
+      }
+    },
+    {
+      "planned_lesson": "os2872",
+      "title": "IRQ 범위 free: 경계와 할당 존재 계약",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 801,
+        "end": 828,
+        "anchor": "irq_free_descs"
+      }
+    },
+    {
+      "planned_lesson": "os2873",
+      "title": "연속 IRQ allocator: 지정 번호와 동적 하한",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 830,
+        "end": 855,
+        "anchor": "__irq_alloc_descs"
+      }
+    },
+    {
+      "planned_lesson": "os2874",
+      "title": "다음 IRQ 번호 API: offset 포함 검색",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 876,
+        "end": 901,
+        "anchor": "irq_get_next_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2875",
+      "title": "Descriptor lock 획득: per-CPU 검사와 bus 순서",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 882,
+        "end": 907,
+        "anchor": "__irq_get_desc_lock"
+      }
+    },
+    {
+      "planned_lesson": "os2876",
+      "title": "Descriptor unlock: 반대 순서와 flags 복원",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 905,
+        "end": 930,
+        "anchor": "__irq_put_desc_unlock"
+      }
+    },
+    {
+      "planned_lesson": "os2877",
+      "title": "Per-CPU partition 설정: 할당과 빌린 mask",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 913,
+        "end": 938,
+        "anchor": "irq_set_percpu_devid_partition"
+      }
+    },
+    {
+      "planned_lesson": "os2878",
+      "title": "Per-CPU 기본 partition: possible CPU 대체",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 932,
+        "end": 964,
+        "anchor": "irq_set_percpu_devid"
+      }
+    },
+    {
+      "planned_lesson": "os2879",
+      "title": "Per-CPU partition 조회: 선택 출력 복사",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 937,
+        "end": 964,
+        "anchor": "irq_get_percpu_devid_partition"
+      }
+    },
+    {
+      "planned_lesson": "os2880",
+      "title": "IRQ CPU 통계 증가: 유효 번호의 위임",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 951,
+        "end": 976,
+        "anchor": "kstat_incr_irq_this_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os2881",
+      "title": "CPU별 IRQ count 조회: 0 fallback과 수명",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 965,
+        "end": 990,
+        "anchor": "kstat_irqs_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os2882",
+      "title": "IRQ 통계 합계: 일반 total과 per-CPU 합산",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 972,
+        "end": 997,
+        "anchor": "kstat_irqs_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2883",
+      "title": "IRQ 전체 통계 helper: possible CPU 합계",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 987,
+        "end": 1012,
+        "anchor": "kstat_irqs"
+      }
+    },
+    {
+      "planned_lesson": "os2884",
+      "title": "IRQ snapshot: 현재 CPU의 기준 저장",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 998,
+        "end": 1030,
+        "anchor": "kstat_snapshot_irqs"
+      }
+    },
+    {
+      "planned_lesson": "os2885",
+      "title": "Snapshot 이후 count: unsigned 차이",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 1010,
+        "end": 1035,
+        "anchor": "kstat_get_irq_since_snapshot"
+      }
+    },
+    {
+      "planned_lesson": "os2886",
+      "title": "Thread 통계 조회: RCU 객체 수명 보호",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 1031,
+        "end": 1053,
+        "anchor": "kstat_irqs_usr"
+      }
+    },
+    {
+      "planned_lesson": "os2887",
+      "title": "IRQ lockdep class 변경: 분석용 분류",
+      "path": "kernel/irq/irqdesc.c",
+      "excerpt": {
+        "start": 1042,
+        "end": 1053,
+        "anchor": "__irq_set_lockdep_class"
+      }
+    }
+  ]
+}

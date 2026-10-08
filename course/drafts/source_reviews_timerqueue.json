@@ -1,0 +1,83 @@
+{
+  "include/linux/timerqueue_types.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 17,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1098",
+        "symbols": [
+          "timerqueue_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole timerqueue types/header/C read and authored: intrusivektime node, cached minimum/head lifecycle, emptyselfmarker/queued state, strict comparator/container, add-newminimum vs del-nonempty boolean, equal-key pinned insertion ordering, nons consuming minimum/NULL iteration, keyupdate delete-reinsert, caller locking/objectlifetime, WARN does not reject invalid call. Actual complete original red-black backend composed with timerqueue,25940324checks/100000sequentialmutations optimized+ASanUBSan, independent stable sorted-array/parent/color/blackheight/minimum/iteration/state/returns checks. No actual concurrenthrtimer/clockevents/callback cancellation proof."
+      },
+      {
+        "lesson": "os1099",
+        "symbols": [
+          "timerqueue_head"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole timerqueue types/header/C read and authored: intrusivektime node, cached minimum/head lifecycle, emptyselfmarker/queued state, strict comparator/container, add-newminimum vs del-nonempty boolean, equal-key pinned insertion ordering, nons consuming minimum/NULL iteration, keyupdate delete-reinsert, caller locking/objectlifetime, WARN does not reject invalid call. Actual complete original red-black backend composed with timerqueue,25940324checks/100000sequentialmutations optimized+ASanUBSan, independent stable sorted-array/parent/color/blackheight/minimum/iteration/state/returns checks. No actual concurrenthrtimer/clockevents/callback cancellation proof."
+      }
+    ]
+  },
+  "include/linux/timerqueue.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 44,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1100",
+        "symbols": [
+          "timerqueue_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole timerqueue types/header/C read and authored: intrusivektime node, cached minimum/head lifecycle, emptyselfmarker/queued state, strict comparator/container, add-newminimum vs del-nonempty boolean, equal-key pinned insertion ordering, nons consuming minimum/NULL iteration, keyupdate delete-reinsert, caller locking/objectlifetime, WARN does not reject invalid call. Actual complete original red-black backend composed with timerqueue,25940324checks/100000sequentialmutations optimized+ASanUBSan, independent stable sorted-array/parent/color/blackheight/minimum/iteration/state/returns checks. No actual concurrenthrtimer/clockevents/callback cancellation proof."
+      },
+      {
+        "lesson": "os1101",
+        "symbols": [
+          "timerqueue_init_head"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole timerqueue types/header/C read and authored: intrusivektime node, cached minimum/head lifecycle, emptyselfmarker/queued state, strict comparator/container, add-newminimum vs del-nonempty boolean, equal-key pinned insertion ordering, nons consuming minimum/NULL iteration, keyupdate delete-reinsert, caller locking/objectlifetime, WARN does not reject invalid call. Actual complete original red-black backend composed with timerqueue,25940324checks/100000sequentialmutations optimized+ASanUBSan, independent stable sorted-array/parent/color/blackheight/minimum/iteration/state/returns checks. No actual concurrenthrtimer/clockevents/callback cancellation proof."
+      },
+      {
+        "lesson": "os1106",
+        "symbols": [
+          "timerqueue_getnext"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole timerqueue types/header/C read and authored: intrusivektime node, cached minimum/head lifecycle, emptyselfmarker/queued state, strict comparator/container, add-newminimum vs del-nonempty boolean, equal-key pinned insertion ordering, nons consuming minimum/NULL iteration, keyupdate delete-reinsert, caller locking/objectlifetime, WARN does not reject invalid call. Actual complete original red-black backend composed with timerqueue,25940324checks/100000sequentialmutations optimized+ASanUBSan, independent stable sorted-array/parent/color/blackheight/minimum/iteration/state/returns checks. No actual concurrenthrtimer/clockevents/callback cancellation proof."
+      }
+    ]
+  }
+}

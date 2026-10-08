@@ -1,0 +1,378 @@
+{
+  "drivers/of/irq.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 750,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2680",
+        "symbols": [
+          "irq_of_parse_and_map"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 간편parse-map·오류0표현. parse_one실패는0이며정상specifier를irq_create_of_mapping에전달합니다. 이편의wrapper는파싱음수오류를그대로반환하는of_irq_get과다릅니다. 반환은LinuxvirtualIRQ번호이고DTB의controller별hardware번호와구별합니다. fixture의parse EINVAL→0과mapping성공55를앞뒤호출로추적합니다. unsigned0실패와별도intstatusinterface의정보량차이를표로적습니다."
+      },
+      {
+        "lesson": "os2681",
+        "symbols": [
+          "of_irq_find_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ parent검색·속성또는계층상승. child참조를얻고interrupt-parentu32가없으면일반parent,있으면phandle대상을찾습니다. #interrupt-cells가있는node를만날때까지각이전child참조를put하며상승합니다. 반환parent참조의소유권과caller의put을연결해야합니다. device→interrupt-parent→controller와일반parentfallback을그립니다. 물리장치계층과인터럽트연결계층이달라질수있고cycle/모든malformed관계를이본문이검증한다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2682",
+        "symbols": [
+          "of_irq_find_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ no-phandle호환·defaultPIC참조. OF_IMAP_NO_PHANDLEworkaround면interrupt-parent값의일반phandle검색대신defaultPIC참조를얻습니다. 같은호환선택은imapparent파서에도있습니다. 기존특정tree지원정책이며모든잘못된phandle을항상복구하는일반알고리즘은아닙니다. 정상phandle조회와defaultPIC경로를표로적습니다. workaroundflag와of_irq_dflt_pic의정의·설정은다른구현을읽어야하며이파일해설로전체platform완료를판정하지않습니다."
+      },
+      {
+        "lesson": "os2683",
+        "symbols": [
+          "of_irq_imap_abusers"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF interrupt-map 예외목록·driver직접파싱. 일부compatible목록은core가interrupt-map을무시하도록하며NULL이목록끝입니다. 해당controllerdriver가별도로파싱하는기존호환정책입니다. 새controller설계에이목록을일반추가방법으로권하지않는원문주석도함께읽습니다. controller속성+map존재+예외compatible의종료조건을뒤rawparser에연결합니다. table문자열선언과실제driver파싱은별도범위입니다."
+      },
+      {
+        "lesson": "os2684",
+        "symbols": [
+          "of_irq_parse_imap_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF imap parent파싱·phandle와cell폭. 첫cell에서parentphandle를읽고pointer를한cell옮깁니다. parent가없거나interrupt-cells부재면NULL입니다. parentaddress-cells부재는0으로두고parent주소/specifier를소비해out_irq np/args/args_count를작성합니다. 결과args는CPU값입니다. entry의phandle→parentaddr→parentirq배열을그립니다. flatoffset가아닌expandednode참조와BEcell→CPUargs의변환을주석달아봅니다."
+      },
+      {
+        "lesson": "os2685",
+        "symbols": [
+          "of_irq_parse_imap_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF imap길이·합상한과caller입력. addrsize+intsize가MAX_PHANDLE_ARGS를넘거나len이그합보다작으면parent참조를put하고NULL입니다. len은caller가전달한cell수이며첫phandle소비후의독립길이조정까지이guard가전부인증한다고판정하지않습니다. 정상entry와상위반복조건을함께읽습니다. parentaddr1/irq2의합3과phandle까지포함한entry전체4를계산합니다. guard의비교대상과전체표현길이를구별하고임의짧은entry를실행하지않습니다."
+      },
+      {
+        "lesson": "os2686",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ raw시작·specifier폭일치. 현재node참조에서interrupt-cells를찾고없으면IRQparent를올라갑니다. parent부재또는out_irq args_count가intsize와다르면기본EINVAL실패입니다. 공개specifier와controller가예상하는정수개수가맞아야다음번역을할수있습니다. args_count2/controllercells3의실패를예측합니다. 이선택fixture는rawparser를실행하지않았으므로원문경로해설과wrapper반환검산을구별합니다."
+      },
+      {
+        "lesson": "os2687",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 주소폭·legacyparent검색과기본2. address-cells를현재node부터일반parent로찾고끝까지없으면2입니다. addrsize+intsize가MAX_PHANDLE_ARGS보다크면EFAULT입니다. 숫자합과지원자료전제를확인하며모든u32합overflow/cycle를독립guard한다고설명하지않습니다. addr2+irq3의matchkey5cell을그립니다. imapparent의주소폭default0과이초기legacyfallback2의서로다른위치를주석달아봅니다."
+      },
+      {
+        "lesson": "os2688",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ matchkey·주소와specifier의결합. initial_match_array에주소cells를복사하고없으면0,뒤에는out_irq CPUargs를BEcell로작성합니다. 주소와IRQspecifier를연결한복합key입니다. interrupt-map-mask와bit별비교에같은저장표현을사용합니다. reg주소1cell과IRQ2cell을세cellkey로분리해그립니다. CPU정수배열과BE비교배열의다른표현,caller주소길이와임시buffer상한을확인합니다."
+      },
+      {
+        "lesson": "os2689",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller와map우선순위·예외종료. interrupt-controller이고map이없거나예외compatible이면0으로끝납니다. 일반controller에map이있으면map을먼저처리합니다. controller속성하나만으로항상즉시끝이라고설명하면중간번역을놓칩니다. controller/map/예외의조합을표로적습니다. 직접controller도메인과중간interruptnexus의역할을구별하고최종raw성공과virqmapping은별도단계입니다."
+      },
+      {
+        "lesson": "os2690",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ map필수주소·없는map의상승. map처리단계에서addrsize>0인데addr가NULL이면실패합니다. map이없으면of_irq_find_parent로새parent를얻어다음수준을처리합니다. 주소계층상승과IRQ관계상승이같은callback이라고판정하지않습니다. 주소필요/NULL의분기와nomap→newparent경로를그립니다. 최종controller조기종료가이검사보다앞이라는순서도원문에서표시합니다."
+      },
+      {
+        "lesson": "os2691",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ maskedmatch·XOR와AND의bit선택. 각keycell에서(match_array^mapcell)&mask가0이면그cell이match입니다. 모든cell의결과를AND누적합니다. mask부재는all-onesdummy라모든bit를비교합니다. 실제mask길이/입력bounds의모든조건을이본문이독립검사한다고설명하지않습니다. key0x12/map0x13/mask0xfe는차이bit0을무시해match인계산을풉니다. mask0xff이면불일치이며선택bit비교와주소덧셈을구별합니다."
+      },
+      {
+        "lesson": "os2692",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF imap후보·parent해석과disabledskip. key비교뒤parententry를파싱해다음cursor를얻고parent사용가능여부도match에AND합니다. 불일치/disabled이면그parent참조를put하고소비길이를빼다음entry를시도합니다. 오류중out_irq가일부변경될수있어실패output을정상specifier로사용하지않습니다. keymatch지만parentdisabled인후보를건너뛰는흐름을그립니다. pointer차이로소비cell을계산하는부분과argsoutput수명을각분기에표시합니다."
+      },
+      {
+        "lesson": "os2693",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 새key·parent주소와self종료. match후oldimap+1의parent주소/IRQpayload를새match_array로사용합니다. intsize는새args_count,addrsize는소비pointer차이에서intsize를뺀값입니다. ipar==newpar이면selfmap으로0종료하며다른경우이전iparput후상승합니다. childkey→parentkey→상위map의두단계를그립니다. 같은tree에서도controllerreference와mapcellpointer의공간이다르고모든cycle검증을self비교하나가대체하지않음을표시합니다."
+      },
+      {
+        "lesson": "os2694",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw실패반환·기본EINVAL과최종ENOENT. 기본rc는EINVAL이고상한EFAULT는따로설정합니다. parent상승끝에서ENOENT를설정한뒤fail로가ipar를put합니다. 성공조기return과공통실패label의cleanup은서로다른경로입니다. 참조/output의전체정합성은호출분기와함께읽습니다. 기본파싱실패/임시상한/끝parent부재의세오류를표로적습니다. label로가는경로와직접return의수명작업을추적하며선택wrapperfixture가raw를실행한것은아님을표시합니다."
+      },
+      {
+        "lesson": "os2695",
+        "symbols": [
+          "of_irq_parse_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ parseone·OldWorld와3cell주소buffer. OldWorldworkaround면별도parser에위임합니다. 일반은reg를주소buffer3cell에최대sizeof만복사하고나머지는초기0입니다. 이주소buffer와raw가읽는addrsize의정상caller조건을같이확인해야하며복사상한만으로모든임의주소폭이안전하다고판정하지않습니다. reg길이4/12/16의실제복사량4/12/12를계산합니다. raw주소요구폭과주어진buffer길이,OldWorld구현은이파일밖이라는범위를표시합니다."
+      },
+      {
+        "lesson": "os2696",
+        "symbols": [
+          "of_irq_parse_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ extended우선·legacyfallback. interrupts-extended를phandle/interrupt-cells로먼저파싱합니다. 성공하면raw번역결과를직접return합니다. 실패면일반interrupt-parent와interrupts방식을시도합니다. 새로운복합속성과기존두속성표현의호환전략이며extended오류를언제나즉시같은오류로전파하지않습니다. extended성공→raw직접반환과실패→legacy의분기를그립니다. 서로다른parentdomain을가진specifier표현과index선택의역할을확인합니다."
+      },
+      {
+        "lesson": "os2697",
+        "symbols": [
+          "of_irq_parse_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ legacyindex·폭과args작성. parentinterrupt-cells를읽고out_irq의np/count를정해interrupts의index×intsize+i를순서대로조회합니다. 실패는outlabel로가parentput,정상은raw번역뒤같은label입니다. 이복사루프전모든args상한/곱셈범위를독립검사했다고설명하지않습니다. intsize3/index2의속성위치6/7/8을계산합니다. caller지원폭과개별u32index조회오류를주석달고실패output은정상값으로사용하지않습니다."
+      },
+      {
+        "lesson": "os2698",
+        "symbols": [
+          "of_irq_to_resource"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ resource·virq0와선택output. get의음수오류는반환합니다. r과irq둘다유효nonzero일때만resource를0으로초기화하고interrupt-names또는nodefullname을이름으로쓰며IRQtriggerflags를OR합니다. irq0은resource를작성하지않고0으로반환합니다. providerfixture의음수/0/55와rNULL,선택이름/fallback을읽습니다. resource중립화시점과mapping실패0에서기존sentinel유지를주석달아봅니다."
+      },
+      {
+        "lesson": "os2699",
+        "symbols": [
+          "of_irq_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ get·domain부재의probe defer. parse실패는그status입니다. 정상specifier의irqdomain을찾아없으면EPROBE_DEFER,있으면mapping결과를받고out에서np를put합니다. mapping0은음수defer와다른실패표현입니다. controllerdriver준비시점과의존성을다루는deferredprobe기술입니다. fixture의parseEINVAL/domain없음-517/mapping0/mapping55와put계산을표로적습니다. provider가domainlookup/mapping을대체하며실제IRQ할당/발생은검증하지않았음을표시합니다."
+      },
+      {
+        "lesson": "os2700",
+        "symbols": [
+          "of_irq_get_byname"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 이름조회·NULL와음수index전파. nameNULL은EINVAL입니다. interrupt-names에서index를찾고음수면그값을직접return하며정상만of_irq_get에전달합니다. reserved-memorybyname의무조건idx위임과다른오류정책입니다. NULL/부재/second이름의fixture반환을읽습니다. 이름목록위치와interruptspecifier위치를같은index로연결하는원리및제공자실행범위를표시합니다."
+      },
+      {
+        "lesson": "os2701",
+        "symbols": [
+          "of_irq_count"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ count·parse성공접두구간. index0부터parse_one이0인동안nr를늘려첫실패에서끝냅니다. 실제domainmapping이아니라specifierparse개수입니다. 모든raw속성요소나뒤유효entry의전수개수가아니며이본문은각성공np를명시put하지않으므로참조작업을임의로있다고설명하지않습니다. provider에서0/1성공2실패라count2인검산을읽습니다. count의기준과get/map의기준,명시참조작업의존재를원문대로구별합니다."
+      },
+      {
+        "lesson": "os2702",
+        "symbols": [
+          "of_irq_to_resource_table"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ resource표·상한과첫비양수종료. nr_irqs상한까지index별resource를작성합니다. to_resource가0이하이면끝나고작성한개수i를반환합니다. 0mapping실패와음수defer/파싱오류가같은반복종료조건에포함되지만오류값자체를표함수의return으로전파하는것은아닙니다. 3칸provider표에서첫두55/세번째오류로return2와마지막칸불변을읽습니다. count상한과실제작성량을나눠주석달아봅니다."
+      },
+      {
+        "lesson": "os2703",
+        "symbols": [
+          "of_intc_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller초기화기록·callback와두목록. descriptor는list_head,irqinitcallback,dev와interrupt_parent를저장합니다. intc_desc_list는대기controller, intc_parent_list는성공해다음parent후보가된controller입니다. 한descriptor의listnode를상태별목록에옮겨의존순서초기화를표현합니다. 대기→성공parentqueue→해제의상태를그립니다. dev/parentnodepointer와동적descriptor공간의수명및각ref작업을분리해읽습니다."
+      },
+      {
+        "lesson": "os2704",
+        "symbols": [
+          "of_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller수집·사용가능match와첫extendedparent. matchingnode중interrupt-controller이고사용가능하며initdata가있는대상을수집합니다. interrupts-extended의첫phandle를parent로선택하고없으면IRQparentfallback입니다. 여러domain의다른parent는같은root거리라고가정하는원문주석을보며전체graph최적순서보장으로확대하지않습니다. 여러extendedparent중첫선택과일반parentfallback을그립니다. selfparent는put후NULL로바꿔root후보로만드는조건을확인합니다."
+      },
+      {
+        "lesson": "os2705",
+        "symbols": [
+          "of_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller위상순서·parent준비뒤child. parentNULL부터대기목록의해당parentcontroller들을초기화합니다. 성공한descriptor를parentqueue꼬리에넣고첫후보를꺼내다음parent로사용합니다. root→준비된parent→child순서의의존초기화이며대기목록반복탐색비용이있는알고리즘입니다. rootA,childB,grandchildC의초기화순서를그립니다. 여러root/child의queue진행과정렬된flatnode순서를같은순서라고가정하지않습니다."
+      },
+      {
+        "lesson": "os2706",
+        "symbols": [
+          "of_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller init실패·flag복구와남은child. init전OF_POPULATED를세우고callback실패면flag를내리고descriptor를free해parentqueue에넣지않습니다. 대기child가남았는데준비parentqueue가비면오류출력후끝냅니다. 누락/실패의존관계와cycle등을모두독립진단하는정교한graphvalidator는아닙니다. parentinit실패뒤child가처리되지않는흐름을그립니다. flag복구와callback모든부작용rollback이같은것이아니고성공수명정책은driver와참조경로를더읽어야합니다."
+      },
+      {
+        "lesson": "os2707",
+        "symbols": [
+          "of_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF controller descriptor정리·공간과node참조. 남은parentqueue와대기목록을safeiterator로정리합니다. err대기목록은dev참조put와descriptorfree를수행합니다. 성공/실패/parentqueue경로의참조작업은완전히같지않아모든node를항상같이put한다고없는코드를추가설명하지않습니다. 성공queue소비,callback실패,allocation실패err,처리불가대기의네경로를그립니다. 실제명시put/free작업과kernelcontroller의지속수명계약을구별합니다."
+      },
+      {
+        "lesson": "os2708",
+        "symbols": [
+          "__of_msi_map_id"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF MSI IDmap·device parent상승과fallback. dev부터deviceparent를올라가of_map_id의msi-map/msi-map-mask를시도해첫0에서끝냅니다. id_out초기값은id_in이라match없으면provider정책에따라원래ID를유지합니다. 실제table/mask변환은별도of_map_id구현이며이wrapper가모든ID검증을수행하지않습니다. device1→parent2가ID7을0x107로바꾸는선택provider검산과parent없음7을읽습니다. device계층과앞device_nodeIRQparent계층의차이를그립니다."
+      },
+      {
+        "lesson": "os2709",
+        "symbols": [
+          "of_msi_map_id"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF MSI 공개IDmap·기대controllerpointer. 공개wrapper는msi_np로받은pointer변수의주소를내부helper에전달합니다. caller에게새nodepointeroutput을직접돌려주는interface가아니며return은ID입니다. controller조건과참조계약은of_map_id의구현에연결됩니다. valuepointer인자와pointer-to-pointer내부호출을그립니다. provider가일부선택상황을대체했다는범위와caller가반환ID와domain을혼동하지않는사용방법을적습니다."
+      },
+      {
+        "lesson": "os2710",
+        "symbols": [
+          "of_msi_map_get_device_domain"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF MSI mapdomain·controller와bus token. localnpNULL로IDmaphelper를호출해controller를찾고irq_find_matching_host(np,bus_token)을반환합니다. 같은controller도token조건에따라domain선택이달라질수있습니다. 변환ID를이wrapperreturn으로제공하는것은아닙니다. 선택provider의token3성공/token4NULL과match없음NULL을읽습니다. busdomain종류와ID변환결과를두화살표로분리합니다."
+      },
+      {
+        "lesson": "os2711",
+        "symbols": [
+          "of_msi_get_domain"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF msi-parentdomain·phandleiterator와첫match. msi-parent/#msi-cells의phandleiterator를사용합니다. 각node의matchinghost를token으로찾아첫domain을반환하고없으면NULL입니다. dev인자는본문에서직접사용하지않으며iterator참조/종료오류계약은관련macro와정의를함께읽습니다. msi-mapID변환경로와msi-parent명시domain경로를비교합니다. 이함수는선택fixture에서provider로대체했고실제iterator를실행한증거는아닙니다."
+      },
+      {
+        "lesson": "os2712",
+        "symbols": [
+          "of_msi_configure"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF MSI configure·platformdomain연결. of_msi_get_domain에DOMAIN_BUS_PLATFORM_MSI를전달해결과를dev_set_msi_domain으로연결합니다. voidinterface이며NULLdomain도전달됩니다. 실제MSImessage발생/IRQvector할당이아니라device의domain관계를설정하는단계입니다. provider에서controller→domain설정과다른node→NULL의검산을읽습니다. domain연결과실제MSI할당/하드웨어프로그램수명은별도코드로확인합니다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,272 @@
+{
+  "scripts/dtc/libfdt/fdt_addresses.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 101,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2284",
+        "symbols": [
+          "fdt_cells"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB cell 해석·부모 노드와 32비트 단위. cell은 DTB에서 big-endian 32비트 정수 한 단위입니다. fdt_cells는 주어진 노드의 이름 있는 property를 조회해 길이가 정확히 sizeof(fdt32_t)인지 확인하고 endian 변환합니다. 여기서 nodeoffset은 트리 내부 위치이며 물리 주소나 cell 수와 서로 다른 단위입니다. 부모 7의 #address-cells property가 00 00 00 02이면 2를 얻는 과정을 적습니다. property 조회 자체의 구현과 이 함수의 해석 단계를 구별해 주석을 답니다."
+      },
+      {
+        "lesson": "os2285",
+        "symbols": [
+          "fdt_cells"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB cell 오류·NULL과 len out parameter. fdt_getprop가 NULL이면 fdt_cells는 len을 그대로 반환합니다. 조회 함수가 len에 적은 음수 오류를 전달하는 계약입니다. NULL일 때 임의의 0이나 기본값으로 바꾸지 않으며 기본값 정책은 address/size wrapper에서 NOTFOUND에 한해 적용합니다. NOTFOUND와 BADSTRUCTURE를 각각 입력했을 때 wrapper의 결과를 비교합니다. 정상 property 길이와 조회 실패의 오류가 같은 len 변수에 전달되는 방식을 읽습니다."
+      },
+      {
+        "lesson": "os2286",
+        "symbols": [
+          "fdt_cells"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB cell 개수·형식 길이와 상한 검사. property 길이가 4와 다르거나 변환한 uint32 값이 FDT_MAX_NCELLS보다 크면 BADNCELLS입니다. 형식 길이 검사를 통과한 뒤에 값을 읽으며 상한 확인 뒤 int로 변환합니다. 일반 cell getter가 허용한 개수와 주소 범위 append 함수가 지원하는 개수는 다릅니다. 길이 0부터 8, 개수 0부터 상한+1을 조건표로 작성합니다. fixture는 이 조합을 실제 원본 함수로 검사하지만 실제 트리 검색은 provider를 사용합니다."
+      },
+      {
+        "lesson": "os2287",
+        "symbols": [
+          "fdt_address_cells"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "주소 cell 기본값·없으면 2, 0이면 오류. fdt_address_cells는 #address-cells를 조회합니다. 값 0은 BADNCELLS로 거부하고 NOTFOUND이면 기본값 2를 반환합니다. 그 외 정상 값과 오류는 그대로 전달합니다. 명시적 0과 property 부재를 다르게 처리하는 기본값 정책입니다. property 부재, 명시적 0, 값 1, 조회 BADSTRUCTURE의 네 경우를 풉니다. 기본 주소 폭이 두 32비트 cell이라는 의미를 64비트 값 표현과 연결합니다."
+      },
+      {
+        "lesson": "os2288",
+        "symbols": [
+          "fdt_size_cells"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "크기 cell 기본값·없으면 1, 0은 유지. fdt_size_cells는 #size-cells의 NOTFOUND만 기본값 1로 바꿉니다. 주소 wrapper와 달리 정상 값 0을 거부하지 않습니다. 따라서 크기 field가 없는 버스 표현과 이 helper가 다루는 구체적 주소 범위 append의 제한을 나누어 이해해야 합니다. 주소/크기 getter에 각각 값 0을 넣어 BADNCELLS와 0의 차이를 관찰합니다. size getter가 0을 허용해도 append가 이를 지원한다는 결론을 내리지 않습니다."
+      },
+      {
+        "lesson": "os2289",
+        "symbols": [
+          "fdt_appendprop_addrrange"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "주소 범위 append·부모의 형식과 자식의 property. 주소/크기 cell 수는 parent에서 읽고 인코딩한 property는 nodeoffset에 추가합니다. 버스가 자식 주소의 표현 형식을 정하고 각 자식이 자신의 범위를 보유하는 관계입니다. 두 getter 중 음수 오류가 나오면 append 호출 전에 그대로 반환합니다. 부모 7, 자식 42, 이름 reg를 지정한 fixture에서 조회 대상과 append 대상을 구별합니다. 이 helper는 주소를 장치에 매핑하거나 MMU page table을 생성하지 않습니다."
+      },
+      {
+        "lesson": "os2290",
+        "symbols": [
+          "fdt_appendprop_addrrange"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "한 cell 주소·끝을 포함하지 않는 범위 경계. 주소가 한 cell이면 addr<=UINT32_MAX와 size<=2^32−addr를 요구합니다. [addr,addr+size) 범위의 끝이 2^32와 같아도 허용합니다. 덧셈 대신 남은 크기를 비교해 큰 size의 합산 overflow를 피하지만 주소 필드 자체의 상한도 먼저 확인합니다. addr=UINT32_MAX일 때 size=1은 허용, size=2는 BADVALUE임을 계산합니다. 유효 마지막 바이트 주소와 범위의 exclusive end가 다른 숫자임을 주석에 적습니다."
+      },
+      {
+        "lesson": "os2291",
+        "symbols": [
+          "fdt_appendprop_addrrange"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "두 cell 주소·64비트 인코딩과 검사의 범위. 주소가 두 cell이면 fdt64_st로 uint64 주소를 저장합니다. 이 분기는 addr+size의 64비트 overflow나 물리 주소 범위의 적합성을 별도로 검사하지 않습니다. 값의 직렬화 성공과 장치 버스 및 실제 메모리에서 범위가 유효하다는 판단을 구별합니다. addr=UINT64_MAX, size=1, 두 cell 주소/크기의 경우 helper가 인코딩 가능한 이유를 읽습니다. 실행 fixture는 바이트와 반환만 확인하며 그 주소를 실제로 매핑하지 않습니다."
+      },
+      {
+        "lesson": "os2292",
+        "symbols": [
+          "fdt_appendprop_addrrange"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "크기 field 폭·한 cell 상한과 두 cell 저장. 주소를 쓴 다음 prop를 addr_cells*4만큼 이동합니다. 크기가 한 cell이면 UINT32_MAX를 넘으면 BADVALUE, 두 cell이면 uint64 값을 저장하며 나머지 개수는 BADNCELLS입니다. 주소 범위 검사와 크기 field가 숫자를 담을 수 있는지는 서로 다른 조건입니다. 주소 0, 크기 2^32는 한 cell 주소 범위 경계에는 맞지만 size_cells=1이면 표현할 수 없어 실패합니다. size_cells=2일 때와 비교해 두 검사를 설명합니다."
+      },
+      {
+        "lesson": "os2293",
+        "symbols": [
+          "fdt_appendprop_addrrange"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "주소·크기 byte 직렬화와 append 반환. 최대 16바이트의 지역 uint8 배열에 주소 뒤 크기를 big-endian으로 저장합니다. fdt32_st/fdt64_st의 byte 저장 방식은 배열을 정렬된 typed pointer로 직접 역참조하는 것과 다릅니다. 실제 추가 길이는 (addr_cells+size_cells)*4이며 append의 반환을 그대로 전달합니다. 1/1이면 8, 2/1이면 12, 2/2이면 16바이트를 계산합니다. 원본의 지역 배열은 helper 호출 동안만 유효하므로 append가 동기적으로 데이터를 사용하는 API 계약을 확인합니다."
+      }
+    ]
+  },
+  "scripts/dtc/libfdt/fdt_empty_tree.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 38,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2294",
+        "symbols": [
+          "fdt_create_empty_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "빈 DTB 생성·여섯 단계의 순차 구성. wrapper는 create→finish_reservemap→begin_node(빈 이름)→end_node→finish→open_into를 순서대로 호출합니다. 예약 목록을 끝낸 뒤 빈 root 하나를 작성해 완성하고 마지막에 편집용 buffer 형태로 엽니다. 원본 wrapper의 흐름과 호출되는 각 구현의 내부 알고리즘을 구별합니다. 여섯 호출을 화살표로 그려 tree 상태를 설명합니다. fixture는 호출 순서와 인자를 확인하는 provider이며 실제 DTB 바이트를 생성하는 하위 구현을 실행한 증거는 아닙니다."
+      },
+      {
+        "lesson": "os2295",
+        "symbols": [
+          "fdt_create_empty_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "빈 트리 오류 처리·첫 실패에서 즉시 반환. 각 중간 단계의 err가 0이 아니면 즉시 반환하고 다음 단계는 호출하지 않습니다. 음수만 비교하는 것이 아니라 if(err)입니다. wrapper 자체는 앞 단계가 변경한 buffer를 원래 상태로 되돌리는 별도 코드를 갖지 않습니다. 하위 함수의 구체적인 실패 상태는 그 구현에서 확인해야 합니다. 실패를 여섯 단계마다 주입해 호출 수와 반환을 확인합니다. provider가 이미 적은 marker는 남으며 이를 실제 모든 하위 함수의 실패 후 DTB 형식으로 일반화하지 않습니다."
+      },
+      {
+        "lesson": "os2296",
+        "symbols": [
+          "fdt_create_empty_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "완성 뒤 self open·같은 buffer와 여유 크기. 마지막 호출은 fdt_open_into(buf,buf,bufsize)로 source와 destination이 같습니다. 완성 후 제공한 용량에서 편집 가능한 형태로 여는 요청이며 그 결과를 그대로 반환합니다. 실제 block 이동과 여유 공간 처리 알고리즘은 open_into의 구현에서 설명할 항목입니다. 처음 create의 bufsize와 마지막 open_into의 bufsize가 같은 것을 확인합니다. wrapper에서 buffer를 새로 할당하거나 반환 pointer를 교체하는 코드가 없다는 점을 주석에 적습니다."
+      }
+    ]
+  },
+  "scripts/dtc/libfdt/fdt_strerror.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 60,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2297",
+        "symbols": [
+          "FDT_ERRTABENT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "오류 이름 표·designated initializer와 문자열화. FDT_ERRTABENT(val)는 배열 index [val]에 .str=#val을 지정합니다. #는 macro 인자 token의 이름을 문자열로 만드는 연산이므로 숫자 자체의 decimal 문자열과 다릅니다. 구조체 한 field와 희소 index 배열을 이용해 오류 번호에서 상수 이름을 찾습니다. FDT_ERR_BADNCELLS의 table 위치와 문자열 FDT_ERR_BADNCELLS를 연결합니다. index가 enum/error 번호로 정해져 선언 줄의 순서와 분리되는 C 지정 초기화 문법을 읽습니다."
+      },
+      {
+        "lesson": "os2298",
+        "symbols": [
+          "fdt_errtable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "오류 table 크기·요소 수와 빈 항목. 표는 오류 번호 1부터 19를 이름에 연결하며 지정되지 않은 index 0은 정적 초기화로 NULL입니다. FDT_ERRTABSIZE는 sizeof(배열)/sizeof(첫 요소)를 int로 변환합니다. 요소 크기로 전체 바이트를 나누는 배열 길이 계산은 배열이 pointer로 decay한 함수 인자에 그대로 적용할 수 없습니다. 최대 지정 index 19로 table 크기 20이 되는 이유를 계산합니다. 조회 시 범위 확인 뒤 str가 NULL인지도 검사하는 두 조건을 읽습니다."
+      },
+      {
+        "lesson": "os2299",
+        "symbols": [
+          "fdt_strerror"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "오류 문자열·양수 성공 위치와 0 성공. errval>0이면 valid offset/length 문자열, 0이면 no error 문자열을 반환합니다. 일부 libfdt API의 성공 값은 위치나 길이이며 모든 성공이 0이라는 규칙은 아닙니다. fdt_strerror는 설명을 고를 뿐 해당 offset이 실제 트리에서 유효한지를 검증하지 않습니다. 0, 1, INT_MAX의 문자열 결과를 비교합니다. 사용 중인 API의 성공 반환 계약을 먼저 읽고 문자열 helper의 부호 분류를 연결합니다."
+      },
+      {
+        "lesson": "os2300",
+        "symbols": [
+          "fdt_strerror"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "음수 오류 lookup·범위와 알 수 없는 값. 음수이면 -errval을 table index로 사용하되 table 크기 미만인지와 항목의 str가 존재하는지를 확인합니다. 알려진 오류는 상수 이름, 그 외는 unknown error 문자열입니다. INT_MIN에 unary minus를 적용하는 signed overflow는 이 원본의 별도 경계 문제이며 fixture는 그 값을 실행하지 않았습니다. -BADNCELLS, -ALIGNMENT, -1000의 결과를 풉니다. table bounds 검사와 int negation의 표현 가능성을 별개의 조건으로 읽어 모든 int 입력의 안전성을 주장하지 않습니다."
+      },
+      {
+        "lesson": "os2301",
+        "symbols": [
+          "fdt_errtable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 조회 오류·없는 대상과 잘못된 식별자. NOTFOUND는 대상 node/property 부재, EXISTS는 이미 존재하는 대상입니다. BADOFFSET은 범위 밖 또는 부적절한 종류의 위치, BADPATH는 잘못된 경로 형식, BADPHANDLE은 길이/값이 잘못된 phandle입니다. 오류 이름 lookup은 이 조건을 검사하는 parser 자체가 아니며 의미는 공개 header의 설명과 함께 읽습니다. 없는 선택 property와 손상된 offset을 기본값으로 함께 처리하지 않습니다. phandle은 node를 식별하는 숫자이고 byte offset과 다른 역할임을 예제로 구분합니다."
+      },
+      {
+        "lesson": "os2302",
+        "symbols": [
+          "fdt_errtable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 상태·공간·정렬 오류를 읽는 방법. NOSPACE는 출력 공간 부족, BADSTATE는 순차 작성 중 부적절한 상태, TRUNCATED는 block이나 종료가 부족한 자료, ALIGNMENT는 DTB base의 8바이트 정렬 위반입니다. 같은 실패 부호라도 원인과 caller가 고칠 조건은 다릅니다. 오류 이름만으로 buffer 확대가 모든 문제를 해결한다고 해석하지 않습니다. 생성 wrapper의 단계 실패, core header의 정렬 실패, block 끝 넘음을 각 오류와 연결합니다. open_into를 통한 공간 준비와 잘린 입력 자료의 복구를 구별합니다."
+      },
+      {
+        "lesson": "os2303",
+        "symbols": [
+          "fdt_errtable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 형식 오류·magic·version·구조·배치. BADMAGIC은 식별 magic 오류, BADVERSION은 작업에 지원되지 않는 version 조건, BADSTRUCTURE는 tag 계층 등 구조 손상, BADLAYOUT은 read-write 작업이 처리하지 못하는 block 배치입니다. 이 고정 library의 FIRST_SUPPORTED_VERSION은 2이며 version 15 자체를 무조건 미지원으로 설명하지 않습니다. version과 last compatible 관계도 확인합니다. version15/last16의 오류는 version<lastcompatible 관계를 위반하기 때문임을 적습니다. 형식이 정상이어도 쓰기 API의 배치 조건을 별도로 맞춰야 하는 경우를 구분합니다."
+      },
+      {
+        "lesson": "os2304",
+        "symbols": [
+          "fdt_errtable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 값·overlay·자원·flag·내부 오류. BADNCELLS는 cell 개수 형식/값, BADVALUE는 기대와 다른 property 값, BADOVERLAY는 구조상 맞아도 적용에 필요한 자료가 부족하거나 예상과 다른 overlay, NOPHANDLES는 식별자 범위 소진, BADFLAGS는 flag 조합, INTERNAL은 내부 assertion 실패를 표현합니다. 이 table은 오류 원인을 고치거나 overlay를 적용하지 않습니다. 주소 범위 초과 BADVALUE와 cell count 불지원 BADNCELLS를 비교합니다. 정상 phandle 범위 1..0xfffffffe와 자원 소진을 읽되 실제 overlay/할당 구현은 해당 원본 수업에서 이어갑니다."
+      }
+    ]
+  }
+}

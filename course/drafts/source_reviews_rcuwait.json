@@ -1,0 +1,92 @@
+{
+  "include/linux/rcuwait.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 93,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1441",
+        "symbols": [
+          "rcuwait"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1442",
+        "symbols": [
+          "prepare_to_rcuwait"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1443",
+        "symbols": [
+          "___rcuwait_wait_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1444",
+        "symbols": [
+          "___rcuwait_wait_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1445",
+        "symbols": [
+          "rcuwait_wait_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1446",
+        "symbols": [
+          "rcuwait_wait_event_timeout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      },
+      {
+        "lesson": "os1447",
+        "symbols": [
+          "__rcuwait_wait_event_timeout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuwait header authored with exact wake/finish source-region explanations: singleRCUtask vswaitqueue/init/staticNULL/active snapshot no serialization orsleepguarantee,preparecurrent RCUassign andexternal taskwrite serialization,commonloop setstate/condition-first/signalstate/-EINTR/cmd/finish,barrierA-B waittaskpub-condread vswakecondstore-taskread protocol notserialproof,generalwait schedule ret0/spuriousresume recheck,stateflavorconditionalinterruptibility,timeoutouterearlycondition/no-register,original___wait_cond_timeout conditiontrue ret0->1 successdistinction/false0 expiry,internal schedule_timeoutremaining andsignalcleanup/conditionreeval,finishNULL+TASK_RUNNING notfree,wakeRCUprotection/MB/deref/wakeprocessret0NULLoralreadyrunning/noautocondchange. Exactfullheader and original timeoutmacro plus exactfinish(kernel/rcu/update.c) andwake(kernel/exit.c) serialtask/signal/schedule/RCU/barrier models19007assertions eachoptimized+ASanUBSan:1000repeat immediatecond/three-schedules success/initialandlatersignal/conditionwins signal/initialtrue5and0/false0nogeneration/deadlinecondsuccess1/expiry0/interruptfinish,activecheckingrunningwake0/sleepingwake1/NULLwake0/barrierhooks/finishcleanup. Wakeprocessreturncontract cross-read kernel/sched/core.c4401..4414 doc. Onlyrcuwait.h iswholefile completed; exit.c/update.c/wait.h/schedcore usedregions only notwhole-filecompletion. No realscheduler/RCUgraceperiod/concurrency/lostwake/LKMM/actualticktimingproof; sourceunchanged."
+      }
+    ]
+  }
+}

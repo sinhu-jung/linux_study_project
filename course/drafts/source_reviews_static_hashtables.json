@@ -1,0 +1,180 @@
+{
+  "include/linux/hashtable.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 209,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1149",
+        "symbols": [
+          "DEFINE_HASHTABLE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1150",
+        "symbols": [
+          "DEFINE_READ_MOSTLY_HASHTABLE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1151",
+        "symbols": [
+          "HASH_BITS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1152",
+        "symbols": [
+          "hash_min"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1153",
+        "symbols": [
+          "hash_del"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1154",
+        "symbols": [
+          "hash_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1155",
+        "symbols": [
+          "hash_for_each_possible"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1156",
+        "symbols": [
+          "hash_hashed"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1157",
+        "symbols": [
+          "hash_empty"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1158",
+        "symbols": [
+          "hash_del"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1159",
+        "symbols": [
+          "hash_add_rcu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1160",
+        "symbols": [
+          "hash_del_rcu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1161",
+        "symbols": [
+          "hash_for_each"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1162",
+        "symbols": [
+          "hash_for_each_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      },
+      {
+        "lesson": "os1163",
+        "symbols": [
+          "hash_for_each_possible_rcu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole static hashtable header read and authored: array declaration/init/readmostly placement, size and pointer contracts/valid bits, typed hash choice, hlist pprev O1known-node deletion, head LIFO/no allocation-resize-keycompare, collision filtering/duplicate node/key mutation, hashed state not table identity, allbucket empty scan, ordinary del vs memory lifetime, RCU initialized publication/writer serialization/next-preserving deletion/graceperiod, nested-loop break, safe current deletion/possible-safe collision filtering, RCU cond and notrace not protection. Exact header+complete hlist tail+selected exact RCU helpers:8791928 checks each BITS64/32 optimized andASanUBSan/30000 mutations; independent bucket and serial reference, expected pointer-not-array compile rejection. Serial RCU model/no real graceperiod-concurrency-memoryordering-lockdep/native32 proof."
+      }
+    ]
+  }
+}

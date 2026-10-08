@@ -1,0 +1,42 @@
+"""Swap-in, VMA names, injection and configuration gates."""
+ROWS = [
+('WILLNEED Swap-in: PTE 잠금과 Shmem XArray 순회를 I/O 앞에서 놓기', 'swapin_walk_pmd_entry',
+ 'swap에 있는 데이터를 미리 읽으려면 어떤 swap entry를 읽을지 찾는 보호와 실제 읽기 작업을 분리해야 합니다. 페이지 테이블 spinlock이나 RCU 읽기 구간을 잡은 채 긴 작업을 수행하면 다른 작업의 진행과 객체 수명 관리에 문제가 생깁니다.',
+ 'swapin_walk_pmd_entry는 PTE를 map/lock해 일반 swap entry를 찾습니다. present나 특수 non-swap entry는 건너뜁니다. 읽을 entry가 있으면 PTE 잠금을 놓고 read_swap_cache_async를 호출해 얻은 folio 참조를 put합니다. 다음 주소에서는 PTE를 다시 map/lock합니다. 끝에서 남은 잠금을 정리하고 swap_read_unplug,cond_resched 후 0입니다.',
+ '세 PTE가 [present,일반 swap,특수 entry]라면 일반 swap 항목에만 읽기 helper를 호출합니다. swap처럼 표현된 모든 entry가 디스크 위치인 것은 아닙니다. 읽기 helper가 NULL을 반환해도 이 callback에는 그것을 음수 오류로 바꾸는 분기가 없으므로 0을 모든 swap-in 성공 보장으로 해석하지 않습니다.',
+ 'Shmem의 희소 XArray와 주소 변환',
+ 'shmem_swapin_range는 mapping->i_pages에서 linear_page_index(start)부터 linear_page_index(end)-1까지 순회합니다. 일반 folio 객체는 건너뛰고 value인 일반 swap entry만 읽습니다. 읽기 전에 xas_pause와 rcu_read_unlock을 하고 이후 RCU 잠금을 다시 잡습니다. 주소는 vm_start+(xa_index-vm_pgoff)*PAGE_SIZE입니다. vm_pgoff=10,인덱스=12라면 VMA 시작에서 두 페이지 뒤입니다. 끝 인덱스의 -1은 반열린 주소 범위를 XArray의 포함 끝으로 바꾸기 위한 것입니다.',
+ ('swap 모양의 특수 entry도 모두 디스크 읽기를 하나요?', '아닙니다.non_swap_entry이면 건너뜁니다.', '그렇습니다.swap 형식이면 언제나 유효 디스크 위치입니다.', '자료 표현과 entry 종류를 구분하는 검사가 잘못된 I/O를 피합니다.'),
+ ('Shmem은 read_swap_cache_async 동안 같은 RCU 읽기 구간을 유지하나요?', '아닙니다.순회를 pause하고 RCU 잠금을 놓았다가 다시 잡습니다.', '그렇습니다.전체 I/O 동안 RCU 잠금을 절대로 놓지 않습니다.', '순회 상태 보존과 긴 읽기 작업 구간을 분리하는 순서를 따릅니다.')),
+('익명 VMA 이름: 같은 문자열 재사용과 참조 포화 시 복제', 'replace_anon_vma_name',
+ '익명 메모리 영역에 이름을 붙이면 여러 영역의 용도를 구분할 수 있습니다. 이름을 VMA마다 무조건 복사하면 공간이 낭비되고,무조건 공유하면 참조 수의 한계와 수명 처리를 놓칠 수 있어 별도 이름 객체를 관리합니다.',
+ 'alloc은 문자열 길이에 NUL 1바이트를 더해 flexible array를 포함한 구조체를 할당하고 kref를 초기화한 뒤 복사합니다. replace는 새 이름이 NULL이면 기존 참조를 놓고 이름을 지웁니다. 이름이 같으면 그대로 두고,다르면 reuse로 새 참조를 얻은 뒤 기존 참조를 놓습니다. mm_inline.h의 equality는 포인터가 같거나 두 비NULL 문자열이 strcmp로 같으면 true입니다.',
+ '서로 다른 객체가 모두 cache라는 문자열을 담아도 equality는 true일 수 있습니다. reuse는 refcount가 REFCOUNT_MAX보다 작으면 참조를 늘려 같은 객체를 반환하고,한계 이상이면 이름 문자열로 새 객체를 할당합니다. 새 할당 실패는 NULL이 될 수 있으며 replace는 이를 별도 오류 검사하지 않고 저장한 뒤 0을 반환합니다. 이름 보존이 항상 성공한다고 과장하지 않습니다.',
+ '이름 지정 범위와 허용 대상',
+ 'madvise_set_anon_name은 시작 정렬·길이 올림·넘침·빈 범위를 검사한 뒤 VMA walker를 사용하며 이 함수 자체가 mmap_lock을 새로 잡지는 않습니다. visitor는 일반 파일 매핑을 EBADF로 거절하고 anon shmem은 허용합니다. 기존 flag를 유지해 VMA 갱신을 요청하고 ENOMEM은 EAGAIN으로 바꿉니다. CONFIG_ANON_VMA_NAME이 없으면 replace stub은 비NULL 이름에 EINVAL,NULL에는 0입니다.',
+ ('포인터가 다른 두 이름 객체는 항상 다른 이름인가요?', '아닙니다.비NULL 문자열 내용이 같으면 같은 이름으로 봅니다.', '그렇습니다.문자열 내용은 전혀 비교하지 않습니다.', '객체 동일성과 문자열 값의 동일성을 모두 고려하는 equality helper입니다.'),
+ ('reuse가 참조 한계에서 새 할당에 실패하면 replace가 ENOMEM을 내나요?', '아닙니다.이 구현은 NULL을 저장하고 0을 반환합니다.', '그렇습니다.모든 할당 실패는 여기서 ENOMEM입니다.', '호출 helper의 NULL 가능성과 호출자의 실제 오류 검사 여부를 함께 읽어야 합니다.')),
+('Madvise 메모리 오류 주입: 거대 페이지 크기를 미리 저장하는 이유', 'madvise_inject_error',
+ '메모리 오류 처리 경로를 시험하려면 실제 하드웨어 고장 없이 오류를 주입할 수 있어야 합니다. 그러나 페이지 격리·이동이 대상 객체의 형태를 바꿀 수 있으므로 다음 주소를 계산할 크기는 변화 전에 확보해야 합니다.',
+ 'CONFIG_MEMORY_FAILURE에서 helper는 CAP_SYS_ADMIN이 없으면 EPERM입니다. 주소마다 get_user_pages_fast로 한 페이지를 얻고 결과가 1이 아니면 그 값을 그대로 반환합니다. PFN과 compound_head의 page_size를 먼저 구합니다. SOFT_OFFLINE은 soft_offline_page,HWPOISON은 memory_failure를 호출합니다. 뒤의 memory_failure 경로에서는 EOPNOTSUPP를 0으로 바꾸며 그 밖의 오류는 반환합니다.',
+ '현재 compound page가 2MiB이고 soft offline 과정에서 작은 페이지들로 분해되면 처리 뒤 크기를 읽어 다음 위치를 계산할 때 원래 범위를 잘못 재방문할 수 있습니다. 그래서 원래 크기를 저장하고 start+=size로 전진합니다. 크기 변수는 get_user_pages_fast 요청 개수 1과 같은 단위가 아니며 compound page 전체 크기입니다.',
+ '참조 인계와 특수 반환',
+ '두 오류 처리 helper에 MF_COUNT_INCREASED를 전달하며 이 호출부에는 성공 뒤 일반 folio_put을 추가하지 않습니다. HWPOISON 경로에는 ACTION_REQUIRED와 SW_SIMULATED도 있습니다. get_user_pages_fast가 0이면 조건 ret!=1 때문에 그대로 0을 반환하며 이후 주소 처리는 하지 않습니다. 이 소스 동작을 모두 처리한 성공과 혼동하지 않습니다. 이 수업은 원문 분석이며 실제 메모리 손상 주입을 실행하지 않았습니다.',
+ ('soft offline 전에 compound page 크기를 저장하는 이유는?', '처리 중 페이지가 분해되어 이후 크기가 달라질 수 있기 때문입니다.', '페이지 주소를 문자열로 출력하려고 필요하기 때문입니다.', '처리로 바뀌는 객체에서 순회 간격을 나중에 읽으면 다음 위치 계산이 달라질 수 있습니다.'),
+ ('get_user_pages_fast가 0이면 이 helper는 계속 다음 주소를 보나요?', '아닙니다.0을 그대로 반환하며 끝냅니다.', '그렇습니다.0은 다음 주소로 계속 진행하라는 뜻입니다.', 'ret!=1 분기의 직접 return을 따라야 실제 처리 범위를 알 수 있습니다.')),
+('Madvise CONFIG와 봉인 검사: API 번호가 있어도 모든 정책이 허용되지는 않는다', 'madvise_behavior_valid',
+ '같은 API 번호라도 커널에 기능이 포함되어 있는지와 특정 VMA에 적용 가능한지는 별개입니다. 빌드 설정의 허용표와 실행 중 메모리 보호 정책을 구분해야 EINVAL과 EPERM의 원인을 찾을 수 있습니다.',
+ 'madvise_behavior_valid는 KSM의 MERGEABLE·UNMERGEABLE,THP의 HUGEPAGE·NOHUGEPAGE·COLLAPSE,메모리 실패 처리의 SOFT_OFFLINE·HWPOISON을 CONFIG 조건으로 허용합니다. do_madvise는 이 검사를 먼저 합니다. VMA visitor는 이후 can_modify_vma_madv가 false이면 EPERM입니다. 지원 번호 검사와 개별 VMA 정책 검사가 다른 위치에 있습니다.',
+ 'THP가 없는 빌드에서는 process_madvise의 허용표에 COLLAPSE가 있어도 do_madvise의 최종 지원 검사를 통과하지 못할 수 있습니다. 반대로 빌드가 지원한다고 봉인된 모든 메모리를 버릴 수 있는 것은 아닙니다. mseal helper는 discard 계열인지와 봉인 여부,읽기 전용 익명 메모리인지의 조합을 봅니다.',
+ '봉인 조건의 정확한 조합',
+ 'mseal.c의 discard 목록은 FREE,DONTNEED,DONTNEED_LOCKED,REMOVE,DONTFORK,WIPEONFORK입니다. 파일 또는 SHARED VMA는 이 helper의 ro-anon 조건에서 제외됩니다. 익명 private VMA에서 VM_WRITE가 없거나 arch_vma_access_permitted의 쓰기 허용이 false이면 ro-anon입니다. discard이면서 can_modify_vma가 false이고 ro-anon일 때 거절합니다. 이 검사 하나가 봉인된 VMA의 모든 madvise를 무조건 거절하는 것은 아닙니다. 기능 비활성 stub은 true입니다.',
+ ('process_madvise 허용표에 COLLAPSE가 있으면 빌드 설정과 무관하게 성공하나요?', '아닙니다.do_madvise의 CONFIG별 지원 검사도 통과해야 합니다.', '그렇습니다.바깥 허용표 하나가 모든 검사를 대신합니다.', '서로 다른 층의 허용 검사를 순서대로 통과해야 실제 작업에 도달합니다.'),
+ ('봉인 검사는 모든 behavior를 무조건 거절하나요?', '아닙니다.discard 목록과 읽기 전용 익명 조건 등을 조합합니다.', '그렇습니다.봉인 비트만 있으면 모든 조언에 EPERM입니다.', '정책 helper의 여러 조건을 하나의 과도한 규칙으로 축약하면 실제 동작과 달라집니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'메모리','mm/madvise.c',symbol,why,principle,use,
+              '빌드 지원·실행 권한·VMA 정책·객체 참조·I/O 완료 여부를 각각 확인하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('대조 범위','Linux v6.12 mm/madvise.c의 swap-in·이름 관리·오류 주입·behavior 허용표와 mm_inline.h 이름 helper,mseal.c 및 vma.h 정책 helper를 대조했습니다. swap·memory_failure·mseal 전체 구현이나 실제 오류 주입 실행은 별도 범위입니다.')])

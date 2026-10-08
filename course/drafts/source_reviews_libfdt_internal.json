@@ -1,0 +1,180 @@
+{
+  "scripts/dtc/libfdt/libfdt_internal.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 192,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2246",
+        "symbols": [
+          "FDT_ALIGN"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt alignment·다음power-of-two경계로올림. FDT_ALIGN은(x+a−1)&~(a−1)로다음 alignment경계에올립니다. a가 power-of-two이고덧셈이표현범위안인사용계약을읽어야합니다. FDT_TAGALIGN은 tag크기 4를사용하여가변 node이름과 propertydata뒤다음 tag를정렬합니다. x5·a4는 8,이미 4의배수면그대로인예제를풉니다. 모든양수 a를지원하는일반나눗셈공식이라고해석하지않습니다."
+      },
+      {
+        "lesson": "os2247",
+        "symbols": [
+          "FDT_RO_PROBE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt probe macro·음수오류early return. FDT_RO_PROBE는 localint32totalsize_에 fdt_ro_probe_결과를저장하고음수이면현재 caller함수에서그값을 return합니다. 단순 bool검사나별도함수 scope반환이아닙니다. fdt_move등 caller가자료를이동하기전최소 headerprobe를재사용합니다. macro호출의 return이 caller의흐름을끝내는것을주석으로답니다. probe가전체 tree검증과같다는주장을하지않고실제검사범위를읽습니다."
+      },
+      {
+        "lesson": "os2248",
+        "symbols": [
+          "fdt_offset_ptr_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt raw structure pointer·검사와주소계산분리. 내부 rawhelper는 constchar*blob+structureoffset+상대 offset을반환합니다. negative·range·overflow검사를이 helper에추가한것처럼설명하지않습니다. 공개 fdt_offset_ptr가조건검사뒤이를호출합니다. writablewrapper는 void*입력의같은위치를 uintptr_t경유 cast로제공합니다. fixture의 structurebase56·offset0주소와 const/writablewrapper동일위치를확인합니다. mutableblob계약과 bounds검사 API를구별합니다."
+      },
+      {
+        "lesson": "os2249",
+        "symbols": [
+          "fdt_mem_rsv_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt reserve pointer·base와entry stride. reservehelper는 blob시작+reserveoffset을 fdt_reserve_entry*로바꾸고 n을더합니다. Cpointer덧셈은 entrysizeof단위이므로 n1은 16byte뒤입니다. bound·종료 entry검사는상위 reserveAPI계약이고이 rawhelper는직접검사하지않습니다. writable버전은같은위치를반환합니다. fixture의유효 reserve0이 blob+40인지확인합니다. n을 byteoffset처럼설명하지않고전체 reserve범위와 terminator사용법을이어읽습니다."
+      },
+      {
+        "lesson": "os2250",
+        "symbols": [
+          "fdt32_ld_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 내부정수load·자연정렬문맥. 내부 fdt32/64_ld_는 typedpointer역참조후 endian변환을합니다. 주석은 naturallyaligned주소또는 unalignedread를문제없이다루는 platform을가정하며그렇지않으면공개 fdtXX_ld를쓸수있다고합니다. 내부구조 field와 property값접근의문맥을구별합니다. fixture의정렬 header32와 reserve64load를확인합니다. 임의 unalignedpointer로이 helper를호출하는테스트를모든 platform안전하다고추천하지않습니다."
+      },
+      {
+        "lesson": "os2251",
+        "symbols": [
+          "FDT_SW_MAGIC"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt sequential-write magic·완성전blob구분. FDT_SW_MAGIC은~FDT_MAGIC으로완성 DTB와작성중 sequential-writeblob을구별합니다. probe는이 magic에서 VALID_INPUT가정이없고 structure size0이면 BADSTATE로거부합니다. headercheck의완성 magic조건과 probe의두 format허용조건은다릅니다. fixture의 SWmagic·size0오류와 size72probe통과를비교합니다. fdt_check_header가 SWmagic도동일하게허용한다고해설하지않습니다."
+      },
+      {
+        "lesson": "os2252",
+        "symbols": [
+          "FDT_ASSUME_MASK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt assumption default·검사 생략의입력계약. FDT_ASSUME_MASK가외부정의되지않으면 0입니다. source는 assumption을안켜는최대검사문맥을설명하고전제를켜면일부 guard를생략합니다. 이는 invaliddata를자동수리하거나유효성을증명하는 flag가아닙니다. compile조건과입력/호출자계약을함께읽습니다. fixture의 mask0·LATEST4·VALID_DTBandINPUTandLATEST7에서 valid자료만사용하는조건차이를읽습니다. 가정이켜진상태에 malformed자료를억지로넣어안전성을주장하지않습니다."
+      },
+      {
+        "lesson": "os2253",
+        "symbols": [
+          "ASSUME_PERFECT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt PERFECT·검증된최신자료의전제. ASSUME_PERFECT는 0xff로최신 format·유효 data·유효인자등전제를넓게켭니다. 원문은잘못된 tree/인자가 undefinedbehavior나 crash를낼수있고완전히검증된최신자료에서코드크기를줄이려는문맥이라고설명합니다. 전체수정이 transaction으로원복된다는가정도하지않습니다. mask7fixture의검산을 PERFECT0xff전체 proof로확장하지않습니다. actual입력검증의증거와검사생략설정을분리해주석답니다."
+      },
+      {
+        "lesson": "os2254",
+        "symbols": [
+          "ASSUME_VALID_DTB"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt VALID_DTB·자료전제와parameter검사구분. VALID_DTB bit0은 headermetadata·기본계층이정상인자료를가정합니다. 주석은자료자체에대한 header/tag검사를줄이고 callerparameter전제와구분한다고합니다. truncated·malicious·완전한 garbage를같은정상입력으로다루는안전보장이아닙니다. 자료의유효성과 offset인자의유효성을두열로적습니다. mask7에는추가 INPUT전제도있으므로 VALID_DTB하나의효과와섞지않습니다."
+      },
+      {
+        "lesson": "os2255",
+        "symbols": [
+          "ASSUME_VALID_INPUT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt VALID_INPUT·DTB전제 위에 올바른인자. VALID_INPUT bit1은 VALID_DTB에더해유효 offset등올바른함수인자를가정합니다. 원문은 VALID_DTB없이켜는것이의미없다고설명합니다. typedef나 compileflag가이의존관계를자동검증하는 enumresolver는아닙니다. 선택 dataset의유효인자계약을 caller가충족해야합니다. mask7fixture는실제 validblob·validoffset에서만 guard생략함수를실행합니다. 잘못된인자의에러 case는이전제없는 mask에서검산했습니다."
+      },
+      {
+        "lesson": "os2256",
+        "symbols": [
+          "ASSUME_LATEST"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt LATEST·구버전지원 코드 생략. LATEST bit2는최신지원 version자료를가정해 version검사와 olderformat처리코드를줄입니다. 실제 headerversion을최신으로수정하는옵션이아닙니다. fixture의 mask4는 latestformat정상자료와 version이아닌오류검사를실행하고구버전오류는 default문맥에서확인했습니다. 구버전 fieldsize·property8bytelegacyalignment와 LATESTbranch를연결합니다. 실제자료 format을바꾸는 serializer와검사생략정책을구별합니다."
+      },
+      {
+        "lesson": "os2257",
+        "symbols": [
+          "ASSUME_NO_ROLLBACK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt NO_ROLLBACK·실패수정의남는자료. NO_ROLLBACK bit3은공간부족등실패때 property이름을 stringtable에서되돌리는작업을생략할수있다는전제입니다. 주석은 tree가덜효율적인상태로남을수있는것과완전한 transaction원복을구별합니다. core읽기 fixture가수정/rollback구현을실행한것은아닙니다. property이름추가뒤실제 property추가실패라는 doc예제를그립니다. 자료정상성과불필요한 string이남는것의차이를읽습니다."
+      },
+      {
+        "lesson": "os2258",
+        "symbols": [
+          "ASSUME_LIBFDT_ORDER"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt ORDER·명세와생성도구의배치차이. ORDER bit4는 reserve→structure→strings순서를가정합니다. 주석은이순서가 device-tree명세가강제하는것은아니지만 libfdt와 compiler의일반배치라고설명하며 fdt_open_into의재배치확인/수정능력을줄인다고합니다. format허용범위와도구편의배치를구별합니다. fixture의 40→56→128순서를 example로읽습니다. 이 dataset이모든허용 DTB배치를대표한다고말하지않습니다."
+      },
+      {
+        "lesson": "os2259",
+        "symbols": [
+          "ASSUME_LIBFDT_FLAWLESS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt FLAWLESS·library 내부정상성 전제. FLAWLESS bit5는 library자체에내부 bug가없다는전제로일부내부검사를줄입니다. 입력 tree유효성이나 calleroffset정상성의전제와는다른층입니다. source의가능한 internalerror검사와유저입력검사를같이묶어모두없애는옵션으로설명하지않습니다. library구현·자료·parameter의세전제층을구분합니다. current6buildfixture가내부 bug부재전체를증명한다는주장을하지않습니다."
+      },
+      {
+        "lesson": "os2260",
+        "symbols": [
+          "can_assume_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt can_assume·bit overlap과token결합. can_assume_(mask)는 FDT_ASSUME_MASK&mask를 bool로반환합니다. 여러 bit를묶은 mask는하나라도겹치면 true이고모두포함검사와같지않습니다. can_assume(_assume)macro는 ASSUME_와이름을 tokenpaste하여이 helper에넘깁니다. compile상수정책을각 guard에연결합니다. mask4에서 LATEST|INPUT인 6query는 true인 fixture를확인합니다. source는보통하나의 flag를 query하므로조합질문의의미를구별합니다."
+      }
+    ]
+  }
+}

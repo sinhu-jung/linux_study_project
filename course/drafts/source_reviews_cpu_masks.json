@@ -1,0 +1,98 @@
+{
+  "lib/cpumask.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 204,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os796",
+        "symbols": [
+          "cpumask_next_wrap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "CPU 번호와 개수",
+          "현재 Header Macro",
+          "Finder의 역할"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      },
+      {
+        "lesson": "os797",
+        "symbols": [
+          "alloc_cpumask_var_node",
+          "free_cpumask_var"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "크기 계산",
+          "해제 종류"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      },
+      {
+        "lesson": "os798",
+        "symbols": [
+          "alloc_bootmem_cpumask_var",
+          "free_bootmem_cpumask_var"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "초기 실행 단계",
+          "정렬과 내용"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      },
+      {
+        "lesson": "os799",
+        "symbols": [
+          "cpumask_local_spread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "거리 순서",
+          "열거 비용"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      },
+      {
+        "lesson": "os800",
+        "symbols": [
+          "distribute_cpu_mask_prev",
+          "cpumask_any_and_distribute"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "상태의 범위",
+          "CONFIG 예외"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      },
+      {
+        "lesson": "os801",
+        "symbols": [
+          "distribute_cpu_mask_prev",
+          "cpumask_any_distribute"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "빈 집합",
+          "동작을 읽는 순서"
+        ],
+        "review": "Whole lib/cpumask.c read and authored: wrap helper vs actual current header macro, offstack and singleCPU alternate configurations, normal/boot allocation ownership and failures, NUMA ordinal forwarding and WARN no fallback, shared perCPU cursor and empty masks. Two independent DEBUG configurations executed; modeled primitives and absence of physical hotplug/NUMA concurrency stated."
+      }
+    ]
+  }
+}

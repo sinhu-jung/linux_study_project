@@ -1,0 +1,290 @@
+{
+  "include/linux/percpu_counter.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 286,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os956",
+        "symbols": [
+          "percpu_counter",
+          "PERCPU_COUNTER_LOCAL_BATCH"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os958",
+        "symbols": [
+          "percpu_counter_init_many",
+          "percpu_counter_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os972",
+        "symbols": [
+          "percpu_counter_read_positive",
+          "percpu_counter_read",
+          "percpu_counter_sum",
+          "percpu_counter_sum_positive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os973",
+        "symbols": [
+          "percpu_counter_add_local",
+          "percpu_counter_limited_add",
+          "percpu_counter_compare",
+          "percpu_counter_sub_local"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os974",
+        "symbols": [
+          "percpu_counter_add",
+          "percpu_counter_init_many",
+          "percpu_counter_init",
+          "percpu_counter_destroy_many",
+          "percpu_counter_destroy",
+          "percpu_counter_set",
+          "percpu_counter_add_batch",
+          "percpu_counter_add_local",
+          "percpu_counter_initialized",
+          "percpu_counter_sync"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os975",
+        "symbols": [
+          "percpu_counter_limited_add",
+          "percpu_counter_compare",
+          "__percpu_counter_compare"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os976",
+        "symbols": [
+          "percpu_counter_sub",
+          "percpu_counter_inc",
+          "percpu_counter_dec",
+          "percpu_counter_sub_local"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      }
+    ]
+  },
+  "lib/percpu_counter.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 407,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os957",
+        "symbols": [
+          "__percpu_counter_init_many"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os959",
+        "symbols": [
+          "percpu_counter_destroy_many",
+          "percpu_counter_destroy",
+          "percpu_counter_initialized"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os960",
+        "symbols": [
+          "percpu_counter_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os961",
+        "symbols": [
+          "percpu_counter_add_batch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os962",
+        "symbols": [
+          "percpu_counter_add_batch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os963",
+        "symbols": [
+          "percpu_counter_sync"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os964",
+        "symbols": [
+          "__percpu_counter_sum"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os965",
+        "symbols": [
+          "__percpu_counter_compare",
+          "percpu_counter_compare"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os966",
+        "symbols": [
+          "__percpu_counter_limited_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os967",
+        "symbols": [
+          "__percpu_counter_limited_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os968",
+        "symbols": [
+          "compute_batch_value",
+          "percpu_counter_batch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os969",
+        "symbols": [
+          "percpu_counter_cpu_dead",
+          "percpu_counters",
+          "percpu_counters_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os970",
+        "symbols": [
+          "percpu_counter_fixup_free",
+          "percpu_counter_debug_descr",
+          "debug_percpu_counter_activate",
+          "debug_percpu_counter_deactivate"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      },
+      {
+        "lesson": "os971",
+        "symbols": [
+          "percpu_counter_startup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read, individually authored SMP/UP structure, central/local/error bounds, IRQ-local-CAS and fallback, current CPU sync, online|dying sum, compare/limited branches, allocation/key/shared lifetime, hotplug/dead fold, debug/startup and all API wrappers. Original full source serial fixture tests 8 SMP feature combinations plus UP against independent event totals and limited update reference, optimized and ASan/UBSan. Explicit CPU/migration/IRQ/locks/perCPU allocation/debug/lockdep/hotplug stubs; no real native SMP/concurrent IRQ/kernel framework execution proof."
+      }
+    ]
+  }
+}

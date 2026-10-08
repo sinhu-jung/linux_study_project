@@ -1,0 +1,268 @@
+{
+  "arch/arm64/kernel/alternative.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 300,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2128",
+        "symbols": [
+          "__ALT_PTR"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 상대 pointer·각 offset 필드 주소 기준. __ALT_PTR은 offset 필드 주소에 그 필드 값을 더합니다. descriptor 시작+offset이 아니라 &a->f+a->f이고 orig와 alt 두 필드의 주소가 다릅니다. ALT_ORIG_PTR과 ALT_REPL_PTR은 각각 해당 필드를 선택합니다. ELF의 label−점(.) 상대 relocation 생성과 대응하는 주소 복원 기술입니다. 두 필드가 4byte 떨어진 descriptor에 각 주소 기준을 표시합니다. 구조체 시작 기준으로 둘 다 복원하면 alt 주소가 틀어질 수 있음을 작은 숫자로 계산합니다."
+      },
+      {
+        "lesson": "os2129",
+        "symbols": [
+          "ALT_CAP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative tag 분리·번호와 callback 판정. ALT_CAP은 cpucap에서 ARM64_CB_BIT를 제거해 capability 번호를 얻고 ALT_HAS_CB는 tag bit 존재를 확인합니다. 같은 16bit 필드의 일부를 종류 표시로 사용하는 압축 표현을 읽는 방법입니다. callback tag가 켜진 값을 그대로 cpus_have_cap 번호로 전달하지 않습니다. 0x8006에서 cap6과 callback true를 각각 계산합니다. 선언 범위의 cap번호 상한 계약과 함께 읽어 tag와 번호 충돌을 막는 이유를 이해합니다."
+      },
+      {
+        "lesson": "os2130",
+        "symbols": [
+          "alternative_is_applied"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 적용 상태·bitmap과 잘못된 번호. 적용 상태는 applied_alternatives bitmap의 cap bit로 조회합니다. cpucap>=ARM64_NCAPS이면 WARN_ON 후 false를 반환하므로 범위 밖 bit 접근을 피합니다. 이 bitmap은 적용된 기능 상태이며 CPU hardware register를 매 조회마다 읽는 코드가 아닙니다. fixture의 32개 bit 조회와 32·65535 경계 경고를 확인합니다. 비트 번호 유효성·warning 모델·실제 kernel 경고 동작을 구별합니다."
+      },
+      {
+        "lesson": "os2131",
+        "symbols": [
+          "branch_insn_requires_update"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 내부 branch·끝 주소 포함 조건. 분기 목적지가 replacement 시작 이상이고 시작+alt_len 이하이면 재계산하지 않습니다. 원문의<=는 끝 주소를 포함하므로 일반 배열의 half-open 범위와 그대로 같다고 바꾸어 설명하면 안 됩니다. replacement 외부 목적지는 원본 instruction 위치 기준 offset으로 고칩니다. 시작−1·시작·끝·끝+1 네 경계의 true/false를 fixture 결과와 연결합니다. 끝 주소까지 포함하는 원문 조건을 주석에서 정확히 적습니다."
+      },
+      {
+        "lesson": "os2132",
+        "symbols": [
+          "get_alt_insn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative instruction 읽기·little endian에서CPU값. get_alt_insn은 replacement의__le32 값을 le32_to_cpu로 읽고 명령 종류별 상대 주소 조정을 수행합니다. CPU 연산 표현과 저장된 instruction byte 순서를 분리합니다. 마지막 반환 u32는 CPU 표현이고 patch_alternative에서 다시 cpu_to_le32로 저장합니다. 원본의읽기·변환·분류·반환·쓰기 경로를 그립니다. fixture는 native little endian의 identity provider이므로 big endian 실행 검증으로 해석하지 않습니다."
+      },
+      {
+        "lesson": "os2133",
+        "symbols": [
+          "get_alt_insn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative branch 재배치·외부 target 유지. immediate branch는 replacement PC에 원래 offset을 더해 target을 계산합니다. target이 replacement 범위 밖이면 target−original PC를 새 offset으로 encoding합니다. 같은 instruction의 새 실행 위치가 달라도 외부 목적지는 유지하는 PC-relative relocation 원리입니다. 내부 branch는코드 덩어리와 함께 이동하므로기존 상대 offset을유지합니다. fixture의선택 B/BL각 8위치·−256..256offset에서외부 target동일성과내부 word불변을확인합니다. conditional branch helper전체는 provider모델밖이므로모든 branch인코딩을실행했다고하지않습니다."
+      },
+      {
+        "lesson": "os2134",
+        "symbols": [
+          "get_alt_insn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative ADRP·4K page 기준 재계산. ADRP는 replacement pointer를 4K로내린주소에원래 pageoffset을더해 target을얻습니다. 원본 pointer의 4Kpage로기준을바꾸어 newoffset을 encoding합니다. instructionbyte주소그자체가아닌 page주소가연산기준인것이 branch와다릅니다. instruction의나머지 operandbit는 provider의선택 encoding에서유지됩니다. −32..32page·8위치예제의 oldpage+oldoffset==newpage+newoffset을독립적인나눗셈 oracle과확인합니다. 원문 SZ_4K와 align_down의단위를주석에적습니다."
+      },
+      {
+        "lesson": "os2135",
+        "symbols": [
+          "get_alt_insn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative literal 금지·처리한ADRP와나머지. branch와 ADRP를처리한뒤 uses_literal이 true인명령은 BUG로막습니다. PC-relative literal을모두자동지원하는 engine이아닙니다. ADRP는앞선 else-if에서처리되므로 literal분류에포함돼도그뒤 BUG에들어가지않는순서가중요합니다. 나머지명령은기존 word를돌려줍니다. fixture는선택 LDRliteral·ADR두종류의 BUG도달을 longjmp모델로확인하고 NOP·RET불변을확인합니다. 실제 kernelBUG의 crash·warning·복구동작을이모델과동일하다고하지않습니다."
+      },
+      {
+        "lesson": "os2136",
+        "symbols": [
+          "patch_alternative"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 복사loop·읽는PC와쓰는alias분리. patch_alternative는 replacement시작을복원하고 nr_inst번 get_alt_insn을호출해 updptr[i]에 little-endianword를씁니다. offset계산에는 origptr+i를전달하므로갱신 alias주소를실행 PC로혼동하지않습니다. nr_inst밖의 word는 loop가쓰지않습니다. 2word복사뒤 3번째 sentinel이그대로인 fixture를확인합니다. 실제 textpermission·aliasmapping·동시 CPU실행은이 data배열실험밖입니다."
+      },
+      {
+        "lesson": "os2137",
+        "symbols": [
+          "clean_dcache_range_nopatch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative private cache clean·패치중자기호출회피. cache.S의일반루틴도이 engine이패치할수있어 private cache clean을사용합니다. CTR의 DminLine에서 line크기 4<<field를얻고시작을 line경계로내려 dc civac를실행합니다. Cortex-A53errata때문에 clean만이아닌 clean+invalidate를 PoC까지하는이유가주석에있습니다. line32·start35·end70이면 32와 64line을다루는계산예제를만듭니다. fixture가 privilegeddc를실행하지않았음을구별하고실제 cache효과·errataCPU검증을주장하지않습니다."
+      },
+      {
+        "lesson": "os2138",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 적용필터·요청mask와실제cap두조건. engine은 region의 descriptor를하나씩읽고 cap번호를추출합니다. 요청 cpucap_mask bit가없거나 cpus_have_cap이 false면건너뜁니다. 요청단계에포함된기능과 system에있는기능이모두맞아야해당 descriptor의 patch를수행합니다. callback종류 bit는먼저제거한번호로판정합니다. mask에있음/없음과 systemcap있음/없음의 4칸에서교집합한칸만 patch조건임을적습니다. 실제 feature탐지·concurrentbitmap변경은별도계약입니다."
+      },
+      {
+        "lesson": "os2139",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 적용길이·일반같은길이와callback0. callback descriptor이면 alt_len!=0을 BUG_ON으로거부합니다. 일반 descriptor이면 alt_len!=orig_len을거부합니다. 어셈블러길이검사와 runtime입력계약을함께지킵니다. nr_inst는 orig_len/AARCH64_INSN_SIZE로계산되므로일반정규 instruction크기배수의 metadata생성계약도읽어야합니다. 4/4일반·4/0callback·4/8일반오류·4/4callback오류를표로풀어봅니다. 원문에없는 orig_len나머지검사를추가된것처럼설명하지않습니다."
+      },
+      {
+        "lesson": "os2140",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative module과kernel쓰기·alias선택. origptr은 descriptor의원본위치입니다. module이면 updptr=origptr이고 kernel이면 lm_alias(origptr)를사용합니다. 원본 text위치와쓰기경로주소의분리로 instruction주소재계산을유지합니다. patchcallback에는둘을모두전달합니다. 이 helper자체가 moduletextpermission전환을구현한다고추론하면안됩니다. is_moduletrue/false두경로의 origptr·updptr를그립니다. 실제 mapping정의·permission정책·modulelifecycle은호출문맥을이어읽습니다."
+      },
+      {
+        "lesson": "os2141",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative dispatch·callback주소와일반복사. callbacktag이면 ALT_REPL_PTR을함수 pointer로해석해사용하고아니면 patch_alternative를선택합니다. 같은 4인자인터페이스로호출하여 NOP생성같은맞춤패치와일반 instruction복사를통합합니다. tag가없을때 replacement주소는 instruction자료이지임의함수호출대상이아닙니다. cap6callbackmetadata와 cap3일반 metadata의두번째 offset의역할을비교합니다. descriptor생성과 runtime해석을끝까지연결하세요."
+      },
+      {
+        "lesson": "os2142",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative cache동기화·kernel과module책임. kernel대체는각원본영역의 Dcache를 privateclean으로처리하고 loop뒤 dsb(ish)·icache_inval_all_pou·isb를수행합니다. module은이 helper의 cache경로를건너뛰며 coremodule코드의 flush_module_icache가책임진다고주석에있습니다. 쓰기완료만으로다른 CPU의 instruction관찰이보장된다고설명하면안됩니다. patch쓰기→Dcache→DSB→Icache→ISB순서를적습니다. 실제 hardwarecache·barrier효과는이 fixture가실행한부분이아닙니다."
+      },
+      {
+        "lesson": "os2143",
+        "symbols": [
+          "__apply_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 적용bitmap·요청누적후system교집합. kernel경로의 cache동기화뒤 applied_alternatives에요청 mask를 OR하고 system_cpucaps와 AND합니다. 실제 descriptor별로한 bit씩설정하는코드가아니라요청 capability집합을누적한뒤 system지원집합으로제한합니다. module경로는이상태갱신도건너뜁니다. old0b001·request0b110·system0b101이면결과 0b101을계산합니다. descriptor존재개수와 capability적용상태집합을동일하게세지않습니다."
+      },
+      {
+        "lesson": "os2144",
+        "symbols": [
+          "apply_alternatives_vdso"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative VDSO·ELFsection에서region복원. VDSO적용은 all_capabilities를채우고 ELFheader의 sectionheader주소를얻어.altinstructions를찾습니다. section이없으면바로반환하고있으면 VDSObase+sh_offset부터+sh_size까지 region을만듭니다. 이후 kernel형식의 falseis_module로적용 helper를호출합니다. ELF파일 offset과 runtimebase를연결하는주소계산을그립니다. find_section구현·잘못된 ELF전체검증·실제 VDSO메모리 mapping은이함수본문밖입니다."
+      },
+      {
+        "lesson": "os2145",
+        "symbols": [
+          "kernel_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative kernelregion·linker경계와init수명. kernel_alternatives는 linker가제공하는__alt_instructions와끝 symbol을 begin/end로연결한 initconstregion입니다. range는 descriptor단위로 loop에서소비합니다. 배열의개수상수보다 linkersection경계를사용해여러번역단위가만든 metadata를모으는기술입니다. Cstruct배열과 linkersection시작/끝 symbol의관계를그립니다. 이파일이모든 descriptor본문을직접선언한것처럼해석하지않습니다."
+      },
+      {
+        "lesson": "os2146",
+        "symbols": [
+          "__apply_alternatives_multi_stop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative multi-stop·CPU0작업과단순poll. CPU0이아닌 CPU는 volatileall_alternatives_applied를 poll하며 cpu_relax하고완료후 isb합니다. CPU0은 boot_cpucaps의 complement인 remaining집합을만들어아직전체적용전임을 BUG_ON으로확인하고패치후완료 flag1을씁니다. stop_machine자체도패치대상일수있어단순 pollprotocol을쓴다는주석이있습니다. CPU0패치·cachebarrier·flagpublish와다른 CPUwait·isb를그립니다. volatile하나만으로임의멀티스레드 memoryordering이보장된다는일반화를하지않습니다."
+      },
+      {
+        "lesson": "os2147",
+        "symbols": [
+          "apply_alternatives_all"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 전체적용·VDSO와stop_machine. 전체적용은먼저 VDSO를처리하고 cpu_online_mask를대상으로 stop_machine에 multi_stopcallback을넘깁니다. liveSMP에서다른 CPU가패치중 instruction을동시에실행하는문제를피하려는호출문맥입니다. stop_machine알고리즘전체는이함수호출한줄에구현된것이아닙니다. VDSO→systemstopcallback→CPU0patch/다른 CPUwait흐름을연결합니다. actualstop_machine코드는다른파일학습으로이어집니다."
+      },
+      {
+        "lesson": "os2148",
+        "symbols": [
+          "apply_boot_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative boot적용·초기CPU기능만. 초기 boot기능탐지직후 bootCPU에서 boot_cpucapsmask로 kernelregion을적용합니다. 다른 CPU걱정이없는시점이라는주석이있고 CPU번호가 0아니면 WARN_ON합니다. 경고 macro자체가바로반환을넣는코드는아니므로경고후코드흐름과호출계약을구별합니다. boot단계와나중 remaining단계를표로적습니다. WARN_ON구문에 return이없는것을확인하고경고를실행중단과혼동하지않습니다."
+      },
+      {
+        "lesson": "os2149",
+        "symbols": [
+          "apply_alternatives_module"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative module적용·start와byte length. MODULES설정의함수는 start부터 start+length까지 region을만들고 all_capabilities를채운뒤 is_moduletrue로 helper를호출합니다. length는 descriptor개수가아니라 byte 크기이고 loop는복원된 begin/endpointer사이를순회합니다. 설정 off의빈 inline은헤더에서제공됩니다. 2개 12byteentry면 length24인예제를만듭니다. caller가유효 section·정규 descriptor길이를전달하는계약과전체 moduleloader검증을구별합니다."
+      },
+      {
+        "lesson": "os2150",
+        "symbols": [
+          "alt_cb_patch_nops"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative NOPcallback·정확히nr_inst개생성. NOPcallback은 origptr자료를복사하지않고 aarch64_insn_gen_nop로 instructionword를생성해 nr_inst개 updptr에 little-endian으로씁니다. kernellikelycapability의 branch를 NOP으로바꾸는 callback과연결됩니다. prototype의 descriptor·orig인자가여기서사용되지않아도공통인터페이스는유지합니다. fixture의 2wordNOP생성과 3번째 sentinel보존을확인합니다. 생성된 word를 kerneltext에실제로써실행한검증으로해석하지않습니다."
+      }
+    ]
+  }
+}

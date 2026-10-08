@@ -1,0 +1,138 @@
+{
+  "include/linux/local_lock.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 75,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1404",
+        "symbols": [
+          "local_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1413",
+        "symbols": [
+          "local_lock_irqsave"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      }
+    ]
+  },
+  "include/linux/local_lock_internal.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 172,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1405",
+        "symbols": [
+          "local_lock_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1406",
+        "symbols": [
+          "local_lock_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1407",
+        "symbols": [
+          "__local_lock_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1408",
+        "symbols": [
+          "__local_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1409",
+        "symbols": [
+          "__local_lock_irqsave"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1410",
+        "symbols": [
+          "__local_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1411",
+        "symbols": [
+          "__local_lock_irqsave"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      },
+      {
+        "lesson": "os1412",
+        "symbols": [
+          "__local_lock_nested_bh"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole local lock public/internal headers read/authored: guards/includes/forwarding/commonperCPU vsglobal,nonRTdebugdepmap-owner/empty GNU struct andnoopdebughelpers,staticinitializer/runtimeclasskey/debugno-freed/maptypes includingnestedBHnormaltype,preemptdisable/thiscpu/release-enable,IRQdisable-enable vssave-restore priorstate,nestedsoftirqassert/contextpreconditions,RTspinlocktypedef/migrationdisable-spin/spinunlock-migrationenable/stayspreemptible,RTIRQaliases/unsignedlongtypecheck/flags0/noIRQsave command/restoreignoresflags,RTnestedsoftirqspin withoutnewmigrationguard,allfourcleanupguarddeclarations irqflags field/manualvsautomatic doubleunlock risk. Exactwholepublic/internal nestedinclude in serialCPU/preempt/migrate/IRQ/RTspin/lockdep models fourCONFIG combinations each9001assertions optimized+ASanUBSan:twoCPUindices/1000cycles each plainIRQsave0and1/nestedBH/nonRTpreempt2restore/RTpreempt0unchanged+spinassert0+RTmigrationbalance/noIRQchanges/5000lockpairs/debugownerreset. Cleanupguard generation explicitlyempty/model notexecuted,notreal IRQ/scheduler/RTkernel/lockdep/concurrency/LKMM proof. Sourceunchanged; onlyCONFIGunusedparameter diagnostics excluded; unusedcontext task/lockdep symbols annotated; initialmodel wrongsize>0 assumption repaired toallowGNUemptystruct size0. Occurrence2 excerpts anchor actualRT macro definitions,not nonRT body mislabeled. RT IRQ-off numeric input model checks macro behavior only, not valid sleepable RT usage."
+      }
+    ]
+  }
+}

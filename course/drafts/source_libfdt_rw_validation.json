@@ -1,0 +1,316 @@
+{
+  "draft_lessons": 31,
+  "questions": 62,
+  "anchors": [
+    {
+      "planned_lesson": "os2384",
+      "title": "DTB 쓰기 layout·reserve→structure→strings 순서",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 13,
+        "end": 38,
+        "anchor": "fdt_blocks_misordered_"
+      }
+    },
+    {
+      "planned_lesson": "os2385",
+      "title": "DTB read-write probe·version17과 조건부 변경",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 25,
+        "end": 50,
+        "anchor": "fdt_rw_probe_"
+      }
+    },
+    {
+      "planned_lesson": "os2386",
+      "title": "DTB 쓰기 probe macro·호출자 조기 return",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 42,
+        "end": 67,
+        "anchor": "FDT_RW_PROBE"
+      }
+    },
+    {
+      "planned_lesson": "os2387",
+      "title": "DTB 사용 데이터 끝·capacity와 dsize 구별",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 49,
+        "end": 74,
+        "anchor": "fdt_data_size_"
+      }
+    },
+    {
+      "planned_lesson": "os2388",
+      "title": "DTB splice·범위 교체와 tail memmove",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 54,
+        "end": 79,
+        "anchor": "fdt_splice_"
+      }
+    },
+    {
+      "planned_lesson": "os2389",
+      "title": "DTB splice 오류·oldlen과 공간 검사",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 54,
+        "end": 79,
+        "anchor": "fdt_splice_"
+      }
+    },
+    {
+      "planned_lesson": "os2390",
+      "title": "DTB reserve splice·entry 단위와 두 base 이동",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 70,
+        "end": 95,
+        "anchor": "fdt_splice_mem_rsv_"
+      }
+    },
+    {
+      "planned_lesson": "os2391",
+      "title": "DTB structure splice·크기와 strings base 갱신",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 83,
+        "end": 108,
+        "anchor": "fdt_splice_struct_"
+      }
+    },
+    {
+      "planned_lesson": "os2392",
+      "title": "DTB strings splice·끝에 새 이름 공간 만들기",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 105,
+        "end": 130,
+        "anchor": "fdt_splice_string_"
+      }
+    },
+    {
+      "planned_lesson": "os2393",
+      "title": "DTB read-write 이름 dedup·정상 nonnegative offset",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 127,
+        "end": 152,
+        "anchor": "fdt_find_add_string_"
+      }
+    },
+    {
+      "planned_lesson": "os2394",
+      "title": "DTB 마지막 이름 원복·NO_ROLLBACK의 실제 차이",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 98,
+        "end": 126,
+        "anchor": "fdt_del_last_string_"
+      }
+    },
+    {
+      "planned_lesson": "os2395",
+      "title": "DTB 예약 추가·terminator 앞 삽입",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 155,
+        "end": 180,
+        "anchor": "fdt_add_mem_rsv"
+      }
+    },
+    {
+      "planned_lesson": "os2396",
+      "title": "DTB 예약 삭제·개수 조건과 인덱스 사용",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 172,
+        "end": 197,
+        "anchor": "fdt_del_mem_rsv"
+      }
+    },
+    {
+      "planned_lesson": "os2397",
+      "title": "DTB 기존 property resize·padding와 실제 len",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 184,
+        "end": 209,
+        "anchor": "fdt_resize_property_"
+      }
+    },
+    {
+      "planned_lesson": "os2398",
+      "title": "DTB 새 property·node header 뒤 삽입과 이름 원복",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 202,
+        "end": 227,
+        "anchor": "fdt_add_property_"
+      }
+    },
+    {
+      "planned_lesson": "os2399",
+      "title": "DTB node 이름 변경·NUL 포함 정렬 공간 splice",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 235,
+        "end": 260,
+        "anchor": "fdt_set_name"
+      }
+    },
+    {
+      "planned_lesson": "os2400",
+      "title": "DTB setprop placeholder·기존 resize 또는 신규 추가",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 258,
+        "end": 283,
+        "anchor": "fdt_setprop_placeholder"
+      }
+    },
+    {
+      "planned_lesson": "os2401",
+      "title": "DTB setprop·가변 길이 교체와 빈 값",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 276,
+        "end": 301,
+        "anchor": "fdt_setprop"
+      }
+    },
+    {
+      "planned_lesson": "os2402",
+      "title": "DTB appendprop·기존 값 뒤 추가와 len 갱신",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 291,
+        "end": 316,
+        "anchor": "fdt_appendprop"
+      }
+    },
+    {
+      "planned_lesson": "os2403",
+      "title": "DTB property 삭제·compact 제거와 문자열 잔존",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 318,
+        "end": 343,
+        "anchor": "fdt_delprop"
+      }
+    },
+    {
+      "planned_lesson": "os2404",
+      "title": "DTB child 추가·기존 이름 존재 검사",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 333,
+        "end": 358,
+        "anchor": "fdt_add_subnode_namelen"
+      }
+    },
+    {
+      "planned_lesson": "os2405",
+      "title": "DTB 새 child record·NUL padding과 END_NODE",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 333,
+        "end": 358,
+        "anchor": "fdt_add_subnode_namelen"
+      }
+    },
+    {
+      "planned_lesson": "os2406",
+      "title": "DTB child 일반 wrapper·strlen의 사용 조건",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 377,
+        "end": 402,
+        "anchor": "fdt_add_subnode"
+      }
+    },
+    {
+      "planned_lesson": "os2407",
+      "title": "DTB subtree 삭제·깊이 탐색 뒤 전체 영역 splice",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 382,
+        "end": 407,
+        "anchor": "fdt_del_node"
+      }
+    },
+    {
+      "planned_lesson": "os2408",
+      "title": "DTB block pack·header 뒤8 정렬 재배치",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 396,
+        "end": 421,
+        "anchor": "fdt_packblocks_"
+      }
+    },
+    {
+      "planned_lesson": "os2409",
+      "title": "DTB open_into·version16 구조 길이 계산",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 419,
+        "end": 444,
+        "anchor": "fdt_open_into"
+      }
+    },
+    {
+      "planned_lesson": "os2410",
+      "title": "DTB open_into 빠른 경로·move 뒤 capacity 확장",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 419,
+        "end": 444,
+        "anchor": "fdt_open_into"
+      }
+    },
+    {
+      "planned_lesson": "os2411",
+      "title": "DTB open_into 재배치·겹침을 피한 임시 공간",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 419,
+        "end": 444,
+        "anchor": "fdt_open_into"
+      }
+    },
+    {
+      "planned_lesson": "os2412",
+      "title": "DTB open_into 재배치 완료·header 필드 정리",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 419,
+        "end": 444,
+        "anchor": "fdt_open_into"
+      }
+    },
+    {
+      "planned_lesson": "os2413",
+      "title": "DTB pack·편집 여유를 제거한 최종 길이",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 487,
+        "end": 500,
+        "anchor": "fdt_pack"
+      }
+    },
+    {
+      "planned_lesson": "os2414",
+      "title": "DTB 가변 수정 사용법·path 재조회와 pointer 수명",
+      "path": "scripts/dtc/libfdt/fdt_rw.c",
+      "excerpt": {
+        "start": 276,
+        "end": 301,
+        "anchor": "fdt_setprop"
+      }
+    }
+  ]
+}

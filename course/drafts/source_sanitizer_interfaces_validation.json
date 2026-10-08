@@ -1,0 +1,416 @@
+{
+  "draft_lessons": 41,
+  "questions": 82,
+  "anchors": [
+    {
+      "planned_lesson": "os1650",
+      "title": "KCSAN 접근 분류·비트 플래그의 합성",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 276,
+        "end": 301,
+        "anchor": "__kcsan_check_read"
+      }
+    },
+    {
+      "planned_lesson": "os1651",
+      "title": "KCSAN 직접 검사·설정과 번역 단위의 차이",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 37,
+        "end": 62,
+        "anchor": "__kcsan_check_access"
+      }
+    },
+    {
+      "planned_lesson": "os1652",
+      "title": "KCSAN 공개 검사·빈 inline에서도 인자는 평가된다",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 229,
+        "end": 254,
+        "anchor": "kcsan_check_access"
+      }
+    },
+    {
+      "planned_lesson": "os1653",
+      "title": "KCSAN 현재 문맥의 검사 중단·중첩 균형",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 74,
+        "end": 102,
+        "anchor": "kcsan_disable_current"
+      }
+    },
+    {
+      "planned_lesson": "os1654",
+      "title": "KCSAN 번역 단위용 중단 alias·라이브러리 경계",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 232,
+        "end": 257,
+        "anchor": "__kcsan_disable_current"
+      }
+    },
+    {
+      "planned_lesson": "os1655",
+      "title": "KCSAN atomic 영역·중첩과 flat 프로토콜",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 90,
+        "end": 117,
+        "anchor": "kcsan_nestable_atomic_begin"
+      }
+    },
+    {
+      "planned_lesson": "os1656",
+      "title": "KCSAN 다음 접근 개수·검사 해석의 제한된 구간",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 118,
+        "end": 143,
+        "anchor": "kcsan_atomic_next"
+      }
+    },
+    {
+      "planned_lesson": "os1657",
+      "title": "KCSAN 접근 mask·선택한 비트의 변화만 점검",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 128,
+        "end": 153,
+        "anchor": "kcsan_set_access_mask"
+      }
+    },
+    {
+      "planned_lesson": "os1658",
+      "title": "KCSAN scoped 자료구조·union과 접근 위치",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 131,
+        "end": 171,
+        "anchor": "kcsan_scoped_access"
+      }
+    },
+    {
+      "planned_lesson": "os1659",
+      "title": "KCSAN scoped 등록·검사 구간과 런타임 진입",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 173,
+        "end": 198,
+        "anchor": "kcsan_begin_scoped_access"
+      }
+    },
+    {
+      "planned_lesson": "os1660",
+      "title": "KCSAN cleanup 속성·스코프 끝에서 종료 호출",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 379,
+        "end": 418,
+        "anchor": "__ASSERT_EXCLUSIVE_SCOPED"
+      }
+    },
+    {
+      "planned_lesson": "os1661",
+      "title": "KCSAN 비활성 구성·빈 scoped 구조체와 annotation",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 184,
+        "end": 209,
+        "anchor": "kcsan_end_scoped_access"
+      }
+    },
+    {
+      "planned_lesson": "os1662",
+      "title": "KCSAN weak memory 표시·signal fence의 재사용",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 248,
+        "end": 275,
+        "anchor": "__KCSAN_BARRIER_TO_SIGNAL_FENCE"
+      }
+    },
+    {
+      "planned_lesson": "os1663",
+      "title": "KCSAN weak memory 직접 hook·구성 우선순위",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 254,
+        "end": 283,
+        "anchor": "kcsan_mb"
+      }
+    },
+    {
+      "planned_lesson": "os1664",
+      "title": "KCSAN atomic 검사·4·5·7과 IGNORE_ATOMICS",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 327,
+        "end": 369,
+        "anchor": "kcsan_check_atomic_read"
+      }
+    },
+    {
+      "planned_lesson": "os1665",
+      "title": "KCSAN 단일 writer assertion·표시된 접근의 불변 조건",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 370,
+        "end": 418,
+        "anchor": "ASSERT_EXCLUSIVE_WRITER"
+      }
+    },
+    {
+      "planned_lesson": "os1666",
+      "title": "KCSAN scoped writer assertion·구간 중 상태 변경",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 419,
+        "end": 450,
+        "anchor": "ASSERT_EXCLUSIVE_WRITER_SCOPED"
+      }
+    },
+    {
+      "planned_lesson": "os1667",
+      "title": "KCSAN 독점 access assertion·객체 재사용과 수명",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 451,
+        "end": 524,
+        "anchor": "ASSERT_EXCLUSIVE_ACCESS"
+      }
+    },
+    {
+      "planned_lesson": "os1668",
+      "title": "KCSAN scoped 독점 access·25와 범위 수명",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 467,
+        "end": 524,
+        "anchor": "ASSERT_EXCLUSIVE_ACCESS_SCOPED"
+      }
+    },
+    {
+      "planned_lesson": "os1669",
+      "title": "KCSAN bit assertion·mask 복구와 바로 다음 접근",
+      "path": "include/linux/kcsan-checks.h",
+      "excerpt": {
+        "start": 525,
+        "end": 533,
+        "anchor": "ASSERT_EXCLUSIVE_BITS"
+      }
+    },
+    {
+      "planned_lesson": "os1670",
+      "title": "KASAN 접근 검사·software 모드와 직접 API",
+      "path": "include/linux/kasan-checks.h",
+      "excerpt": {
+        "start": 19,
+        "end": 44,
+        "anchor": "__kasan_check_read"
+      }
+    },
+    {
+      "planned_lesson": "os1671",
+      "title": "KASAN 공개 접근·번역 단위와 true stub",
+      "path": "include/linux/kasan-checks.h",
+      "excerpt": {
+        "start": 40,
+        "end": 50,
+        "anchor": "kasan_check_read"
+      }
+    },
+    {
+      "planned_lesson": "os1672",
+      "title": "KASAN hardware tags·이 annotation의 적용 한계",
+      "path": "include/linux/kasan-checks.h",
+      "excerpt": {
+        "start": 44,
+        "end": 50,
+        "anchor": "kasan_check_write"
+      }
+    },
+    {
+      "planned_lesson": "os1673",
+      "title": "KASAN 길이 타입·unsigned int 경계와 전달",
+      "path": "include/linux/kasan-checks.h",
+      "excerpt": {
+        "start": 20,
+        "end": 45,
+        "anchor": "__kasan_check_write"
+      }
+    },
+    {
+      "planned_lesson": "os1674",
+      "title": "KMSAN poison·미초기화 표시와 origin",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 27,
+        "end": 60,
+        "anchor": "kmsan_poison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1675",
+      "title": "KMSAN unpoison·초기화 표시와 실제 초기화",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 37,
+        "end": 62,
+        "anchor": "kmsan_unpoison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1676",
+      "title": "KMSAN check·일부 미초기화 byte와 범위 검사",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 47,
+        "end": 72,
+        "anchor": "kmsan_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1677",
+      "title": "KMSAN 사용자 전달·미초기화 정보 유출과 left",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 61,
+        "end": 86,
+        "anchor": "kmsan_copy_to_user"
+      }
+    },
+    {
+      "planned_lesson": "os1678",
+      "title": "KMSAN memmove·데이터 복사 뒤 metadata 이동",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 73,
+        "end": 98,
+        "anchor": "kmsan_memmove"
+      }
+    },
+    {
+      "planned_lesson": "os1679",
+      "title": "KMSAN 비활성 구성·빈 함수와 검사 부재",
+      "path": "include/linux/kmsan-checks.h",
+      "excerpt": {
+        "start": 47,
+        "end": 72,
+        "anchor": "kmsan_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1680",
+      "title": "수동 접근 계측·컴파일러가 보지 못하는 경로",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 24,
+        "end": 51,
+        "anchor": "instrument_read"
+      }
+    },
+    {
+      "planned_lesson": "os1681",
+      "title": "수동 write 계측·크기와 접근 방향",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 38,
+        "end": 65,
+        "anchor": "instrument_write"
+      }
+    },
+    {
+      "planned_lesson": "os1682",
+      "title": "수동 read-write 계측·KASAN write와 KCSAN compound",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 52,
+        "end": 79,
+        "anchor": "instrument_read_write"
+      }
+    },
+    {
+      "planned_lesson": "os1683",
+      "title": "수동 atomic 계측·KASAN 검사는 여전히 필요하다",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 94,
+        "end": 125,
+        "anchor": "instrument_atomic_read_write"
+      }
+    },
+    {
+      "planned_lesson": "os1684",
+      "title": "사용자 copy-out 계측·커널 source의 읽기",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 110,
+        "end": 142,
+        "anchor": "instrument_copy_to_user"
+      }
+    },
+    {
+      "planned_lesson": "os1685",
+      "title": "사용자 copy-in 전 계측·커널 destination의 쓰기",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 127,
+        "end": 158,
+        "anchor": "instrument_copy_from_user_before"
+      }
+    },
+    {
+      "planned_lesson": "os1686",
+      "title": "사용자 copy-in 뒤 계측·n-left만 initialized",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 144,
+        "end": 177,
+        "anchor": "instrument_copy_from_user_after"
+      }
+    },
+    {
+      "planned_lesson": "os1687",
+      "title": "비계측 memcpy 전 hook·네 호출의 정확한 순서",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 159,
+        "end": 184,
+        "anchor": "instrument_memcpy_before"
+      }
+    },
+    {
+      "planned_lesson": "os1688",
+      "title": "비계측 memcpy 뒤 hook·복사된 길이의 상태 전파",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 178,
+        "end": 210,
+        "anchor": "instrument_memcpy_after"
+      }
+    },
+    {
+      "planned_lesson": "os1689",
+      "title": "get_user 계측·주소를 취할 수 없는 지역 변수",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 193,
+        "end": 216,
+        "anchor": "instrument_get_user"
+      }
+    },
+    {
+      "planned_lesson": "os1690",
+      "title": "put_user 계측·sizeof(from)과 사용하지 않는 size",
+      "path": "include/linux/instrumented.h",
+      "excerpt": {
+        "start": 211,
+        "end": 216,
+        "anchor": "instrument_put_user"
+      }
+    }
+  ]
+}

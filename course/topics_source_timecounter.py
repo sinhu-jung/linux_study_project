@@ -1,0 +1,96 @@
+"""Whole cycle/time counter interface and scalar conversion implementation."""
+def register(topic,q,detail):
+ h='include/linux/timecounter.h';c='kernel/time/timecounter.c'
+ def lesson(title,path,symbol,why,principle,use,reading,qa,cards):
+  topic(title,'시간',path,symbol,why,principle,use,reading,*(q(*x) for x in qa),details=[detail(*x) for x in cards])
+ lesson('하드웨어cycle counter·read함수와단위배율',h,'cyclecounter',
+  '하드웨어의증가숫자를읽는인터페이스와나노초로해석하는설정을배웁니다.',
+  'cyclecounter는read함수포인터,카운터유효비트mask,나노초배율mult,2거듭제곱제수shift를담습니다. read는이counter객체를받아u64cycle값을반환합니다. 이형식은지난값·누적나노초를저장하지않는하드웨어접근층이며하드웨어초기화와잠금규칙은구현·caller의책임입니다.',
+  '준비된하드웨어read와mask·mult·shift를구성하고cycle을CPU명령개수나나노초와항상같다고가정하지않습니다.장치주파수에맞춘배율과산술범위를확인합니다.',
+  '함수포인터선언과세변환설정필드를읽으세요.',
+  [('cycle숫자가항상나노초인가?','아니며mult와shift로단위를변환한다','u64이면모든숫자의단위가나노초다','정수형은단위를정하지않습니다.하드웨어주기와변환배율을함께확인합니다.'),('cyclecounter가누적epoch를직접저장하는가?','아니며state는timecounter층에있다','read필드가자동으로지난시각전체를저장한다','하드웨어접근설정과누적시간상태를두구조체로분리합니다.')],
+  [('콜백','read는하드웨어구현으로연결하는함수포인터입니다.스칼라학습검사는가상하드웨어콜백을사용합니다.'),('문맥','하드웨어등록·주파수보정·동시접근규칙은이인터페이스선언밖에서결정합니다.')])
+ lesson('카운터폭mask·전체64비트의shift경계',h,'CYCLECOUNTER_MASK',
+  '짧은카운터의하위비트만남기는mask와64칸shift를피하는방법을배웁니다.',
+  'CYCLECOUNTER_MASK(bits)는bits<64이면(1ULL<<bits)-1,그외이면u64변환된-1인모든1비트입니다. 8비트mask는255,64비트mask는MAX입니다. 유효하드웨어폭은보통1..64로설정하고bits0이mask0을만든다는식의동작과의미있는카운터설정을구분합니다.',
+  '하드웨어실제폭과mask를맞춥니다. 음수폭·bit폭을넘는임의입력검사를API가제공한다고읽지않고0..64의식범위를확인합니다.',
+  '조건연산자의선택분기·u64cast·64경계를읽으세요.',
+  [('8비트카운터mask는?','255다','256이다','하위8비트를1로세운값은2^8-1입니다.주기길이256과mask255는다릅니다.'),('64비트폭에서1ULL<<64를실행하는가?','아니며모든1비트분기를선택한다','항상실행한뒤자동으로0이된다','조건분기로폭만큼shift하는유효하지않은연산을피합니다.')],
+  [('역할','mask는cycle차이를주기안으로줄입니다.소수나노초를남기는별도tc.mask와구분합니다.'),('입력평가','bits식이macro에여러번나옵니다.설정상수·부작용없는입력을사용합니다.')])
+ lesson('timecounter상태·지난cycle과누적epoch·소수부',h,'timecounter',
+  '하드웨어원시값에서계속증가하는나노초시간을만드는상태를배웁니다.',
+  'cc는하드웨어접근객체,cycle_last는최근읽은cycle,nsec는누적정수나노초입니다. mask는변환소수부의하위shift비트,frac은아직1나노초로올라오지않은고정소수자리입니다. 초기nsec는caller의epoch로정해집니다.구조체선언에자동잠금·원자snapshot은없습니다.',
+  '같은cc설정과상태를유지하고연속read를하드웨어한주기보다자주수행합니다.epoch기준을호출경로와맞추고두mask의용도를구분합니다.',
+  '다섯필드와주석의readfrequency책임을읽으세요.',
+  [('tc.mask와cc.mask는항상같은용도인가?','아니며소수부mask와하드웨어cyclemask다','둘 다장치메모리주소다','tc.mask는나노초분수자리,cc.mask는카운터유효폭입니다.'),('nsec의초기epoch는어디서오는가?','init에caller가준초기timestamp다','구조체가항상1970년을하드코딩한다','누적counter는초기timestamp와동일epoch를이어갑니다. clock의의미는사용경로가정합니다.')],
+  [('순환','u64나노초도유한폭입니다.약585년전체범위를무제한시간이라고해석하지않습니다.'),('수명','cc포인터객체와read구현의수명·설정안정성도caller가보호합니다.')])
+ lesson('고정소수시간·매읽기의버린fraction을다음에더하기',h,'cyclecounter_cyc2ns',
+  '1나노초보다작은분수를계속버리면시간이느려지는문제를해결하는원리를배웁니다.',
+  'ns=cycles*mult+*frac를u64로계산합니다. 낮은shift비트는*frac=ns&mask로남기고정수나노초는ns>>shift로반환합니다. mult1,shift2이면cycle1은1/4ns입니다. 네번1cycle을읽으면앞세번0ns,네번째1ns가되며낮은비트를다음번에이어갑니다.',
+  'mask=(1ULL<<shift)-1과shift0..63·유효곱범위를사용합니다. 매번floor(cycles*mult/2^shift)만더해fraction을버리는모델과비교합니다.',
+  '가산·mask저장·shift반환을1/4ns예제로읽으세요.',
+  [('1/4ns짜리cycle을1개씩네번읽으면누적은?','fraction을남기면총1ns다','매번0이라영원히0ns다','fraction은1,2,3,0으로이어지고네번째정수나노초1을반환합니다.'),('낮은비트를저장하는이유는?','아직정수나노초가안된분수를다음계산에이어가기위해서다','하드웨어cycle을임의로초기화하기위해서다','연속시간변환의절단오차를누적fraction으로보존합니다.')],
+  [('중간overflow','cycles*mult+frac는128곱이나checked연산이아닙니다.u64범위를caller가맞춰야합니다.'),('주파수','mult/2^shift라는고정소수배율의정밀도는설정값에따릅니다.')])
+ lesson('timecounter초기화·현재cycle을epoch에붙이기',c,'timecounter_init',
+  '현재하드웨어값을임의의시작나노초에대응시키는초기화단계를배웁니다.',
+  'init은cc를저장하고read를한번불러cycle_last를얻습니다. nsec=start_tstamp,mask=(1ULL<<cc->shift)-1,frac0을설정합니다. 하드웨어를직접시작하거나리셋하지않습니다. init후첫read는이기준에서의경과량을더하며미초기화상태read는정상계약이아닙니다.',
+  '준비된하드웨어와shift<64설정을제공합니다. 현재cycle샘플과start_tstamp를정확히같은하드웨어순간으로동기화하는정밀도는caller측정문맥을확인합니다.',
+  '다섯대입과read한번호출을읽으세요.',
+  [('init이하드웨어카운터를0으로설정하는가?','아니며현재값을읽어기준으로저장한다','항상장치cycle을0으로리셋한다','본문에하드웨어쓰기나시작함수가없습니다. read콜백으로기준만얻습니다.'),('init에서shift64는유효한mask계산인가?','아니며1ULL<<shift의폭조건을벗어난다','cc.mask가64비트면무조건유효하다','cycle폭mask와fractionshift는별도입니다. 초기화식의64칸shift는유효하지않습니다.')],
+  [('재초기화','기존epoch와fraction을덮어새기준을만듭니다.보존하며조금조정하는adjtime과다릅니다.'),('주석과실제','read_delta의미초기화관련주석을정상init→read흐름과구분해읽습니다.')])
+ lesson('cycle차이의wrap·한주기경과는보이지않는다',c,'timecounter_read_delta',
+  '한번MAX를넘는경계를처리하는것과한바퀴의실제경과를복원하는것의차이를배웁니다.',
+  'delta=(cycle_now-cycle_last)&cc.mask입니다. 8비트카운터250에서5로가면11cycle을구합니다. 하지만이전값과같은값으로256cycle뒤돌아오면delta0입니다. 실제경과는0..주기-1범위여야유일하게복원되며읽기사이에한주기이상이흐르면놓친바퀴수를알수없습니다.',
+  '주기길이·주파수로최대읽기간격을정합니다. 주석의wrap표현을보고정확히한전체주기가흘러도계산된다고가정하지않습니다. 기준last를읽은뒤업데이트하는순서를보호합니다.',
+  '차이mask·fraction변환·cycle_last갱신을읽으세요.',
+  [('8비트cycle250→5의짧은경과는?','11cycle이다','-245cycle이다','modulo256차이입니다.짧은경과를가정하면wrap경계를복원합니다.'),('10→10이256cycle경과뒤라면계산delta는?','0이라한바퀴를놓친다','자동으로256을복원한다','같은두샘플에서바퀴수를알수없습니다. 전체주기보다자주읽는조건이필요합니다.')],
+  [('더긴공백','몇바퀴를돌았든샘플차이는같은modulo값일수있습니다.'),('변환범위','알맞은읽기간격도곱cycles*mult의overflow조건과함께점검합니다.')])
+ lesson('나노초read누적·epoch에경과량더하기',c,'timecounter_read',
+  '하드웨어차이로구한기간을누적시각에더하는상태갱신을배웁니다.',
+  'read_delta가cycle_last·frac를갱신한뒤read는ns_offset에tc.nsec를더하고nsec를저장·반환합니다. 정상기간에서계속증가하지만u64덧셈은유한폭modulo이며시각조정·잘못된읽기공백은별도조건입니다. 읽기자체가상태를갱신해pure조회가아닙니다.',
+  '호출간격과상태잠금규칙을지킵니다. 동시에두reader가같은last·frac를갱신하면자동직렬화되지않으므로상위구현의동기화를확인합니다.',
+  'delta반환과두nsec대입을읽으세요.',
+  [('start1000ns후경과7ns의read반환은?','1007ns다','epoch를버리고7ns만반환한다','초기timestamp와경과량을합친같은시간기준을반환합니다.'),('read가상태를전혀바꾸지않는가?','아니며last·frac·nsec를갱신한다','반환값만읽고모든필드를그대로둔다','경과량을중복누적하지않기위해지난샘플을새기준으로바꿉니다.')],
+  [('관찰','동일cycle을다시읽으면delta0이지만API는상태갱신흐름입니다.'),('폭','u64나노초의끝에서자동MAX포화하거나오류를반환하지않습니다.')])
+ lesson('누적시간조정·signeddelta와unsignedepoch',h,'timecounter_adjtime',
+  '시간의기준만옮기는조정과하드웨어카운터리셋이다른점을배웁니다.',
+  'adjtime은u64 tc.nsec에s64 delta를그대로더합니다. usualconversion으로unsignedmodulo합이되며음수delta는수치상빼는효과입니다. cycle_last·frac·cc는바꾸지않습니다. nsec0에delta-1이면MAX로wrap하므로음수시각을자동거절하는API가아닙니다.',
+  '상위clock조정정책의범위·동기화를맞추고epoch만원하는만큼옮깁니다. 음수delta나MAX경계에서수학적시간의표현조건을확인합니다.',
+  '한줄+=와변경안되는필드를읽으세요.',
+  [('nsec1000에delta-13을주면유효범위결과는?','987이다','cycle_last도13감소한다','누적나노초기준만옮깁니다. 하드웨어지난샘플은유지합니다.'),('nsec0에delta-1은오류false인가?','아니며u64MAX로wrap한다','자동으로0에clamp한다','반환형void이고범위분기가없습니다. unsigned산술의경계를caller가확인합니다.')],
+  [('단조성','음수adjtime은시각을뒤로옮길수있습니다.무조건단조시계보장으로읽지않습니다.'),('분수','같은frac를유지하므로변환소수위상은보존합니다.')])
+ lesson('cycletimestamp를epoch시각으로·기준state의비변경',c,'timecounter_cyc2time',
+  '이미받은장치timestamp를누적시간기준으로변환하는기능을배웁니다.',
+  'cyc2time은tc.cycle_last와입력cycle_tstamp차이를mask로구합니다. nsec·frac는지역변수로복사해앞뒤변환을하고값만반환합니다. tc는const포인터이고실제하드웨어read를새로하지않습니다. 여러필드의원자적snapshot은caller가보호해야합니다.',
+  '같은장치·같은cycle폭의timestamp를전달하고현재last와반주기이내거리계약을확인합니다. 조회시점의state가일관되게보이도록상위잠금규칙을사용합니다.',
+  'const인수·지역nsec/frac와read콜백이없는본문을읽으세요.',
+  [('이변환이하드웨어read를새로부르는가?','아니며저장된last기준과입력샘플을쓴다','항상현재cycle을먼저읽어last를갱신한다','본문은지정한timestamp를기존누적시간기준으로옮깁니다. state를누적하는read와다릅니다.'),('지역frac변경이tc.frac에저장되는가?','아니며지역복사본만사용한다','반드시원래frac도갱신된다','&frac는지역변수주소입니다. conststate의내용을직접갱신하지않습니다.')],
+  [('주석범위','반주기근처방향모호성과fractionbackwards의실제산술은다음수업에서따로확인합니다.'),('timestamp용도','장치가찍은과거cycle을같은epoch시간으로옮기는사용을생각합니다.')])
+ lesson('과거·미래timestamp판정·반주기동률은과거',c,'timecounter_cyc2time',
+  '순환카운터의timestamp가앞인지뒤인지반주기를기준으로해석하는방법을배웁니다.',
+  'forwarddelta>cc.mask/2이면너무먼미래로보기보다과거로해석해last-stamp역차이를구합니다. 8비트mask255에서threshold127이라정확히128차이는과거분기입니다. 그샘플은+128과-128을구분할정보가없습니다. 반주기미만이라는전제를확인해야합니다.',
+  'timestamp와last간최대거리를장치프로토콜·읽기주기에맞춥니다. 실제오래된값을한바퀴이후미래값으로혼동하지않고동률정책을일반시간순서라고확대하지않습니다.',
+  'mask/2비교·forward차이·backward차이를읽으세요.',
+  [('8비트delta128은어느분기로가는가?','과거분기다','반드시미래분기다','threshold는255/2=127이고128은더큽니다.동률의원래방향은샘플만으로모호합니다.'),('이API가몇바퀴전의샘플인지구분하는가?','아니며반주기범위계약이필요하다','u64반환이면모든오래된샘플을식별한다','입력cycle폭과modulo차이는바퀴정보를잃습니다.출력폭만늘려복원할수없습니다.')],
+  [('방향선택','단순u64대소비교보다짧은modulo거리를사용합니다.'),('실험','정수배율의과거·미래·정확히반주기입력을분리해원문결과를확인합니다.')])
+ lesson('미래cycle변환·fraction위상을이어서계산',c,'timecounter_cyc2time',
+  '저장된소수위상을포함해미래샘플을예측하는고정소수계산을배웁니다.',
+  '미래분기는nsec+=cyclecounter_cyc2ns(cc,delta,mask,&지역frac)입니다. 현재정수nsec에floor((delta*mult+현재frac)/2^shift)를더합니다. 기존fraction을생략하면경계에서1ns이하의시점차이가생길수있습니다. 지역frac는원래state에반영하지않습니다.',
+  'delta·mult곱의범위와현재state의fraction정규화를확인합니다. epoch기준의전진변환과실제경과상태read를혼동하지않습니다.',
+  '지역frac포인터와정수nsec가산을읽으세요.',
+  [('mult1,shift2,현재frac3에미래delta1이면추가정수ns는?','1ns다','항상0ns다','1+3=4를2칸shift하면1입니다.남은분수위상이정수경계를넘습니다.'),('미래변환결과를구하면cycle_last도앞으로움직이는가?','아니며state는유지된다','자동으로장치샘플을소비한다','이함수는기준에서의변환값을계산합니다. 누적read상태갱신을수행하지않습니다.')],
+  [('정밀도','배율자체의주파수근사와정수ns절단은여전히존재합니다.'),('검증','연속fixed-point총합참조와미래예측을68가지폭·shift구성에서비교합니다.')])
+ lesson('과거fraction변환·floor와정확한epoch정수차이',c,'cc_cyc2ns_backwards',
+  '과거변환에서동일고정소수기준의정수시각과원문절단정책이다를수있음을배웁니다.',
+  'helper는((cycles*mult)-frac)>>shift를반환하고caller는그값을nsec에서뺍니다. 현재frac0,mult1,shift2,현재cycle8의nsec1002에서과거cycle7은delta1이므로원문은1002-floor(1/4)=1002입니다. epoch1000+floor(7/4)=1001과1ns차이입니다.',
+  '뒤로가는기간의floor와정확한epochfloor를구분합니다. (nsec+frac/scale)-기간을floor하는수학식은nsec-floor기간과항상같지않습니다.요구정밀도에맞춰실제원문정책을검산합니다.',
+  'minusfrac·rightshift·caller의nsec감소를읽으세요.',
+  [('예제현재cycle8,과거7의원문결과는?','1002로epochfloor1001과1ns차이다','항상정확히1001이다','과거기간1/4를먼저floor0으로만들고뺍니다. 수학적전체시각floor와다른계산순서입니다.'),('floor(x-y)가항상floor(x)-floor(y)와같은가?','아니며분수경계에서달라질수있다','모든양수와음수에서같다','정수절단은분배법칙을갖지않습니다.원문에정해진연산순서를읽습니다.')],
+  [('사용범위','정수ns/cycle배율·fraction0같은특수조건과일반소수배율을구분합니다.'),('인수','helper의mask인수는본문에서쓰지않습니다. fractionunderflow를mask로수정한다고추측하지않습니다.')])
+ lesson('과거fraction변환의unsigned감산wrap·실제원문반례',c,'cc_cyc2ns_backwards',
+  '작은음수중간값이unsigned에서거대한값이되는경계를원문으로확인합니다.',
+  'mult1,shift2,init1000ns에서cycle3을read하면nsec1000,frac3입니다. 과거cycle2의delta1에helper는u64(1-3)>>2를계산해거대한값을만듭니다. nsec에서그값을빼는최종수치도큰modulo값이며이상적인1000+floor(2/4)=1000과다릅니다. 고정v6.12원문으로재현한경계입니다.',
+  'cycles*mult>=frac조건이깨지는경우를검사합니다. 이학습검사는원문을바꾸지않고관찰결과를설명합니다. 어떤배율·샘플에서도과거변환이정확하다고확대하지않습니다.',
+  'u64ns·minusfrac·shift의순서를작은숫자1-3으로읽으세요.',
+  [('u64의1-3은정수-2로남는가?','아니며2^64-2로wrap한다','항상signed-2로계산된다','중간변수는u64입니다.그값을shift하면작은음수기간의절댓값과전혀다른큰양수가됩니다.'),('이반례를설명할때원문결과를이상적인1000으로고쳐쓰는가?','아니며원문결과와이상적계산의차이를명시한다','정확한수학결과만적고원문차이는숨긴다','학습대상은실제소스의연산입니다. 원하는정밀도와실제구현경계를분리해확인해야합니다.')],
+  [('검증 증거','원문header/C의최적화·ASan/UBSan검사에서해당값과1ns차이예제를독립assert로재현했습니다.unsignedwrap은검사도구에signedoverflow오류로뜨지않습니다.'),('전체범위','timecounterheader/C전체를해설하며가상하드웨어와직렬상태검사입니다.실제clocksource드라이버·동시잠금·하드웨어주파수증명은별도입니다.')])

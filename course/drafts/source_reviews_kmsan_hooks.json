@@ -1,0 +1,334 @@
+{
+  "mm/kmsan/hooks.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 439,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1799",
+        "symbols": [
+          "kmsan_task_create"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN task 생성과 runtime 진입의 짝. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1800",
+        "symbols": [
+          "kmsan_task_exit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN task 종료에서 current 상태를 억제하는 이유. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1801",
+        "symbols": [
+          "kmsan_slab_alloc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN slab 할당과 영 초기화 플래그. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1802",
+        "symbols": [
+          "kmsan_slab_alloc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN constructor·RCU cache의 상태 보존. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1803",
+        "symbols": [
+          "kmsan_slab_free"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN slab 해제와 use-after-free origin. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1804",
+        "symbols": [
+          "kmsan_kmalloc_large"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 큰 kmalloc 요청 길이와 추적. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1805",
+        "symbols": [
+          "kmsan_kfree_large"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 큰 할당 해제·head page와 경고 이후 흐름. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1806",
+        "symbols": [
+          "vmalloc_shadow"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 평행 주소 변환·shadow와 origin. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1807",
+        "symbols": [
+          "kmsan_vunmap_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN vunmap의 두 metadata 범위와 flush 책임. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1808",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap의 새 metadata와 물리 주소 인자. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1809",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap 할당 order와 mapping 크기. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1810",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap 소유권 이동과 NULL 표시. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1811",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap 첫 실패와 clean 변수의 실제 분기. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1812",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap 뒤쪽 실패·현재 자원과 이전 mapping. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1813",
+        "symbols": [
+          "kmsan_iounmap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN iounmap 조회와 나머지 구간 제거의 순서. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1814",
+        "symbols": [
+          "kmsan_copy_to_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN copy_to_user 실제 복사량과 잔여 길이. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1815",
+        "symbols": [
+          "kmsan_copy_to_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN copy_to_user 사용자 검사와 compat metadata 복사. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1816",
+        "symbols": [
+          "kmsan_memmove"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN memmove hook과 실제 데이터 복사의 분담. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1817",
+        "symbols": [
+          "kmsan_handle_urb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN USB URB 출력·입력의 추적 방향. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1818",
+        "symbols": [
+          "kmsan_handle_dma_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN DMA 네 방향과 양방향 처리 순서. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1819",
+        "symbols": [
+          "kmsan_handle_dma"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN DMA highmem 제외와 주소 계산. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1820",
+        "symbols": [
+          "kmsan_handle_dma"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN DMA 페이지 분할과 반복 종료 원리. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1821",
+        "symbols": [
+          "kmsan_handle_dma_sg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN scatter-gather 순회와 비연속 항목. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1822",
+        "symbols": [
+          "kmsan_poison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 공개 poison과 origin 할당의 재진입 위험. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1823",
+        "symbols": [
+          "kmsan_unpoison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 공개 unpoison의 runtime 허용과 접근 복구. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1824",
+        "symbols": [
+          "kmsan_unpoison_entry_regs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN IRQ entry register의 구조체 크기 전달. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1825",
+        "symbols": [
+          "kmsan_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 공개 memory 검사와 보고 이유. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1826",
+        "symbols": [
+          "kmsan_enable_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN current depth 중첩과 enable의 감소. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      },
+      {
+        "lesson": "os1827",
+        "symbols": [
+          "kmsan_disable_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN depth 경고와 unsigned 경계의 실제 결과. Whole439line hooks.c manually authored29lessons58workedquestions, covering alltask/slab/largealloc-free/vmalloctransform-unmap/ioremap-iounmap/usercopy-residual-compat/metamove/URB/DMApage-SG/publicpoison-unpoison-entryregs-check/currentdepth functiongroups. Originalhook bodies executed with explicitfinitearena andmetadata/event/virtualmapping/resourcepool models, addressspaceconfigs0/1 O2+ASanUBSan4builds each253assertions. Originalfirstfailureclean0 skipsfree; iounmapsuffixbeforelaterlookup observations restrictedtomodel, notactualkernelreproducer. Partialvmalloc349..403/437..521crossread notwhole. NoactualLLVM/KMSANkernel/allocator/USB/DMA/RCU/page-table execution."
+      }
+    ]
+  }
+}

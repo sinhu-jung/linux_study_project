@@ -1,0 +1,336 @@
+{
+  "draft_lessons": 33,
+  "questions": 66,
+  "anchors": [
+    {
+      "planned_lesson": "os1711",
+      "title": "KMSAN compiler ABI·인자와 반환 metadata 저장 공간",
+      "path": "include/linux/kmsan_types.h",
+      "excerpt": {
+        "start": 18,
+        "end": 37,
+        "anchor": "kmsan_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1712",
+      "title": "KMSAN 실행 문맥·cstate와 런타임 재귀 상태",
+      "path": "include/linux/kmsan_types.h",
+      "excerpt": {
+        "start": 31,
+        "end": 37,
+        "anchor": "kmsan_ctx"
+      }
+    },
+    {
+      "planned_lesson": "os1713",
+      "title": "KMSAN shadow·origin pointer 쌍과 4byte granularity",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 41,
+        "end": 74,
+        "anchor": "shadow_origin_ptr"
+      }
+    },
+    {
+      "planned_lesson": "os1714",
+      "title": "KMSAN 문맥 선택·task와 interrupt per-CPU",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 81,
+        "end": 106,
+        "anchor": "kmsan_get_context"
+      }
+    },
+    {
+      "planned_lesson": "os1715",
+      "title": "KMSAN 재귀 방지·hook가 자신을 다시 부르는 경우",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 100,
+        "end": 125,
+        "anchor": "kmsan_in_runtime"
+      }
+    },
+    {
+      "planned_lesson": "os1716",
+      "title": "KMSAN runtime 진입·후위 증가와 종료 균형",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 109,
+        "end": 134,
+        "anchor": "kmsan_enter_runtime"
+      }
+    },
+    {
+      "planned_lesson": "os1717",
+      "title": "KMSAN origin extra bits·depth와 UAF 압축",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 135,
+        "end": 160,
+        "anchor": "kmsan_extra_bits"
+      }
+    },
+    {
+      "planned_lesson": "os1718",
+      "title": "KMSAN 비계측 주소 분류·반열린 module·vmalloc 범위",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 178,
+        "end": 188,
+        "anchor": "kmsan_internal_is_module_addr"
+      }
+    },
+    {
+      "planned_lesson": "os1719",
+      "title": "KMSAN report 계약·연속 구간과 reason",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 75,
+        "end": 100,
+        "anchor": "kmsan_report"
+      }
+    },
+    {
+      "planned_lesson": "os1720",
+      "title": "KMSAN task 생성·문맥 zero와 thread 정보 annotation",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "kmsan_internal_task_create"
+      }
+    },
+    {
+      "planned_lesson": "os1721",
+      "title": "KMSAN poison 구현·shadow FF와 origin 저장",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 49,
+        "end": 74,
+        "anchor": "kmsan_internal_poison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1722",
+      "title": "KMSAN unpoison 구현·zero shadow와 zero origin 요청",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 61,
+        "end": 86,
+        "anchor": "kmsan_internal_unpoison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1723",
+      "title": "KMSAN stack 저장·reclaim flag 제거와 비수면",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 66,
+        "end": 91,
+        "anchor": "kmsan_save_stack_with_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1724",
+      "title": "KMSAN metadata memmove·source와 destination 추적 유무",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 83,
+        "end": 108,
+        "anchor": "kmsan_internal_memmove_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1725",
+      "title": "KMSAN metadata memmove 방향·겹치는 구간 보존",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 83,
+        "end": 108,
+        "anchor": "kmsan_internal_memmove_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1726",
+      "title": "KMSAN metadata memmove·주소 offset과 origin index",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 83,
+        "end": 108,
+        "anchor": "kmsan_internal_memmove_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1727",
+      "title": "KMSAN origin 연결 cache·연속 같은 원인의 재사용",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 83,
+        "end": 108,
+        "anchor": "kmsan_internal_memmove_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1728",
+      "title": "KMSAN origin chain·최대7과 반복 padding 원인",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 148,
+        "end": 174,
+        "anchor": "kmsan_internal_chain_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1729",
+      "title": "KMSAN origin chain 표현·magic·현재 stack·이전 handle",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 148,
+        "end": 174,
+        "anchor": "kmsan_internal_chain_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1730",
+      "title": "KMSAN shadow 설정·추적하지 않는 범위와 checked",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 194,
+        "end": 219,
+        "anchor": "kmsan_internal_set_shadow_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1731",
+      "title": "KMSAN origin 설정·정렬 확대와 부분 그룹",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 194,
+        "end": 219,
+        "anchor": "kmsan_internal_set_shadow_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1732",
+      "title": "KMSAN vmalloc page 조회·주소 분류와 pfn 유효성",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 238,
+        "end": 263,
+        "anchor": "kmsan_vmalloc_to_page_or_null"
+      }
+    },
+    {
+      "planned_lesson": "os1733",
+      "title": "KMSAN 범위 검사·페이지 경계에서 chunk 분할",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 252,
+        "end": 277,
+        "anchor": "kmsan_internal_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1734",
+      "title": "KMSAN 보고 그룹·clean byte에서 끊기는 run",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 252,
+        "end": 277,
+        "anchor": "kmsan_internal_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1735",
+      "title": "KMSAN 보고 그룹·origin 변경과 마지막 flush",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 252,
+        "end": 277,
+        "anchor": "kmsan_internal_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1736",
+      "title": "KMSAN 미추적 페이지·이전 run 보고와 상태 초기화",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 252,
+        "end": 277,
+        "anchor": "kmsan_internal_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1737",
+      "title": "KMSAN metadata 연속성·data 간격과 shadow·origin 간격",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 336,
+        "end": 361,
+        "anchor": "kmsan_metadata_is_contiguous"
+      }
+    },
+    {
+      "planned_lesson": "os1738",
+      "title": "KMSAN metadata 연속성·모두 미추적과 혼합 mapping",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 336,
+        "end": 361,
+        "anchor": "kmsan_metadata_is_contiguous"
+      }
+    },
+    {
+      "planned_lesson": "os1739",
+      "title": "KMSAN 연속성 helper의 반복 범위·짧은 경계 접근",
+      "path": "mm/kmsan/core.c",
+      "excerpt": {
+        "start": 336,
+        "end": 361,
+        "anchor": "kmsan_metadata_is_contiguous"
+      }
+    },
+    {
+      "planned_lesson": "os1740",
+      "title": "KMSAN origin 종류·alloca와 chain magic",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 55,
+        "end": 80,
+        "anchor": "kmsan_print_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1741",
+      "title": "KMSAN metadata 반환 API·store와 dummy 경로 계약",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 45,
+        "end": 74,
+        "anchor": "kmsan_get_shadow_origin_ptr"
+      }
+    },
+    {
+      "planned_lesson": "os1742",
+      "title": "KMSAN page metadata 연결·order와 초기 할당 선언",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 170,
+        "end": 188,
+        "anchor": "kmsan_setup_meta"
+      }
+    },
+    {
+      "planned_lesson": "os1743",
+      "title": "KMSAN internal 함수 계약·비수면 작업과 재귀 검사",
+      "path": "mm/kmsan/kmsan.h",
+      "excerpt": {
+        "start": 158,
+        "end": 183,
+        "anchor": "kmsan_internal_unpoison_memory"
+      }
+    }
+  ]
+}

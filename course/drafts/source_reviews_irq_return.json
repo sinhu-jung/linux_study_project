@@ -1,0 +1,81 @@
+{
+  "include/linux/irqreturn.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 21,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2750",
+        "symbols": [
+          "irqreturn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 반환 enum: 세 가지 처리 결과. enum irqreturn은 장치가 처리하지 않은 결과 0, 처리한 결과 1, 등록한 처리 스레드를 깨워 달라는 결과 2를 이름으로 표현합니다. C의 enum은 이 이름에 정수 값을 부여합니다. 인터럽트 번호나 CPU 모드를 저장하는 자료구조가 아닙니다. 각 장치 handler는 해당 장치의 상태를 확인한 뒤 적절한 결과를 반환합니다. 세 이름을 숫자와 연결하고 no_action 및 __handle_irq_event_percpu의 반환 흐름을 따라가세요. shared IRQ에서는 장치마다 반환한 결과가 OR로 합쳐지므로 개별 반환과 전체 결과를 구분합니다."
+      },
+      {
+        "lesson": "os2751",
+        "symbols": [
+          "IRQ_NONE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ_NONE: 처리하지 않은 장치의 결과. IRQ_NONE은 0 << 0이므로 0입니다. 주석은 이 장치의 인터럽트가 아니거나 이 장치가 처리하지 않았다는 의미를 설명합니다. 공유 interrupt에서 한 장치가 NONE을 반환해도 다른 장치의 handler는 계속 호출됩니다. 전체 결과에 OR하면 기존 처리 bit를 지우지 않습니다. no_action의 반환과 공유 action 순회에서 retval |= res를 함께 보세요. 다른 장치가 HANDLED를 반환한 뒤 NONE이 나오는 예에서 1 | 0을 계산합니다."
+      },
+      {
+        "lesson": "os2752",
+        "symbols": [
+          "IRQ_HANDLED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ_HANDLED: 장치가 처리한 결과. IRQ_HANDLED는 1 << 0으로 값 1입니다. 장치가 이 interrupt를 처리했다는 callback 결과입니다. 이 값 자체는 thread 깨우기를 요청하지 않습니다. 실제 event switch는 IRQ_WAKE_THREAD 값 2를 별도로 검사하므로 성공 의미와 비동기 작업 요청을 구분해야 합니다. 장치의 pending 상태를 확인하고 처리한 뒤 HANDLED를 반환하는 흐름을 그려 보세요. 이 반환만으로 등록 thread_fn이 자동 실행되는 것으로 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2753",
+        "symbols": [
+          "IRQ_WAKE_THREAD"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ_WAKE_THREAD: 등록한 thread_fn의 요청. IRQ_WAKE_THREAD는 1 << 1으로 값 2입니다. hard handler가 등록한 처리 thread를 깨워 달라고 요청하는 결과입니다. 이 값이 task pointer를 담는 것은 아닙니다. handle.c는 thread_fn 유무를 검사하고 없는 경우 경고합니다. 값 3을 단일 callback에서 반환하면 exact switch case 2와 일치하지 않습니다. request_threaded_irq의 공개 prototype에서 handler와 thread_fn을 구분하고 handle.c의 깨우기 흐름을 연결합니다. 실제 등록 함수 전체와 thread 실행 완료는 별도 소스로 따라갑니다."
+      },
+      {
+        "lesson": "os2754",
+        "symbols": [
+          "irqreturn_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "irqreturn_t: enum에 붙인 타입 이름. typedef enum irqreturn irqreturn_t는 기존 enum 타입에 다른 이름을 붙입니다. 새로운 변수나 메모리를 만드는 선언이 아니고 endian 변환이나 값을 재계산하는 함수도 아닙니다. IRQ handler의 함수 반환 타입을 간결하게 작성하는 데 사용합니다. enum의 크기를 항상 1 byte로 보장하는 선언은 아닙니다. irqreturn_t handler(int irq, void *dev_id) 형태에서 반환 타입과 인자를 나눠 읽으세요. typedef 이름으로 callback prototype을 쓰고 enum 값 NONE, HANDLED, WAKE_THREAD 중 계약에 맞는 결과를 반환합니다."
+      },
+      {
+        "lesson": "os2755",
+        "symbols": [
+          "IRQ_RETVAL"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ_RETVAL: 참거짓을 처리 결과로 변환. IRQ_RETVAL(x)는 조건 연산자 ((x) ? IRQ_HANDLED : IRQ_NONE)입니다. 0이면 NONE 0, 0이 아닌 값이면 HANDLED 1입니다. 음수도 참이며 입력 2를 넣어도 WAKE_THREAD를 보존하지 않고 HANDLED로 변환합니다. 매크로 본문에는 x가 조건식에 한 번만 있으므로 이 매크로 자체는 인자를 중복 평가하지 않습니다. 장치의 처리 여부를 나타내는 참거짓 값을 결과로 바꿀 때 사용하세요. 실제 원본 header를 포함한 fixture는 -16부터 16까지 입력을 검사합니다. thread 요청 값을 변환하는 도구로 쓰지 않습니다."
+      }
+    ]
+  }
+}

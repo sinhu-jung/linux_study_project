@@ -1,0 +1,807 @@
+{
+  "kernel/irq/chip.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 1619,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2756",
+        "symbols": [
+          "bad_chained_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Chained IRQ: 잘못된 action 호출 진단. chained_action은 bad_chained_irq를 handler로 둡니다. chained flow는 하위 interrupt를 분배하고 이 IRQ의 일반 action을 호출하지 않는 계약입니다. 잘못 호출되면 WARN_ONCE로 진단하고 NONE을 반환합니다. 이 기본 action이 하위 장치 event를 처리하는 함수는 아닙니다. chained handler와 일반 장치 callback을 나눠 그리세요. 설치 경로가 chained_action을 넣는 이유를 연결하고 잘못된 호출의 경고·NONE을 예상합니다."
+      },
+      {
+        "lesson": "os2757",
+        "symbols": [
+          "irq_set_chip"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ chip 등록: NULL 대체와 descriptor 잠금. IRQ 번호로 잠긴 descriptor를 얻고 없으면 EINVAL입니다. chip이 NULL이면 no_irq_chip을 저장하는 GNU 생략 조건식 chip ?: fallback을 사용합니다. 잠금 해제 뒤 irq_mark_irq로 번호를 표시합니다. 함수는 controller 자체를 할당하거나 chip 자료를 복사하지 않습니다. chip 포인터, descriptor 안의 포인터 field, no_irq_chip 대체를 그립니다. caller는 저장한 chip의 수명을 유지하고 실제 flow handler 설치 순서도 확인합니다."
+      },
+      {
+        "lesson": "os2758",
+        "symbols": [
+          "irq_set_irq_type"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ trigger 설정: buslock과 오류 전달. GLOBAL 검사 조건의 descriptor buslock을 얻고 없으면 EINVAL입니다. __irq_set_trigger의 결과를 저장하고 busunlock 뒤 그대로 반환합니다. level/edge 등 trigger 설정의 controller 작업은 내부 함수와 callback에 위임합니다. 이 wrapper가 모든 type을 항상 성공 처리하지 않습니다. 유효 IRQ에서 원하는 trigger 값을 전달하고 음수 반환을 처리하세요. lock과 unlock 사이의 설정 호출 및 오류가 caller까지 전파되는 경로를 주석 달아봅니다."
+      },
+      {
+        "lesson": "os2759",
+        "symbols": [
+          "irq_set_handler_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ handler_data: 공통 context 포인터. descriptor 잠금을 얻어 irq_common_data.handler_data에 입력 포인터를 저장합니다. descriptor가 없으면 EINVAL이며 성공은 0입니다. controller나 chained flow가 사용할 context를 연결하는 작업으로 chip_data field와 별개입니다. 포인터 대상의 할당·복사를 이 함수가 수행하지 않습니다. chained controller가 사용할 context 구조체와 저장 포인터를 그립니다. handler_data와 chip_data를 구별하고 해제 전에 callback 사용이 끝나도록 수명을 관리합니다."
+      },
+      {
+        "lesson": "os2760",
+        "symbols": [
+          "irq_set_msi_desc_off"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "MSI descriptor: base와 offset 연결. irq_base + irq_offset 번호의 descriptor에 MSI entry 포인터를 연결합니다. entry가 있고 offset이 0일 때만 entry->irq를 base로 갱신합니다. 다른 offset은 같은 MSI entry를 연결해도 대표 IRQ field를 다시 바꾸지 않습니다. 덧셈 범위와 유효 descriptor는 caller 조건입니다. base 40, offset 0과 2를 비교해 descriptor 40·42의 연결을 그립니다. entry의 대표 번호 갱신 조건과 여러 interrupt의 포인터 공유를 따로 읽습니다."
+      },
+      {
+        "lesson": "os2761",
+        "symbols": [
+          "irq_set_msi_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "MSI 기본 wrapper: offset 0 재사용. irq_set_msi_desc는 offset을 0으로 정해 irq_set_msi_desc_off에 위임합니다. 공통 구현을 재사용하므로 descriptor 오류와 entry 대표 IRQ 갱신 조건을 그대로 따릅니다. wrapper가 별도 descriptor를 만들거나 다른 잠금 정책을 추가하는 것은 아닙니다. offset 없는 단일 IRQ API를 사용할 때 이 wrapper를 선택합니다. 입력 IRQ·entry가 공통 함수의 base·entry에 전달되고 offset 0이 고정되는 과정을 써봅니다."
+      },
+      {
+        "lesson": "os2762",
+        "symbols": [
+          "irq_set_chip_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ chip_data: chip별 context 수명. descriptor 잠금 안에서 irq_data.chip_data를 저장하고 unlock합니다. 없으면 EINVAL, 성공은 0입니다. controller callback이 장치별 정보를 얻는 연결점이며 handler_data와 다릅니다. 저장 대상의 수명과 callback의 사용 시점을 맞추는 일은 caller의 책임입니다. controller별 구조체 주소를 chip_data로 전달하는 예를 그립니다. descriptor·chip callback 표·context 객체의 세 관계를 나누고 teardown 전에 사용 종료를 확인합니다."
+      },
+      {
+        "lesson": "os2763",
+        "symbols": [
+          "irq_get_irq_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ data 조회: 내부 객체 주소와 NULL. irq_to_desc로 조회한 descriptor가 있으면 그 안의 irq_data 주소를 반환하고 없으면 NULL입니다. 새 객체나 복사본을 만드는 API가 아닙니다. 이 함수 본문에는 descriptor lock 획득이 없어 반환 포인터의 수명과 접근 보호는 사용 문맥에서 보장해야 합니다. 유효 번호와 없는 번호의 반환을 비교하세요. 내부 field 주소를 얻은 뒤 임의 해제하지 않고 descriptor 수명과 동기화 계약을 따라 사용합니다."
+      },
+      {
+        "lesson": "os2764",
+        "symbols": [
+          "irq_state_clr_disabled"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 상태 bit: disabled 표시 해제. irq_state_clr_disabled는 irqd_clear로 IRQD_IRQ_DISABLED bit만 내립니다. software 상태 표시를 바꾸는 helper이며 chip의 enable callback을 직접 호출하지 않습니다. masked·started 상태는 별개라서 disabled 해제만으로 실제 controller가 unmask됐다고 단정할 수 없습니다. disabled·masked·started를 세 bit로 그립니다. irq_enable이 이 helper 뒤 어떤 controller callback 또는 unmask를 선택하는지 연결합니다."
+      },
+      {
+        "lesson": "os2765",
+        "symbols": [
+          "irq_state_clr_masked"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 상태 bit: masked 표시 해제. irq_state_clr_masked는 IRQD_IRQ_MASKED bit를 내리는 software helper입니다. 실제 unmask_irq는 필요한 상태와 callback 존재를 확인하고 callback 뒤 이 표시를 내립니다. 이 helper 자체는 controller 레지스터를 쓰거나 disabled 상태를 해제하지 않습니다. unmask callback 성공 흐름 뒤 masked 표시가 바뀌는 순서를 읽습니다. 명시적 bit 변경과 실제 장치 동작을 혼동하지 않고 연결 지점을 표시합니다."
+      },
+      {
+        "lesson": "os2766",
+        "symbols": [
+          "irq_state_clr_started"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ started bit: 종료 상태 정리. irq_state_clr_started는 IRQD_IRQ_STARTED만 내립니다. irq_shutdown은 실제 shutdown 또는 disable 작업을 한 뒤 이 helper를 호출합니다. started·activated·disabled·masked는 서로 다른 수명 상태이고 이 bit 조작 자체는 domain 자원을 해제하지 않습니다. shutdown 경로의 callback과 상태 변경 순서를 그립니다. domain deactivate가 shutdown_and_deactivate에서 별도로 호출되는 이유를 연결합니다."
+      },
+      {
+        "lesson": "os2767",
+        "symbols": [
+          "irq_state_set_started"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ started bit: startup 결과와 상태. irq_state_set_started는 IRQD_IRQ_STARTED를 세웁니다. __irq_startup은 chip startup의 ret 값과 별개로 이 helper에 도달해 시작 표시를 설정합니다. 따라서 이 bit를 모든 callback 결과의 성공 증명으로 읽으면 안 됩니다. 실제 chip 계약과 반환 의미를 함께 확인해야 합니다. startup callback이 값을 반환하는 경로와 이 helper 호출을 연결합니다. 상태 bit·반환 값·domain activation의 서로 다른 정보를 나눠 기록합니다."
+      },
+      {
+        "lesson": "os2768",
+        "symbols": [
+          "__irq_startup_managed"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Managed startup: 온라인 CPU 교집합. SMP에서 managed가 아니면 NORMAL입니다. managed이면 shutdown 표시를 내린 뒤 affinity와 온라인 CPU mask의 교집합을 확인합니다. 교집합이 없으면 force 여부와 관계없이 ABORT이고 force는 경고 조건입니다. 교집합이 있으면 domain activation 실패도 ABORT, 성공은 MANAGED입니다. UP 대체 함수는 NORMAL을 반환합니다. affinity {2,3}, online {0,1}과 {1,2} 두 예의 교집합을 풉니다. CPU hotplug로 나중에 시작할 정책과 force가 빈 교집합을 강제로 성공시키지 않는 점을 기록합니다."
+      },
+      {
+        "lesson": "os2769",
+        "symbols": [
+          "__irq_startup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ startup 내부: callback과 enable 대체. 활성화되지 않은 상태는 경고하지만 진행합니다. irq_startup callback이 있으면 호출 결과를 저장하고 disabled·masked를 내립니다. 없으면 irq_enable에 위임합니다. 마지막에 started를 세우고 ret를 반환합니다. 경고가 자동 조기 반환이나 rollback을 의미하지 않습니다. callback 존재·부재의 두 경로와 상태 변경을 표로 정리합니다. 실제 chip startup 반환 계약을 확인하고 ret와 started 표시를 분리해 해석합니다."
+      },
+      {
+        "lesson": "os2770",
+        "symbols": [
+          "irq_startup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ startup: affinity 순서와 resend. depth를 0으로 만들고 이미 started면 enable합니다. NORMAL은 AFFINITY_PRE_STARTUP flag에 따라 affinity 설정을 시작 전 또는 후에 한 번 수행합니다. MANAGED는 지정 mask 설정 뒤 시작합니다. ABORT는 managed_shutdown을 세우고 0으로 반환하며 resend에 도달하지 않습니다. 다른 경로는 resend가 참이면 재전송을 확인합니다. 정상·managed·abort·이미 started 네 경로를 그립니다. affinity callback 순서를 flag로 선택하는 이유와 0 반환이 abort에서도 나올 수 있다는 계약을 함께 읽습니다."
+      },
+      {
+        "lesson": "os2771",
+        "symbols": [
+          "irq_activate"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ activate: managed의 별도 시점. managed affinity가 아니면 irq_domain_activate_irq를 호출하고 결과를 반환합니다. managed이면 여기서는 0입니다. managed domain activation은 startup_managed에서 온라인 CPU 조건 뒤 수행합니다. 함수의 0 결과만으로 모든 경우의 domain callback이 이미 실행됐다고 가정하면 안 됩니다. managed·일반 IRQ의 activation 위치를 비교합니다. 자원 활성화와 실제 시작을 분리해 CPU 온라인 정책에 맞춰 호출하는 흐름을 기록합니다."
+      },
+      {
+        "lesson": "os2772",
+        "symbols": [
+          "irq_activate_and_startup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ activate-and-startup: 경고 실패의 0 반환. irq_activate가 nonzero이면 WARN_ON 조건 뒤 0을 반환하고 startup을 호출하지 않습니다. 성공이면 IRQ_START_FORCE를 전달해 irq_startup합니다. 이 wrapper는 activation 실패를 음수 그대로 전달하지 않으므로 반환 값을 읽을 때 실제 control flow를 확인해야 합니다. activation 성공·실패 두 가지 호출 순서를 써봅니다. 경고 출력과 오류 값의 전파는 별개이며 실패 branch의 명시적 0을 그대로 주석 답지에 표시합니다."
+      },
+      {
+        "lesson": "os2773",
+        "symbols": [
+          "irq_shutdown"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ shutdown: started 조건과 depth. started인 경우만 resend를 정리하고 depth를 1로 만듭니다. shutdown callback이 있으면 호출 뒤 disabled·masked를 세우고 없으면 __irq_disable(desc,true)를 사용합니다. 마지막에 started를 내립니다. started가 아니면 이 본문은 작업하지 않습니다. 시작 여부와 callback 유무의 조합을 그립니다. 종료 뒤 disabled·masked·started 표시와 depth 1을 확인하고 domain deactivate는 별도 API로 연결합니다."
+      },
+      {
+        "lesson": "os2774",
+        "symbols": [
+          "irq_shutdown_and_deactivate"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ shutdown과 domain deactivate의 독립 수명. 먼저 irq_shutdown을 호출한 뒤 started 여부와 관계없이 irq_domain_deactivate_irq를 호출합니다. 주석은 request/startup 전에도 activation이 가능하므로 deactivate가 독립 상태 추적을 해야 한다고 설명합니다. 실제 함수 순서는 종료 후 domain 활성화 수명 정리입니다. 활성화했지만 시작하지 않은 IRQ를 예로 들어 shutdown이 생략돼도 deactivate가 필요한 이유를 씁니다. started와 activated 두 상태를 별도 축으로 그립니다."
+      },
+      {
+        "lesson": "os2775",
+        "symbols": [
+          "irq_enable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ enable: disabled와 masked의 차이. 이미 논리적으로 enabled면 unmask만 시도합니다. disabled이면 표시를 내린 뒤 enable callback이 있으면 호출하고 masked도 내립니다. 없으면 unmask_irq를 사용합니다. enable과 unmask는 controller의 별도 callback일 수 있으며 이 함수는 depth를 관리하지 않습니다. disabled·masked 4조합과 enable callback 유무를 따라갑니다. 원문 provider fixture의 상태·호출 결과를 비교하고 실제 chip 동작은 callback 계약으로 확인합니다."
+      },
+      {
+        "lesson": "os2776",
+        "symbols": [
+          "__irq_disable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ disable 내부: lazy와 강제 mask. 이미 disabled면 mask=true일 때 mask만 시도합니다. 새 disable은 disabled 표시를 세우고 disable callback이 있으면 호출한 뒤 masked도 세웁니다. 없으면 mask=true일 때만 mask합니다. mask=false와 callback 부재는 논리적으로 disabled지만 hardware unmasked 상태를 남길 수 있습니다. callback 유무·기존 상태·mask 조건을 표로 풉니다. lazy 상태에서 뒤 IRQ flow가 pending과 mask를 처리하는 경로를 함께 읽습니다."
+      },
+      {
+        "lesson": "os2777",
+        "symbols": [
+          "irq_disable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ lazy disable: 불필요한 hardware 접근 절감. irq_settings_disable_unlazy 값을 mask 인자로 __irq_disable에 전달합니다. disable callback이 없는 chip의 기본 lazy 방식은 software disabled 표시만 세워 장치 접근을 줄입니다. 이후 interrupt가 오면 flow handler가 mask 및 pending을 처리합니다. IRQ_DISABLE_UNLAZY 설정은 즉시 mask 정책을 요청합니다. disable 뒤 interrupt가 없는 경우와 발생한 경우를 비교합니다. 장치가 자체 interrupt를 막지 못할 때 unlazy 정책이 필요한 이유와 실제 flow 처리를 연결합니다."
+      },
+      {
+        "lesson": "os2778",
+        "symbols": [
+          "irq_percpu_enable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU enable: callback 대체와 CPU mask. enable callback이 있으면 호출하고 없으면 unmask callback을 직접 호출합니다. 뒤에 해당 CPU를 percpu_enabled mask에 추가합니다. 대체 unmask의 NULL guard는 없으므로 chip이 필요한 callback을 제공해야 합니다. 공유 descriptor의 일반 disable state 변경과 별도 per-CPU 경로입니다. CPU 2를 활성 mask에 추가하는 예를 그립니다. callback 제공 조건과 cpumask bit의 의미를 나누고 실제 local interrupt 제어를 구현하는 chip에 연결합니다."
+      },
+      {
+        "lesson": "os2779",
+        "symbols": [
+          "irq_percpu_disable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU disable: 특정 CPU bit 제거. disable callback이 있으면 호출하고 없으면 mask callback을 직접 호출한 뒤 지정 CPU를 percpu_enabled에서 제거합니다. 대체 mask는 유효해야 합니다. 이 함수가 모든 CPU의 local interrupt를 한 번에 끄는 것은 아니며 caller가 맞는 CPU 문맥과 수명을 보장해야 합니다. CPU {1,2}에서 CPU 2를 제거한 결과 {1}을 풉니다. controller disable·mask 대체 경로와 software CPU 집합 변경을 순서대로 기록합니다."
+      },
+      {
+        "lesson": "os2780",
+        "symbols": [
+          "mask_ack_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "mask-and-ack: 결합 callback과 대체 순서. irq_mask_ack가 있으면 결합 callback을 호출하고 masked 표시를 세웁니다. 없으면 mask_irq를 먼저 호출하고 irq_ack가 있을 때 ack합니다. 결합 작업과 두 작업의 순서를 controller 기능에 맞춰 선택합니다. mask 상태는 전달 억제이고 ack는 controller의 이벤트 확인으로 다른 의미입니다. 결합 callback 유무에 따른 호출 목록을 그립니다. 원본 실행 모델의 mask/ack 횟수와 실제 controller 의미를 나눠 읽습니다."
+      },
+      {
+        "lesson": "os2781",
+        "symbols": [
+          "mask_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ mask: 중복 접근 생략과 callback 조건. 이미 masked면 반환합니다. 아니라도 irq_mask가 있을 때만 호출하고 masked 표시를 세웁니다. callback이 없으면 이 helper는 표시를 임의로 세우지 않습니다. 상태 확인으로 불필요한 중복 controller 접근을 줄이며 실제 callback이 표시와 일치하도록 구현돼야 합니다. masked 0·1과 callback 유무 네 경우의 호출·최종 bit를 풉니다. 없던 callback을 software 표시만으로 실제 차단한 것처럼 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2782",
+        "symbols": [
+          "unmask_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ unmask: 반대 상태 전이와 선택 callback. 이미 masked가 아니면 반환합니다. masked이고 irq_unmask가 있을 때 callback을 호출한 뒤 masked 표시를 내립니다. callback이 없으면 기존 masked 상태를 유지합니다. disabled 표시를 바꾸는 함수가 아니므로 controller 전달 상태와 논리적 실행 허용을 함께 읽어야 합니다. masked bit와 unmask callback 유무 네 경우를 표로 정리합니다. 반복 unmask가 hardware를 다시 쓰지 않는 이유와 disabled 상태 독립성을 표시합니다."
+      },
+      {
+        "lesson": "os2783",
+        "symbols": [
+          "unmask_threaded_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Threaded unmask: 늦춘 EOI 순서. IRQCHIP_EOI_THREADED flag면 irq_eoi를 먼저 호출하고 unmask_irq를 수행합니다. flag가 없으면 unmask만 합니다. EOI_THREADED에서 eoi callback은 유효해야 합니다. thread가 끝날 시점에 controller 완료 통지와 전달 재개를 순서대로 연결하는 경로입니다. EOI flag 유무의 callback 순서를 그립니다. EOI와 unmask의 역할을 구별하고 이 helper만으로 모든 thread 완료 동기화를 수행한다고 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2784",
+        "symbols": [
+          "handle_nested_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Nested IRQ: 호출 thread 문맥에서 처리. might_sleep 문맥에서 descriptor lock을 얻고 replay·waiting을 내립니다. action이 없거나 disabled면 pending을 세우고 끝납니다. 가능하면 통계와 threads_active를 증가하고 unlock한 뒤 각 thread_fn을 호출해 결과를 OR합니다. debug note 뒤 wake_threads_waitq로 종료 수명을 연결합니다. 새 thread를 만드는 함수는 아닙니다. 중첩 controller의 상위 thread가 하위 thread_fn을 직접 호출하는 순서를 그립니다. 유효 IRQ·등록 callback 조건과 lock을 놓은 상태의 실행을 확인합니다."
+      },
+      {
+        "lesson": "os2785",
+        "symbols": [
+          "irq_check_poll"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ poll 검사: 진행 bit와 대기 위임. IRQS_POLL_INPROGRESS가 없으면 false입니다. 있으면 irq_wait_for_poll 결과를 반환합니다. 실제 poll 대기 및 동기화는 제공 함수가 수행하며 이 helper는 조건과 위임만 담당합니다. 다른 CPU의 poll과 event 처리의 충돌을 관리하는 irq_may_run의 마지막 판단입니다. poll bit 0·1과 wait 결과 true·false를 표로 풉니다. 순차 fixture는 반환 선택을 검산하며 실제 CPU 경쟁이나 spin 대기 시간을 측정하지 않습니다."
+      },
+      {
+        "lesson": "os2786",
+        "symbols": [
+          "irq_may_run"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 실행 허용: 진행·wakeup·poll 순서. INPROGRESS와 WAKEUP_ARMED가 모두 없으면 true입니다. 둘 중 하나면 먼저 irq_pm_check_wakeup을 확인해 true일 때 false로 막습니다. 아니면 irq_check_poll 결과입니다. 상태 bit 존재가 단순 무조건 금지를 뜻하지 않으며 PM 사건 처리와 poll 동기화 경로가 판단에 참여합니다. 두 bit·PM 결과·poll bit·wait 결과 조합을 읽습니다. 원문 실행 모델의 32조합 검산과 실제 PM·poll 구현의 의미를 구별합니다."
+      },
+      {
+        "lesson": "os2787",
+        "symbols": [
+          "handle_simple_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Simple IRQ: hardware 제어의 caller 계약. descriptor lock을 얻고 may_run을 확인합니다. 가능하면 replay·waiting을 내리고 action 부재 또는 disabled일 때 pending으로 끝납니다. 정상은 통계와 handle_irq_event 뒤 unlock합니다. ack·mask·unmask는 이 flow 본문에 없으므로 필요하면 caller가 처리해야 합니다. software 분배 IRQ의 flow와 장치 action을 구별합니다. fixture에서 정상 event 1·hardware callback 0을 확인하고 controller 작업의 책임을 표시합니다."
+      },
+      {
+        "lesson": "os2788",
+        "symbols": [
+          "handle_untracked_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Untracked IRQ: 통계·randomness 생략. simple과 비슷한 guard 뒤 pending을 내리고 INPROGRESS를 세워 unlock합니다. __handle_irq_event_percpu를 직접 호출하고 relock 뒤 진행 bit를 내립니다. 통계·randomness·spurious 추적 wrapper를 사용하지 않습니다. 분배기가 실제 발생 장치를 모르는 untracked 정책을 위한 flow입니다. handle_simple_irq가 사용하는 event wrapper와 직접 core 호출을 비교합니다. 생략된 관찰 작업을 표시하고 진행 bit와 잠금 경계는 여전히 필요하다는 점을 읽습니다."
+      },
+      {
+        "lesson": "os2789",
+        "symbols": [
+          "cond_unmask_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "조건부 unmask: thread 작업이 남은 경우. disabled가 아니고 masked이며 threads_oneshot이 0일 때만 unmask합니다. 일반 level IRQ 또는 oneshot인데 thread를 깨우지 않은 경우 전달을 재개합니다. thread 작업 bit가 남았으면 mask를 유지해 같은 line의 재진입을 제한합니다. threads_active와 threads_oneshot은 같은 field가 아닙니다. 세 조건을 AND로 적고 하나씩 거짓일 때 unmask가 없는 이유를 풉니다. thread 작업 bit 제거와 실제 완료 경로는 별도 관리 소스로 연결합니다."
+      },
+      {
+        "lesson": "os2790",
+        "symbols": [
+          "handle_level_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Level IRQ: 활성 수준·mask·ack·재개. level 신호는 장치가 활성 수준을 유지하는 동안 재발생할 수 있습니다. lock 뒤 mask_ack를 먼저 하고 may_run을 확인합니다. action 부재·disabled면 pending을 남기고 masked 상태로 끝납니다. 정상은 통계·event 뒤 cond_unmask를 수행해 thread 작업 여부에 맞춰 전달을 재개합니다. 장치 pending을 지우는 callback과 controller ack를 구별하세요. mask→ack→handler→조건부 unmask 순서를 그리고 thread가 남은 경우를 함께 풉니다."
+      },
+      {
+        "lesson": "os2791",
+        "symbols": [
+          "cond_unmask_eoi_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "조건부 EOI: oneshot와 늦춘 완료 통지. ONESHOT가 아니면 EOI 후 반환합니다. ONESHOT이면 disabled가 아니고 masked이며 thread bit가 없을 때 EOI 후 unmask합니다. 그렇지 않으면 EOI_THREADED가 없을 때만 EOI입니다. EOI_THREADED는 남은 thread 처리 뒤 완료 통지를 미루는 정책으로 연결됩니다. oneshot·disabled·masked·thread bit·EOI flag의 조합을 표로 그립니다. callback 횟수 검산과 실제 controller 완료 의미는 구별합니다."
+      },
+      {
+        "lesson": "os2792",
+        "symbols": [
+          "handle_fasteoi_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fast EOI: 완료 통지·pending 재전송. may_run 실패에서 NEEDS_RESEND 정책이면 pending을 세우고 out으로 갑니다. action 부재·disabled는 pending+mask입니다. 정상은 통계, oneshot일 때 mask, event, cond_unmask_eoi를 수행하고 pending이 남으면 resend를 확인합니다. out의 EOI는 EOI_IF_HANDLED가 없을 때만입니다. CPU affinity 이동 중 이전 CPU의 처리와 새 CPU의 도착을 그립니다. pending 표시·resend와 EOI 선택을 조건별로 나눠 읽습니다."
+      },
+      {
+        "lesson": "os2793",
+        "symbols": [
+          "handle_fasteoi_nmi"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fast EOI NMI: 단일 action 계약. NMI flow는 per-CPU 통계를 증가하고 trace entry→단일 action handler→trace exit를 수행합니다. eoi callback이 있으면 호출합니다. 주석은 NMI가 공유되지 않아 action 하나라는 계약을 명시합니다. action NULL guard나 일반 descriptor lock이 없는 만큼 등록과 NMI-safe callback 조건이 중요합니다. 일반 shared IRQ의 action loop와 비교합니다. 단일 action·NMI 문맥 제한·선택적 EOI를 표시하고 이 함수가 sleep 가능한 작업을 허용한다고 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2794",
+        "symbols": [
+          "handle_edge_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Edge IRQ: pending 반복 처리 알고리즘. edge는 변화 순간의 사건을 controller가 latch하고 ack해야 새 사건을 받을 수 있습니다. 실행 불가·disabled·action 부재는 pending+mask_ack입니다. 정상은 통계와 ack 후 event를 반복하며 pending이고 disabled가 아닐 때 계속합니다. 반복 중 pending+masked이면 unmask하고 action이 사라지면 mask 후 끝납니다. 처리 중 두 사건이 추가되는 모델에서 event가 3회인 이유를 풉니다. 반복 종료 조건과 disable된 경우 pending을 남기는 경로를 별도로 그립니다."
+      },
+      {
+        "lesson": "os2795",
+        "symbols": [
+          "handle_edge_eoi_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Edge EOI: mask 없는 반복과 공통 완료. CONFIG_IRQ_EDGE_EOI_HANDLER에서 edge 사건을 pending 반복으로 처리하지만 mask/unmask 논리는 없습니다. 실행 불가·disabled·action 부재는 out_eoi로 가고 정상 반복은 pending과 disable 조건입니다. 모든 exit가 공통 eoi callback 뒤 unlock에 도달하며 eoi callback 유효성이 필요합니다. edge 일반 flow와 비교해 ack·mask 대신 공통 EOI를 사용하는 지점을 표시합니다. controller 특성에 맞는 flow 선택이 필요함을 설명합니다."
+      },
+      {
+        "lesson": "os2796",
+        "symbols": [
+          "handle_percpu_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU IRQ: 공유 총계 없이 local 처리. per-CPU interrupt는 직렬화하지 않으므로 desc->tot_count를 건드리지 않고 __kstat로 CPU별 통계만 증가합니다. 선택적 ack 뒤 handle_irq_event_percpu를 호출하고 선택적 eoi로 끝납니다. 일반 desc lock을 이 본문에서 얻지 않으므로 local IRQ 문맥과 등록 계약을 따릅니다. CPU별 통계 배열과 공유 총계의 차이를 그립니다. ack→event→eoi 순서 및 callback 부재가 허용되는 두 위치를 표시합니다."
+      },
+      {
+        "lesson": "os2797",
+        "symbols": [
+          "handle_percpu_devid_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU dev_id: local context와 spurious 처리. CPU별 통계와 선택적 ack 뒤 action이 있으면 raw_cpu_ptr(percpu_dev_id)를 handler 인자로 전달합니다. 없으면 현재 CPU의 enabled bit를 확인해 활성인 경우 disable하고 한번 오류를 출력합니다. 마지막 선택적 eoi는 두 경로에 공통입니다. 일반 dev_id가 아니라 CPU별 객체 주소를 고릅니다. CPU 0·1의 context가 다른 percpu 변수 예를 그립니다. action 없는 경우의 local disable과 오류 출력이 장치 callback 실행과 다른 경로임을 읽습니다."
+      },
+      {
+        "lesson": "os2798",
+        "symbols": [
+          "handle_percpu_devid_fasteoi_nmi"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU NMI dev_id: NULL guard 없는 계약. CPU별 통계 뒤 trace entry·현재 CPU context를 전달한 단일 action·trace exit, 선택적 EOI입니다. 일반 percpu_devid IRQ와 달리 action 없는 spurious branch가 없습니다. 유효한 단일 action과 NMI-safe 문맥이 등록 계약이며 이 함수는 일반 공유 IRQ loop를 사용하지 않습니다. 두 percpu_devid 함수의 action guard를 비교합니다. NMI 등록 시 callback·percpu 자료의 수명을 유지하고 잠들 수 없는 문맥 제약을 별도 확인합니다."
+      },
+      {
+        "lesson": "os2799",
+        "symbols": [
+          "__irq_do_set_handler"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Flow handler 설치: hierarchy와 chained 제약. NULL handle은 bad handler로 바꿉니다. 유효 handler는 hierarchy에서 사용 가능한 chip을 찾지만 chained면 외부 chip 미준비에서 경고하고 끝납니다. bad로 해제하면 mask_ack·disabled·depth 1이며 chained action 제거와 PM put을 합니다. 정상 chained는 trigger 재설정 뒤 handler를 복원하고 noprobe·norequest·nothread, chained_action, PM get과 즉시 activation/startup을 연결합니다. 일반 설치·chained 설치·해제 세 경로를 그립니다. trigger callback이 handler를 바꿀 수 있어 다시 복원하는 이유와 PM 오류 경고가 자동 rollback이 아닌 점을 읽습니다."
+      },
+      {
+        "lesson": "os2800",
+        "symbols": [
+          "__irq_set_handler"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Flow 설치 wrapper: buslock과 빈 descriptor. descriptor buslock을 얻어 없으면 void 반환합니다. 있으면 __irq_do_set_handler로 위임하고 busunlock합니다. 내부 설치 함수도 void이므로 이 wrapper는 성공·실패를 정수로 반환하지 않습니다. caller는 적합한 chip·handler·chained 계약을 먼저 충족해야 합니다. lock→내부 설치→unlock 순서를 주석 달고 없는 IRQ를 처리하는 branch를 표시합니다. void API와 errno API의 차이를 읽습니다."
+      },
+      {
+        "lesson": "os2801",
+        "symbols": [
+          "irq_set_chained_handler_and_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Chained handler와 data: 같은 잠금 안의 설치. descriptor buslock 아래 handler_data를 저장하고 chained=1, name=NULL로 내부 설치합니다. 없으면 void 반환합니다. data 저장 뒤 내부 설치가 경고로 끝나도 이 wrapper가 data를 rollback하지 않습니다. controller context와 flow를 같은 잠금 범위에 연결하는 API입니다. 유효 chip을 먼저 준비한 뒤 context와 chained handler를 설치하는 순서를 그립니다. 내부 설치 실패 가능성과 이미 저장된 data의 상태를 함께 읽습니다."
+      },
+      {
+        "lesson": "os2802",
+        "symbols": [
+          "irq_set_chip_and_handler_name"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Chip와 flow 결합 wrapper: 두 호출의 결과. 먼저 irq_set_chip을 호출한 뒤 __irq_set_handler를 호출합니다. 첫 호출의 int 결과를 검사하지 않는 void wrapper이며 두 호출이 하나의 잠금 아래 atomic transaction인 것은 아닙니다. 설치 전에 유효 IRQ와 chip 수명을 준비하고 설정 API의 문맥 계약을 따라야 합니다. 두 호출의 순서와 각각의 잠금 범위를 그립니다. 편의 wrapper라는 이유로 첫 오류 반환이나 전체 rollback이 보장된다고 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2803",
+        "symbols": [
+          "irq_modify_status"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ status 변경: 설정과 irq_data 동기화. descriptor lock 안에서 설정 bits를 clear/set합니다. 기존 trigger를 저장하고 irq_data의 balance·percpu·trigger·level·move bits를 내린 뒤 새 settings로 다시 세웁니다. 새 trigger mask가 NONE이 아니면 이를 택하고 아니면 기존 trigger를 유지합니다. 이미 활성인데 NOAUTOEN 설정은 경고하지만 작업을 계속합니다. settings와 irq_data에 같은 정책이 표현되는 두 위치를 그립니다. 기존 trigger 유지 branch와 특정 bits 재구성을 순서대로 주석 달아봅니다."
+      },
+      {
+        "lesson": "os2804",
+        "symbols": [
+          "irq_cpu_online"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "CPU online: 활성 IRQ의 callback 선택. DEPRECATED_IRQ_CPU_ONOFFLINE 구성에서 활성 IRQ 번호를 순회합니다. descriptor가 없으면 건너뛰고 irqsave lock 안에서 chip·online callback을 확인합니다. ONOFFLINE_ENABLED가 없거나 IRQ가 disabled가 아니면 callback을 호출합니다. flag가 있으면 enabled IRQ만 통지하는 정책입니다. 활성 IRQ 목록과 CPU 온라인 사건을 연결합니다. chip flag·disabled의 네 조합을 풀이하고 callback 제공·잠금 수명 조건을 적습니다."
+      },
+      {
+        "lesson": "os2805",
+        "symbols": [
+          "irq_cpu_offline"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "CPU offline: per-IRQ 통지와 보호 범위. 활성 번호마다 유효 descriptor를 찾고 irqsave lock 안에서 chip의 offline callback을 선택합니다. ONOFFLINE_ENABLED이면 논리적으로 enabled인 IRQ에만 통지합니다. callback 뒤 unlockrestore로 IRQ 상태를 복구합니다. 이 함수 자체가 CPU hotplug 전체 단계나 모든 affinity 이동을 구현하지 않습니다. online 함수와 대칭인 callback 이름·조건·잠금 복원을 비교합니다. CPU hotplug 전체 구현과 이 통지 hook의 범위를 구별합니다."
+      },
+      {
+        "lesson": "os2806",
+        "symbols": [
+          "handle_fasteoi_ack_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Hierarchy Fast EOI ack: 시작 전 확인. HIERARCHY와 FASTEOI_HIERARCHY_HANDLERS 구성에서 may_run·action·disabled guard 뒤 통계를 증가합니다. oneshot이면 mask하고 irq_ack를 직접 호출한 뒤 event·cond_unmask_eoi입니다. guard 실패 out은 EOI_IF_HANDLED가 없을 때 EOI합니다. 필요한 ack·eoi callback은 유효해야 합니다. 일반 fasteoi와 추가 ack 위치를 비교합니다. edge 계층 controller의 확인 작업과 완료 통지를 나누고 handler 전에 ack가 오는 순서를 표시합니다."
+      },
+      {
+        "lesson": "os2807",
+        "symbols": [
+          "handle_fasteoi_mask_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Hierarchy Fast EOI mask: level 차단 선행. lock 직후 mask_ack를 수행하고 may_run을 확인합니다. disabled·action 부재는 pending+mask 뒤 out입니다. 정상은 통계, oneshot 추가 mask 시도, event·cond_unmask_eoi입니다. level 계층 controller의 초기 차단·확인이 fasteoi 완료 처리와 결합됩니다. out EOI는 flag 조건을 따릅니다. fasteoi_ack의 ack 위치와 비교해 이 flow는 guard 전에 mask_ack하는 점을 표시합니다. 중복 mask가 상태 helper에서 생략되는 이유도 연결합니다."
+      },
+      {
+        "lesson": "os2808",
+        "symbols": [
+          "irq_chip_set_parent_state"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent state 설정: 선택 callback 부재의 성공. 먼저 parent_data로 한 단계 올라갑니다. parent가 없거나 set_irqchip_state가 없으면 0입니다. 있으면 which·val을 부모 callback에 전달하고 결과를 반환합니다. 0이 언제나 실제 hardware 상태 변경을 뜻하는 것은 아닙니다. parent chip 자체는 유효해야 합니다. 상태 설정의 선택적 지원 계약을 읽습니다. callback 부재의 no-op 성공과 실제 변경을 구별하고 parent 관계가 끊어진 경우를 그립니다."
+      },
+      {
+        "lesson": "os2809",
+        "symbols": [
+          "irq_chip_get_parent_state"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent state 조회: 성공과 output 불변. parent나 get callback이 없으면 0이며 state 출력에 값을 쓰지 않습니다. 지원되면 부모 callback에 state 포인터를 전달해 결과를 반환합니다. 따라서 선택적 no-op 성공에서 출력 초기값을 실제 hardware 조회 결과로 착각하면 안 됩니다. 출력 storage와 chip 유효성은 caller 조건입니다. state를 초기화한 예에서 callback 부재면 그대로 남는 흐름을 읽습니다. 상태 조회의 지원 여부와 errno·출력 의미를 함께 확인합니다."
+      },
+      {
+        "lesson": "os2810",
+        "symbols": [
+          "irq_chip_enable_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent enable: 유효 링크와 unmask 대체. parent_data로 이동해 enable callback이 있으면 호출하고 없으면 unmask를 직접 호출합니다. 이 함수에는 parent NULL guard가 없고 대체 unmask도 필요합니다. 위 helper의 조건부 성공 정책을 모든 parent API에 일반화하면 안 됩니다. 부모 controller가 준비된 hierarchy 문맥에서 사용합니다. valid parent·chip·enable 또는 unmask 조건을 써봅니다. 직접 부모를 활성화하는 callback과 desc 상태 표시 변경은 다른 경로임을 확인합니다."
+      },
+      {
+        "lesson": "os2811",
+        "symbols": [
+          "irq_chip_disable_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent disable: mask 대체의 조건. 한 단계 parent로 올라가 disable이 있으면 호출하고 없으면 mask를 직접 호출합니다. parent·chip·대체 callback은 유효해야 합니다. 하위 descriptor의 disable 중첩 depth를 이 함수가 갱신하지 않습니다. controller hierarchy에서 하위 chip이 상위 전달을 제한할 때 사용하는 helper입니다. enable_parent와 대칭인 대체 작업을 표시합니다. 부모 링크와 callback의 준비 조건을 먼저 확인하고 상위 hardware 제어에 위임하는 예를 풉니다."
+      },
+      {
+        "lesson": "os2812",
+        "symbols": [
+          "irq_chip_ack_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent ack: 부모 사건 확인. parent_data로 한 단계 이동한 뒤 부모 chip의 irq_ack callback을 직접 호출해 사건을 확인합니다. 이 helper에는 parent 또는 해당 callback의 NULL guard가 없습니다. 실제 controller 동작은 구현이 담당하고 이 함수는 위임만 수행합니다. ack·mask·unmask·EOI의 의미를 같은 작업으로 합치면 안 됩니다. 부모 링크와 irq_ack 제공 조건을 확인합니다. 하위 chip callback에서 부모에게 사건을 확인하는 흐름을 그려 일반 descriptor 상태 변경과 직접 callback 위임을 구별합니다."
+      },
+      {
+        "lesson": "os2813",
+        "symbols": [
+          "irq_chip_mask_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent mask: 부모 전달 차단. parent_data로 한 단계 이동한 뒤 부모 chip의 irq_mask callback을 직접 호출해 전달을 차단합니다. 이 helper에는 parent 또는 해당 callback의 NULL guard가 없습니다. 실제 controller 동작은 구현이 담당하고 이 함수는 위임만 수행합니다. ack·mask·unmask·EOI의 의미를 같은 작업으로 합치면 안 됩니다. 부모 링크와 irq_mask 제공 조건을 확인합니다. 하위 chip callback에서 부모에게 전달을 차단하는 흐름을 그려 일반 descriptor 상태 변경과 직접 callback 위임을 구별합니다."
+      },
+      {
+        "lesson": "os2814",
+        "symbols": [
+          "irq_chip_unmask_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent unmask: 부모 전달 허용. parent_data로 한 단계 이동한 뒤 부모 chip의 irq_unmask callback을 직접 호출해 전달을 허용합니다. 이 helper에는 parent 또는 해당 callback의 NULL guard가 없습니다. 실제 controller 동작은 구현이 담당하고 이 함수는 위임만 수행합니다. ack·mask·unmask·EOI의 의미를 같은 작업으로 합치면 안 됩니다. 부모 링크와 irq_unmask 제공 조건을 확인합니다. 하위 chip callback에서 부모에게 전달을 허용하는 흐름을 그려 일반 descriptor 상태 변경과 직접 callback 위임을 구별합니다."
+      },
+      {
+        "lesson": "os2815",
+        "symbols": [
+          "irq_chip_eoi_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent EOI: 부모 완료 통지. parent_data로 한 단계 이동한 뒤 부모 chip의 irq_eoi callback을 직접 호출해 처리 완료를 통지합니다. 이 helper에는 parent 또는 해당 callback의 NULL guard가 없습니다. 실제 controller 동작은 구현이 담당하고 이 함수는 위임만 수행합니다. ack·mask·unmask·EOI의 의미를 같은 작업으로 합치면 안 됩니다. 부모 링크와 irq_eoi 제공 조건을 확인합니다. 하위 chip callback에서 부모에게 처리 완료를 통지하는 흐름을 그려 일반 descriptor 상태 변경과 직접 callback 위임을 구별합니다."
+      },
+      {
+        "lesson": "os2816",
+        "symbols": [
+          "irq_chip_set_affinity_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent affinity: 선택적 지원과 ENOSYS. 직접 부모의 irq_set_affinity가 있으면 dest mask와 force를 전달해 결과를 반환합니다. 없으면 ENOSYS입니다. parent 자체의 NULL guard는 없으므로 준비된 hierarchy가 필요합니다. 여기서는 CPU 선택 알고리즘을 구현하지 않고 부모에게 요청을 전달합니다. CPU mask와 force 인자의 전달을 그립니다. callback 부재 오류를 처리하고 managed startup의 온라인 교집합과 실제 affinity 설정을 구별합니다."
+      },
+      {
+        "lesson": "os2817",
+        "symbols": [
+          "irq_chip_set_type_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent trigger type: 제공 함수로 위임. 직접 부모의 irq_set_type을 확인해 있으면 type을 전달하고 결과를 반환합니다. 없으면 ENOSYS입니다. 유효 parent와 chip이 전제입니다. 하위 flow 설치가 trigger callback 영향으로 handler를 복원하는 경로와 연결해 type 설정이 controller별 작업임을 이해합니다. level·edge type 인자와 부모 callback을 그립니다. 지원 부재를 처리하고 이 helper가 모든 controller에 임의 type을 보장하는 API가 아님을 확인합니다."
+      },
+      {
+        "lesson": "os2818",
+        "symbols": [
+          "irq_chip_retrigger_hierarchy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Hierarchy retrigger: 첫 지원 부모 검색. 자신을 건너뛰고 parent_data부터 root 방향으로 순회합니다. chip과 retrigger callback이 있는 첫 노드에서 호출 결과를 즉시 반환합니다. 지원 노드가 없으면 0입니다. 부모 chain이 유효하고 끝나야 하며 이 loop에는 순환 검출이 없습니다. child→parent→root 중 parent 미지원·root 지원 예를 풉니다. 첫 지원 선택과 모든 controller 호출의 차이를 표시하고 cyclic 링크를 정상 사용으로 만들지 않습니다."
+      },
+      {
+        "lesson": "os2819",
+        "symbols": [
+          "irq_chip_set_vcpu_affinity_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent vCPU affinity: 가상화 context 전달. 직접 부모에 vcpu_info 포인터를 전달합니다. set_vcpu_affinity callback이 없으면 ENOSYS, 있으면 callback 결과입니다. pointer의 실제 내용·수명·가상 interrupt routing 방식은 controller 구현 계약이며 이 helper가 VM이나 vCPU를 생성하지 않습니다. vcpu_info의 제공자와 부모 chip callback을 연결합니다. 일반 CPU mask affinity와 이 opaque context 전달을 구별하고 지원 부재를 처리합니다."
+      },
+      {
+        "lesson": "os2820",
+        "symbols": [
+          "irq_chip_set_wake_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent wake 설정: SKIP flag의 no-op. 부모 chip의 SKIP_SET_WAKE flag면 callback 유무와 관계없이 0입니다. flag가 없고 set_wake가 있으면 on 인자를 전달하고 결과를 반환합니다. 둘 다 없으면 ENOSYS입니다. 유효 부모가 필요하며 wake capability 설정과 현재 IRQ event 처리의 PM guard는 다른 동작입니다. skip flag·callback 유무의 네 조건을 풉니다. 전원 절약 상태의 wake 설정 정책과 실제 interrupt 도착을 별도 단계로 그립니다."
+      },
+      {
+        "lesson": "os2821",
+        "symbols": [
+          "irq_chip_request_resources_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent resource 요청: 선택적 no-op 성공. 부모 irq_request_resources가 있으면 호출 결과를 반환합니다. 없으면 주석의 선택적 기능 계약대로 0입니다. parent와 chip은 유효해야 합니다. 실제 어떤 hardware 자원을 확보하고 실패를 복구하는지는 callback 구현을 읽어야 하며 helper의 0이 항상 신규 자원 할당을 뜻하지 않습니다. request와 release의 짝을 그립니다. callback 부재와 실제 확보 성공을 구별하고 부모가 반환한 실패에 대한 caller 정리 흐름을 확인합니다."
+      },
+      {
+        "lesson": "os2822",
+        "symbols": [
+          "irq_chip_release_resources_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent resource 해제: 선택 callback. 부모로 이동해 release_resources가 있을 때만 호출합니다. 반환 타입은 void이며 callback 부재면 수행하지 않습니다. parent·chip 유효성 및 실제 확보한 자원의 수명은 caller 조건입니다. 요청·해제 균형과 controller teardown을 함께 읽어야 합니다. resource 요청 성공 뒤 해제 위치를 그립니다. void 종료·선택 callback·부모 준비 조건을 표시하고 descriptor 자체 해제로 혼동하지 않습니다."
+      },
+      {
+        "lesson": "os2823",
+        "symbols": [
+          "irq_chip_compose_msi_msg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "MSI message compose: 자신부터 첫 제공자. 자신부터 irqd_get_parent_data로 올라가 compose callback을 제공하는 첫 chip을 pos에 저장합니다. 찾은 뒤 loop를 끝내 그 callback에 msg를 전달하고 0입니다. 없으면 ENOSYS입니다. hierarchy 없는 경우 helper가 부모 없음을 처리하며 callback의 message 작성과 실제 장치 MSI 전송은 다른 작업입니다. self 미지원·parent 지원·root 지원 예에서 선택 노드를 풉니다. retrigger가 부모부터 시작하는 것과 달리 자기 자신을 포함하는 검색임을 비교합니다."
+      },
+      {
+        "lesson": "os2824",
+        "symbols": [
+          "irq_get_pm_device"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ PM device: domain 연결 조회. irq_data에 domain이 있으면 domain->pm_dev를 반환하고 없으면 NULL입니다. 부모 hierarchy를 순회하지 않습니다. domain이 있어도 pm_dev가 NULL일 수 있습니다. 이 helper는 device를 생성하거나 runtime PM reference를 얻지 않으며 단순히 연결된 device 포인터를 조회합니다. irq_data→domain→pm_dev 관계를 그립니다. domain 존재와 device 존재를 따로 확인하고 다음 PM get/put의 CONFIG_PM 조건을 연결합니다."
+      },
+      {
+        "lesson": "os2825",
+        "symbols": [
+          "irq_chip_pm_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ runtime PM get: 조건과 결과 전파. 현재 domain의 pm device를 얻고 CONFIG_PM이 켜져 있으며 dev가 있을 때만 pm_runtime_resume_and_get을 호출합니다. 반환 값을 그대로 전달하며 조건이 아니면 0입니다. 실제 전원 활성화·reference 획득과 실패 정리는 runtime PM 구현의 계약을 따라야 합니다. CONFIG_PM 0·1과 dev NULL·유효의 조합을 풉니다. get 성공 뒤 put 짝을 연결하고 0이 선택적 no-op에서도 나온다는 점을 확인합니다."
+      },
+      {
+        "lesson": "os2826",
+        "symbols": [
+          "irq_chip_pm_put"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ runtime PM put: 음수 보존·양수 정규화. CONFIG_PM과 dev 조건이면 pm_runtime_put을 호출합니다. retval가 음수면 그대로 반환하고 0 또는 양수면 0으로 정규화합니다. get과 달리 nonnegative 값을 그대로 전달하지 않습니다. 공유 device의 실제 전원 차단 시점은 모든 reference가 균형을 이루는 runtime PM 계약과 연결됩니다. runtime 결과 -5·0·1에서 API 반환 -5·0·0을 풉니다. 여러 IRQ가 같은 device를 사용하는 get/put 균형을 그립니다."
+      },
+      {
+        "lesson": "os2827",
+        "symbols": [
+          "irq_chip_mask_ack_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Parent mask-and-ack: 결합 callback 필수. 직접 parent로 이동해 irq_mask_ack를 호출합니다. 일반 mask_ack_irq와 달리 결합 callback이 없을 때 mask와 ack 두 함수로 대체하는 branch가 없습니다. parent·chip·결합 callback이 유효해야 합니다. 비슷한 이름을 보고 다른 helper의 fallback 계약을 옮기면 안 됩니다. 일반 descriptor helper와 parent helper의 본문을 나란히 비교합니다. chip이 결합 작업을 제공하는 hierarchy에서 위임하고 NULL 대체가 있는 것으로 가정하지 않습니다."
+      }
+    ]
+  }
+}

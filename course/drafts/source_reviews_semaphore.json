@@ -1,0 +1,162 @@
+{
+  "include/linux/semaphore.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 51,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1521",
+        "symbols": [
+          "semaphore"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1522",
+        "symbols": [
+          "sema_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1523",
+        "symbols": [
+          "DEFINE_SEMAPHORE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      }
+    ],
+    "fixture": "data/source_checks/source-semaphore-harness-manifest.json"
+  },
+  "kernel/locking/semaphore.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 279,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1524",
+        "symbols": [
+          "down"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1525",
+        "symbols": [
+          "down_interruptible"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1526",
+        "symbols": [
+          "down_killable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1527",
+        "symbols": [
+          "down_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1528",
+        "symbols": [
+          "down_timeout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1529",
+        "symbols": [
+          "___down_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1530",
+        "symbols": [
+          "up"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1531",
+        "symbols": [
+          "__down_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      },
+      {
+        "lesson": "os1532",
+        "symbols": [
+          "down_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full semaphore.h and kernel/locking/semaphore.c read/authored across12 lessons/24 worked questions: raw lock/unsigned permits/list, static/dynamic init and signed-val conversion/lockdep, no-owner binary vs mutex and cross-context up/try, down fastpath vs deprecated uninterruptible slow/state/irqsave, preposted permit precedes signal, interruptible/fatal-only kill -EINTR vs other API -ERESTARTSYS, try0success1failure and signed intermediate, timeout0success/-ETIME/jiffies instead of remaining-value contract, local waiter tail/current/up and signal-timeout checks before action vs granted-up after action, error unlink, FIFO direct grant no count increment/newcomer cannot steal posted count, trace begin/end/result and inline constants, injected native int32 count boundaries and unsigned up wrap distinguish completion saturation. Exact full original definitions in explicit serial models66001 assertions eachoptimized+ASanUBSan, 2000 repeat cases, grant at deadline+signal and trace results, IRQ-off restore, no scheduler/SMP/real ftrace/RT/latency proof. Large counts and negative initializer are injected outside balanced-resource API usage. schedule_timeout state/MAX return primary contract cross-read kernel/time/timer.c2545..2624 only; timer.c not whole reviewed. Sourceunchanged."
+      }
+    ],
+    "fixture": "data/source_checks/source-semaphore-harness-manifest.json"
+  }
+}

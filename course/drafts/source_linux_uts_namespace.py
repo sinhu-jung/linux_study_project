@@ -1,0 +1,42 @@
+"""UTS namespace lifecycle and installation, grounded in kernel/utsname.c."""
+ROWS = [
+('UTS 이름 격리: 같은 포인터 공유와 새 이름 복사', 'copy_utsname',
+ '컨테이너마다 다른 호스트 이름을 보여 주려면 이름을 모든 프로세스가 하나로 공유하는 전역 문자열에만 두면 안 됩니다. Linux는 태스크가 참조하는 UTS namespace 객체 안에 이름을 둡니다. 새 객체를 만들지 않는 경우에는 같은 이름을 공유하고 새 객체를 만들면 이후 변경이 분리됩니다.',
+ 'copy_utsname은 old_ns가 NULL이면 BUG_ON이며 먼저 get_uts_ns로 참조를 얻습니다. CLONE_NEWUTS가 없으면 그 old_ns를 그대로 반환합니다. 플래그가 있으면 clone_uts_ns로 새 객체를 만든 뒤 old_ns의 임시 참조를 put하고 새 포인터 또는 오류 포인터를 반환합니다. clone은 uts_sem 읽기 잠금 아래 name 구조체를 memcpy하므로 처음 이름 값은 원본과 같습니다.',
+ '원래 객체 참조 수가3이면 공유 경로는4가 된 같은 객체를 반환합니다. 새 namespace 경로는 원본을 잠시4로 했다가3으로 되돌리고 새 객체 참조1을 반환합니다. 이름 server-a로 복제한 후 한쪽 이름을 server-b로 바꾸면 분리된 name 저장 공간 때문에 다른 쪽은 server-a를 유지합니다. 복제 실패도 원본의 임시 참조는 내려갑니다.',
+ '자료구조와 읽기·쓰기 잠금',
+ 'uts_namespace에는 new_utsname name,user_ns,ucounts,ns_common이 있습니다. new_utsname은 sysname,nodename,release,version,machine,domainname 여섯 개의65바이트 배열이며 포인터 문자열을 얕게 복사하는 형태가 아닙니다. utsname()은 current->nsproxy->uts_ns->name을 고릅니다. sethostname/setdomainname은 같은 uts_sem의 쓰기 잠금 아래 배열을 갱신하므로 복제 중 쓰기와 충돌하지 않게 합니다. CONFIG_UTS_NS가 없으면 헤더 stub은 NEWUTS에 -EINVAL,공유에는 old_ns를 반환하고 get/put은 빈 함수입니다. UTS 분리만으로 다른 namespace 종류까지 분리되는 것은 아닙니다.',
+ ('CLONE_NEWUTS 없이 복사하면 이름 배열을 새로 만드나요?', '아닙니다.참조를 얻은 같은 namespace 객체를 반환합니다.', '그렇습니다.매번 새 배열6개를 따로 할당합니다.', '포인터 공유 경로와 새 객체를 생성하는 경로를 플래그로 구분합니다.'),
+ ('새 namespace 생성이 실패해도 old_ns 임시 참조는 내려가나요?', '그렇습니다.clone 호출 뒤 put이 실행됩니다.', '아닙니다.오류면 증가분을 항상 남깁니다.', 'new_ns가 오류 포인터일 수 있어도 old_ns를 put하는 줄은 같은 위치에서 실행됩니다.')),
+('UTS 생성 제한: 사용자별 개수 회계와 역순 실패 정리', 'clone_uts_ns',
+ '프로세스가 namespace를 무한히 만들면 커널 객체와 식별 번호를 계속 소비합니다. 객체 메모리 할당만 검사해서는 사용자별 생성 제한을 지킬 수 없으므로 먼저 개수 회계의 몫을 얻습니다. 그 뒤 단계가 실패하면 회계까지 돌려놓아야 실패한 생성이 할당량을 영구 소비하지 않습니다.',
+ 'clone_uts_ns는 inc_uts_namespaces(user_ns)로 current_euid의 UCOUNT_UTS_NAMESPACES를 증가시킵니다. 실패하면 -ENOSPC 오류 포인터입니다. 다음 create_uts_ns는 slab 객체를 할당하고 참조 수1로 초기화하며 실패는 -ENOMEM입니다. ns_alloc_inum 실패면 그 오류를 보존하고 객체를 해제한 뒤 회계를 감소시킵니다. 성공하면 ucounts와 operations를 설정하고 이름 복사와 get_user_ns를 수행합니다.',
+ '예를 들어 회계가 허용한 몫 하나를 얻었지만 객체 할당이 실패하면 fail_dec에서 그 몫을 반납합니다. 식별 번호 할당까지 실패했으면 fail_free에서 객체를 먼저 반납하고 fail_dec로 내려갑니다. 원문 주석의 ENOMEM만 읽으면 첫 단계 ENOSPC와 ns_alloc_inum의 다른 오류를 놓칩니다. 반환값은 NULL과 다르게 ERR_PTR(err)이므로 호출자는 오류 포인터 규약으로 확인해야 합니다.',
+ '정상 파괴에도 두 가지 수명 정리가 필요하다',
+ 'free_uts_ns는 ucounts 감소,user namespace 참조 put,namespace 식별 번호 반환,slab 객체 해제 순입니다. get_uts_ns/put_uts_ns는 namespace 객체 참조 수를 관리하고 inc/dec_uts_namespaces는 생성 개수 회계를 관리하므로 같은 카운터가 아닙니다. 객체를 여러 태스크가 공유한다고 생성 개수를 태스크마다 새로 세는 구조가 아닙니다. inc_ucount 내부 계층 회계 알고리즘은 별도 구현이며 여기서는 이 파일의 호출·반납 계약을 확인합니다.',
+ ('생성 개수 몫을 얻지 못하면 어떤 오류로 반환하나요?', '-ENOSPC를 담은 오류 포인터입니다.', '항상 NULL입니다.', 'err를 -ENOSPC로 두고 첫 실패 분기에서 ERR_PTR(err)를 반환합니다.'),
+ ('namespace 객체 참조 수와 사용자별 namespace 개수는 같은 카운터인가요?', '아닙니다.공유 수명과 생성 자원 회계가 다릅니다.', '그렇습니다.get_uts_ns마다 namespace 생성 몫을 하나 더 씁니다.', 'get/put과 inc_ucount/dec_ucount의 호출 위치가 달라 공유와 생성 비용을 구분합니다.')),
+('UTS namespace 교체: 권한 두 곳과 먼저 얻고 나중에 놓기', 'utsns_install',
+ '다른 namespace에 들어가면 프로세스가 보는 이름과 그 이름을 관리하는 권한 관계가 바뀝니다. 대상만 검사하고 호출자 쪽 권한을 무시해서는 안 됩니다. 또한 새 객체가 기존 객체와 같을 수 있어 교체 과정의 참조 순서를 잘못 잡으면 사용하는 객체를 먼저 해제할 수 있습니다.',
+ 'utsns_install은 new의 ns_common에서 container_of로 uts_namespace를 찾습니다. 대상 ns->user_ns와 nsset->cred->user_ns 양쪽에 대해 CAP_SYS_ADMIN을 검사하며 하나라도 실패하면 -EPERM입니다. 성공하면 대상 get_uts_ns를 먼저 호출하고 nsproxy의 기존 uts_ns를 put한 뒤 새 포인터를 대입하고0을 반환합니다. 작업 대상은 인자로 받은 nsset의 nsproxy입니다.',
+ '대상과 기존이 같은 객체이며 참조 수가1인 예를 보면 get으로2,put으로1이 된 뒤 같은 포인터가 남습니다. 반대로 기존을 먼저 put하면0이 되어 해제될 수 있으므로 순서가 중요합니다. 두 권한 검사 중 하나가 실패하면 get/put/대입을 하기 전에 반환하므로 이 함수는 기존 연결을 유지합니다.',
+ '공통 namespace 인터페이스의 연결',
+ 'utsns_operations는 name="uts",type=CLONE_NEWUTS와 get,put,install,owner 함수 포인터를 묶습니다. 공통 코드가 같은 인터페이스로 여러 namespace 종류를 다루되 실제 구현을 선택하게 하는 테이블입니다. to_uts_ns는 객체 안에 포함된 ns_common 필드 주소에서 바깥 객체를 찾으므로 별도 객체를 복사하지 않습니다. utsns_owner는 user_ns 포인터를 돌려줄 뿐 이 함수 자체에서 참조를 증가시키지 않습니다. 이 파일만으로 setns 전체의 원자적 commit 절차까지 설명 완료했다고 세지 않습니다.',
+ ('대상과 기존 namespace가 같을 때 참조1에서 get 후 put 결과는?', '1로 유지됩니다.', '0이 되어 반드시 해제됩니다.', '먼저 새 참조를 얻어 같은 객체 교체에서도 사용 중인 객체의 수명을 보존합니다.'),
+ ('대상 user namespace 권한만 있으면 install이 성공하나요?', '아닙니다.nsset 자격의 user namespace 권한도 검사합니다.', '그렇습니다.권한 검사는 한 번뿐입니다.', '두 ns_capable 조건 중 하나라도 거짓이면 -EPERM으로 연결 변경 전에 반환합니다.')),
+('UTS 조회와 전용 Slab: 태스크 잠금 안에서 참조 얻기', 'utsns_get',
+ '다른 태스크의 namespace 포인터를 읽고 잠금을 풀어 버린 뒤 참조를 얻으면 그 사이 태스크의 연결이 사라질 수 있습니다. 안전한 조회는 연결을 보호하는 잠금 아래에서 포인터를 읽고 객체 참조까지 확보해야 합니다. 자주 생성되는 고정 크기 객체는 별도 slab cache로 관리합니다.',
+ 'utsns_get은 task_lock 안에서 task->nsproxy를 읽습니다. 있으면 uts_ns를 가져와 get_uts_ns한 뒤 task_unlock하고 &ns->ns를 반환합니다. nsproxy가 없으면 NULL입니다. utsns_put은 공통 포인터를 바깥 객체로 변환해 put합니다. uts_ns_init은 kmem_cache_create_usercopy로 uts_namespace 크기의 cache를 만들고 SLAB_PANIC|SLAB_ACCOUNT,허용 복사 구간으로 name의 offset과 크기를 전달합니다.',
+ '태스크가 namespace N을 가리키고 있을 때 조회가 잠금 안에서 N의 참조를1에서2로 올리면 이후 태스크 쪽 참조를 내려도 조회자가 가진 하나가 남습니다. 조회자가 utsns_put을 해야 마지막 수명 정리가 가능합니다. name은65바이트 배열6개로390바이트이며,user_ns 포인터나 참조 수 같은 관리 필드까지 usercopy 허용 구간으로 지정한 것이 아닙니다.',
+ '초기화·조회·파괴를 연결해서 읽기',
+ 'cache 포인터는 __ro_after_init이고 uts_ns_init은 __init입니다. 여기서는 name 필드만 usercopy 허용 영역으로 등록하는 인자를 확인하며 별도 usercopy 검사기의 모든 규칙을 주장하지 않습니다. SLAB_ACCOUNT는 메모리 회계에 쓰이는 cache 속성이고 SLAB_PANIC은 cache 생성 실패 정책에 관한 속성입니다. create_uts_ns의 일반 객체 할당은 여전히 실패할 수 있어 NULL 검사가 있습니다. cache 생성 정책과 개별 할당 성공 보장을 섞으면 안 됩니다.',
+ ('조회 참조는 task_unlock 앞과 뒤 중 언제 얻나요?', '잠금을 풀기 전에 얻습니다.', '잠금을 푼 뒤 포인터가 살아 있을 것이라 가정하고 얻습니다.', 'nsproxy 연결을 보호한 상태에서 수명을 확보한 다음 잠금을 놓는 순서입니다.'),
+ ('이 cache의 usercopy 허용 구간은 객체 전체인가요?', '아닙니다.name 필드의 offset과 크기입니다.', '그렇습니다.user_ns 포인터도 항상 포함합니다.', 'kmem_cache_create_usercopy 인자가 name 필드만 지정하므로 관리 자료와 이름 데이터 영역을 구분합니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'격리·보안','kernel/utsname.c',symbol,why,principle,use,
+              '공유한 객체인지 새 객체인지 표시하고,참조 수·사용자별 생성 회계·권한 검사를 따로 추적하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('원문 검토 범위','Linux v6.12 kernel/utsname.c 전체,utsname 헤더와 kernel/sys.c 이름 쓰기 잠금을 대조했습니다. 외부 ucounts·setns·slab 구현 전체나 실제 namespace 생성 시험을 포함하지 않습니다.')])

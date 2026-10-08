@@ -1,0 +1,36 @@
+{
+  "sha": "adc218676eef25575469234709c2d87185ca223a",
+  "path": "lib/bitmap.c",
+  "source_sha256": "c616e82207126892621e6285f1d29690b1da0c8f167cab3b9ec898b559942806",
+  "state": "whole_source_read_not_yet_authored",
+  "regions": [
+    {
+      "start": 1,
+      "end": 882,
+      "read": true
+    }
+  ],
+  "dependency_regions": [
+    {
+      "path": "include/linux/bitmap.h",
+      "start": 260,
+      "end": 600,
+      "read": true,
+      "whole_header_reviewed": false
+    }
+  ],
+  "next_mechanisms": [
+    "tail dontcare versus scalar masking/equality/or-equality",
+    "bulk boolean operations and replacement, intersections/subset",
+    "word/popcount weight macro with filtered tail",
+    "shift word offset/remainder/input-mask and direction for in-place, caller validshift bounds",
+    "cut memmove partial overlap then perbit wordcarry, firstword preserved lowbits",
+    "set/clear firstword mask/fullwords/lastmask caller valid range",
+    "aligned zero-area search findzero/align(offset)/end/testbit/restart failure returns end greater size",
+    "position-to-ordinal prefix weight, remap rank%newweight/identity/inplace no-op",
+    "NUMA onto relmap ordinal and fold modulo; fold sz positive required; onto explanatory pseudo loop differs actual relmap loop",
+    "normal/node bitmap allocation, ZERO and free; devm reset-action cleanup on registration failure",
+    "64bit arr32 pairing/tail clearing,32bit arr64 split/tail clearing; no native32 runtime claim"
+  ],
+  "note": "This reading note closes no global semantic coverage entry. Author individual lessons/problems/answers and source evidence before registry inclusion."
+}

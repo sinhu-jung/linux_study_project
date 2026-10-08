@@ -1,0 +1,823 @@
+{
+  "lib/polynomial.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os567",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "왜 분모를 분산하는가",
+          "종료와 메모리"
+        ],
+        "symbols": [
+          "polynomial_calc"
+        ],
+        "review": "파일 전체 함수의 계수 초기화·차수만큼 mult_frac·남은 분모·상수항 종료·최종 분모 0 보정과 센서 변환 주석의 단위·분모 재배치 원리를 대조. 원본 함수·구조체·mult_frac를 유지한 실행에서 양수·0·음수·중간 정수 절단 검산."
+      }
+    ]
+  },
+  "include/linux/polynomial.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os567",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "종료와 메모리"
+        ],
+        "symbols": [
+          "polynomial_term",
+          "polynomial"
+        ],
+        "review": "두 구조체의 모든 필드와 유연한 배열 멤버·차수 0 종료 계약·공개 함수 선언을 본문에 연결. 크기 인자 없는 배열 수명과 유효 분모를 설명."
+      }
+    ]
+  },
+  "lib/memweight.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os568",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "크기 단위",
+          "관찰 일관성"
+        ],
+        "symbols": [
+          "memweight"
+        ],
+        "review": "전체 단일 함수의 시작 주소 정렬·byte weight·word 구간·INT_MAX/BITS_PER_LONG BUG_ON·big-endian 꼬리·합계 반환을 대조. 바이트/비트 단위 변환과 동시 수정의 snapshot 전제 및 11bit 예를 설명."
+      }
+    ]
+  },
+  "lib/memcat_p.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os571",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "빈 배열",
+          "해제 책임"
+        ],
+        "symbols": [
+          "__memcat_p"
+        ],
+        "review": "전체 단일 함수의 두 NULL 종료 count·종료 슬롯·kmalloc_array·실패·역순 copy·b에서 a 전환을 대조. 원본 실행에서 순서·객체 공유·양쪽 빈 배열·한쪽 빈 배열·할당 실패 검산."
+      }
+    ]
+  },
+  "lib/check_signature.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os572",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "C 표식",
+          "유효 길이"
+        ],
+        "symbols": [
+          "check_signature"
+        ],
+        "review": "전체 단일 함수의 readb MMIO 접근·불일치 조기 반환·두 pointer 증가·length=0 결과·주소 매핑 수명과 음수 길이 검증 부재를 대조. 고정 패턴 검사와 암호 서명을 구분."
+      }
+    ]
+  },
+  "lib/dec_and_lock.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os573",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "경합 예",
+          "IRQ 복원"
+        ],
+        "symbols": [
+          "_atomic_dec_and_lock",
+          "_atomic_dec_and_lock_irqsave",
+          "_atomic_dec_and_raw_lock",
+          "_atomic_dec_and_raw_lock_irqsave"
+        ],
+        "review": "파일 전체 네 변형의 add_unless fast path·lock 아래 마지막 감소·잠금 보유 반환·비마지막 unlock을 비교. 참조 획득 경합과 일반/raw/IRQ 복원 차이를 설명."
+      }
+    ]
+  },
+  "lib/once.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os574",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "한 번의 범위",
+          "모듈 수명",
+          "정적 검사 표식"
+        ],
+        "symbols": [
+          "once_deferred",
+          "once_disable_jump",
+          "__do_once_start",
+          "__do_once_done",
+          "__do_once_sleepable_start",
+          "__do_once_sleepable_done"
+        ],
+        "review": "전체 helper와 work 구조·두 전역 잠금·spinlock/IRQ 및 mutex 경로·done 설정 이후 deferred static branch disable·할당 실패·module 참조·work 해제·sparse 표식을 대조. Header의 per-callsite static done/key 의미와 잠드는 작업의 사용 조건을 연결."
+      }
+    ]
+  },
+  "lib/ratelimit.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os575",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "시간 경계",
+          "억제 집계"
+        ],
+        "symbols": [
+          "___ratelimit"
+        ],
+        "review": "전체 함수의 별도 READ_ONCE·interval0·trylock 실패·begin·엄격 시간 경계·release flag별 missed 출력/초기화·printed reset·burst0·missed 증가·unlock을 대조. Trylock 억제가 missed에 포함되지 않는 점과 token bucket과의 차이를 설명."
+      }
+    ]
+  },
+  "lib/bucket_locks.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os581",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "분산과 충돌",
+          "설정에 따른 표현"
+        ],
+        "symbols": [
+          "__alloc_bucket_spinlocks",
+          "free_bucket_spinlocks"
+        ],
+        "review": "전체 두 함수의 CPU multiplier·64 CPU 상한·PROVE_LOCKING2·max_size·실제 spinlock 크기0·kvmalloc_array·잠금/lockdep 초기화·mask size-1·kvfree를 대조. 주석과 달리 본문에 power-of-two 반올림이 없음을 실제 연산으로 설명."
+      }
+    ]
+  },
+  "lib/cmdline.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os585",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "검증 모드",
+          "큰 범위의 실제 실행"
+        ],
+        "symbols": [
+          "get_range",
+          "get_option",
+          "get_options"
+        ],
+        "review": "Range 전개·상한 후속 반복·출력 상태0/1/2/3·validator·개수와 실제 저장 수 불일치를 대조. 원본 실행에서 2-4,7과 작은 배열의1-100 및 반환 문자열 위치 검산."
+      },
+      {
+        "lesson": "os586",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Fallthrough",
+          "소비와 검증"
+        ],
+        "symbols": [
+          "memparse"
+        ],
+        "review": "전체 E/P/T/G/M/K와 소문자·누적10bit shift·접미사1문자·retptr·overflow 오류 부재를 설명. 2M과2MB 실행 검산."
+      },
+      {
+        "lesson": "os587",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "수정과 수명",
+          "선택지 parser"
+        ],
+        "symbols": [
+          "next_arg",
+          "parse_option_str"
+        ],
+        "review": "전체 quote 상태·첫 equals·NUL 삽입·value quote 제거·flag NULL·skip_spaces와 comma 옵션 exact 경계를 대조. 인자 분리·읽기 전용 입력 전제·root와ro 구별을 실행 검산."
+      }
+    ]
+  },
+  "lib/bcd.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os595",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "0~99 검산",
+          "Constant 경로"
+        ],
+        "symbols": [
+          "_bcd2bin",
+          "_bin2bcd"
+        ],
+        "review": "전체 두 함수의 nibble·decimal×10·103/1024 quotient·잔여 자리 합성과 header의 constant/validation 차이를 대조. 모든0..99 round-trip와 invalid nibble 검산."
+      }
+    ]
+  },
+  "lib/bitrev.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os596",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Lookup와 계산"
+        ],
+        "symbols": [
+          "byte_rev_table"
+        ],
+        "review": "파일 전체 CONFIG_HAVE_ARCH_BITREVERSE fallback·256byte table·GPL export와 header의lookup/constant/arch 경로를 연결. 모든256값을 별도 bit-loop reference로 대조하고 두 번 반전 및 word/byte 반전 차이를 검산."
+      }
+    ]
+  },
+  "lib/clz_ctz.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os597",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "폭",
+          "Bit 위치와 길이"
+        ],
+        "symbols": [
+          "__ctzsi2",
+          "__clzsi2",
+          "__clzdi2",
+          "__ctzdi2"
+        ],
+        "review": "파일 전체 네 weak helper의32/64-fls와 ffs 계산·arch override·직접 참조 없이도 compiler builtin에 필요하다는 주석을 대조. Bit index와 bit 길이 및 zero builtin 전제를 설명."
+      }
+    ]
+  },
+  "lib/ashldi3.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os598",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "정상 범위",
+          "Endian 표현"
+        ],
+        "symbols": [
+          "__ashldi3"
+        ],
+        "review": "전체 단일 helper의zero 반환·b<32 carry·b>=32 word 이동·low0·범위 검사 부재를 대조. 선택한little-endian DW 표현에서2006값×shift0..63을 unsigned reference와 실행 검산."
+      }
+    ]
+  },
+  "lib/lshrdi3.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os599",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Carry 방향",
+          "타입과 의미"
+        ],
+        "symbols": [
+          "__lshrdi3"
+        ],
+        "review": "전체 helper의unsigned high/low·zero fill·word 사이 high→low carry·b0·32 경계를 대조. 같은유효입력범위에서 unsigned native shift와 실행 검산."
+      }
+    ]
+  },
+  "lib/ashrdi3.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os600",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "음수 나눗셈과 주의",
+          "일회 예측"
+        ],
+        "symbols": [
+          "__ashrdi3"
+        ],
+        "review": "전체 helper의signed high·부호 fill·unsigned carry·b0/word 경계를 대조. Signed shift 전제와 C integer division 차이를 설명하고 unsigned로명시한sign-fill reference로 실행 검산."
+      }
+    ]
+  },
+  "lib/cmpdi2.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os601",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Low는 unsigned",
+          "반환 해석"
+        ],
+        "symbols": [
+          "__cmpdi2"
+        ],
+        "review": "전체 helper의signed high 우선·unsigned low·작음0/같음1/큼2 반환과 일반comparator 차이를 대조. Signed native comparison reference와 실행 검산."
+      }
+    ]
+  },
+  "lib/ucmpdi2.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os601",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "반환 해석"
+        ],
+        "symbols": [
+          "__ucmpdi2"
+        ],
+        "review": "전체 helper의high와low 모두 unsigned 비교·0/1/2 반환을signed counterpart와 대조. Unsigned native comparison reference와 실행 검산."
+      }
+    ]
+  },
+  "lib/muldi3.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os602",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "작은 곱 합성",
+          "Architecture 대체"
+        ],
+        "symbols": [
+          "__ll_lowpart",
+          "__ll_highpart",
+          "umul_ppmm",
+          "__umulsidi3",
+          "__muldi3"
+        ],
+        "review": "파일 전체 기본macro의16bit부분곱·중간carry·64bitlow product와32bit 교차항·high×high 제외·arch 대체조건을 대조. 선택한host DW표현과-fwrapv문맥의2006값에서 low64 unsigned product와 실행 검산; 모든architecture의 compiler lowering 검증으로 간주하지 않음."
+      }
+    ]
+  },
+  "lib/ucs2_string.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os614",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "읽기 경계"
+        ],
+        "symbols": [
+          "ucs2_strnlen",
+          "ucs2_strlen",
+          "ucs2_strsize"
+        ],
+        "review": "전체 파일을 읽고 길이3함수는 os614, 복사·비교는 os615, UTF8 크기·변환은 os616에 연결. 16bit단위와 byte단위·NUL 미포함·strnlen 평가순서와 한도 다음 read·copy 잘림·비교 반환·UTF8 byte분해·whole character 한도·공간이 남을 때만 NUL·surrogate 검증 부재를 원본 실행으로 대조. Includes/exports/module license는 선언·연결 정보로 구분."
+      },
+      {
+        "lesson": "os615",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "오류와 목적 내용"
+        ],
+        "symbols": [
+          "ucs2_strscpy",
+          "ucs2_strncmp"
+        ],
+        "review": "전체 복사·비교 분기, zero count, limit bound, overlap 금지, 종료·E2BIG·len0 선검사 대조."
+      },
+      {
+        "lesson": "os616",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "반환 이름과 실제 단위",
+          "Unicode 경계"
+        ],
+        "symbols": [
+          "ucs2_utf8size",
+          "ucs2_as_utf8"
+        ],
+        "review": "전체1/2/3byte 분기·비트합성·maxlength·NUL 조건·실제j반환 byte단위 대조. 경계7f/80/7ff/800과surrogate 처리 실행 확인."
+      }
+    ]
+  },
+  "include/linux/ucs2_string.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os614",
+        "sections": [
+          "코드 단위와 문자"
+        ],
+        "symbols": [
+          "ucs2_char_t"
+        ],
+        "review": "전체 header의 u16 typedef·7함수 선언과 include·guard를 os614~616의 구현 계약에 연결. 단위·return signedness 확인."
+      }
+    ]
+  },
+  "lib/glob.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os617",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Regexp와 구분",
+          "모듈 정보",
+          "최악 예"
+        ],
+        "symbols": [
+          "glob_match"
+        ],
+        "review": "전체 함수의 ?/*/class/escape/literal/backtrack/NUL 종료를 대조. 첫! 부정과^literal·첫]·닫히지 않은[·범위·마지막별표 retry·비재귀quadratic 최악·slash/dot 일반 처리와 모듈선언 연결. 원본 실행 boundary 검산."
+      }
+    ]
+  },
+  "include/linux/glob.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os617",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리"
+        ],
+        "symbols": [
+          "glob_match"
+        ],
+        "review": "전체 header의 bool·__pure·const입력 선언·guard를 glob 구현 계약과 연결."
+      }
+    ]
+  },
+  "lib/kasprintf.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os621",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "입력 변화",
+          "Allocation 계약"
+        ],
+        "symbols": [
+          "kvasprintf",
+          "kasprintf"
+        ],
+        "review": "전체 va_copy/va_end·길이 계산·first+1 할당·실패NULL·재출력·WARN과 kasprintf 가변인자 수명 연결. os622의const helper까지 파일 전체 읽음; kernel format과입력 안정성 전제 명시."
+      },
+      {
+        "lesson": "os622",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "형식 없는 경우"
+        ],
+        "symbols": [
+          "kvasprintf_const"
+        ],
+        "review": "전체3분기 no-percent/exact-%s/general과 kstrdup_const/kfree_const rodata 공통해제 계약 대조."
+      }
+    ]
+  },
+  "lib/errname.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os623",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "희소 table",
+          "Compile 검증",
+          "입력 전제"
+        ],
+        "symbols": [
+          "names_0",
+          "names_512",
+          "__errname",
+          "errname"
+        ],
+        "review": "전체 table의지정index·동의어조건·build범위·static_assert·512offset·MIPS EDQUOT·NULL·양수prefix skip·abs입력전제 대조. 정의된errno 이름 변환과오류정책 구분."
+      }
+    ]
+  },
+  "lib/hexdump.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os618",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Unsigned 이동",
+          "검증 범위"
+        ],
+        "symbols": [
+          "hex_to_bin",
+          "hex_asc",
+          "hex_asc_upper"
+        ],
+        "review": "전체mask식·unsigned shift·ASCII uppercase변환과table출력정보를 대조. 모든256입력 별도range reference 실행; 전체 timing 안전성 증명으로 취급하지 않음."
+      },
+      {
+        "lesson": "os619",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "길이 0",
+          "Nibble 합성"
+        ],
+        "symbols": [
+          "hex2bin",
+          "bin2hex"
+        ],
+        "review": "전체pair변환·오류 조기반환·목적부분갱신·count바이트단위·bin2hex pointer/NUL미추가 대조 실행."
+      },
+      {
+        "lesson": "os620",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "종료와 공간 0",
+          "잘림 길이",
+          "빈 자료와 크기 0",
+          "큰 자료와 호출 문맥",
+          "Offset은 행 시작"
+        ],
+        "symbols": [
+          "hex_dump_to_buffer",
+          "print_hex_dump"
+        ],
+        "review": "파일전체의row/group보정·group별unaligned native integer 표시·ASCII열·두overflow·NUL·zero-space empty -1·CONFIG_PRINTK전체행loop·prefix·int크기전제를 대조. Buffer helper 실행검산, printk 실제runtime은 실행하지 않음."
+      }
+    ]
+  },
+  "include/linux/errname.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os623",
+        "sections": [
+          "기능 설정"
+        ],
+        "symbols": [
+          "errname"
+        ],
+        "review": "전체header guard/include·CONFIG_SYMBOLIC_ERRNAME 선언 vs NULL inline stub를 본문과 연결."
+      }
+    ]
+  },
+  "lib/random32.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os612",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용자의 Seed 경로",
+          "Byte 출력과 소비",
+          "공식 검증 벡터",
+          "CPU별 초기화와 Once"
+        ],
+        "symbols": [
+          "prandom_u32_state",
+          "prandom_bytes_state",
+          "prandom_warmup",
+          "prandom_seed_full_state",
+          "test1",
+          "test2",
+          "prandom_state_selftest_seed",
+          "prandom_state_selftest"
+        ],
+        "review": "파일전체 recurrence·seed최소전제·CPU별entropy·warmup·byte출력·EXPORT·CONFIGselftest 및 table104개·검증seed LCG69069·횟수·로그와return0를 연결. 원본104vectors 모두 explicit assertion으로 Linux실행 통과; perCPUentropy runtime은 실행하지 않음."
+      }
+    ]
+  },
+  "include/linux/prandom.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os612",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용자의 Seed 경로",
+          "CPU별 초기화와 Once"
+        ],
+        "symbols": [
+          "rnd_state",
+          "prandom_init_once",
+          "__seed",
+          "prandom_seed_state"
+        ],
+        "review": "전체header의4wordstate·함수선언·DO_ONCE wrapper·최소seed보정·u64mix를 본문과 연결."
+      },
+      {
+        "lesson": "os613",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "모듈러 폭",
+          "역할 구분"
+        ],
+        "symbols": [
+          "next_pseudo_random32"
+        ],
+        "review": "마지막LCGhelper의muladd u32규약·callerstate·고정seed결과·모듈러reference1000steps 대조."
+      }
+    ]
+  },
+  "lib/earlycpio.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os569",
+        "symbols": [
+          "cpio_fields",
+          "find_cpio_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "헤더와 이름 제한",
+          "정렬 구간과 전제"
+        ],
+        "review": "파일전체 enum14필드·6+13x8 header·zero4padding·hex변환·magic2개·len감소·name/data/next정렬·범위·mode·path접두사·nextoff·name18한도/warn/strscpy·data반환·미발견zero구조체를 대조. 압축전자료배치의creator전제·체크섬미검증·잘못된archive에대한일반검증보증없음 설명과 원본실행 정상/실패fixtures 확인."
+      }
+    ]
+  },
+  "include/linux/earlycpio.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os569",
+        "symbols": [
+          "cpio_data",
+          "MAX_CPIO_FILE_NAME",
+          "find_cpio_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "헤더와 이름 제한"
+        ],
+        "review": "전체구조체3필드·고정18byte name과함수선언·include/guard를본문및실행fixture와연결."
+      }
+    ]
+  },
+  "lib/checksum.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os624",
+        "symbols": [
+          "from32to16",
+          "do_csum",
+          "ip_fast_csum",
+          "ip_compute_csum"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Endian과 정렬",
+          "두 번 접는 이유"
+        ],
+        "review": "파일전체generic sum구간·oddalign·wordcarry·twofold·byteswap·IHL단위·finalcomplement·조건부architecture대체 대조.20x8x129가지원본실행 독립network-byte reference일치."
+      },
+      {
+        "lesson": "os625",
+        "symbols": [
+          "csum_partial"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "C 타입 표식",
+          "빈 영역"
+        ],
+        "review": "중간sum표현·32carry·evenfragment계약·finalfold와원본실행대조."
+      },
+      {
+        "lesson": "os626",
+        "symbols": [
+          "from64to32",
+          "csum_tcpudp_nofold"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Protocol 항",
+          "64에서32로",
+          "Generic 구현 범위"
+        ],
+        "review": "넓은sum·주소2개·len/proto endian배치·twofold·wsum반환과genericmagicwrapper 연결. IPv4pseudoheader실행대조;모든architecture/offload실행으로취급하지않음."
+      }
+    ]
+  },
+  "include/asm-generic/checksum.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os625",
+        "symbols": [
+          "csum_fold",
+          "csum_partial"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "C 타입 표식"
+        ],
+        "review": "전체header선언·conditionalguards·32rotate기반fold식을본문및실행에연결."
+      },
+      {
+        "lesson": "os626",
+        "symbols": [
+          "csum_tcpudp_magic",
+          "csum_tcpudp_nofold"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Generic 구현 범위"
+        ],
+        "review": "nofold->fold wrapper와addr/len/proto/sum type·return단위확인.다른fast/compute선언은os624계약에연결."
+      }
+    ]
+  },
+  "lib/irq_poll.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os584",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Disable 표현",
+          "CPU Hotplug",
+          "초기화와 Callback",
+          "완료와 메모리 순서",
+          "Framework 등록"
+        ],
+        "symbols": [
+          "irq_poll_sched",
+          "__irq_poll_complete",
+          "irq_poll_complete",
+          "irq_poll_softirq",
+          "irq_poll_disable",
+          "irq_poll_enable",
+          "irq_poll_init",
+          "irq_poll_cpu_dead",
+          "irq_poll_setup"
+        ],
+        "review": "전체파일의perCPU목록·budget·sched2bit·IRQ보호·completebarrier·softirq시간/량/weight분기·callback소유권·tailmove·disablewait·enableBUG/clear·memset/init·CPUhotplug/BH및subsys등록을원본과대조. 실제IRQ경합실행검증은별개."
+      }
+    ]
+  },
+  "include/linux/irq_poll.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os584",
+        "sections": [
+          "초기화와 Callback",
+          "Disable 표현"
+        ],
+        "symbols": [
+          "irq_poll",
+          "irq_poll_fn",
+          "IRQ_POLL_F_SCHED",
+          "IRQ_POLL_F_DISABLE"
+        ],
+        "review": "전체header의4필드·callback서명·statebit2개·5public선언·guard를본문의호출계약과연결."
+      }
+    ]
+  }
+}

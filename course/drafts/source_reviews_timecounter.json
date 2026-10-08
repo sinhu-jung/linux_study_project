@@ -1,0 +1,171 @@
+{
+  "include/linux/timecounter.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 137,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1109",
+        "symbols": [
+          "cyclecounter"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1110",
+        "symbols": [
+          "CYCLECOUNTER_MASK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1111",
+        "symbols": [
+          "timecounter"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1112",
+        "symbols": [
+          "cyclecounter_cyc2ns"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1116",
+        "symbols": [
+          "timecounter_adjtime"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      }
+    ]
+  },
+  "kernel/time/timecounter.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 99,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1113",
+        "symbols": [
+          "timecounter_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1114",
+        "symbols": [
+          "timecounter_read_delta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1115",
+        "symbols": [
+          "timecounter_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1117",
+        "symbols": [
+          "timecounter_cyc2time"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1118",
+        "symbols": [
+          "timecounter_cyc2time"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1119",
+        "symbols": [
+          "timecounter_cyc2time"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1120",
+        "symbols": [
+          "cc_cyc2ns_backwards"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      },
+      {
+        "lesson": "os1121",
+        "symbols": [
+          "cc_cyc2ns_backwards"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole cycle/timecounter header/C read and authored: hardwarecallback/state separation, distinct hardware vs fraction masks/shift limits, fixed-point residual carry and overflow bounds, epochinit/read-delta/read state, fullwrap invisibility requiring elapsed<period, signedadj modulo, constcyc2time no-read/no-state change, halfcycle past tie, fractional forward phase, backwards floor one-ns mismatch and unsigned fractionunderflow counterexample explicitly reproduced. Exact source777314checks in68configs×10000forwardreads plus conversion/boundaries; optimized+ASanUBSan serialsynthetic hardware. No actualclocksource/driver/locking proof."
+      }
+    ]
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "draft_lessons": 18,
+  "questions": 36,
+  "anchors": [
+    {
+      "planned_lesson": "os1009",
+      "title": "참조 수 전용 형식·atomic 저장과 초기 참조",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 104,
+        "end": 133,
+        "anchor": "REFCOUNT_INIT"
+      }
+    },
+    {
+      "planned_lesson": "os1010",
+      "title": "참조 수 설정·unsigned read와 signed bad range",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 134,
+        "end": 175,
+        "anchor": "refcount_read"
+      }
+    },
+    {
+      "planned_lesson": "os1011",
+      "title": "포화 참조 카운터·wrap으로 인한 잘못된 해제 피하기",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 106,
+        "end": 133,
+        "anchor": "REFCOUNT_SATURATED"
+      }
+    },
+    {
+      "planned_lesson": "os1012",
+      "title": "포화 경고 helper·이유별 WARN_ONCE와 공통 설정",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 13,
+        "end": 38,
+        "anchor": "refcount_warn_saturate"
+      }
+    },
+    {
+      "planned_lesson": "os1013",
+      "title": "0이 아닐 때 참조 추가·CAS 재시도와 부활 금지",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 140,
+        "end": 175,
+        "anchor": "__refcount_add_not_zero"
+      }
+    },
+    {
+      "planned_lesson": "os1014",
+      "title": "조건부 단일 참조 획득·oldp와 inc_not_zero",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 216,
+        "end": 241,
+        "anchor": "__refcount_inc_not_zero"
+      }
+    },
+    {
+      "planned_lesson": "os1015",
+      "title": "이미 소유한 참조 추가·0에서 증가하면 UAF 경고",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 182,
+        "end": 210,
+        "anchor": "__refcount_add"
+      }
+    },
+    {
+      "planned_lesson": "os1016",
+      "title": "정상 단일 참조 증가·획득 전 객체 안정성",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 239,
+        "end": 264,
+        "anchor": "__refcount_inc"
+      }
+    },
+    {
+      "planned_lesson": "os1017",
+      "title": "참조 감소와0검사·release 뒤 마지막 성공 acquire",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 262,
+        "end": 299,
+        "anchor": "__refcount_sub_and_test"
+      }
+    },
+    {
+      "planned_lesson": "os1018",
+      "title": "마지막 단일 참조·dec_and_test와 free 책임",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 305,
+        "end": 330,
+        "anchor": "__refcount_dec_and_test"
+      }
+    },
+    {
+      "planned_lesson": "os1019",
+      "title": "해제 검사 없는 dec·마지막 감소는 leak 경고",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 328,
+        "end": 353,
+        "anchor": "__refcount_dec"
+      }
+    },
+    {
+      "planned_lesson": "os1020",
+      "title": "오직1일 때 감소·조건부 try-delete 전이",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 55,
+        "end": 80,
+        "anchor": "refcount_dec_if_one"
+      }
+    },
+    {
+      "planned_lesson": "os1021",
+      "title": "1이 아닐 때 감소·0과 포화의 특별 반환",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 74,
+        "end": 112,
+        "anchor": "refcount_dec_not_one"
+      }
+    },
+    {
+      "planned_lesson": "os1022",
+      "title": "마지막 참조와 mutex·잠금 뒤 다시 감소 확인",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 113,
+        "end": 143,
+        "anchor": "refcount_dec_and_mutex_lock"
+      }
+    },
+    {
+      "planned_lesson": "os1023",
+      "title": "마지막 참조와 spinlock·일반 감소의 빠른 경로",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 144,
+        "end": 171,
+        "anchor": "refcount_dec_and_lock"
+      }
+    },
+    {
+      "planned_lesson": "os1024",
+      "title": "마지막 참조와 IRQ save 잠금·flags의 성공 계약",
+      "path": "lib/refcount.c",
+      "excerpt": {
+        "start": 172,
+        "end": 186,
+        "anchor": "refcount_dec_and_lock_irqsave"
+      }
+    },
+    {
+      "planned_lesson": "os1025",
+      "title": "참조 수의 메모리 ordering·증가와 감소의 비대칭",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 234,
+        "end": 259,
+        "anchor": "refcount_inc_not_zero"
+      }
+    },
+    {
+      "planned_lesson": "os1026",
+      "title": "큰 batch 참조와 bad range·일반 정수 API로 쓰지 않기",
+      "path": "include/linux/refcount.h",
+      "excerpt": {
+        "start": 176,
+        "end": 210,
+        "anchor": "refcount_add_not_zero"
+      }
+    }
+  ]
+}

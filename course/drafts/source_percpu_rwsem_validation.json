@@ -1,0 +1,166 @@
+{
+  "draft_lessons": 16,
+  "questions": 32,
+  "anchors": [
+    {
+      "planned_lesson": "os1414",
+      "title": "PerCPU rwsem 표현·읽기 카운터와 쓰기 차단 분리",
+      "path": "include/linux/percpu-rwsem.h",
+      "excerpt": {
+        "start": 12,
+        "end": 37,
+        "anchor": "percpu_rw_semaphore"
+      }
+    },
+    {
+      "planned_lesson": "os1415",
+      "title": "PerCPU rwsem 초기화와 free·할당 실패와 NULL 상태",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 14,
+        "end": 39,
+        "anchor": "__percpu_init_rwsem"
+      }
+    },
+    {
+      "planned_lesson": "os1416",
+      "title": "PerCPU 빠른 read·짧은 선점 금지와 RCU 전환",
+      "path": "include/linux/percpu-rwsem.h",
+      "excerpt": {
+        "start": 47,
+        "end": 72,
+        "anchor": "percpu_down_read"
+      }
+    },
+    {
+      "planned_lesson": "os1417",
+      "title": "PerCPU read trylock·성공만 분석 획득 기록",
+      "path": "include/linux/percpu-rwsem.h",
+      "excerpt": {
+        "start": 73,
+        "end": 98,
+        "anchor": "percpu_down_read_trylock"
+      }
+    },
+    {
+      "planned_lesson": "os1418",
+      "title": "PerCPU slow read try·증가 barrier block 검사 rollback",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 48,
+        "end": 73,
+        "anchor": "__percpu_down_read_trylock"
+      }
+    },
+    {
+      "planned_lesson": "os1419",
+      "title": "PerCPU down_read slowpath·try 실패와 잠드는 대기",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 167,
+        "end": 192,
+        "anchor": "__percpu_down_read"
+      }
+    },
+    {
+      "planned_lesson": "os1420",
+      "title": "PerCPU read 해제·slow barrier와 writer wake",
+      "path": "include/linux/percpu-rwsem.h",
+      "excerpt": {
+        "start": 97,
+        "end": 122,
+        "anchor": "percpu_up_read"
+      }
+    },
+    {
+      "planned_lesson": "os1421",
+      "title": "PerCPU unsigned 합계·CPU 이동 뒤 underflow와 modular sum",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 185,
+        "end": 210,
+        "anchor": "per_cpu_sum"
+      }
+    },
+    {
+      "planned_lesson": "os1422",
+      "title": "PerCPU read 상태 조회·block 중 false의 의미",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 195,
+        "end": 220,
+        "anchor": "percpu_is_read_locked"
+      }
+    },
+    {
+      "planned_lesson": "os1423",
+      "title": "PerCPU reader drain·block 후 합계0과 barrier C",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 209,
+        "end": 237,
+        "anchor": "readers_active_check"
+      }
+    },
+    {
+      "planned_lesson": "os1424",
+      "title": "PerCPU writer try·먼저 조회한 block과 atomic xchg",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 84,
+        "end": 118,
+        "anchor": "__percpu_down_write_trylock"
+      }
+    },
+    {
+      "planned_lesson": "os1425",
+      "title": "PerCPU writer down·RCU 전환 block과 기존 reader 대기",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 224,
+        "end": 250,
+        "anchor": "percpu_down_write"
+      }
+    },
+    {
+      "planned_lesson": "os1426",
+      "title": "PerCPU writer up·release 공개와 지연 fastpath 복귀",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 259,
+        "end": 284,
+        "anchor": "percpu_up_write"
+      }
+    },
+    {
+      "planned_lesson": "os1427",
+      "title": "PerCPU waiter·대기열 등록과 private NULL handshake",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 141,
+        "end": 166,
+        "anchor": "percpu_rwsem_wait"
+      }
+    },
+    {
+      "planned_lesson": "os1428",
+      "title": "PerCPU wake callback·reader batch와 writer 하나의 FIFO",
+      "path": "kernel/locking/percpu-rwsem.c",
+      "excerpt": {
+        "start": 119,
+        "end": 144,
+        "anchor": "percpu_rwsem_wake_function"
+      }
+    },
+    {
+      "planned_lesson": "os1429",
+      "title": "PerCPU rwsem 문서·읽기 확장성과 쓰기 비용의 선택",
+      "path": "include/linux/percpu-rwsem.h",
+      "excerpt": {
+        "start": 47,
+        "end": 72,
+        "anchor": "percpu_down_read"
+      }
+    }
+  ]
+}

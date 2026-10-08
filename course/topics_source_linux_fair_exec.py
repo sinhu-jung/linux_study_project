@@ -1,0 +1,42 @@
+"""Weighted scheduling arithmetic and irreversible exec transitions."""
+ROWS = [
+('공정 스케줄링 가상 시간: 큰 가중치가 느리게 증가하는 이유','스케줄링','kernel/sched/fair.c','calc_delta_fair',
+ '태스크마다 다른 CPU 몫을 주면서 실제 사용 시간을 같은 기준으로 비교하려면 사용량을 가중치로 나누어야 합니다. 가중치가 큰 태스크의 같은 실행 시간을 더 작은 가상 사용량으로 기록하면 더 많은 실제 시간을 받을 여지가 생깁니다.',
+ 'calc_delta_fair는 weight가 NICE_0_LOAD이면 delta를 그대로 반환합니다. 다르면 __calc_delta(delta,NICE_0_LOAD,&se->load)로 실제 실행 시간에 기준 가중치/태스크 가중치 비율을 적용합니다. 하위 helper는 나눗셈을 반복하기보다 저장된 inv_weight를 갱신해 곱셈과 시프트로 계산합니다. 큰 중간값의 상위 비트를 확인해 factor를 줄이고 shift를 조절한 뒤 mul_u64_u32_shr를 사용합니다.',
+ '이상적인 비율 계산에서 기준과 같은 가중치로 10ms 실행하면 가상 시간도 10ms입니다. 가중치가 기준의 2배면 약 5ms, 절반이면 약 20ms에 해당합니다. 실제 정수 역수 계산에는 반올림 차이가 있을 수 있습니다. 이 값은 벽시계가 느려졌다는 뜻이 아니라 스케줄러의 비교용 사용량입니다.',
+ '왜 nice 숫자 자체로 나누지 않나',
+ 'nice 값은 정책 입력이고 이 함수가 사용하는 것은 그 정책이 반영된 load.weight입니다. nice=0을 분모 0으로 쓰는 계산이 아닙니다. __update_inv_weight는 이미 inverse가 있으면 재사용하고, 0 또는 매우 큰 scale-down weight에 별도 경계값을 둡니다. 이 내부 경계 처리가 임의의 잘못된 가중치로도 모든 공정성 계약을 보장한다는 뜻은 아닙니다. CPU 선택·실행 가능성·다음 태스크 선택까지 이 함수가 결정하지도 않습니다.',
+ ('기준 가중치의 2배로 10ms 실행하면 이상적인 가상 증가량은?', '약 5ms입니다.', '약 20ms입니다.', '실제 시간×기준 가중치/태스크 가중치이므로 10×1/2입니다. 큰 몫의 태스크는 같은 실시간 사용에 대해 가상 시간이 천천히 증가합니다.'),
+ ('이 helper가 가상 증가량을 계산하면 다음 태스크까지 확정되나요?', '아닙니다. 사용량 환산과 선택 정책은 다른 단계입니다.', '그렇습니다. 결과값 자체가 다음 PID입니다.', '반환형은 시간 차이를 표현하는 u64입니다. 실행 큐 탐색이나 PID 선택을 수행하지 않습니다.')),
+('EEVDF deadline 갱신: 실시간 마감이 아닌 가상 서비스 끝점','스케줄링','kernel/sched/fair.c','update_deadline',
+ '공정 스케줄러는 태스크가 요청한 서비스 조각을 다 썼는지 추적해야 합니다. 실제 시각의 마감 시간과 가상 서비스 끝점을 혼동하면 특정 시각까지 반드시 실행을 끝낸다는 잘못된 보장을 기대하게 됩니다.',
+ 'update_deadline은 vruntime-deadline을 s64로 해석해 아직 음수이면 false입니다. 서비스 조각을 다 썼으면 custom_slice가 없는 경우 slice를 sysctl_sched_base_slice로 갱신합니다. 새 deadline은 현재 vruntime+calc_delta_fair(slice,se)이며 true를 반환합니다. 가중치는 가상 시간 증가율, slice는 요청한 실제 시간 조각에 해당합니다. 함수 자체에서 문맥 교환을 실행하지 않습니다.',
+ '동일 기준 가중치, vruntime=10000, 이전 deadline=9000, slice=3000이라는 시간 단위 예에서 새 deadline은 13000입니다. vruntime=8000,deadline=9000이면 갱신 없이 false입니다. custom_slice가 있으면 기본 slice로 덮어쓰지 않는 조건도 확인하세요.',
+ '왜 deadline이라는 단어만으로 실시간 보장을 읽으면 안 되나',
+ '여기의 deadline은 EEVDF가 공정 서비스를 비교하는 가상 값입니다. SCHED_DEADLINE의 예약 정책이나 사용자 작업의 실제 완료 마감과 같은 객체가 아닙니다. true는 요청 조각을 소비해 새 기준을 만들었다는 신호이며 상위 update_curr가 다른 runnable 태스크와 조건을 보고 재스케줄을 요청합니다. 반환 즉시 CPU가 바뀐다는 뜻도 아닙니다.',
+ ('vruntime이 아직 deadline보다 작으면 새 slice를 무조건 적용하나요?', '아닙니다. 먼저 false로 반환합니다.', '그렇습니다. 호출할 때마다 deadline을 늘립니다.', '첫 조건의 조기 반환이 slice 갱신 및 deadline 대입보다 앞에 있습니다.'),
+ ('custom_slice가 있는 태스크의 slice도 기본값으로 덮어쓰나요?', '아닙니다. !custom_slice일 때만 대입합니다.', '그렇습니다. 모든 태스크에 같은 값을 강제합니다.', '조건부 대입으로 사용자 지정 slice와 기본 정책을 구별합니다.')),
+('현재 태스크 실행 시간 회계: 하나만 실행 가능해도 계산은 필요하다','스케줄링','kernel/sched/fair.c','update_curr',
+ '실행 가능한 태스크가 하나뿐이면 당장 다른 태스크로 바꿀 이유가 적더라도 CPU 사용량과 그룹 예산을 계속 기록해야 합니다. 회계와 재스케줄 판단을 같은 작업으로 취급하면 사용량이 누락될 수 있습니다.',
+ 'update_curr는 curr가 없으면 반환합니다. update_curr_se가 rq_clock_task-now 차이로 실행 시간을 계산하고 양수이면 exec_start 및 sum_exec_runtime을 갱신합니다. delta<=0이면 상위도 반환합니다. 양수이면 가상 시간을 늘리고 deadline과 최소 가상 시간을 갱신합니다. 실제 task entity이면 태스크·그룹·cgroup 회계와 deadline server 관련 회계를 수행합니다. account_cfs_rq_runtime 뒤 nr_running==1이면 반환합니다. 그 외 deadline 소비나 PREEMPT_SHORT 조건에 따라 resched_curr를 요청하고 buddy 힌트를 정리합니다.',
+ 'exec_start=1000, rq의 태스크 시계=1600이면 delta=600입니다. 실행 누계에 600을 더하고 다음 exec_start를 1600으로 옮깁니다. runnable 수가 1이어도 이 회계는 이미 수행됐습니다. 실제 시간과 가중치를 적용한 vruntime 증가량을 같은 숫자라고 고정하지 마세요.',
+ '왜 exec_start를 현재 시각으로 옮기나',
+ '다음 갱신에서 같은 실행 구간을 다시 더하지 않도록 기준점을 이동합니다. 시각 차이가 0 이하인 경로는 exec_start와 실행 누계를 갱신하지 않습니다. 그룹 entity는 실제 task와 달라 task_of 및 태스크별 회계를 같은 방식으로 실행하지 않지만 실행 큐의 런타임 회계는 따로 이어집니다. resched_curr도 요청 표시이며 이 함수가 즉시 다른 사용자 프로그램으로 점프하는 것은 아닙니다.',
+ ('nr_running=1이면 실행 시간 누계도 기록하지 않나요?', '아닙니다. 회계 후에 그 조건으로 반환합니다.', '그렇습니다. 태스크가 하나면 모든 계산을 생략합니다.', 'nr_running 검사는 가상 시간·태스크 회계·account_cfs_rq_runtime 뒤에 있습니다.'),
+ ('now=1600,exec_start=1000에서 양수 갱신 후 exec_start는?', '1600입니다.', '1000을 유지합니다.', '다음 계산의 시작점을 이동해야 이전 600 구간을 중복해서 더하지 않습니다.')),
+('exec 실패의 경계: 이전 프로그램으로 돌아갈 수 없는 시점','프로세스','fs/exec.c','bprm_execve',
+ 'exec는 현재 프로세스가 실행할 프로그램을 바꾸는 과정입니다. 교체 준비 단계에서 실패하면 오류를 돌려줄 수 있지만 실행 상태를 되돌릴 수 없는 단계까지 바꾼 뒤에는 이전 사용자 코드로 단순 복귀하면 안 됩니다.',
+ 'bprm_execve는 prepare_bprm_creds 실패면 즉시 반환합니다. 성공하면 unsafe 상태 검사와 in_execve 표시, mm CID 준비 및 sched_exec를 수행합니다. 보안 자격 hook이나 exec_binprm 실패는 out으로 갑니다. 정상 완료는 mm CID 후처리, fs->in_exec와 in_execve 제거, rseq·user events·회계·NUMA 정리 후 결과를 반환합니다. 실패 경로에서 point_of_no_return이 참이고 fatal signal이 아직 없으면 SIGSEGV를 강제합니다. 실패도 mm CID 후처리와 exec 표시 제거를 수행합니다.',
+ '같은 -ENOMEM이라도 되돌릴 수 없는 지점 이전 실패와 이후 실패를 나눠 그리세요. 이후라면 기존 사용자 프로그램으로 오류 코드만 돌려주는 정상 복귀를 허용하지 않도록 fatal signal을 마련합니다. 이미 fatal signal이 있으면 새로운 SIGSEGV를 덧붙이는 조건은 성립하지 않습니다.',
+ '왜 오류를 전부 같은 rollback으로 설명하면 안 되나',
+ 'begin_new_exec는 이후 오류를 치명적으로 처리하도록 point_of_no_return을 설정한 뒤 thread-group 재구성 같은 단계를 수행합니다. 이 표시가 있는 out 경로는 원상복구를 완성하는 함수가 아니라 안전하지 않은 사용자 복귀를 막는 처리입니다. 반면 처음 자격 준비 실패는 exec 진행 표시를 세우기 전이어서 뒤 공통 정리로 가지 않습니다. 자격·메모리·스레드 교체의 모든 하위 구현은 각각 이어서 검토해야 합니다.',
+ ('point_of_no_return 뒤 실패했고 fatal signal도 없으면?', 'SIGSEGV를 강제해 이전 사용자 코드로 정상 복귀하지 않게 합니다.', '모든 상태를 자동으로 원래대로 돌리고 계속 실행합니다.', 'out 경로의 조건은 point_of_no_return && !fatal_signal_pending입니다. 이 지점 이후의 실패는 일반적인 오류 반환만으로 처리할 수 없습니다.'),
+ ('prepare_bprm_creds 실패도 in_execve를 1로 만든 뒤 정리하나요?', '아닙니다. 해당 실패는 표시를 세우기 전에 바로 반환합니다.', '그렇습니다. 모든 실패는 같은 out 레이블만 사용합니다.', '초기 반환과 이후 goto out의 순서 차이가 자원 정리 범위를 결정합니다.')),
+]
+
+def register(topic,q,detail):
+    for title,area,path,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,area,path,symbol,why,principle,use,
+              '실제 시간과 가상 시간, 상태 표시와 실제 문맥 교환, 되돌릴 수 있는 실패와 치명적 실패를 구별해 조건표를 만드세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('검토 범위','고정 Linux v6.12의 명시한 함수 및 연결 helper를 대조했습니다. 계산은 학습용 예제이며 실제 CPU 스케줄링·exec 실패 주입·모든 동시성 경로를 실행 검증한 결과는 아닙니다.')])

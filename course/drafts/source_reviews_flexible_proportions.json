@@ -1,0 +1,254 @@
+{
+  "include/linux/flex_proportions.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 72,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os977",
+        "symbols": [
+          "fprop_global",
+          "fprop_local_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os978",
+        "symbols": [
+          "fprop_global_init",
+          "fprop_local_init_percpu",
+          "fprop_global_destroy",
+          "fprop_local_destroy_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os979",
+        "symbols": [
+          "fprop_new_period",
+          "fprop_new_period"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os980",
+        "symbols": [
+          "fprop_fraction_percpu",
+          "fprop_new_period"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os985",
+        "symbols": [
+          "__fprop_add_percpu",
+          "fprop_inc_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os986",
+        "symbols": [
+          "fprop_fraction_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os987",
+        "symbols": [
+          "__fprop_add_percpu_max",
+          "FPROP_FRAC_SHIFT",
+          "FPROP_FRAC_BASE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      },
+      {
+        "lesson": "os988",
+        "symbols": [
+          "__fprop_add_percpu_max"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header declarations/constants/IRQ wrapper connected to complete authored C implementation lesson; lifetime, period and arithmetic caller contracts explained."
+      }
+    ]
+  },
+  "lib/flex_proportions.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 201,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os978",
+        "symbols": [
+          "fprop_global_init",
+          "fprop_local_init_percpu",
+          "fprop_global_destroy",
+          "fprop_local_destroy_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os979",
+        "symbols": [
+          "fprop_new_period"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os980",
+        "symbols": [
+          "fprop_fraction_percpu",
+          "fprop_new_period"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os981",
+        "symbols": [
+          "fprop_new_period"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os982",
+        "symbols": [
+          "fprop_reflect_period_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os983",
+        "symbols": [
+          "fprop_reflect_period_percpu",
+          "PROP_BATCH"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os984",
+        "symbols": [
+          "fprop_reflect_period_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os985",
+        "symbols": [
+          "__fprop_add_percpu",
+          "fprop_inc_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os986",
+        "symbols": [
+          "fprop_fraction_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os987",
+        "symbols": [
+          "__fprop_add_percpu_max",
+          "FPROP_FRAC_SHIFT",
+          "FPROP_FRAC_BASE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      },
+      {
+        "lesson": "os988",
+        "symbols": [
+          "__fprop_add_percpu_max"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole C/header read and individually authored ideal decaying history vs integer/batched implementation, init1/failure/lifetime, period writer serialization and seq retry, additive decay preserving new events, return0-gap/post-aging boundary, lazy reflect/period wrap/longwidth/approx threshold, both counters add/IRQ wrapper, fraction clamp, fixedpoint max and ceil oneevent overshoot. Exact original full source composed with original percpu backend in explicit serial stubs; independent eager history with boundary flushes and brute integer crossproduct allowance, optimized plus ASan/UBSan both longwidth conditional models. No actual SMP/native32/seqcount framework proof."
+      }
+    ]
+  }
+}

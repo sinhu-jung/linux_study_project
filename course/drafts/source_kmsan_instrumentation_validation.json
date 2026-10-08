@@ -1,0 +1,356 @@
+{
+  "draft_lessons": 35,
+  "questions": 70,
+  "anchors": [
+    {
+      "planned_lesson": "os1764",
+      "title": "KMSAN asm 주소 분류·사용자 범위와 metadata 존재",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 22,
+        "end": 47,
+        "anchor": "is_bad_asm_addr"
+      }
+    },
+    {
+      "planned_lesson": "os1765",
+      "title": "KMSAN getter uaccess 보존·조회 전후 상태 복구",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 33,
+        "end": 58,
+        "anchor": "get_shadow_origin_ptr"
+      }
+    },
+    {
+      "planned_lesson": "os1766",
+      "title": "KMSAN가변 길이 metadata API·load_n과 store_n",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 52,
+        "end": 77,
+        "anchor": "__msan_metadata_ptr_for_load_n"
+      }
+    },
+    {
+      "planned_lesson": "os1767",
+      "title": "KMSAN 고정 길이 API 생성·token pasting과 8 개 함수",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 73,
+        "end": 104,
+        "anchor": "DECLARE_METADATA_PTR_GETTER"
+      }
+    },
+    {
+      "planned_lesson": "os1768",
+      "title": "KMSAN asm 출력 초기화·놓친 store의 best effort",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 106,
+        "end": 131,
+        "anchor": "__msan_instrument_asm_store"
+      }
+    },
+    {
+      "planned_lesson": "os1769",
+      "title": "KMSAN asm 크기 경계·4096 초과는 8로 줄인다",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 106,
+        "end": 131,
+        "anchor": "__msan_instrument_asm_store"
+      }
+    },
+    {
+      "planned_lesson": "os1770",
+      "title": "KMSAN asm hook와 IRQ 문맥·runtime guard를 생략하는 이유",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 106,
+        "end": 131,
+        "anchor": "__msan_instrument_asm_store"
+      }
+    },
+    {
+      "planned_lesson": "os1771",
+      "title": "KMSAN string 반환 metadata·destination pointer의 상태",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 139,
+        "end": 164,
+        "anchor": "get_param0_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1772",
+      "title": "KMSAN 고정 param origin 읽기·char 한 byte와 signedness",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 139,
+        "end": 164,
+        "anchor": "get_param0_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1773",
+      "title": "KMSAN retval 저장·64bit shadow와 origin 필드",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 148,
+        "end": 173,
+        "anchor": "set_retval_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1774",
+      "title": "KMSAN memcpy hook·data copy와 metadata copy의 두 단계",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 183,
+        "end": 208,
+        "anchor": "__msan_memcpy"
+      }
+    },
+    {
+      "planned_lesson": "os1775",
+      "title": "KMSAN memmove hook·data 겹침과 metadata notification",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 158,
+        "end": 183,
+        "anchor": "__msan_memmove"
+      }
+    },
+    {
+      "planned_lesson": "os1776",
+      "title": "KMSAN zero 길이 copy·memset과 다른 early return",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 158,
+        "end": 183,
+        "anchor": "__msan_memmove"
+      }
+    },
+    {
+      "planned_lesson": "os1777",
+      "title": "KMSAN memset hook·채우는 값 c의 shadow를 받지 못한다",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 210,
+        "end": 238,
+        "anchor": "__msan_memset"
+      }
+    },
+    {
+      "planned_lesson": "os1778",
+      "title": "KMSAN compiler origin chain hook·uaccess와할당 guard",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 240,
+        "end": 265,
+        "anchor": "__msan_chain_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1779",
+      "title": "KMSAN 지역 변수 origin·alloca magic과설명자",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 261,
+        "end": 286,
+        "anchor": "__msan_poison_alloca"
+      }
+    },
+    {
+      "planned_lesson": "os1780",
+      "title": "KMSAN alloca 두번째 frame·설정과추적 비용",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 261,
+        "end": 286,
+        "anchor": "__msan_poison_alloca"
+      }
+    },
+    {
+      "planned_lesson": "os1781",
+      "title": "KMSAN local unpoison hook·checked와 runtime 균형",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 297,
+        "end": 322,
+        "anchor": "__msan_unpoison_alloca"
+      }
+    },
+    {
+      "planned_lesson": "os1782",
+      "title": "KMSAN 값 사용 경고·주소 없는 report",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 313,
+        "end": 334,
+        "anchor": "__msan_warning"
+      }
+    },
+    {
+      "planned_lesson": "os1783",
+      "title": "KMSAN compiler context 접근·metadata 전달상태 주소",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1784",
+      "title": "KMSAN 공식 안내·검사 kernel과학습실의 실행 구별",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 313,
+        "end": 334,
+        "anchor": "__msan_warning"
+      }
+    },
+    {
+      "planned_lesson": "os1785",
+      "title": "KMSAN report 읽기·사용·저장·생성 위치의 세 stack",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 313,
+        "end": 334,
+        "anchor": "__msan_warning"
+      }
+    },
+    {
+      "planned_lesson": "os1786",
+      "title": "KMSAN 미초기화 사용·조건·주소·외부전달·인자",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 313,
+        "end": 334,
+        "anchor": "__msan_warning"
+      }
+    },
+    {
+      "planned_lesson": "os1787",
+      "title": "KMSAN bit shadow 원리·데이터 0과초기화 0은다르다",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 210,
+        "end": 238,
+        "anchor": "__msan_memset"
+      }
+    },
+    {
+      "planned_lesson": "os1788",
+      "title": "KMSAN OR shadow 계산·known1이 unknown을덮는 bit",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 158,
+        "end": 183,
+        "anchor": "__msan_memmove"
+      }
+    },
+    {
+      "planned_lesson": "os1789",
+      "title": "KMSAN origin 정밀도·두 short가한 4byte 원인을공유",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 240,
+        "end": 265,
+        "anchor": "__msan_chain_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1790",
+      "title": "KMSAN origin 비용·최초생성과복사 chain의차이",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 240,
+        "end": 265,
+        "anchor": "__msan_chain_origin"
+      }
+    },
+    {
+      "planned_lesson": "os1791",
+      "title": "KMSAN no checks와 no instrumentation·다른함수속성",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1792",
+      "title": "KMSAN Makefile 선택·파일·디렉터리계측제외",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1793",
+      "title": "KMSAN 현재 task 보고중단·depth 균형과짧은구간",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1794",
+      "title": "KMSAN param·retval 빠른검사와 noundef 한계",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    },
+    {
+      "planned_lesson": "os1795",
+      "title": "KMSAN metadata 단편화·data 연속과추적공간연속",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 52,
+        "end": 77,
+        "anchor": "__msan_metadata_ptr_for_load_n"
+      }
+    },
+    {
+      "planned_lesson": "os1796",
+      "title": "KMSAN 문서와 getter 대조·비연속경고는 fallback 분기가아니다",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 52,
+        "end": 77,
+        "anchor": "__msan_metadata_ptr_for_load_n"
+      }
+    },
+    {
+      "planned_lesson": "os1797",
+      "title": "KMSAN vmalloc 공간 배치·data·shadow·origin의 평행 범위",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 62,
+        "end": 87,
+        "anchor": "__msan_metadata_ptr_for_store_n"
+      }
+    },
+    {
+      "planned_lesson": "os1798",
+      "title": "KMSAN 고정 자료의 오래된표기·실제파일·구조체를대조한다",
+      "path": "mm/kmsan/instrumentation.c",
+      "excerpt": {
+        "start": 330,
+        "end": 334,
+        "anchor": "__msan_get_context_state"
+      }
+    }
+  ]
+}

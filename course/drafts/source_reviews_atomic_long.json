@@ -1,0 +1,836 @@
+{
+  "include/linux/atomic/atomic-long.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 1812,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1548",
+        "symbols": [
+          "ATOMIC_LONG_INIT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1549",
+        "symbols": [
+          "raw_atomic_long_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1550",
+        "symbols": [
+          "raw_atomic_long_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1551",
+        "symbols": [
+          "raw_atomic_long_add_return"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1552",
+        "symbols": [
+          "raw_atomic_long_inc_return"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1553",
+        "symbols": [
+          "raw_atomic_long_fetch_andnot"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1554",
+        "symbols": [
+          "raw_atomic_long_xchg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1555",
+        "symbols": [
+          "raw_atomic_long_cmpxchg_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1556",
+        "symbols": [
+          "raw_atomic_long_try_cmpxchg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1557",
+        "symbols": [
+          "raw_atomic_long_sub_and_test"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1558",
+        "symbols": [
+          "raw_atomic_long_add_unless"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1559",
+        "symbols": [
+          "raw_atomic_long_inc_unless_negative"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1560",
+        "symbols": [
+          "raw_atomic_long_dec_if_positive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1561",
+        "symbols": [
+          "raw_atomic_long_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1562",
+        "symbols": [
+          "raw_atomic_long_fetch_add_relaxed"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1563",
+        "symbols": [
+          "raw_atomic_long_fetch_add_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1564",
+        "symbols": [
+          "raw_atomic_long_fetch_add_relaxed"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1565",
+        "symbols": [
+          "raw_atomic_long_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1566",
+        "symbols": [
+          "raw_atomic_long_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1567",
+        "symbols": [
+          "raw_atomic_long_try_cmpxchg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1568",
+        "symbols": [
+          "raw_atomic_long_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1569",
+        "symbols": [
+          "raw_atomic_long_add_return"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1570",
+        "symbols": [
+          "raw_atomic_long_fetch_inc_acquire"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1571",
+        "symbols": [
+          "raw_atomic_long_fetch_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      }
+    ],
+    "fixture": "data/source_checks/source-atomic-long-harness-manifest.json"
+  },
+  "Documentation/atomic_t.txt": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 367,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1548",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1549",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1550",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1551",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1552",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1553",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1554",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1555",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1556",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1557",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1558",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1559",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1560",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1561",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1562",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1563",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1564",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1565",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1566",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1567",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1568",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1569",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1570",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1571",
+        "symbols": [
+          "atomic_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      }
+    ],
+    "fixture": "data/source_checks/source-atomic-long-harness-manifest.json"
+  },
+  "Documentation/core-api/wrappers/atomic_t.rst": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 19,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1548",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1549",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1550",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1551",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1552",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1553",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1554",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1555",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1556",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1557",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1558",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1559",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1560",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1561",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1562",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1563",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1564",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1565",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1566",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1567",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1568",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1569",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1570",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      },
+      {
+        "lesson": "os1571",
+        "symbols": [
+          "atomic_t.txt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole atomic-long.h1812 lines and atomic_t.txt367 lines plus RST include wrapper read/authored across24 lessons48 workedquestions: CONFIG64 type/init/conditional-read aliases, native32-vs64 ABI/expected casts scoped, relaxed/read acquire/set release, arithmetic/incdec void/update/fetch four ordering forms, and/andnot/or/xor fetch forms and irreversible-vs-arithmetic API rationale, xchg and cmpxchg old-return vs try bool expected update/recompute, zero/negative test, unless/nonzero/sign/positive domains and failure relaxed, raw/noinstr vs public instrumentation preference, atomicity single object vs other-address ordering, acquire R/release W/full/compiler barrier, adjacent before/after RMW helpers/noop-arch caveat/stronger-than-acquire litmus with W part and no herd execution claim, set-vs-RMW forbidden final2/lock backend contract, MMIO unsupported/fatal trap and I/O distinction, signed GNUwrap vs refcount, forwardprogress LL/SC loop branch/compiler caveats/CAS native caveat/exponentialbackoff guidance and no starvation proof, generated script/table source vs output/runtime layers. Exact all85 original wrapper definitions native64 compiler atomic backend820 assertions optimized+ASanUBSan eachpassed, five positive/zero/negative inputs including compare fail/success expected update. No native32/kernel LKMM/noinstr/actual instrumentation/all scheduling/progress proof. gen-atomic-long.sh read cross-referenced but shared atomic-tbl.sh/table not fully reviewed in this unit."
+      }
+    ],
+    "fixture": "data/source_checks/source-atomic-long-harness-manifest.json"
+  }
+}

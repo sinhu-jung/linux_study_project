@@ -1,0 +1,281 @@
+{
+  "arch/arm64/include/asm/alternative.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 38,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2105",
+        "symbols": [
+          "alt_instr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative descriptor·원본과 대체 명령을 연결하는 12바이트. alt_instr는 orig_offset·alt_offset의 signed32 상대 위치, cpucap의16bit, 두 길이의8bit를 저장합니다. 명령 데이터 전체를 구조체에 넣지 않고 별도 코드 영역과 연결하는 작은 descriptor입니다. fixture의 native ABI에서 구조체 크기는12byte이며 ELF metadata도 같은 필드 순서로 조립됐습니다. 각 필드의 크기와 원본·대체 영역의 관계를 그립니다. offset은 구조체 시작이 아니라 해당 offset 필드 주소를 기준으로 runtime helper가 복원합니다."
+      },
+      {
+        "lesson": "os2106",
+        "symbols": [
+          "alternative_cb_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback·동일 인터페이스로 패치 방법 전달. alternative_cb_t는 descriptor, 원본 instruction pointer, 갱신 pointer, instruction 개수를 받는 함수 포인터 타입입니다. 일반 명령 복사와 callback 기반 생성이 같은 호출 인터페이스를 사용합니다. 원본 주소와 실제 쓰기 주소를 분리해 alias 경로에서도 원본 PC 기준 계산을 유지할 수 있습니다. callback 네 인자를 목적별로 주석 처리하고 alt_cb_patch_nops 선언과 연결합니다. nr_inst는 byte 길이가 아니라32bit instruction 개수입니다."
+      },
+      {
+        "lesson": "os2107",
+        "symbols": [
+          "apply_boot_alternatives"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 부팅·전체 CPU 적용·상태 조회 API. 헤더는 boot 초기 적용, system 전체 적용, capability 적용 여부 조회를 선언합니다. 선언만으로 적용 순서나 동기화가 구현되는 것은 아닙니다. boot CPU에서 이미 확인한 기능과 나중에 확인한 system 기능을 나누어 적용하는 runtime 구현에 연결하는 인터페이스입니다. 세 선언을 runtime alternative.c의 함수 정의와 연결하세요. 이 헤더의 선언을 읽고 stop_machine이나 cache flush를 여기서 수행한다고 주석 달지 않습니다."
+      },
+      {
+        "lesson": "os2108",
+        "symbols": [
+          "apply_alternatives_module"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative module 설정·외부 함수와 빈 inline. CONFIG_MODULES가 켜지면 module 영역 적용 함수의 선언을 사용하고 꺼지면 같은 이름의 빈 static inline 함수가 됩니다. 공통 C 호출 지점이 설정별 인터페이스를 유지하는 방식입니다. 비활성 함수가 빈 본문이어도 C 함수 인자 표현식의 평가 의미를 빈 function-like macro와 혼동하면 안 됩니다. start와 byte length를 runtime region으로 연결하세요. disabled inline을 macro의 인자 미평가와 같다고 해석하지 말고 C 함수 호출의 표현식 평가를 구별합니다."
+      }
+    ]
+  },
+  "arch/arm64/include/asm/alternative-macros.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 268,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2109",
+        "symbols": [
+          "ARM64_CB_SHIFT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback tag·capability 상위 bit 분리. ARM64_CB_SHIFT는15이고 ARM64_CB_BIT는 해당 bit입니다.16bit cpucap 필드의 상위 bit를 callback 종류 표시로 쓰고 나머지로 capability를 표현합니다. ARM64_NCAPS가 tag bit에 도달하면 preprocessor error를 내어 번호와 tag가 충돌하지 않도록 합니다. cap6에 callback bit를 OR하면0x8006인 fixture descriptor와 연결합니다. cap 번호 추출과 callback 유무 판정은 runtime의 서로 다른 mask입니다."
+      },
+      {
+        "lesson": "os2110",
+        "symbols": [
+          "ALTINSTR_ENTRY"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative C 문자열 metadata·field-relative relocation. ALTINSTR_ENTRY는 inline asm 문자열로 두 .word, .hword, 두 .byte를 출력합니다. 661b는 이전 원본 label,663f는 다음 대체 label이며 각 .word의 현재 위치 점(.)에서 label까지 상대 차이를 저장합니다. object에서는 relocation이 아직 적용되지 않은 placeholder와 relocation 기록을 함께 읽어야 합니다. readelf의 raw0 offset을 실제 최종 주소0이라고 해석하지 않습니다. R_AARCH64_PREL32 relocation과 원본·대체 label 관계를 연결해 주석을 답니다."
+      },
+      {
+        "lesson": "os2111",
+        "symbols": [
+          "ALTINSTR_ENTRY_CB"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback metadata·대체 영역 대신 함수 위치. callback metadata는 두 번째 상대 위치를 callback symbol에 연결합니다. 대체 instruction의 시작 label 대신 callback 주소를 제공하며 길이 필드는 빈663/664영역으로0이 됩니다. 같은 descriptor 포맷을 종류 bit로 해석하여 복사 방식과 생성 방식의 dispatch를 나눕니다. 일반 record와 callback record의 두 번째 relocation 대상·alt_len을 비교하세요. fixture의 callback cap0x8006과4/0 길이를 확인합니다."
+      },
+      {
+        "lesson": "os2112",
+        "symbols": [
+          "__ALTERNATIVE_CFG"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative C cfg·설정 off는 원본까지 생략. __ALTERNATIVE_CFG는 cfg_enabled가1일 때만 원본·metadata·대체 block 전체를 assembler에 생성합니다. 설정 off는 원본을 남기고 대체만 막는 것이 아니라 oldinstr까지 생략합니다. 설정 on은 원본 label과 별도 subsection의 대체 label을 만들고 두 길이의 동등성을 검사합니다. CONFIG_FOO를 전달하는 사용 주석과 fixture의 off record 누락을 연결하세요. fixture의 IS_ENABLED는 명시적0/1 입력 모델이며 kernel의 전체 tristate macro 구현을 대체 검증하지 않습니다."
+      },
+      {
+        "lesson": "os2113",
+        "symbols": [
+          "__ALTERNATIVE_CFG"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 길이 검사·두 .org의 양방향 제약. 원본과 대체 길이를 각각 A·B라 하면 첫 .org는 현재 위치+A−B로, 두 번째는 이후 위치+B−A로 이동하려고 합니다. 어느 쪽이 길어도 한 directive가 뒤로 이동해 오류가 나므로 두 길이가 같아야 합니다. .inst를 쓰는 assembler 문제를 피하기 위한 원문의 역사적 설명도 함께 읽습니다. 1개 nop과2개 nop의 mismatch fixture가 실제 move .org backwards 오류를 내는 것을 확인합니다. 빈 공간 padding이 자동으로 모든 길이 차이를 허용한다고 해석하지 않습니다."
+      },
+      {
+        "lesson": "os2114",
+        "symbols": [
+          "__ALTERNATIVE_CFG_CB"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback cfg·빈 대체 영역을 의도적으로 생성. callback cfg macro는 원본 영역과 callback metadata를 생성하고663·664 label 사이에 instruction을 넣지 않습니다. 보통 대체 macro의 같은 길이 .org 검사도 적용하지 않습니다. runtime은 callback tag이면 alt_len이0이어야 한다고 검사하여 두 경로의 계약을 맞춥니다. callback의 원본 branch4byte·대체0byte를 일반4/4 record와 비교합니다. callback은 원본 길이만큼 명령을 직접 생성해 쓰는 인터페이스입니다."
+      },
+      {
+        "lesson": "os2115",
+        "symbols": [
+          "ALTERNATIVE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative variadic API·선택 설정 인자와 기본1. ALTERNATIVE는 oldinstr·newinstr 이후의 variadic 인자에 capability와 선택 config를 받아 _ALTERNATIVE_CFG로 넘기고 마지막 기본1을 제공합니다. config를 생략하면 생성 조건1, 제공하면 IS_ENABLED(config)로 조건을 정합니다. C inline asm과 assembler 양쪽에서 같은 상위 인터페이스를 사용합니다. 3인자 호출과4인자 호출이 어디로 확장되는지 순서대로 적으세요. fixture의 ordinary cap9와 CONFIG_FIXTURE off cap8을 비교합니다."
+      },
+      {
+        "lesson": "os2116",
+        "symbols": [
+          "ALTERNATIVE_CB"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback API·tag와 callback 조합. ALTERNATIVE_CB는 ARM64_CB_SHIFT 위치의 bit를 capability에 OR하고 cfg1인 callback 생성 helper에 넘깁니다. 실행 시마다 C 함수가 이 macro를 호출하는 구조가 아니라 빌드 때 branch와 descriptor를 만들고 나중에 patch engine이 callback을 호출하도록 연결합니다. alternative_has_cap_likely의 kernel 쪽 callback API와 alt_cb_patch_nops를 연결하세요. callback symbol은 link 가능한 실행 코드이며 metadata의 상대 위치로 전달됩니다."
+      },
+      {
+        "lesson": "os2117",
+        "symbols": [
+          "altinstruction_entry"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative assembler entry·5개 필드와12byte. assembler altinstruction_entry는 원본·대체 주소의 field-relative .word 두 개, capability .hword, 두 길이 .byte를 만듭니다. fixture에서5개 record의 tag와 길이가3/4/4,4/4/4,5/4/4,0x8006/4/0,7/8/8로 나왔으며 disabled cap8 record는 없었습니다. C alt_instr의 필드 순서와 assembler 출력 순서를 나란히 적습니다. metadata만으로는 relocation 적용 후 실제 instruction 주소까지 증명하지 않으므로 linker 단계와 구별합니다."
+      },
+      {
+        "lesson": "os2118",
+        "symbols": [
+          "alternative_insn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative 단일 명령·enable와 subsection 분리. alternative_insn은 enable 기본1을 받아 원본을 현재 영역에, 대체를 subsection1에 조립하고 metadata를 만듭니다. enable0이면 .if 범위가 생략됩니다. subsection의 대체 instruction이 보통 함수의 순서대로 바로 실행되는 코드라고 읽으면 패치 자료와 기본 실행 흐름을 혼동합니다. cap3의 한 nop 대체와 cap8 enable0 예제를 조립 결과에 연결합니다. default 실행 코드와 patch 원본 자료의 위치를 분리해 그립니다."
+      },
+      {
+        "lesson": "os2119",
+        "symbols": [
+          "alternative_if_not"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative sequence 계약·길이와 외부 branch target. 원문 sequence 설명은 feature 있음 경로의 길이가 기본 경로와 같아야 하고 외부에서 대체 sequence 내부를 branch target으로 사용하면 안 된다고 합니다. 외부로 향하는 PC-relative branch는 runtime에서 조정할 수 있지만 외부에서 대체 내부로 들어오는 branch는 고치지 않는다는 방향 차이가 있습니다. 밖으로 나가는 branch와 밖에서 들어오는 branch를 화살표 방향으로 구별합니다. 두 길이가 같다는 조건만으로 임의 label 진입까지 안전해지는 것은 아닙니다."
+      },
+      {
+        "lesson": "os2120",
+        "symbols": [
+          "alternative_if_not"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative if_not·기본 경로부터 작성. alternative_if_not은 mode0을 설정하고 현재 영역의661·662를 기본 코드로, subsection의663·664를 대체 코드로 연결하는 metadata를 만듭니다. capability 없는 경로를 먼저 쓰고 else에서 capability 있는 경로를 쓰는 구성입니다. metadata는 아직 앞으로 정의될 label을 참조할 수 있습니다. if_not cap4→기본 nop→else→대체 nop의 label과 section을 표시하세요. 앞서 user PAC wrapper의 unsupported branch와 NOP 대체 흐름도 연결합니다."
+      },
+      {
+        "lesson": "os2121",
+        "symbols": [
+          "alternative_if"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative if·feature 경로를 먼저 쓰는 역배치. alternative_if는 mode1과 역순 descriptor를 사용하고 먼저 subsection1의661·662에 capability 있는 코드를 씁니다. else에서 원래 section의663·664 기본 코드를 씁니다. 같은 if/else 형태라도 if_not과 원본·대체 label 관계가 뒤집히며 .align2는 instruction alignment 정보를 assembler에 제공합니다. cap5 예제의 section 전환과 descriptor orig663/repl661을 연결합니다. 작성 순서와 기본 실행 영역의 순서가 동일하다고 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2122",
+        "symbols": [
+          "alternative_else"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative else·mode에 따른 section 전환. alternative_else는 첫 영역 끝662를 정의한 뒤 mode0이면 subsection1으로, mode1이면 previous section으로 돌아가 두 번째 영역 시작663을 정의합니다. 전역 assembler .set mode 상태를 사용하므로 임의 중첩으로 mode를 덮어쓰는 사용을 지원한다고 추론하면 안 됩니다. if_not와 if 각각에서 else 전후 section을 표로 적으세요. mode값·662 끝·663 시작을 하나씩 따라가면 branch 조건과 metadata 길이를 읽기 쉬워집니다."
+      },
+      {
+        "lesson": "os2123",
+        "symbols": [
+          "alternative_endif"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative endif·길이 확인과 이전 section 복귀. alternative_endif는 두 번째 영역 끝664를 만들고 양방향 .org로 두 길이가 같게 요구합니다. mode0이면 subsection의 대체 작성 뒤 previous로 복귀하고 mode1은 else에서 이미 기본 영역으로 돌아왔으므로 다시 이동하지 않습니다. section 복귀 조건은 작성 상태를 맞추기 위한 것입니다. 두 mode의 endif 뒤 현재 section을 확인하세요. mismatch 조립 실패와 normal record4/4·8/8 검산을 함께 연결합니다."
+      },
+      {
+        "lesson": "os2124",
+        "symbols": [
+          "alternative_cb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative callback assembler·대체 길이0과 끝 label. alternative_cb는 mode0, callback tag·함수 주소·원본 길이·대체0으로 entry를 생성하고 기본 영역661을 시작합니다. alternative_cb_end는 원본 끝662만 표시합니다. 일반 else/endif와 달리 대체 code subsection과 동등 길이 검사가 필요하지 않습니다. callback cap6의 원본 nop과 callback symbol relocation을 확인합니다. callback이 출력하는 instruction은 runtime 갱신 개수와 연결됩니다."
+      },
+      {
+        "lesson": "os2125",
+        "symbols": [
+          "alternative_else_nop_endif"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative NOP helper·기존 길이로 padding 개수 계산. NOP helper는 else로 이동한 다음 첫 영역 길이(662−661)를 instruction 크기로 나눈 개수만큼 nops를 만들고 endif로 닫습니다. default 또는 alternative 중 어느 영역이 NOP인지 mode에 따라 달라집니다. fixture에서2개 nop 첫 영역은8byte NOP 상대 영역을 생성했습니다. PAC 설치 wrapper와 helper의 자동 NOP 길이를 연결하세요. 잘못된 비instruction 배수 길이가 자동으로 안전해진다고 주장하지 말고 macro의 정규 instruction 사용 계약을 확인합니다."
+      },
+      {
+        "lesson": "os2126",
+        "symbols": [
+          "alternative_has_cap_likely"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative likely capability·기본 branch를 NOP으로 치환. likely helper는 먼저 cpucap_is_possible이 false면false를 반환합니다. 그 밖에는 기본 branch가 l_no로 가서false이고 패치되면 branch가NOP이 되어true로 흐릅니다. BUILD_VDSO는 일반대체, kernel은 NOP 생성 callback을 사용합니다. immediate i 제약은 capability가 assembly 입력의 상수여야 함을 요구합니다. fixture는 possible0/1·VDSO0/1·sanitizer0/1에서 아직 패치하지 않은false 경로를 실행했습니다. 실제 기능 발견·patch후true·SMP를 실행 검증한 결과로 해석하지 않습니다."
+      },
+      {
+        "lesson": "os2127",
+        "symbols": [
+          "alternative_has_cap_unlikely"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Alternative unlikely capability·NOP을 branch로 치환. unlikely helper는 impossible capability에서false, 일반 기본NOP 뒤에도false입니다. capability 적용 시NOP을 l_yes로 향하는 branch로 바꾸어true가 됩니다. asm goto는 assembler 명령이 C label로 이동할 수 있게 알려주며 output operand가 없는 이 인터페이스는 C 제어 흐름과 instruction patch를 연결합니다. likely와unlikely의 기본명령·대체명령·true/false label을 나란히 적습니다. branch의 l_yes PC-relative relocation은 실제 patch engine의 위치 조정과 연결해 읽습니다."
+      }
+    ]
+  }
+}

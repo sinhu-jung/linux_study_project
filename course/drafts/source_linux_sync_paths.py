@@ -1,0 +1,42 @@
+"""Filesystem sync phases, range boundaries and error observation."""
+ROWS = [
+('파일시스템 동기화의 두 단계: 쓰기 시작과 완료 대기','sync_filesystem',
+ '변경된 inode를 처리하는 일이 실제 블록 장치 쓰기 요청까지 곧바로 끝낸다는 뜻은 아닙니다. 일부 파일시스템은 inode 처리로 장치 캐시 버퍼를 더럽힐 수 있어서 파일시스템 작업과 장치 쓰기를 연결해야 합니다.',
+ 'sync_filesystem은 s_umount 잠금이 잡혀 있는지 WARN_ON으로 검사하고 읽기 전용이면0입니다. writeback_inodes_sb 후 sync_fs가 있으면 wait0으로 호출합니다. 오류면 즉시 반환합니다. sync_blockdev_nowait 오류도 반환합니다. 이어 sync_inodes_sb,sync_fs(wait1),sync_blockdev 순서로 진행합니다.',
+ '첫 sync_fs가 -EIO라면 뒤의 장치 제출과 두 번째 대기 단계는 실행되지 않습니다. callback이 없으면 그 단계만 건너뛰고 inode와 장치 경로는 진행합니다. 읽기 전용은 쓰기 작업 없이0입니다. 이 함수가 s_umount를 직접 획득하는 코드는 없으므로 호출자가 읽기/쓰기 모드 전환과의 직렬화를 준비해야 합니다.',
+ '전역 sync와 한 파일시스템 sync의 차이',
+ 'ksys_sync는 먼저 flusher들을 깨운 뒤 전체 superblock의 inode를 처리하고 sync_fs를0과1로 두 번 순회합니다. 이어 sync_bdevs(false),sync_bdevs(true),필요 시 laptop completion을 수행합니다. sync_fs 순회 helper는 읽기 전용과 SB_I_SKIP_SYNC를 제외하지만 inode 순회는 읽기 전용만 제외합니다. 이 전역 경로는 개별 sync_fs 반환 오류를 수집하지 않고 sync syscall은0을 반환합니다. 반환 계약을 sync_filesystem의 오류 전달과 혼동하면 안 됩니다.',
+ ('sync_filesystem이 s_umount를 직접 잡나요?','아닙니다. 잡혀 있는지 검사하며 호출자 계약에 의존합니다.','그렇습니다. 주석의 lock이라는 단어만으로 획득을 보장합니다.','본문에는 rwsem_is_locked 검사만 있고 down_read나 down_write 호출이 없습니다.'),
+ ('첫 sync_fs 오류 뒤에도 두 번째 단계로 계속 가나요?','아닙니다. 그 오류를 즉시 반환합니다.','그렇습니다. 모든 단계를 무조건 실행합니다.','각 단계의 ret 검사와 조기 반환 때문에 실패 지점 이후 동작은 생략됩니다.')),
+('Syncfs 오류 관찰: 이번 동기화 결과와 이전 쓰기 오류','SYSCALL_DEFINE1(syncfs',
+ '동기화를 지금 요청해 얻은 결과와 이전 비동기 쓰기에서 발생한 오류는 서로 다른 경로로 알려질 수 있습니다. 파일시스템 전체 동기화도 어느 파일을 통해 오류를 관찰했는지 기록해야 같은 관찰 지점의 진행 상태를 관리할 수 있습니다.',
+ 'syncfs syscall은 fdget으로 파일을 얻고 없으면 -EBADF입니다. 파일 경로의 superblock에서 s_umount 읽기 잠금을 잡아 sync_filesystem을 호출한 뒤 풉니다. 그 다음 errseq_check_and_advance로 s_wb_err와 파일의 f_sb_err를 비교·진전시키고 fdput합니다. 반환은 ret이 비0이면 ret,아니면 ret2입니다.',
+ '이번 sync_filesystem이 -EIO이고 오류 관찰 결과가 다른 비0값이어도 반환 우선순위는 ret입니다. 그래도 errseq_check_and_advance 자체는 실행됐으므로 오류 관찰 위치가 그대로라고 생각하면 안 됩니다. fd는 특정 파일의 내용만 동기화하라는 범위가 아니라 그 파일이 속한 파일시스템을 찾는 데 쓰입니다.',
+ '응급 동기화가 다른 이유',
+ 'emergency_sync는 GFP_ATOMIC으로 work를 할당하고 성공한 경우에만 작업 큐에 넣는 void 함수입니다. 실패를 errno로 반환하지 않습니다. worker는 inode/sync_fs(wait0)/sync_bdevs(false) 순회를 두 번 수행해 일시적으로 잠긴 대상을 놓칠 가능성을 줄이고 메시지를 출력한 뒤 work를 해제합니다. 호출 반환이 완료를 뜻하지 않으며 두 번 실행했다고 모든 지속성 조건이 증명되는 것도 아닙니다. 파일의 실제 syncfs 본문과 전역/응급 경로를 함께 대조한 수업입니다.',
+ ('sync_filesystem 오류가 있어도 errseq 관찰은 실행하나요?','그렇습니다. 잠금을 푼 다음 오류 관찰을 수행합니다.','아닙니다. ret이 비0이면 그 전에 즉시 반환합니다.','syncfs wrapper는 두 결과를 모두 얻은 뒤 ret을 우선하는 반환식을 사용합니다.'),
+ ('emergency_sync 반환은 디스크 작업 완료인가요?','아닙니다. 성공적으로 할당했으면 worker를 예약합니다.','그렇습니다. void 함수는 항상 동기 완료입니다.','예약 함수와 do_sync_work 실행을 분리해야 하며 할당 실패 경로도 존재합니다.')),
+('파일 범위 동기화: 끝 바이트 포함과0길이의 특별한 뜻','sync_file_range',
+ '시작 위치와 길이로 표현한 구간을 끝 위치가 포함되는 API에 넘기려면1을 빼야 합니다. 길이0을 빈 작업으로 해석할지 파일 끝까지로 해석할지도 API마다 다르므로 경계 계산을 먼저 읽어야 합니다.',
+ 'sync_file_range는 허용되지 않은 flags를 -EINVAL로 거절합니다. endbyte=offset+nbytes 뒤 offset 음수,endbyte 음수,endbyte<offset을 검사합니다. nbytes0이면 endbyte=LLONG_MAX이고 그 외에는1을 빼 포함 끝으로 바꿉니다. 허용 파일 종류는 일반·블록·디렉터리·심볼릭 링크이며 그 밖은 -ESPIPE입니다.',
+ 'offset100,nbytes20이면100부터119까지입니다. offset100,nbytes0이면100부터 파일 끝을 대상으로 하는 최대 끝값을 씁니다. flags0이면 범위와 종류 검사를 지난 뒤 실제 기다림이나 쓰기 호출 없이0을 반환할 수 있습니다. size가0이라는 이유로 언제나 아무 일도 없다고 판단하면 틀립니다.',
+ '32비트 페이지 인덱스의 주소 한계',
+ 'sizeof(pgoff_t)==4이면 페이지 캐시 한계는2^32×페이지 크기입니다. 시작이 그 이상이면 이 함수는 성공0으로 바로 끝납니다. 시작은 안쪽이지만 끝이 한계 이상이면 nbytes를0으로 바꿔 EOF 범위로 처리합니다. 이 특례는 일반 파일 종류 검사보다 앞에 있습니다. 예를 들어 페이지4KiB이면 한계는2^44바이트입니다. 실제 사용자 ABI는 ksys wrapper에서 fd를 얻고 반환하며 compat는 분할 인자를 합치고 range2는 인자 순서만 달리해 같은 helper로 연결합니다.',
+ ('offset100,nbytes20의 포함 끝은?','119입니다.','120입니다.','offset+길이는 다음 바이트 위치이므로 포함 끝으로 바꿀 때1을 뺍니다.'),
+ ('nbytes0은 항상 빈 구간인가요?','아닙니다. 이 API에서는 offset부터 EOF입니다.','그렇습니다. 어떤 함수에서든0길이는 무조건 no-op입니다.','본문은 nbytes0에 LLONG_MAX 끝값을 지정하므로 API별 길이 계약을 확인해야 합니다.')),
+('Sync file range의 기다림: 데이터 쓰기와 저장장치 캐시 비우기 구별','vfs_fsync_range',
+ '더러운 페이지의 쓰기를 시작하는 것,이미 진행 중인 쓰기가 끝나기를 기다리는 것,메타데이터와 장치 캐시까지 안전하게 반영하는 것은 서로 다른 작업입니다. 플래그 이름에 sync가 있어도 모두 같은 지속성 보장은 아닙니다.',
+ 'sync_file_range는 WAIT_BEFORE이면 file_fdatawait_range를 먼저 호출하고 음수 오류면 끝냅니다. WRITE이면 __filemap_fdatawrite_range를 호출합니다. 세 플래그를 모두 포함한 WRITE_AND_WAIT 조합이면 WB_SYNC_ALL,그 외 쓰기는 WB_SYNC_NONE입니다. WRITE 오류도 조기 반환하고 WAIT_AFTER이면 마지막에 다시 기다립니다.',
+ '플래그 값은 WAIT_BEFORE1,WRITE2,WAIT_AFTER4입니다. 모두 합친7에서 WB_SYNC_ALL을 선택하며 WRITE와 WAIT_AFTER만 합친6은 쓰기 뒤 대기는 하지만 쓰기 제출 모드는 WB_SYNC_NONE입니다. WRITE만 요청하면 새 쓰기를 시작하지만 완료 대기 단계가 없습니다. 또한 비동기 방식의 요청이라도 요청 구조체가 부족하면 호출 중 잠들 수 있으므로 즉시 반환을 보장하지 않습니다. 모든 플래그를 사용해도 이 함수는 파일 메타데이터나 디스크 캐시 flush를 대신하지 않습니다. 전원 상실 뒤 데이터를 보존하는 목적의 fsync와 동일시하면 안 됩니다.',
+ 'VFS fsync가 위임하는 범위',
+ 'vfs_fsync_range는 file의 fsync 연산이 없으면 -EINVAL입니다. datasync가 아니고 I_DIRTY_TIME이 있으면 inode를 dirty sync로 표시한 뒤 파일시스템 callback을 호출합니다. vfs_fsync는0부터 LLONG_MAX를 전달하고 do_fsync는 fd가 없으면 -EBADF입니다. fsync syscall은 datasync0,fdatasync는1을 전달합니다. datasync1도 수정된 데이터를 접근하는 데 필요한 메타데이터는 대상이라는 계약이지 모든 메타데이터를 배제하는 뜻은 아닙니다.',
+ ('WRITE만 있으면 함수가 절대로 잠들지 않나요?','아닙니다. 쓰기 요청 자원 부족 등으로 잠들 수 있습니다.','그렇습니다. 완료 대기가 없으니 어떤 상황에도 즉시 반환합니다.','비동기 쓰기 시작과 호출 자체의 비차단 보장은 다른 계약이라고 원문 주석이 구분합니다.'),
+ ('fdatasync는 모든 메타데이터를 제외하나요?','아닙니다. 변경한 데이터 접근에 필요한 메타데이터는 포함합니다.','그렇습니다. 데이터 바이트 외에는 아무것도 처리하지 않습니다.','vfs_fsync_range의 datasync 계약은 필요한 메타데이터를 보존하는 제한된 동기화 범위를 설명합니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'파일시스템','fs/sync.c',symbol,why,principle,use,
+              '쓰기 시작·대기·메타데이터·장치 캐시와 오류 관찰을 서로 분리해 추적하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('검토 범위','Linux v6.12 fs/sync.c의 본문과 syscall wrapper를 대조했습니다. 설명용 범위 계산이며 실제 디스크 오류·전원 차단·파일시스템 내구성 실행 검증은 아닙니다.')])

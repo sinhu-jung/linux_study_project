@@ -1,0 +1,193 @@
+{
+  "scripts/dtc/libfdt/libfdt_env.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 96,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2238",
+        "symbols": [
+          "FDT_BITWISE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 환경타입·Sparse bitwise annotation. fdt16/32/64_t는고정폭정수에 FDT_BITWISEannotation을붙인저장자료형입니다. __CHECKER__에서는 bitwise/forceattribute로정수 domain변환을표시하고보통컴파일에서는빈 macro입니다. runtime새메모리표현을만드는것이아니라 type검사문맥과실제변환을연결합니다. Sparseannotation과실제 endianhelper계산을분리합니다. fixture는보통 GCCbranch를실행했고 Sparse검사를수행하지않았습니다."
+      },
+      {
+        "lesson": "os2239",
+        "symbols": [
+          "EXTRACT_BYTE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt byte extraction·값메모리에서unsigned byte읽기. EXTRACT_BYTE는 x의주소를 uint8_t*로보고 n번째 byte를 unsignedlonglong으로넓힙니다. object의 byte표현을읽고 shift하기전 64bit너비를확보하는방식입니다. x는 inlinehelper의 local인자값이라호출자의표현식을이 macro각사용마다재실행하는인터페이스가아닙니다. 변수 0x1234의 nativebyte배치와두 byte를 big-endianword로합치는계산을그립니다. 함수인자 singleevaluation과 macro자체사용조건을구별합니다."
+      },
+      {
+        "lesson": "os2240",
+        "symbols": [
+          "cpu_to_fdt16"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 16bit endian·저장byte와왕복. 16bithelper는메모리 byte0을 8bit올리고 byte1과 OR합니다. nativeendianness에맞는 fdt16_t값을만들어저장하면 big-endianbyte가됩니다. 반대 helper도같은 byte조합으로 CPU값을복원합니다. 정수숫자를항상무조건 swap한다고설명하면 big-endianCPU에서틀립니다. 모든 65536입력의저장 byte[x>>8,x&255]와왕복값을실제원문으로검산했습니다. fixture는 nativeLE이고다른 CPU실행은별도입니다."
+      },
+      {
+        "lesson": "os2241",
+        "symbols": [
+          "fdt32_to_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 32bit endian·header와tag 변환. 32bithelper는 byte0..3을 24·16·8·0bit에배치합니다. headerfield와 tagword를 CPU값으로읽고 CPU값을저장 word로만드는대칭 helper를제공합니다. fixture는독립 byteoracle와 10000개선택값으로변환·왕복을확인했습니다. DTBmagic의 4byte를변환해서 0xd00dfeed를얻는예제를풉니다. 주소 offset값의단위와 endianness를별도로읽습니다."
+      },
+      {
+        "lesson": "os2242",
+        "symbols": [
+          "cpu_to_fdt64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 64bit endian·56bitshift와예약범위. 64bit변환은 8byte를 56부터 0bit까지 8bit간격으로조합합니다. unsignedlonglong의확장으로높은 shift를수행하고 fdt64_t저장과 uint64_t복원을연결합니다.64bitreserveentry주소·size같은 binary값의표현을다룹니다. 10000개선택 64bit값에서 8개저장 byte와왕복을확인했습니다. 실제 physical주소가 valid인것을변환결과만으로증명하지않습니다."
+      },
+      {
+        "lesson": "os2243",
+        "symbols": [
+          "FDT_FORCE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt force cast·타입domain과변환함수. FDT_FORCE는 Checker문맥에서강제변환 annotation이고보통컴파일에서는빈 token입니다. endianhelper의반환 cast에서저장자료형 domain과 CPU정수 domain을연결합니다. force자체가 byte를재배열하지않고 CPU_TO_FDT식이실제 byte조합을수행합니다. castannotation과 shift/OR계산을다른색으로주석답니다. 보통 GCCfixture와 typechecking도구의역할을구별합니다."
+      },
+      {
+        "lesson": "os2244",
+        "symbols": [
+          "cpu_to_fdt64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt helper macro 수명·undef로노출줄이기. env는 inline변환함수정의뒤 CPU_TO_FDT16/32/64와 EXTRACT_BYTE를#undef합니다. 함수본문은이미전처리확장을통과한정의이고 publicinline함수는사용할수있습니다. 내부 macro이름을이후 caller가 publicAPI처럼호출하려하면정의가남아있지않습니다. header끝까지읽고 public함수와일시적내부 macro를목록으로나눕니다. macro수명과 C함수 symbol의수명을구별합니다."
+      },
+      {
+        "lesson": "os2245",
+        "symbols": [
+          "fdt_strnlen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Libfdt 구형 macOS·strnlen fallback 선택. Apple문맥에서 AvailabilityMacros와지원버전조건으로구형환경은 strnlen을 fdt_strnlen으로 alias합니다. fallback은 memchr로최대 max_count안의 NUL을찾아거리또는 max_count를반환합니다. 현재 platformbranch와구형 API호환기술을구별해야합니다. NUL앞거리·NUL없음·max0예제를풉니다. 현재 Linuxfixture는이 Apple조건을실행하지않았으므로구형 macOS실행검증이라고말하지않습니다."
+      }
+    ]
+  },
+  "scripts/dtc/libfdt/fdt.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 66,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2231",
+        "symbols": [
+          "fdt_header"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB header·big-endian 크기와 세 block offset. fdt_header는 magic·totalsize와 structure/string/reserve block의 offset을 fdt32_t로저장합니다. offset은 blob시작기준 byte위치이고 CPU-native정수와저장 byte표현을구별해야합니다. version·last_comp_version으로형식호환성을함께표현합니다. 실제 fixture의 header40·reserve40·structure56·strings128·totalsize135를구간그림으로그립니다. field값을직접 native정수로읽지않고변환 helper를사용합니다."
+      },
+      {
+        "lesson": "os2232",
+        "symbols": [
+          "fdt_header"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB header 버전·추가필드와크기28/32/36/40. 초기 header의 7개 32bit필드뒤에 version2 boot_cpuid_phys,version3 size_dt_strings,version17 size_dt_struct가추가됩니다. version1은 28byte,2는 32,3과 16은 36,17은 40입니다. 현재 Cstruct크기와예전 format의 header길이가항상같은것은아닙니다. 고정 fdt_header_size_의버전구간선택과상수를연결합니다. formathistory와현재 library가허용하는지원버전범위를따로읽습니다."
+      },
+      {
+        "lesson": "os2233",
+        "symbols": [
+          "fdt_reserve_entry"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB reserve entry·64bit주소와범위크기. reserve entry는 fdt64_t address와 size두필드로표현합니다.32bitpropertytag와달리 64bit주소범위를기록하는자료구조입니다. array순회와종료 entry의의미는 reserve API구현에연결하고이 struct선언만으로모든예약 memory관리알고리즘을설명하지않습니다. 실제 blob의 reserveblock16byte공간과두 64bitfield를그립니다. kernelpageallocator의예약과 binary자료형의역할을구별합니다."
+      },
+      {
+        "lesson": "os2234",
+        "symbols": [
+          "fdt_node_header"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB node header·flexible name 배열. node header는 32bit tag와끝에길이가고정되지않은 char name[]을갖습니다. 이름 NUL과 4byte정렬 padding을 tag순회에서다룹니다. sizeof struct만으로 node전체이름공간을알수없으며 flatblob내가변길이 record입니다. root빈이름은 tag4+NUL/padding4=8byte인 fixture를풉니다. childgrand이름은 NUL포함 6byte와 padding으로다음 tag가 4byte정렬됩니다."
+      },
+      {
+        "lesson": "os2235",
+        "symbols": [
+          "fdt_property"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB property·len과string nameoff·가변data. property는 tag·len·nameoff의 32bitfield와 flexiblechar data[]입니다. nameoff는 stringsblock의이름위치이고 len은 valuebyte길이입니다. property이름을각 record에반복저장하는것대신별도 stringsblock을참조하는형식입니다. fixture의 propertylen4·nameoff0·value42와 strings의 answer를연결합니다. value안의자료형은 property의사용계약에따라읽고모든 property를동일정수로가정하지않습니다."
+      },
+      {
+        "lesson": "os2236",
+        "symbols": [
+          "FDT_BEGIN_NODE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB tag 집합·begin/endnode/prop/nop/end. DTB는 BEGIN_NODE1·END_NODE2·PROP3·NOP4·END9로 flatstructure를표현합니다. BEGIN/END_NODE의중첩으로 tree깊이를복원하고 END는전체 structure끝입니다. END_NODE와 END의역할을섞으면순회종료와 subtree경계가틀립니다. fixture의 root→a→grand→b와 tag10개를다이어그램에연결합니다. flatrecord순서와계층 tree의대응을읽습니다."
+      },
+      {
+        "lesson": "os2237",
+        "symbols": [
+          "FDT_MAGIC"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB magic과tag단위·자료형크기 기반. FDT_MAGIC은 0xd00dfeed이고 FDT_TAGSIZE는 sizeof(fdt32_t)입니다. magic은 format식별 word,tag는 structure내 record종류 word입니다. header식별과 tree알고리즘의입력을각기다른위치와목적으로사용합니다. header처음 byte d0 0d fe ed와 structure첫 tag00 00 00 01을비교합니다. 정수값과실제저장 byte를연결합니다."
+      }
+    ]
+  }
+}

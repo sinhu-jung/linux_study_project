@@ -1,0 +1,206 @@
+{
+  "draft_lessons": 20,
+  "questions": 40,
+  "anchors": [
+    {
+      "planned_lesson": "os1744",
+      "title": "KMSAN page 연결·데이터 page 와 두 metadata page",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 36,
+        "end": 61,
+        "anchor": "page_has_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1745",
+      "title": "KMSAN metadata page 자체·재귀 추적 연결 제거",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "set_no_shadow_origin_page"
+      }
+    },
+    {
+      "planned_lesson": "os1746",
+      "title": "KMSAN dummy load·store page·상태 간섭 방지",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 81,
+        "end": 106,
+        "anchor": "kmsan_get_shadow_origin_ptr"
+      }
+    },
+    {
+      "planned_lesson": "os1747",
+      "title": "KMSAN metadata getter·비활성·미추적 fallback",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 81,
+        "end": 106,
+        "anchor": "kmsan_get_shadow_origin_ptr"
+      }
+    },
+    {
+      "planned_lesson": "os1748",
+      "title": "KMSAN vmalloc metadata·주소 offset 을 평행 공간으로 이동",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 55,
+        "end": 80,
+        "anchor": "vmalloc_meta"
+      }
+    },
+    {
+      "planned_lesson": "os1749",
+      "title": "KMSAN metadata lookup 우선순위·특수 범위→arch→page",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 124,
+        "end": 149,
+        "anchor": "kmsan_get_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1750",
+      "title": "KMSAN 일반 page metadata·유효 주소와 page offset",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 73,
+        "end": 98,
+        "anchor": "virt_to_page_or_null"
+      }
+    },
+    {
+      "planned_lesson": "os1751",
+      "title": "KMSAN metadata lookup 의 문맥 독립성·재귀 guard 와 별개",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 124,
+        "end": 149,
+        "anchor": "kmsan_get_metadata"
+      }
+    },
+    {
+      "planned_lesson": "os1752",
+      "title": "KMSAN page copy·전체 shadow 와 origin 의 이동",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 151,
+        "end": 176,
+        "anchor": "kmsan_copy_page_meta"
+      }
+    },
+    {
+      "planned_lesson": "os1753",
+      "title": "KMSAN page copy·미추적 source 와 initialized 정책",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 151,
+        "end": 176,
+        "anchor": "kmsan_copy_page_meta"
+      }
+    },
+    {
+      "planned_lesson": "os1754",
+      "title": "KMSAN page allocation·ZERO 와 비활성의 초기화 상태",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 170,
+        "end": 195,
+        "anchor": "kmsan_alloc_page"
+      }
+    },
+    {
+      "planned_lesson": "os1755",
+      "title": "KMSAN page allocation·runtime 내부 ZERO 의 우선순위",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 170,
+        "end": 195,
+        "anchor": "kmsan_alloc_page"
+      }
+    },
+    {
+      "planned_lesson": "os1756",
+      "title": "KMSAN page allocation·poison shadow 와 공유 origin handle",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 170,
+        "end": 195,
+        "anchor": "kmsan_alloc_page"
+      }
+    },
+    {
+      "planned_lesson": "os1757",
+      "title": "KMSAN page free·UAF origin 과 page_size",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 205,
+        "end": 230,
+        "anchor": "kmsan_free_page"
+      }
+    },
+    {
+      "planned_lesson": "os1758",
+      "title": "KMSAN vmap 준비·두 임시 page 배열과 보호값",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 217,
+        "end": 242,
+        "anchor": "kmsan_vmap_pages_range_noflush"
+      }
+    },
+    {
+      "planned_lesson": "os1759",
+      "title": "KMSAN vmap 성공·두 mapping 과 TLB·cache 처리",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 217,
+        "end": 242,
+        "anchor": "kmsan_vmap_pages_range_noflush"
+      }
+    },
+    {
+      "planned_lesson": "os1760",
+      "title": "KMSAN vmap 할당 실패·부분 자원 정리",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 217,
+        "end": 242,
+        "anchor": "kmsan_vmap_pages_range_noflush"
+      }
+    },
+    {
+      "planned_lesson": "os1761",
+      "title": "KMSAN 고정 vmap 오류 경로·guard 종료가 건너뛰어진다",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 217,
+        "end": 242,
+        "anchor": "kmsan_vmap_pages_range_noflush"
+      }
+    },
+    {
+      "planned_lesson": "os1762",
+      "title": "KMSAN boot metadata 할당·범위 정렬과 두 공간",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 274,
+        "end": 299,
+        "anchor": "kmsan_init_alloc_meta_for_range"
+      }
+    },
+    {
+      "planned_lesson": "os1763",
+      "title": "KMSAN page setup·order 별 연결과 metadata 추적 제외",
+      "path": "mm/kmsan/shadow.c",
+      "excerpt": {
+        "start": 301,
+        "end": 310,
+        "anchor": "kmsan_setup_meta"
+      }
+    }
+  ]
+}

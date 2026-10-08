@@ -1,0 +1,160 @@
+{
+  "include/linux/swab.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 48,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1249",
+        "symbols": [
+          "swab32_array"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      }
+    ]
+  },
+  "include/uapi/linux/swab.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 305,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1239",
+        "symbols": [
+          "___constant_swab16"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1240",
+        "symbols": [
+          "___constant_swab32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1241",
+        "symbols": [
+          "___constant_swab64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1242",
+        "symbols": [
+          "__swab32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1243",
+        "symbols": [
+          "__fswab64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1244",
+        "symbols": [
+          "__swab"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1245",
+        "symbols": [
+          "___constant_swahw32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1246",
+        "symbols": [
+          "___constant_swahb32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1247",
+        "symbols": [
+          "__swab32p"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1248",
+        "symbols": [
+          "__swab32s"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      },
+      {
+        "lesson": "os1250",
+        "symbols": [
+          "___constant_swab16"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole Linux/UAPI swab headers read and authored: 16/32/64 byte masks and casts, byte vs bit reversal, builtin/constant folding/runtime arch fallback and const attribute, split64 two32 swaps and wide cast before shift, conditional machineword alias, halfword vs withinhalfbyte permutation, aligned pointer getters and in-place writes, word-count arrays/zero count/canaries, private constant macro repeated argument vs public evaluation. Exact two headers: 1162164 checks per configuration, eight BITS32/64 x builtin on/off x split64 on/off configurations, each optimized and ASan/UBSan; independent byte reference/fullu16/100000u32-u64/double-swap/composition/pointer/mutation/arrays/onceargument. Private constant x++ expected compile rejection; no execution of undefined behavior. No architecture override, native32 ABI, MMIO or atomicity proof."
+      }
+    ]
+  }
+}

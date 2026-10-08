@@ -1,0 +1,296 @@
+{
+  "draft_lessons": 29,
+  "questions": 58,
+  "anchors": [
+    {
+      "planned_lesson": "os1799",
+      "title": "KMSAN task 생성과 runtime 진입의 짝",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 33,
+        "end": 58,
+        "anchor": "kmsan_task_create"
+      }
+    },
+    {
+      "planned_lesson": "os1800",
+      "title": "KMSAN task 종료에서 current 상태를 억제하는 이유",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "kmsan_task_exit"
+      }
+    },
+    {
+      "planned_lesson": "os1801",
+      "title": "KMSAN slab 할당과 영 초기화 플래그",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 48,
+        "end": 73,
+        "anchor": "kmsan_slab_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os1802",
+      "title": "KMSAN constructor·RCU cache의 상태 보존",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 48,
+        "end": 73,
+        "anchor": "kmsan_slab_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os1803",
+      "title": "KMSAN slab 해제와 use-after-free origin",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 71,
+        "end": 96,
+        "anchor": "kmsan_slab_free"
+      }
+    },
+    {
+      "planned_lesson": "os1804",
+      "title": "KMSAN 큰 kmalloc 요청 길이와 추적",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 92,
+        "end": 117,
+        "anchor": "kmsan_kmalloc_large"
+      }
+    },
+    {
+      "planned_lesson": "os1805",
+      "title": "KMSAN 큰 할당 해제·head page와 경고 이후 흐름",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 108,
+        "end": 133,
+        "anchor": "kmsan_kfree_large"
+      }
+    },
+    {
+      "planned_lesson": "os1806",
+      "title": "KMSAN 평행 주소 변환·shadow와 origin",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 124,
+        "end": 149,
+        "anchor": "vmalloc_shadow"
+      }
+    },
+    {
+      "planned_lesson": "os1807",
+      "title": "KMSAN vunmap의 두 metadata 범위와 flush 책임",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 136,
+        "end": 161,
+        "anchor": "kmsan_vunmap_range_noflush"
+      }
+    },
+    {
+      "planned_lesson": "os1808",
+      "title": "KMSAN ioremap의 새 metadata와 물리 주소 인자",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "kmsan_ioremap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1809",
+      "title": "KMSAN ioremap 할당 order와 mapping 크기",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "kmsan_ioremap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1810",
+      "title": "KMSAN ioremap 소유권 이동과 NULL 표시",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "kmsan_ioremap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1811",
+      "title": "KMSAN ioremap 첫 실패와 clean 변수의 실제 분기",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "kmsan_ioremap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1812",
+      "title": "KMSAN ioremap 뒤쪽 실패·현재 자원과 이전 mapping",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "kmsan_ioremap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1813",
+      "title": "KMSAN iounmap 조회와 나머지 구간 제거의 순서",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 219,
+        "end": 244,
+        "anchor": "kmsan_iounmap_page_range"
+      }
+    },
+    {
+      "planned_lesson": "os1814",
+      "title": "KMSAN copy_to_user 실제 복사량과 잔여 길이",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 248,
+        "end": 273,
+        "anchor": "kmsan_copy_to_user"
+      }
+    },
+    {
+      "planned_lesson": "os1815",
+      "title": "KMSAN copy_to_user 사용자 검사와 compat metadata 복사",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 248,
+        "end": 273,
+        "anchor": "kmsan_copy_to_user"
+      }
+    },
+    {
+      "planned_lesson": "os1816",
+      "title": "KMSAN memmove hook과 실제 데이터 복사의 분담",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 287,
+        "end": 312,
+        "anchor": "kmsan_memmove"
+      }
+    },
+    {
+      "planned_lesson": "os1817",
+      "title": "KMSAN USB URB 출력·입력의 추적 방향",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 299,
+        "end": 324,
+        "anchor": "kmsan_handle_urb"
+      }
+    },
+    {
+      "planned_lesson": "os1818",
+      "title": "KMSAN DMA 네 방향과 양방향 처리 순서",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 315,
+        "end": 340,
+        "anchor": "kmsan_handle_dma_page"
+      }
+    },
+    {
+      "planned_lesson": "os1819",
+      "title": "KMSAN DMA highmem 제외와 주소 계산",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 339,
+        "end": 364,
+        "anchor": "kmsan_handle_dma"
+      }
+    },
+    {
+      "planned_lesson": "os1820",
+      "title": "KMSAN DMA 페이지 분할과 반복 종료 원리",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 339,
+        "end": 364,
+        "anchor": "kmsan_handle_dma"
+      }
+    },
+    {
+      "planned_lesson": "os1821",
+      "title": "KMSAN scatter-gather 순회와 비연속 항목",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 361,
+        "end": 386,
+        "anchor": "kmsan_handle_dma_sg"
+      }
+    },
+    {
+      "planned_lesson": "os1822",
+      "title": "KMSAN 공개 poison과 origin 할당의 재진입 위험",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 379,
+        "end": 404,
+        "anchor": "kmsan_poison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1823",
+      "title": "KMSAN 공개 unpoison의 runtime 허용과 접근 복구",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 395,
+        "end": 420,
+        "anchor": "kmsan_unpoison_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1824",
+      "title": "KMSAN IRQ entry register의 구조체 크기 전달",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 413,
+        "end": 438,
+        "anchor": "kmsan_unpoison_entry_regs"
+      }
+    },
+    {
+      "planned_lesson": "os1825",
+      "title": "KMSAN 공개 memory 검사와 보고 이유",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 418,
+        "end": 439,
+        "anchor": "kmsan_check_memory"
+      }
+    },
+    {
+      "planned_lesson": "os1826",
+      "title": "KMSAN current depth 중첩과 enable의 감소",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 427,
+        "end": 439,
+        "anchor": "kmsan_enable_current"
+      }
+    },
+    {
+      "planned_lesson": "os1827",
+      "title": "KMSAN depth 경고와 unsigned 경계의 실제 결과",
+      "path": "mm/kmsan/hooks.c",
+      "excerpt": {
+        "start": 434,
+        "end": 439,
+        "anchor": "kmsan_disable_current"
+      }
+    }
+  ]
+}

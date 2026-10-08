@@ -1,0 +1,149 @@
+{
+  "include/linux/rcu_sync.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 53,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1430",
+        "symbols": [
+          "rcu_sync"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1431",
+        "symbols": [
+          "rcu_sync_is_idle"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      }
+    ]
+  },
+  "kernel/rcu/sync.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 190,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1432",
+        "symbols": [
+          "rcu_sync_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1433",
+        "symbols": [
+          "rcu_sync_call"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1434",
+        "symbols": [
+          "rcu_sync_enter"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1435",
+        "symbols": [
+          "rcu_sync_enter"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1436",
+        "symbols": [
+          "rcu_sync_func"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1437",
+        "symbols": [
+          "rcu_sync_exit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1438",
+        "symbols": [
+          "rcu_sync_func"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1439",
+        "symbols": [
+          "rcu_sync_func"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      },
+      {
+        "lesson": "os1440",
+        "symbols": [
+          "rcu_sync_dtor"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole RCU-sync header/body read/authored: updater gp_count vsstate andactualreadcounts/fiveenumstates/rsslockalias/gpwait-cbhead/include/staticinit+runtimezero+queueinit/forwarddeclarations,RCU-readflavor idlecondition/READONCE noautolock,call_rcu_hurry deferredqueue-lifetime,firstIDLEtoENTER count++ unlockirq then synchronizeRCU+directfunc PASSED (notspinheldGPwait),joined enter waitstate>=PASSED/shareGP andnotwriterexclusion,callbackcontainer+warning/countpositivepriority PASSED+wake,exitcounts lastPASSED-toEXITqueue/EXITtoREPLAY/REPLAYfutureGP/oldcallbacknewupdater PASSED/finalIDLE fastpathpermission notfree,dtor active-usewarnings/REPLAYtoEXIT preventextraqueue/rcubarrier callbackcompletion lifetime vsnotguaranteednewGP. Barriercontract cross-read actualkernel/rcu/tree.c doc4544..4550 (notwhole tree review). Exactfullheaders/body serialspin/IRQ/GP/callbackqueue/warn model60014assertions each optimized+ASanUBSan:10000nestedenter-exitcounts/stateGPsharing/oldcallbackenter+exit replay-requeue thenidle/oldcallbacknewactivePASSED/newexitqueue/dtorREPLAYbarrierflatten/IDLEdtornosync/ENTERjoin manuallymodeledinprogressGP/idleRCUcontextwarning. Not actualRCUconcurrency/scheduler/allflavors/LKMM/realGPtimingproof; warningconditions notactual once-onlyemission; sourceunchanged."
+      }
+    ]
+  }
+}

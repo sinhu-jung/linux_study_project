@@ -1,0 +1,146 @@
+{
+  "include/linux/rbtree.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 401,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os898",
+        "symbols": [
+          "RB_EMPTY_NODE",
+          "RB_CLEAR_NODE",
+          "RB_EMPTY_ROOT",
+          "rb_entry_safe",
+          "rb_parent",
+          "rb_entry"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "부모 접근",
+          "단일 평가"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os899",
+        "symbols": [
+          "rb_link_node",
+          "rb_link_node_rcu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "포인터의 포인터",
+          "재삽입"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os900",
+        "symbols": [
+          "rbtree_postorder_for_each_entry_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "NULL 변환",
+          "수거와 제거"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os901",
+        "symbols": [
+          "rb_erase_cached",
+          "rb_first_cached",
+          "rb_insert_color_cached",
+          "rb_replace_node_cached"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "O(1)의 비용",
+          "대칭 캐시 없음"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os902",
+        "symbols": [
+          "rb_add_cached",
+          "rb_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "호출 순서",
+          "캐시 반환"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os903",
+        "symbols": [
+          "rb_find_add",
+          "rb_find_add_rcu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "비교 형식",
+          "RCU 회전"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os904",
+        "symbols": [
+          "rb_find_rcu",
+          "rb_find"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "루트 관찰",
+          "일치 선택"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os905",
+        "symbols": [
+          "rb_find_first",
+          "rb_next_match",
+          "rb_for_each"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "일반 find와 차이",
+          "순회 비용"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      },
+      {
+        "lesson": "os906",
+        "symbols": [
+          "rb_find"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "선언 범위",
+          "동시성 책임"
+        ],
+        "review": "All four original RB source/header files read, no top-level functions/macros excluded: representation/tags/roots, every mirrored insert3+erase4fixup, parent/child/RCU publication, erase0/1children and direct/deep successor, dummy and augmented entrypoints, generic/MAX callbacks, cached return contracts, all search conventions/duplicate/RCU false-negative contracts, entry/empty markers, sorted/postorder/safe lifecycle. Individually authored two worked questions per lesson. Actual original sequential userspace RB/augmentation tested, kernel RCU concurrency/graceperiod/performance explicitly excluded."
+      }
+    ]
+  }
+}

@@ -1,0 +1,386 @@
+{
+  "draft_lessons": 38,
+  "questions": 76,
+  "anchors": [
+    {
+      "planned_lesson": "os1888",
+      "title": "Stack depot 중복 제거·같은 호출 경로를 공유한다",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 674,
+        "end": 700,
+        "anchor": "stack_depot_save"
+      }
+    },
+    {
+      "planned_lesson": "os1889",
+      "title": "Stack depot 초기화 선택·compile·early·late",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 189,
+        "end": 214,
+        "anchor": "stack_depot_init"
+      }
+    },
+    {
+      "planned_lesson": "os1890",
+      "title": "Stack depot boot 비활성 parameter와 bool 변환",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 98,
+        "end": 123,
+        "anchor": "disable_stack_depot"
+      }
+    },
+    {
+      "planned_lesson": "os1891",
+      "title": "Stack depot early request 경고와 실제 설정 변경",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 104,
+        "end": 129,
+        "anchor": "stack_depot_request_early_init"
+      }
+    },
+    {
+      "planned_lesson": "os1892",
+      "title": "Stack depot early init 한 번과 장애 비활성화",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 122,
+        "end": 147,
+        "anchor": "stack_depot_early_init"
+      }
+    },
+    {
+      "planned_lesson": "os1893",
+      "title": "Stack depot early hash table와 mask의 원소 수",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 113,
+        "end": 138,
+        "anchor": "init_stack_table"
+      }
+    },
+    {
+      "planned_lesson": "os1894",
+      "title": "Stack depot late init mutex와 재호출",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 189,
+        "end": 214,
+        "anchor": "stack_depot_init"
+      }
+    },
+    {
+      "planned_lesson": "os1895",
+      "title": "Stack depot bucket 크기·메모리 규모와 상하한",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 189,
+        "end": 214,
+        "anchor": "stack_depot_init"
+      }
+    },
+    {
+      "planned_lesson": "os1896",
+      "title": "Stack depot pool 배열과 0handle 회피",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 310,
+        "end": 335,
+        "anchor": "depot_pop_free_pool"
+      }
+    },
+    {
+      "planned_lesson": "os1897",
+      "title": "Stack depot 새 pool 전환과 미리 확보한 자원",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 244,
+        "end": 275,
+        "anchor": "depot_init_pool"
+      }
+    },
+    {
+      "planned_lesson": "os1898",
+      "title": "Stack depot pool 용량 제한과 prealloc 보존",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 244,
+        "end": 275,
+        "anchor": "depot_init_pool"
+      }
+    },
+    {
+      "planned_lesson": "os1899",
+      "title": "Stack depot 남은 prealloc cache와 해제 책임",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 291,
+        "end": 316,
+        "anchor": "depot_keep_new_pool"
+      }
+    },
+    {
+      "planned_lesson": "os1900",
+      "title": "Stack depot record 크기와16byte 정렬",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 369,
+        "end": 394,
+        "anchor": "depot_stack_record_size"
+      }
+    },
+    {
+      "planned_lesson": "os1901",
+      "title": "Stack depot freelist FIFO와 RCU cookie 재사용",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 344,
+        "end": 369,
+        "anchor": "depot_pop_free"
+      }
+    },
+    {
+      "planned_lesson": "os1902",
+      "title": "Stack depot allocation·영구 기록과 참조 기록",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 381,
+        "end": 406,
+        "anchor": "depot_alloc_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1903",
+      "title": "Stack depot 긴 입력의 저장 truncation과 dedup 경계",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 381,
+        "end": 406,
+        "anchor": "depot_alloc_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1904",
+      "title": "Stack depot fetch의 pool 해석과 count0 거부",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 439,
+        "end": 464,
+        "anchor": "depot_fetch_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1905",
+      "title": "Stack depot put의 hash 제거·union과 cookie",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 468,
+        "end": 493,
+        "anchor": "depot_free_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1906",
+      "title": "Stack depot hash 입력과 jhash helper 범위",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 512,
+        "end": 537,
+        "anchor": "hash_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1907",
+      "title": "Stack depot private memcmp·동등성만 필요한 비교",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 524,
+        "end": 549,
+        "anchor": "stackdepot_memcmp"
+      }
+    },
+    {
+      "planned_lesson": "os1908",
+      "title": "Stack depot find·hash·size·frames·참조 확보",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 535,
+        "end": 560,
+        "anchor": "find_stack"
+      }
+    },
+    {
+      "planned_lesson": "os1909",
+      "title": "Stack depot save flag 유효성·interrupt stack 필터",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 584,
+        "end": 609,
+        "anchor": "stack_depot_save_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1910",
+      "title": "Stack depot 빠른 검색과 잠금 밖 preallocation",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 584,
+        "end": 609,
+        "anchor": "stack_depot_save_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1911",
+      "title": "Stack depot 잠금 안의 재검색과 중복 삽입 방지",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 584,
+        "end": 609,
+        "anchor": "stack_depot_save_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1912",
+      "title": "Stack depot 기본 save와 참조 정책의 구분",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 674,
+        "end": 700,
+        "anchor": "stack_depot_save"
+      }
+    },
+    {
+      "planned_lesson": "os1913",
+      "title": "Stack depot 공개 fetch·out pointer 초기화와 borrowed 배열",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 691,
+        "end": 716,
+        "anchor": "stack_depot_fetch"
+      }
+    },
+    {
+      "planned_lesson": "os1914",
+      "title": "Stack depot 내부 record getter의0처리",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 683,
+        "end": 710,
+        "anchor": "__stack_depot_get_stack_record"
+      }
+    },
+    {
+      "planned_lesson": "os1915",
+      "title": "Stack depot put 균형과 마지막 참조 해제",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 719,
+        "end": 744,
+        "anchor": "stack_depot_put"
+      }
+    },
+    {
+      "planned_lesson": "os1916",
+      "title": "Stack depot handle 재사용과 generation 없는 식별자",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 719,
+        "end": 744,
+        "anchor": "stack_depot_put"
+      }
+    },
+    {
+      "planned_lesson": "os1917",
+      "title": "Stack depot 출력 wrapper와 빈 기록",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 739,
+        "end": 764,
+        "anchor": "stack_depot_print"
+      }
+    },
+    {
+      "planned_lesson": "os1918",
+      "title": "Stack depot extra5bit와 bitfield truncation",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 762,
+        "end": 789,
+        "anchor": "stack_depot_set_extra_bits"
+      }
+    },
+    {
+      "planned_lesson": "os1919",
+      "title": "Stack depot debug 통계와 근사 snapshot",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 784,
+        "end": 809,
+        "anchor": "stats_show"
+      }
+    },
+    {
+      "planned_lesson": "os1920",
+      "title": "Stack depot debugfs 초기화와 읽기 권한",
+      "path": "lib/stackdepot.c",
+      "excerpt": {
+        "start": 798,
+        "end": 809,
+        "anchor": "depot_debugfs_init"
+      }
+    },
+    {
+      "planned_lesson": "os1921",
+      "title": "Stack depot header·handle bit수와 pool 단위",
+      "path": "include/linux/stackdepot.h",
+      "excerpt": {
+        "start": 53,
+        "end": 78,
+        "anchor": "stack_record"
+      }
+    },
+    {
+      "planned_lesson": "os1922",
+      "title": "Stack depot header·record union의 수명 불변식",
+      "path": "include/linux/stackdepot.h",
+      "excerpt": {
+        "start": 53,
+        "end": 78,
+        "anchor": "stack_record"
+      }
+    },
+    {
+      "planned_lesson": "os1923",
+      "title": "Stack depot CAN_ALLOC·GET 두 flag의 독립 목적",
+      "path": "include/linux/stackdepot.h",
+      "excerpt": {
+        "start": 157,
+        "end": 188,
+        "anchor": "stack_depot_save_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1924",
+      "title": "Stack depot 문서 Context와 실제 allocation 분기",
+      "path": "include/linux/stackdepot.h",
+      "excerpt": {
+        "start": 157,
+        "end": 188,
+        "anchor": "stack_depot_save_flags"
+      }
+    },
+    {
+      "planned_lesson": "os1925",
+      "title": "Stack depot put 문서의 과거 evict 이름",
+      "path": "include/linux/stackdepot.h",
+      "excerpt": {
+        "start": 232,
+        "end": 257,
+        "anchor": "stack_depot_put"
+      }
+    }
+  ]
+}

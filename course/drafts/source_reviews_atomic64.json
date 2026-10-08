@@ -1,0 +1,195 @@
+{
+  "include/asm-generic/atomic64.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 75,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1533",
+        "symbols": [
+          "ATOMIC64_INIT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1547",
+        "symbols": [
+          "ATOMIC64_OP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      }
+    ],
+    "fixture": "data/source_checks/source-atomic64-harness-manifest.json"
+  },
+  "lib/atomic64.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 189,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1534",
+        "symbols": [
+          "lock_addr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1535",
+        "symbols": [
+          "lock_addr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1536",
+        "symbols": [
+          "generic_atomic64_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1537",
+        "symbols": [
+          "generic_atomic64_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1538",
+        "symbols": [
+          "ATOMIC64_OP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1539",
+        "symbols": [
+          "ATOMIC64_OP_RETURN"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1540",
+        "symbols": [
+          "ATOMIC64_FETCH_OP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1541",
+        "symbols": [
+          "ATOMIC64_OPS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1542",
+        "symbols": [
+          "generic_atomic64_dec_if_positive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1543",
+        "symbols": [
+          "generic_atomic64_cmpxchg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1544",
+        "symbols": [
+          "generic_atomic64_xchg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1545",
+        "symbols": [
+          "generic_atomic64_fetch_add_unless"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      },
+      {
+        "lesson": "os1546",
+        "symbols": [
+          "ATOMIC64_OP_RETURN"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full generic atomic64 header and C implementation read/authored: s64 single-field storage/init, backend scope, 16 hashed raw locks/cacheline padded union and address mixing/collision vs storage distinction, irqsave read/set snapshots and read+set not atomic composition, void/post-update/pre-update macro templates, add/sub three forms vs bitwise two after redefinition, unsigned-oracle GNU-wrap arithmetic and dec_if_positive computed-result boundary vs refcount, cmpxchg old-value success equality, unconditional xchg, fetch_add_unless old-value forbidden test, header extern generation/undef/arch aliases including set_release. Full original bodies executed unchanged with explicit pthread mutex/TLS IRQ models, four cacheline64/128 optimized/sanitized GNU -fwrapv configurations each560034 assertions plus40000 distinct threaded fetch results. No native32/kernel spin/IRQ/LKMM/other backend or performance proof. Makefile998 compiler option cross-read only, not whole-file review."
+      }
+    ],
+    "fixture": "data/source_checks/source-atomic64-harness-manifest.json"
+  }
+}

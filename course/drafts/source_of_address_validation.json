@@ -1,0 +1,426 @@
+{
+  "draft_lessons": 42,
+  "questions": 84,
+  "anchors": [
+    {
+      "planned_lesson": "os2614",
+      "title": "OF 주소 bus interface·함수 pointer 전략",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "of_bus"
+      }
+    },
+    {
+      "planned_lesson": "os2615",
+      "title": "OF 기본 cell 수·parent 규칙 위임",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 57,
+        "end": 82,
+        "anchor": "of_bus_default_count_cells"
+      }
+    },
+    {
+      "planned_lesson": "os2616",
+      "title": "OF 기본 range map·half-open구간과offset",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 66,
+        "end": 91,
+        "anchor": "of_bus_default_map"
+      }
+    },
+    {
+      "planned_lesson": "os2617",
+      "title": "OF 기본 주소 translate·낮은64bit작성",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 82,
+        "end": 107,
+        "anchor": "of_bus_default_translate"
+      }
+    },
+    {
+      "planned_lesson": "os2618",
+      "title": "OF 기본 flags·메모리와명시flagcell",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 94,
+        "end": 119,
+        "anchor": "of_bus_default_flags_get_flags"
+      }
+    },
+    {
+      "planned_lesson": "os2619",
+      "title": "OF default-flags map·동일flag조건",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 104,
+        "end": 129,
+        "anchor": "of_bus_default_flags_map"
+      }
+    },
+    {
+      "planned_lesson": "os2620",
+      "title": "OF default-flags translate·첫cell보존",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 114,
+        "end": 139,
+        "anchor": "of_bus_default_flags_translate"
+      }
+    },
+    {
+      "planned_lesson": "os2621",
+      "title": "OF PCI 주소flag·IO MEM64 prefetch",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 121,
+        "end": 148,
+        "anchor": "of_bus_pci_get_flags"
+      }
+    },
+    {
+      "planned_lesson": "os2622",
+      "title": "OF PCI bus선택·type와pcie이름fallback",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 160,
+        "end": 185,
+        "anchor": "of_bus_pci_match"
+      }
+    },
+    {
+      "planned_lesson": "os2623",
+      "title": "OF PCI cell폭·주소3크기2",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 175,
+        "end": 200,
+        "anchor": "of_bus_pci_count_cells"
+      }
+    },
+    {
+      "planned_lesson": "os2624",
+      "title": "OF PCI map·타입bit일치뒤offset",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 184,
+        "end": 209,
+        "anchor": "of_bus_pci_map"
+      }
+    },
+    {
+      "planned_lesson": "os2625",
+      "title": "OF resource bounds·inclusive끝과overflow",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 201,
+        "end": 232,
+        "anchor": "__of_address_resource_bounds"
+      }
+    },
+    {
+      "planned_lesson": "os2626",
+      "title": "OF PCI range resource·IO등록과PIOtoken",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 233,
+        "end": 258,
+        "anchor": "of_pci_range_to_resource"
+      }
+    },
+    {
+      "planned_lesson": "os2627",
+      "title": "OF PCI range실패·BAD표시와오류종류",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 233,
+        "end": 258,
+        "anchor": "of_pci_range_to_resource"
+      }
+    },
+    {
+      "planned_lesson": "os2628",
+      "title": "OF range index선택·parser순회",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 276,
+        "end": 301,
+        "anchor": "of_range_to_resource"
+      }
+    },
+    {
+      "planned_lesson": "os2629",
+      "title": "OF ISA 규약·이름cell폭과타입bit",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 312,
+        "end": 337,
+        "anchor": "of_bus_isa_map"
+      }
+    },
+    {
+      "planned_lesson": "os2630",
+      "title": "OF bus table우선순위·nullmatchfallback",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 391,
+        "end": 416,
+        "anchor": "of_match_bus"
+      }
+    },
+    {
+      "planned_lesson": "os2631",
+      "title": "OF missingranges quirk·PPC호환과cache",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 402,
+        "end": 427,
+        "anchor": "of_empty_ranges_quirk"
+      }
+    },
+    {
+      "planned_lesson": "os2632",
+      "title": "OF 한단계 변환·missing와empty ranges",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 422,
+        "end": 449,
+        "anchor": "of_translate_one"
+      }
+    },
+    {
+      "planned_lesson": "os2633",
+      "title": "OF 한단계 range검색·offset과parentbase",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 422,
+        "end": 449,
+        "anchor": "of_translate_one"
+      }
+    },
+    {
+      "planned_lesson": "os2634",
+      "title": "OF 계층 주소변환·parent상승과cell검사",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 501,
+        "end": 526,
+        "anchor": "__of_translate_address"
+      }
+    },
+    {
+      "planned_lesson": "os2635",
+      "title": "OF 계층 node참조·자동cleanup과소유권이동",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 501,
+        "end": 526,
+        "anchor": "__of_translate_address"
+      }
+    },
+    {
+      "planned_lesson": "os2636",
+      "title": "OF indirectPIO host·일반물리주소와구별",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 501,
+        "end": 526,
+        "anchor": "__of_translate_address"
+      }
+    },
+    {
+      "planned_lesson": "os2637",
+      "title": "OF DMA parent·interconnect dma-mem선택",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 603,
+        "end": 628,
+        "anchor": "__of_get_dma_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2638",
+      "title": "OF DMA 주소wrapper·dma-ranges와host거부",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 632,
+        "end": 657,
+        "anchor": "of_translate_dma_address"
+      }
+    },
+    {
+      "planned_lesson": "os2639",
+      "title": "OF DMA tuple읽기·선택output과다음cursor",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 658,
+        "end": 683,
+        "anchor": "of_translate_dma_region"
+      }
+    },
+    {
+      "planned_lesson": "os2640",
+      "title": "OF 주소entry 조회·index와PCI BAR",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 687,
+        "end": 712,
+        "anchor": "__of_get_address"
+      }
+    },
+    {
+      "planned_lesson": "os2641",
+      "title": "OF untranslated reg읽기·물리변환과구별",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 741,
+        "end": 766,
+        "anchor": "of_property_read_reg"
+      }
+    },
+    {
+      "planned_lesson": "os2642",
+      "title": "OF range parser준비·주소폭과끝pointer",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 754,
+        "end": 779,
+        "anchor": "parser_init"
+      }
+    },
+    {
+      "planned_lesson": "os2643",
+      "title": "OF range parser한entry·주소변환과size",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 790,
+        "end": 815,
+        "anchor": "of_pci_range_parser_one"
+      }
+    },
+    {
+      "planned_lesson": "os2644",
+      "title": "OF 연속range합치기·두주소와동일flags",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 790,
+        "end": 815,
+        "anchor": "of_pci_range_parser_one"
+      }
+    },
+    {
+      "planned_lesson": "os2645",
+      "title": "OF IOport변환·host와memory-mapped경로",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 847,
+        "end": 887,
+        "anchor": "of_translate_ioport"
+      }
+    },
+    {
+      "planned_lesson": "os2646",
+      "title": "OF DMA range탐색·empty와부재정책",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 888,
+        "end": 913,
+        "anchor": "of_dma_get_range"
+      }
+    },
+    {
+      "planned_lesson": "os2647",
+      "title": "OF DMA map배열·두pass와zero sentinel",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 888,
+        "end": 913,
+        "anchor": "of_dma_get_range"
+      }
+    },
+    {
+      "planned_lesson": "os2648",
+      "title": "OF DMA 최대CPU주소·subtree최소제약",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 963,
+        "end": 988,
+        "anchor": "of_dma_get_max_cpu_address"
+      }
+    },
+    {
+      "planned_lesson": "os2649",
+      "title": "OF DMA coherence·ancestor정책과기본값",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1006,
+        "end": 1032,
+        "anchor": "of_dma_is_coherent"
+      }
+    },
+    {
+      "planned_lesson": "os2650",
+      "title": "OF MMIO nonposted·Apple설정과parent속성",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1033,
+        "end": 1058,
+        "anchor": "of_mmio_is_nonposted"
+      }
+    },
+    {
+      "planned_lesson": "os2651",
+      "title": "OF 주소resource작성·flags경로와이름",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1045,
+        "end": 1070,
+        "anchor": "__of_address_to_resource"
+      }
+    },
+    {
+      "planned_lesson": "os2652",
+      "title": "OF 공개resource wrapper·index와BAR의분리",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1102,
+        "end": 1127,
+        "anchor": "of_pci_address_to_resource"
+      }
+    },
+    {
+      "planned_lesson": "os2653",
+      "title": "OF iomap·resource와선택mapping",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1120,
+        "end": 1147,
+        "anchor": "of_iomap"
+      }
+    },
+    {
+      "planned_lesson": "os2654",
+      "title": "OF IO request+map·ERR_PTR와자원예약",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1148,
+        "end": 1173,
+        "anchor": "of_io_request_and_map"
+      }
+    },
+    {
+      "planned_lesson": "os2655",
+      "title": "OF IO mapping실패정리·예약반납",
+      "path": "drivers/of/address.c",
+      "excerpt": {
+        "start": 1148,
+        "end": 1173,
+        "anchor": "of_io_request_and_map"
+      }
+    }
+  ]
+}

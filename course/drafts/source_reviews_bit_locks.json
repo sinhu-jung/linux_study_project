@@ -1,0 +1,162 @@
+{
+  "include/linux/bit_spinlock.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 101,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1374",
+        "symbols": [
+          "bit_spin_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1375",
+        "symbols": [
+          "bit_spin_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1376",
+        "symbols": [
+          "bit_spin_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1377",
+        "symbols": [
+          "bit_spin_unlock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1378",
+        "symbols": [
+          "__bit_spin_unlock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1379",
+        "symbols": [
+          "bit_spin_is_locked"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      }
+    ]
+  },
+  "include/asm-generic/bitops/lock.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 82,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1380",
+        "symbols": [
+          "arch_test_and_set_bit_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1381",
+        "symbols": [
+          "arch_clear_bit_unlock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1382",
+        "symbols": [
+          "arch___clear_bit_unlock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      },
+      {
+        "lesson": "os1383",
+        "symbols": [
+          "arch_xor_unlock_is_negative_byte"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      }
+    ]
+  },
+  "include/asm-generic/bitops/instrumented-lock.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 82,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1384",
+        "symbols": [
+          "test_and_set_bit_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole three bit lock headers read/authored: bitstate/vsnormalspinlock documented performance caution,preempt disable acquisition and contended enable/read-relax/disable-atomicretry,trylock successbool vsoldbit and nestedfailuredepth restoration,debugBUG unheldunlock,release-before-enable/analysis annotations,weakunlock allwordflag protection/staleword clobber model,UP/SMP/DEBUG/PREEMPT_COUNT islocked distinctions vsownership,nr word+mask,READONCE fastpath vsatomicrace,successacquire/atomicANDNOTrelease/weakerload-and-release-store,lowbyte XOR oldbit7waiters/publicmask0..6 vswordsign,architectureoverride condition,instrumentation hooks/address+size and atomic-vsgeneralwrite/KCSANrelease. Originalthreeheaders modeled GNU atomics/acquire-release/preemptTLS/countinstrumentation sixconfig branches eachoptimized+ASanUBSan; assertions518/519/525, fourthreads100000protectedincrements inSMP/debugconfigs,exactbalancedpreempt/tryfailure/bit70word/outsidemask,all256lowbyteXOR/oldwaiter/hookcounts,stale-read-storeclobber demonstration. ExpectedDEBUGunheldunlock modeledBUG_ON abort exit134. Originalconditionalunusedparams warning onlydisabled; contextunusedsymbols annotations fixed. Not realkernelpreemption/scheduler/KCSAN/LKMM/allarchitecture execution. Genericweakstore atomicity distinctwholeRMW."
+      }
+    ]
+  }
+}

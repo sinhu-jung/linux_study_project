@@ -1,0 +1,123 @@
+{
+  "kernel/irq/debugfs.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 257,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2943",
+        "symbols": [
+          "irq_debug_show_bits"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "데이터 표로 반복을 단순화하기"
+        ],
+        "review": "IRQ 디버그 비트 출력: 숫자 상태를 이름 표와 대조하기. irq_debug_show_bits는 size개 설명 항목을 순회하면서 state & sd->mask가 0이 아니면 sd->name을 출력합니다. 매 반복마다 i와 설명 포인터 sd를 함께 증가시킵니다. internals.h의 BIT_MASK_DESCR(m)은 .mask=m, .name=#m인 구조체 초기값을 만듭니다. #m은 매크로 인자의 이름을 문자열로 바꾸는 C 전처리기 기능입니다. ind+12 폭의 빈 문자열을 먼저 출력해 들여쓰기를 만듭니다. 표에 없는 비트 이름을 자동으로 알아내는 함수는 아닙니다. 각 비트마다 if문을 따로 작성하는 대신 값과 이름의 작은 구조체 배열을 만들어 공통 순회 함수를 사용합니다. 출력 순서는 비트의 숫자순을 자동 계산한 것이 아니라 표에 적힌 순서입니다. 하나의 mask에 여러 비트가 들어 있으면 이 검사는 전부 포함이 아니라 하나라도 겹치는지를 판단합니다."
+      },
+      {
+        "lesson": "os2944",
+        "symbols": [
+          "irq_debug_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "표에 없으면 값이 사라지는가"
+        ],
+        "review": "IRQ 상태 표 네 종류: chip 기능과 현재 실행 상태 구별. irqchip_flags는 chip의 타입 변경 마스킹·EOI 처리·절전 마스킹·온라인/오프라인·wake 생략·oneshot·thread EOI·level MSI·NMI·절전 wake enable·immutable 기능을 이름으로 표시합니다. irqdata_states는 트리거, 활성화·시작·disable·mask·진행, CPU 배치와 이동, 관리형 상태, vCPU 전달, 깨우기, 문맥 강제 및 재전달 상태를 나열합니다. irqdesc_states는 probe·request·thread·autoenable 금지와 nested·per-CPU 식별·polled·unlazy·hidden 설정을, irqdesc_istates는 탐색·이상 중단·폴링·oneshot·replay·waiting·pending·절전·NMI 내부 상태를 담습니다. 각 출력은 원시 16진수 값과 알려진 이름들을 함께 제공합니다. 이름 표는 이 파일이 명시한 항목만 표시하므로 이름이 출력되지 않았다는 이유만으로 모든 미표시 비트가 0이라고 단정하면 안 됩니다. chip->flags는 unsigned long으로 원시 출력되고 이름 해석 helper의 state 인자는 unsigned int라는 형식 차이도 있습니다. 이름 표가 커널의 모든 플래그 정의를 자동 반영하는 구조는 아닙니다."
+      },
+      {
+        "lesson": "os2945",
+        "symbols": [
+          "irq_debug_show_masks"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "왜 출력 형식도 기술인가"
+        ],
+        "review": "IRQ affinity 출력: 빌드 설정에 따라 달라지는 세 집합. CONFIG_SMP에서는 일반 affinity를 affinity 줄에 출력합니다. CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK가 있으면 실제 집합을 effectiv 줄에, CONFIG_GENERIC_PENDING_IRQ가 있으면 pending_mask를 pending 줄에 출력합니다. %*pbl과 cpumask_pr_args는 CPU 비트 집합을 목록 형태로 출력하는 커널 형식입니다. SMP가 아닌 빌드에서는 같은 이름의 함수가 빈 본문이어서 이 정보들을 출력하지 않습니다. 줄의 부재와 빈 집합의 출력을 같은 상태로 해석하면 안 됩니다. CPU 수가 많을 때 비트를 16진수로만 읽는 것보다 0-3,6처럼 번호와 구간으로 보는 것이 쉽습니다. %pbl은 일반 사용자 공간 printf의 모든 구현에서 같은 뜻을 갖는 범용 C 형식이 아니라 커널의 bitmap 출력 확장입니다. 같은 코드를 일반 C 프로그램에 복사해 동일 결과를 기대하면 안 됩니다."
+      },
+      {
+        "lesson": "os2946",
+        "symbols": [
+          "irq_debug_show_chip"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "공통 부분과 개별 부분 연결하기"
+        ],
+        "review": "IRQ chip 출력: 선택적 콜백과 기본 이름의 분기. irq_debug_show_chip은 data->chip이 없으면 chip: None을 출력하고 반환합니다. chip이 있으면 irq_print_chip 콜백이 있는지 확인해 호출하고, 없으면 chip->name을 출력합니다. 그 뒤 flags 원시값을 16진수로 출력하고 irqchip_flags 표로 이름을 풉니다. 선택적 콜백을 쓰더라도 공통 flags 출력은 이어집니다. 콜백은 IRQ를 처리하는 handler가 아니라 현재 seq_file에 진단 문자열을 출력하기 위한 인터페이스입니다. 컨트롤러별 이름 표현만 콜백에 맡기고 flags 해석은 공통 함수가 수행합니다. 이런 구조는 모든 드라이버가 출력 전체를 복제하지 않으면서 특수 정보를 추가하게 합니다. 단, 출력 중 호출되는 콜백은 상위 irq_debug_show의 raw spinlock과 IRQ 비활성 문맥 안에서 실행되므로 임의로 잠드는 작업을 넣어도 되는 곳으로 해석하면 안 됩니다."
+      },
+      {
+        "lesson": "os2947",
+        "symbols": [
+          "irq_debug_show_data"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "재귀의 종료 조건과 자료구조 계약"
+        ],
+        "review": "IRQ domain 계층 출력: 부모 포인터를 따라가는 재귀. irq_debug_show_data는 domain 이름과 hwirq를 출력하고 chip 정보를 호출합니다. domain·ops·debug_show가 모두 있으면 도메인 전용 콜백도 호출합니다. CONFIG_IRQ_DOMAIN_HIERARCHY에서는 parent_data가 없으면 반환하고, 있으면 parent 표기 뒤 부모를 같은 함수에 넘기며 ind를 4 늘립니다. 설정이 꺼지면 부모 순회 코드는 없습니다. Linux IRQ 번호와 각 계층의 hwirq는 역할이 다르며 부모에서도 새로운 하드웨어 번호를 출력합니다. 함수가 자기 자신을 부르더라도 parent_data가 없는 노드에서 멈추므로 정상적인 부모 사슬은 유한하게 출력됩니다. 이 함수에는 방문한 노드를 저장해 순환을 탐지하는 집합이나 별도 깊이 상한이 없습니다. 부모 연결이 순환하지 않는 정상 IRQ 계층이라는 생성 경로의 계약에 의존합니다. 재귀 함수 자체가 모든 잘못된 그래프를 안전하게 처리한다고 설명하면 안 됩니다."
+      },
+      {
+        "lesson": "os2948",
+        "symbols": [
+          "irq_debug_open"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "출력 버퍼와 장치 데이터는 다르다"
+        ],
+        "review": "IRQ 진단 파일 읽기: single_open과 seq_file 연결. irq_debug_open은 single_open(file,irq_debug_show,inode->i_private)의 결과를 그대로 반환합니다. dfs_irq_ops는 open을 이 함수에, read를 seq_read, llseek를 seq_lseek, release를 single_release, write를 irq_debug_write에 연결합니다. irq_debug_show의 m->private에는 전달된 descriptor가 연결됩니다. show 함수는 raw_spin_lock_irq로 descriptor를 보호하며 handler·device·status·istate·disable depth·wake depth·irq_data 상태·NUMA node·mask·domain 정보를 출력한 뒤 잠금을 풀고 0입니다. seq_file은 커널이 순차적인 텍스트를 제공하도록 돕는 인터페이스이며 이 코드가 별도의 일반 디스크 파일에 영구 저장하는 것은 아닙니다. 파일을 다시 읽는 시점에는 IRQ 상태가 바뀌었을 수 있습니다. desc 잠금은 보호된 상태의 접근을 조율하지만 CPU마다 변하는 모든 외부 값까지 시스템 전체의 한 순간으로 정지시키는 전역 스냅샷은 아닙니다."
+      },
+      {
+        "lesson": "os2949",
+        "symbols": [
+          "irq_debug_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "복사 길이와 소비했다고 알리는 길이"
+        ],
+        "review": "IRQ debugfs 입력 길이: trigger 전체 단어만 검사하는 코드가 아니다. irq_debug_write는 8바이트 buf를 0으로 초기화하고 min(7,count)만큼 copy_from_user합니다. 복사가 완전하지 않으면 -EFAULT입니다. strncmp(buf,\"trigger\",size)가 0이면 irq_inject_interrupt를 호출하고 오류면 그 오류, 성공이면 원래 count를 반환합니다. 일치하지 않아도 count를 반환합니다. 비교 길이가 size이므로 \"t\"나 \"tri\" 같은 접두어도 일치하고, 7바이트보다 긴 \"triggerXYZ\"도 앞 7바이트가 같아 일치합니다. 이 함수에 count=0이 전달돼 도달하면 길이 0 비교도 일치합니다. ppos는 사용하지 않습니다. buf의 마지막 바이트를 0으로 남기려 최대 7바이트만 복사하지만 성공 경로는 size가 아니라 요청 count를 반환합니다. 따라서 긴 입력의 뒤쪽까지 모두 해석했다는 뜻은 아닙니다. 입력 부분 복사 실패도 남은 문자열을 억지로 해석하지 않고 EFAULT로 끝납니다. irq_inject_interrupt 자체의 진단 전용 계약과 실패 조건은 앞선 재전달 단원과 연결됩니다."
+      },
+      {
+        "lesson": "os2950",
+        "symbols": [
+          "irq_debugfs_copy_devname"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "왜 GFP_KERNEL도 알아야 하나"
+        ],
+        "review": "IRQ 장치 이름 복사: 문자열 소유권과 할당 실패. irq_debugfs_copy_devname은 IRQ 번호로 descriptor를 찾고 dev_name(dev)를 얻습니다. 이름이 있으면 kstrdup(name,GFP_KERNEL) 결과를 desc->dev_name에 저장합니다. kstrdup은 새 메모리를 할당해 문자열을 복사하며 실패하면 NULL일 수 있지만 이 함수는 오류를 반환하지 않습니다. 이름이 없으면 기존 값을 건드리지 않습니다. descriptor NULL 검사, 기존 문자열 해제, 반복 호출을 위한 교체 처리는 이 함수에 없으므로 유효한 객체와 올바른 호출 수명을 전제로 읽어야 합니다. GFP_KERNEL은 일반적으로 잠들 수 있는 할당 경로를 허용하는 플래그입니다. 앞의 irq_debug_show처럼 raw spinlock을 보유한 출력 구간과 이 이름 준비 함수를 같은 문맥에서 마음대로 호출할 수 있다고 생각하면 안 됩니다. 복사로 소유권을 분리했더라도 할당 실패와 마지막 해제는 여전히 관리해야 합니다."
+      },
+      {
+        "lesson": "os2951",
+        "symbols": [
+          "irq_add_debugfs_entry"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "생성 요청과 성공 보장의 차이"
+        ],
+        "review": "IRQ debugfs 생성: 초기 순회와 나중 등록의 공통 helper. irq_add_debugfs_entry는 irq_dir이 없거나 desc가 없거나 이미 debugfs_file이 있으면 반환합니다. 아니면 char name[10]에 IRQ 번호를 sprintf의 %d로 만들고 0644 파일을 생성하며 private 데이터로 desc, 연산 표로 dfs_irq_ops를 넘깁니다. irq_debugfs_init은 최상위 irq 디렉터리와 도메인 진단 항목, 그 아래 irqs 디렉터리를 만든 뒤 sparse 잠금 안에서 모든 active IRQ에 같은 helper를 호출합니다. __initcall이 초기화 함수를 부팅 경로에 연결하며 init의 반환은 항상 0입니다. 이 함수는 debugfs 생성 결과에 별도 IS_ERR 검사를 해 성공을 집계하지 않으므로 init의 0만으로 모든 파일이 실제 생성됐다고 단정할 수 없습니다. 이름 버퍼는 고정 크기이고 sprintf 자체는 크기 제한 인자를 받지 않으므로 임의의 unsigned int 전체 범위 문자열에 안전한 범용 포매터라고 설명하면 안 됩니다. 커널 IRQ 번호 범위와 기존 호출 계약 안에서 읽어야 합니다."
+      }
+    ]
+  }
+}

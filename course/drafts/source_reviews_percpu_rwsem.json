@@ -1,0 +1,226 @@
+{
+  "include/linux/percpu-rwsem.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 159,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1414",
+        "symbols": [
+          "percpu_rw_semaphore"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1416",
+        "symbols": [
+          "percpu_down_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1417",
+        "symbols": [
+          "percpu_down_read_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1420",
+        "symbols": [
+          "percpu_up_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1429",
+        "symbols": [
+          "percpu_down_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      }
+    ]
+  },
+  "kernel/locking/percpu-rwsem.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 287,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1415",
+        "symbols": [
+          "__percpu_init_rwsem"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1418",
+        "symbols": [
+          "__percpu_down_read_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1419",
+        "symbols": [
+          "__percpu_down_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1421",
+        "symbols": [
+          "per_cpu_sum"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1422",
+        "symbols": [
+          "percpu_is_read_locked"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1423",
+        "symbols": [
+          "readers_active_check"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1424",
+        "symbols": [
+          "__percpu_down_write_trylock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1425",
+        "symbols": [
+          "percpu_down_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1426",
+        "symbols": [
+          "percpu_up_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1427",
+        "symbols": [
+          "percpu_rwsem_wait"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      },
+      {
+        "lesson": "os1428",
+        "symbols": [
+          "percpu_rwsem_wake_function"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      }
+    ]
+  },
+  "Documentation/locking/percpu-rw-semaphore.rst": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 28,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1429",
+        "symbols": [],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole percpu rwsem header/body/docs read/authored: structure roles/rss/count/writerwait/waiters/block/debug/staticinitializers,initpercpu failure/freezero/dtor/null andclasskeys/annotations,fastreadshortpreempt+RCUsyncidle thenCSpreemptible,tryret/analysisonlysuccess,slowreadinc/mbA/acquireblock/rollbacksameCPU/writerwake,unconditionalwait temporarypreemptenable/tracerebalance,upreadfastdec vsmbBdec-writerwake,normalmigrationbetweenCPUs/unsignedindividualunderflow andmodularsum/activebound,diagnosticreadlocked includes!block falsewhileexistingreadersdrain/writequery notownership,readerscheck blockprecondition/zero/C-Bbarrier,writerreadfastcheck+xchg/D-A relation,rcusyncenter/block/drain+rcuwait/trace,upwrite releaseblock0/wake/delayedRCUfastpathrestore,actualwaittry+tailEXCLUSIVE/CUSTOMregisterserializedagainstunlockwake/uninterruptiblestate/privateNULLrelease-acquire/stackentrylifetime,callbacktaskrefs/listdelete/wake/readerreturn0budgetcontinuation/writer1/fail1stopping andwriterstealcomment/FIFOintent notall-schedulerfairnessproof,documentationcachelinebounce/fastreadvswriterRCUcost notfixedbenchmark. Selectedexactfunctions serialCPU/unsignedatomic/rcusync/wait/order/allocator models20015assertions eachoptimized+ASanUBSan:10000fastreadanddifferentCPUup/modularsum1+UINTMAX=0,slowacquire/failedtryrollback/wake/preemptbalance/modeledwaitresult,block+drainzero/writebusywaitresult/releasewake/rssstaysslow/diagnosticblock1active/allocfailure/freeNULLdtoronce. OriginalFIFOcallbacks/scheduler/waitloop/graceperiod/staticmacro/lockdep generation notexecuted; no LKMM/concurrentorderingproof. Fixtureloopindentation repaired; originalunusedparameter warnings onlyexcluded/sourceunchanged."
+      }
+    ]
+  }
+}

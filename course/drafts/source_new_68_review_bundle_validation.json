@@ -1,0 +1,686 @@
+{
+  "draft_lessons": 68,
+  "questions": 136,
+  "anchors": [
+    {
+      "planned_lesson": "os784",
+      "title": "Bitmap 사용자 입력·복사와 Parser 수명",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 24,
+        "end": 57,
+        "anchor": "bitmap_parse_user"
+      }
+    },
+    {
+      "planned_lesson": "os785",
+      "title": "Bitmap Page 출력·남은 공간과 실제 길이",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 58,
+        "end": 83,
+        "anchor": "bitmap_print_to_pagebuf"
+      }
+    },
+    {
+      "planned_lesson": "os786",
+      "title": "Bitmap Bin Attribute·문자열 Byte Slice",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 79,
+        "end": 179,
+        "anchor": "bitmap_print_to_buf"
+      }
+    },
+    {
+      "planned_lesson": "os787",
+      "title": "Bitmap Region·반복 구간과 마지막 부분 그룹",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 220,
+        "end": 245,
+        "anchor": "bitmap_set_region"
+      }
+    },
+    {
+      "planned_lesson": "os788",
+      "title": "Bitmap Region 검사·문법과 범위 오류",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 228,
+        "end": 253,
+        "anchor": "bitmap_check_region"
+      }
+    },
+    {
+      "planned_lesson": "os789",
+      "title": "Bitmap 숫자 Token·N과 Decimal Overflow",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 239,
+        "end": 264,
+        "anchor": "bitmap_getnum"
+      }
+    },
+    {
+      "planned_lesson": "os790",
+      "title": "Bitmap 구분자·Forward Reverse와 Newline 종료",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 279,
+        "end": 304,
+        "anchor": "bitmap_find_region"
+      }
+    },
+    {
+      "planned_lesson": "os791",
+      "title": "Bitmap List 문법·All Range와 반복 Pattern",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 295,
+        "end": 320,
+        "anchor": "bitmap_parse_region"
+      }
+    },
+    {
+      "planned_lesson": "os792",
+      "title": "Bitmap List 적용·실패 뒤 부분 결과",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 374,
+        "end": 399,
+        "anchor": "bitmap_parselist"
+      }
+    },
+    {
+      "planned_lesson": "os793",
+      "title": "Bitmap Hex Chunk·역방향 Nibble과32bit 폭",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 433,
+        "end": 472,
+        "anchor": "bitmap_get_x32_reverse"
+      }
+    },
+    {
+      "planned_lesson": "os794",
+      "title": "Bitmap Hex Parser·낮은 Chunk와 Endian 배치",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 473,
+        "end": 498,
+        "anchor": "bitmap_parse"
+      }
+    },
+    {
+      "planned_lesson": "os795",
+      "title": "Bitmap Hex 완료 검사·미사용 Chunk와 부분 오류",
+      "path": "lib/bitmap-str.c",
+      "excerpt": {
+        "start": 473,
+        "end": 498,
+        "anchor": "bitmap_parse"
+      }
+    },
+    {
+      "planned_lesson": "os796",
+      "title": "CPU Mask Wrap·한 바퀴 순회와 시작점",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 22,
+        "end": 59,
+        "anchor": "cpumask_next_wrap"
+      }
+    },
+    {
+      "planned_lesson": "os797",
+      "title": "CPU Mask Offstack·CONFIG에 따른 저장 수명",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 60,
+        "end": 85,
+        "anchor": "alloc_cpumask_var_node"
+      }
+    },
+    {
+      "planned_lesson": "os798",
+      "title": "CPU Mask Bootmem·초기 할당 실패의 Panic",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 84,
+        "end": 109,
+        "anchor": "alloc_bootmem_cpumask_var"
+      }
+    },
+    {
+      "planned_lesson": "os799",
+      "title": "CPU Local Spread·NUMA 거리와 순번 Modulo",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 143,
+        "end": 168,
+        "anchor": "cpumask_local_spread"
+      }
+    },
+    {
+      "planned_lesson": "os800",
+      "title": "CPU 교집합 분배·Per CPU 이전 선택",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 169,
+        "end": 194,
+        "anchor": "cpumask_any_and_distribute"
+      }
+    },
+    {
+      "planned_lesson": "os801",
+      "title": "CPU 단일 Mask 분배·교집합 함수와 공유 Cursor",
+      "path": "lib/cpumask.c",
+      "excerpt": {
+        "start": 192,
+        "end": 204,
+        "anchor": "cpumask_any_distribute"
+      }
+    },
+    {
+      "planned_lesson": "os802",
+      "title": "Bit Search First·비어 있는 Word 건너뛰기",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 99,
+        "end": 124,
+        "anchor": "_find_first_bit"
+      }
+    },
+    {
+      "planned_lesson": "os803",
+      "title": "Bit First 교집합·FETCH 식으로 필터 결합",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 122,
+        "end": 147,
+        "anchor": "_find_first_and_and_bit"
+      }
+    },
+    {
+      "planned_lesson": "os804",
+      "title": "Bit Next·시작 Word Mask와 유효 끝",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 143,
+        "end": 168,
+        "anchor": "_find_next_bit"
+      }
+    },
+    {
+      "planned_lesson": "os805",
+      "title": "Bit Next 결합·AND ANDNOT OR 후보",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 189,
+        "end": 214,
+        "anchor": "_find_next_andnot_bit"
+      }
+    },
+    {
+      "planned_lesson": "os806",
+      "title": "Bit Nth·Popcount로 순번 Word 찾기",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 150,
+        "end": 175,
+        "anchor": "__find_nth_bit"
+      }
+    },
+    {
+      "planned_lesson": "os807",
+      "title": "Bit Nth 필터·교집합 순번과 차집합",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 170,
+        "end": 195,
+        "anchor": "__find_nth_and_andnot_bit"
+      }
+    },
+    {
+      "planned_lesson": "os808",
+      "title": "Bit Last·뒤에서 탐색과 마지막 Mask",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 216,
+        "end": 241,
+        "anchor": "_find_last_bit"
+      }
+    },
+    {
+      "planned_lesson": "os809",
+      "title": "Bit Clump8·발견 위치를8bit 경계로",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 235,
+        "end": 260,
+        "anchor": "find_next_clump8"
+      }
+    },
+    {
+      "planned_lesson": "os810",
+      "title": "Bit LE 탐색·Byte Swap과시작Mask 변환",
+      "path": "lib/find_bit.c",
+      "excerpt": {
+        "start": 273,
+        "end": 282,
+        "anchor": "_find_next_bit_le"
+      }
+    },
+    {
+      "planned_lesson": "os811",
+      "title": "Software Popcount32·병렬 작은 Counter 합치기",
+      "path": "lib/hweight.c",
+      "excerpt": {
+        "start": 13,
+        "end": 38,
+        "anchor": "__sw_hweight32"
+      }
+    },
+    {
+      "planned_lesson": "os812",
+      "title": "Software Popcount8·16과 낮은 폭의 합",
+      "path": "lib/hweight.c",
+      "excerpt": {
+        "start": 30,
+        "end": 55,
+        "anchor": "__sw_hweight16"
+      }
+    },
+    {
+      "planned_lesson": "os813",
+      "title": "Software Popcount64·Word 폭과 분할 합",
+      "path": "lib/hweight.c",
+      "excerpt": {
+        "start": 47,
+        "end": 68,
+        "anchor": "__sw_hweight64"
+      }
+    },
+    {
+      "planned_lesson": "os814",
+      "title": "Llist Batch·CAS 실패와 마지막 Link 갱신",
+      "path": "lib/llist.c",
+      "excerpt": {
+        "start": 26,
+        "end": 52,
+        "anchor": "llist_add_batch"
+      }
+    },
+    {
+      "planned_lesson": "os815",
+      "title": "Llist Del First·Acquire와 단일 소비자",
+      "path": "lib/llist.c",
+      "excerpt": {
+        "start": 53,
+        "end": 78,
+        "anchor": "llist_del_first"
+      }
+    },
+    {
+      "planned_lesson": "os816",
+      "title": "Llist Del This·첫 항목의 신원 검사",
+      "path": "lib/llist.c",
+      "excerpt": {
+        "start": 79,
+        "end": 104,
+        "anchor": "llist_del_first_this"
+      }
+    },
+    {
+      "planned_lesson": "os817",
+      "title": "Llist Reverse·분리한 Chain의 Link 방향",
+      "path": "lib/llist.c",
+      "excerpt": {
+        "start": 103,
+        "end": 116,
+        "anchor": "llist_reverse_order"
+      }
+    },
+    {
+      "planned_lesson": "os818",
+      "title": "Llist 초기화·NULL Head와 Self Node Marker",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 84,
+        "end": 109,
+        "anchor": "init_llist_node"
+      }
+    },
+    {
+      "planned_lesson": "os819",
+      "title": "Llist 상태 조회·Empty와 On List의 한계",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 216,
+        "end": 245,
+        "anchor": "llist_empty"
+      }
+    },
+    {
+      "planned_lesson": "os820",
+      "title": "Llist 비원자 Add·이중 Underscore 규약",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 230,
+        "end": 255,
+        "anchor": "__llist_add_batch"
+      }
+    },
+    {
+      "planned_lesson": "os821",
+      "title": "Llist Del All·Atomic Detach와 반환 Chain",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 264,
+        "end": 289,
+        "anchor": "llist_del_all"
+      }
+    },
+    {
+      "planned_lesson": "os822",
+      "title": "Llist Del First Init·제거와 Marker Reset",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 286,
+        "end": 300,
+        "anchor": "llist_del_first_init"
+      }
+    },
+    {
+      "planned_lesson": "os823",
+      "title": "Llist 순회 Macro·Safe의 Next 미리 저장",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 162,
+        "end": 201,
+        "anchor": "llist_for_each_safe"
+      }
+    },
+    {
+      "planned_lesson": "os824",
+      "title": "Llist Entry 순회·Container 주소와 NULL Member",
+      "path": "include/linux/llist.h",
+      "excerpt": {
+        "start": 126,
+        "end": 161,
+        "anchor": "member_address_is_nonnull"
+      }
+    },
+    {
+      "planned_lesson": "os825",
+      "title": "Plist 삽입·두 Tier와 양쪽 우선순위 탐색",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 73,
+        "end": 98,
+        "anchor": "plist_add"
+      }
+    },
+    {
+      "planned_lesson": "os826",
+      "title": "Plist 삭제·대표를 다음 동순위에 넘기기",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 122,
+        "end": 154,
+        "anchor": "plist_del"
+      }
+    },
+    {
+      "planned_lesson": "os827",
+      "title": "Plist Requeue·동순위 끝으로 이동",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 155,
+        "end": 180,
+        "anchor": "plist_requeue"
+      }
+    },
+    {
+      "planned_lesson": "os828",
+      "title": "Plist DEBUG·Prev Next 연결 검사",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 44,
+        "end": 72,
+        "anchor": "plist_check_list"
+      }
+    },
+    {
+      "planned_lesson": "os829",
+      "title": "Plist Test 불변식·개수 대표 Ring와순서",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 193,
+        "end": 218,
+        "anchor": "plist_test_check"
+      }
+    },
+    {
+      "planned_lesson": "os830",
+      "title": "Plist Test 실행·결정적 입력과시간측정 범위",
+      "path": "lib/plist.c",
+      "excerpt": {
+        "start": 230,
+        "end": 255,
+        "anchor": "plist_test"
+      }
+    },
+    {
+      "planned_lesson": "os831",
+      "title": "Plist 초기화·Head와두 Link의Self 표현",
+      "path": "include/linux/plist.h",
+      "excerpt": {
+        "start": 125,
+        "end": 151,
+        "anchor": "plist_node_init"
+      }
+    },
+    {
+      "planned_lesson": "os832",
+      "title": "Plist 접근자·First Last와비어있지않은전제",
+      "path": "include/linux/plist.h",
+      "excerpt": {
+        "start": 273,
+        "end": 291,
+        "anchor": "plist_first"
+      }
+    },
+    {
+      "planned_lesson": "os833",
+      "title": "Plist 순회·Continue Safe와Caller Lock",
+      "path": "include/linux/plist.h",
+      "excerpt": {
+        "start": 163,
+        "end": 195,
+        "anchor": "plist_for_each_safe"
+      }
+    },
+    {
+      "planned_lesson": "os834",
+      "title": "Min Heap 저장·배열과 사용자 Callback",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 43,
+        "end": 68,
+        "anchor": "__min_heap_init"
+      }
+    },
+    {
+      "planned_lesson": "os835",
+      "title": "Min Heap 조회·Peek와 Capacity 조건",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 58,
+        "end": 83,
+        "anchor": "__min_heap_peek"
+      }
+    },
+    {
+      "planned_lesson": "os836",
+      "title": "Min Heap Sift Down·Leaf 탐색후Backtrack",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 78,
+        "end": 103,
+        "anchor": "__min_heap_sift_down"
+      }
+    },
+    {
+      "planned_lesson": "os837",
+      "title": "Min Heap Sift Up·Parent 비교와Equal 순서",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 116,
+        "end": 141,
+        "anchor": "__min_heap_sift_up"
+      }
+    },
+    {
+      "planned_lesson": "os838",
+      "title": "Min Heapify·Floyd의아래쪽부터복구",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 136,
+        "end": 161,
+        "anchor": "__min_heapify_all"
+      }
+    },
+    {
+      "planned_lesson": "os839",
+      "title": "Min Heap Pop·마지막 원소로Root 채우기",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 150,
+        "end": 175,
+        "anchor": "__min_heap_pop"
+      }
+    },
+    {
+      "planned_lesson": "os840",
+      "title": "Min Heap Pop Push·개수 유지와한번의Sift",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 175,
+        "end": 200,
+        "anchor": "__min_heap_pop_push"
+      }
+    },
+    {
+      "planned_lesson": "os841",
+      "title": "Min Heap Push·끝에추가후상승",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 189,
+        "end": 214,
+        "anchor": "__min_heap_push"
+      }
+    },
+    {
+      "planned_lesson": "os842",
+      "title": "Min Heap Del·임의위치와양방향복구",
+      "path": "include/linux/min_heap.h",
+      "excerpt": {
+        "start": 214,
+        "end": 236,
+        "anchor": "__min_heap_del"
+      }
+    },
+    {
+      "planned_lesson": "os843",
+      "title": "Interval Tree Template·정렬 Key와 Subtree 최대 끝",
+      "path": "include/linux/interval_tree_generic.h",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "INTERVAL_TREE_DEFINE"
+      }
+    },
+    {
+      "planned_lesson": "os844",
+      "title": "Interval Subtree Search·두 겹침 조건과 왼쪽 후보",
+      "path": "include/linux/interval_tree_generic.h",
+      "excerpt": {
+        "start": 81,
+        "end": 106,
+        "anchor": "_subtree_search"
+      }
+    },
+    {
+      "planned_lesson": "os845",
+      "title": "Interval First·전체 범위 Fast Rejection",
+      "path": "include/linux/interval_tree_generic.h",
+      "excerpt": {
+        "start": 119,
+        "end": 144,
+        "anchor": "_iter_first"
+      }
+    },
+    {
+      "planned_lesson": "os846",
+      "title": "Interval Next·오른쪽 Subtree와 Parent 복귀",
+      "path": "include/linux/interval_tree_generic.h",
+      "excerpt": {
+        "start": 152,
+        "end": 177,
+        "anchor": "_iter_next"
+      }
+    },
+    {
+      "planned_lesson": "os847",
+      "title": "Interval Span Merge·겹침과 인접 구간 합치기",
+      "path": "lib/interval_tree.c",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "interval_tree_span_iter_next_gap"
+      }
+    },
+    {
+      "planned_lesson": "os848",
+      "title": "Interval Span First·전체 Hole와시작 Clip",
+      "path": "lib/interval_tree.c",
+      "excerpt": {
+        "start": 43,
+        "end": 68,
+        "anchor": "interval_tree_span_iter_first"
+      }
+    },
+    {
+      "planned_lesson": "os849",
+      "title": "Interval Span Next·Hole Used 교대와Done",
+      "path": "lib/interval_tree.c",
+      "excerpt": {
+        "start": 82,
+        "end": 107,
+        "anchor": "interval_tree_span_iter_next"
+      }
+    },
+    {
+      "planned_lesson": "os850",
+      "title": "Interval Span Advance·현재범위 재사용과재검색",
+      "path": "lib/interval_tree.c",
+      "excerpt": {
+        "start": 124,
+        "end": 149,
+        "anchor": "interval_tree_span_iter_advance"
+      }
+    },
+    {
+      "planned_lesson": "os851",
+      "title": "Interval Header·Node 표현과Span Iterator Macro",
+      "path": "include/linux/interval_tree.h",
+      "excerpt": {
+        "start": 77,
+        "end": 88,
+        "anchor": "interval_tree_span_iter_done"
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "mm/kmsan/Makefile": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 34,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1882",
+        "symbols": [
+          "obj-y"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN runtime Makefile·여섯 object의 역할. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      },
+      {
+        "lesson": "os1883",
+        "symbols": [
+          "KMSAN_SANITIZE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 자기 runtime의 세 계측 제외. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      },
+      {
+        "lesson": "os1884",
+        "symbols": [
+          "CC_FLAGS_KMSAN_RUNTIME"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN compiler option 탐지와 += 변수 누적. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      },
+      {
+        "lesson": "os1885",
+        "symbols": [
+          "CFLAGS_REMOVE_core.o"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ftrace 제거와 재귀 호출 방지. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      },
+      {
+        "lesson": "os1886",
+        "symbols": [
+          "CFLAGS_core.o"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 여섯 object의 공통 CFLAGS 적용. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      },
+      {
+        "lesson": "os1887",
+        "symbols": [
+          "obj-$(CONFIG_KMSAN_KUNIT_TEST)"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN KUnit test의 조건부 빌드와 계측 재활성화. Whole34line Makefile manually authored6lessons12Qs, GNUmake originalinclude4config combinations option-support0/1 KUNIT0/1,44independentvariablechecks:6obj-y base,conditionaltestobj-y/obj-n,3directorysanitizersn/perobjecttesty, flagsno-stackprotector/optionalno-conserve-stack/DDISABLE_BRANCH_PROFILING,6removeFTRACE and6perobjectflags,warningsuppression. Helperccoption/ccdisablewarning/ftrace modeledexplicitnotactualKbuild; no actualkernel compile/link/tracing/KUnit/LLVMsanitizer execution."
+      }
+    ]
+  }
+}

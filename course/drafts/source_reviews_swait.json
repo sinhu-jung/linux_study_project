@@ -1,0 +1,184 @@
+{
+  "include/linux/swait.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 287,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1492",
+        "symbols": [
+          "swait_queue_head"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1493",
+        "symbols": [
+          "swait_queue"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1495",
+        "symbols": [
+          "swait_active"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1503",
+        "symbols": [
+          "___swait_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1504",
+        "symbols": [
+          "swait_event_exclusive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1505",
+        "symbols": [
+          "swait_event_timeout_exclusive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      }
+    ],
+    "fixture": "data/source_checks/source-swait-harness-manifest.json"
+  },
+  "kernel/sched/swait.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 144,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1494",
+        "symbols": [
+          "__init_swait_queue_head"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1496",
+        "symbols": [
+          "swake_up_locked"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1497",
+        "symbols": [
+          "swake_up_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1498",
+        "symbols": [
+          "swake_up_all"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1499",
+        "symbols": [
+          "swake_up_all_locked"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1500",
+        "symbols": [
+          "__prepare_to_swait"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1501",
+        "symbols": [
+          "prepare_to_swait_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      },
+      {
+        "lesson": "os1502",
+        "symbols": [
+          "finish_swait"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full swait.h and kernel/sched/swait.c read and authored: real-time restricted feature design/no custom callback/no nonexclusive/no mixed sleep types, task-only entry/raw-spin head, static/runtime/onstack init, active and paired barrier, first task wake/removal independent of trywake result and flags, irqsave one, IRQ-enabled all snapshot splice/per-item unlock and newly registered waiter outside snapshot, completion-only all_locked exception/no unlock, current/tail prepare/reprepare, signal removal/-ERESTARTSYS/condition priority, finish careful vs caller-locked helper, GNU common macro/goto error bypass, all ordinary/interruptible/idle wrappers and jiffies deadline-success1 contract. Exact full source bodies in explicit serial list/raw lock/IRQ/task/scheduler/barrier support model: 56002 assertions each optimized and ASan/UBSan, 2000 repeated cases including deterministic new waiter registration during all-wake release. No real RT latency/IRQ duration/kernel preemption/SMP/LKMM/actual scheduler proof. Pinned source unchanged."
+      }
+    ],
+    "fixture": "data/source_checks/source-swait-harness-manifest.json"
+  }
+}

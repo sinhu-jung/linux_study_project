@@ -1,0 +1,147 @@
+{
+  "include/linux/of_reserved_mem.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 83,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2602",
+        "symbols": [
+          "reserved_mem"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 공개 자료·주소범위와private상태. struct reserved_mem은name,flatnode,ops,물리base/size,void *priv를저장합니다. priv는pool별구현이해석하는상태이며범용header가내용을정의하지않습니다. 구조체주소와해당물리메모리의주소는서로다르고guard·device/ofinclude와전방선언이공개타입을연결합니다. 관리entry→물리범위와ops/private자료를별도화살표로그립니다. 물리주소typedef와Cpointer,flatnodeoffset을구별하고최소실행fixture에는실제priv/ops전체가없다는범위를확인합니다."
+      },
+      {
+        "lesson": "os2603",
+        "symbols": [
+          "reserved_mem_ops"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved ops인터페이스·init과release의반환. device_init은rmem/dev를받아intstatus를반환하고device_release는같은대상을받는voidcallback입니다. 함수pointertable로여러reservedpool구현을공통장치연결경로에제공합니다. 둘의반환형차이는caller의성공기록과해제정책에연결됩니다. initstatus0의list등록과실패recordfree,releasevoid의lock밖호출을앞구현과연결합니다. ops가있다는것만으로실제DMA행동을알수없어개별callback본문을따로읽습니다."
+      },
+      {
+        "lesson": "os2604",
+        "symbols": [
+          "reservedmem_of_init_fn"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved init함수타입·linkerdispatch계약. typedef int(*reservedmem_of_init_fn)(struct reserved_mem *)은부팅region초기화callback타입입니다. device_init처럼dev인자를받는타입이아니며RESERVEDMEM_OF_DECLARE가이타입을공통OF선언macro에전달합니다. typedef만으로함수가실행되거나동적으로등록되지는않습니다. region초기화와장치연결초기화의인자/반환을두열로비교합니다. inittabledata를함수pointer로해석하는앞__reserved_mem_init_node와C의함수pointer타입검사를연결합니다."
+      },
+      {
+        "lesson": "os2605",
+        "symbols": [
+          "RESERVEDMEM_OF_DECLARE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 선언macro·enabled linktable연결. CONFIG_OF_RESERVED_MEM에서_OF_DECLARE(reservedmem,name,compat,init,타입)에위임합니다. 관련of.h일부원문은CONFIG_OF가켜지고MODULE이아닐때used/alignedreservedmemsectionentry를만듭니다. 최종등록조건은이header의기능flag하나뿐이라고단정하지않습니다. macro인자와linkersection의compatible/dataentry를그립니다. of.h1514..1530만참고한것이며of.h전체해설완료로기록하지않습니다. 런타임동적등록과빌드시table생성을구별합니다."
+      },
+      {
+        "lesson": "os2606",
+        "symbols": [
+          "RESERVEDMEM_OF_DECLARE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 선언macro·disabled stubentry. CONFIG_OF_RESERVED_MEM가꺼지면_OF_DECLARE_STUB에위임합니다. 관련of.h본문은unusedstaticentry를정의해compatible/data와타입표현을유지하지만활성reservedmemsection등록과같지않습니다. stub선언과뒤함수fallback을구별합니다. enabledsectionentry와disabledunusedentry를비교합니다. init이불필요해보인다고타입계약까지없다고가정하지않으며완전한linker/모든module조합실행증거는별도로확인합니다."
+      },
+      {
+        "lesson": "os2607",
+        "symbols": [
+          "of_reserved_mem_device_init_by_idx"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 공개init·index와name선택. 설정켜짐은index/name초기화외부선언을제공합니다. idx는memory-regionphandle목록위치이고name은memory-region-names에서위치를고르는문자열입니다. 실제반환정책은disabled대상skip0와opsinitstatus등본문에따르므로prototype의int만으로association생성을판정하지않습니다. 같은pool을index0또는name으로고르는caller흐름을그립니다. 필수dev/np와소유권,실제연결실행및오류전파는앞구현수업에연결합니다."
+      },
+      {
+        "lesson": "os2608",
+        "symbols": [
+          "of_reserved_mem_device_release"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 공개release와lookup·소유권분리. enabled부분은device_release와node기반lookup을외부선언합니다. release는해당dev의관리기록/ops정리이고lookup은공유reservedentrypointer를얻습니다. 이API가자동으로예약배열전체를해제하거나새entry소유권을caller에게주는것은아닙니다. record수명과reservedregion수명을분리해그립니다. lookup결과에임의kfree를하지않고release가어느공간을해제하는지실제구현에서확인합니다."
+      },
+      {
+        "lesson": "os2609",
+        "symbols": [
+          "of_reserved_mem_device_init_by_idx"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF RESERVED_MEM 꺼짐·index초기화. 설정꺼짐에서of_reserved_mem_device_init_by_idx은staticinlinefallback입니다. indexphandle조회와opsdevice_init/list등록을하지않습니다. 결과는-ENOSYS입니다. 기능부재를caller가정상빈결과와혼동하지않도록반환정책을확인해야하며활성구현의동작을이stub으로증명하지않습니다. enabledextern과disabledinline을같은이름의서로다른선언위치로비교합니다. -ENOSYS의caller처리와설정조건을주석달고다른header의ENODEVfallback과ENOSYS를혼동하지않습니다."
+      },
+      {
+        "lesson": "os2610",
+        "symbols": [
+          "of_reserved_mem_device_init_by_name"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF RESERVED_MEM 꺼짐·이름초기화. 설정꺼짐에서of_reserved_mem_device_init_by_name은staticinlinefallback입니다. 이름목록조회와장치연결을하지않습니다. 결과는-ENOSYS입니다. 기능부재를caller가정상빈결과와혼동하지않도록반환정책을확인해야하며활성구현의동작을이stub으로증명하지않습니다. enabledextern과disabledinline을같은이름의서로다른선언위치로비교합니다. -ENOSYS의caller처리와설정조건을주석달고다른header의ENODEVfallback과ENOSYS를혼동하지않습니다."
+      },
+      {
+        "lesson": "os2611",
+        "symbols": [
+          "of_reserved_mem_device_release"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF RESERVED_MEM 꺼짐·장치연결해제. 설정꺼짐에서of_reserved_mem_device_release은staticinlinefallback입니다. 장치연결목록순회나opsdevice_release를하지않습니다. 결과는빈body입니다. 기능부재를caller가정상빈결과와혼동하지않도록반환정책을확인해야하며활성구현의동작을이stub으로증명하지않습니다. enabledextern과disabledinline을같은이름의서로다른선언위치로비교합니다. 빈body의caller처리와설정조건을주석달고다른header의ENODEVfallback과ENOSYS를혼동하지않습니다."
+      },
+      {
+        "lesson": "os2612",
+        "symbols": [
+          "of_reserved_mem_lookup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF RESERVED_MEM 꺼짐·공유entry조회. 설정꺼짐에서of_reserved_mem_lookup은staticinlinefallback입니다. reservedentry이름검색과공유pointer제공을하지않습니다. 결과는NULL입니다. 기능부재를caller가정상빈결과와혼동하지않도록반환정책을확인해야하며활성구현의동작을이stub으로증명하지않습니다. enabledextern과disabledinline을같은이름의서로다른선언위치로비교합니다. NULL의caller처리와설정조건을주석달고다른header의ENODEVfallback과ENOSYS를혼동하지않습니다."
+      },
+      {
+        "lesson": "os2613",
+        "symbols": [
+          "of_reserved_mem_device_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF reserved 첫영역wrapper·dev of_node와index0. 항상제공되는inlinewrapper는dev->of_node와index0을by_idx에전달합니다. 첫memory-region을사용하는편의API입니다. 여기서는devNULL을역참조전에검사하지않아하위by_idx의NULLguard가wrapper의모든입력까지보호한다고가정하지않습니다. dev→of_node→memory-region0→reservedops흐름을그립니다. 기능꺼짐에서는하위ENOSYS로이어지지만dev유효성은wrapper호출조건으로별도유지합니다."
+      }
+    ]
+  }
+}

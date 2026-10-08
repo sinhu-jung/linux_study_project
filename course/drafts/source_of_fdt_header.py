@@ -1,0 +1,253 @@
+"""Whole OF flat public97line header and explicit disabled-configuration stubs."""
+ROWS = [('OF flat header·커널 공개 인터페이스와 guard',
+  'of_fdt_unflatten_tree',
+  '이 header는 C 구현 자체가 아니라 공개 선언을 제공합니다. _LINUX_OF_FDT_H guard는 중복 포함을 막고 __ASSEMBLY__에서는 C 타입·prototype 부분을 '
+  '건너뜁니다. OF_DT_HEADER는0xd00dfeed marker입니다. CONFIG_OF_FLATTREE에서 device_node 전방 선언과 런타임 unflatten API를 제공합니다.',
+  'marker 상수와 함수 선언을 구별해 주석 달아보세요. device_node 구조를 이 header에서 완전히 정의하지 않는 이유와 pointer 인자에 전방 선언을 사용할 수 있는 C 규칙을 '
+  '확인합니다.',
+  ('이 header가 전체 device_node 구조를 정의하나요?',
+   '아닙니다. 전방 선언을 제공합니다.',
+   '그렇습니다. 모든 field가 여기 있습니다.',
+   '불완전 struct 타입도 pointer 선언에 사용할 수 있습니다.'),
+  ('OF_DT_HEADER marker는 무엇인가요?',
+   '0xd00dfeed입니다.',
+   '항상0xdeadbeef입니다.',
+   'DTB header marker와 unflatten 끝 검사 marker는 목적과 값이 다릅니다.'),
+  1),
+ ('OF flat 공개 데이터·boot pointer와 link 기호',
+  'of_fdt_limit_memory',
+  'CONFIG_OF_FLATTREE 부분은 dt_root_addr_cells/size_cells, initial_boot_params와 __dtb_start/end를 extern으로 선언합니다. '
+  'extern은 저장 공간의 정의가 다른 번역 단위나 link 과정에 있다는 연결 계약입니다. of_flat_dt_translate_address와 memory limit도 여기서 선언되며 모든 함수 '
+  '구현이 fdt.c에 있는 것은 아닙니다.',
+  'extern 선언과 drivers/of/fdt.c의 실제 전역 정의를 비교합니다. 주소 변환 구현은 별도 파일을 읽어야 하며 이 header 전체 해설을 해당 구현 전체의 완료로 계산하지 않습니다.',
+  ('extern 전역 선언이 이 header마다 새 공간을 만드나요?',
+   '아닙니다. 다른 정의와 연결합니다.',
+   '그렇습니다. include마다 새 global입니다.',
+   '선언과 저장 공간 정의의 서로 다른 링크 역할입니다.'),
+  ('이 header의 모든 prototype 구현이 fdt.c에 있나요?',
+   '아닙니다. 구현 위치를 각각 확인합니다.',
+   '그렇습니다. 언제나 같은 파일입니다.',
+   '공개 interface 목록과 개별 구현의 출처를 구별합니다.'),
+  1),
+ ('OF early callback interface·전체와 직계 scan',
+  'of_scan_flat_dt',
+  'CONFIG_OF_EARLY_FLATTREE에서 전체 scan callback은 node/uname/depth/data를 받고 직계 child scan callback은 depth 없이 '
+  'node/uname/data를 받습니다. 함수 pointer로 caller의 처리 동작과 context를 제공합니다. 이 선언의 node는 flat offset이며 struct device_node '
+  'pointer와 다른 표현입니다.',
+  '전체 callback과 subnode callback의 인자 네 개/세 개를 표로 적습니다. 구현에서 nonzero return으로 scan을 멈추는 계약을 앞 수업과 연결하고 해당 '
+  'prototype만으로 callback 실행이 일어나는 것은 아님을 표시합니다.',
+  ('전체 scan callback에 직계 scan보다 추가되는 인자는 무엇인가요?',
+   'depth입니다.',
+   '항상 struct device_node pointer입니다.',
+   '깊이 있는 전체 traversal과 직계 목록의 다른 interface입니다.'),
+  ('callback 선언만으로 실제 callback을 실행하나요?',
+   '아닙니다. 호출하는 구현이 필요합니다.',
+   '그렇습니다. include 때 모두 실행됩니다.',
+   'prototype 제공과 런타임 함수 호출의 단계를 구별합니다.'),
+  1),
+ ('OF early flat 조회·const property와 길이 output',
+  'of_get_flat_dt_prop',
+  'early 영역은 subnode 이름 조회, property pointer/size output, compatible score, root offset와 phandle getter를 선언합니다. '
+  'const void *는 caller가 이 pointer로 payload를 수정하는 인터페이스가 아니라는 타입 계약입니다. 함수의 실제 return·오류·수명 조건은 libfdt와 fdt.c 구현에 '
+  '연결됩니다.',
+  'property pointer와 size output, root0와 phandle 식별자, compatible 양수 score를 각각 다른 종류로 주석 달아봅니다. const가 원본 blob을 영구 '
+  '보존하거나 모든 다른 경로의 수정을 금지하는 것은 아닙니다.',
+  ('const property pointer가 새 복사본 수명을 보장하나요?',
+   '아닙니다. 원본 참조 계약을 확인합니다.',
+   '그렇습니다. 항상 영구 복사본입니다.',
+   '읽기 타입과 allocation·lifetime의 의미는 다릅니다.'),
+  ('compatible score와 phandle은 같은 종류 값인가요?',
+   '아닙니다. 우선순위와 식별자입니다.',
+   '그렇습니다. 항상 같은 node offset입니다.',
+   '공개 함수별 반환값의 의미를 구별합니다.'),
+  1),
+ ('OF early 준비 API·chosen memory reserved 단계',
+  'early_init_dt_scan_chosen',
+  'chosen/cmdline, memory scan, usable-range, chosen stdout, reserved-memory scan, DTB 자체 reserve와 arch memory '
+  'add를 선언합니다. scan의 반환 int와 reserve/add의 void 등 각 interface가 caller에게 결과를 전달하는 범위가 다릅니다. 선언만으로 하위 메모리·console '
+  '구현까지 실행되지 않습니다.',
+  'boot scan과 reserved 준비 호출 순서를 실제 구현에 연결합니다. int/void 반환을 표로 적고 물리 base/size의 u64와 cmdline char pointer의 다른 자료 '
+  '표현을 표시합니다.',
+  ('early_init_dt_add_memory_arch의 반환형은 무엇인가요?',
+   'void입니다.',
+   '항상 성공 bool입니다.',
+   '하위 등록 결과를 이 interface가 status로 반환하는지 구별합니다.'),
+  ('reserve_self는 무엇을 보존하는 API인가요?', 'DTB 자체 영역입니다.', '항상 새 cmdline 문자열만입니다.', '초기 자료 공간 수명과 property 참조를 연결합니다.'),
+  1),
+ ('OF early cell cursor API·pointer-to-pointer',
+  'dt_mem_next_cell',
+  'u64 반환과 const __be32 **cellp는 여러 cell을 읽고 caller의 cursor를 이동시키는 interface입니다. const는 cell bytes를 이 pointer 경로로 '
+  '바꾸지 않는 의미이고 pointer-to-pointer는 cursor 주소를 바꾸는 효과와 양립합니다. 이 header에는 cell 범위검사의 구현이 없습니다.',
+  'cell bytes 읽기와 *cellp 이동의 두 효과를 그립니다. const pointer의 대상과 pointer 자체의 변경을 구별하고 구현의 of_read_number와 상위 entry 길이 '
+  '계약을 앞 수업에서 확인합니다.',
+  ('const cell bytes와 caller cursor 변경이 양립하나요?',
+   '그렇습니다. 대상 bytes와 pointer 변수는 다릅니다.',
+   '아닙니다. const면 어떤 pointer도 못 바꿉니다.',
+   'const가 수식하는 대상과 pointer-to-pointer 대입을 구별합니다.'),
+  ('이 prototype이 모든 cell bounds도 검사하나요?',
+   '아닙니다. 구현과 caller 계약을 확인합니다.',
+   '그렇습니다. 선언이 자동 검사합니다.',
+   '타입 interface와 실행 중 길이검사의 서로 다른 역할입니다.'),
+  1),
+ ('OF early verify scan interface·bool와void 역할',
+  'early_init_dt_scan',
+  'root scan과 verify/전체 scan의 bool, scan_nodes의 void를 함께 선언합니다. bool return은 선언된 함수의 의미 범위로 읽어야 하며 전체 OS와 driver가 '
+  '정상 동작한다는 인증이 아닙니다. 구현의 verify→root info→chosen/memory/usable 순서를 interface와 연결합니다.',
+  'params void pointer와 scan bool, scan_nodes void의 표를 만듭니다. early boot에만 쓰는 __init 관련 수명과 header 선언의 실제 '
+  'attribute 위치를 원문에서 따로 확인합니다.',
+  ('early_init_dt_scan_nodes의 반환형은 무엇인가요?', 'void입니다.', '항상 모든 오류 목록입니다.', '개별 함수의 반환 계약을 선언과 구현에서 연결합니다.'),
+  ('early_init_dt_scan true가 모든 OS 성공 인증인가요?',
+   '아닙니다. 해당 DTB scan 범위입니다.',
+   '그렇습니다. 모든 시스템이 검증됐습니다.',
+   '함수의 bool 의미를 호출 범위 밖으로 확대하지 않습니다.'),
+  1),
+ ('OF machine selector interface·이중 pointer callback',
+  'of_flat_dt_match_machine',
+  'get_next_compat callback은 const char * const **로 호환 문자열 table pointer를 output하고 const void *로 후보 자료를 반환합니다. 상위 '
+  'selector는 default_match fallback을 받습니다. data의 불투명 pointer와 호환 table의 여러 pointer 층은 서로 다른 출력을 제공합니다.',
+  'callback 반환 machine 자료와 *compat output을 두 화살표로 그립니다. NULL 후보 종료, 최소 양수score와 동점 보존의 구현을 연결하며 machine name char '
+  'pointer와 같은 자료라고 가정하지 않습니다.',
+  ('callback의 반환과 compat output은 같은 자료인가요?',
+   '아닙니다. 후보 자료와 문자열 table입니다.',
+   '그렇습니다. 항상 같은 pointer입니다.',
+   '이중 출력 interface의 pointer 층과 의미를 구별합니다.'),
+  ('default_match는 언제 쓰일 수 있나요?',
+   '더 나은 match가 없을 때 fallback입니다.',
+   '항상 첫 문자열 bytes를 수정합니다.',
+   '초기 best 결과와 table 반복 선택의 관계를 읽습니다.'),
+  1),
+ ('OF 부팅 tree 공개 API·copy와 early helper',
+  'unflatten_and_copy_device_tree',
+  'unflatten_device_tree, copy뒤unflatten, early_init_devtree와 early_get_first_memblock_info의 선언을 제공합니다. early '
+  'memory helper는 phys_addr_t output을 받습니다. 이 공개 목록은 구현 연결을 위한 것이며 이 header의 해설로 다른 파일의 구현 원리까지 완료됐다고 판단하지 않습니다.',
+  'unflatten과 copy뒤unflatten의 원본 blob 수명 조건을 비교합니다. 다른 두 helper의 실제 정의 위치를 찾아 다음 학습 범위로 표시하고 prototype 자체와 실행 동작을 '
+  '구별합니다.',
+  ('unflatten과 copy뒤unflatten의 차이는 무엇인가요?',
+   '원본 blob의 복사와 수명 처리입니다.',
+   '항상 compatible score만 다릅니다.',
+   'initsection 자료 보존과 expanded property 참조의 관계입니다.'),
+  ('다른 helper 선언을 읽었다고 그 구현도 완성됐나요?',
+   '아닙니다. 실제 정의를 따로 읽습니다.',
+   '그렇습니다. 선언이 모든 알고리즘입니다.',
+   'interface 설명과 구현 원리 해설의 범위를 구별합니다.'),
+  1),
+ ('OF EARLY_FLATTREE 꺼짐·early_init_dt_check_for_usable_mem_range',
+  'early_init_dt_check_for_usable_mem_range',
+  '이 fallback은 usable-memory-range에 따른 초기 메모리 제한을 수행하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static inline '
+  'stub으로 제공됩니다. 아무 동작을 하지 않는 빈 body입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. 모든 '
+  'early prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. 아무 동작을 하지 않는 빈 body을 caller가 어떻게 다룰지 주석 달고 실제 early '
+  'scan·예약·unflatten 실행으로 착각하지 않습니다.',
+  ('early_init_dt_check_for_usable_mem_range의 설정 꺼짐 동작은 무엇인가요?',
+   '아무 동작을 하지 않는 빈 body입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('early_init_dt_check_for_usable_mem_range stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·early_init_dt_scan_chosen_stdout',
+  'early_init_dt_scan_chosen_stdout',
+  '이 fallback은 chosen stdout-path를 해석하거나 early console을 설정하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static '
+  'inline stub으로 제공됩니다. -ENODEV 반환입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. 모든 early '
+  'prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. -ENODEV 반환을 caller가 어떻게 다룰지 주석 달고 실제 early scan·예약·unflatten 실행으로 '
+  '착각하지 않습니다.',
+  ('early_init_dt_scan_chosen_stdout의 설정 꺼짐 동작은 무엇인가요?',
+   '-ENODEV 반환입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('early_init_dt_scan_chosen_stdout stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·early_init_fdt_scan_reserved_mem',
+  'early_init_fdt_scan_reserved_mem',
+  '이 fallback은 reserved-memory node와 header memreserve 목록을 예약하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static '
+  'inline stub으로 제공됩니다. 아무 동작을 하지 않는 빈 body입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. '
+  '모든 early prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. 아무 동작을 하지 않는 빈 body을 caller가 어떻게 다룰지 주석 달고 실제 early '
+  'scan·예약·unflatten 실행으로 착각하지 않습니다.',
+  ('early_init_fdt_scan_reserved_mem의 설정 꺼짐 동작은 무엇인가요?',
+   '아무 동작을 하지 않는 빈 body입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('early_init_fdt_scan_reserved_mem stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·early_init_fdt_reserve_self',
+  'early_init_fdt_reserve_self',
+  '이 fallback은 DTB 자체의 물리 영역을 memblock에 예약하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static inline stub으로 '
+  '제공됩니다. 아무 동작을 하지 않는 빈 body입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. 모든 early '
+  'prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. 아무 동작을 하지 않는 빈 body을 caller가 어떻게 다룰지 주석 달고 실제 early '
+  'scan·예약·unflatten 실행으로 착각하지 않습니다.',
+  ('early_init_fdt_reserve_self의 설정 꺼짐 동작은 무엇인가요?',
+   '아무 동작을 하지 않는 빈 body입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('early_init_fdt_reserve_self stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·of_flat_dt_get_machine_name',
+  'of_flat_dt_get_machine_name',
+  '이 fallback은 root의 model/compatible 이름을 조회해 제공하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static inline stub으로 '
+  '제공됩니다. NULL 반환입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. 모든 early prototype이 '
+  'stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. NULL 반환을 caller가 어떻게 다룰지 주석 달고 실제 early scan·예약·unflatten 실행으로 착각하지 '
+  '않습니다.',
+  ('of_flat_dt_get_machine_name의 설정 꺼짐 동작은 무엇인가요?',
+   'NULL 반환입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('of_flat_dt_get_machine_name stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·unflatten_device_tree',
+  'unflatten_device_tree',
+  '이 fallback은 flat blob에서 부팅 device_node/property 연결 구조를 만들지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static '
+  'inline stub으로 제공됩니다. 아무 동작을 하지 않는 빈 body입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. '
+  '모든 early prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. 아무 동작을 하지 않는 빈 body을 caller가 어떻게 다룰지 주석 달고 실제 early '
+  'scan·예약·unflatten 실행으로 착각하지 않습니다.',
+  ('unflatten_device_tree의 설정 꺼짐 동작은 무엇인가요?',
+   '아무 동작을 하지 않는 빈 body입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('unflatten_device_tree stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2),
+ ('OF EARLY_FLATTREE 꺼짐·unflatten_and_copy_device_tree',
+  'unflatten_and_copy_device_tree',
+  '이 fallback은 부팅 DTB의 지속 공간 복사와 expanded tree 생성을 모두 수행하지 않습니다. CONFIG_OF_EARLY_FLATTREE가 꺼지면 이 이름은 static '
+  'inline stub으로 제공됩니다. 아무 동작을 하지 않는 빈 body입니다. 실제 기능을 수행하지 않는 fallback을 통해 해당 선택 API의 caller가 설정 차이를 처리할 수 있습니다. '
+  '모든 early prototype이 stub으로 제공되는 것은 아니므로 다른 호출까지 항상 link된다고 가정하지 않습니다.',
+  '설정 켜짐의 extern 선언과 꺼짐의 inline body를 비교합니다. 아무 동작을 하지 않는 빈 body을 caller가 어떻게 다룰지 주석 달고 실제 early '
+  'scan·예약·unflatten 실행으로 착각하지 않습니다.',
+  ('unflatten_and_copy_device_tree의 설정 꺼짐 동작은 무엇인가요?',
+   '아무 동작을 하지 않는 빈 body입니다.',
+   '항상 전체 early 부팅 기능을 실행합니다.',
+   '전처리 설정에 따라 공개 선언 대신 선택 inline fallback을 제공합니다.'),
+  ('unflatten_and_copy_device_tree stub이 제공되면 모든 early API에도 stub이 있나요?',
+   '아닙니다. 각 선언과 else 목록을 확인합니다.',
+   '그렇습니다. 모든 API가 항상 존재합니다.',
+   '일부 fallback의 존재를 전체 early interface의 보장으로 확대하지 않습니다.'),
+  2)]
+
+def register(topic,q,detail):
+ for title,symbol,principle,use,qa,qb,occurrence in ROWS:
+  topic(title,"장치·드라이버","include/linux/of_fdt.h",symbol,
+   "flat 장치 트리의 커널 공개 타입·조회·부팅 scan·함수 pointer interface와 설정이 꺼졌을 때 선택 fallback을 원본 선언에 연결합니다.",principle,use,
+   "extern 선언과 구현, flat offset와node pointer, const와cursor, callback출력, bool/int/void와설정별inline대체에 주석을 달아보세요.",q(*qa),q(*qb),source_occurrence=occurrence,details=[
+    detail("원문 범위","include/linux/of_fdt.h97행 전체의 guard/marker/include/assembly제외·FLATTREE 선언/전역/link기호·EARLY_FLATTREE 모든prototype 및 꺼짐7inline stub을 해설·문제·풀이에 연결했습니다. 다른 파일의 early/addresshelper 구현은 해당 선언만으로 완료 처리하지 않습니다."),
+    detail("사용 조건","설정 켜짐에서는 함수 정의와 링크 제공이 필요합니다. 꺼짐에서는 명시된7stub만 제공되며 VOID no-op·ENODEV·NULL의 서로 다른 정책을 caller가 확인합니다. 원문 선언과 별도 구현/실행 범위를 구별합니다.")])

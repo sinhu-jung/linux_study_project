@@ -1,0 +1,236 @@
+{
+  "draft_lessons": 23,
+  "questions": 46,
+  "anchors": [
+    {
+      "planned_lesson": "os1351",
+      "title": "Bitmap 헤더의 mask·word 시작과 유효 tail",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 226,
+        "end": 251,
+        "anchor": "BITMAP_FIRST_WORD_MASK"
+      }
+    },
+    {
+      "planned_lesson": "os1352",
+      "title": "Bitmap 크기와 zero fill·저장 word까지 초기화",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 231,
+        "end": 256,
+        "anchor": "bitmap_zero"
+      }
+    },
+    {
+      "planned_lesson": "os1353",
+      "title": "Bitmap copy·저장 표현과 overlap 조건",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 252,
+        "end": 277,
+        "anchor": "bitmap_copy"
+      }
+    },
+    {
+      "planned_lesson": "os1354",
+      "title": "Bitmap copy_clear_tail·복사 뒤 마지막 mask",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 266,
+        "end": 292,
+        "anchor": "bitmap_copy_clear_tail"
+      }
+    },
+    {
+      "planned_lesson": "os1355",
+      "title": "Bitmap copy_and_extend·작은 집합을 큰 저장 공간으로",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 273,
+        "end": 298,
+        "anchor": "bitmap_copy_and_extend"
+      }
+    },
+    {
+      "planned_lesson": "os1356",
+      "title": "Bitmap AND OR XOR·상수 한 word와 일반 경로",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 322,
+        "end": 347,
+        "anchor": "bitmap_and"
+      }
+    },
+    {
+      "planned_lesson": "os1357",
+      "title": "Bitmap 차집합 complement replace·mask로 집합 선택",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 520,
+        "end": 566,
+        "anchor": "bitmap_replace"
+      }
+    },
+    {
+      "planned_lesson": "os1358",
+      "title": "Bitmap equal·컴파일 상수와 endian별 byte 비교",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 376,
+        "end": 401,
+        "anchor": "bitmap_equal"
+      }
+    },
+    {
+      "planned_lesson": "os1359",
+      "title": "Bitmap or_equal intersects subset·관계만 묻는 조회",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 396,
+        "end": 421,
+        "anchor": "bitmap_or_equal"
+      }
+    },
+    {
+      "planned_lesson": "os1360",
+      "title": "Bitmap empty full weight·공집합과 원소 수",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 424,
+        "end": 449,
+        "anchor": "bitmap_empty"
+      }
+    },
+    {
+      "planned_lesson": "os1361",
+      "title": "Bitmap set clear wrapper·한 bit mask memset 선택",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 468,
+        "end": 493,
+        "anchor": "bitmap_set"
+      }
+    },
+    {
+      "planned_lesson": "os1362",
+      "title": "Bitmap shift wrapper·작은 상수와 큰 배열 전제",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 500,
+        "end": 525,
+        "anchor": "bitmap_shift_right"
+      }
+    },
+    {
+      "planned_lesson": "os1363",
+      "title": "Bitmap scatter·촘촘한 bit를 mask 위치로 배치",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 568,
+        "end": 621,
+        "anchor": "bitmap_scatter"
+      }
+    },
+    {
+      "planned_lesson": "os1364",
+      "title": "Bitmap gather·mask 위치를 낮은 연속 bit로 모으기",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 623,
+        "end": 651,
+        "anchor": "bitmap_gather"
+      }
+    },
+    {
+      "planned_lesson": "os1365",
+      "title": "Bitmap 연속 set region·검색 종료값과 두 경계",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 636,
+        "end": 668,
+        "anchor": "bitmap_next_set_region"
+      }
+    },
+    {
+      "planned_lesson": "os1366",
+      "title": "Bitmap 영역 allocate release·busy 검사와 동기화",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 670,
+        "end": 695,
+        "anchor": "bitmap_allocate_region"
+      }
+    },
+    {
+      "planned_lesson": "os1367",
+      "title": "Bitmap find_free_region·2의 거듭제곱 크기와 정렬",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 695,
+        "end": 731,
+        "anchor": "bitmap_find_free_region"
+      }
+    },
+    {
+      "planned_lesson": "os1368",
+      "title": "Bitmap 배열 변환·u32 u64와 native word 폭",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 749,
+        "end": 774,
+        "anchor": "bitmap_from_u64"
+      }
+    },
+    {
+      "planned_lesson": "os1369",
+      "title": "Bitmap 상수 u64 initializer·ABI와 low high 원소",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 733,
+        "end": 763,
+        "anchor": "BITMAP_FROM_U64"
+      }
+    },
+    {
+      "planned_lesson": "os1370",
+      "title": "Bitmap read·word 경계를 넘는 작은 필드 조회",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 765,
+        "end": 797,
+        "anchor": "bitmap_read"
+      }
+    },
+    {
+      "planned_lesson": "os1371",
+      "title": "Bitmap write·값 폭 제한과 두 word의 바깥 bit 보존",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 799,
+        "end": 824,
+        "anchor": "bitmap_write"
+      }
+    },
+    {
+      "planned_lesson": "os1372",
+      "title": "Bitmap zero-area wrapper·기본 alignment offset0",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 207,
+        "end": 232,
+        "anchor": "bitmap_find_next_zero_area"
+      }
+    },
+    {
+      "planned_lesson": "os1373",
+      "title": "Bitmap 할당 선언과 자동 정리·header와 구현의 연결",
+      "path": "include/linux/bitmap.h",
+      "excerpt": {
+        "start": 132,
+        "end": 157,
+        "anchor": "bitmap_alloc"
+      }
+    }
+  ]
+}

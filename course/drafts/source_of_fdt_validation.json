@@ -1,0 +1,516 @@
+{
+  "draft_lessons": 51,
+  "questions": 102,
+  "anchors": [
+    {
+      "planned_lesson": "os2507",
+      "title": "OF 부팅 메모리 목록 제한·reg entry 크기",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 50,
+        "end": 75,
+        "anchor": "of_fdt_limit_memory"
+      }
+    },
+    {
+      "planned_lesson": "os2508",
+      "title": "OF node 사용 여부·status 문자열",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 69,
+        "end": 94,
+        "anchor": "of_fdt_device_is_available"
+      }
+    },
+    {
+      "planned_lesson": "os2509",
+      "title": "OF unflatten arena·정렬 bump allocation",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 82,
+        "end": 107,
+        "anchor": "unflatten_dt_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os2510",
+      "title": "OF property 연결 목록·tail pointer로 순서 유지",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 94,
+        "end": 119,
+        "anchor": "populate_properties"
+      }
+    },
+    {
+      "planned_lesson": "os2511",
+      "title": "OF property 수명·이름과 값은 원본 blob 참조",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 94,
+        "end": 119,
+        "anchor": "populate_properties"
+      }
+    },
+    {
+      "planned_lesson": "os2512",
+      "title": "OF phandle 입력 이름·첫 값과 IBM 덮기",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 94,
+        "end": 119,
+        "anchor": "populate_properties"
+      }
+    },
+    {
+      "planned_lesson": "os2513",
+      "title": "OF 없는 name property·unit name에서 생성",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 94,
+        "end": 119,
+        "anchor": "populate_properties"
+      }
+    },
+    {
+      "planned_lesson": "os2514",
+      "title": "OF device_node 생성·이름과 parent 연결",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 191,
+        "end": 216,
+        "anchor": "populate_node"
+      }
+    },
+    {
+      "planned_lesson": "os2515",
+      "title": "OF child 앞 삽입·빠른 연결과 순서 역전",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 191,
+        "end": 216,
+        "anchor": "populate_node"
+      }
+    },
+    {
+      "planned_lesson": "os2516",
+      "title": "OF child 목록 역전·재귀와 저장한 next",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 237,
+        "end": 269,
+        "anchor": "reverse_nodes"
+      }
+    },
+    {
+      "planned_lesson": "os2517",
+      "title": "OF unflatten 순회·깊이별 parent 배열",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 270,
+        "end": 295,
+        "anchor": "unflatten_dt_nodes"
+      }
+    },
+    {
+      "planned_lesson": "os2518",
+      "title": "OF unflatten dryrun·할당 크기 계산 pass",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 270,
+        "end": 295,
+        "anchor": "unflatten_dt_nodes"
+      }
+    },
+    {
+      "planned_lesson": "os2519",
+      "title": "OF unflatten subtree·시작 depth와 사용 정책",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 270,
+        "end": 295,
+        "anchor": "unflatten_dt_nodes"
+      }
+    },
+    {
+      "planned_lesson": "os2520",
+      "title": "OF unflatten 전체 준비·header와 두 pass",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 351,
+        "end": 376,
+        "anchor": "__unflatten_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2521",
+      "title": "OF unflatten 끝 marker·경고와 오류 처리",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 351,
+        "end": 376,
+        "anchor": "__unflatten_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2522",
+      "title": "OF unflatten detached·root flag와 반환 공간",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 351,
+        "end": 376,
+        "anchor": "__unflatten_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2523",
+      "title": "OF 런타임 tree 할당·kzalloc 제공자",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 419,
+        "end": 444,
+        "anchor": "kernel_tree_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os2524",
+      "title": "OF tree 확장 mutex·직렬화 wrapper",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 440,
+        "end": 472,
+        "anchor": "of_fdt_unflatten_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2525",
+      "title": "OF crash dump elfcorehdr·예약 중복 검사",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 473,
+        "end": 498,
+        "anchor": "fdt_reserve_elfcorehdr"
+      }
+    },
+    {
+      "planned_lesson": "os2526",
+      "title": "OF 예약 메모리 순서·노드와 header memreserve",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 496,
+        "end": 521,
+        "anchor": "early_init_fdt_scan_reserved_mem"
+      }
+    },
+    {
+      "planned_lesson": "os2527",
+      "title": "OF DTB 자체 예약·원본 참조의 수명",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 521,
+        "end": 546,
+        "anchor": "early_init_fdt_reserve_self"
+      }
+    },
+    {
+      "planned_lesson": "os2528",
+      "title": "OF flat 전체 scan·callback과 조기 종료",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 540,
+        "end": 569,
+        "anchor": "of_scan_flat_dt"
+      }
+    },
+    {
+      "planned_lesson": "os2529",
+      "title": "OF flat 직계 child scan·깊은 후손과 구별",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 570,
+        "end": 597,
+        "anchor": "of_scan_flat_dt_subnodes"
+      }
+    },
+    {
+      "planned_lesson": "os2530",
+      "title": "OF flat 조회 wrapper·offset와원본pointer",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 618,
+        "end": 643,
+        "anchor": "of_get_flat_dt_prop"
+      }
+    },
+    {
+      "planned_lesson": "os2531",
+      "title": "OF compatible 우선순위·문자열 목록의1기반 점수",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 634,
+        "end": 660,
+        "anchor": "of_fdt_is_compatible"
+      }
+    },
+    {
+      "planned_lesson": "os2532",
+      "title": "OF machine table match·최소 양수와 동점",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 669,
+        "end": 694,
+        "anchor": "of_flat_dt_match"
+      }
+    },
+    {
+      "planned_lesson": "os2533",
+      "title": "OF machine 이름·model과 compatible fallback",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 694,
+        "end": 719,
+        "anchor": "of_flat_dt_get_machine_name"
+      }
+    },
+    {
+      "planned_lesson": "os2534",
+      "title": "OF initrd 가상주소·architecture 조건",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 754,
+        "end": 779,
+        "anchor": "__early_init_dt_declare_initrd"
+      }
+    },
+    {
+      "planned_lesson": "os2535",
+      "title": "OF initrd 범위·start/end와size",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 774,
+        "end": 799,
+        "anchor": "early_init_dt_check_for_initrd"
+      }
+    },
+    {
+      "planned_lesson": "os2536",
+      "title": "OF elfcorehdr cell읽기·길이guard의실제단위",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 809,
+        "end": 838,
+        "anchor": "early_init_dt_check_for_elfcorehdr"
+      }
+    },
+    {
+      "planned_lesson": "os2537",
+      "title": "OF usable-memory-range·최대2개와cap/add",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 845,
+        "end": 870,
+        "anchor": "early_init_dt_check_for_usable_mem_range"
+      }
+    },
+    {
+      "planned_lesson": "os2538",
+      "title": "OF early stdout 경로·alias와colon options",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 877,
+        "end": 902,
+        "anchor": "early_init_dt_scan_chosen_stdout"
+      }
+    },
+    {
+      "planned_lesson": "os2539",
+      "title": "OF early console 선택·compatible table와EALREADY",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 877,
+        "end": 902,
+        "anchor": "early_init_dt_scan_chosen_stdout"
+      }
+    },
+    {
+      "planned_lesson": "os2540",
+      "title": "OF root cell 기본값·big-endian설정 읽기",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 928,
+        "end": 953,
+        "anchor": "early_init_dt_scan_root"
+      }
+    },
+    {
+      "planned_lesson": "os2541",
+      "title": "OF cell cursor·누적숫자와pointer증가",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 953,
+        "end": 978,
+        "anchor": "dt_mem_next_cell"
+      }
+    },
+    {
+      "planned_lesson": "os2542",
+      "title": "OF memory node 선택·직계child와status",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 964,
+        "end": 989,
+        "anchor": "early_init_dt_scan_memory"
+      }
+    },
+    {
+      "planned_lesson": "os2543",
+      "title": "OF memory reg 반복·완전entry와hotplug표시",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 964,
+        "end": 989,
+        "anchor": "early_init_dt_scan_memory"
+      }
+    },
+    {
+      "planned_lesson": "os2544",
+      "title": "OF chosen 처리·없는node도cmdline설정 적용",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1019,
+        "end": 1044,
+        "anchor": "early_init_dt_scan_chosen"
+      }
+    },
+    {
+      "planned_lesson": "os2545",
+      "title": "OF boot randomness·seed NOP와CRC갱신",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1019,
+        "end": 1044,
+        "anchor": "early_init_dt_scan_chosen"
+      }
+    },
+    {
+      "planned_lesson": "os2546",
+      "title": "OF commandline 정책·extend force default",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1019,
+        "end": 1044,
+        "anchor": "early_init_dt_scan_chosen"
+      }
+    },
+    {
+      "planned_lesson": "os2547",
+      "title": "OF 물리메모리 page정렬·앞부분잘라내기",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1086,
+        "end": 1111,
+        "anchor": "early_init_dt_add_memory_arch"
+      }
+    },
+    {
+      "planned_lesson": "os2548",
+      "title": "OF 물리메모리 제한·최대끝과최소offset",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1086,
+        "end": 1111,
+        "anchor": "early_init_dt_add_memory_arch"
+      }
+    },
+    {
+      "planned_lesson": "os2549",
+      "title": "OF early tree allocation·memblock와panic",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1128,
+        "end": 1153,
+        "anchor": "early_init_dt_alloc_memory_arch"
+      }
+    },
+    {
+      "planned_lesson": "os2550",
+      "title": "OF boot DTB verify·CRC와root cell준비",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1139,
+        "end": 1164,
+        "anchor": "early_init_dt_verify"
+      }
+    },
+    {
+      "planned_lesson": "os2551",
+      "title": "OF boot scan 순서·chosen memory usable",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1160,
+        "end": 1185,
+        "anchor": "early_init_dt_scan_nodes"
+      }
+    },
+    {
+      "planned_lesson": "os2552",
+      "title": "OF DTB copy·totalbytes와정렬할당",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1188,
+        "end": 1213,
+        "anchor": "copy_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2553",
+      "title": "OF boot unflatten·ACPI와빈rootfallback",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1211,
+        "end": 1236,
+        "anchor": "unflatten_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2554",
+      "title": "OF boot root와aliases·unflatten후단계",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1211,
+        "end": 1236,
+        "anchor": "unflatten_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2555",
+      "title": "OF copy뒤unflatten·initsectionblob수명",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1255,
+        "end": 1280,
+        "anchor": "unflatten_and_copy_device_tree"
+      }
+    },
+    {
+      "planned_lesson": "os2556",
+      "title": "OF raw FDT sysfs읽기·offset와count계약",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1264,
+        "end": 1289,
+        "anchor": "of_fdt_raw_read"
+      }
+    },
+    {
+      "planned_lesson": "os2557",
+      "title": "OF raw FDT 공개 조건·CRC와root읽기권한",
+      "path": "drivers/of/fdt.c",
+      "excerpt": {
+        "start": 1272,
+        "end": 1291,
+        "anchor": "of_fdt_raw_init"
+      }
+    }
+  ]
+}

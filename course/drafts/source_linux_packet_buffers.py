@@ -1,0 +1,43 @@
+"""Packet buffer descriptors, shared data, and linear buffer bounds."""
+ROWS = [
+('패킷 clone: 메타데이터는 따로, 실제 데이터는 공유', '네트워크', 'net/core/skbuff.c', 'skb_clone',
+ '같은 패킷을 여러 경로에서 관찰하거나 전달할 때 본문을 매번 복사하면 메모리와 복사 시간이 듭니다. 패킷을 설명하는 sk_buff 객체만 별도로 만들고 데이터 공간은 공유하면 그 비용을 줄일 수 있습니다.',
+ 'skb_clone은 먼저 skb_orphan_frags 실패를 확인합니다. fclone 원본이고 쌍의 참조가 1이면 미리 마련된 skb2를 사용하며 아니면 별도 sk_buff를 할당합니다. pfmemalloc이면 할당 플래그를 보강합니다. __skb_clone은 링크·소켓·destructor 등을 새 객체 규칙에 맞추고 길이 및 head/data/tail/end 같은 위치 정보를 복사합니다. 새 객체 users는 1로 두고 공유 데이터 dataref를 증가시키며 양쪽을 cloned 상태로 표시합니다.',
+ '원본 A와 clone B를 두 상자로 그린 뒤 둘의 head/data 화살표가 같은 데이터 공간으로 향하게 하세요. B의 메타데이터가 별도라는 것만으로 B를 통해 본문 바이트를 수정해도 A가 영향받지 않는다고 판단하면 안 됩니다. 데이터 쓰기 전 공유 해제나 적절한 writable 확보 경로가 필요합니다.',
+ '왜 참조 카운터가 두 종류인가',
+ 'users는 개별 sk_buff 객체의 사용자를 세고 dataref는 여러 descriptor가 공유하는 데이터 공간의 수명을 관리합니다. 객체 둘에 각각 users=1이 있어도 데이터는 공유될 수 있습니다. skb_clone의 NULL은 할당 또는 fragment 준비 실패를 포함하며 새 데이터 본문 전체를 복사하는 함수가 아닙니다. __copy_skb_header의 세부 필드 정책은 하위 helper의 별도 계약으로 이어집니다.',
+ ('clone B의 users=1이면 데이터도 B만 쓰는가요?', '아닙니다. 데이터 공유 참조는 별도로 관리합니다.', '그렇습니다. users가 1이면 본문까지 항상 독점입니다.', 'clone 경로는 head와 data를 복사하고 dataref를 증가시킵니다. 객체 참조 수와 데이터 참조 수를 구별합니다.'),
+ ('skb_clone은 성공하면 원본 본문을 전부 memcpy하나요?', '아닙니다. descriptor를 준비하고 데이터 공유를 설정합니다.', '그렇습니다. 모든 clone은 전체 데이터 복사입니다.', '핵심 경로는 __skb_clone의 포인터·길이 복사 및 dataref 증가입니다. 전체 데이터 복사가 필요하면 다른 API의 계약을 봐야 합니다.')),
+('패킷 전체 복사: 흩어진 데이터를 새 선형 버퍼로 모으기', '네트워크', 'net/core/skbuff.c', 'skb_copy',
+ '공유 패킷의 본문을 독립적으로 바꾸려면 새 데이터 저장 공간이 필요할 수 있습니다. 원본이 선형 머리와 여러 fragment로 나뉘어 있어도 복사 결과를 하나의 선형 데이터 영역으로 만들 수 있습니다.',
+ 'skb_copy는 fragment가 읽을 수 없으면 NULL이고 GSO_FRAGLIST 형식도 경고 후 NULL입니다. 원래 headroom을 기억하고 skb_end_offset+data_len 크기로 새 skb를 할당합니다. skb_reserve로 headroom을 만들고 skb_put으로 데이터 길이를 확보합니다. skb_copy_bits를 -headerlen부터 호출해 headroom과 전체 패킷 길이를 새 head에 복사하고 skb_copy_header로 메타데이터를 옮깁니다. 정상 전제에서 copy_bits 오류는 BUG_ON 대상입니다.',
+ '원본 headroom=32, 패킷 len=1000이라고 가정하면 데이터 앞 32바이트도 함께 복사하며 새 data는 새 head에서 32바이트 뒤입니다. 원본 data_len은 비선형 영역의 길이여서 새 할당 크기 계산에 포함됩니다. 이 API의 실패 반환 NULL을 확인하고 성공 객체의 수명을 나중에 정리하세요.',
+ '왜 skb_put만으로 복사가 끝나지 않나',
+ 'skb_put은 데이터 길이와 tail 위치를 늘리고 쓸 시작 주소를 반환할 뿐 원본 바이트를 채우지 않습니다. 실제 내용을 옮기는 것은 뒤의 skb_copy_bits입니다. 또한 skb_copy는 단순 구조체 memcpy가 아니며 읽을 수 없는 fragment와 특정 GSO 형식에는 실패합니다. 모든 packet 형식이 항상 같은 방법으로 선형 복사된다고 일반화하면 안 됩니다.',
+ ('새 버퍼의 본문 바이트를 채우는 핵심 호출은?', 'skb_copy_bits입니다.', 'skb_put 하나로 내용도 자동 복사됩니다.', 'reserve와 put은 위치·길이를 설정하고, 그 다음 copy_bits가 원본 데이터와 headroom을 실제로 옮깁니다.'),
+ ('읽을 수 없는 fragment를 가진 skb도 무조건 복사되나요?', '아닙니다. skb_frags_readable 검사에서 NULL입니다.', '그렇습니다. 어떤 데이터 형태도 실패하지 않습니다.', '할당 전에 이미 입력 형식의 조건을 검사합니다. 메모리 부족만이 실패 원인은 아닙니다.')),
+('패킷 공간 확보: reserve·put·push의 위치 변화', '네트워크', 'net/core/skbuff.c', 'skb_put',
+ '네트워크 계층은 데이터 앞에 헤더를 붙이고 뒤에 본문을 쓸 공간이 필요합니다. 이미 확보한 버퍼 안에서 headroom과 tailroom을 관리하면 매번 데이터를 옮기지 않고 패킷 범위를 조정할 수 있습니다.',
+ '빈 skb에서 skb_reserve는 data와 tail을 같은 길이만큼 앞으로 이동하며 len을 늘리지 않습니다. skb_put은 기존 tail 주소를 반환하고 tail과 len을 늘리며 end를 넘으면 panic 경로입니다. 선형 버퍼 전제도 검사합니다. skb_push는 data를 뒤로 이동하고 len을 늘리며 head보다 앞서면 panic입니다. 두 함수 모두 자동으로 메모리를 늘려 주거나 새 영역을 0으로 채우는 함수가 아닙니다.',
+ 'head 기준 전체 공간 128, 초기 data=tail=0,len=0인 단순 모델을 보세요. reserve(32) 뒤 data=tail=32,len=0입니다. put(40) 뒤 data=32,tail=72,len=40이고 반환은 이전 tail 위치 32입니다. push(20) 뒤 data=12,tail=72,len=60입니다. 앞 헤더 20바이트를 쓸 자리를 확보한 것입니다.',
+ '왜 공간 부족을 정상 NULL 오류로 처리하지 않나',
+ 'skb_put과 skb_push는 호출자가 충분한 공간 및 쓰기 가능성 조건을 확보했다고 전제합니다. 경계를 넘으면 skb_over_panic 또는 skb_under_panic으로 이어지므로 외부에서 받은 길이를 검증 없이 넘기는 안전한 grow API가 아닙니다. reserve도 범위 검사나 할당을 수행하지 않으며 빈 버퍼를 준비할 때 사용하는 계약을 지켜야 합니다. 공유 clone의 데이터 수정 권한도 이 위치 연산만으로 얻어지지 않습니다.',
+ ('reserve(32)를 하면 패킷 len도 32가 되나요?', '아닙니다. 앞 공간을 비워 두고 len은 유지합니다.', '그렇습니다. 예약 바이트는 곧 유효한 패킷 데이터입니다.', 'reserve는 data와 tail만 이동합니다. put 또는 push처럼 len을 더하는 연산과 다릅니다.'),
+ ('tailroom이 부족해도 skb_put이 자동 재할당하나요?', '아닙니다. 범위를 넘으면 panic 경로입니다.', '그렇습니다. 원하는 만큼 버퍼를 자동으로 키웁니다.', '본문에는 allocator 호출이 없으며 tail > end 조건을 검사합니다. 호출 전 필요한 공간 확보가 중요합니다.')),
+('패킷 앞부분 소비: pull의 길이 검사와 비선형 영역', '네트워크', 'net/core/skbuff.c', 'skb_pull',
+ '헤더를 해석한 뒤 그 부분을 소비하면 다음 프로토콜 계층은 payload부터 읽어야 합니다. 포인터를 움직이는 비용은 작지만 전체 패킷 길이와 바로 접근 가능한 선형 영역의 길이를 구별해야 합니다.',
+ 'skb_pull은 헤더의 skb_pull_inline에 위임합니다. 요청 len이 전체 skb->len보다 크면 NULL이며 변경하지 않습니다. 아니면 __skb_pull이 전체 len을 줄이고 줄어든 값이 data_len보다 작으면 BUG 경로입니다. 정상일 때 data를 앞으로 len만큼 옮겨 새 시작 주소를 반환합니다. data_len은 fragment 등에 있는 비선형 데이터 길이이므로 감소한 전체 길이가 그것보다 작아지면 선형 영역보다 더 많이 pull한 셈입니다.',
+ '전체 길이 1000, data_len=700이면 선형 머리는 300바이트입니다. pull(100)은 새 전체 길이 900으로 가능하지만 pull(400)은 전체 길이보다 작아도 선형 머리를 넘으므로 __skb_pull 조건을 위반합니다. 필요한 헤더가 선형 영역에 있는지 pskb_may_pull 같은 준비 경로를 사용하는 계약을 함께 확인하세요.',
+ '왜 pull이 지우는 것은 데이터가 아니라 유효 범위인가',
+ '이 함수는 data 위치와 길이를 바꾸며 옛 헤더 바이트를 0으로 지우거나 별도 할당을 해제하지 않습니다. 소비된 영역은 headroom 쪽에 남아 이후 push가 덮어쓸 수 있습니다. 길이 초과 NULL은 변경 전 검사이지만 선형 영역 위반은 이미 len을 줄인 뒤 BUG가 실행되는 경로이며 DEBUG_NET 설정은 진단을 위해 len을 되돌리는 코드를 포함합니다. 두 실패를 모두 안전한 무변경 NULL로 설명하면 안 됩니다.',
+ ('전체 1000, 비선형 700에서 pull(400)은 안전한가요?', '아닙니다. 선형 머리 300보다 많이 소비합니다.', '그렇습니다. 전체 1000보다 작으면 충분합니다.', '감소 후 전체 길이 600이 data_len 700보다 작아지는 불일치가 발생합니다. 데이터의 배치를 고려해야 합니다.'),
+ ('pull한 헤더의 메모리는 즉시 0으로 지워지나요?', '아닙니다. 시작 위치와 길이를 변경합니다.', '그렇습니다. 보안을 위해 항상 전체 헤더를 0으로 덮습니다.', '본문에는 memset이나 zero 동작이 없습니다. 유효 영역 변경과 데이터 지우기는 다른 작업입니다.')),
+]
+
+def register(topic, q, detail):
+    for title, area, path, symbol, why, principle, use, dt, body, qa, qb in ROWS:
+        topic(title, area, path, symbol, why, principle, use,
+              'head·data·tail·end와 전체 len·비선형 data_len을 그림에 표시하고 연산 전후 위치를 계산하세요. 객체 참조와 데이터 공유를 구별하세요.',
+              q(title+' · '+qa[0], *qa[1:]), q(title+' · '+qb[0], *qb[1:]),
+              details=[detail(dt, body), detail('검토 범위',
+              'Linux v6.12의 해당 함수와 명시한 helper의 구현을 읽었습니다. 포인터 예제는 설명용 상대 위치이며 실제 패킷 전송·커널 panic·동시성 실험을 수행한 결과는 아닙니다.')])

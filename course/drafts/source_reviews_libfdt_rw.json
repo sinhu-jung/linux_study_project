@@ -1,0 +1,356 @@
+{
+  "scripts/dtc/libfdt/fdt_rw.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 500,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2384",
+        "symbols": [
+          "fdt_blocks_misordered_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 쓰기 layout·reserve→structure→strings 순서. read-write 구현은 reserve 시작이8 정렬 header 뒤이고 structure가 reserve 뒤, strings가 structure 뒤, strings끝이total 안인지 확인합니다. 이 도구가 쓰기에 기대하는 배치와 명세가 허용하는 모든 배치는 다릅니다. 재배치가 필요한 자료는 open_into에서 다루며 이 helper는 검사 결과만 계산합니다. 각 block의 시작·크기·끝을 네 부등식으로 적습니다. sequential writer의 초기 reserve48과 pack의40이 모두 header40 뒤인 관계를 읽습니다."
+      },
+      {
+        "lesson": "os2385",
+        "symbols": [
+          "fdt_rw_probe_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB read-write probe·version17과 조건부 변경. VALID_DTB 전제면 바로0입니다. 기본 경로는 최소 read probe 뒤 version17 미만을 BADVERSION, 잘못된 배치를 BADLAYOUT로 거부합니다. LATEST가 아니고 version이17보다 크면 header version을17로 씁니다. probe라는 이름이어도 완전히 불변인 조회로 설명하지 않습니다. 전체 library 최소2, 공개 struct 최소16, 이 쓰기 경로 최소17을 구별합니다. probe의 version 변경이 실제 작업 실패 전에도 선행할 수 있음을 읽습니다."
+      },
+      {
+        "lesson": "os2386",
+        "symbols": [
+          "FDT_RW_PROBE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 쓰기 probe macro·호출자 조기 return. macro는 내부 err_를 선언해 rw_probe를 호출하고 실패하면 사용하는 함수에서 return합니다. 검사와 오류 전달을 여러 공개 수정 API가 공유합니다. preprocessor 코드 확장과 독립 함수의 반환을 구별하며 이후 수정이 시작되는 위치를 각 caller에서 확인합니다. add/del reserve와 property/node 수정 함수에서 macro 다음의 첫 변경을 표시합니다. 잘못된 상태가 조기에 전달되는 공통 흐름을 적습니다."
+      },
+      {
+        "lesson": "os2387",
+        "symbols": [
+          "fdt_data_size_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 사용 데이터 끝·capacity와 dsize 구별. data size는 strings offset+strings size로 사용 영역의 끝을 계산합니다. totalsize는 편집 buffer capacity일 수 있으므로 같은 값이라고 가정하지 않습니다. splice는 이 사용 끝까지의 tail을 이동하고 pack은 이 끝을 최종 total로 설정합니다. open_into 후 capacity8192와 실제 사용 끝을 비교합니다. 사용 데이터·여유 공간·최종 압축 길이의 세 수치를 그림으로 적습니다."
+      },
+      {
+        "lesson": "os2388",
+        "symbols": [
+          "fdt_splice_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB splice·범위 교체와 tail memmove. splicepoint부터 oldlen 영역을 newlen 영역으로 바꾸기 위해 뒤의 사용 tail을 memmove합니다. oldlen 음수·끝 범위·일부 overflow 및 총capacity 초과를 검사합니다. 새 구간의 내용 자체를 여기서 초기화하거나 header metadata를 모두 갱신하는 것은 아니며 caller가 다음 단계를 수행합니다. oldlen4→newlen8이면 뒤 자료가4바이트 밀립니다. private helper의 정상 길이/범위 계약과 모든 임의 큰 인자를 완전히 검사한다는 주장 사이를 구별합니다."
+      },
+      {
+        "lesson": "os2389",
+        "symbols": [
+          "fdt_splice_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB splice 오류·oldlen과 공간 검사. old 영역이 사용 데이터 밖이거나 일부 덧셈이 wrap되면 BADOFFSET, 변경 후 사용 끝이 capacity를 넘으면 NOSPACE입니다. 검사가 끝나야 memmove를 시작합니다. 이 함수가 모든 negative newlen과 임의 pointer 조합에 대한 일반 allocator 계약을 제공한다고 해석하지 않습니다. 충분한 capacity의 property 확대와 packed buffer의 NOSPACE를 비교합니다. private caller가4 정렬 길이를 준비하는 과정과 검사 순서를 주석으로 적습니다."
+      },
+      {
+        "lesson": "os2390",
+        "symbols": [
+          "fdt_splice_mem_rsv_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB reserve splice·entry 단위와 두 base 이동. oldn/newn entry 수에 sizeof(entry)를 곱해 byte splice를 요청합니다. 성공이면 delta=(newn−oldn)*16을 structure와 strings 시작 offset에 더합니다. structure-relative node offset은 같은 자료 안에서 유지될 수 있지만 absolute pointer는 block 이동 때문에 달라집니다. 예약 entry 추가/삭제 뒤 두 block base가16 늘거나 줄어드는 값을 계산합니다. relative 위치와 기존 pointer 보존을 서로 다른 조건으로 읽습니다."
+      },
+      {
+        "lesson": "os2391",
+        "symbols": [
+          "fdt_splice_struct_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB structure splice·크기와 strings base 갱신. structure 구간의 old/new byte 차이만큼 structure size와 strings 시작 offset을 갱신합니다. 공통 splice 성공 후 metadata를 바꾸므로 실패하면 그 단계의 크기 setter는 실행하지 않습니다. 중간 property/node를 바꾸면 이후 구조 상대 offset도 이동할 수 있습니다. status 값 길이를 늘리거나 줄인 뒤 이름 경로로 node를 다시 조회하는 fixture를 읽습니다. offset cache와 byte pointer가 자동 유지된다고 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2392",
+        "symbols": [
+          "fdt_splice_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB strings splice·끝에 새 이름 공간 만들기. strings 사용 끝에서 oldlen0/newlen을 splice해 이름 공간을 늘립니다. 성공 후 strings size를 증가시키며 structure size나 reserve base를 바꾸지는 않습니다. sequential writer의 뒤에서 역방향 증가와 달리 완성 쓰기 배치의 strings끝을 앞으로 늘리는 방식입니다. 기존 문자열 표 뒤4바이트 new 이름을 추가하는 과정을 계산합니다. 같은 이름 table도 작성 단계에 따라 성장 방향과 offset 기준이 달라짐을 적습니다."
+      },
+      {
+        "lesson": "os2393",
+        "symbols": [
+          "fdt_find_add_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB read-write 이름 dedup·정상 nonnegative offset. 기존 table에서 NUL byte sequence를 찾으면 시작 기준 offset을 반환합니다. 없으면 끝에 공간을 확보하고 이름을 복사합니다. NO_ROLLBACK 전제가 없을 때 allocated0/1을 기록하며 이 값은 뒤 property 공간 실패의 원복에 사용됩니다. 기존 이름의 suffix도 재사용 가능할 수 있습니다. 정상 offset0도 성공이며 sequential 내부 helper의0 실패 sentinel과 다름을 적습니다. 이름 추가 오류는 음수인 이 helper의 계약을 비교합니다."
+      },
+      {
+        "lesson": "os2394",
+        "symbols": [
+          "fdt_del_last_string_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 마지막 이름 원복·NO_ROLLBACK의 실제 차이. 기본 property 추가 실패는 새 이름의 strlen+1을 strings size에서 빼 사용 범위를 되돌립니다. byte를 지우는 transaction은 아닙니다. NO_ROLLBACK bit8이면 caller가 원복을 생략해 property 없이 이름만 표에 남을 수 있습니다. 자료의 효율과 전체 원복 보장을 구별합니다. capacity에4바이트만 여유가 있는 실제 fixture에서 new 이름 추가 후 property 실패를 일으켰습니다. 기본 문자열 크기는 유지되고 mask8에서는4 증가하는 metadata를 비교합니다."
+      },
+      {
+        "lesson": "os2395",
+        "symbols": [
+          "fdt_add_mem_rsv"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 예약 추가·terminator 앞 삽입. reserve 개수를 얻고 그 위치의 terminator 앞에 entry 한 개를 splice합니다. 뒤 structure/strings를 밀고 주소·크기를 big-endian64로 기록합니다. terminator를 덮어 없애는 단순 overwrite가 아니라 기존 종료 표시를 뒤로 보존하는 삽입입니다. 두 예약을 실제 추가해 num2를 얻습니다. tree 자료의 예약 목록 수정과 실제 OS allocator에 예약을 적용하는 것은 다른 단계라고 적습니다."
+      },
+      {
+        "lesson": "os2396",
+        "symbols": [
+          "fdt_del_mem_rsv"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 예약 삭제·개수 조건과 인덱스 사용. n이 현재 reserve 개수 이상이면 NOTFOUND입니다. 정상 n은 한 entry를0개로 splice해 뒤 block을 당깁니다. 이 본문의 n>=개수 비교가 음수 n을 명시적으로 거부하는 검사까지 포함한다고 설명하지 않습니다. caller는 유효 nonnegative index와 정상 자료 계약을 확인합니다. index0 삭제 뒤 기존 두 번째 예약 값이 첫 entry가 되는 fixture를 풉니다. 범위 밖10은 NOTFOUND이며 음수 index는 실행하지 않았습니다."
+      },
+      {
+        "lesson": "os2397",
+        "symbols": [
+          "fdt_resize_property_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 기존 property resize·padding와 실제 len. 기존 writable property를 얻고 data 공간의 정렬된 oldlen/newlen을 splice합니다. 성공이면 len field를 실제 새 byte 길이로 기록합니다. padding 공간 길이와 value 길이는 다르며 header가 같은 자리여도 뒤 tree 자료의 위치는 바뀔 수 있습니다. status okay5→disabled-long14→ok3의 실제 재조회와 길이를 비교합니다. 새 값 복사는 이 helper 뒤 caller 단계임을 적습니다."
+      },
+      {
+        "lesson": "os2398",
+        "symbols": [
+          "fdt_add_property_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 새 property·node header 뒤 삽입과 이름 원복. node checker로 header 뒤 위치를 얻고 이름을 찾거나 추가합니다. 그 위치에 property header12+정렬 value 공간을 삽입합니다. 실패하면 기본 문맥에서 새 이름만 원복하고 성공이면 tag/nameoff/len을 씁니다. 새 property는 node property 목록 앞에 들어갈 수 있어 순서가 기존과 달라집니다. 새 empty property를 실제 추가하고 len0이어도 header가 필요함을 계산합니다. 전체 tree를 재배치한 뒤 기존 offset 사용과 이름 path 재조회 조건을 읽습니다."
+      },
+      {
+        "lesson": "os2399",
+        "symbols": [
+          "fdt_set_name"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB node 이름 변경·NUL 포함 정렬 공간 splice. 기존 이름을 조회하고 oldlen+1/newlen+1의4 정렬 공간을 splice한 뒤 새 이름을NUL까지 복사합니다. 같은 기본 이름에서도 unit address 문자열을 바꾸면 path 검색 결과가 바뀝니다. caller가 제공하는 새 이름의 accessible NUL와 기존 blob pointer 겹침 사용 조건도 확인해야 합니다. 공개 문서는 형제 이름의 유일성을 효율적으로 검사하지 않으며 형제와 같은 이름으로 바꾸면 결과가 정의되지 않는다고 설명합니다. caller가 중복을 피해야 합니다. device@100→device@200 뒤 old 경로는NOTFOUND, 새 경로는 정상인 실제 fixture를 읽습니다. 이름 변경과 phandle 식별자 변경을 구별합니다."
+      },
+      {
+        "lesson": "os2400",
+        "symbols": [
+          "fdt_setprop_placeholder"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB setprop placeholder·기존 resize 또는 신규 추가. 먼저 rw probe 후 기존 property resize를 시도합니다. 그 결과가 정확히 NOTFOUND이면 새 property를 추가하며 다른 오류는 전달합니다. 정상 때 prop_data에 writable value pointer를 적습니다. 반환0 이후에만 caller가 이 pointer를 쓸 수 있고 크기 변경으로 다른 pointer가 무효화될 수 있습니다. 존재 status의 확대와 새 empty property 생성을 같은 API로 수행합니다. 모든 조회 오류를 부재로 간주해 새 값을 만드는 코드가 아니라는 점을 적습니다."
+      },
+      {
+        "lesson": "os2401",
+        "symbols": [
+          "fdt_setprop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB setprop·가변 길이 교체와 빈 값. placeholder로 공간을 준비하고 성공 뒤 len이0이 아니면 memcpy합니다. len0에서는 val NULL의 byte 복사를 호출하지 않습니다. 같은 길이만 요구하는 inplace와 달리 공간이 있으면 기존 값 길이를 바꾸거나 새 property를 만들 수 있습니다. caller는 비음수 표현 가능한 길이와 val memory 계약을 지켜야 합니다. len0/valNULL의 실제 empty property와 status의 길이 변화를 비교합니다. byte copy와 정수 endian 변환은 wrapper별 별도 단계입니다."
+      },
+      {
+        "lesson": "os2402",
+        "symbols": [
+          "fdt_appendprop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB appendprop·기존 값 뒤 추가와 len 갱신. 기존 property가 있으면 newlen=oldlen+len을 계산해 정렬 공간을 resize하고 len field를 새 길이로 바꾼 뒤 기존 data 끝에 복사합니다. 없는 경우 새 property를 추가합니다. 이 원본의 int 합산을 모든 큰 길이의 overflow 안전성으로 설명하지 않고 작은 유효 길이와 buffer 계약을 확인합니다. 주소 범위 reg12바이트 뒤 다음12를 추가해24가 되는 실제 fixture를 읽습니다. oldlen byte 위치와 새 alignment 공간을 구별합니다."
+      },
+      {
+        "lesson": "os2403",
+        "symbols": [
+          "fdt_delprop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB property 삭제·compact 제거와 문자열 잔존. property를 조회하고 header12+정렬된 value 길이를0으로 splice합니다. 뒤 자료를 당기므로 후속 structure offset이 바뀔 수 있습니다. property의 name 문자열을 strings table에서 별도로 삭제하는 코드는 없습니다. NOP property의 동일 offset 유지와 다른 기술입니다. status len3 삭제에서 structure size가16 줄어드는 실제 fixture를 확인합니다. 문자열 table compact와 property record 제거를 구별합니다."
+      },
+      {
+        "lesson": "os2404",
+        "symbols": [
+          "fdt_add_subnode_namelen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB child 추가·기존 이름 존재 검사. 직계 child 이름 검색이 성공하면 EXISTS, NOTFOUND 외 오류면 그대로 반환합니다. 새 child는 parent property와 NOP tag를 건너뛴 위치에 삽입합니다. 기존 child 뒤에만 append하는 규칙이 아니라 property 다음의 앞쪽 child 위치일 수 있습니다. device@200이 있는 bus에 device 요청이 unit address 생략 규칙으로 EXISTS인 fixture를 읽습니다. child 이름 비교의 규칙이 추가 중복 조건에도 사용됩니다."
+      },
+      {
+        "lesson": "os2405",
+        "symbols": [
+          "fdt_add_subnode_namelen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 새 child record·NUL padding과 END_NODE. 새 공간은 node header4+정렬된 namelen+1+END_NODE4입니다. 이름 공간을0으로 채우고 지정 namelen byte를 복사해 NUL과 padding을 확보합니다. 빈 child의 시작과 종료 tag를 동시에 씁니다. 실패 전후 기존 relative offset과 pointer 수명은 splice 조건에 따라 달라집니다. child-extra의 앞5문자를 child로 생성하는 fixture에서 정렬된 이름 공간8바이트와 전체 record16바이트를 계산합니다. 이름이5면 정렬6→8, 총4+8+4=16임을 확인합니다."
+      },
+      {
+        "lesson": "os2406",
+        "symbols": [
+          "fdt_add_subnode"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB child 일반 wrapper·strlen의 사용 조건. 일반 wrapper는 strlen(name)을 namelen 추가 함수에 전달합니다. 이름이NUL로 끝나는 caller 자료가 필요하며 내부 검색과 splice가 실제 child를 생성합니다. 반환은0 고정 status가 아니라 새 node의 structure-relative offset이므로 음수 오류와 nonnegative 위치를 구별합니다. 첫 bus child가 root header 뒤 offset8에 생성된 fixture를 확인합니다. 이후 property 삽입으로 그 값이 바뀔 수 있어 같은 path를 재조회하는 사용법을 적습니다."
+      },
+      {
+        "lesson": "os2407",
+        "symbols": [
+          "fdt_del_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB subtree 삭제·깊이 탐색 뒤 전체 영역 splice. rw probe 뒤 node_end_offset_로 subtree 끝을 찾고 오류면 반환합니다. 정상 범위를0으로 splice하므로 node와 모든 후손의 record를 제거하고 뒤 자료를 당깁니다. NOP node의 무효화와 달리 구조 크기를 줄입니다. shared 이름 table을 별도로 정리하지는 않습니다. child subtree 삭제 뒤 path NOTFOUND를 확인합니다. parent와 sibling을 다시 조회하고 기존 offset cache를 그대로 쓰지 않는 이유를 설명합니다."
+      },
+      {
+        "lesson": "os2408",
+        "symbols": [
+          "fdt_packblocks_"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB block pack·header 뒤8 정렬 재배치. reserve를8 정렬 header 뒤에, structure를 reserve 뒤에, strings를 structure 뒤에 memmove하고 관련 offset/size를 갱신합니다. 순차 create가 reserve를48에 둔 자료도 pack에서는40으로 시작할 수 있습니다. 각 block 내부의 relative offset은 자료를 그대로 옮기는 방식으로 유지합니다. 예약 entry 포함 개수와 세 block 길이로 새 offset을 계산합니다. 이름 table의 미사용 문자열까지 자동 제거하는 문자열별 compact가 아니라 block 배치 압축임을 적습니다."
+      },
+      {
+        "lesson": "os2409",
+        "symbols": [
+          "fdt_open_into"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB open_into·version16 구조 길이 계산. 완성 자료를 최소 probe하고 reserve 개수+terminator의 길이를 구합니다. version17 이상은 structure size field, version16은 END까지 tag를 순회해 길이를 계산합니다. 그보다 오래된 format은 BADVERSION입니다. 전체 library가 version2부터 읽는 것과 이 변환 API가 지원하는 구간은 다릅니다. version16에는 structure size field가 없다는 format 수업과 연결합니다. 현재 fixture는17이므로16 순회 변환은 원문 해설이며 실행했다고 주장하지 않습니다."
+      },
+      {
+        "lesson": "os2410",
+        "symbols": [
+          "fdt_open_into"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB open_into 빠른 경로·move 뒤 capacity 확장. block 순서가 기대와 맞거나 ORDER 전제가 있으면 fdt_move로 자료를 옮기고 version17, structure size, total=bufsize를 설정합니다. 같은 buffer도 사용할 수 있고 별도 buffer에도 완성 자료를 복사해 편집 여유를 줍니다. 여유 byte 전체를0으로 채우는 코드는 없습니다. packed tree를 other8192 및 같은 blob8192에 실제 열고 path를 다시 읽습니다. capacity 증가와 실제 사용 길이를 구별합니다."
+      },
+      {
+        "lesson": "os2411",
+        "symbols": [
+          "fdt_open_into"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB open_into 재배치·겹침을 피한 임시 공간. 순서가 맞지 않으면 compact newsize를 계산합니다. 목적 시작에 새 tree를 만들려 하지만 old 자료와 겹치면 old tree 바로 뒤를 임시 공간으로 사용하고 목적 capacity에 그 임시 전체가 들어갈지 다시 확인합니다. 단순히 newsize만큼 여유면 모든 overlap 배치를 변환한다는 보장은 아닙니다. old와 new의 주소 구간을 그려 overlap 조건 두 개와 temporary 끝 검사 위치를 적습니다. 현재 fixture는 ordered 경로만 실행해 이 reorder overlap은 원문 설명입니다."
+      },
+      {
+        "lesson": "os2412",
+        "symbols": [
+          "fdt_open_into"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB open_into 재배치 완료·header 필드 정리. packblocks로 임시 완성 배치를 만들고 목적에 memmove한 뒤 magic, total capacity, version17, lastcomp16, boot CPU id를 정리합니다. 구조·문자열 상대 offset은 기존 block 내용을 유지합니다. 외부 OS boot나 CPU 실행을 이 header 정리 자체가 수행하는 것은 아닙니다. 최종 metadata와 block 이동을 서로 다른 단계로 적습니다. boot_cpuid_phys는 숫자 자료이며 CPU를 이 함수가 부팅하는 코드가 아니라는 점을 읽습니다."
+      },
+      {
+        "lesson": "os2413",
+        "symbols": [
+          "fdt_pack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB pack·편집 여유를 제거한 최종 길이. rw probe 뒤 예약 목록+terminator 길이를 구하고 같은 buffer에서 세 block을 compact합니다. totalsize를 strings끝의 data_size로 바꿉니다. pack 후 여유가 사라지므로 새 property 추가가 NOSPACE일 수 있고 필요하면 open_into로 capacity를 다시 준비합니다. 실제 pack 후 total<4096이고 total==strings끝인 검산을 읽습니다. 출력 저장용 compact 자료와 계속 수정할 편집 용량의 차이를 설명합니다."
+      },
+      {
+        "lesson": "os2414",
+        "symbols": [
+          "fdt_setprop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "DTB 가변 수정 사용법·path 재조회와 pointer 수명. 가변 크기 수정은 뒤 node의 structure offset, strings base와 기존 byte pointer를 이동시킬 수 있습니다. fixture는 매 변경 전에 path로 node를 다시 찾고 변경 뒤 value pointer를 다시 얻습니다. 전체 tree에 자동 stable pointer나 offset 갱신 서비스가 있다고 가정하지 않는 사용법입니다. 이름을 그대로 유지한 node라도 앞쪽 property를 늘리면 위치가 달라지는 예제를 그립니다. 예약 block 이동과 structure 내부 이동의 상대 offset 차이까지 연결합니다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "include/linux/refcount.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 361,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1009",
+        "symbols": [
+          "REFCOUNT_INIT",
+          "REFCOUNT_MAX",
+          "REFCOUNT_SATURATED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1010",
+        "symbols": [
+          "refcount_read",
+          "refcount_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1011",
+        "symbols": [
+          "REFCOUNT_SATURATED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1013",
+        "symbols": [
+          "__refcount_add_not_zero",
+          "refcount_add_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1014",
+        "symbols": [
+          "__refcount_inc_not_zero",
+          "refcount_inc_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1015",
+        "symbols": [
+          "__refcount_add",
+          "refcount_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1016",
+        "symbols": [
+          "__refcount_inc",
+          "refcount_inc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1017",
+        "symbols": [
+          "__refcount_sub_and_test",
+          "refcount_sub_and_test"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1018",
+        "symbols": [
+          "__refcount_dec_and_test",
+          "refcount_dec_and_test"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1019",
+        "symbols": [
+          "__refcount_dec",
+          "refcount_dec"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1025",
+        "symbols": [
+          "refcount_inc_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1026",
+        "symbols": [
+          "refcount_add_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      }
+    ]
+  },
+  "lib/refcount.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 186,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1012",
+        "symbols": [
+          "refcount_warn_saturate",
+          "REFCOUNT_WARN",
+          "refcount_saturation_type"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1020",
+        "symbols": [
+          "refcount_dec_if_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1021",
+        "symbols": [
+          "refcount_dec_not_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1022",
+        "symbols": [
+          "refcount_dec_and_mutex_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1023",
+        "symbols": [
+          "refcount_dec_and_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      },
+      {
+        "lesson": "os1024",
+        "symbols": [
+          "refcount_dec_and_lock_irqsave"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole types/header/C read; individually authored every oldp/public reference helper,0 stability/noresurrection, intbad range/unsignedread, unchecked transient saturation and largebatch limitations, WARNenum/unknown, relaxedincrement/control vs release decrement/successacquire, decleak vs finaltest, ifone/notone0 and saturated special returns, mutex/spin/IRQ final-drop held-lock and stale-flags contracts. Exact full source C11 atomic/strongCAS/pthread/-fwrapv model passed optimized+ASanUBSan236076checks,200000retained gets,100x16lastdrops winner+visibility checksum,1000get-vs-lastdrop races. IRQ and WARN_ONCE are explicitmodels; no nativekernel atomic/LKMM/allocator/RCUgraceperiod proof."
+      }
+    ]
+  },
+  "include/linux/refcount_types.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 19,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1009",
+        "symbols": [
+          "refcount_t",
+          "refcount_struct",
+          "refs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "파일 연결"
+        ],
+        "review": "Whole19line guard/include/atomic field typedef/saturation purpose comment read and authored through dedicated type/init lesson; original complete type declaration included in source fixture."
+      }
+    ]
+  }
+}

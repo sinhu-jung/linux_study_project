@@ -1,0 +1,180 @@
+{
+  "include/linux/jhash.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 176,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1926",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins hash의 목적·32bit 후보와 실제 key 비교. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1927",
+        "symbols": [
+          "jhash_size"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins hash table 크기·mask와2의승수. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1928",
+        "symbols": [
+          "__jhash_mix"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins hash u32 wrap과 rotate의 역할. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1929",
+        "symbols": [
+          "__jhash_mix"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins reversible mix·역순 연산과 상태 복원. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1930",
+        "symbols": [
+          "__jhash_final"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins final과 avalanche의 선택 관찰. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1931",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins 초기 상태·seed와 입력 byte 길이. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1932",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins byte block12와 반복 경계. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1933",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins unaligned 읽기와 endian 선택. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1934",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins tail switch의 fallthrough 누적. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1935",
+        "symbols": [
+          "jhash2"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins jhash2·u32 원소 수와 byte 길이 변환. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1936",
+        "symbols": [
+          "jhash2"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins jhash2 세 word 반복과 마지막1·2·3. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1937",
+        "symbols": [
+          "__jhash_nwords"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins word wrapper와 내부 nwords 초기값 계약. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1938",
+        "symbols": [
+          "jhash_3words"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins 1·2·3 word wrapper의 빠른 사용법. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1939",
+        "symbols": [
+          "jhash"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins 빈 입력·NULL 길이0의 선택 계약. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      },
+      {
+        "lesson": "os1940",
+        "symbols": [
+          "jhash2"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Jenkins 검산·reference와 분포 관찰의 구분. Whole176line jhash.h manuallyauthored15lessons30Qs:32hash lookupcollision exactkey compare/notcryptography; power2size/maskvalidshift0..31; u32wrap/rotate; reversiblemix inverseall3state vscompressed32c; finalselectedbitavalanche notuniversal; seed+lengthbyte; bytebulk12 strict> boundary/tailLEbyte fallthrough CPUbulkendiandependent; jhash2wordlength×4/bulk3/tail1..3/0; nwordsprivatecontractwrapperconstant+4/8/12; NULLn0nocopyvalidcontract; selectionreferencevsdistributionlimits. Originalmacrosinline withactualnativeu32wrap/rotate/bytes/memcpy/CPU32LE orselectedbswapBE (notnativeBEABI), 772semanticreferencebytes cases4offset×193lengths/196u32length0..48, Pythonmasked32instructiontable+indexedtail reference, 10000wrapper/inversemix and1bit selectedchanges10000/differentbits160313. O2+ASanUBSan4builds LE81066/selectedBEload51066 each. NotallABIs/hugeinvalidlength/invalidshift/address/crypto/wholecollisionrate; sourcehelpercallsnotmarkedotherwholefiles."
+      }
+    ]
+  }
+}

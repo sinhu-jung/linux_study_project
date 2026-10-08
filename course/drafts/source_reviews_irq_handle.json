@@ -1,0 +1,202 @@
+{
+  "kernel/irq/handle.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 242,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2733",
+        "symbols": [
+          "handle_bad_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ bad-handler·진단통계와ack. descriptor에서IRQ번호를얻어진단출력→현재CPU통계증가→ack_bad_irq순서로처리합니다. 정상장치handler대신예상치못한/미처리IRQ를다루는경로입니다. ack의실제하드웨어동작과CPU통계구현은각제공함수를따로읽어야합니다. fixture의세호출각1회검산을읽습니다. IRQ번호와descriptor,진단로그와장치ack의서로다른역할을순서대로주석달아봅니다."
+      },
+      {
+        "lesson": "os2734",
+        "symbols": [
+          "no_action"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ no_action·IRQ_NONE 의미. 빈특수handler는IRQ_NONE을반환합니다. 장치가해당IRQ를처리했다는IRQ_HANDLED가아니며IRQthread를요청하는IRQ_WAKE_THREAD도아닙니다. sharedIRQ의다른handler결과와분리해읽어야합니다. 원본irqreturn.h의세값과no_action반환을비교합니다. no_action을전체sharedIRQ의최종실패로즉시일반화하지않고뒤actionOR합산을연결합니다."
+      },
+      {
+        "lesson": "os2735",
+        "symbols": [
+          "warn_no_thread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ thread누락경고·action별once bit. test_and_set_bit(IRQTF_WARNED)로기존bit가1이면끝나고첫번만경고합니다. WAKE_THREAD를반환했는데thread_fn을등록하지않은driver를진단합니다. action별bit가전체시스템전역경고횟수와같은의미는아닙니다. 같은action두호출에서로그1회인provider검산을읽습니다. driver는request_threaded_irq의thread_fn등록계약을함께확인하고등록함수전체해설완료로계산하지않습니다."
+      },
+      {
+        "lesson": "os2736",
+        "symbols": [
+          "__irq_wake_thread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 종료thread·PF_EXITING 조기반환. threadtask의PF_EXITING이있으면깨우지않고반환합니다. 원문주석은hardhandler가장치interrupt를비활성화한계약과연결합니다. 이함수는threadpointerNULL을독립guard하지않으므로등록된thread의유효성이caller조건입니다. fixture의exiting에서bit/active/wake불변을확인합니다. crash상태에서중복wake를피하는정책과실제IRQstorm방지의장치계약을따로주석달아봅니다."
+      },
+      {
+        "lesson": "os2737",
+        "symbols": [
+          "__irq_wake_thread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ RUNTHREAD·중복깨우기 합치기. RUNTHREADtest-and-set의이전값이1이면후속mask/counter/wake를생략합니다. 같은action에이미처리요청이있을때중복요청을합칩니다. thread가bit를다시내린뒤새요청은다시wake할수있으며정확한실제thread진행은별도구현을읽습니다. 첫wake에서active1/wake1,중복불변,bitclear뒤active2/wake2의순차검산을읽습니다. 요청bit와실제CPU스케줄실행완료를구별합니다."
+      },
+      {
+        "lesson": "os2738",
+        "symbols": [
+          "__irq_wake_thread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ oneshot mask·직렬화 전제의lockless OR. 새wake에서desc threads_oneshot에action thread_mask를OR합니다. 이위치의OR자체가모든CPU동시쓰기를일반보장하는atomic연산은아닙니다. 주석의같은IRQhardhandler직렬화,thread쪽desc lock과INPROGRESS검사계약이필요합니다. mask4와8을합쳐12가되는bit계산을풉니다. 실제fixture는순차모델이고threadfinalize/flowhandler/CPU메모리모델검증이아님을표시합니다."
+      },
+      {
+        "lesson": "os2739",
+        "symbols": [
+          "__irq_wake_thread"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ activecounter·wake와synchronize연결. 새wake의oneshotmask다음threads_active를atomic증가하고wake_up_process를호출합니다. 주석에thread완료/exit에서감소하고0이면synchronize_irq대기자를깨우는다른쪽계약이설명됩니다. 이함수자체는counter감소나wait완료를수행하지않습니다. bit선택→mask→atomic증가→taskwake순서를그립니다. fixture의counter증가와실제thread완료/대기동작은다른실행범위로기록합니다."
+      },
+      {
+        "lesson": "os2740",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ action목록·공유handler와시간기록. retvalNONE으로시작해IRQ시간을기록하고descriptor의action목록을순회합니다. handler에irq와등록dev_id를전달합니다. 공유IRQ에서각driver가자기장치여부를판정할수있는contextpointer기법이며목록수명/등록해제의보호는caller전체프로토콜을읽어야합니다. actionA/devA와B/devB를그립니다. 한handlerNONE도뒤handler를막지않는흐름과전체목록의반환OR을연결합니다."
+      },
+      {
+        "lesson": "os2741",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ lockdep threaded표시·세flag제외. descriptor가thread가능하고action에NO_THREAD/PERCPU/ONESHOT중아무것도없으면lockdep_hardirq_threaded로분석문맥을표시합니다. 실제thread를생성하거나여기서force_irqthreads를직접설정하는호출은아닙니다. 세flag의8조합중모두없는경우만표시되는검산을읽습니다. lockdep의동기화분석용문맥과실제thread_fn/wake조건을구별합니다."
+      },
+      {
+        "lesson": "os2742",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ handlertrace·entry callback exit. traceentry뒤handler를호출하고traceresult를기록합니다. trace는실제callback호출경계를관찰하는기술이며장치작업을대체하는호출이아닙니다. actionhandler가반환한enum은뒤threadwake선택과최종OR에사용됩니다. entry→handler→exit의순서를그립니다. fixture의trace횟수와실제tracebuffer/tool/오버헤드/시간분석은별도구현범위라고기록합니다."
+      },
+      {
+        "lesson": "os2743",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ hardhandler문맥·interrupt enable복구. handler뒤localIRQ가켜져있으면WARN_ONCE조건으로진단하고local_irq_disable합니다. hardIRQhandler는문맥규칙을지켜야하며threaded작업과다릅니다. WARN_ONCE는경고출력을한번으로제한하지만해당조건이면후속disable흐름을읽어야합니다. provider에서handler가enable한경우disable호출1과최종disabled를검산합니다. 실제CPUinterruptmask는provider가대체했으므로하드웨어실험으로확대하지않습니다."
+      },
+      {
+        "lesson": "os2744",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ_WAKE_THREAD exactcase·등록함수필수. switch의WAKE_THREADcase는값2일때만들어갑니다. thread_fn이없으면경고하고wake하지않지만res는뒤retval에OR됩니다. 다른res는default입니다. 단일handler가HANDLED|WAKE값3을임의반환한다고case2가실행되는것은아니므로공개정상enum계약을지켜야합니다. fixture의res0..3/thread_fn유무를비교합니다. 전체합산3과단일callback값3을구별하고정상thread요청은등록thread_fn과WAKE_THREAD를사용합니다."
+      },
+      {
+        "lesson": "os2745",
+        "symbols": [
+          "__handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 공유반환·bitwise OR와전체결과. 각actionres를retval에OR합니다. HANDLED1과WAKE2가서로다른action에서나오면전체3이될수있습니다. 첫성공에서목록을끝내지않고모두호출합니다. 전체결과bit합과개별handler정상반환enum의계약을분리해읽습니다. 실제두action1/2의결과3과각호출1회,threadmask8을검산합니다. NONE0은OR에영향이없고다른action처리성공을삭제하지않습니다."
+      },
+      {
+        "lesson": "os2746",
+        "symbols": [
+          "handle_irq_event_percpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ event후처리·randomness와debug선택. coreaction순회뒤add_interrupt_randomness를호출합니다. no_debug가아니면note_interrupt에retval를전달합니다. event시간/통계를entropy제공자에연결하는호출이며이fixture가실제난수품질이나모든spurious판정을검증한것은아닙니다. debug켜짐/꺼짐에서note증가/유지와random호출을검산합니다. hook실행횟수와실제난수/진단알고리즘을별도학습범위로구별합니다."
+      },
+      {
+        "lesson": "os2747",
+        "symbols": [
+          "handle_irq_event"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ event잠금경계·진행상태와복원. istatePENDING을내리고irq_dataINPROGRESS를세운뒤descrawlock을풀어action을호출합니다. 다시lock하고INPROGRESS를내린상태로반환합니다. 진입때caller가lock을보유하는계약이필요하며handler실행중desc lock을계속보유한다고설명하지않습니다. providertrace S→U→H→L→C와최종lock1/pendingclear를검산합니다. 진행flag와잠금상태가서로다른field이며실제CPU/spinlock/LKMM동시성증명은아닙니다."
+      },
+      {
+        "lesson": "os2748",
+        "symbols": [
+          "set_handle_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ architecture handler등록·once와NULL조건. GENERIC_IRQ_MULTI_HANDLER에서전역handle_arch_irq가이미nonNULL이면EBUSY입니다. 비어있으면입력pointer를저장하고0입니다. NULL입력자체를거부하는guard는없어빈상태에서NULL등록0은전역을계속NULL로둡니다. 실제entry전에유효handler설정계약이필요합니다. NULL초기→NULL등록0→root_handler등록0→재등록EBUSY의검산을읽습니다. __ro_after_init의보호시점과실제boot등록은다른환경과연결합니다."
+      },
+      {
+        "lesson": "os2749",
+        "symbols": [
+          "generic_handle_arch_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ architectureentry·accounting와regs복원. irq_enter→현재regs교체/old저장→architecturehandler→oldregs복원→irq_exit순서입니다. 중첩문맥에서현재registerpointer를보존하는기술과entryaccounting을연결합니다. handle_arch_irqNULL을여기서검사하지않으므로진입전등록/문맥계약이필수입니다. providertrace E/R/H/R/X와oldregs복원을읽습니다. asmlinkage/noinstr속성의실제architecture/compiler효과,CPUentry나중첩IRQ전범위는별도검증입니다."
+      }
+    ]
+  }
+}

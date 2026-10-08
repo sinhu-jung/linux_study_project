@@ -1,0 +1,374 @@
+{
+  "include/linux/completion.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 122,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1506",
+        "symbols": [
+          "completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1507",
+        "symbols": [
+          "init_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1508",
+        "symbols": [
+          "DECLARE_COMPLETION_ONSTACK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1520",
+        "symbols": [
+          "reinit_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      }
+    ],
+    "fixture": "data/source_checks/source-completion-harness-manifest.json"
+  },
+  "kernel/sched/completion.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 353,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1509",
+        "symbols": [
+          "complete_with_flags"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1510",
+        "symbols": [
+          "complete_on_current_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1511",
+        "symbols": [
+          "complete_all"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1512",
+        "symbols": [
+          "do_wait_for_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1513",
+        "symbols": [
+          "__wait_for_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1514",
+        "symbols": [
+          "wait_for_completion_timeout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1515",
+        "symbols": [
+          "wait_for_common_io"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1516",
+        "symbols": [
+          "wait_for_completion_interruptible"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1517",
+        "symbols": [
+          "wait_for_completion_killable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1518",
+        "symbols": [
+          "try_wait_for_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1519",
+        "symbols": [
+          "completion_done"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      }
+    ],
+    "fixture": "data/source_checks/source-completion-harness-manifest.json"
+  },
+  "Documentation/scheduler/completion.rst": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 293,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1506",
+        "symbols": [
+          "completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1507",
+        "symbols": [
+          "init_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1508",
+        "symbols": [
+          "DECLARE_COMPLETION_ONSTACK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1509",
+        "symbols": [
+          "complete_with_flags"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1510",
+        "symbols": [
+          "complete_on_current_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1511",
+        "symbols": [
+          "complete_all"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1512",
+        "symbols": [
+          "do_wait_for_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1513",
+        "symbols": [
+          "__wait_for_common"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1514",
+        "symbols": [
+          "wait_for_completion_timeout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1515",
+        "symbols": [
+          "wait_for_common_io"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1516",
+        "symbols": [
+          "wait_for_completion_interruptible"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1517",
+        "symbols": [
+          "wait_for_completion_killable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1518",
+        "symbols": [
+          "try_wait_for_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1519",
+        "symbols": [
+          "completion_done"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      },
+      {
+        "lesson": "os1520",
+        "symbols": [
+          "reinit_completion"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Full completion.h/completion.c and Documentation/scheduler/completion.rst read and authored across 15 lessons/30worked questions: counting done and UINTMAX permanent sentinel, preposted event, swait/raw-lock vs mutex role, init vs reinit and stack/onstack/map/lifetime/no implicit cancellation, annotation empty bodies vs actual lock/barrier protocol, single/currentCPU posting/saturation, complete_all/all_locked and RT-context hook cross-read include/linux/lockdep.h639..653 only, wait action unlock/relock/finish/token consume/positive success, process context/IRQ-enabled wait, jiffies0 expiry and boundary success1/zero-timeout notatomic substitute, I/O action/accounting, interruptible/killable/arbitrary state and exact header int vs doc long example, try READ_ONCE fastpath/locked recheck/consume, completion_done snapshot no recheck/no waiter count, complete_all reuse requires old users finished and no inferred lifetime ownership. Exact source bodies exercised with serial models: 80001 assertions each optimized+ASanUBSan; deterministic competing consumer invokes original try_wait function, typed signal classification and deadline posting. No real RT/IRQ duration/kernel scheduling/concurrent free/SMP/LKMM proof. lockdep.h only region reference not whole-file completion."
+      }
+    ],
+    "fixture": "data/source_checks/source-completion-harness-manifest.json"
+  }
+}

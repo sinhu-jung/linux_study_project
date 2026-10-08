@@ -1,0 +1,286 @@
+{
+  "draft_lessons": 28,
+  "questions": 56,
+  "anchors": [
+    {
+      "planned_lesson": "os2003",
+      "title": "arm64 커널 unwinder 상태·공통 경계와 추적 도구 정보",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 33,
+        "end": 58,
+        "anchor": "kunwind_state"
+      }
+    },
+    {
+      "planned_lesson": "os2004",
+      "title": "arm64 초기화·task 설정과 공통 범위 초기화",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 43,
+        "end": 74,
+        "anchor": "kunwind_init"
+      }
+    },
+    {
+      "planned_lesson": "os2005",
+      "title": "arm64 regs 시작·x29와 pc의 전달",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 58,
+        "end": 83,
+        "anchor": "kunwind_init_from_regs"
+      }
+    },
+    {
+      "planned_lesson": "os2006",
+      "title": "arm64 caller 시작·inline과 noinline의 역할",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 76,
+        "end": 101,
+        "anchor": "kunwind_init_from_caller"
+      }
+    },
+    {
+      "planned_lesson": "os2007",
+      "title": "arm64 blocked task 시작·saved fp와 pc의 안정 조건",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 95,
+        "end": 120,
+        "anchor": "kunwind_init_from_task"
+      }
+    },
+    {
+      "planned_lesson": "os2008",
+      "title": "arm64 함수 그래프 tracer·반환 handler를 원래 PC로 복원",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 105,
+        "end": 130,
+        "anchor": "kunwind_recover_return_address"
+      }
+    },
+    {
+      "planned_lesson": "os2009",
+      "title": "arm64 kretprobe trampoline·인스턴스 상태와 PC 복원",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 105,
+        "end": 130,
+        "anchor": "kunwind_recover_return_address"
+      }
+    },
+    {
+      "planned_lesson": "os2010",
+      "title": "arm64 복원 순서·graph 다음 kretprobe 판별",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 105,
+        "end": 130,
+        "anchor": "kunwind_recover_return_address"
+      }
+    },
+    {
+      "planned_lesson": "os2011",
+      "title": "arm64 마지막 frame 판별·task_pt_regs의 stackframe",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 141,
+        "end": 166,
+        "anchor": "kunwind_next"
+      }
+    },
+    {
+      "planned_lesson": "os2012",
+      "title": "arm64 다음 frame·경계 검사 후 PAC 제거와 복원",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 141,
+        "end": 166,
+        "anchor": "kunwind_next"
+      }
+    },
+    {
+      "planned_lesson": "os2013",
+      "title": "arm64 do_kunwind·현재 PC 전달 뒤 다음 frame",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 163,
+        "end": 188,
+        "anchor": "do_kunwind"
+      }
+    },
+    {
+      "planned_lesson": "os2014",
+      "title": "arm64 초기 PC와 다음 PC·PAC 처리 시점 구별",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 163,
+        "end": 188,
+        "anchor": "do_kunwind"
+      }
+    },
+    {
+      "planned_lesson": "os2015",
+      "title": "arm64 per-CPU 스택 접근·current와 선점 불가 조건",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 184,
+        "end": 209,
+        "anchor": "STACKINFO_CPU"
+      }
+    },
+    {
+      "planned_lesson": "os2016",
+      "title": "arm64 SDEI와 EFI 스택·문맥별 접근 조건",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 195,
+        "end": 220,
+        "anchor": "STACKINFO_SDEI"
+      }
+    },
+    {
+      "planned_lesson": "os2017",
+      "title": "arm64 walker의 접근 범위 배열·설정에 따라 후보 추가",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 210,
+        "end": 235,
+        "anchor": "kunwind_stack_walk"
+      }
+    },
+    {
+      "planned_lesson": "os2018",
+      "title": "arm64 walker 출발 선택·regs와 current와 blocked task",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 210,
+        "end": 235,
+        "anchor": "kunwind_stack_walk"
+      }
+    },
+    {
+      "planned_lesson": "os2019",
+      "title": "arm64 공개 arch walker·callback adapter와 NULL task 전제",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 260,
+        "end": 285,
+        "anchor": "arch_stack_walk"
+      }
+    },
+    {
+      "planned_lesson": "os2020",
+      "title": "arm64 BPF 스택 walk·ip와 fp와 sp 0 전달",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 286,
+        "end": 311,
+        "anchor": "arch_bpf_stack_walk"
+      }
+    },
+    {
+      "planned_lesson": "os2021",
+      "title": "arm64 backtrace 출력·user mode 제외와 참조 균형",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 304,
+        "end": 329,
+        "anchor": "dump_backtrace"
+      }
+    },
+    {
+      "planned_lesson": "os2022",
+      "title": "arm64 show_stack·dump 호출과 compiler barrier",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 324,
+        "end": 349,
+        "anchor": "show_stack"
+      }
+    },
+    {
+      "planned_lesson": "os2023",
+      "title": "arm64 사용자 frame_tail·packed fp와 lr 배치",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 333,
+        "end": 358,
+        "anchor": "frame_tail"
+      }
+    },
+    {
+      "planned_lesson": "os2024",
+      "title": "arm64 사용자 frame 복사·access_ok와 pagefault 구간",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 343,
+        "end": 369,
+        "anchor": "unwind_user_frame"
+      }
+    },
+    {
+      "planned_lesson": "os2025",
+      "title": "arm64 사용자 주소 수집·PAC 처리와 단조 fp 검사 순서",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 343,
+        "end": 369,
+        "anchor": "unwind_user_frame"
+      }
+    },
+    {
+      "planned_lesson": "os2026",
+      "title": "arm64 사용자 접근 주석·실제 copy 크기의 해석",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 343,
+        "end": 369,
+        "anchor": "unwind_user_frame"
+      }
+    },
+    {
+      "planned_lesson": "os2027",
+      "title": "arm64 compat frame_tail·fp sp lr의 32bit 정보",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 385,
+        "end": 410,
+        "anchor": "compat_frame_tail"
+      }
+    },
+    {
+      "planned_lesson": "os2028",
+      "title": "arm64 compat 사용자 순회·다음 fp 변환과 엄격 진행",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 392,
+        "end": 417,
+        "anchor": "unwind_compat_user_frame"
+      }
+    },
+    {
+      "planned_lesson": "os2029",
+      "title": "arm64 사용자 walker 시작·PC 먼저 전달하고 정렬 분기",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 425,
+        "end": 448,
+        "anchor": "arch_stack_walk_user"
+      }
+    },
+    {
+      "planned_lesson": "os2030",
+      "title": "arm64 architecture walk 검산·실제 본문과 제공한 실행 문맥",
+      "path": "arch/arm64/kernel/stacktrace.c",
+      "excerpt": {
+        "start": 260,
+        "end": 285,
+        "anchor": "arch_stack_walk"
+      }
+    }
+  ]
+}

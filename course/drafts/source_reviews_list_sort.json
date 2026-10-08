@@ -1,0 +1,119 @@
+{
+  "lib/list_sort.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 253,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os861",
+        "symbols": [
+          "merge"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "포인터의 포인터",
+          "노드 보존"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      },
+      {
+        "lesson": "os862",
+        "symbols": [
+          "merge_final"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "u8 계수기",
+          "자기 비교와 양보"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      },
+      {
+        "lesson": "os863",
+        "symbols": [
+          "list_sort"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "사전식 비교",
+          "호출 문맥"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      },
+      {
+        "lesson": "os864",
+        "symbols": [
+          "list_sort"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "head의 역할",
+          "수명과 소유권"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      },
+      {
+        "lesson": "os865",
+        "symbols": [
+          "list_sort"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "여섯 상태 표",
+          "캐시와 비교 수"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      },
+      {
+        "lesson": "os866",
+        "symbols": [
+          "list_sort"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "공개 헤더",
+          "비교 대상 범위"
+        ],
+        "review": "Whole source authored: pointer-to-next stable merge, final bidirectional/sentinel restore with u8 selfcallbacks, comparison boolean/signed/age/multiword contracts, pending prev reuse, all six binary scheduling states and balance ranges, final oldest-first merge, zero/one fastreturn, callback/context/lifetime protection. Independent key+original-id qsort and original comparator age checks with exact links/payload; ASan/UBSan passes; no native kernel lock/resched/cache performance proof."
+      }
+    ]
+  },
+  "include/linux/list_sort.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 14,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os866",
+        "symbols": [
+          "struct list_head",
+          "list_cmp_func_t",
+          "list_sort",
+          "nonnull"
+        ],
+        "sections": [
+          "공개 헤더"
+        ],
+        "review": "Entire public header read. Forward declaration, priv-first comparator, compiler nonnull attributes and public list_sort signature individually explained."
+      }
+    ]
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "arch/arm64/include/asm/fixmap.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 115,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2194",
+        "symbols": [
+          "fixed_addresses"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap 원리·고정 virtual slot과 runtime physical page. fixmap은 compile때 virtual위치와 slot번호를정하고 boot또는필요한시점에 physicalpage를연결합니다. 각 slot폭은 PAGE_SIZE입니다. heap할당과달리공유 slot의 mapping과수명을 caller가관리해야합니다. 이전 textpatch의 lock은공유 FIX_TEXT_POKE0을보호합니다. slot→고정 virtualpage→physicalpage의 3단계를그립니다. fixture는 pagetable을만들지않고 formula와기록 provider만검산했습니다."
+      },
+      {
+        "lesson": "os2195",
+        "symbols": [
+          "fixed_addresses"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap enum·page단위와설정별slot. enum의증가는 page단위 slot을예약합니다. FDT·earlycon·textpoke·GHES·entrytrampoline·임시 bootmapping·pagetable작성 slot이있고설정조건에따라숫자배치가바뀝니다. 특정설정의 enum정수를다른설정의고정 ABI번호라고사용하면안됩니다. GHES/SDEI/UNMAP/RELOC조건별포함필드를표시합니다. fixture의 16branch조합은문법과 formula검사이며모든 Kconfig유효조합검증은아닙니다."
+      },
+      {
+        "lesson": "os2196",
+        "symbols": [
+          "fixed_addresses"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap FDT window·경계횡단을위한추가page. FDT예약은 MAX_FDT_SIZE를 PAGE_SIZE로올림한 page수에추가 1page를넣습니다. 최대크기 FDT가 page안에서시작하여경계를넘어도전체를담는 window를준비하는이유입니다. FIX_FDT가 FIX_FDT_END보다큰 index라 virtual주소는반대방향으로내려갑니다. MAX2MB·page4KB에서 512+1page예약예제를풉니다. 값은 fixture입력문맥이며실제고정 boot상수와주소배치를함께확인합니다."
+      },
+      {
+        "lesson": "os2197",
+        "symbols": [
+          "fixed_addresses"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap GHES·IRQ/SEA/SDEI 문맥 slot 분리. GHES설정은 IRQ와 SEA용 slot을만들고 SDEI설정까지있으면 normal·criticalslot도추가합니다. 서로다른문맥의 mapping을별도 slot으로분리하는설정별인터페이스입니다. enum만으로해당문맥의 handler알고리즘이나동시성전체가구현되는것은아닙니다. GHESoff에서는 SDEIflag만켜져도이 slot들이없음을 fixture구성과연결합니다. 조건중첩과관련 handler사용법은호출원문으로이어읽습니다."
+      },
+      {
+        "lesson": "os2198",
+        "symbols": [
+          "TRAMP_VALIAS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap entry trampoline·설정과TRAMP_VALIAS. UNMAP_KERNEL_AT_EL0이면 trampoline text1~3slot이있고 RELOCATABLE도있으면추가 text4data용 slot이있습니다. TRAMP_VALIAS는 text1slot의__fix_to_virt결과입니다. trampoline의실제 entryinstruction과 EL0/EL1전환은이주소예약헤더밖입니다. UNMAP0/1과 RELOC0/1의배치를비교합니다. fixture에서 TRAMP_VALIAS가해당 slot주소와같은지확인했습니다."
+      },
+      {
+        "lesson": "os2199",
+        "symbols": [
+          "NR_FIX_BTMAPS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap early boot 임시window·7개묶음. NR_FIX_BTMAPS는 256KB/PAGE_SIZE이고 7개묶음으로 TOTAL_FIX_BTMAPS를만듭니다. FIX_BTMAP_END부터 BEGIN까지끝을포함하는 slot개수는 TOTAL과같습니다. 일반 ioremap이동작하기전 early_ioremap이사용하는임시 bootmapping예약입니다. page4KB면묶음 64slot·전체 448slot을계산합니다. BEGIN−END+1의 off-by-one을범위개수문제로풉니다."
+      },
+      {
+        "lesson": "os2200",
+        "symbols": [
+          "fixed_addresses"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap pagetable slot·아직unmapped table작성. 임시 bootwindow뒤에 FIX_PTE·PMD·PUD·P4D·PGDslot을예약합니다. 주석은아직 mapped되지않은 memory를 pagetable로사용할수있도록 kernel table작성에쓰는위치라고설명합니다. 각이름이동일 page-level개념을나타내도실제 architecture의 foldedlevel조건을이어읽어야합니다. tablepage의 physical주소를임시 virtualslot에연결해내용을작성하는흐름을그립니다. enum예약만으로완전한 pagetablewalk구현을설명하지않습니다."
+      },
+      {
+        "lesson": "os2201",
+        "symbols": [
+          "FIXADDR_SIZE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap 크기·permanent와전체범위. FIXADDR_SIZE/START는 permanent끝 marker를 page크기로환산하고 FIXADDR_TOT_SIZE/START는임시 boot·table슬롯까지전체끝 marker를사용합니다. TOP에서크기를빼므로전체 START가 permanentSTART보다더낮습니다. 같은시작범위로취급하면 temporary주소검사를잘못읽을수있습니다. 두끝 marker와두 START를구간그림으로표시합니다. genericvirt_to_fix가어느 START를검사하는지다음수업에연결합니다."
+      },
+      {
+        "lesson": "os2202",
+        "symbols": [
+          "FIXMAP_PAGE_IO"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap arch IO protection·generic default보다우선. arm64헤더는 FIXMAP_PAGE_IO를 PROT_DEVICE_nGnRE의 pgprot로정의합니다. generic헤더는이미정의된 IO값이있으면 PAGE_KERNEL_IOdefault를덮어쓰지않습니다. architecture-specificmemory속성과 genericfallback의우선순위를읽는패턴입니다. fixture의 IO2와 genericdefault6에서 set_fixmap_io가 2를기록하는지확인합니다. 숫자는 provider값이며실제 hardwarememorytypebit를검증한것은아닙니다."
+      },
+      {
+        "lesson": "os2203",
+        "symbols": [
+          "__late_clear_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap early/late alias·같은설정함수와clear. early_set과 late_set은__set_fixmap을 alias하고 late_clear는 idx·physical0·FIXMAP_PAGE_CLEAR로호출합니다. early/late라는이름이무조건다른 pagealgorithm을뜻하는것은아닙니다. 실제설정·clear동작은 runtime함수와 protection0의의미를연결합니다. 세 macro의호출인자를비교하고 clearprovider의 phys0/prot0기록을확인합니다. alias와별도구현의차이를주석으로답니다."
+      },
+      {
+        "lesson": "os2204",
+        "symbols": [
+          "__set_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap runtime interface·slot·physical·protection. __set_fixmap은 fixed_addressesindex·phys_addr_tphysical·pgprot_tprotection을받습니다. 고정 virtualslot에무엇을어떤 memory속성으로연결할지전달하는인터페이스입니다. offsetmacro는반환 virtualpointer를조합하지만__set_fixmap자체는 void입니다. 세인자를주소선택·page자료·권한/속성으로분류합니다. 실제 PTE변경과 TLB정리는 mm/fixmap.c로이어읽습니다."
+      }
+    ]
+  },
+  "include/asm-generic/fixmap.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 101,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2205",
+        "symbols": [
+          "__fix_to_virt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap index→virtual·TOP에서page단위감소. __fix_to_virt는 TOP−(index<<PAGE_SHIFT)입니다. index가 1늘면 virtual주소는 1page내려갑니다. 원문 index의타입과 shift규약을고려해야하고임의거대 index를유효범위검사없이통과시키는공식으로쓰면안됩니다. 모든예약 index에대해 TOP−index*PAGE_SIZE독립 oracle과검산합니다. 실제 kernelTOP대신 fixtureTOP4GB를사용한산술모델입니다."
+      },
+      {
+        "lesson": "os2206",
+        "symbols": [
+          "__virt_to_fix"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap virtual→index·pageoffset 제거. __virt_to_fix는 vaddr를 PAGE_MASK로내려 pagebase를얻고 TOP과의차이를 PAGE_SHIFT로나눕니다. 같은 page안의다른 byteoffset은같은 index가됩니다. index/address상호변환에는 page단위정렬이들어가므로 byte주소전체가완전히원복되는 bijection이라고설명하면안됩니다. 각 slot의 16개 page내 offset이같은 index로복원되는 fixture를확인합니다. 별도로 physicaloffset을더하는 wrapper와연결합니다."
+      },
+      {
+        "lesson": "os2207",
+        "symbols": [
+          "fix_to_virt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap fix_to_virt·compiler 범위 계약. fix_to_virt는 BUILD_BUG_ON(idx>=전체끝 marker)을사용하고주소공식을반환합니다. compiler의상수전파·항상 inline과연결된범위계약입니다. fixture는 index전체를순회하려고 BUILD_BUG_ON을 runtimeassert로대체했으므로 actualcompile-time오류검증이라고주장하지않습니다. 전체끝이전 index만 formulaoracle에넣습니다. raw__fix_to_virt와검사 wrapper를구별하고 FIX_HOLEindex0은여기서별도로거부하지않음을읽습니다."
+      },
+      {
+        "lesson": "os2208",
+        "symbols": [
+          "virt_to_fix"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap virt_to_fix·permanent 범위와TOP 제외. virt_to_fix는 vaddr>=TOP또는 vaddr<permanentSTART이면 BUG_ON입니다. raw역공식과달리 permanent주소범위를검사합니다. START는포함하고 TOP은제외하며전체 temporary범위의모든주소를허용하는 wrapper는아닙니다. TOP−1은 index1이고 START는 permanent끝 markerindex인것을확인합니다. START−1·TOP의 BUG경계와전체 index→주소허용범위의비대칭을읽습니다."
+      },
+      {
+        "lesson": "os2209",
+        "symbols": [
+          "FIXMAP_PAGE_NORMAL"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap generic protection·normal/RO/nocache/IO/clear. genericdefault는 normal·nocache·IO를각 PAGE_KERNEL계열로연결하고 RO는 PAGE_KERNEL_RO가정의된경우제공합니다. clear는__pgprot(0)입니다. #ifndefguard가 architectureoverride를유지합니다. 같은 mapping함수를서로다른 protection으로호출하는방식입니다. normal과 nocache·IO·clearprovider기록을표로적습니다. protection값과 physical주소 0의역할을구별합니다."
+      },
+      {
+        "lesson": "os2210",
+        "symbols": [
+          "set_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap set/clear·함수같은macro와 flags. set_fixmap은 idx·phys·normalflags로__set_fixmap을호출하고 clear_fixmap은 physical0·clearflags를전달합니다. wrapper가자체적으로새 heap객체를할당하거나반환 virtual주소를만드는것은아닙니다. 수정할 slot과 page속성을전달하는얇은인터페이스입니다. 두 wrapper의 3인자를비교하고 clearprovider의 phys0/prot0을확인합니다. runtime함수의 0flagsbranch를이어읽습니다."
+      },
+      {
+        "lesson": "os2211",
+        "symbols": [
+          "__set_fixmap_offset"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap offset wrapper·physical page내위치 반영. offsetwrapper는__set_fixmap을호출한뒤 fix_to_virt(idx)+(phys&(PAGE_SIZE−1))을마지막값으로돌려주는 GNUstatementexpression입니다. pagebase의고정 virtual주소에 physicalpage내 offset을붙여같은 byte위치를가리킵니다. 실제 mapping은 runtimehelper의 pageframe계약으로연결합니다. physicalbase+offset32를 virtualslotbase+32로대응시킵니다. fixture의 page크기 4K/16K/64K별 32개 offsetoracle를확인합니다."
+      },
+      {
+        "lesson": "os2212",
+        "symbols": [
+          "__set_fixmap_offset"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap offset macro·idx와phys의반복평가. offsetmacro는 idx와 phys를설정호출과주소계산에각각사용하므로두번평가할수있습니다. cachedlocal인자를만드는 macro가아닙니다. 부작용있는표현식이매번다른값을내면 mapping한 slot/page와반환주소가맞지않을수있어안정된변수나상수를사용해야합니다. fixture의안정값반환함수두개가각 2회호출되는것을확인합니다. 서로다른인자의동일 scalar충돌실험은쓰지않고순서와평가횟수를구별합니다."
+      },
+      {
+        "lesson": "os2213",
+        "symbols": [
+          "set_fixmap_nocache"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap nocache/IO wrapper·protection 선택 재사용. nocache는 FIXMAP_PAGE_NOCACHE로설정하고 offset_nocache는같은속성의 offset주소 wrapper를재사용합니다. IO는 FIXMAP_PAGE_IO를사용합니다. 주소 formula가같아도 memoryaccess속성은다르므로일반 RAM·device·uncached의사용조건을 architecture정의와확인해야합니다. normal3·nocache5·archIO2의 provider기록을비교합니다. 실제 cache/hardwareordering효과는숫자기록 fixture로증명하지않습니다."
+      }
+    ]
+  }
+}

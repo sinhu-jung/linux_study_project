@@ -1,0 +1,235 @@
+{
+  "include/linux/bitops.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 360,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1300",
+        "symbols": [
+          "BITS_TO_LONGS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1301",
+        "symbols": [
+          "BITS_TO_LONGS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1302",
+        "symbols": [
+          "rol64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1303",
+        "symbols": [
+          "ror32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1304",
+        "symbols": [
+          "rol16"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1305",
+        "symbols": [
+          "sign_extend32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1306",
+        "symbols": [
+          "sign_extend64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1307",
+        "symbols": [
+          "get_bitmask_order"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1308",
+        "symbols": [
+          "get_count_order_long"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1309",
+        "symbols": [
+          "hweight_long"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1310",
+        "symbols": [
+          "__ffs64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1311",
+        "symbols": [
+          "fns"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1312",
+        "symbols": [
+          "bitop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1313",
+        "symbols": [
+          "__check_bitop_pr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1314",
+        "symbols": [
+          "assign_bit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1315",
+        "symbols": [
+          "__ptr_set_bit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1316",
+        "symbols": [
+          "set_mask_bits"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1317",
+        "symbols": [
+          "set_mask_bits"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1318",
+        "symbols": [
+          "bit_clear_unless"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      },
+      {
+        "lesson": "os1319",
+        "symbols": [
+          "__assign_bit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Entire bitops header read/authored: sizeof-bit storage/roundup units andULONGMAX unsigned-overflow counterexample, rotations8/16/32/64 maskedshift0/fullwidth/UINTMAX andpromotion context, signextend32/64 validindex/zero-basedsignbit/twoscomplement-arithmeticshift GCC scope, bitmaskorder vscountorder/zero0 vs-1/sizeoflong fls, hweightlong vspositions andsoftwaredeclarations, ffs64nonzero/32split vsnative64 run, fnszerobasedrank/dropLSB/BITSLONGsentinel, bitop compilerconstant selection notNULLvalidator, eightprototype equality checks/fourname layers, atomicassign vsnonatomicassign, pointervar tags/ABI-alias-lifetime-nr constraints/nondereferenceflagged, setmaskbits CASexpectedupdate/recalculate/successoldreturn/bits outside-mask nottruncated, bitclearunless retryrechecktest/abort/trueevenalreadyclear, KERNEL/ifndefguards andvalues vsmemory vsCAS/MMIO contracts. Exact original full bitops plus genericnon-atomic/forwarding/typecheck/consthweight/softwarehweight dependencies in nativeGCC GNU11-fwrapv-fno-strict-aliasing context:3780023 recorded checks optimized andASanUBSan,10000words/12rotationcounts/everyvalidsignindex/ranks0..64/hweight/ffs,0..100000storage-order,100000bitmapmutations+arraycanaries,assign/pointerflag restoration,CASforcedfailure oldupdate andtestabort,4writers40000successful CASupdates withdisjointfields andoutsidepreservation, typecheckscalarunevaluated vsfnexpressiononce,ULONGMAXstoragewrap.3expectednegative pointer/scalar/function compile cases; initial reference signedness warning corrected without source edits. Atomic/barrier/fls/ffs architectures are explicit C11seqcst/acquire and bitloop models; native64 only, no actualkernelLKMM/native32/allarch/Sparse/invalidshift-zeroffs orMMIO proof. Dependencies execution does not mark every dependency authored. Supplemental exact __ffs64 selected32/64 each100064 checks optimized andASanUBSan; selected32 onlong64 notnative32ABI, invalidBITS16 compile rejection."
+      }
+    ]
+  }
+}

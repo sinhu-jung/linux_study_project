@@ -1,0 +1,596 @@
+{
+  "draft_lessons": 59,
+  "questions": 118,
+  "anchors": [
+    {
+      "planned_lesson": "os627",
+      "title": "문자 비교·Unsigned Byte와 길이 한도",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 260,
+        "end": 285,
+        "anchor": "strcmp"
+      }
+    },
+    {
+      "planned_lesson": "os628",
+      "title": "대소문자 비교·Byte 변환과 종료",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "strncasecmp"
+      }
+    },
+    {
+      "planned_lesson": "os629",
+      "title": "Strncpy·NUL Padding과 잘린 문자열",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 92,
+        "end": 120,
+        "anchor": "strncpy"
+      }
+    },
+    {
+      "planned_lesson": "os630",
+      "title": "Strscpy·Word 검색과 잘림 오류",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 107,
+        "end": 136,
+        "anchor": "sized_strscpy"
+      }
+    },
+    {
+      "planned_lesson": "os631",
+      "title": "Strcat·추가 길이와 목적 용량",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 214,
+        "end": 239,
+        "anchor": "strncat"
+      }
+    },
+    {
+      "planned_lesson": "os632",
+      "title": "Strlcat·필요 길이와 Kernel BUG 전제",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 234,
+        "end": 259,
+        "anchor": "strlcat"
+      }
+    },
+    {
+      "planned_lesson": "os633",
+      "title": "Stpcpy·끝 Pointer와 Compiler Libcall",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 191,
+        "end": 216,
+        "anchor": "stpcpy"
+      }
+    },
+    {
+      "planned_lesson": "os634",
+      "title": "문자 검색·미발견 NULL과 끝 Pointer",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 330,
+        "end": 355,
+        "anchor": "strchrnul"
+      }
+    },
+    {
+      "planned_lesson": "os635",
+      "title": "Strlen·종료 탐색과 최대 Count",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 410,
+        "end": 435,
+        "anchor": "strnlen"
+      }
+    },
+    {
+      "planned_lesson": "os636",
+      "title": "문자 집합 탐색·Prefix와 첫 위치",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 427,
+        "end": 452,
+        "anchor": "strspn"
+      }
+    },
+    {
+      "planned_lesson": "os637",
+      "title": "Strsep·Char 이중 Pointer와 빈 Token",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 490,
+        "end": 515,
+        "anchor": "strsep"
+      }
+    },
+    {
+      "planned_lesson": "os638",
+      "title": "Memset 폭·Byte Fill과 정수 값 Fill",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 538,
+        "end": 563,
+        "anchor": "memset16"
+      }
+    },
+    {
+      "planned_lesson": "os639",
+      "title": "Memmove·겹침과 복사 방향",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 624,
+        "end": 653,
+        "anchor": "memmove"
+      }
+    },
+    {
+      "planned_lesson": "os640",
+      "title": "Memcmp·Word 건너뛰기와 Byte 순서",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 655,
+        "end": 680,
+        "anchor": "memcmp"
+      }
+    },
+    {
+      "planned_lesson": "os641",
+      "title": "Memory 검색·NULL과 범위 끝 주소",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 712,
+        "end": 737,
+        "anchor": "memscan"
+      }
+    },
+    {
+      "planned_lesson": "os642",
+      "title": "Substring 검색·후보 반복과 Len 전제",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 759,
+        "end": 786,
+        "anchor": "strnstr"
+      }
+    },
+    {
+      "planned_lesson": "os643",
+      "title": "Memchr Inv·반복 값과 Word 검사",
+      "path": "lib/string.c",
+      "excerpt": {
+        "start": 820,
+        "end": 845,
+        "anchor": "memchr_inv"
+      }
+    },
+    {
+      "planned_lesson": "os644",
+      "title": "Word At A Time·첫 NUL의 Bit Mask",
+      "path": "include/asm-generic/word-at-a-time.h",
+      "excerpt": {
+        "start": 42,
+        "end": 67,
+        "anchor": "has_zero"
+      }
+    },
+    {
+      "planned_lesson": "os645",
+      "title": "숫자 Radix·자동 기수와 Prefix 소비",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 26,
+        "end": 51,
+        "anchor": "_parse_integer_fixup_radix"
+      }
+    },
+    {
+      "planned_lesson": "os646",
+      "title": "숫자 누적·Multiply Add와 Overflow Bit",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 52,
+        "end": 77,
+        "anchor": "_parse_integer_limit"
+      }
+    },
+    {
+      "planned_lesson": "os647",
+      "title": "Kstrtoull·전체 종료와 결과 보존",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 132,
+        "end": 157,
+        "anchor": "kstrtoull"
+      }
+    },
+    {
+      "planned_lesson": "os648",
+      "title": "Signed 변환·음수 최솟값 경계",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 156,
+        "end": 181,
+        "anchor": "kstrtoll"
+      }
+    },
+    {
+      "planned_lesson": "os649",
+      "title": "숫자 폭 축소·Cast 비교와 Alias Wrapper",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 323,
+        "end": 348,
+        "anchor": "kstrtos8"
+      }
+    },
+    {
+      "planned_lesson": "os650",
+      "title": "Kstrtobool·첫 문자와 두 글자 Prefix",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 348,
+        "end": 373,
+        "anchor": "kstrtobool"
+      }
+    },
+    {
+      "planned_lesson": "os651",
+      "title": "숫자 From User·제한 복사와 Prefix 잘림",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 408,
+        "end": 431,
+        "anchor": "kstrto_from_user"
+      }
+    },
+    {
+      "planned_lesson": "os652",
+      "title": "Bool From User·세 Byte 복사와 판별",
+      "path": "lib/kstrtox.c",
+      "excerpt": {
+        "start": 395,
+        "end": 420,
+        "anchor": "kstrtobool_from_user"
+      }
+    },
+    {
+      "planned_lesson": "os653",
+      "title": "크기 표시·Napier 축소와 세 유효숫자",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 39,
+        "end": 64,
+        "anchor": "string_get_size"
+      }
+    },
+    {
+      "planned_lesson": "os654",
+      "title": "사용자 정수 배열·두 번 파싱과 소유권",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 154,
+        "end": 179,
+        "anchor": "parse_int_array_user"
+      }
+    },
+    {
+      "planned_lesson": "os655",
+      "title": "Unescape·제자리 변환과 0 용량의 의미",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 320,
+        "end": 345,
+        "anchor": "string_unescape"
+      }
+    },
+    {
+      "planned_lesson": "os656",
+      "title": "Octal·Hex Unescape의 자리 수 경계",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 213,
+        "end": 238,
+        "anchor": "unescape_octal"
+      }
+    },
+    {
+      "planned_lesson": "os657",
+      "title": "Escape Memory·필요 길이와 자동 NUL 없음",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 574,
+        "end": 604,
+        "anchor": "string_escape_mem"
+      }
+    },
+    {
+      "planned_lesson": "os658",
+      "title": "Escape 선택·Only 사전과 Append 우선순위",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 574,
+        "end": 604,
+        "anchor": "string_escape_mem"
+      }
+    },
+    {
+      "planned_lesson": "os659",
+      "title": "Quotable 복제·두 번 변환과 할당",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 648,
+        "end": 675,
+        "anchor": "kstrdup_quotable"
+      }
+    },
+    {
+      "planned_lesson": "os660",
+      "title": "명령행 로그·Argument NUL을 공백으로",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 676,
+        "end": 701,
+        "anchor": "kstrdup_quotable_cmdline"
+      }
+    },
+    {
+      "planned_lesson": "os661",
+      "title": "파일 경로 로그·오류 표식과 임시 공간",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 709,
+        "end": 734,
+        "anchor": "kstrdup_quotable_file"
+      }
+    },
+    {
+      "planned_lesson": "os662",
+      "title": "문자 교체·원본 수정과 복제 선택",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 981,
+        "end": 1006,
+        "anchor": "strreplace"
+      }
+    },
+    {
+      "planned_lesson": "os663",
+      "title": "문자열 배열·부분 할당 실패 정리",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 759,
+        "end": 789,
+        "anchor": "kasprintf_strarray"
+      }
+    },
+    {
+      "planned_lesson": "os664",
+      "title": "Devm 문자열 배열·Device Resource 등록",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 815,
+        "end": 841,
+        "anchor": "devm_kasprintf_strarray"
+      }
+    },
+    {
+      "planned_lesson": "os665",
+      "title": "공백 정리·반환 위치와 Allocation 시작",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 858,
+        "end": 885,
+        "anchor": "strim"
+      }
+    },
+    {
+      "planned_lesson": "os666",
+      "title": "Sysfs 비교·마지막 Newline 하나",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 886,
+        "end": 919,
+        "anchor": "sysfs_streq"
+      }
+    },
+    {
+      "planned_lesson": "os667",
+      "title": "이름 배열 검색·한도와 첫 NULL 종료",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 920,
+        "end": 953,
+        "anchor": "match_string"
+      }
+    },
+    {
+      "planned_lesson": "os668",
+      "title": "복사와 Padding·목적 길이 기준",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 1000,
+        "end": 1025,
+        "anchor": "memcpy_and_pad"
+      }
+    },
+    {
+      "planned_lesson": "os669",
+      "title": "FORTIFY 보고·Reason 해석과 Panic",
+      "path": "lib/string_helpers.c",
+      "excerpt": {
+        "start": 1025,
+        "end": 1043,
+        "anchor": "__fortify_report"
+      }
+    },
+    {
+      "planned_lesson": "os670",
+      "title": "문자 Helper Header·Inline Wrapper와 Byte Case",
+      "path": "include/linux/string_helpers.h",
+      "excerpt": {
+        "start": 15,
+        "end": 40,
+        "anchor": "string_is_terminated"
+      }
+    },
+    {
+      "planned_lesson": "os671",
+      "title": "Ctype 분류·256칸 Table과 Flag 조합",
+      "path": "lib/ctype.c",
+      "excerpt": {
+        "start": 12,
+        "end": 37,
+        "anchor": "_ctype"
+      }
+    },
+    {
+      "planned_lesson": "os672",
+      "title": "Ctype 변환·범위 검사와 내부 Bit OR",
+      "path": "include/linux/ctype.h",
+      "excerpt": {
+        "start": 49,
+        "end": 74,
+        "anchor": "__tolower"
+      }
+    },
+    {
+      "planned_lesson": "os673",
+      "title": "표시 문자열 선택·Bool와 반대 방향 Macro",
+      "path": "include/linux/string_choices.h",
+      "excerpt": {
+        "start": 44,
+        "end": 69,
+        "anchor": "str_read_write"
+      }
+    },
+    {
+      "planned_lesson": "os674",
+      "title": "User 배열 복제·크기 곱셈 Overflow",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 31,
+        "end": 56,
+        "anchor": "memdup_array_user"
+      }
+    },
+    {
+      "planned_lesson": "os675",
+      "title": "Strscpy Macro·배열 크기와 선택 인자",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 112,
+        "end": 146,
+        "anchor": "strscpy"
+      }
+    },
+    {
+      "planned_lesson": "os676",
+      "title": "Strscpy Pad·성공 뒤 남는 Byte 초기화",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 115,
+        "end": 146,
+        "anchor": "sized_strscpy_pad"
+      }
+    },
+    {
+      "planned_lesson": "os677",
+      "title": "Long·Pointer 채우기와 Memcat 타입 검사",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 243,
+        "end": 268,
+        "anchor": "memset_p"
+      }
+    },
+    {
+      "planned_lesson": "os678",
+      "title": "Zero 판정·Cache 복사 Fallback의 계약",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 293,
+        "end": 318,
+        "anchor": "mem_is_zero"
+      }
+    },
+    {
+      "planned_lesson": "os679",
+      "title": "명시적 Zeroing·Compiler 제거를 막는 Barrier",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 372,
+        "end": 397,
+        "anchor": "memzero_explicit"
+      }
+    },
+    {
+      "planned_lesson": "os680",
+      "title": "Prefix와 Basename·길이 반환과 내부 주소",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 545,
+        "end": 551,
+        "anchor": "str_has_prefix"
+      }
+    },
+    {
+      "planned_lesson": "os681",
+      "title": "Strtomem·Nonstring 목적과 Padding 선택",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 437,
+        "end": 462,
+        "anchor": "strtomem"
+      }
+    },
+    {
+      "planned_lesson": "os682",
+      "title": "Memtostr·끝 한 칸과 NUL Padding",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 456,
+        "end": 481,
+        "anchor": "memtostr"
+      }
+    },
+    {
+      "planned_lesson": "os683",
+      "title": "구조체 부분 초기화·Member 끝과 시작",
+      "path": "include/linux/string.h",
+      "excerpt": {
+        "start": 504,
+        "end": 529,
+        "anchor": "memset_after"
+      }
+    },
+    {
+      "planned_lesson": "os684",
+      "title": "Argv Split·공백 경계와 숨긴 소유권 칸",
+      "path": "lib/argv_split.c",
+      "excerpt": {
+        "start": 60,
+        "end": 85,
+        "anchor": "argv_split"
+      }
+    },
+    {
+      "planned_lesson": "os685",
+      "title": "가변 인자 Macro·개수와 두 단계 결합",
+      "path": "include/linux/args.h",
+      "excerpt": {
+        "start": 22,
+        "end": 28,
+        "anchor": "COUNT_ARGS"
+      }
+    }
+  ]
+}

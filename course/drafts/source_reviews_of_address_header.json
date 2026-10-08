@@ -1,0 +1,279 @@
+{
+  "include/linux/of_address.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 201,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2656",
+        "symbols": [
+          "of_pci_range_parser"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF range parser 공개상태·cursor와주소폭. parser는node/bus,range/end cellpointer,na/ns/pna와dma bool을저장합니다. of_range_parser macro는같은struct이름의alias여서일반ranges도같은parser형식을재사용합니다. cursor가변하므로iterator실행전후상태는같지않으며pointer의원본property수명이필요합니다. start/end와child/parent/size폭을그립니다. bus는전방선언pointer이고callback구조의전체정의는address.c라는점을확인합니다. 독립fixture의alias/count검산과전체translation실행을구별합니다."
+      },
+      {
+        "lesson": "os2657",
+        "symbols": [
+          "of_pci_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF range 공개자료·주소union과일반alias. 익명union의pci_addr/bus_addr는같은u64공간을두이름으로접근합니다. cpu_addr,size,flags는다른field입니다. of_range는이struct의macroalias입니다. 버스숫자주소와CPU주소를같은값으로가정하지않고range변환관계를표현합니다. pci_addr에0x123을쓴뒤bus_addr0x123인실제검산을읽습니다. alias이름과별도cpu_addr저장공간을그리며union이두독립주소를저장하는구조는아님을표시합니다."
+      },
+      {
+        "lesson": "os2658",
+        "symbols": [
+          "for_each_of_pci_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF range iterator macro·함수조건과cursor소비. for(;parser_one(parser,range);)는init와증가식을비우고조건호출이cursor를소비합니다. NULL이면반복을끝내며of_rangeiteratoralias도같은macro를씁니다. parser_one이연속rawentry를합칠수있어반복횟수와rawtuple개수가다를수있습니다. disabledparser_one이NULL이라body0회/cursor불변인검산을읽습니다. 활성구현에서cursor소비와range합치기를앞수업에연결하고macro인자sideeffect는유효caller계약으로따로확인합니다."
+      },
+      {
+        "lesson": "os2659",
+        "symbols": [
+          "of_range_count"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw range count·pointer차이와tuple폭. parser/node/range가없거나range=end이면0입니다. 정상은남은cell차이를na+pna+ns로나눈값입니다. 범용정수나눗셈이며이본문은denominator양수나같은배열pointer전체조건을독립검사하지않아유효parser준비계약이필요합니다. 6cell/tuple3에서2,3cell소비뒤1,end에서0의실제검산을읽습니다. 남은불완전entry는정수나눗셈으로내려가며zero폭의임의parser를실행하지않습니다."
+      },
+      {
+        "lesson": "os2660",
+        "symbols": [
+          "of_range_count"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw range count·iterator뒤남은수. iterator안이나뒤에count를호출하면최초전체개수가아니라현재cursor부터남은rawentry개수입니다. 연속entry합치기후range결과수와도다를수있습니다. 전체raw개수를원하면초기상태에서계산하고필요한경우parser를다시준비합니다. 원래2entry에서1개소비후count1을그립니다. 초기에저장한개수와현재count,합쳐진range반복수를다른변수로표시해정수값의의미를구별합니다."
+      },
+      {
+        "lesson": "os2661",
+        "symbols": [
+          "of_translate_dma_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF DMA 공개주소 API·ADDRESSguard밖선언. DMAaddress와regionprototype은CONFIG_OF_ADDRESS블록앞에선언됩니다. 선언위치와실제definition/link제공을구별해야하며모든설정에서항상실행가능한구현이있다는보장은아닙니다. region은start/lengthoutput와다음cellcursor를제공합니다. header의guard범위를줄로표시하고address.c의DMAparent/ranges구현에연결합니다. prototype의존재와Kconfig/link관계를따로확인하며현재fixture는DMA함수를link실행하지않습니다."
+      },
+      {
+        "lesson": "os2662",
+        "symbols": [
+          "of_translate_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 활성공개 API·주소resource와조회. ADDRESS블록은물리주소/resource/MMIO요청/원본entry/BAR/reg읽기/parser/resource/coherence의외부선언을제공합니다. 각함수의NULL/BAD/status/ERR_PTR반환형식이다르므로성공값을같은규칙으로처리하지않습니다. 실제알고리즘은address.c해설에연결합니다. 각공개API의실패표현을표로정리합니다. constproperty와__iomempointer,resource관리구조를다른타입으로표시하고이header전체읽기를실제I/O실행증명으로확대하지않습니다."
+      },
+      {
+        "lesson": "os2663",
+        "symbols": [
+          "of_pci_range_parser_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF parser 공개 API·init와range resource. ranges/DMA-rangesparserinit과parser_one,PCI/일반range-to-resource를선언합니다. of_range_parser_init은PCI명칭함수의alias입니다. PCI이름이남아도buscallbacktable을통해다른range규약을재사용하며구현의cell/flag/합치기조건을따로확인합니다. init상태→one소비→resourcebounds의흐름을그립니다. rawcount와range결과수,PCI_BAR선택과ranges목록index가다른interface임을표시합니다."
+      },
+      {
+        "lesson": "os2664",
+        "symbols": [
+          "of_io_request_and_map"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·I/O 요청·mapping. CONFIG_OF_ADDRESS가꺼지면of_io_request_and_map은staticinlinefallback입니다. resource조회·예약·mapping을수행하지않습니다. 결과는IOMEM_ERR_PTR(-EINVAL)입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. IOMEM_ERR_PTR(-EINVAL)을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2665",
+        "symbols": [
+          "of_translate_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·물리주소변환. CONFIG_OF_ADDRESS가꺼지면of_translate_address은staticinlinefallback입니다. parent주소계층을변환하지않습니다. 결과는OF_BAD_ADDR입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. OF_BAD_ADDR을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2666",
+        "symbols": [
+          "__of_get_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·원본entry조회. CONFIG_OF_ADDRESS가꺼지면__of_get_address은staticinlinefallback입니다. property/BAR검색이나size/flagsoutput대입을하지않습니다. 결과는NULL입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. NULL을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2667",
+        "symbols": [
+          "of_property_read_reg"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·reg숫자읽기. CONFIG_OF_ADDRESS가꺼지면of_property_read_reg은staticinlinefallback입니다. regentry를읽거나addr/sizeoutput을대입하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2668",
+        "symbols": [
+          "of_pci_range_parser_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·ranges parser준비. CONFIG_OF_ADDRESS가꺼지면of_pci_range_parser_init은staticinlinefallback입니다. ranges속성을읽어cursor를준비하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2669",
+        "symbols": [
+          "of_pci_dma_range_parser_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·DMA parser준비. CONFIG_OF_ADDRESS가꺼지면of_pci_dma_range_parser_init은staticinlinefallback입니다. dma-ranges속성을읽어parser를준비하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2670",
+        "symbols": [
+          "of_pci_range_parser_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·range결과조회. CONFIG_OF_ADDRESS가꺼지면of_pci_range_parser_one은staticinlinefallback입니다. rangecursor를소비하거나outputrange를작성하지않습니다. 결과는NULL입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. NULL을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2671",
+        "symbols": [
+          "of_pci_address_to_resource"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·PCI BAR resource. CONFIG_OF_ADDRESS가꺼지면of_pci_address_to_resource은staticinlinefallback입니다. BAR를resource로변환하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2672",
+        "symbols": [
+          "of_pci_range_to_resource"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·range resource변환. CONFIG_OF_ADDRESS가꺼지면of_pci_range_to_resource은staticinlinefallback입니다. 주어진range를resourcefield로작성하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2673",
+        "symbols": [
+          "of_range_to_resource"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·range index선택. CONFIG_OF_ADDRESS가꺼지면of_range_to_resource은staticinlinefallback입니다. index검색과resource변환을하지않습니다. 결과는-ENOSYS입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. -ENOSYS을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2674",
+        "symbols": [
+          "of_dma_is_coherent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF ADDRESS 꺼짐·DMA coherence정책. CONFIG_OF_ADDRESS가꺼지면of_dma_is_coherent은staticinlinefallback입니다. DMAancestor의coherence속성을검색하지않습니다. 결과는false입니다. 활성구현의실패경로와동일한내부작업을실행한다고설명하지않으며선택output변수는정상결과로사용하기전에반환을확인합니다. 원문의extern과두번째inline위치를비교합니다. false을caller가각반환형식에맞게처리하고다른stub의ENOSYS/EINVAL/NULL/BAD를같은값으로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2675",
+        "symbols": [
+          "of_address_to_resource"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 꺼짐·address-to-resource EINVAL. 이header는CONFIG_OF로address-to-resource와iomap의선언을별도로선택합니다. OF꺼짐의resourcefallback은EINVAL이며ADDRESS꺼짐다른resourceAPI의ENOSYS와다릅니다. outputresource를작성하지않습니다. ADDRESSon/OFoff같은unsupported조합을실제유효설정으로가정하지않습니다. 원본의세선언위치와별도guard를그립니다. fixture는OF/ADDRESS 00,10,11의syntax와00의실행을확인하며전체Kconfig의모든허용조합을증명하지않습니다."
+      },
+      {
+        "lesson": "os2676",
+        "symbols": [
+          "of_iomap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 꺼짐·iomap NULL과다른mapping API. OF꺼짐의iomapstub은NULL입니다. ADDRESS꺼짐request-and-map의ERR_PTR(EINVAL)과다른interface입니다. 두설정블록의선언위치와caller의NULL/IS_ERR검사차이를확인해야하며stub이실제mapping후실패했다는뜻은아닙니다. NULL값과intptr오류표현을fixture에서비교합니다. mappingpointer의실패규칙을함수별로적고아무pointer를바로역참조하지않는사용방법을확인합니다."
+      },
+      {
+        "lesson": "os2677",
+        "symbols": [
+          "of_get_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 주소index편의wrapper·BAR sentinel. inlinewrapper는__of_get_address에index와bar-1을전달합니다. 원본entrypointer와선택size/flags를조회하며주소계층translation을수행하는함수는아닙니다. disabled하위함수는NULL로끝나output을정상대입하지않습니다. index0과bar-1의호출을그립니다. size/flags초기sentinel이disabled실행에서유지되는검산과성공검사후output사용의순서를확인합니다."
+      },
+      {
+        "lesson": "os2678",
+        "symbols": [
+          "of_get_pci_address"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF PCI BAR편의wrapper·index sentinel. __of_get_address에index-1과bar_no를전달합니다. 일반entry번호와PCI BAR의선택모드를분리한재사용입니다. BAR지원버스조건과실제firstword등록번호비교는address.c에서확인하며단순배열bar번째로항상읽는알고리즘이아닙니다. index-1/bar0과index0/bar-1을비교합니다. caller의선택size/flagsoutput와pointer수명을표시하고disabledNULL을성공자료로쓰지않습니다."
+      },
+      {
+        "lesson": "os2679",
+        "symbols": [
+          "of_address_count"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF address count·성공연속접두구간. index0부터resource변환이0인동안count를증가시킵니다. 첫실패에서끝나므로rawregtuple총수나모든유효entry의전수개수를항상뜻하지않습니다. 예를들어중간entry변환이실패하면그뒤entry를계속찾지않습니다. 성공0/1뒤index2실패의count2를원문반복으로예측합니다. disabledOFstub의첫EINVAL이라count0인실제검산과rawrangecount의다른기준을비교합니다."
+      }
+    ]
+  }
+}

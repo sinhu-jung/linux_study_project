@@ -1,0 +1,256 @@
+{
+  "draft_lessons": 25,
+  "questions": 50,
+  "anchors": [
+    {
+      "planned_lesson": "os2151",
+      "title": "A64 명령 크기·4바이트와 고정 길이",
+      "path": "arch/arm64/include/asm/insn-def.h",
+      "excerpt": {
+        "start": 9,
+        "end": 23,
+        "anchor": "AARCH64_INSN_SIZE"
+      }
+    },
+    {
+      "planned_lesson": "os2152",
+      "title": "A64 BRK encoding·기본 word와 immediate 위치",
+      "path": "arch/arm64/include/asm/insn-def.h",
+      "excerpt": {
+        "start": 15,
+        "end": 23,
+        "anchor": "AARCH64_BREAK_MON"
+      }
+    },
+    {
+      "planned_lesson": "os2153",
+      "title": "A64 의도적 fault BRK·handler 목적 구분",
+      "path": "arch/arm64/include/asm/insn-def.h",
+      "excerpt": {
+        "start": 21,
+        "end": 23,
+        "anchor": "AARCH64_BREAK_FAULT"
+      }
+    },
+    {
+      "planned_lesson": "os2154",
+      "title": "Text patch API·word 읽기와 쓰기 오류",
+      "path": "arch/arm64/include/asm/patching.h",
+      "excerpt": {
+        "start": 7,
+        "end": 17,
+        "anchor": "aarch64_insn_read"
+      }
+    },
+    {
+      "planned_lesson": "os2155",
+      "title": "Text patch API·literal64와 instruction 크기 구분",
+      "path": "arch/arm64/include/asm/patching.h",
+      "excerpt": {
+        "start": 10,
+        "end": 17,
+        "anchor": "aarch64_insn_write_literal_u64"
+      }
+    },
+    {
+      "planned_lesson": "os2156",
+      "title": "Text patch API·여러 명령과 byte 범위 복사",
+      "path": "arch/arm64/include/asm/patching.h",
+      "excerpt": {
+        "start": 12,
+        "end": 17,
+        "anchor": "aarch64_insn_copy"
+      }
+    },
+    {
+      "planned_lesson": "os2157",
+      "title": "Text patch exit 영역·시스템 상태와 half-open",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 18,
+        "end": 43,
+        "anchor": "is_exit_text"
+      }
+    },
+    {
+      "planned_lesson": "os2158",
+      "title": "Text patch image 판정·core 또는 초기exit",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 26,
+        "end": 51,
+        "anchor": "is_image_text"
+      }
+    },
+    {
+      "planned_lesson": "os2159",
+      "title": "Text patch map·physical과vmalloc page 선택",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 31,
+        "end": 56,
+        "anchor": "patch_map"
+      }
+    },
+    {
+      "planned_lesson": "os2160",
+      "title": "Text patch unmap·고정slot 정리",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 49,
+        "end": 74,
+        "anchor": "patch_unmap"
+      }
+    },
+    {
+      "planned_lesson": "os2161",
+      "title": "Text instruction read·오류 시 출력 보존",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 57,
+        "end": 82,
+        "anchor": "aarch64_insn_read"
+      }
+    },
+    {
+      "planned_lesson": "os2162",
+      "title": "Text write 보호·rawspinIRQ와 nofault",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 69,
+        "end": 94,
+        "anchor": "__aarch64_insn_write"
+      }
+    },
+    {
+      "planned_lesson": "os2163",
+      "title": "Text instruction write·CPU값에서LE값",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 86,
+        "end": 111,
+        "anchor": "aarch64_insn_write"
+      }
+    },
+    {
+      "planned_lesson": "os2164",
+      "title": "Text literal write·64bit 데이터와 같은mapping잠금",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 91,
+        "end": 116,
+        "anchor": "aarch64_insn_write_literal_u64"
+      }
+    },
+    {
+      "planned_lesson": "os2165",
+      "title": "Text poke callback·page chunk와 누적offset",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 110,
+        "end": 135,
+        "anchor": "__text_poke"
+      }
+    },
+    {
+      "planned_lesson": "os2166",
+      "title": "Text copy callback·nofault 오류를 전달하지 않는 계약",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 138,
+        "end": 163,
+        "anchor": "text_poke_memcpy"
+      }
+    },
+    {
+      "planned_lesson": "os2167",
+      "title": "Text set callback·len/4와 남는byte",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 143,
+        "end": 174,
+        "anchor": "text_poke_memset"
+      }
+    },
+    {
+      "planned_lesson": "os2168",
+      "title": "Text copy 공개API·정렬과unused RX문맥",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 158,
+        "end": 183,
+        "anchor": "aarch64_insn_copy"
+      }
+    },
+    {
+      "planned_lesson": "os2169",
+      "title": "Text set 공개API·illegalinstruction영역 채우기",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 175,
+        "end": 200,
+        "anchor": "aarch64_insn_set"
+      }
+    },
+    {
+      "planned_lesson": "os2170",
+      "title": "Text nosync patch·정렬오류와성공시에cache",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 183,
+        "end": 208,
+        "anchor": "aarch64_insn_patch_text_nosync"
+      }
+    },
+    {
+      "planned_lesson": "os2171",
+      "title": "Text patch descriptor·주소와word 배열·CPUcount",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 200,
+        "end": 225,
+        "anchor": "aarch64_insn_patch"
+      }
+    },
+    {
+      "planned_lesson": "os2172",
+      "title": "Text patch last CPU master·원자도착counter",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 207,
+        "end": 232,
+        "anchor": "aarch64_insn_patch_text_cb"
+      }
+    },
+    {
+      "planned_lesson": "os2173",
+      "title": "Text patch 대기CPU·완료초과와ISB",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 207,
+        "end": 232,
+        "anchor": "aarch64_insn_patch_text_cb"
+      }
+    },
+    {
+      "planned_lesson": "os2174",
+      "title": "Text patch 오류·앞선성공을되돌리지않음",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 207,
+        "end": 232,
+        "anchor": "aarch64_insn_patch_text_cb"
+      }
+    },
+    {
+      "planned_lesson": "os2175",
+      "title": "Text patch 공개동기화·count검사와cpuslocked",
+      "path": "arch/arm64/kernel/patching.c",
+      "excerpt": {
+        "start": 228,
+        "end": 242,
+        "anchor": "aarch64_insn_patch_text"
+      }
+    }
+  ]
+}

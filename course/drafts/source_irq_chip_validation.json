@@ -1,0 +1,726 @@
+{
+  "draft_lessons": 72,
+  "questions": 144,
+  "anchors": [
+    {
+      "planned_lesson": "os2756",
+      "title": "Chained IRQ: 잘못된 action 호출 진단",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 22,
+        "end": 47,
+        "anchor": "bad_chained_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2757",
+      "title": "IRQ chip 등록: NULL 대체와 descriptor 잠금",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "irq_set_chip"
+      }
+    },
+    {
+      "planned_lesson": "os2758",
+      "title": "IRQ trigger 설정: buslock과 오류 전달",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 65,
+        "end": 90,
+        "anchor": "irq_set_irq_type"
+      }
+    },
+    {
+      "planned_lesson": "os2759",
+      "title": "IRQ handler_data: 공통 context 포인터",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 87,
+        "end": 112,
+        "anchor": "irq_set_handler_data"
+      }
+    },
+    {
+      "planned_lesson": "os2760",
+      "title": "MSI descriptor: base와 offset 연결",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 108,
+        "end": 133,
+        "anchor": "irq_set_msi_desc_off"
+      }
+    },
+    {
+      "planned_lesson": "os2761",
+      "title": "MSI 기본 wrapper: offset 0 재사용",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 130,
+        "end": 155,
+        "anchor": "irq_set_msi_desc"
+      }
+    },
+    {
+      "planned_lesson": "os2762",
+      "title": "IRQ chip_data: chip별 context 수명",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 142,
+        "end": 167,
+        "anchor": "irq_set_chip_data"
+      }
+    },
+    {
+      "planned_lesson": "os2763",
+      "title": "IRQ data 조회: 내부 객체 주소와 NULL",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 155,
+        "end": 180,
+        "anchor": "irq_get_irq_data"
+      }
+    },
+    {
+      "planned_lesson": "os2764",
+      "title": "IRQ 상태 bit: disabled 표시 해제",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 163,
+        "end": 188,
+        "anchor": "irq_state_clr_disabled"
+      }
+    },
+    {
+      "planned_lesson": "os2765",
+      "title": "IRQ 상태 bit: masked 표시 해제",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 168,
+        "end": 193,
+        "anchor": "irq_state_clr_masked"
+      }
+    },
+    {
+      "planned_lesson": "os2766",
+      "title": "IRQ started bit: 종료 상태 정리",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 173,
+        "end": 198,
+        "anchor": "irq_state_clr_started"
+      }
+    },
+    {
+      "planned_lesson": "os2767",
+      "title": "IRQ started bit: startup 결과와 상태",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 178,
+        "end": 207,
+        "anchor": "irq_state_set_started"
+      }
+    },
+    {
+      "planned_lesson": "os2768",
+      "title": "Managed startup: 온라인 CPU 교집합",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 191,
+        "end": 216,
+        "anchor": "__irq_startup_managed"
+      }
+    },
+    {
+      "planned_lesson": "os2769",
+      "title": "IRQ startup 내부: callback과 enable 대체",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 235,
+        "end": 260,
+        "anchor": "__irq_startup"
+      }
+    },
+    {
+      "planned_lesson": "os2770",
+      "title": "IRQ startup: affinity 순서와 resend",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 254,
+        "end": 279,
+        "anchor": "irq_startup"
+      }
+    },
+    {
+      "planned_lesson": "os2771",
+      "title": "IRQ activate: managed의 별도 시점",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 288,
+        "end": 313,
+        "anchor": "irq_activate"
+      }
+    },
+    {
+      "planned_lesson": "os2772",
+      "title": "IRQ activate-and-startup: 경고 실패의 0 반환",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 297,
+        "end": 322,
+        "anchor": "irq_activate_and_startup"
+      }
+    },
+    {
+      "planned_lesson": "os2773",
+      "title": "IRQ shutdown: started 조건과 depth",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 306,
+        "end": 331,
+        "anchor": "irq_shutdown"
+      }
+    },
+    {
+      "planned_lesson": "os2774",
+      "title": "IRQ shutdown과 domain deactivate의 독립 수명",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 323,
+        "end": 348,
+        "anchor": "irq_shutdown_and_deactivate"
+      }
+    },
+    {
+      "planned_lesson": "os2775",
+      "title": "IRQ enable: disabled와 masked의 차이",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 335,
+        "end": 360,
+        "anchor": "irq_enable"
+      }
+    },
+    {
+      "planned_lesson": "os2776",
+      "title": "IRQ disable 내부: lazy와 강제 mask",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 350,
+        "end": 385,
+        "anchor": "__irq_disable"
+      }
+    },
+    {
+      "planned_lesson": "os2777",
+      "title": "IRQ lazy disable: 불필요한 hardware 접근 절감",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 386,
+        "end": 411,
+        "anchor": "irq_disable"
+      }
+    },
+    {
+      "planned_lesson": "os2778",
+      "title": "Per-CPU enable: callback 대체와 CPU mask",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 391,
+        "end": 416,
+        "anchor": "irq_percpu_enable"
+      }
+    },
+    {
+      "planned_lesson": "os2779",
+      "title": "Per-CPU disable: 특정 CPU bit 제거",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 400,
+        "end": 425,
+        "anchor": "irq_percpu_disable"
+      }
+    },
+    {
+      "planned_lesson": "os2780",
+      "title": "mask-and-ack: 결합 callback과 대체 순서",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 409,
+        "end": 434,
+        "anchor": "mask_ack_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2781",
+      "title": "IRQ mask: 중복 접근 생략과 callback 조건",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 421,
+        "end": 446,
+        "anchor": "mask_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2782",
+      "title": "IRQ unmask: 반대 상태 전이와 선택 callback",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 432,
+        "end": 460,
+        "anchor": "unmask_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2783",
+      "title": "Threaded unmask: 늦춘 EOI 순서",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 443,
+        "end": 468,
+        "anchor": "unmask_threaded_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2784",
+      "title": "Nested IRQ: 호출 thread 문맥에서 처리",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 461,
+        "end": 486,
+        "anchor": "handle_nested_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2785",
+      "title": "IRQ poll 검사: 진행 bit와 대기 위임",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 495,
+        "end": 520,
+        "anchor": "irq_check_poll"
+      }
+    },
+    {
+      "planned_lesson": "os2786",
+      "title": "IRQ 실행 허용: 진행·wakeup·poll 순서",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 502,
+        "end": 537,
+        "anchor": "irq_may_run"
+      }
+    },
+    {
+      "planned_lesson": "os2787",
+      "title": "Simple IRQ: hardware 제어의 caller 계약",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 538,
+        "end": 572,
+        "anchor": "handle_simple_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2788",
+      "title": "Untracked IRQ: 통계·randomness 생략",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 573,
+        "end": 598,
+        "anchor": "handle_untracked_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2789",
+      "title": "조건부 unmask: thread 작업이 남은 경우",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 605,
+        "end": 630,
+        "anchor": "cond_unmask_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2790",
+      "title": "Level IRQ: 활성 수준·mask·ack·재개",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 628,
+        "end": 653,
+        "anchor": "handle_level_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2791",
+      "title": "조건부 EOI: oneshot와 늦춘 완료 통지",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 657,
+        "end": 686,
+        "anchor": "cond_unmask_eoi_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2792",
+      "title": "Fast EOI: 완료 통지·pending 재전송",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 687,
+        "end": 712,
+        "anchor": "handle_fasteoi_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2793",
+      "title": "Fast EOI NMI: 단일 action 계약",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 751,
+        "end": 786,
+        "anchor": "handle_fasteoi_nmi"
+      }
+    },
+    {
+      "planned_lesson": "os2794",
+      "title": "Edge IRQ: pending 반복 처리 알고리즘",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 787,
+        "end": 812,
+        "anchor": "handle_edge_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2795",
+      "title": "Edge EOI: mask 없는 반복과 공통 완료",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 849,
+        "end": 874,
+        "anchor": "handle_edge_eoi_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2796",
+      "title": "Per-CPU IRQ: 공유 총계 없이 local 처리",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 894,
+        "end": 923,
+        "anchor": "handle_percpu_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2797",
+      "title": "Per-CPU dev_id: local context와 spurious 처리",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 924,
+        "end": 949,
+        "anchor": "handle_percpu_devid_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2798",
+      "title": "Per-CPU NMI dev_id: NULL guard 없는 계약",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 967,
+        "end": 992,
+        "anchor": "handle_percpu_devid_fasteoi_nmi"
+      }
+    },
+    {
+      "planned_lesson": "os2799",
+      "title": "Flow handler 설치: hierarchy와 chained 제약",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 985,
+        "end": 1010,
+        "anchor": "__irq_do_set_handler"
+      }
+    },
+    {
+      "planned_lesson": "os2800",
+      "title": "Flow 설치 wrapper: buslock과 빈 descriptor",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1058,
+        "end": 1083,
+        "anchor": "__irq_set_handler"
+      }
+    },
+    {
+      "planned_lesson": "os2801",
+      "title": "Chained handler와 data: 같은 잠금 안의 설치",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1073,
+        "end": 1098,
+        "anchor": "irq_set_chained_handler_and_data"
+      }
+    },
+    {
+      "planned_lesson": "os2802",
+      "title": "Chip와 flow 결합 wrapper: 두 호출의 결과",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1090,
+        "end": 1115,
+        "anchor": "irq_set_chip_and_handler_name"
+      }
+    },
+    {
+      "planned_lesson": "os2803",
+      "title": "IRQ status 변경: 설정과 irq_data 동기화",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1098,
+        "end": 1123,
+        "anchor": "irq_modify_status"
+      }
+    },
+    {
+      "planned_lesson": "os2804",
+      "title": "CPU online: 활성 IRQ의 callback 선택",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1144,
+        "end": 1173,
+        "anchor": "irq_cpu_online"
+      }
+    },
+    {
+      "planned_lesson": "os2805",
+      "title": "CPU offline: per-IRQ 통지와 보호 범위",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1174,
+        "end": 1199,
+        "anchor": "irq_cpu_offline"
+      }
+    },
+    {
+      "planned_lesson": "os2806",
+      "title": "Hierarchy Fast EOI ack: 시작 전 확인",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1212,
+        "end": 1237,
+        "anchor": "handle_fasteoi_ack_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2807",
+      "title": "Hierarchy Fast EOI mask: level 차단 선행",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1263,
+        "end": 1288,
+        "anchor": "handle_fasteoi_mask_irq"
+      }
+    },
+    {
+      "planned_lesson": "os2808",
+      "title": "Parent state 설정: 선택 callback 부재의 성공",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1313,
+        "end": 1338,
+        "anchor": "irq_chip_set_parent_state"
+      }
+    },
+    {
+      "planned_lesson": "os2809",
+      "title": "Parent state 조회: 성공과 output 불변",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1335,
+        "end": 1360,
+        "anchor": "irq_chip_get_parent_state"
+      }
+    },
+    {
+      "planned_lesson": "os2810",
+      "title": "Parent enable: 유효 링크와 unmask 대체",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1353,
+        "end": 1381,
+        "anchor": "irq_chip_enable_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2811",
+      "title": "Parent disable: mask 대체의 조건",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1368,
+        "end": 1393,
+        "anchor": "irq_chip_disable_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2812",
+      "title": "Parent ack: 부모 사건 확인",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1382,
+        "end": 1407,
+        "anchor": "irq_chip_ack_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2813",
+      "title": "Parent mask: 부모 전달 차단",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1393,
+        "end": 1418,
+        "anchor": "irq_chip_mask_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2814",
+      "title": "Parent unmask: 부모 전달 허용",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1415,
+        "end": 1440,
+        "anchor": "irq_chip_unmask_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2815",
+      "title": "Parent EOI: 부모 완료 통지",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1426,
+        "end": 1451,
+        "anchor": "irq_chip_eoi_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2816",
+      "title": "Parent affinity: 선택적 지원과 ENOSYS",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1441,
+        "end": 1466,
+        "anchor": "irq_chip_set_affinity_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2817",
+      "title": "Parent trigger type: 제공 함수로 위임",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1459,
+        "end": 1484,
+        "anchor": "irq_chip_set_type_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2818",
+      "title": "Hierarchy retrigger: 첫 지원 부모 검색",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1477,
+        "end": 1507,
+        "anchor": "irq_chip_retrigger_hierarchy"
+      }
+    },
+    {
+      "planned_lesson": "os2819",
+      "title": "Parent vCPU affinity: 가상화 context 전달",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1492,
+        "end": 1517,
+        "anchor": "irq_chip_set_vcpu_affinity_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2820",
+      "title": "Parent wake 설정: SKIP flag의 no-op",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1508,
+        "end": 1533,
+        "anchor": "irq_chip_set_wake_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2821",
+      "title": "Parent resource 요청: 선택적 no-op 성공",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1526,
+        "end": 1559,
+        "anchor": "irq_chip_request_resources_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2822",
+      "title": "Parent resource 해제: 선택 callback",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1542,
+        "end": 1567,
+        "anchor": "irq_chip_release_resources_parent"
+      }
+    },
+    {
+      "planned_lesson": "os2823",
+      "title": "MSI message compose: 자신부터 첫 제공자",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1560,
+        "end": 1590,
+        "anchor": "irq_chip_compose_msi_msg"
+      }
+    },
+    {
+      "planned_lesson": "os2824",
+      "title": "IRQ PM device: domain 연결 조회",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1576,
+        "end": 1601,
+        "anchor": "irq_get_pm_device"
+      }
+    },
+    {
+      "planned_lesson": "os2825",
+      "title": "IRQ runtime PM get: 조건과 결과 전파",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1591,
+        "end": 1616,
+        "anchor": "irq_chip_pm_get"
+      }
+    },
+    {
+      "planned_lesson": "os2826",
+      "title": "IRQ runtime PM put: 음수 보존·양수 정규화",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1610,
+        "end": 1619,
+        "anchor": "irq_chip_pm_put"
+      }
+    },
+    {
+      "planned_lesson": "os2827",
+      "title": "Parent mask-and-ack: 결합 callback 필수",
+      "path": "kernel/irq/chip.c",
+      "excerpt": {
+        "start": 1404,
+        "end": 1429,
+        "anchor": "irq_chip_mask_ack_parent"
+      }
+    }
+  ]
+}

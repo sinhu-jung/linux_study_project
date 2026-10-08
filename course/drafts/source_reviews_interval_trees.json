@@ -1,0 +1,181 @@
+{
+  "include/linux/interval_tree_generic.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 187,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os843",
+        "symbols": [
+          "INTERVAL_TREE_DEFINE",
+          "RB_DECLARE_CALLBACKS_MAX",
+          "_insert",
+          "_remove"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Callback의 원리",
+          "실제 Instantiation"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os844",
+        "symbols": [
+          "_subtree_search"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "요약의 효용",
+          "Leftmost의 뜻"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os845",
+        "symbols": [
+          "_iter_first"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "O(1) 경계 검사",
+          "예시"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os846",
+        "symbols": [
+          "_iter_next"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "순회 구성",
+          "균형의 역할"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      }
+    ]
+  },
+  "lib/interval_tree.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 149,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os847",
+        "symbols": [
+          "interval_tree_span_iter_next_gap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "두 Node",
+          "Greedy span"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os848",
+        "symbols": [
+          "interval_tree_span_iter_first"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Leading Hole",
+          "CONFIG"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os849",
+        "symbols": [
+          "interval_tree_span_iter_next"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Inclusive 연결",
+          "전체 Hole의 종료"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os850",
+        "symbols": [
+          "interval_tree_span_iter_advance"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Union Alias",
+          "상태 재사용"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      },
+      {
+        "lesson": "os843",
+        "symbols": [
+          "START",
+          "LAST",
+          "INTERVAL_TREE_DEFINE",
+          "EXPORT_SYMBOL_GPL"
+        ],
+        "sections": [
+          "실제 Instantiation"
+        ],
+        "review": "Concrete generic instantiation for unsigned long endpoints/start-last getters/subtree summary/interval_tree prefix and four exports explicitly described; no separate handwritten node-query implementation omitted."
+      }
+    ]
+  },
+  "include/linux/interval_tree.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 88,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os851",
+        "symbols": [
+          "interval_tree_node",
+          "interval_tree_span_iter",
+          "interval_tree_span_iter_done",
+          "interval_tree_for_each_span",
+          "interval_tree_insert",
+          "interval_tree_remove",
+          "interval_tree_iter_first",
+          "interval_tree_iter_next"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "선언과 구현",
+          "수명과 동기화"
+        ],
+        "review": "Whole interval generic/concrete/header read: template and instantiation, inclusive overlap and subtree-max, insert/remove augmented backend connection, leftmost/range rejection, successor search, merged used/hole spans, clipping/done/forwardadvance and union state are individually authored with two worked questions. Plain BST backend execution validates queries/spans only; RB rotations/balance/performance/caller protection excluded."
+      }
+    ]
+  }
+}

@@ -1,0 +1,426 @@
+{
+  "draft_lessons": 42,
+  "questions": 84,
+  "anchors": [
+    {
+      "planned_lesson": "os1450",
+      "title": "Waitqueue 구조·대기자와 대기열의 역할",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "wait_queue_entry"
+      }
+    },
+    {
+      "planned_lesson": "os1451",
+      "title": "Waitqueue 초기화·리스트 연결 전후의 차이",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 47,
+        "end": 72,
+        "anchor": "__WAITQUEUE_INITIALIZER"
+      }
+    },
+    {
+      "planned_lesson": "os1452",
+      "title": "Waitqueue head 초기화·잠금과 lockdep 클래스",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 8,
+        "end": 33,
+        "anchor": "__init_waitqueue_head"
+      }
+    },
+    {
+      "planned_lesson": "os1453",
+      "title": "Waitqueue active·잠금 없는 관측과 놓친 깨움",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 125,
+        "end": 150,
+        "anchor": "waitqueue_active"
+      }
+    },
+    {
+      "planned_lesson": "os1454",
+      "title": "Waitqueue sleeper 조회·단일 항목과 배리어 포함 검사",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 151,
+        "end": 176,
+        "anchor": "wq_has_sleeper"
+      }
+    },
+    {
+      "planned_lesson": "os1455",
+      "title": "Waitqueue 등록 순서·priority 앞부분과 일반 항목",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 169,
+        "end": 194,
+        "anchor": "__add_wait_queue"
+      }
+    },
+    {
+      "planned_lesson": "os1456",
+      "title": "Waitqueue exclusive·플래그와 tail 등록",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "add_wait_queue_exclusive"
+      }
+    },
+    {
+      "planned_lesson": "os1457",
+      "title": "Waitqueue 깨움 순회·콜백 결과와 exclusive 예산",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 73,
+        "end": 98,
+        "anchor": "__wake_up_common"
+      }
+    },
+    {
+      "planned_lesson": "os1458",
+      "title": "Waitqueue wake 반환·전체 호출 수와 exclusive 성공 수",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 99,
+        "end": 124,
+        "anchor": "__wake_up_common_lock"
+      }
+    },
+    {
+      "planned_lesson": "os1459",
+      "title": "Waitqueue prepare·등록 뒤 대기 상태 설정",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 229,
+        "end": 254,
+        "anchor": "prepare_to_wait"
+      }
+    },
+    {
+      "planned_lesson": "os1460",
+      "title": "Waitqueue exclusive prepare·첫 대기자 반환의 한계",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 244,
+        "end": 269,
+        "anchor": "prepare_to_wait_exclusive"
+      }
+    },
+    {
+      "planned_lesson": "os1461",
+      "title": "Waitqueue signal 준비·제거와 -ERESTARTSYS",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 270,
+        "end": 295,
+        "anchor": "prepare_to_wait_event"
+      }
+    },
+    {
+      "planned_lesson": "os1462",
+      "title": "Waitqueue 공통 macro·조건 우선과 오류 경로",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 299,
+        "end": 324,
+        "anchor": "___wait_event"
+      }
+    },
+    {
+      "planned_lesson": "os1463",
+      "title": "Waitqueue finish·careful 조회와 조건부 제거",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 356,
+        "end": 381,
+        "anchor": "finish_wait"
+      }
+    },
+    {
+      "planned_lesson": "os1464",
+      "title": "Waitqueue autoremove·깨움 성공 때만 링크 정리",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 382,
+        "end": 412,
+        "anchor": "autoremove_wake_function"
+      }
+    },
+    {
+      "planned_lesson": "os1465",
+      "title": "Waitqueue wake 종류·state 필터와 호출자 잠금",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 219,
+        "end": 244,
+        "anchor": "wake_up"
+      }
+    },
+    {
+      "planned_lesson": "os1466",
+      "title": "Waitqueue sync wake·스케줄링 힌트와 완료 대기의 차이",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 167,
+        "end": 192,
+        "anchor": "__wake_up_sync_key"
+      }
+    },
+    {
+      "planned_lesson": "os1467",
+      "title": "Waitqueue current CPU wake·WF_CURRENT_CPU 전달",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 131,
+        "end": 166,
+        "anchor": "__wake_up_on_current_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1468",
+      "title": "Waitqueue poll key·이벤트 비트 전달과 포인터 해석",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 233,
+        "end": 259,
+        "anchor": "poll_to_key"
+      }
+    },
+    {
+      "planned_lesson": "os1469",
+      "title": "Waitqueue pollfree·통지 뒤 RCU 수명 정리",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 260,
+        "end": 285,
+        "anchor": "wake_up_pollfree"
+      }
+    },
+    {
+      "planned_lesson": "os1470",
+      "title": "Waitqueue locked wait·잠금을 풀고 잠든 뒤 재획득",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 313,
+        "end": 338,
+        "anchor": "do_wait_intr"
+      }
+    },
+    {
+      "planned_lesson": "os1471",
+      "title": "Waitqueue wait_woken·깨움 플래그와 정지 요청",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 413,
+        "end": 438,
+        "anchor": "wait_woken"
+      }
+    },
+    {
+      "planned_lesson": "os1472",
+      "title": "Waitqueue woken 콜백·배리어 A·B·C의 연결",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 438,
+        "end": 446,
+        "anchor": "woken_wake_function"
+      }
+    },
+    {
+      "planned_lesson": "os1473",
+      "title": "Waitqueue 일반 wait_event·조건과 void 반환",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 339,
+        "end": 364,
+        "anchor": "wait_event"
+      }
+    },
+    {
+      "planned_lesson": "os1474",
+      "title": "Waitqueue interruptible·signal 오류와 반복 조건",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 495,
+        "end": 528,
+        "anchor": "wait_event_interruptible"
+      }
+    },
+    {
+      "planned_lesson": "os1475",
+      "title": "Waitqueue timeout·jiffies 잔여값과 만료 경계",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 411,
+        "end": 436,
+        "anchor": "wait_event_timeout"
+      }
+    },
+    {
+      "planned_lesson": "os1476",
+      "title": "Waitqueue interruptible timeout·세 가지 반환 영역",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 529,
+        "end": 554,
+        "anchor": "wait_event_interruptible_timeout"
+      }
+    },
+    {
+      "planned_lesson": "os1477",
+      "title": "Waitqueue I/O wait·대기 명령 교체",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 354,
+        "end": 379,
+        "anchor": "io_wait_event"
+      }
+    },
+    {
+      "planned_lesson": "os1478",
+      "title": "Waitqueue freezable·freezer state와 signal 계약",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 378,
+        "end": 410,
+        "anchor": "wait_event_freezable"
+      }
+    },
+    {
+      "planned_lesson": "os1479",
+      "title": "Waitqueue command·수면 전후 코드의 실행 조건",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 469,
+        "end": 494,
+        "anchor": "wait_event_cmd"
+      }
+    },
+    {
+      "planned_lesson": "os1480",
+      "title": "Waitqueue exclusive wrapper·깨움 선택과 조건 소비",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 620,
+        "end": 645,
+        "anchor": "wait_event_interruptible_exclusive"
+      }
+    },
+    {
+      "planned_lesson": "os1481",
+      "title": "Waitqueue TASK_IDLE·load와 일반 interruptible의 차이",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 669,
+        "end": 694,
+        "anchor": "wait_event_idle"
+      }
+    },
+    {
+      "planned_lesson": "os1482",
+      "title": "Waitqueue killable·TASK_WAKEKILL과 지정 state",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 925,
+        "end": 952,
+        "anchor": "wait_event_killable"
+      }
+    },
+    {
+      "planned_lesson": "os1483",
+      "title": "Waitqueue 고해상도 timeout·타이머 task와 -ETIME",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 539,
+        "end": 579,
+        "anchor": "__wait_event_hrtimeout"
+      }
+    },
+    {
+      "planned_lesson": "os1484",
+      "title": "Waitqueue 고해상도 wrapper·조건 성공과 signal 상태",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 580,
+        "end": 605,
+        "anchor": "wait_event_hrtimeout"
+      }
+    },
+    {
+      "planned_lesson": "os1485",
+      "title": "Waitqueue locked macro·조건 검사와 잠금 유지",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 773,
+        "end": 812,
+        "anchor": "__wait_event_interruptible_locked"
+      }
+    },
+    {
+      "planned_lesson": "os1486",
+      "title": "Waitqueue 별도 lock_irq·cmd와 수면 사이의 해제",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 1000,
+        "end": 1029,
+        "anchor": "__wait_event_lock_irq"
+      }
+    },
+    {
+      "planned_lesson": "os1487",
+      "title": "Waitqueue lock_irq timeout·잠금과 세 가지 반환",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 1137,
+        "end": 1167,
+        "anchor": "__wait_event_lock_irq_timeout"
+      }
+    },
+    {
+      "planned_lesson": "os1488",
+      "title": "Waitqueue 내부 exclusive helper·앞쪽과 tail의 차이",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 186,
+        "end": 211,
+        "anchor": "__add_wait_queue_exclusive"
+      }
+    },
+    {
+      "planned_lesson": "os1489",
+      "title": "Waitqueue init_wait_entry·current와 autoremove 연결",
+      "path": "kernel/sched/wait.c",
+      "excerpt": {
+        "start": 261,
+        "end": 288,
+        "anchor": "init_wait_entry"
+      }
+    },
+    {
+      "planned_lesson": "os1490",
+      "title": "Waitqueue 헤더 끝·init_wait와 callback 선언",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 1209,
+        "end": 1220,
+        "anchor": "init_wait"
+      }
+    },
+    {
+      "planned_lesson": "os1491",
+      "title": "Waitqueue flags·표시 비트 정의와 콜백 전 snapshot",
+      "path": "include/linux/wait.h",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "wait_queue_entry"
+      }
+    }
+  ]
+}

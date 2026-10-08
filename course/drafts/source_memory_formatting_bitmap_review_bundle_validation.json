@@ -1,0 +1,906 @@
+{
+  "draft_lessons": 90,
+  "questions": 180,
+  "anchors": [
+    {
+      "planned_lesson": "os694",
+      "title": "VMA 보조·Stack 주소와 File 참조 교체",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 338,
+        "end": 363,
+        "anchor": "vma_set_file"
+      }
+    },
+    {
+      "planned_lesson": "os695",
+      "title": "Stack ASLR·Page Mask와 성장 방향",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 351,
+        "end": 380,
+        "anchor": "randomize_stack_top"
+      }
+    },
+    {
+      "planned_lesson": "os696",
+      "title": "Randomize Page·정렬과 Range 한도",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 381,
+        "end": 406,
+        "anchor": "randomize_page"
+      }
+    },
+    {
+      "planned_lesson": "os697",
+      "title": "Mmap 배치 선택·Legacy와 Top Down",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 475,
+        "end": 500,
+        "anchor": "arch_pick_mmap_layout"
+      }
+    },
+    {
+      "planned_lesson": "os698",
+      "title": "Locked VM 회계·쓰기 Lock과 Memlock 한도",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 516,
+        "end": 541,
+        "anchor": "__account_locked_vm"
+      }
+    },
+    {
+      "planned_lesson": "os699",
+      "title": "Kernel Mmap Wrapper·Security와 Lock 이후 처리",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 575,
+        "end": 600,
+        "anchor": "vm_mmap_pgoff"
+      }
+    },
+    {
+      "planned_lesson": "os700",
+      "title": "KVMalloc 대체 경로·GFP와 Page 크기",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 650,
+        "end": 679,
+        "anchor": "__kvmalloc_node_noprof"
+      }
+    },
+    {
+      "planned_lesson": "os701",
+      "title": "KV 해제·주소 계열과 민감 자료 지우기",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 714,
+        "end": 744,
+        "anchor": "kvfree_sensitive"
+      }
+    },
+    {
+      "planned_lesson": "os702",
+      "title": "KV 재할당·기존 자료 보존과 실패 Ownership",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 745,
+        "end": 770,
+        "anchor": "kvrealloc_noprof"
+      }
+    },
+    {
+      "planned_lesson": "os703",
+      "title": "Vmalloc Array·곱셈 검사와 Zero Flag",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 779,
+        "end": 805,
+        "anchor": "__vmalloc_array_noprof"
+      }
+    },
+    {
+      "planned_lesson": "os704",
+      "title": "Folio Mapping·Pointer Tag와 Swap 우선순위",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 844,
+        "end": 872,
+        "anchor": "folio_mapping"
+      }
+    },
+    {
+      "planned_lesson": "os705",
+      "title": "Folio 복사·Page 반복과 중간 Poison 오류",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 887,
+        "end": 912,
+        "anchor": "folio_mc_copy"
+      }
+    },
+    {
+      "planned_lesson": "os706",
+      "title": "Overcommit 정책 교체·Batch와 Per CPU 동기화",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 927,
+        "end": 952,
+        "anchor": "overcommit_policy_handler"
+      }
+    },
+    {
+      "planned_lesson": "os707",
+      "title": "Commit Limit·RAM·Huge Page·Swap의 단위",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 977,
+        "end": 1009,
+        "anchor": "vm_commit_limit"
+      }
+    },
+    {
+      "planned_lesson": "os708",
+      "title": "메모리 예약 허용·먼저 회계하고 실패 복원",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1032,
+        "end": 1057,
+        "anchor": "__vm_enough_memory"
+      }
+    },
+    {
+      "planned_lesson": "os709",
+      "title": "Get Cmdline·범위 Snapshot과 종료 보정",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1088,
+        "end": 1116,
+        "anchor": "get_cmdline"
+      }
+    },
+    {
+      "planned_lesson": "os710",
+      "title": "Page 비교·Local Mapping의 역순 해제",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1137,
+        "end": 1162,
+        "anchor": "memcmp_pages"
+      }
+    },
+    {
+      "planned_lesson": "os711",
+      "title": "객체 Provenance·Debug 설정과 주소 분류",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1162,
+        "end": 1187,
+        "anchor": "mem_dump_obj"
+      }
+    },
+    {
+      "planned_lesson": "os712",
+      "title": "Page Offline·Reader와 전환 Writer의 RW Semaphore",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1206,
+        "end": 1231,
+        "anchor": "page_offline_freeze"
+      }
+    },
+    {
+      "planned_lesson": "os713",
+      "title": "Folio Cache Flush·Architecture Fallback 반복",
+      "path": "mm/util.c",
+      "excerpt": {
+        "start": 1229,
+        "end": 1237,
+        "anchor": "flush_dcache_folio"
+      }
+    },
+    {
+      "planned_lesson": "os714",
+      "title": "Simple 숫자 변환·소비 길이와 오류 계약",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 64,
+        "end": 95,
+        "anchor": "simple_strntoull"
+      }
+    },
+    {
+      "planned_lesson": "os715",
+      "title": "Simple 부호 변환·Minus와 제한 길이",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 135,
+        "end": 160,
+        "anchor": "simple_strntoll"
+      }
+    },
+    {
+      "planned_lesson": "os716",
+      "title": "Format 숫자 읽기·Pointer 갱신과 Do While",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 164,
+        "end": 198,
+        "anchor": "skip_atoi"
+      }
+    },
+    {
+      "planned_lesson": "os717",
+      "title": "Decimal 두 자리 Table·역순 출력과 Endian",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 222,
+        "end": 247,
+        "anchor": "put_dec_trunc8"
+      }
+    },
+    {
+      "planned_lesson": "os718",
+      "title": "64bit Decimal 분해·1억 단위 Chunk",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 264,
+        "end": 289,
+        "anchor": "put_dec_full8"
+      }
+    },
+    {
+      "planned_lesson": "os719",
+      "title": "32bit Decimal 분해·16bit Limb와 Carry",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 324,
+        "end": 349,
+        "anchor": "put_dec_helper4"
+      }
+    },
+    {
+      "planned_lesson": "os720",
+      "title": "Num To Str·폭 검사와 NUL 없는 결과",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 379,
+        "end": 404,
+        "anchor": "num_to_str"
+      }
+    },
+    {
+      "planned_lesson": "os721",
+      "title": "숫자 Format·부호 Prefix와 Padding 순서",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 457,
+        "end": 482,
+        "anchor": "number"
+      }
+    },
+    {
+      "planned_lesson": "os722",
+      "title": "문자열 Format·Precision과 오른쪽 이동",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 618,
+        "end": 643,
+        "anchor": "widen_string"
+      }
+    },
+    {
+      "planned_lesson": "os723",
+      "title": "출력 Pointer 사전 검사·Null과 Error 표현",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 696,
+        "end": 721,
+        "anchor": "check_pointer_msg"
+      }
+    },
+    {
+      "planned_lesson": "os724",
+      "title": "Pointer Hash 초기화·Publish와 Memory Barrier",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 759,
+        "end": 784,
+        "anchor": "fill_ptr_key"
+      }
+    },
+    {
+      "planned_lesson": "os725",
+      "title": "Pointer Hash 값·준비 실패와 32bit 식별자",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 778,
+        "end": 803,
+        "anchor": "__ptr_to_hashval"
+      }
+    },
+    {
+      "planned_lesson": "os726",
+      "title": "기본 Pointer 출력·Hash와 준비 전 Placeholder",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 807,
+        "end": 832,
+        "anchor": "ptr_to_id"
+      }
+    },
+    {
+      "planned_lesson": "os727",
+      "title": "Restricted Pointer·권한과 Read 시점 검사",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 853,
+        "end": 881,
+        "anchor": "restricted_pointer"
+      }
+    },
+    {
+      "planned_lesson": "os728",
+      "title": "Dentry 이름 출력·부모 경로와 RCU 구간",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 900,
+        "end": 925,
+        "anchor": "dentry_name"
+      }
+    },
+    {
+      "planned_lesson": "os729",
+      "title": "Block Device 이름·숫자 끝 이름의 Partition 구분",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 959,
+        "end": 984,
+        "anchor": "bdev_name"
+      }
+    },
+    {
+      "planned_lesson": "os730",
+      "title": "Symbol 출력·Kallsyms와 Build ID 분기",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 982,
+        "end": 1007,
+        "anchor": "symbol_string"
+      }
+    },
+    {
+      "planned_lesson": "os731",
+      "title": "Resource 출력·종류별 진법과 Flag 해독",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1043,
+        "end": 1068,
+        "anchor": "resource_string"
+      }
+    },
+    {
+      "planned_lesson": "os732",
+      "title": "Hex Buffer 출력·개수와 Separator",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1144,
+        "end": 1169,
+        "anchor": "hex_string"
+      }
+    },
+    {
+      "planned_lesson": "os733",
+      "title": "Bitmap 표시·32bit Chunk와 연속 범위",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1195,
+        "end": 1220,
+        "anchor": "bitmap_string"
+      }
+    },
+    {
+      "planned_lesson": "os734",
+      "title": "MAC 표시·순서 반전과 구분자",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1269,
+        "end": 1294,
+        "anchor": "mac_address_string"
+      }
+    },
+    {
+      "planned_lesson": "os735",
+      "title": "IPv4 표시·Byte Order와 세 자리 Zero",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1310,
+        "end": 1335,
+        "anchor": "ip4_string"
+      }
+    },
+    {
+      "planned_lesson": "os736",
+      "title": "IPv6 기본 표시·고정 Hex와 Colon",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1443,
+        "end": 1468,
+        "anchor": "ip6_string"
+      }
+    },
+    {
+      "planned_lesson": "os737",
+      "title": "IPv6 압축·최장 Zero Run과 동률 처리",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1360,
+        "end": 1385,
+        "anchor": "ip6_compressed_string"
+      }
+    },
+    {
+      "planned_lesson": "os738",
+      "title": "Socket 주소 표시·Port Flow와 Scope",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1484,
+        "end": 1509,
+        "anchor": "ip6_addr_string_sa"
+      }
+    },
+    {
+      "planned_lesson": "os739",
+      "title": "IP Formatter 분배·Family와 잘못된 Format",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1581,
+        "end": 1606,
+        "anchor": "ip_addr_string"
+      }
+    },
+    {
+      "planned_lesson": "os740",
+      "title": "Escape 출력·Flag 조합과 필요한 전체 길이",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1616,
+        "end": 1641,
+        "anchor": "escaped_string"
+      }
+    },
+    {
+      "planned_lesson": "os741",
+      "title": "중첩 Va Format·Va Copy와 Owner 보존",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1674,
+        "end": 1699,
+        "anchor": "va_format"
+      }
+    },
+    {
+      "planned_lesson": "os742",
+      "title": "UUID 출력·Index Table과 Case 선택",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1690,
+        "end": 1715,
+        "anchor": "uuid_string"
+      }
+    },
+    {
+      "planned_lesson": "os743",
+      "title": "Netdev Feature 표시·타입 크기와 Hex 폭",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1735,
+        "end": 1760,
+        "anchor": "netdev_bits"
+      }
+    },
+    {
+      "planned_lesson": "os744",
+      "title": "FourCC 표시·Unaligned 읽기와 Endian 표식",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1757,
+        "end": 1782,
+        "anchor": "fourcc_string"
+      }
+    },
+    {
+      "planned_lesson": "os745",
+      "title": "물리·DMA 주소 표시·값을 담은 Pointer",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1795,
+        "end": 1820,
+        "anchor": "address_val"
+      }
+    },
+    {
+      "planned_lesson": "os746",
+      "title": "RTC 날짜 출력·Raw 필드와 Calendar 보정",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1855,
+        "end": 1880,
+        "anchor": "rtc_str"
+      }
+    },
+    {
+      "planned_lesson": "os747",
+      "title": "Time64 표시·Calendar 변환과 Format 분배",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1905,
+        "end": 1930,
+        "anchor": "time64_str"
+      }
+    },
+    {
+      "planned_lesson": "os748",
+      "title": "Clock 표시·지원 CONFIG와 Name Fallback",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1942,
+        "end": 1967,
+        "anchor": "clock"
+      }
+    },
+    {
+      "planned_lesson": "os749",
+      "title": "Flag 이름 Table·Composite Mask와 남은 Bit",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 1963,
+        "end": 1988,
+        "anchor": "format_flags"
+      }
+    },
+    {
+      "planned_lesson": "os750",
+      "title": "Page Flag 표시·Bit Field Table과 CONFIG 폭",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2011,
+        "end": 2036,
+        "anchor": "format_page_flags"
+      }
+    },
+    {
+      "planned_lesson": "os751",
+      "title": "GFP·VMA Flag 분배·포인터 타입 선택",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2058,
+        "end": 2083,
+        "anchor": "flags_string"
+      }
+    },
+    {
+      "planned_lesson": "os752",
+      "title": "Firmware Node 이름·Parent 참조와 전체 경로",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2086,
+        "end": 2111,
+        "anchor": "fwnode_full_name_string"
+      }
+    },
+    {
+      "planned_lesson": "os753",
+      "title": "Device Tree 표시·선택 필드와 Compatible 목록",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2113,
+        "end": 2138,
+        "anchor": "device_node_string"
+      }
+    },
+    {
+      "planned_lesson": "os754",
+      "title": "Pointer Format 분배·Suffix와 Rust 계약",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2392,
+        "end": 2417,
+        "anchor": "pointer"
+      }
+    },
+    {
+      "planned_lesson": "os755",
+      "title": "Format Decoder·중단 후 재개하는 상태",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2510,
+        "end": 2535,
+        "anchor": "format_decode"
+      }
+    },
+    {
+      "planned_lesson": "os756",
+      "title": "Format 크기 Setter·Bit Field 절단 검사",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2688,
+        "end": 2732,
+        "anchor": "set_field_width"
+      }
+    },
+    {
+      "planned_lesson": "os757",
+      "title": "Vsnprintf Engine·인자 승격과 필요한 길이",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2733,
+        "end": 2758,
+        "anchor": "vsnprintf"
+      }
+    },
+    {
+      "planned_lesson": "os758",
+      "title": "Scnprintf·실제 저장 길이와 Zero 공간",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2902,
+        "end": 2931,
+        "anchor": "vscnprintf"
+      }
+    },
+    {
+      "planned_lesson": "os759",
+      "title": "Sprintf Wrapper·Capacity 없는 호출의 전제",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 2983,
+        "end": 3008,
+        "anchor": "vsprintf"
+      }
+    },
+    {
+      "planned_lesson": "os760",
+      "title": "Binary Printf·Word 용량과 인자 Packing",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3038,
+        "end": 3063,
+        "anchor": "vbin_printf"
+      }
+    },
+    {
+      "planned_lesson": "os761",
+      "title": "Binary Pointer·즉시 Dereference와 지연 표시",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3038,
+        "end": 3063,
+        "anchor": "vbin_printf"
+      }
+    },
+    {
+      "planned_lesson": "os762",
+      "title": "Binary Buffer 경계·원본 분기의 실제 한계",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3038,
+        "end": 3063,
+        "anchor": "vbin_printf"
+      }
+    },
+    {
+      "planned_lesson": "os763",
+      "title": "Bstr Printf·Binary 인자의 정렬과 재생",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3197,
+        "end": 3222,
+        "anchor": "bstr_printf"
+      }
+    },
+    {
+      "planned_lesson": "os764",
+      "title": "Vsscanf 흐름·공백 Literal과 대입 개수",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3417,
+        "end": 3442,
+        "anchor": "vsscanf"
+      }
+    },
+    {
+      "planned_lesson": "os765",
+      "title": "Scanner Char·String과 저장공간 제한",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3417,
+        "end": 3442,
+        "anchor": "vsscanf"
+      }
+    },
+    {
+      "planned_lesson": "os766",
+      "title": "Scanner 집합·256bit Bitmap과 Negate",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3417,
+        "end": 3442,
+        "anchor": "vsscanf"
+      }
+    },
+    {
+      "planned_lesson": "os767",
+      "title": "Scanner 숫자·진법과 목적 Pointer 타입",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3417,
+        "end": 3442,
+        "anchor": "vsscanf"
+      }
+    },
+    {
+      "planned_lesson": "os768",
+      "title": "Scanner 별표·공백 단위 Suppression 한계",
+      "path": "lib/vsprintf.c",
+      "excerpt": {
+        "start": 3417,
+        "end": 3442,
+        "anchor": "vsscanf"
+      }
+    },
+    {
+      "planned_lesson": "os769",
+      "title": "Bitmap 비교·유효 Bit와 마지막 Word Mask",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 37,
+        "end": 62,
+        "anchor": "__bitmap_equal"
+      }
+    },
+    {
+      "planned_lesson": "os770",
+      "title": "Bitmap 집합 연산·Tail 처리와 Mask 교체",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 283,
+        "end": 308,
+        "anchor": "__bitmap_replace"
+      }
+    },
+    {
+      "planned_lesson": "os771",
+      "title": "Bitmap 관계·교차와 부분집합의 반례",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 310,
+        "end": 335,
+        "anchor": "__bitmap_subset"
+      }
+    },
+    {
+      "planned_lesson": "os772",
+      "title": "Bitmap Weight·Popcount와 식 재사용",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 338,
+        "end": 363,
+        "anchor": "__bitmap_weight"
+      }
+    },
+    {
+      "planned_lesson": "os773",
+      "title": "Bitmap Right Shift·Word 경계 Carry와 Tail",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 92,
+        "end": 117,
+        "anchor": "__bitmap_shift_right"
+      }
+    },
+    {
+      "planned_lesson": "os774",
+      "title": "Bitmap Left Shift·역순 순회와 Carry",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 137,
+        "end": 198,
+        "anchor": "__bitmap_shift_left"
+      }
+    },
+    {
+      "planned_lesson": "os775",
+      "title": "Bitmap Cut·부분 겹침과 Bit별 Carry",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 199,
+        "end": 224,
+        "anchor": "bitmap_cut"
+      }
+    },
+    {
+      "planned_lesson": "os776",
+      "title": "Bitmap Set Clear·첫 Mask와 마지막 Mask",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 358,
+        "end": 383,
+        "anchor": "__bitmap_set"
+      }
+    },
+    {
+      "planned_lesson": "os777",
+      "title": "Bitmap Zero Area·Alignment Offset과 재검색",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 413,
+        "end": 438,
+        "anchor": "bitmap_find_next_zero_area_off"
+      }
+    },
+    {
+      "planned_lesson": "os778",
+      "title": "Bitmap Remap·위치 순번과 Modulo 대상",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 497,
+        "end": 544,
+        "anchor": "bitmap_remap"
+      }
+    },
+    {
+      "planned_lesson": "os779",
+      "title": "Bitmap Onto·밀집 순번을 희소 위치로",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 664,
+        "end": 689,
+        "anchor": "bitmap_onto"
+      }
+    },
+    {
+      "planned_lesson": "os780",
+      "title": "Bitmap Fold·Modulo 충돌과 크기 조건",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 703,
+        "end": 728,
+        "anchor": "bitmap_fold"
+      }
+    },
+    {
+      "planned_lesson": "os781",
+      "title": "Bitmap 할당·Word 올림과 Node 선택",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 717,
+        "end": 742,
+        "anchor": "bitmap_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os782",
+      "title": "Devm Bitmap·Action 등록 실패의 Reset",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 756,
+        "end": 781,
+        "anchor": "devm_bitmap_alloc"
+      }
+    },
+    {
+      "planned_lesson": "os783",
+      "title": "Bitmap 배열 변환·U32 U64와 Tail Clear",
+      "path": "lib/bitmap.c",
+      "excerpt": {
+        "start": 788,
+        "end": 813,
+        "anchor": "bitmap_from_arr32"
+      }
+    }
+  ]
+}

@@ -1,0 +1,675 @@
+{
+  "kernel/irq/irqdesc.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 1053,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2828",
+        "symbols": [
+          "irq_affinity_setup"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 기본 affinity: boot CPU 보존. SMP boot 인자 irqaffinity=의 문자열을 CPU list로 parse합니다. mask storage를 준비하고 현재 boot CPU를 반드시 추가해 비어 있거나 부적절한 mask가 boot CPU까지 제외하지 않도록 합니다. parse 반환 값은 여기서 검사하지 않고 setup 처리 결과는 1입니다. 실제 문자열 문법은 cpulist_parse 구현 계약입니다. boot CPU 0과 입력 {2,3}이면 결과 {0,2,3}인 예를 풉니다. 입력 parse 성공 여부와 boot CPU 보존 정책을 분리하고 이 함수가 전체 affinity 강제 설정이라고 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2829",
+        "symbols": [
+          "init_irq_default_affinity"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 기본 affinity 초기화: 빈 mask의 fallback. SMP에서 mask가 사용 가능하지 않으면 NOWAIT로 zero mask를 준비합니다. mask가 비어 있으면 모든 CPU를 설정합니다. 앞 boot 인자에서 이미 비어 있지 않은 mask는 유지합니다. UP 구현은 빈 함수입니다. 할당 helper의 실제 구성별 storage와 실패 계약은 해당 helper를 확인해야 합니다. 이미 설정된 mask·빈 mask·UP 세 경우를 그립니다. fallback이 언제 적용되는지 주석 달고 설정한 mask를 항상 전체 CPU로 덮는 것으로 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2830",
+        "symbols": [
+          "alloc_masks"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ CPU masks 할당: 단계별 실패 정리. SMP에서 affinity를 먼저 할당하고 구성에 따라 effective_affinity와 pending_mask를 추가합니다. 뒤 단계 실패는 앞서 얻은 mask를 해제하고 ENOMEM입니다. UP 대체는 0입니다. 선택 기능 조합에 따라 필요한 storage와 정리 대상이 달라지는 자원 획득 알고리즘입니다. affinity→effective→pending 순서와 실패 지점별 역정리를 그립니다. CONFIG 조합에 없는 storage는 할당·해제 대상이 아님을 표시합니다."
+      },
+      {
+        "lesson": "os2831",
+        "symbols": [
+          "desc_smp_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor SMP 초기화: 복사와 pending clear. 입력 affinity가 NULL이면 irq_default_affinity를 선택해 descriptor affinity에 복사합니다. GENERIC_PENDING_IRQ면 pending mask를 지우고 NUMA면 node를 기록합니다. 입력 mask 포인터를 그대로 보관하는 대신 준비한 mask storage에 값을 복사합니다. UP 대체는 작업이 없습니다. 입력 mask와 descriptor storage를 두 객체로 그립니다. NULL fallback·pending 초기화·NUMA field 조건을 구분하고 실제 할당은 alloc_masks가 담당함을 연결합니다."
+      },
+      {
+        "lesson": "os2832",
+        "symbols": [
+          "free_masks"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor masks 해제: 구성별 자원 반환. SMP에서 pending_mask가 구성돼 있으면 해제하고 affinity를 해제하며 effective mask도 해당 구성에서 해제합니다. UP 대체는 빈 함수입니다. 자원 수명 끝에서 호출하며 할당 실패 정리와 정상 최종 해제의 역할을 나눠 읽습니다. 이 함수는 descriptor나 per-CPU 통계 storage를 직접 free하지 않습니다. alloc_masks와 각 CONFIG 조건을 대조합니다. 최종 irq_kobj_release가 masks·percpu·desc 순으로 정리하는 위치를 연결합니다."
+      },
+      {
+        "lesson": "os2833",
+        "symbols": [
+          "desc_set_defaults"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor 기본 상태: 사용 전 안전한 초기값. handler/MSI context를 NULL로 두고 irq_data.common·번호·no_irq_chip을 연결합니다. default settings에 disabled·masked를 세우고 bad handler와 depth 1을 설정합니다. IRQ·unhandled·total 통계를 0으로 만들고 name=NULL·owner를 저장하며 모든 possible CPU의 irqstat를 0으로 초기화한 뒤 SMP mask 정책을 적용합니다. 새 descriptor의 chip·handler·depth·bits와 context를 표로 그립니다. 할당과 실제 IRQ 활성화를 구분하고 아직 요청하지 않은 IRQ가 정상 handler로 실행되지 않는 기본 상태를 읽습니다."
+      },
+      {
+        "lesson": "os2834",
+        "symbols": [
+          "irq_find_free_area"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Maple Tree IRQ 저장소: 빈 연속 범위 탐색. sparse_irqs는 ALLOC_RANGE·LOCK_EXTERN·USE_RCU flag의 Maple Tree이고 외부 sparse_irq_lock을 사용합니다. MA_STATE로 탐색 상태를 만들고 from부터 MAX_SPARSE_IRQS까지 cnt 길이 빈 영역을 찾습니다. 실패는 ENOSPC, 성공은 mas.index입니다. 이 함수 자체에 mutex 획득은 없습니다. 사용 번호 {2,3,7}, from 2, cnt 2의 첫 빈 연속 영역을 손으로 풉니다. 검색 storage는 실제 Maple Tree이고 단순 bitmap으로 원문을 대체하지 않습니다. 자세한 tree 알고리즘은 해당 수업과 연결합니다."
+      },
+      {
+        "lesson": "os2835",
+        "symbols": [
+          "irq_find_at_or_after"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Maple Tree IRQ 순회: offset 포함과 sentinel. index를 offset으로 시작하고 RCU guard 아래 mt_find를 사용합니다. 찾은 descriptor의 IRQ 번호를 반환하며 없으면 nr_irqs입니다. offset 자체에 저장된 번호도 포함하는 at-or-after 검색입니다. tree 조회의 객체 수명 보호와 번호 sentinel을 함께 읽어야 합니다. 번호 {2,5,9}에서 offset 5→5, 6→9, 10→nr_irqs를 풉니다. sentinel을 유효 IRQ로 호출하지 않고 loop 종료 조건으로 사용합니다."
+      },
+      {
+        "lesson": "os2836",
+        "symbols": [
+          "irq_insert_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ tree 삽입: 단일 번호와 경고 정책. irq..irq 한 번호 범위의 MA_STATE에 descriptor를 mas_store_gfp로 저장합니다. nonzero 결과는 WARN_ON으로 진단하지만 함수는 void이며 오류를 caller에 반환하지 않습니다. 외부 mutex와 storage 할당 조건은 caller 문맥의 계약입니다. 단순 경고를 모든 삽입 실패 rollback으로 설명하면 안 됩니다. 단일 키와 descriptor pointer의 연결을 그립니다. alloc_descs에서 삽입 후 sysfs·debugfs로 진행하는 호출을 읽고 경고와 정수 오류 전달을 구분합니다."
+      },
+      {
+        "lesson": "os2837",
+        "symbols": [
+          "delete_irq_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ tree 삭제: 조회 제거와 메모리 수명. irq 한 번호의 MA_STATE에서 mas_erase를 호출합니다. 이는 tree의 연결을 제거하는 작업이고 descriptor free를 직접 수행하지 않습니다. sparse free_desc는 sysfs 제거와 tree 삭제 뒤 RCU callback을 예약합니다. 조회에서 보이지 않게 하는 시점과 메모리 수명 종료를 나눠 이해합니다. tree에서 번호를 지운 뒤 기존 RCU reader가 끝날 때까지 객체를 유지하는 그림을 그립니다. erase와 free를 하나의 작업으로 합치지 않습니다."
+      },
+      {
+        "lesson": "os2838",
+        "symbols": [
+          "init_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor 자원 초기화: 잠금·waitqueue·RCU. per-CPU irqstat를 할당하고 masks 할당 실패면 percpu를 반환합니다. spinlock 초기화와 공통 lockdep class, request_mutex·thread waitqueue·기본 값·입력 flags·resend를 설정합니다. SPARSE 구성은 kobject와 rcu_head도 초기화합니다. 단계 실패는 ENOMEM이며 성공 0입니다. 통계→masks→잠금·대기→기본 상태→선택 수명의 순서를 그립니다. init과 활성화가 다르며 초기화만으로 IRQ thread가 실행되지 않는 점을 기록합니다."
+      },
+      {
+        "lesson": "os2839",
+        "symbols": [
+          "per_cpu_count_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs CPU 통계: bounded 쉼표 출력. kobject에서 container_of로 descriptor를 얻어 possible CPU별 통계를 쉼표로 출력합니다. 매번 PAGE_SIZE-ret만큼 scnprintf를 사용하고 끝에 줄바꿈을 추가합니다. CPU별 count를 한 값으로 합산하는 출력이 아닙니다. snapshot 전체 동시 일치 보장은 본문에 없습니다. CPU count {3,7}이면 3,7과 newline인 문자열을 써봅니다. bounded formatting과 모든 CPU 통계의 원자 snapshot은 다른 속성임을 구분합니다."
+      },
+      {
+        "lesson": "os2840",
+        "symbols": [
+          "chip_name_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs chip 이름: 잠금과 빈 출력. descriptor raw spinlock_irq 안에서 chip과 chip name이 모두 있으면 bounded 문자열과 newline을 출력합니다. 없으면 ret 0으로 빈 출력입니다. kobject→descriptor 관계를 container_of로 되찾고 필드 관찰을 잠금 범위에 넣습니다. 출력 pointer 수명은 sysfs/kobject 계약과 연결됩니다. chip NULL·name NULL·유효 세 경우를 풉니다. 이름을 새로 할당하는 작업이 아니라 보유한 이름을 읽는 작업임을 표시합니다."
+      },
+      {
+        "lesson": "os2841",
+        "symbols": [
+          "hwirq_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs hwirq: domain 조건의 번호. descriptor lock 안에서 domain이 있을 때만 irq_data.hwirq를 unsigned long 문자열로 출력합니다. domain이 없으면 빈 결과입니다. hardware 번호와 Linux logical IRQ 번호는 다를 수 있으므로 sysfs 이름을 보고 동일한 번호라고 가정하지 않습니다. caller buffer는 sysfs page 계약입니다. domain mapping에서 hwirq 7→logical 42 예를 그립니다. 출력 field와 descriptor 번호를 구별하고 domain 없는 경우의 빈 반환을 읽습니다."
+      },
+      {
+        "lesson": "os2842",
+        "symbols": [
+          "type_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs trigger 표시: level 또는 edge. descriptor lock 아래 irqd_is_level_type을 확인해 level 또는 edge와 newline을 출력합니다. boolean level 조건의 두 표현이며 rising·falling·high·low의 모든 상세 trigger를 문자열로 분리하지 않습니다. 관찰용 출력과 실제 trigger 설정 API를 구별해야 합니다. level flag 참·거짓의 출력을 풉니다. irq_set_irq_type으로 설정하는 상세 type과 이 sysfs 요약 표시의 정보량 차이를 기록합니다."
+      },
+      {
+        "lesson": "os2843",
+        "symbols": [
+          "wakeup_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs wakeup 표시: 정책 조회. descriptor lock 안에서 irqd_is_wakeup_set을 읽어 enabled 또는 disabled를 출력합니다. 현재 hardware IRQ line이 활성인지와 같은 정보가 아니라 wakeup 설정 상태입니다. 읽기 callback이 실제 PM wake event를 생성하거나 IRQ를 enable하는 함수는 아닙니다. wakeup 설정과 일반 disabled 상태를 두 축으로 그립니다. 이름이 enabled라고 해도 어떤 기능의 enabled인지 확인하는 습관을 익힙니다."
+      },
+      {
+        "lesson": "os2844",
+        "symbols": [
+          "name_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs flow 이름: NULL과 bounded 출력. descriptor lock 안에서 name이 있으면 PAGE_SIZE bounded 문자열과 newline을 출력하고 없으면 길이 0입니다. name은 flow 설치 API가 연결하는 이름이며 action 목록의 장치 이름 출력과 다릅니다. 이 callback은 저장된 pointer를 읽어 문자열로 제공합니다. flow name과 action name을 서로 다른 field로 그립니다. 없는 이름을 임의 문자열로 만들지 않는 branch와 잠금 범위를 표시합니다."
+      },
+      {
+        "lesson": "os2845",
+        "symbols": [
+          "actions_show"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs action 목록: 잠금 안의 순회. descriptor lock 안에서 action 이름을 쉼표로 bounded 출력합니다. 목록 출력이 있으면 unlock 뒤 newline을 추가하고 비어 있으면 길이 0입니다. IRQ_ATTR_RO와 irq_attrs는 읽기 전용 show 속성을 연결하며 배열 끝의 NULL이 종료 sentinel입니다. 목록 순회와 등록·해제의 잠금 계약을 함께 읽습니다. action 이름 A·B의 A,B 출력을 써봅니다. attribute 등록 배열의 일곱 속성과 NULL 끝을 확인하고 쓰기 handler가 있는 것으로 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2846",
+        "symbols": [
+          "irq_sysfs_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ sysfs 추가: 비핵심 실패와 표시. base kobject가 준비됐을 때 descriptor kobject를 번호 이름으로 추가합니다. 실패는 경고하고 계속하며 성공에만 IRQS_SYSFS를 세웁니다. 늦은 초기화의 실패는 rollback할 수 없고 핵심 IRQ 기능이 아니란 주석입니다. SYSFS off 대체는 빈 함수입니다. base 없는 early boot·추가 실패·성공 세 경우를 그립니다. IRQ 할당 성공과 sysfs 노출 성공을 별개로 읽고 표시 bit가 성공을 추적하는 이유를 설명합니다."
+      },
+      {
+        "lesson": "os2847",
+        "symbols": [
+          "irq_sysfs_del"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ sysfs 삭제: 등록 성공의 조건. IRQS_SYSFS 표시가 있을 때만 kobject_del합니다. early boot에서 등록하지 않았거나 add 실패한 descriptor를 잘못 삭제하지 않는 guard입니다. kobject_del은 노출 제거이고 최종 객체 수명 종료는 put/release와 구분합니다. SYSFS off 구현은 빈 함수입니다. 등록 여부 bit 0·1의 호출을 풉니다. sysfs 제거·tree 삭제·RCU callback·kobject release의 다른 시점을 한 수명 그림으로 연결합니다."
+      },
+      {
+        "lesson": "os2848",
+        "symbols": [
+          "irq_sysfs_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ sysfs 초기화: sparse 할당과 직렬화. sparse lock으로 alloc/free를 막고 kernel 아래 irq base를 생성합니다. 실패면 unlock하고 ENOMEM입니다. 성공이면 이미 있는 descriptor 모두에 sysfs_add를 수행하고 unlock 후 0입니다. postcore_initcall에 연결되며 개별 add 실패는 전체 오류로 누적하지 않습니다. early IRQ 할당과 늦은 sysfs 준비를 두 단계로 그립니다. base 생성 오류와 개별 add 경고의 다른 처리 정책을 비교합니다."
+      },
+      {
+        "lesson": "os2849",
+        "symbols": [
+          "irq_to_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse IRQ 조회: Maple Tree pointer. SPARSE 구성은 mtree_load로 logical IRQ 번호에 연결된 descriptor pointer를 조회합니다. 객체 할당이나 명시적인 RCU read lock은 이 본문에 없습니다. tree 자체 조회 지원과 반환 pointer를 계속 사용하는 동안의 수명 보호는 구별해야 합니다. 호출 문맥의 mutex·RCU·IRQ 등록 계약을 확인합니다. tree 번호→객체 pointer의 연결을 그립니다. kstat_irqs_usr의 RCU 범위와 비교하고 조회한 객체를 임의 free하거나 무기한 유지하지 않습니다."
+      },
+      {
+        "lesson": "os2850",
+        "symbols": [
+          "irq_lock_sparse"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse mutex 획득: 외부 tree lock. irq_lock_sparse는 sparse_irq_lock mutex를 얻습니다. Maple Tree의 LOCK_EXTERN과 IRQ 할당·해제 및 sysfs 초기화 직렬화에 사용합니다. mutex 획득은 local IRQ 상태 저장이나 descriptor raw lock 획득과 같은 작업이 아닙니다. 허용된 sleep 문맥에서 짝 unlock과 함께 사용해야 합니다. tree 전체 변경 보호와 개별 descriptor lock을 두 층으로 그립니다. IRQ hard 문맥에 임의 mutex를 추가하지 않고 실제 caller의 문맥을 따릅니다."
+      },
+      {
+        "lesson": "os2851",
+        "symbols": [
+          "irq_unlock_sparse"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse mutex 해제: 획득과 균형. irq_unlock_sparse는 같은 sparse_irq_lock mutex를 반환합니다. 보호된 tree 변경·sysfs 등록 등이 끝난 뒤 호출해야 하며 획득하지 않은 lock을 임의 해제하는 사용은 계약 밖입니다. descriptor의 raw spinlock이나 local IRQ 상태를 이 함수가 대신 복구하지 않습니다. 성공·오류 경로마다 sparse lock과 unlock의 짝을 표시합니다. irq_sysfs_init의 base 실패 경로와 정상 순회 뒤 경로를 비교합니다."
+      },
+      {
+        "lesson": "os2852",
+        "symbols": [
+          "alloc_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse descriptor 할당: NUMA와 초기화 실패. NUMA node에서 zero descriptor를 할당하고 실패면 NULL입니다. init_desc가 실패하면 descriptor를 kfree하고 NULL, 성공이면 pointer입니다. 초기화 함수는 자신이 얻은 masks·percpu 실패 자원을 정리하므로 이 wrapper는 바깥 객체를 담당합니다. 이 단계만으로 tree에 등록되지는 않습니다. 객체 할당→내부 자원 초기화→caller tree 삽입의 세 단계를 그립니다. 내부 실패 정리와 바깥 객체 해제를 나눠 수명 누락을 확인합니다."
+      },
+      {
+        "lesson": "os2853",
+        "symbols": [
+          "irq_kobj_release"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Kobject 최종 release: 내부 자원과 객체. kobject에서 container_of로 descriptor를 찾고 masks, per-CPU statistics, descriptor 자체 순으로 해제합니다. kobj_type.release가 이 함수를 연결합니다. call_rcu callback의 kobject_put과 최종 release는 참조 수명에 따라 다른 시점일 수 있으며 이 함수가 tree 삭제까지 담당하지 않습니다. tree 삭제→grace period→put→마지막 reference release 흐름을 그립니다. kobject 참조가 남아 있는 경우 실제 kfree가 더 늦을 수 있음을 표시합니다."
+      },
+      {
+        "lesson": "os2854",
+        "symbols": [
+          "delayed_free_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "RCU 지연 callback: kobject put 위임. rcu_head에서 descriptor를 얻어 kobject_put을 호출합니다. 직접 kfree가 아닙니다. free_desc가 call_rcu를 예약한 뒤 grace period에 도달해 실행하는 callback이며 실제 마지막 kobject reference가 반환될 때 release로 정리됩니다. RCU와 reference 수명의 두 보호를 함께 읽어야 합니다. reader가 끝난 뒤 put하고 다른 sysfs reference가 남았으면 최종 free가 더 늦는 그림을 그립니다. delay를 고정 밀리초 timer로 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2855",
+        "symbols": [
+          "free_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse descriptor free: 노출 제거 후 RCU. debugfs·proc 노출을 제거하고 sysfs를 지운 뒤 tree 번호를 삭제합니다. 이후 call_rcu로 delayed_free_desc를 예약합니다. sparse_irq_lock은 proc 통계 조회와 sysfs 초기화도 보호합니다. 반환 즉시 descriptor·masks·stats를 모두 kfree했다고 읽으면 안 됩니다. 유효 할당 IRQ가 선행 조건입니다. 노출 제거·신규 조회 실패·기존 RCU reader·최종 release의 시간을 그립니다. 번호 free와 객체 메모리 free가 다른 시점인 이유를 문제로 풉니다."
+      },
+      {
+        "lesson": "os2856",
+        "symbols": [
+          "alloc_descs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "연속 sparse 할당: affinity 검증과 역정리. affinity 배열이 있으면 모든 cnt mask가 비어 있지 않은지 먼저 확인합니다. 각 descriptor는 mask의 첫 CPU node에 할당하고 managed면 MANAGED·SHUTDOWN, 입력 affinity면 SET flag를 설정합니다. tree·sysfs·debugfs에 연결하며 중간 alloc 실패는 앞 descriptor를 역순 free하고 ENOMEM입니다. sysfs 경고와 tree 삽입 경고는 이 alloc 실패 branch와 다릅니다. mask 배열 길이 cnt와 각 객체의 NUMA node 선택을 그립니다. 세 번째 객체 실패에서 앞 두 개가 역정리되는 경로와 RCU 지연 free를 연결합니다."
+      },
+      {
+        "lesson": "os2857",
+        "symbols": [
+          "irq_expand_nr_irqs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse 번호 상한 확장: 최대 한계. SPARSE에서 요청 상한이 MAX_SPARSE_IRQS보다 크면 ENOMEM입니다. 범위 안이면 nr_irqs를 입력으로 갱신하고 0입니다. 이 함수 자체는 descriptor 객체를 할당하거나 tree에 저장하지 않습니다. 상한은 번호 공간의 관리 한계이고 사용 중 객체 수와 같은 값이 아닙니다. nr_irqs 64에서 80으로 확장한 뒤 실제 cnt 객체 할당은 별도인 그림을 그립니다. MAX 경계 초과의 반환과 번호 공간의 상한 의미를 구별합니다."
+      },
+      {
+        "lesson": "os2858",
+        "symbols": [
+          "early_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sparse early IRQ: architecture 사전 번호. 기본 affinity를 준비하고 arch_probe_nr_irqs로 사전 할당 수와 architecture 번호 정책을 얻습니다. nr_irqs·initcnt가 MAX를 넘으면 경고 후 제한하고 initcnt가 더 크면 nr_irqs를 올립니다. 각 번호를 alloc_desc 후 삽입하며 이 loop는 alloc_desc NULL을 독립 검사하지 않습니다. 마지막 arch_early_irq_init 결과를 반환합니다. architecture 초기 번호 공간·preallocated 수·동적 확장을 나눠 그립니다. 이 early 경로의 할당 전제와 정상 동적 alloc 실패 정리를 같은 것으로 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2859",
+        "symbols": [
+          "early_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 배열 early IRQ: 전부 초기화와 오류 prefix 정리. SPARSE off는 cacheline 정렬의 irq_desc[NR_IRQS] 배열을 사용하며 GNU range initializer로 기본 bad handler·depth·lock을 넣습니다. early init은 배열의 모든 객체에 init_desc를 호출합니다. i에서 실패면 앞 prefix의 masks·percpu를 해제하고 오류를 반환합니다. 배열 객체 자체는 동적 kfree하지 않습니다. 고정 배열과 sparse 동적 객체의 저장 방식 차이를 그립니다. 초기화 실패 prefix를 역으로 정리하고 배열 storage가 유지되는 수명을 표시합니다."
+      },
+      {
+        "lesson": "os2860",
+        "symbols": [
+          "irq_to_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 배열 IRQ 조회: 번호 경계. SPARSE off irq_to_desc는 irq < NR_IRQS이면 irq_desc+irq, 아니면 NULL입니다. 이 주소의 객체 storage 존재와 해당 번호가 현재 allocated tree에 등록됐는지는 다른 정보입니다. 고정 배열 조회를 sparse tree lookup과 동일한 할당 존재 검사로 일반화하면 안 됩니다. 번호 0·NR_IRQS-1·NR_IRQS의 pointer를 풉니다. 배열 범위와 tree allocated 목록을 두 축으로 그려 조회 의미의 구성별 차이를 읽습니다."
+      },
+      {
+        "lesson": "os2861",
+        "symbols": [
+          "free_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 배열 free: 기본 상태 재설정. SPARSE off는 descriptor raw irqsave lock 안에서 desc_set_defaults로 상태·통계·owner 등을 초기값으로 돌립니다. unlock 뒤 allocated tree 번호를 삭제합니다. 동적 sparse 경로처럼 객체 자체를 RCU/kfree하지 않으며 기존 masks·percpu storage를 재사용합니다. 유효 IRQ가 caller 조건입니다. free 뒤 같은 배열 주소를 유지하면서 상태가 초기화되는 그림을 그립니다. sparse free와 비교해 storage 수명·tree 연결 수명·통계 reset의 차이를 표시합니다."
+      },
+      {
+        "lesson": "os2862",
+        "symbols": [
+          "alloc_descs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 배열 alloc: owner와 tree 연결. SPARSE off는 범위의 배열 descriptor를 조회해 owner를 설정하고 tree에 삽입합니다. sparse처럼 각 mask를 검증하거나 새 객체를 할당하는 본문이 아닙니다. start를 반환하며 상위 범위 allocator가 유효 번호 구간을 준비해야 합니다. affinity 인자는 이 구현에서 사용하지 않습니다. 같은 API가 구성에 따라 다른 storage 전략을 사용하는 예를 풉니다. 입력 affinity가 있다고 이 branch가 새 mask를 복사한다고 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2863",
+        "symbols": [
+          "irq_expand_nr_irqs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 배열 상한: 확장 지원 없음. SPARSE off 대체 irq_expand_nr_irqs는 입력과 관계없이 ENOMEM입니다. 고정 NR_IRQS 배열 밖으로 번호 공간을 확장할 수 없다는 정책입니다. sparse 상한 갱신과 다른 구현이며 nr_irqs를 이 본문에서 바꾸지 않습니다. 상위 allocator는 실패 뒤 unlock하고 결과를 전달합니다. 고정 배열 끝을 넘는 연속 요청의 실패 경로를 그립니다. 동적 sparse 확장과 배열 storage의 물리적 한계를 구별합니다."
+      },
+      {
+        "lesson": "os2864",
+        "symbols": [
+          "irq_mark_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "고정 IRQ mark: allocated tree에 연결. SPARSE off에서 sparse mutex를 얻고 irq_desc+irq를 tree에 삽입한 뒤 해제합니다. irq_set_chip가 이 helper를 호출해 고정 descriptor 번호를 allocated 목록에 보이게 합니다. 번호 bounds guard는 이 본문에 없으므로 유효 irq가 필요합니다. tree 연결은 새 객체 할당과 다릅니다. chip 설정 뒤 고정 storage 번호가 allocated 목록에 추가되는 흐름을 그립니다. pointer 산술의 유효 범위를 caller 계약으로 표시합니다."
+      },
+      {
+        "lesson": "os2865",
+        "symbols": [
+          "irq_init_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Legacy descriptor 초기화: free 경로 재사용. GENERIC_IRQ_LEGACY이며 SPARSE off인 영역에서 free_desc를 호출합니다. 따라서 고정 descriptor 기본 값 재설정과 tree 등록 제거의 구현을 재사용합니다. 함수 이름만 보고 새로운 동적 allocation이나 정상 handler 활성화를 수행한다고 읽으면 안 됩니다. 유효 번호 계약을 따릅니다. 전처리 위치와 단일 위임 호출을 확인합니다. legacy 초기화의 실제 효과를 고정 free_desc의 상태 reset과 연결합니다."
+      },
+      {
+        "lesson": "os2866",
+        "symbols": [
+          "handle_irq_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor dispatch: 유효성·hard IRQ 계약. NULL descriptor면 EINVAL입니다. hard IRQ 문맥이 아니면서 enforce_irqctx인 경우 경고 조건 뒤 EPERM입니다. 나머지는 generic_handle_irq_desc로 flow를 호출하고 0입니다. 이 함수가 자동으로 hard IRQ entry accounting이나 regs 설정을 만드는 것은 아닙니다. 실제 문맥과 등록 수명이 caller 계약입니다. NULL·enforce·hard IRQ 조건표를 풉니다. 원문 실행 fixture의 순차 반환 검산과 실제 CPU 문맥 진입은 다른 범위라고 기록합니다."
+      },
+      {
+        "lesson": "os2867",
+        "symbols": [
+          "generic_handle_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Logical IRQ dispatch: 번호 조회 위임. irq_to_desc로 logical 번호를 찾고 handle_irq_desc에 전달해 결과를 반환합니다. 문서는 IRQ 문맥과 초기화된 irq regs를 요구합니다. wrapper는 regs를 설정하거나 local IRQ를 save하지 않습니다. 문맥 enforce 조건에 따라 EPERM도 전달될 수 있어 실제 helper branch를 함께 읽어야 합니다. logical 번호→descriptor→flow의 세 단계를 그립니다. lookup 실패·문맥 오류·정상 처리의 반환과 caller 초기 조건을 비교합니다."
+      },
+      {
+        "lesson": "os2868",
+        "symbols": [
+          "generic_handle_irq_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Safe IRQ dispatch: local mask와 문맥의 차이. local_irq_save로 이전 상태를 저장하고 local 전달을 막은 뒤 descriptor를 dispatch하고 restore합니다. process 문맥에서도 호출할 수 있으나 enforce_irqctx이면 hard IRQ 문맥이 필요해 EPERM이 가능합니다. local IRQ disable은 in_hardirq를 자동 참으로 만드는 작업이 아닙니다. 오류에서도 상태를 복원합니다. 초기 local enabled·disabled 두 경우와 process/enforce 조합을 풉니다. 원문 fixture가 save/restore·오류·dispatch를 확인하며 실제 CPU interrupt 실행은 아닌 점을 기록합니다."
+      },
+      {
+        "lesson": "os2869",
+        "symbols": [
+          "generic_handle_domain_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Domain IRQ dispatch: hardware mapping. IRQ_DOMAIN 구성에서 domain·hwirq를 irq_resolve_mapping에 전달해 descriptor를 얻고 handle_irq_desc로 dispatch합니다. hardware 번호와 logical 번호 변환을 domain이 담당합니다. IRQ 문맥·irq regs는 caller 조건이며 resolve 실패는 NULL descriptor를 통해 EINVAL입니다. domain A hwirq 7과 domain B hwirq 7이 다른 IRQ로 연결될 수 있는 예를 그립니다. 단순 global 번호 조회와 domain mapping을 구분합니다."
+      },
+      {
+        "lesson": "os2870",
+        "symbols": [
+          "generic_handle_domain_irq_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Safe domain dispatch: 상태 복원과 오류. local IRQ 상태를 save하고 domain mapping을 조회·dispatch한 뒤 restore하고 ret를 반환합니다. process 호출을 허용하는 wrapper지만 enforce_irqctx면 hard IRQ에서 호출해야 합니다. mapping 실패나 문맥 오류도 복원 경로에 도달합니다. domain·descriptor 수명은 사용 문맥의 계약입니다. mapping 없음·enforce 실패·성공에서 save/restore가 모두 한 번인 fixture 결과를 읽습니다. local 전달 억제와 객체 수명 보호를 같은 것으로 가정하지 않습니다."
+      },
+      {
+        "lesson": "os2871",
+        "symbols": [
+          "generic_handle_domain_nmi"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Domain NMI dispatch: 경고와 진행. in_nmi가 아니면 WARN_ON_ONCE로 진단하지만 이 경고만으로 조기 반환하지 않습니다. 이어 mapping resolve와 handle_irq_desc 결과를 반환합니다. NMI 문맥·irq regs는 공개 사용 조건이고 선택된 descriptor의 enforce 조건도 따릅니다. 경고를 정상 process 사용 허용으로 읽으면 안 됩니다. NMI 조건 경고와 dispatch helper의 오류를 따로 표시합니다. fixture의 진단 경로는 잘못된 문맥의 본문 관찰이며 정상 사용은 NMI 계약을 지킵니다."
+      },
+      {
+        "lesson": "os2872",
+        "symbols": [
+          "irq_free_descs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 범위 free: 경계와 할당 존재 계약. from이 nr_irqs 이상이거나 from+cnt가 nr_irqs를 넘으면 반환합니다. sparse mutex 아래 cnt개 free_desc를 호출하고 unlock합니다. unsigned 덧셈의 모든 overflow를 따로 검사하는 본문은 아니며 각 번호의 유효 할당 존재도 caller 조건입니다. 범위 검사만으로 빈 번호 free의 안전성을 증명하지 않습니다. 작고 유효한 연속 할당 범위를 해제하는 예를 풉니다. 상한 검사·할당 존재·덧셈 범위를 서로 다른 조건으로 표시합니다."
+      },
+      {
+        "lesson": "os2873",
+        "symbols": [
+          "__irq_alloc_descs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "연속 IRQ allocator: 지정 번호와 동적 하한. cnt 0이면 EINVAL이고 지정 irq에서 from>irq도 EINVAL입니다. 지정 번호는 from을 irq로 맞추고 동적 요청은 architecture 하한을 적용합니다. mutex 아래 빈 연속 영역을 찾고 지정 값과 다르면 EEXIST입니다. 상한을 넘으면 확장 후 객체를 할당합니다. 검색 결과 음수의 독립 branch나 모든 산술 overflow 검사는 없으므로 유효 범위·실제 오류 흐름을 읽어야 합니다. 고정 번호 충돌·동적 from 하한·연속 cnt를 나눠 풉니다. 빈 영역 탐색·상한 확장·객체 초기화의 세 단계와 공통 unlock을 표시합니다."
+      },
+      {
+        "lesson": "os2874",
+        "symbols": [
+          "irq_get_next_irq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "다음 IRQ 번호 API: offset 포함 검색. irq_find_at_or_after에 offset을 직접 전달합니다. 따라서 저장된 offset 자체도 반환할 수 있고 없으면 nr_irqs입니다. 문서의 after 단어만 보고 offset+1 검색을 가정하면 loop가 잘못될 수 있습니다. caller는 반환 번호를 사용한 뒤 다음 검색 시작을 올려야 같은 항목을 다시 찾지 않습니다. 번호 {2,5}에서 offset 2의 반환 2, 다음 시작 3의 반환 5를 풉니다. sentinel과 다음 시작 갱신을 포함한 순회를 써봅니다."
+      },
+      {
+        "lesson": "os2875",
+        "symbols": [
+          "__irq_get_desc_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor lock 획득: per-CPU 검사와 bus 순서. 조회 후 CHECK 조건이 있으면 요구한 PERCPU 여부와 per_cpu_devid 설정이 맞는지 검사해 불일치면 NULL입니다. bus이면 chip_bus_lock 뒤 raw_spin_lock_irqsave를 얻습니다. 이 순서를 반대로 읽으면 unlock pairing도 틀립니다. descriptor 없거나 검사 실패에서 flags는 새로 저장하지 않습니다. 일반·percpu descriptor와 요구 check의 네 조합을 풉니다. bus lock→desc lock의 순서와 실패 반환에서 pointer/flags 의미를 표시합니다."
+      },
+      {
+        "lesson": "os2876",
+        "symbols": [
+          "__irq_put_desc_unlock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Descriptor unlock: 반대 순서와 flags 복원. 먼저 raw_spin_unlock_irqrestore로 descriptor와 이전 local 상태를 복원합니다. bus=true이면 뒤 chip_bus_sync_unlock합니다. __releases annotation은 분석 도구에 잠금 해제를 표현하며 runtime의 실제 unlock은 본문 호출입니다. 유효하고 잠긴 descriptor가 선행 조건입니다. 획득 bus→desc와 해제 desc→bus를 나란히 그립니다. flags는 대응 획득에서 얻은 값이어야 하며 임의 숫자 복원을 정상 사용으로 만들지 않습니다."
+      },
+      {
+        "lesson": "os2877",
+        "symbols": [
+          "irq_set_percpu_devid_partition"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU partition 설정: 할당과 빌린 mask. descriptor가 없거나 percpu_enabled가 이미 있으면 EINVAL입니다. zero CPU mask를 할당하고 실패면 ENOMEM입니다. percpu_affinity에는 입력 포인터 또는 cpu_possible_mask를 저장한 뒤 flags를 설정합니다. desc_smp_init의 mask 복사와 달리 입력을 빌리므로 대상 mask 수명이 필요합니다. affinity 포인터 저장과 값 복사의 차이를 그림으로 비교합니다. caller는 partition mask를 사용 동안 유지하고 등록 상태를 중복 설정하지 않습니다."
+      },
+      {
+        "lesson": "os2878",
+        "symbols": [
+          "irq_set_percpu_devid"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU 기본 partition: possible CPU 대체. partition API에 affinity NULL을 전달합니다. 하위 함수가 cpu_possible_mask 포인터를 저장하는 기본 정책이며 callback flags·할당·오류 결과를 재사용합니다. possible CPU와 현재 online CPU는 같은 집합으로 단정할 수 없습니다. wrapper 자체는 새 mask를 생성하지 않습니다. possible {0,1,2}, online {0,1} 예를 그립니다. NULL이 빈 partition이 아니라 기본 possible 집합을 뜻한다는 점을 문제로 풉니다."
+      },
+      {
+        "lesson": "os2879",
+        "symbols": [
+          "irq_get_percpu_devid_partition"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Per-CPU partition 조회: 선택 출력 복사. descriptor와 percpu_enabled가 없으면 EINVAL입니다. 있으면 출력 affinity가 nonNULL일 때 저장 partition mask를 복사하고 0입니다. 출력 NULL은 상태 유효성 확인만 수행하는 사용이 가능합니다. 조회는 caller storage에 값을 쓰는 작업으로 설정 때 빌린 pointer 계약과 다릅니다. 유효 설정 여부·출력 NULL의 조합을 풉니다. getter의 값 복사와 setter의 포인터 저장을 나란히 비교합니다."
+      },
+      {
+        "lesson": "os2880",
+        "symbols": [
+          "kstat_incr_irq_this_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ CPU 통계 증가: 유효 번호의 위임. irq_to_desc 결과를 kstat_incr_irqs_this_cpu에 전달합니다. 이 wrapper에는 NULL guard가 없으므로 유효 IRQ와 descriptor 수명 및 알맞은 CPU 문맥이 필요합니다. 통계 helper의 일반 total/percpu 처리 정책을 사용하며 조회 실패를 0 성공으로 처리하는 getter와 다릅니다. 유효 번호의 increment와 없는 번호 getter를 비교합니다. 쓰기 위임을 하면서 입력 유효성을 caller에 맡기는 API 계약을 표시합니다."
+      },
+      {
+        "lesson": "os2881",
+        "symbols": [
+          "kstat_irqs_cpu"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "CPU별 IRQ count 조회: 0 fallback과 수명. descriptor와 kstat storage가 있으면 지정 CPU의 cnt를 반환하고 아니면 0입니다. 문서는 concurrent removal이 없도록 caller가 보장해야 한다고 명시합니다. 0이 실제 사건 없음과 조회 불가 두 경우에 나올 수 있습니다. 본문은 RCU 범위를 별도로 열지 않습니다. count 0인 유효 IRQ와 없는 IRQ를 비교합니다. 수명 보호 조건과 값의 의미를 분리하고 CPU 인덱스도 유효하게 사용합니다."
+      },
+      {
+        "lesson": "os2882",
+        "symbols": [
+          "kstat_irqs_desc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 통계 합계: 일반 total과 per-CPU 합산. percpu_devid·percpu·NMI가 모두 아니면 data_race(tot_count)를 바로 반환합니다. 이 일반 경로는 입력 cpumask로 필터하지 않습니다. 나머지는 지정 mask의 CPU별 cnt를 더합니다. data_race annotation은 잠금이나 일관 snapshot을 자동 제공하는 것이 아닙니다. unsigned sum의 범위를 함께 읽습니다. 일반 total 100과 CPU subset count {3,7} 예에서 일반 반환은 100, local/NMI 합산은 10인 차이를 풉니다. approximation 관찰과 정확한 동시 snapshot을 구별합니다."
+      },
+      {
+        "lesson": "os2883",
+        "symbols": [
+          "kstat_irqs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ 전체 통계 helper: possible CPU 합계. 조회 descriptor나 통계 storage가 없으면 0입니다. 있으면 cpu_possible_mask를 kstat_irqs_desc에 전달합니다. 일반 IRQ의 total 빠른 경로와 per-CPU/NMI의 possible CPU 합산이 여기에 연결됩니다. 이 helper 자체가 rcu_read_lock을 열지 않고 외부 kstat_irqs_usr가 reader 범위를 제공합니다. lookup→guard→종류별 합산을 그립니다. possible CPU 선택과 수명 보호 wrapper의 역할을 나눠 읽습니다."
+      },
+      {
+        "lesson": "os2884",
+        "symbols": [
+          "kstat_snapshot_irqs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ snapshot: 현재 CPU의 기준 저장. STAT_SNAPSHOT 구성에서 descriptor 목록을 순회해 kstat storage가 있는 객체의 현재 CPU cnt를 ref에 저장합니다. 모든 CPU의 ref를 한 번에 저장하는 함수가 아닙니다. 이 snapshot은 뒤 현재 CPU의 증가량을 계산할 기준이며 전체 시스템 원자 snapshot을 보장하는 본문이 아닙니다. CPU 0 count 10·CPU 1 count 20에서 CPU 0 호출의 ref 변화만 그립니다. descriptor 목록 순회와 per-CPU field 선택을 분리합니다."
+      },
+      {
+        "lesson": "os2885",
+        "symbols": [
+          "kstat_get_irq_since_snapshot"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Snapshot 이후 count: unsigned 차이. descriptor나 통계 storage가 없으면 0입니다. 있으면 현재 CPU cnt-ref를 unsigned 값으로 반환합니다. 기준 저장 뒤 local 사건 증가량을 관찰하는 API입니다. counter wrap은 unsigned 산술의 범위와 연결되며 임의로 signed 음수 오류로 해석하지 않습니다. 동시 CPU 이동·문맥 계약은 caller가 확인해야 합니다. ref 10·cnt 14면 4인 예를 풉니다. CPU별 기준과 전체 total을 혼동하지 않고 unsigned counter의 표현 범위도 표시합니다."
+      },
+      {
+        "lesson": "os2886",
+        "symbols": [
+          "kstat_irqs_usr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Thread 통계 조회: RCU 객체 수명 보호. rcu_read_lock 안에서 kstat_irqs를 호출하고 unlock 후 합계를 반환합니다. concurrent removal이 tree 삭제 뒤 grace period를 관찰하므로 통계 객체 수명을 보호합니다. RCU가 통계 값을 모두 같은 순간으로 고정하거나 writer를 전부 막는 것은 아닙니다. reader 수명과 값 일관성을 구분합니다. 기존 reader→tree 삭제→reader 종료→지연 release의 그림을 그립니다. 메모리 안전 수명 보호와 approximate 통계 관찰의 다른 의미를 풉니다."
+      },
+      {
+        "lesson": "os2887",
+        "symbols": [
+          "__irq_set_lockdep_class"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "IRQ lockdep class 변경: 분석용 분류. LOCKDEP 구성에서 유효 descriptor가 있으면 desc lock과 request_mutex에 입력 class를 각각 적용합니다. 없는 descriptor면 수행하지 않습니다. class 변경은 분석용 잠금 관계 분류이며 실제 lock 객체 합치기나 runtime mutex 획득이 아닙니다. 두 종류 잠금의 역할을 별도로 유지합니다. desc raw lock과 request mutex를 두 객체로 그립니다. class pointer가 lockdep 분석을 바꾸는 의미와 실제 잠금 소유 상태를 구별합니다."
+      }
+    ]
+  }
+}

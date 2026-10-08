@@ -1,0 +1,42 @@
+"""KVM ioeventfd match/collision, registration and bus teardown contracts."""
+ROWS = [
+('KVM IOEVENTFD 주소 매칭: 범위 안이면 모두 맞는 검색이 아니다', 'ioeventfd_in_range',
+ 'guest의 특정 MMIO·PIO 쓰기를 eventfd 알림으로 바꾸면 사용자 장치 모델에 사건을 전달할 수 있습니다. 그러나 등록 주소 주변의 아무 쓰기나 알림으로 바꾸면 잘못된 레지스터 접근까지 처리하므로 주소·길이·값 조건을 구분합니다.',
+ 'ioeventfd_in_range는 addr가 등록 주소와 정확히 다르면 false입니다. 등록 length0이면 주소만 맞아도 true입니다. length가 있으면 쓰기 len이 정확히 같아야 하고 wildcard면 값 비교 없이 true입니다. datamatch 모드에서는 val 포인터 정렬을 BUG_ON으로 확인하고 길이1·2·4·8에 맞는 정수로 읽어 등록 datamatch와 비교합니다.',
+ '주소0x1000,length4,datamatch7이면 주소0x1001의 쓰기는 인접 범위라도 불일치입니다. 주소0x1000,length2도 불일치이고,주소·길이가 맞아도 값8이면 불일치입니다. length0은0바이트 쓰기만 받는다는 뜻이 아니라 쓰기 길이를 무시한다는 뜻입니다. wildcard도 주소·길이 조건까지 무시하지 않습니다.',
+ '일치한 쓰기와 알림 방향',
+ 'ioeventfd_write는 불일치면 EOPNOTSUPP,일치면 eventfd_signal 후0입니다. 등록 구조체에는 write와 destructor callback만 있고 read는 없습니다. 따라서 MMIO 읽기나 guest RAM의 모든 변경을 감시하는 기능이 아닙니다. IRQFD가 eventfd에서 guest IRQ로 향한다면 IOEVENTFD는 guest I/O 쓰기에서 eventfd로 향합니다. 값은 이 코드의 정수 load로 비교하며 자동 네트워크 byte order 변환을 수행하지 않습니다.',
+ ('length0 등록은0바이트 쓰기만 받나요?', '아닙니다.주소가 같으면 쓰기 길이를 무시합니다.', '그렇습니다.1바이트 이상 쓰기는 모두 거절합니다.', '0은 길이 무시 정책을 나타내는 특별한 값입니다.'),
+ ('wildcard이면 등록 주소 옆의 주소도 일치하나요?', '아닙니다.주소와 길이 검사는 먼저 수행합니다.', '그렇습니다.wildcard는 모든 주소를 뜻합니다.', '이 구현의 wildcard는 데이터 값 비교에만 영향을 줍니다.')),
+('KVM IOEVENTFD 충돌 검사: 서로 겹치는 알림 조건을 거절하기', 'ioeventfd_check_collision',
+ '같은 쓰기에 여러 등록이 동시에 일치하면 어느 eventfd를 울려야 하는지 모호해질 수 있습니다. 주소 숫자만 중복인지 보는 것으로는 부족하고 버스·길이·wildcard·값 조건이 함께 겹치는지 확인해야 합니다.',
+ 'slots_lock 아래 기존 목록을 순회하며 bus_idx와 addr가 같을 때만 다음 조건을 봅니다. 어느 한쪽 length가0이면 충돌입니다. 둘 다 길이가 있으면 길이가 같고,어느 한쪽이 wildcard이거나 datamatch가 같을 때 충돌입니다. 등록 eventfd context가 다른지 여부는 이 충돌 조건에 없습니다.',
+ '같은 버스·주소·길이4에서 값7과 값8의 정확한 datamatch 두 개는 이 검사에서 충돌하지 않습니다. 여기에 wildcard 길이4를 추가하면 두 값 모두와 충돌합니다. length0 등록은 같은 버스·주소의 길이2·4·8 등 모두와 충돌합니다. 같은 주소라도 PIO와 MMIO의 버스가 다르면 이 검사에서는 충돌하지 않습니다.',
+ '숫자 구간 겹침과 조건 겹침',
+ '이 함수는 addr부터 addr+len 사이의 일반적인 구간 중첩 검사를 하는 것이 아닙니다. 시작 주소가 정확히 같은 조건들에서 어떤 쓰기가 동시에 일치할지 판단합니다. 충돌이면 assign_idx가 EEXIST로 되돌리고 새 객체와 context 참조를 정리합니다. 버스 선택은 PIO flag가 먼저,그다음 VIRTIO_CCW_NOTIFY,그 외 MMIO이므로 두 flag가 모두 있으면 이 선택 함수는 PIO를 우선합니다.',
+ ('같은 주소·길이4의 정확한 값7과8은 충돌하나요?', '아닙니다.두 조건이 같은 값을 동시에 받지 않습니다.', '그렇습니다.eventfd 값 조건은 전혀 보지 않습니다.', '동일 버스·주소·길이 뒤에도 wildcard와 datamatch 비교가 남아 있습니다.'),
+ ('다른 eventfd를 쓰면 동일 wildcard 등록 충돌을 피하나요?', '아닙니다.충돌 검사는 eventfd 동일성으로 면제하지 않습니다.', '그렇습니다.다른 FD이면 같은 쓰기를 무조건 중복 등록합니다.', '조건의 모호함은 알림 목적지 FD가 다르다는 이유로 사라지지 않습니다.')),
+('KVM IOEVENTFD 등록과 Fast Bus: 두 번째 등록 실패를 되돌리기', 'kvm_assign_ioeventfd',
+ '길이를 무시하는 MMIO 알림을 더 빠르게 찾기 위해 별도 버스에도 등록할 수 있습니다. 한 요청이 두 자원을 만들면 두 번째 단계 실패 시 첫 단계도 정리해야 절반만 등록된 상태를 피할 수 있습니다.',
+ 'assign은 길이0·1·2·4·8만 허용하고 addr+len 넘침과 알 수 없는 flags를 거절합니다. length0과 DATAMATCH 조합도 EINVAL입니다. 일반 버스에 먼저 assign_idx하고 length0 MMIO이면 FAST_MMIO에 다시 등록합니다. 두 번째 등록이 실패하면 첫 버스 등록을 deassign하고 두 번째 오류를 반환합니다.',
+ '주소만 보는 MMIO 요청 하나는 내부적으로 서로 다른 bus_idx의 객체2개와 eventfd context 참조2개를 얻을 수 있습니다. 하나의 객체를 두 목록에 무조건 같이 넣는 방식이 아닙니다. PIO length0 요청은 이 MMIO 전용 fast bus 분기를 타지 않습니다. addr가 정수 최댓값 근처여서 addr+8이 wrap하면 범위 검사에서 거절합니다.',
+ '단일 버스 등록의 획득 순서',
+ 'assign_idx는 context 참조를 얻고 객체를 할당해 addr·length·bus·값 정책을 채웁니다. slots_lock 아래 충돌 검사,device callback 초기화,bus 등록을 한 뒤 bus의 ioeventfd_count를 늘리고 목록에 추가합니다. 실패는 mutex 해제,객체 free,context put으로 정리합니다. count는 실제 bus 등록 성공 뒤 증가하므로 시도 횟수 카운터가 아닙니다. VM 초기화는 ioeventfds 목록을 준비합니다.',
+ ('length0 MMIO에서 fast bus 등록 실패 후 일반 등록을 유지하나요?', '아닙니다.일반 등록도 deassign합니다.', '그렇습니다.사용자에게 오류를 주면서 절반 등록을 항상 남깁니다.', '두 단계 자원 획득의 실패 정리 순서가 구현돼 있습니다.'),
+ ('length0과 DATAMATCH를 함께 요청할 수 있나요?', '아닙니다.EINVAL입니다.', '그렇습니다.어떤 길이의 값도 자동 비교합니다.', '값 비교 폭을 정하지 않은 주소 전용 모드와 datamatch는 조합할 수 없습니다.')),
+('KVM IOEVENTFD 해제: Bus 교체 실패가 다른 Device에도 미치는 영향', 'kvm_deassign_ioeventfd_idx',
+ '등록을 해제할 때는 같은 주소만 찾으면 다른 알림을 지울 수 있습니다. 또한 읽는 vCPU가 이전 버스를 참조할 수 있어 목록 제거와 메모리 해제 사이에 수명 동기화가 필요합니다.',
+ 'deassign_idx는 context를 얻고 slots_lock 아래 bus·eventfd·주소·길이·wildcard가 모두 같은 항목을 찾습니다. datamatch 모드이면 값도 같아야 합니다. 없으면 ENOENT입니다. 찾으면 kvm_io_bus_unregister_dev를 호출하고 아직 bus가 있으면 count를 줄인 뒤0으로 끝냅니다. 임시 context 참조는 마지막에 놓습니다. length0 MMIO는 FAST_MMIO 해제도 시도하지만 최종 반환은 일반 버스 결과입니다.',
+ '값7과8의 등록 중7만 해제하려면 같은 datamatch 조건이 필요합니다. wildcard 등록을 해제하면서 DATAMATCH flag를 붙이면 wildcard 비교가 달라 찾아지지 않습니다. 공개 kvm_ioeventfd는 DEASSIGN 여부로 먼저 분기하므로 assign에 있는 모든 길이·추가 flag 검사가 해제에도 동일하게 실행되는 것은 아닙니다.',
+ 'Unregister 내부와 소유권',
+ 'kvm_main.c의 unregister는 대상 하나가 빠진 새 bus를 할당해 RCU로 게시하고 kvm SRCU reader를 기다립니다. 성공 시 대상 destructor만 호출하고 옛 bus를 해제합니다. 새 bus 할당 실패 시 NULL bus를 게시하고 이전 bus의 모든 device를 제거하며 ENOMEM을 반환합니다. ioeventfd의 호출부는 이 반환값을 저장하지 않고 bus가 남았는지 확인한 뒤0을 반환합니다. 따라서 일치 항목 해제 성공이 다른 등록에 영향이 전혀 없었다는 보장은 아닙니다. destructor는 context put·목록 삭제·객체 free를 수행합니다.',
+ ('해제 시 주소만 같으면 다른 datamatch 등록도 지우나요?', '아닙니다.값을 포함한 등록 조건을 맞춥니다.', '그렇습니다.같은 주소의 모든 등록을 무조건 삭제합니다.', '정확한 해제 키가 있어야 여러 값별 등록 중 원하는 항목을 선택합니다.'),
+ ('버스 축소 할당 실패는 대상 하나만 제거하나요?', '아닙니다.이 helper는 이전 버스의 모든 device를 제거할 수 있습니다.', '그렇습니다.어떤 오류에서도 주변 device에는 영향이 없습니다.', '호출 helper의 실패 정책과 호출자의 오류 무시를 함께 읽어야 실제 부수 효과를 알 수 있습니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'가상화','virt/kvm/eventfd.c',symbol,why,principle,use,
+              '버스·정확한 주소·길이 무시·값 wildcard·context 소유권·실패 정리를 구별하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('검토 범위','Linux v6.12 virt/kvm/eventfd.c의 IOEVENTFD와 kvm_main.c의 kvm_io_bus_unregister_dev를 대조했습니다. 버스 및 vCPU 전체와 실제 guest MMIO·메모리 할당 실패 시험은 별도 범위입니다.')])

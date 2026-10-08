@@ -1,0 +1,505 @@
+{
+  "include/linux/kcsan-checks.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 533,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1650",
+        "symbols": [
+          "__kcsan_check_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 접근 분류·비트 플래그의 합성. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1651",
+        "symbols": [
+          "__kcsan_check_access"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 직접 검사·설정과 번역 단위의 차이. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1652",
+        "symbols": [
+          "kcsan_check_access"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 공개 검사·빈 inline에서도 인자는 평가된다. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1653",
+        "symbols": [
+          "kcsan_disable_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 현재 문맥의 검사 중단·중첩 균형. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1654",
+        "symbols": [
+          "__kcsan_disable_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 번역 단위용 중단 alias·라이브러리 경계. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1655",
+        "symbols": [
+          "kcsan_nestable_atomic_begin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN atomic 영역·중첩과 flat 프로토콜. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1656",
+        "symbols": [
+          "kcsan_atomic_next"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 다음 접근 개수·검사 해석의 제한된 구간. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1657",
+        "symbols": [
+          "kcsan_set_access_mask"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 접근 mask·선택한 비트의 변화만 점검. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1658",
+        "symbols": [
+          "kcsan_scoped_access"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN scoped 자료구조·union과 접근 위치. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1659",
+        "symbols": [
+          "kcsan_begin_scoped_access"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN scoped 등록·검사 구간과 런타임 진입. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1660",
+        "symbols": [
+          "__ASSERT_EXCLUSIVE_SCOPED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN cleanup 속성·스코프 끝에서 종료 호출. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1661",
+        "symbols": [
+          "kcsan_end_scoped_access"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 비활성 구성·빈 scoped 구조체와 annotation. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1662",
+        "symbols": [
+          "__KCSAN_BARRIER_TO_SIGNAL_FENCE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN weak memory 표시·signal fence의 재사용. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1663",
+        "symbols": [
+          "kcsan_mb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN weak memory 직접 hook·구성 우선순위. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1664",
+        "symbols": [
+          "kcsan_check_atomic_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN atomic 검사·4·5·7과 IGNORE_ATOMICS. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1665",
+        "symbols": [
+          "ASSERT_EXCLUSIVE_WRITER"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 단일 writer assertion·표시된 접근의 불변 조건. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1666",
+        "symbols": [
+          "ASSERT_EXCLUSIVE_WRITER_SCOPED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN scoped writer assertion·구간 중 상태 변경. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1667",
+        "symbols": [
+          "ASSERT_EXCLUSIVE_ACCESS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN 독점 access assertion·객체 재사용과 수명. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1668",
+        "symbols": [
+          "ASSERT_EXCLUSIVE_ACCESS_SCOPED"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN scoped 독점 access·25와 범위 수명. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1669",
+        "symbols": [
+          "ASSERT_EXCLUSIVE_BITS"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KCSAN bit assertion·mask 복구와 바로 다음 접근. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      }
+    ]
+  },
+  "include/linux/kasan-checks.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 50,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1670",
+        "symbols": [
+          "__kasan_check_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KASAN 접근 검사·software 모드와 직접 API. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1671",
+        "symbols": [
+          "kasan_check_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KASAN 공개 접근·번역 단위와 true stub. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1672",
+        "symbols": [
+          "kasan_check_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KASAN hardware tags·이 annotation의 적용 한계. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1673",
+        "symbols": [
+          "__kasan_check_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KASAN 길이 타입·unsigned int 경계와 전달. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      }
+    ]
+  },
+  "include/linux/kmsan-checks.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 98,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1674",
+        "symbols": [
+          "kmsan_poison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN poison·미초기화 표시와 origin. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1675",
+        "symbols": [
+          "kmsan_unpoison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN unpoison·초기화 표시와 실제 초기화. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1676",
+        "symbols": [
+          "kmsan_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN check·일부 미초기화 byte와 범위 검사. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1677",
+        "symbols": [
+          "kmsan_copy_to_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN 사용자 전달·미초기화 정보 유출과 left. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1678",
+        "symbols": [
+          "kmsan_memmove"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN memmove·데이터 복사 뒤 metadata 이동. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1679",
+        "symbols": [
+          "kmsan_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson KMSAN 비활성 구성·빈 함수와 검사 부재. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      }
+    ]
+  },
+  "include/linux/instrumented.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 216,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1680",
+        "symbols": [
+          "instrument_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 수동 접근 계측·컴파일러가 보지 못하는 경로. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1681",
+        "symbols": [
+          "instrument_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 수동 write 계측·크기와 접근 방향. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1682",
+        "symbols": [
+          "instrument_read_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 수동 read-write 계측·KASAN write와 KCSAN compound. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1683",
+        "symbols": [
+          "instrument_atomic_read_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 수동 atomic 계측·KASAN 검사는 여전히 필요하다. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1684",
+        "symbols": [
+          "instrument_copy_to_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 사용자 copy-out 계측·커널 source의 읽기. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1685",
+        "symbols": [
+          "instrument_copy_from_user_before"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 사용자 copy-in 전 계측·커널 destination의 쓰기. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1686",
+        "symbols": [
+          "instrument_copy_from_user_after"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 사용자 copy-in 뒤 계측·n-left만 initialized. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1687",
+        "symbols": [
+          "instrument_memcpy_before"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 비계측 memcpy 전 hook·네 호출의 정확한 순서. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1688",
+        "symbols": [
+          "instrument_memcpy_after"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson 비계측 memcpy 뒤 hook·복사된 길이의 상태 전파. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1689",
+        "symbols": [
+          "instrument_get_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson get_user 계측·주소를 취할 수 없는 지역 변수. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      },
+      {
+        "lesson": "os1690",
+        "symbols": [
+          "instrument_put_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original interface header read and manually authored; lesson put_user 계측·sizeof(from)과 사용하지 않는 size. Four headers total897lines; 41lessons82workedquestions. Actual16 GNU11 builds8configurations O2/ASanUBSan passed runtime recorder assertions; real cleanup attribute executed. Direct/public CONFIG vs translation-unit selection, access flags and ignored atomic argument non-evaluation, disable/nestable/flat/next/mask state, scoped union and runtime-entry checks, scoped cleanup/counter names, writer/access/bits assertions and mask restoration, arbitrary signal-fence tags vs actual LKMM, KASAN software/hardware distinction unsigned-size boundary and true stub, KMSAN poison/origin/GFP/unpoison/check/copy metadata contracts, copy directions/residual and get/put temporary/sizeof contracts. No actual detector engine shadow/watchpoint/origin, race/leak/UAF reports, real uaccess transfer, huge memory access, physical memory ordering or fullcompiler type proof. Runtime interface scope only."
+      }
+    ]
+  }
+}

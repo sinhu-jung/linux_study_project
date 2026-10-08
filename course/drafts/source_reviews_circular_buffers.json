@@ -1,0 +1,204 @@
+{
+  "include/linux/circ_buf.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 37,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1176",
+        "symbols": [
+          "circ_buf"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1177",
+        "symbols": [
+          "CIRC_SPACE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1178",
+        "symbols": [
+          "CIRC_CNT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1179",
+        "symbols": [
+          "CIRC_CNT_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1180",
+        "symbols": [
+          "CIRC_SPACE_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1181",
+        "symbols": [
+          "CIRC_CNT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1182",
+        "symbols": [
+          "CIRC_SPACE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1183",
+        "symbols": [
+          "CIRC_CNT_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      }
+    ]
+  },
+  "Documentation/core-api/circular-buffers.rst": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 237,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1176",
+        "symbols": [
+          "circ_buf"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1177",
+        "symbols": [
+          "CIRC_SPACE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1178",
+        "symbols": [
+          "CIRC_CNT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1179",
+        "symbols": [
+          "CIRC_CNT_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1180",
+        "symbols": [
+          "CIRC_SPACE_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1181",
+        "symbols": [
+          "CIRC_CNT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1182",
+        "symbols": [
+          "CIRC_SPACE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      },
+      {
+        "lesson": "os1183",
+        "symbols": [
+          "CIRC_CNT_TO_END"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole circ_buf header and official circular-buffers documentation read/authored: headproducer/tailconsumer and no size-lock-allocation fields; reservedslot empty/full, pow2mask vs modulo/nonpow2counterexample and validintindices, total vs contiguous read/write and onceheadtail evaluation/GNU statementexpressions, variableitems segmentation, SPSC or serialized roles and observer-dependent bounds not atomicsnapshot, release-head/acquire-reader/release-tail vs READ_ONCE, originaldocument producerREAD_ONCEtail+rolelock contract, wakeup-not-guaranteedbarrier, metadata arithmetic not concurrency/lifetime proof. Exactheader1698104checks optimized andASanUBSan: every head-tail at powers1..512 independentmodulo/minsegments,100000FIFO mutations,onceeval,invalidsize6counterexample,200000pthread SPSCpayloadseq-checksum. Stronger C11 bothdirection acquire-release demonstration than originaldocument producerREAD_ONCEtail example, no actual kernellocks/smpbarriers/LKMM/native32/fullhardware proof."
+      }
+    ]
+  }
+}

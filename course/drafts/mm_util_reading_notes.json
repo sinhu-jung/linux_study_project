@@ -1,0 +1,116 @@
+{
+  "sha": "adc218676eef25575469234709c2d87185ca223a",
+  "path": "mm/util.c",
+  "read_regions": [
+    [
+      1,
+      325
+    ],
+    [
+      326,
+      555
+    ],
+    [
+      555,
+      925
+    ],
+    [
+      925,
+      1330
+    ]
+  ],
+  "decision": "read_for_authoring_not_complete",
+  "next_lessons": [
+    {
+      "symbols": [
+        "vma_is_stack_for_current",
+        "vma_set_file"
+      ],
+      "notes": "Helper stack bounds use <=start and >=end inclusive; backing-file mutation initial setup only, get_file new before swap then fput old, not anonymous VMA conversion."
+    },
+    {
+      "symbols": [
+        "randomize_stack_top",
+        "randomize_page",
+        "arch_randomize_brk",
+        "arch_mmap_rnd"
+      ],
+      "notes": "PF_RANDOMIZE page mask, CONFIG_STACK_GROWSUP +/-; randomize_page alignment subtract requires suitable range (tiny range may underflow), caps start+range, truncates to page count, modulo may bias, zero pages returns aligned start; brk compat32M/native1G; mmap bits compat selection."
+    },
+    {
+      "symbols": [
+        "mmap_is_legacy",
+        "mmap_base",
+        "arch_pick_mmap_layout"
+      ],
+      "notes": "personality compat or unlimited down-stack or sysctl legacy; guard gap + random pad conditionaloverflow, min128M/maxSTACKTOP5/6, upwardlayout separate; MMF_TOPDOWN controls choice; alternate MMU fallback and KUnit export."
+    },
+    {
+      "symbols": [
+        "__account_locked_vm",
+        "account_locked_vm"
+      ],
+      "notes": "write lock required, page count vs byte RLIMIT shift, inc failure outputstable, bypass CAP_IPC_LOCK, decrement WARN still subtract; caller page arithmetic invariants; NULL/zero wrapper no lock."
+    },
+    {
+      "symbols": [
+        "vm_mmap_pgoff",
+        "vm_mmap"
+      ],
+      "notes": "security before killable writer lock, do_mmap then unlock before userfault complete and population; byteoffset overflow/alignment to pgoff, unsigned errno convention, do_mmap otherchecks delegated not allvalidatedhere."
+    },
+    {
+      "symbols": [
+        "kmalloc_gfp_adjust",
+        "__kvmalloc_node_noprof",
+        "kvfree",
+        "kvfree_sensitive",
+        "kvrealloc_noprof"
+      ],
+      "notes": "first contiguous alloc, size<=page nofallback, blockingrequired, INTMAX cap, vm hugeallowed; >page NOWARN/NORETRYunlessMAYFAIL/clearNOFAIL; kvfree addr class; sensitive zero-or-null guard wipebeforefree; vmreallocdelegation, krealloc->kv fallback memcpyksize tagreset KASAN disable/enable thenfreeold; fail oldretained; GFPZERO continuity required."
+    },
+    {
+      "symbols": [
+        "__vmalloc_array_noprof",
+        "vmalloc_array_noprof",
+        "__vcalloc_noprof",
+        "vcalloc_noprof"
+      ],
+      "notes": "checked n*size returns NULL before vmalloc, defaultGFPKERNEL, ZEROmodifier, originalnoallocationhooks body vs publicwrapper."
+    },
+    {
+      "symbols": [
+        "folio_anon_vma",
+        "folio_mapping",
+        "folio_copy",
+        "folio_mc_copy",
+        "memcmp_pages",
+        "flush_dcache_folio"
+      ],
+      "notes": "mapping flags exactANON then subtracttag; slabNULL/swapmapping priority/pagecacheflagNULL; copy src pagecount dst>=src, sched betweenpages, poisoned copyEHWPOISONpartialnorevert; maplocals thenreverseunmap memcmpPAGE_SIZE; flush archfallback perpage."
+    },
+    {
+      "symbols": [
+        "overcommit_ratio_handler",
+        "overcommit_kbytes_handler",
+        "sync_overcommit_as",
+        "overcommit_policy_handler",
+        "vm_commit_limit",
+        "vm_memory_committed",
+        "__vm_enough_memory"
+      ],
+      "notes": "ratio/kbytes mutual reset onlysuccesswrite; policy batch->perCPU sync strict->publish; limitkbytespages or (RAM-huge)*ratio/100 +swap; cachelinecounter and positive sum; acctfirst ALWAYSsuccess GUESS comparesrequestRAM+swap; strict reservesadmin + min(total_vm/32,userreserve), positivebatchedread<allowed strict not <=, failunacct+warn."
+    },
+    {
+      "symbols": [
+        "get_cmdline",
+        "mem_dump_obj",
+        "page_offline_freeze",
+        "page_offline_thaw",
+        "page_offline_begin",
+        "page_offline_end"
+      ],
+      "notes": "get_task_mm reference/arg_endgate/spinlocked boundssnapshot then access_process_vm no guaranteedNUL, overwrittenend path internalNUL orenvextend thenstrnlen, mmput; PRINTK provenance slab/vmalloc thenaddressclass includingzerosize/null; offline rwsem readers hold freeze while writer begin/end transitions preventsaccessrace not pagepin guarantee."
+    }
+  ]
+}

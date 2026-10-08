@@ -1,0 +1,316 @@
+{
+  "arch/arm64/include/asm/insn-def.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 23,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2151",
+        "symbols": [
+          "AARCH64_INSN_SIZE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "A64 명령 크기·4바이트와 고정 길이. A64 instruction은 항상 32bit이고 AARCH64_INSN_SIZE는 4입니다. 데이터 pointer 크기 64bit와 instruction 크기를 구별합니다. patch 길이·정렬·instruction 개수 계산에서 같은 4byte 단위가 쓰입니다. 헤더 상수와 C 읽기·쓰기 함수의 크기를 연결합니다. 대체 영역 8byte가 instruction2개인 예제를 풉니다. ARM64 이름의 64가 모든 instruction64bit를 뜻한다고 읽지 않습니다."
+      },
+      {
+        "lesson": "os2152",
+        "symbols": [
+          "AARCH64_BREAK_MON"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "A64 BRK encoding·기본 word와 immediate 위치. AARCH64_BREAK_MON은 0xd4200000이고 BRK의 imm16은 bits20:5에 놓습니다. 고정 opcode bit와 호출 목적을 나타내는 immediate bit를 OR하여 하나의 instruction word를 구성합니다. word를 만드는 산술과 해당 명령의 실제 예외 실행은 다른 단계입니다. imm16을 5bit 왼쪽으로 옮겨 base에 OR하는 예제를 계산합니다. 이 학습 fixture는 fault instruction을 실행하지 않습니다."
+      },
+      {
+        "lesson": "os2153",
+        "symbols": [
+          "AARCH64_BREAK_FAULT"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "A64 의도적 fault BRK·handler 목적 구분. FAULT용 BRK는 base에 FAULT_BRK_IMM<<5를 OR합니다. 고정 brk-imm.h의 FAULT_BRK_IMM은 0x100이므로 word는 0xd4202000입니다. 주석은 kgdb와 달리 미할당 handler immediate로 의도적 fault를 일으키는 용도를 설명합니다. 다른 BRK 목적들의 immediate를 무조건 같은 정책으로 읽지 않습니다. 원문 연결과 0x100<<5=0x2000 산술을 확인합니다. 실제 fault handler·예외 entry·debugger 동작은 해당 파일과 실행 문맥으로 이어서 공부합니다."
+      }
+    ]
+  },
+  "arch/arm64/include/asm/patching.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 17,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2154",
+        "symbols": [
+          "aarch64_insn_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch API·word 읽기와 쓰기 오류. 헤더의 read와 write는 주소와 32bit instruction을 연결하고 int 오류값을 반환합니다. read는 u32 pointer에 결과를 제공하고 write는 u32 값을 받습니다. 선언을 통해 입력·출력·오류 처리 계약을 먼저 파악한 뒤 C 구현의 nofault·endianness·lock을 연결합니다. read 출력 pointer와 write 값 인자를 표시하세요. 실패했을 때 결과를 사용할지 여부는 반환값과 구현을 함께 읽습니다."
+      },
+      {
+        "lesson": "os2155",
+        "symbols": [
+          "aarch64_insn_write_literal_u64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch API·literal64와 instruction 크기 구분. literal64 쓰기 함수는 u64 값을 받습니다. A64 instruction write의 4byte와 달리 64bit 데이터 값을 써야 하는 인터페이스입니다. 구현은 sizeof(val)을 사용하고 instruction용 cpu_to_le32 변환을 적용하지 않습니다. 함수 이름과 데이터 목적·표현을 구별해야 합니다. instruction write4와 literal write8의 크기를 비교합니다. literal 데이터 쓰기를 2개 instruction을 조립하는 함수라고 설명하지 않습니다."
+      },
+      {
+        "lesson": "os2156",
+        "symbols": [
+          "aarch64_insn_copy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch API·여러 명령과 byte 범위 복사. insn_copy·insn_set은 destination과 byte 길이를 받아 pointer를 반환합니다. patch_text는 주소 배열·명령 배열·int 개수의 별도 API입니다. 연속 byte 영역의 새 코드 생성과 여러 기존 위치의 동기화 patch가 같은 입력 계약은 아닙니다. 연속 16byte 복사와 떨어진 4주소 instruction patch를 각각 어떤 API 인자에 넣는지 적습니다. byte 길이·instruction 개수·주소 개수의 단위를 구별합니다."
+      }
+    ]
+  },
+  "arch/arm64/kernel/patching.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 242,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2157",
+        "symbols": [
+          "is_exit_text"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch exit 영역·시스템 상태와 half-open. exit text는 init 영역과 함께 버려지므로 system_state<SYSTEM_RUNNING일 때만 exit 경계 안의 주소를 image text로 취급합니다. 주소 범위는시작 이상·끝 미만입니다. 초기 영역의 수명과 runtime 주소 판정의 조건을 연결하는 기술입니다. 초기/실행 상태와시작−1·시작·끝−1·끝의 조건을 표로 적습니다. fixture는 actual linker 경계 대신 C 배열을 썼으므로 초기 exit 경계 전체를 실행검증한 결과로 주장하지 않습니다."
+      },
+      {
+        "lesson": "os2158",
+        "symbols": [
+          "is_image_text"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch image 판정·core 또는 초기exit. is_image_text는 core_kernel_text와 is_exit_text를 OR합니다. kernel 본체의 실행 영역 또는 아직 유지되는 exit 영역인지 판정하여 physical page 기반 mapping 경로를 선택합니다. image 영역과 execmem/vmalloc 영역의 page 찾는 방법이 다르게 이어집니다. core=true·exit=false와 core=false·exit=true 두 예제를 mapping 선택에 연결합니다. caller 주소의 출처와 memory 종류를 읽습니다."
+      },
+      {
+        "lesson": "os2159",
+        "symbols": [
+          "patch_map"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch map·physical과vmalloc page 선택. image 주소는 __pa_symbol과 phys_to_page로 page를 얻습니다. image가 아니고 CONFIG_EXECMEM이 있으면 vmalloc_to_page를 사용합니다. 둘 다 아니면 원래주소를 바로 반환합니다. page가 필요한 경로는 BUG_ON(!page) 후 page physical base+page내 offset으로 fixmap alias를 만듭니다. 같은 주소의 page base와 offset을 나누어 계산합니다. fixture의 fixmap은주소 identity 모델이며실제 permission·page table·EL1 mapping을 만든 것은 아닙니다."
+      },
+      {
+        "lesson": "os2160",
+        "symbols": [
+          "patch_unmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch unmap·고정slot 정리. patch_unmap은전달된 fixmap slot을 clear_fixmap으로정리합니다. write와 pagechunk경로가 map뒤 copy를수행하고성공·오류반환과관계없이 slot정리를한뒤 lock을해제합니다. fixmap직접 fallback도상위함수에서 unmap을무조건호출하는실제순서를읽습니다. map→쓰기→unmap→unlock순서를표시하고 copy오류예제에서도정리 counter가맞는지확인합니다. 실제 fixmap의 TLB정책은이 fixture밖입니다."
+      },
+      {
+        "lesson": "os2161",
+        "symbols": [
+          "aarch64_insn_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text instruction read·오류 시 출력 보존. read는 local __le32에 4byte nofault copy를시도하고 ret0일때만출력 insnp에 le32_to_cpu를대입합니다. 오류때출력값을초기화하는코드는없으므로 caller는반환값을확인해야합니다. instruction은 A64규칙에따라항상 little endian인표현을 CPU값으로변환합니다. fixture에서실패주입뒤출력 sentinel0xabcdef01이유지되는것을확인합니다. nofault모델은 valid주소의복사실패를주입하며실제 pagefaulthandler가아닙니다."
+      },
+      {
+        "lesson": "os2162",
+        "symbols": [
+          "__aarch64_insn_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text write 보호·rawspinIRQ와 nofault. 내부 write는 patch_lock을 irqsave로잡고 FIX_TEXT_POKE0에주소를 map한뒤 4byte nofault copy를시도합니다. 이어 unmap·irqrestore를수행하고 ret를반환합니다. 임시공유 mapping을동시에쓰지않도록하는잠금과 local IRQ 상태보존의목적을구별합니다. write성공·실패둘다 map/unmap수와대입여부를 fixture에서확인합니다. 실제 rawspinlock·IRQmask는 pthreadmutex/flags모델이며 kernel잠금의모든특성을실행증명하지않습니다."
+      },
+      {
+        "lesson": "os2163",
+        "symbols": [
+          "aarch64_insn_write"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text instruction write·CPU값에서LE값. 공개 write는 cpu_to_le32로 instruction값을변환하고내부 write를호출합니다. hardwareinstruction표현의 endianness를인터페이스경계에서일관되게맞춥니다. 이함수자체는 cacheclean이나모든 CPU동기화를추가하지않고 caller의상위 patch경로가이를제공합니다. 공개 write→내부 copy와 nosync→cacheclean의층을그립니다. write이름하나만보고 instruction실행관찰까지완료됐다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2164",
+        "symbols": [
+          "aarch64_insn_write_literal_u64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text literal write·64bit 데이터와 같은mapping잠금. literalwrite는동일 lock·fixmap·nofault·unmap순서로 sizeof(u64)를복사합니다. source는 local val주소이고 instructionword변환 helper를사용하지않습니다. kernelpatch자료중 instruction과 literal데이터를목적과크기로구별하는인터페이스입니다. 0x123456789abcdef0값의 8byte저장과 4byteinstruction저장을비교합니다. fixture는 nativeLE이며다른 endianliteral저장실행은검증하지않았습니다."
+      },
+      {
+        "lesson": "os2165",
+        "symbols": [
+          "__text_poke"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text poke callback·page chunk와 누적offset. __text_poke는 page남은 byte와전체 len−patched중작은 size를선택합니다. 각 chunk마다 dst+patched를 map하고 callback에 src·patched·size를전달해복사하거나 word를채운뒤 unmap합니다. loop전체가잠금안에있고끝나면 unlock후원래범위의 Icache를 flush합니다. dst page끝 4byte앞·len12이면 4와 8byte두 chunk를계산합니다. bytechunk범위와 instruction정렬의계약을따로읽습니다."
+      },
+      {
+        "lesson": "os2166",
+        "symbols": [
+          "text_poke_memcpy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text copy callback·nofault 오류를 전달하지 않는 계약. text_poke_memcpy는 src+patched에서 len만큼 copy_to_kernel_nofault하지만함수반환타입이 void이고 copy의 int결과를전달하지않습니다. 따라서상위__text_poke는오류때도 loop·flush·destination반환을계속할수있습니다. 결과 pointer반환을모든 byte쓰기성공증명으로설명하면안됩니다. 실패주입첫 copy가원본 sentinel을유지해도 insn_copy가 dst를반환하고 flush를호출하는 fixture를문제로풉니다. 실제 nofault부분복사등은별도 provider계약입니다."
+      },
+      {
+        "lesson": "os2167",
+        "symbols": [
+          "text_poke_memset"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text set callback·len/4와 남는byte. set callback은 src에서 u32값을읽고 memset32에 len/4개를전달합니다. len이 4의배수가아니면나머지 byte를채우는코드가없습니다. API는 dst정렬을검사하지만 len의배수오류를여기서반환하지않으므로정규 instruction길이를사용하는 caller계약과실제본문을구별합니다. len6의첫 4byte만설정되고마지막 2byte가유지되는 fixture를확인합니다. 모든 byte를채우는일반 memset과같다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2168",
+        "symbols": [
+          "aarch64_insn_copy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text copy 공개API·정렬과unused RX문맥. insn_copy는 dst주소하위 2bit가있으면 NULL이고그렇지않으면 memcpycallback의__text_poke를사용합니다. doc는 JIT의새 codeblock을사용하지않는 RX영역에놓는용도를설명합니다. dst정렬만검사하고 src정렬이나 len배수검사를추가한것처럼설명하지않습니다. dst+1실패·정렬 dst의 page횡단·len0도 flush호출하는실제경로를풉니다. 이미실행중인 code를임의로 copy해도안전하다는용도로확장하지않습니다."
+      },
+      {
+        "lesson": "os2169",
+        "symbols": [
+          "aarch64_insn_set"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text set 공개API·illegalinstruction영역 채우기. insn_set도 dstword정렬을검사하고 local insn주소를 setcallback에전달합니다. doc는 JIT가 RX영역을 illegalinstruction으로채우는용도를예로듭니다. 어떤 word를제공했는지와실제 CPU에서그 word의예외를실행했는지는다른단계입니다. 정렬오류 NULL과 len6의 tail보존예제를연결합니다. localinsn수명은동기적인__text_poke호출동안유효합니다."
+      },
+      {
+        "lesson": "os2170",
+        "symbols": [
+          "aarch64_insn_patch_text_nosync"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text nosync patch·정렬오류와성공시에cache. nosync는 word정렬아니면−EINVAL이고 write가 ret0일때만 4byte영역의 caches_clean_inval_pou를수행합니다. nosync라는이름이 cache작업까지없다는뜻은아닙니다. 모든 CPUstop동기화는상위 patch_text에서제공합니다. 실패시기존 clean횟수증가가없는 fixture를확인합니다. unaligned→쓰기없음·write실패→clean없음·write성공→clean1을표로작성합니다. 실제 cache명령의 hardware효과는 counter모델밖입니다."
+      },
+      {
+        "lesson": "os2171",
+        "symbols": [
+          "aarch64_insn_patch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch descriptor·주소와word 배열·CPUcount. aarch64_insn_patch는주소배열 pointer·새 instruction배열 pointer·개수·atomic CPUcounter를보관합니다. 배열의 i번째주소에 i번째 word를제공하며 counter는 callback도착과완료공지를구분하는상태값입니다. instructionbyte수가아닌 patch위치개수가 insn_cnt입니다. 3주소·3word와 counter초기 0을그립니다. 두배열이유효하고 count만큼원소를제공하는 caller계약을확인합니다."
+      },
+      {
+        "lesson": "os2172",
+        "symbols": [
+          "aarch64_insn_patch_text_cb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch last CPU master·원자도착counter. 각 CPU가 atomic_inc_return으로도착 counter를올립니다. 반환값이 num_online_cpus와같은마지막도착자가 master가되어 patchloop를수행합니다. CPU0고정 master인 alternative.c의 protocol과다릅니다. 작업후추가 increment로완료를공지합니다. fixture는실제 pthread1~4개에서한 master가정확히 3쓰기를수행했습니다. 2CPUcounter0→1대기→2master→3완료의상태를그립니다. 실제 kernelstop_machine·memoryordering전체증명과 pthread+C11모델결과를구별합니다."
+      },
+      {
+        "lesson": "os2173",
+        "symbols": [
+          "aarch64_insn_patch_text_cb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch 대기CPU·완료초과와ISB. master가아닌 CPU는 counter<=online일동안 cpu_relax로대기합니다. master의추가 increment뒤 counter가 online을넘으면빠져나와 isb합니다. 완료가 online과같은것이아닌 online초과인조건을읽어야합니다. 대기 CPU의 localret는 0이고 master의오류는상위 stop문맥의반환계약에연결됩니다. 4CPU이면도착 4와완료 5의차이를표시합니다. fixture에서대기자 3개의 isb counter를확인했으며 hardwareISB를실행한것은아닙니다."
+      },
+      {
+        "lesson": "os2174",
+        "symbols": [
+          "aarch64_insn_patch_text_cb"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch 오류·앞선성공을되돌리지않음. patchloop는 ret0이고 i<count일동안수행합니다. 첫오류가발생하면뒤위치쓰기를멈추고완료 counter는그래도증가시킵니다. 앞서성공한 instruction을원래값으로되돌리는 rollback코드는없습니다. 전체작업을 atomic transaction처럼모든성공또는모든원복이라고해석하면안됩니다. 3위치의두번째쓰기실패예제에서첫 word는변경·두번째와세번째는 fixture원값·clean1·쓰기 2를확인합니다. 실제 nofault부분쓰기계약은별도로읽습니다."
+      },
+      {
+        "lesson": "os2175",
+        "symbols": [
+          "aarch64_insn_patch_text"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Text patch 공개동기화·count검사와cpuslocked. 공개함수는배열·count·atomic초기 0의 local descriptor를만들고 cnt<=0이면−EINVAL입니다. 유효 count이면 stop_machine_cpuslocked에 callback과 descriptor주소·cpu_online_mask를넘깁니다. 함수이름의 cpuslocked는 CPUhotplug잠금호출계약을이어읽어야하는인터페이스이며이함수본문에 hotpluglock을잡는줄은없습니다. cnt0·−1오류와 cnt3을비교합니다. 배열 NULL등모든입력검사를이함수에추가된것처럼설명하지않고 caller의유효배열·CPU집합계약을확인합니다."
+      }
+    ]
+  }
+}

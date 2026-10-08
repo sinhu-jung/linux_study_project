@@ -1,0 +1,52 @@
+"""Whole atomic.h integration macros and exact conditional-read region evidence."""
+ROWS = [
+('Atomic 공통 헤더·아키텍처·fallback·long·계측 계층 연결','atomic_cond_read_acquire',
+ 'atomic.h는 types와 asm의 atomic·barrier를 포함하고 공통 조건 읽기·순서 보강 helper를 정의합니다. 마지막에는 arch fallback, long wrapper와 instrumented wrapper를 그 순서로 연결합니다. 기반 arch 연산 위에 누락 API와 순서 보강을 구성하고, long 폭 선택과 공개 계측 경로를 얹는 계층입니다. include 순서는 C 전처리 연결이며 함수 호출 때마다 헤더가 런타임에 실행되는 것이 아닙니다.',
+ '한 atomic API의 public wrapper→raw wrapper→arch primitive 경로를 찾아보세요. 정의·alias·include와 실제 호출을 구별합니다. 이 헤더가 연결한 다른 큰 파일의 모든 구현을 이 수업 하나로 완성했다고 표시하지 않습니다.',
+ [('최종 연결 순서에서 계측 wrapper는 long wrapper보다 뒤인가요?','그렇습니다. 원문의 include 순서입니다.','아닙니다. 계측만 있고 raw 계층은 없습니다.','파일 마지막의 세 include를 계층으로 연결해 읽으세요.'),('각 atomic 호출 때마다 include가 다시 실행되나요?','아닙니다. C 전처리·컴파일 단계의 연결입니다.','맞습니다. 런타임마다 source 파일을 해석합니다.','헤더 텍스트 구성과 생성된 함수의 실행을 구별합니다.')]),
+('Atomic 공통 순서 계약·복합 연산의 읽기와 쓰기','__atomic_op_acquire',
+ '헤더 주석은 default full, acquire, release와 relaxed 네 변형을 설명합니다. load와 store를 함께 수행하는 복합 RMW에서 acquire는 읽기 부분, release는 쓰기 부분에 적용됩니다. 실패한 cmpxchg_acquire는 ordering을 함의하지 않는다고 명시합니다. 특정 보강 helper가 실패 때도 fence를 수행하는 구현 강도를 공개 API의 모든 backend 실패 보장으로 일반화하지 않습니다.',
+ '조건 성공과 실패를 나누고 RMW의 R·W를 따로 표시하세요. 숫자 갱신의 원자성과 다른 주소의 순서 계약을 구별합니다. 필요한 실패 후 순서는 공개 계약을 기준으로 별도로 확인합니다.',
+ [('복합 acquire의 계약이 적용되는 부분은 무엇인가요?','읽기 부분입니다.','언제나 읽기와 쓰기의 full barrier입니다.','원문 주석은 acquire와 release의 load·store 부분을 구별합니다.'),('실패 cmpxchg_acquire가 모든 backend에서 acquire를 보장하나요?','아닙니다. 공개 실패 계약은 그 보장을 함의하지 않습니다.','맞습니다. 이름에 acquire가 있으면 모든 경로가 같습니다.','헤더의 실패 주석과 실제 특정 helper의 강도를 구별해야 합니다.')]),
+('Atomic 조건부 읽기·counter 주소와 VAL 조건식','atomic_cond_read_relaxed',
+ 'atomic_cond_read_relaxed는 &(v)->counter와 조건식을 smp_cond_load_relaxed에 전달합니다. generic barrier의 해당 매크로는 포인터를 지역 __PTR에 잡고 READ_ONCE로 VAL을 반복해서 읽습니다. 조건식은 이 미리 정한 VAL 이름을 사용하고 참이 된 마지막 값을 반환합니다. 조건 자체를 갱신하거나 보호된 payload 수명을 제공하는 API가 아닙니다.',
+ 'VAL==3 같은 조건을 쓰고 최초 만족과 반복 후 만족을 비교하세요. 반환 스냅샷과 계속 변할 수 있는 counter를 구별합니다. generic 정의가 arch에서 재정의될 수 있으며 선택 모델은 int·long ordinary 타입에 한정됩니다.',
+ [('조건식에서 읽은 값을 나타내는 미리 정한 이름은 무엇인가요?','VAL입니다.','언제나 sizeof입니다.','generic 원문은 C lambda 대신 pre-named VAL을 조건식에 사용한다고 설명합니다.'),('조건이 참이면 반환하는 것은 무엇인가요?','참을 만족한 마지막 읽기 값입니다.','항상 bool true인 1입니다.','조건 판정의 bool과 load의 반환 값은 다릅니다. 모델은 조건 값 3을 반환합니다.')]),
+('Atomic 조건부 읽기의 대기 방식·spin과 수면의 차이','atomic_cond_read_relaxed',
+ 'generic condition-load는 조건이 거짓이면 cpu_relax를 수행하고 다시 READ_ONCE합니다. 원문 이 매크로에는 waitqueue 등록·schedule·timeout 인자가 없습니다. 따라서 wait_event나 completion처럼 task를 수면 대기에 등록하는 API로 읽으면 안 됩니다. 계속 읽을 조건은 다른 실행 주체와 올바른 프로토콜로 변해야 하며 이 helper가 반드시 유한 시간에 반환한다는 뜻은 아닙니다.',
+ '짧은 반복 읽기와 sleep 가능한 대기의 사용 문맥·진행 조건을 확인하세요. 모델의 세 번째 relax에서 값 변경은 결정적인 검사용 동작이며 실제 CPU·producer 경합을 수행한 증거가 아닙니다. 영원히 변하지 않는 조건에 종료 보장을 기대하지 않습니다.',
+ [('이 generic condition-load는 waitqueue에 task를 등록하나요?','아닙니다. READ_ONCE와 cpu_relax 반복입니다.','맞습니다. 모든 대기는 waitqueue 수면입니다.','소스의 for loop와 cpu_relax를 확인하세요. 수면 대기 API와 구분됩니다.'),('원문 매크로 자체에 timeout 인자가 있나요?','아닙니다. 이 형태에는 없습니다.','맞습니다. 모든 조건 대기에 자동 1초 만료가 있습니다.','반환을 보장하려면 조건을 바꾸는 외부 프로토콜의 진행 조건을 확인해야 합니다.')]),
+('Atomic 조건부 acquire·조건 관찰 뒤 순서 보강','atomic_cond_read_acquire',
+ 'atomic_cond_read_acquire와 64비트 wrapper는 해당 counter 주소를 smp_cond_load_acquire에 전달합니다. generic 정의는 relaxed 조건 읽기의 결과를 _val에 저장하고 smp_acquire__after_ctrl_dep를 호출한 뒤 그 값을 반환합니다. 원문은 대기 조건의 control dependency를 이용해 여러 플랫폼에서 barrier 비용을 줄일 수 있다고 설명합니다. 직접 항상 같은 CPU acquire 명령 한 개를 실행한다고 가정하지 않습니다.',
+ '조건을 만족한 읽기와 뒤 접근의 순서 보강을 나누어 추적하세요. 이 정의의 compiler·CPU 계약을 arch barrier와 연결합니다. hook 호출 수는 선택 경로 검사이며 실제 memory ordering 측정이 아닙니다.',
+ [('generic acquire condition-load는 relaxed 결과 뒤 무엇을 호출하나요?','smp_acquire__after_ctrl_dep입니다.','schedule_timeout입니다.','원문은 조건 읽기의 control dependency 뒤 순서 보강을 수행합니다.'),('선택 hook 호출이 모든 CPU에서 같은 명령을 실행했다는 증거인가요?','아닙니다. arch의 구현을 확인해야 합니다.','맞습니다. 모든 acquire는 같은 명령입니다.','generic 제어 구조와 실제 아키텍처 barrier 구현을 구별합니다.')]),
+('Atomic fence 기본 연결·arch 재정의와 before·after','__atomic_op_fence',
+ 'atomic.h는 __atomic_acquire_fence가 없으면 smp_mb__after_atomic, release와 pre full은 before_atomic, post full은 after_atomic으로 연결합니다. 각 연결은 #ifndef이므로 arch가 먼저 정의하면 기본 연결을 사용하지 않습니다. 주석은 relaxed 연산이 이미 full일 때 추가 barrier가 필요 없을 수 있고 acquire fence를 override하는 arch는 after_spinlock 연결도 고려할 수 있다고 설명합니다. 기본 연결이 모든 arch의 고정 비용은 아닙니다.',
+ '기본 정의와 arch override를 분리해 확인하세요. 선택 fixture는 기본 B·A hook과 재정의 P·Q·C·R hook을 각각 실행했습니다. 구성 분기 검사와 실제 CPU barrier 명령·성능을 구별합니다.',
+ [('기본 release fence는 어디로 연결되나요?','smp_mb__before_atomic입니다.','항상 smp_mb__after_atomic입니다.','release와 pre full의 기본 방향은 before입니다.'),('arch가 먼저 acquire fence를 정의하면 기본 연결이 덮어쓰나요?','아닙니다. #ifndef로 보존합니다.','맞습니다. 마지막 공통 헤더가 무조건 덮어씁니다.','선택 구성과 기본값의 적용 조건을 확인하세요.')]),
+('Atomic acquire 보강 매크로·결과 보존과 한 번 실행','__atomic_op_acquire',
+ '__atomic_op_acquire는 op##_relaxed(args)의 결과 타입으로 지역 __ret를 선언하고 실제 연산 결과를 저장합니다. acquire fence를 수행한 뒤 __ret를 GNU statement expression의 값으로 반환합니다. 검사한 ordinary int·bool 결과와 고정 타입 인자 식에서 실제 연산·포인터·값 인자는 각각 한 번 평가됩니다. typeof를 모든 변동 수정 타입까지 언제나 무평가라고 일반화하지 않습니다.',
+ 'op에 add를 대입해 add_relaxed 이름을 만들고 실행→결과 저장→fence→결과 반환 순서를 표시하세요. 이 형태는 __ret를 저장하므로 void 결과를 일반 값 결과처럼 넣지 않습니다. GNU 확장과 공개 atomic API를 구별합니다.',
+ [('acquire helper의 반환 값은 어디서 오나요?','relaxed 연산의 저장한 __ret입니다.','fence hook이 반환하는 숫자입니다.','결과 저장과 순서 보강을 분리합니다. fence 이후에도 연산 결과를 유지합니다.'),('검사한 ordinary 인자 식을 hook과 반환 때문에 두 번 실행하나요?','아닙니다. 실제 연산과 인자 평가는 한 번입니다.','맞습니다. typeof 때문에 항상 두 번 계산됩니다.','범위는 검사한 고정 타입 사용입니다. 언어의 모든 typeof 경우로 일반화하지 않습니다.')]),
+('Atomic release 보강 매크로·연산 앞 fence와 expression 결과','__atomic_op_release',
+ '__atomic_op_release는 먼저 release fence를 수행하고 op##_relaxed(args)를 statement expression의 마지막 문장으로 실행합니다. 값 반환 연산이면 그 값을 돌려주고, void 연산이면 void 호출 형태로 사용할 수 있습니다. acquire·full helper처럼 타입을 가진 지역 __ret에 저장하는 구조는 아닙니다. 같은 보강 목적이어도 source 형태와 허용 결과 타입을 실제로 확인해야 합니다.',
+ '값 반환 add와 void set 두 연산의 source 확장과 실행 순서를 비교하세요. release가 연산 뒤 fence라고 착각하지 않습니다. 이 내부 helper의 형태를 모든 공개 API 사용 문맥의 허가로 해석하지 않습니다.',
+ [('release helper의 fence는 실제 relaxed 호출 앞인가요?','그렇습니다. fence 후 연산입니다.','아닙니다. 항상 연산 뒤 acquire fence입니다.','첫 문장과 마지막 문장의 순서를 확인하세요.'),('검사한 release helper는 void set 호출 형태로도 사용했나요?','그렇습니다. 값 반환 없는 호출을 검사했습니다.','아닙니다. 모든 helper가 __ret 타입 변수만 사용합니다.','release 본문은 지역 결과 변수 없이 마지막 호출 표현식을 사용합니다.')]),
+('Atomic full 보강 매크로·pre·post와 결과 타입 유지','__atomic_op_fence',
+ '__atomic_op_fence는 결과 타입의 __ret를 선언하고 pre full fence, relaxed 연산의 결과 저장, post full fence를 수행한 뒤 __ret를 반환합니다. GNU statement expression은 내부 여러 문장을 하나의 값 표현식으로 연결합니다. 선택 모델은 정수 add와 bool compare의 값 보존·순서 hook을 확인했습니다. CPU 원자성은 기반 primitive가 제공해야 하며 fence 두 개만으로 임의 load+store를 원자 RMW로 만들 수는 없습니다.',
+ '결과의 타입·값과 pre→연산→post 순서를 각각 표시하세요. 값 반환 RMW를 조건식에 넣는 경우 연산 자체와 결과 저장을 분리하여 읽습니다. 모델 hook 순서와 실제 LKMM 실행을 구별합니다.',
+ [('full helper의 연산 결과 저장은 어느 위치인가요?','pre와 post fence 사이입니다.','두 fence를 수행하기 전에만 계산합니다.','본문은 pre→__ret=relaxed→post의 순서입니다.'),('fence 두 개만 붙이면 일반 load와 store가 원자 RMW가 되나요?','아닙니다. 원자성은 기반 RMW primitive가 필요합니다.','맞습니다. 모든 연산 조합이 자동 transaction입니다.','순서 보강과 연산의 분리 불가능한 원자성은 다른 계약입니다.')]),
+('Atomic 내부 보강의 실패·공개 계약과 추가 강도 구별','__atomic_op_acquire',
+ '내부 acquire helper는 relaxed 연산의 bool 결과가 false여도 이어서 fence를 수행합니다. full helper 역시 반환 성공 여부를 검사해 post를 생략하는 분기가 없습니다. 선택 모델의 실패 compare는 expected를 관찰 값으로 바꾸고 fence hook도 실행했습니다. 이는 이 helper의 특정 구현 관찰이며 공개 조건 실패 ordering을 모든 backend에서 acquire·full로 강제한다는 의미가 아닙니다.',
+ '실패 결과와 실제 helper의 추가 동작을 각각 기록하세요. 이식 가능한 코드의 후속 접근은 공개 실패 계약을 기준으로 정합니다. 실행 모델에서 관찰한 추가 강도를 사용하여 다른 backend의 조건 실패까지 추측하지 않습니다.',
+ [('이 acquire helper가 false 결과이면 fence를 생략하나요?','아닙니다. 결과 저장 뒤 무조건 fence입니다.','맞습니다. 성공 검사 후에만 fence를 호출합니다.','본문에는 bool 성공 분기가 없습니다. 공개 실패 계약과 구분해야 합니다.'),('그 관찰을 모든 cmpxchg_acquire 실패의 보장으로 사용할 수 있나요?','아닙니다. 공개 실패 계약을 따릅니다.','맞습니다. 한 helper만 확인하면 모든 arch가 같습니다.','특정 구현의 추가 강도와 모든 backend의 최소 API 계약을 구별합니다.')])
+]
+
+def register(topic,q,detail):
+ for title,symbol,principle,use,qa in ROWS:
+  topic(title,'동기화','include/linux/atomic.h',symbol,
+   '고정 커널 공통 atomic 헤더를 읽어 조건 관찰·순서 helper·결과 보존과 각 backend 계층의 연결 원리를 배웁니다.',principle,use,
+   '포인터·값 인자의 실제 평가, relaxed 결과, fence 순서와 공개 성공·실패 계약을 따로 표시하세요.',
+   *(q(*x) for x in qa),details=[
+    detail('원문 대조','atomic.h 전체를 읽었습니다. 조건 읽기의 정의와 control dependency 설명은 asm-generic/barrier.h 220–274행만 대조했으며 그 파일 전체를 완료로 표시하지 않습니다.'),
+    detail('선택 실행','원문 atomic.h와 barrier.h 245–274행 매크로를 explicit compiler atomic·fence·READ_ONCE·선택 scalar·cpu_relax 모델에 연결했습니다. 기본·override fence의 최적화·ASan·UBSan 네 구성에서 각각 38,000건이 통과했습니다. ordinary 평가 횟수·실패 expected·void release·int/long 조건 반복 검사이며 실제 kernel barrier·producer thread·LKMM·모든 typeof 타입 증명은 아닙니다.')])

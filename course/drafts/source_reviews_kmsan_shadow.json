@@ -1,0 +1,235 @@
+{
+  "mm/kmsan/shadow.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 310,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1744",
+        "symbols": [
+          "page_has_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page 연결·데이터 page 와 두 metadata page. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1745",
+        "symbols": [
+          "set_no_shadow_origin_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN metadata page 자체·재귀 추적 연결 제거. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1746",
+        "symbols": [
+          "kmsan_get_shadow_origin_ptr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN dummy load·store page·상태 간섭 방지. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1747",
+        "symbols": [
+          "kmsan_get_shadow_origin_ptr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN metadata getter·비활성·미추적 fallback. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1748",
+        "symbols": [
+          "vmalloc_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN vmalloc metadata·주소 offset 을 평행 공간으로 이동. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1749",
+        "symbols": [
+          "kmsan_get_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN metadata lookup 우선순위·특수 범위→arch→page. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1750",
+        "symbols": [
+          "virt_to_page_or_null"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN 일반 page metadata·유효 주소와 page offset. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1751",
+        "symbols": [
+          "kmsan_get_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN metadata lookup 의 문맥 독립성·재귀 guard 와 별개. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1752",
+        "symbols": [
+          "kmsan_copy_page_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page copy·전체 shadow 와 origin 의 이동. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1753",
+        "symbols": [
+          "kmsan_copy_page_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page copy·미추적 source 와 initialized 정책. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1754",
+        "symbols": [
+          "kmsan_alloc_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page allocation·ZERO 와 비활성의 초기화 상태. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1755",
+        "symbols": [
+          "kmsan_alloc_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page allocation·runtime 내부 ZERO 의 우선순위. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1756",
+        "symbols": [
+          "kmsan_alloc_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page allocation·poison shadow 와 공유 origin handle. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1757",
+        "symbols": [
+          "kmsan_free_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page free·UAF origin 과 page_size. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1758",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN vmap 준비·두 임시 page 배열과 보호값. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1759",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN vmap 성공·두 mapping 과 TLB·cache 처리. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1760",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN vmap 할당 실패·부분 자원 정리. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1761",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN 고정 vmap 오류 경로·guard 종료가 건너뛰어진다. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1762",
+        "symbols": [
+          "kmsan_init_alloc_meta_for_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN boot metadata 할당·범위 정렬과 두 공간. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      },
+      {
+        "lesson": "os1763",
+        "symbols": [
+          "kmsan_setup_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole original310line shadow.c manually authored20lessons40workedquestions; KMSAN page setup·order 별 연결과 metadata 추적 제외. Page links/helpers/bothrequired/no-meta metadata self pages, separatealigneddummy load/store andperpairshadoworiginpointer, enabled/untrackedfallback/size>PAGE warnsnotclamp, parallelvmalloc/moduleoffset/originalignedwarn, origin4align then special-arch-page lookuppriority/offset/runtimeindependence/nullcontract, pagecopy guard/missingdst/sourceuntracked unpoison policy/wholemetadata memcpy nochain, allocorderpages ZERO/disabled metadata initialized beforeguard/nonZERO runtimebail/FFshadow/sharedhandle, free guard/page_size notformalorder/CHECKFREE, vmap nr2arrays protPAGE_KERNEL/shiftforward/mapping0success/2TLB2cache afterleave/allocationfailENOMEMbeforeenterfree1/mappingerrorgoto ret skipsleave guard1 observed free2 notbalancedcleanup guarantee, bootstartdown/endup2memblock/panic-model/metadata self exclusion, setuporder1<<orderpagearray links. Originalshadow.c and originalcontext/types in finite4alignedpage realmemcpy/memset/callocfree model; twoO2-ASanUBSan builds each21172assertions. Corehelperrecorder andcontiguitytruemodel separate actualcorefixture; numericmetamappingnotdereferenced/archmodel/pagecallback/allocmapfailure injections/paniclongjmp. Noactualpage tables/TLB/cache/allocator/LLVMABI/allorders-addresses-size/hugeaccess proof."
+      }
+    ]
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "include/vdso/time32.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 17,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1092",
+        "symbols": [
+          "old_timespec32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole fixed-layout header read and authored: s32legacyseconds/2038 range, independent ns/us units and no automatic validation, signedsec/unsignedns offset and caller normalization/snapshot contracts. Original declarations and selected cyclic macro/timer-valid helpers tested1250249checks optimized+ASanUBSan on long64. No whole time.h/time32.h implementation claim, native32 ABI/timezone/timensbehavior proof."
+      },
+      {
+        "lesson": "os1093",
+        "symbols": [
+          "old_timeval32"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole fixed-layout header read and authored: s32legacyseconds/2038 range, independent ns/us units and no automatic validation, signedsec/unsignedns offset and caller normalization/snapshot contracts. Original declarations and selected cyclic macro/timer-valid helpers tested1250249checks optimized+ASanUBSan on long64. No whole time.h/time32.h implementation claim, native32 ABI/timezone/timensbehavior proof."
+      }
+    ]
+  },
+  "include/vdso/time.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 12,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1094",
+        "symbols": [
+          "timens_offset"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole fixed-layout header read and authored: s32legacyseconds/2038 range, independent ns/us units and no automatic validation, signedsec/unsignedns offset and caller normalization/snapshot contracts. Original declarations and selected cyclic macro/timer-valid helpers tested1250249checks optimized+ASanUBSan on long64. No whole time.h/time32.h implementation claim, native32 ABI/timezone/timensbehavior proof."
+      }
+    ]
+  }
+}

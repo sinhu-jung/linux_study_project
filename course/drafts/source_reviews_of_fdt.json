@@ -1,0 +1,576 @@
+{
+  "drivers/of/fdt.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 1291,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2507",
+        "symbols": [
+          "of_fdt_limit_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 부팅 메모리 목록 제한·reg entry 크기. root address/size cell 수의 합×4가 한 entry 크기입니다. /memory offset이0보다 크고 reg 길이가 limit×entry보다 크면 같은 property를 짧게 교체합니다. 이 함수는 setter 반환을 확인하지 않으며 limit 정수의 모든 범위·곱셈 overflow를 따로 검사하지 않습니다. address2·size1·limit2면24byte를 계산합니다. 정상 property와 cell 수를 먼저 확인하고 전체 메모리 관리의 물리적 제거가 아니라 DTB reg 자료를 제한하는 단계임을 표시합니다."
+      },
+      {
+        "lesson": "os2508",
+        "symbols": [
+          "of_fdt_device_is_available"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF node 사용 여부·status 문자열. status가 없으면 사용 가능이고 문자열이 ok 또는 okay이면 true입니다. 다른 문자열은 false입니다. DTB 자료를 읽는 정책이며 실제 driver probe의 성공 여부를 의미하지 않습니다. 본문은 status 길이를 받지 않고 strcmp를 사용하므로 정상 종료 문자열 계약을 함께 읽습니다. 실제 fixture의 status 없음/okay/ok/disabled를 비교합니다. 사용 가능 판정과 장치가 실제 작동한다는 판정을 구별하고 malformed 문자열 전체 검증으로 확대하지 않습니다."
+      },
+      {
+        "lesson": "os2509",
+        "symbols": [
+          "unflatten_dt_alloc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten arena·정렬 bump allocation. 현재 cursor를 PTR_ALIGN로 올리고 해당 주소를 반환한 뒤 size만큼 증가합니다. 한 큰 allocation 안에서 node/property를 순서대로 배치하는 bump allocation입니다. 이 helper 자체는 arena 끝이나 정수 wrap·align 유효성을 검사하지 않아 상위 크기 계산과 정상 정렬 계약이 필요합니다. 16가지 시작 위치와1/2/4/8/16 정렬의 실제80조건 검산을 읽습니다. 반환 pointer와 갱신 cursor를 나누어 그리며 임의 align/끝 경계를 검증했다는 의미로 확대하지 않습니다."
+      },
+      {
+        "lesson": "os2510",
+        "symbols": [
+          "populate_properties"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF property 연결 목록·tail pointer로 순서 유지. flat property offset들을 반복해 struct property 공간을 arena에 할당합니다. 실제 pass에서는 pprev를 현재 next 필드 주소로 옮기며 목록 꼬리에 붙입니다. pointer-to-pointer로 빈 목록과 뒤 연결을 같은 대입으로 처리해 flat property 순서를 유지합니다. np->properties→첫 property→next 순서를 그립니다. *pprev=pp와 pprev=&pp->next를 별도로 주석 달고 node의 앞 삽입 방식과 순서가 어떻게 다른지 비교합니다."
+      },
+      {
+        "lesson": "os2511",
+        "symbols": [
+          "populate_properties"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF property 수명·이름과 값은 원본 blob 참조. property 구조체는 새 공간에 만들지만 pp->name과 pp->value는 blob의 문자열/값 pointer를 저장합니다. 전체 property 내용을 깊은 복사하는 구조가 아닙니다. 따라서 unflatten 뒤에도 blob의 해당 bytes 수명과 안정성이 필요하며 뒤 copy/reserve 흐름과 연결됩니다. 새 struct property와 원본 DTB의 name/value를 서로 다른 영역으로 그립니다. DTB를 임의 해제하거나 편집한 뒤 기존 property pointer를 계속 쓰는 위험을 자료 수명 관점에서 설명합니다."
+      },
+      {
+        "lesson": "os2512",
+        "symbols": [
+          "populate_properties"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF phandle 입력 이름·첫 값과 IBM 덮기. phandle 또는 linux,phandle은 np->phandle이0일 때 읽습니다. ibm,phandle은 발견하면 값을 덮어씁니다. 두 일반 이름이 다른 값을 가질 때 원문의 경고를 따르고 정상 일치 계약을 지켜야 합니다. 본문에서 모든 property 길이를 별도 확인한 것은 아닙니다. 세 이름의 처리 분기를 표로 적습니다. 값0 초기상태와 첫 nonzero값 보존을 구별하고 서로 다른 값의 순서 의존을 정상 설정 방식으로 권하지 않습니다."
+      },
+      {
+        "lesson": "os2513",
+        "symbols": [
+          "populate_properties"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 없는 name property·unit name에서 생성. name property가 없으면 nodename에서 마지막 slash 뒤와 @ 앞 부분을 골라 생성합니다. 새 struct property 뒤에 문자열 bytes를 함께 할당하고 NUL을 붙입니다. 기존 property의 blob 참조와 달리 이 보충 문자열은 arena에 저장됩니다. 원문 pointer 비교/연산과 정상 nodename 전제를 그대로 읽습니다. /soc/uart@1000에서 uart를 얻는 범위를 표시합니다. sizeof(property)+문자열길이 allocation과 pp+1 주소를 그리며 이 부분만 실제 payload 복사가 생기는 이유를 설명합니다."
+      },
+      {
+        "lesson": "os2514",
+        "symbols": [
+          "populate_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF device_node 생성·이름과 parent 연결. fdt_get_name의 길이에NUL1을 더해 device_node 뒤 이름 공간을 할당합니다. 실제 pass에서 of_node_init 후 full_name을 뒤 공간으로 정하고 복사합니다. parent가 있으면 parent/child/sibling을 연결하고 나중에 name property pointer를 찾습니다. 이름 실패는 pnp=NULL과 오류 길이를 반환합니다. device_node 바로 뒤의 이름 공간을 그립니다. full_name 복사와 property 값의 빌린 참조를 구별하며 이름 조회 오류에서 output pointer와 return을 함께 확인합니다."
+      },
+      {
+        "lesson": "os2515",
+        "symbols": [
+          "populate_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF child 앞 삽입·빠른 연결과 순서 역전. np->sibling=dad->child 뒤 dad->child=np를 수행해 기존 child 목록 앞에 새 node를 넣습니다. 한 node 연결은 O(1)이지만 flat 순서a,b,c를 처리하면 child 목록c,b,a가 됩니다. 이후 reverse_nodes가 원래 순서를 복원하는 이유입니다. a→b→c 처리 후c→b→a 연결 그림을 그립니다. allocation 순서와 목록 traversal 순서가 다르다는 점을 표시하고 뒤 reversal의 자료구조 원리를 연결합니다."
+      },
+      {
+        "lesson": "os2516",
+        "symbols": [
+          "reverse_nodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF child 목록 역전·재귀와 저장한 next. 먼저 각 child subtree를 재귀 처리한 뒤 parent의 child 목록을 뒤집습니다. 현재 child의 next를 저장하고 sibling을 새 head로 바꾼 뒤 저장한 next로 전진합니다. node bytes나 payload를 복사하지 않고 pointer 연결만 바꾸며 실제 fixture에서 두 깊이의 순서를 확인했습니다. c,b,a와 a의 y,x를 각각a,b,c와x,y로 바꾸는 검산을 읽습니다. next 저장 없이 sibling을 바꾸면 남은 목록을 잃는 이유와 재귀 깊이 전제를 설명합니다."
+      },
+      {
+        "lesson": "os2517",
+        "symbols": [
+          "unflatten_dt_nodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten 순회·깊이별 parent 배열. nps[depth]에 현재 깊이의 parent를 두고 만든 node를 nps[depth+1]로 받습니다. fdt_next_node의 flat depth 결과를 parent 배열에 연결해 tree pointer 구조를 만듭니다. FDT_MAX_DEPTH64에서 depth>=63이면 경고 후 건너뛰며 임의 깊이의 tree를 지원한다고 설명하지 않습니다. root0·child1·grandchild2와 nps index를 표로 적습니다. flat offset과 새 device_node pointer는 서로 다른 공간임을 표시하고63 guard와 배열64의 관계를 계산합니다."
+      },
+      {
+        "lesson": "os2518",
+        "symbols": [
+          "unflatten_dt_nodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten dryrun·할당 크기 계산 pass. mem이NULL이면 dryrun으로 node/property 할당 크기와 정렬 이동을 계산하고 실제 field 작성은 생략합니다. 같은 순회를 실제 pass에서 다시 수행하는 두 pass 전략입니다. dryrun의 cursor 계산은 커널 C 구현 관례에 따른 것이며 표준 userspace C의 모든 pointer 연산 증명으로 취급하지 않습니다. 크기 계산→한 큰 공간 할당→실제 연결의 흐름을 그립니다. 두 pass 사이 blob을 변경하면 계산 결과와 필요한 공간이 어긋날 수 있는 조건을 적습니다."
+      },
+      {
+        "lesson": "os2519",
+        "symbols": [
+          "unflatten_dt_nodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten subtree·시작 depth와 사용 정책. dad가 있으면 initial_depth=depth=1로 시작해 같은 수준의 여러 node를 처리합니다. CONFIG_OF_KOBJ가 꺼지고 status가 사용 불가하면 해당 node를 건너뜁니다. 이 본문을 모든 malformed tree와 disabled subtree의 일관성 검증기로 해석하지 않고 배열·순회·설정 전제를 함께 읽습니다. 전체 root 생성과 기존 parent 아래 subtree 붙이기를 비교합니다. nodepp는 첫 실제 생성 node를 받으며 traversal 오류가 NOTFOUND가 아니면 EINVAL로 바꾸는 경로도 표시합니다."
+      },
+      {
+        "lesson": "os2520",
+        "symbols": [
+          "__unflatten_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten 전체 준비·header와 두 pass. NULL blob/header 실패이면NULL입니다. dryrun 크기가 양수면4정렬로 올리고 size+4를 allocator에 요청합니다. 본문 공간을0으로 채운 뒤 끝에 big-endian deadbeef marker를 넣고 실제 pass를 실행합니다. header 검사만으로 전체 tree의 모든 의미를 인증하지 않습니다. 필요size100이면marker4를 포함104 요청을 계산합니다. node 정렬 인자, zero initialization과 출력mynodes 초기NULL을 읽으며 selected fixture가 이 전체 함수를 실행한 것은 아님을 구별합니다."
+      },
+      {
+        "lesson": "os2521",
+        "symbols": [
+          "__unflatten_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten 끝 marker·경고와 오류 처리. 실제 pass 뒤 marker가 바뀌면 경고합니다. marker가 손상됐다는 조건만으로 즉시NULL을 반환하는 분기는 아니며 ret<=0일 때NULL입니다. 이 marker는 모든 임의 메모리 쓰기를 막는 bounds guard가 아니라 예상 끝을 관찰하는 검사입니다. 실패 allocation의 전체 해제를 이 함수가 수행하지 않습니다. marker 경고 조건과 ret 실패 조건을 다른 가지로 그립니다. 검출·예방·복구가 서로 다른 동작임을 주석으로 적고 allocator 소유권/수명 계약을 함께 확인합니다."
+      },
+      {
+        "lesson": "os2522",
+        "symbols": [
+          "__unflatten_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF unflatten detached·root flag와 반환 공간. detached가true이고 mynodes와첫node가 있으면 그 node에 OF_DETACHED flag를 설정합니다. 성공 반환은 하나의 expanded tree allocation 주소이며 device_node output과 구별합니다. detached flag만으로 tree가 전역 live tree에 자동 등록되는 것은 아닙니다. mem 반환과 *mynodes의node pointer를 별도 화살표로 그립니다. detached 자료를 다루는 caller는 이후 attach/changeset 절차와 소유권을 다른 함수에서 확인합니다."
+      },
+      {
+        "lesson": "os2523",
+        "symbols": [
+          "kernel_tree_alloc"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 런타임 tree 할당·kzalloc 제공자. size와align을 받는 allocator callback 형식이지만 이 구현은 kzalloc(size,GFP_KERNEL)을 반환합니다. align 인자를 직접 사용하지 않습니다. 초기 memblock allocator와 런타임 heap allocator가 같은 상위 두 pass 함수에 다른 callback으로 연결됩니다. callback interface와 실제 인자 사용을 따로 표시합니다. heap allocation이 실패하면NULL이며 독립 fixture는 이 kzalloc/provider를 실행하지 않았다는 범위를 기록합니다."
+      },
+      {
+        "lesson": "os2524",
+        "symbols": [
+          "of_fdt_unflatten_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF tree 확장 mutex·직렬화 wrapper. 정적 mutex를 잡고 __unflatten_device_tree에 kernel_tree_alloc과 detached=true를 전달한 뒤 unlock합니다. 동일 wrapper 호출을 직렬화하는 동기화입니다. mutex만으로 외부 blob의 모든 임의 수정이나 caller의 lifetime까지 해결하지 않습니다. lock→전체unflatten→unlock→mem 반환을 그립니다. critical section의 경계와 allocator,detached 인자를 표시하며 실제 mutex 경합 실행은 별도로 검증해야 합니다."
+      },
+      {
+        "lesson": "os2525",
+        "symbols": [
+          "fdt_reserve_elfcorehdr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF crash dump elfcorehdr·예약 중복 검사. CRASH_DUMP가 켜지고 elfcorehdr_size가 있을 때 기존 예약 여부를 검사합니다. 이미 예약된 region이면 경고하고 끝내며 나머지는 memblock_reserve합니다. crash capture kernel이 이전 kernel의 core 정보를 읽을 영역을 일반 allocation과 구별하는 단계입니다. 예약없음/기예약/설정꺼짐/size0의 분기를 적습니다. overlap 정책과 memblock 반환값의 실제 처리 범위를 확인하며 전체 crash dump 기능 실행으로 확대하지 않습니다."
+      },
+      {
+        "lesson": "os2526",
+        "symbols": [
+          "early_init_fdt_scan_reserved_mem"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 예약 메모리 순서·노드와 header memreserve. boot blob이 있으면 reserved-memory scan→elfcorehdr reserve→header reserve entries→reserved-memory 초기화 순서입니다. header entries는 size0을 끝으로 사용하고각base/size를memblock_reserve합니다. 이 본문은 fdt_get_mem_rsv 반환을 별도 검사하지 않아 정상 reserve 표 계약을 읽어야 합니다. reserved-memory node와 header memreserve를 서로 다른 자료로 그립니다. 각각의 등록/초기화 순서와0size 종료 조건을 표시하고 malformed reserve table을 실제 fixture로 검증한 것은 아님을 적습니다."
+      },
+      {
+        "lesson": "os2527",
+        "symbols": [
+          "early_init_fdt_reserve_self"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF DTB 자체 예약·원본 참조의 수명. initial_boot_params가 있으면 물리 주소__pa와fdt_totalsize 길이를memblock_reserve에 전달합니다. 부팅 blob 공간이 일반 allocator에 재사용되지 않게 예약하는 단계입니다. __pa 변환과 실제 메모리 소유권은 architecture·부팅 준비의 계약에 의존합니다. DTB bytes를 참조하는 property pointer와 해당물리region 예약을 연결합니다. 이미 예약된 blob을 쓰는 경우와 init sectionblob을copy하는 경우를 뒤 unflatten_and_copy에서 비교합니다."
+      },
+      {
+        "lesson": "os2528",
+        "symbols": [
+          "of_scan_flat_dt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF flat 전체 scan·callback과 조기 종료. blob이 없으면0입니다. fdt_next_node를offset-1/depth-1에서 시작해 root와하위를 순회하고 callback에offset/name/depth/data를 전달합니다. callback의nonzero rc면반복을 끝내고그값을 반환합니다. traversal 오류 자체를 모든 경우 caller에게 전파하는 wrapper는 아닙니다. 실제4node fixture의depth0,1,1,2와두번째callback에서7로끝나는검산을 읽습니다. callbackcontext data와 전역bootblob을 구별하고 iterator 종료와 callback 반환을 별도로 표시합니다."
+      },
+      {
+        "lesson": "os2529",
+        "symbols": [
+          "of_scan_flat_dt_subnodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF flat 직계 child scan·깊은 후손과 구별. fdt_for_each_subnode로parent의직계child만 방문합니다. 각name과offset을callback에전달하고nonzero면즉시반환하며끝은0입니다. 전체tree깊이scan과달라grandchild는parentroot의직계child횟수에포함되지않습니다. 실제root의a/b2개와nested후손을비교합니다. callback9의첫child종료와전체2회검산을읽고 iterator의모든malformed오류전파를증명했다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2530",
+        "symbols": [
+          "of_get_flat_dt_prop"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF flat 조회 wrapper·offset와원본pointer. of_get_flat_dt_prop는initial_boot_params의fdt_getprop에위임합니다. 같은영역의subnode조회는fdt_subnode_offset,root는상수0,phandle는fdt_get_phandle입니다. flat offset은struct device_node pointer가아니고 property는원본blobpointer/길이결과입니다. 실제model property14byte와phandle123/subnode부재검산을읽습니다. 반환pointer와size out,error정책을libfdt계약에연결하고 아직unflatten되지않은flat자료를다루는API임을표시합니다."
+      },
+      {
+        "lesson": "os2531",
+        "symbols": [
+          "of_fdt_is_compatible"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF compatible 우선순위·문자열 목록의1기반 점수. compatible NUL목록을앞부터읽고첫match의1기반score를반환합니다.없거나불일치는0이며작은양수가더구체적인앞순위입니다. strlen으로다음문자열로가므로정상종료목록계약이필요하며임의malformed자료안전성을이본문이보장하지않습니다. specific,generic목록의점수1/2와부재0을실제검산합니다. libfdt fdt_node_check_compatible의0match계약과이OFscore의nonzero match를서로혼동하지않습니다."
+      },
+      {
+        "lesson": "os2532",
+        "symbols": [
+          "of_flat_dt_match"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF machine table match·최소 양수와 동점. table의호환문자열마다OFscore를구하고0이아닌최소값을선택합니다. tableNULL이면0입니다. 상위of_flat_dt_match_machine은callback의각table을검사해strictlysmaller일때best를바꿔동점이면먼저선택한결과를유지하고기본값을fallback으로씁니다. tablegeneric2와specific1/동점specific1에서두번째table선택후세번째동점이덮지않는실제검산을읽습니다. 이름hash검색이아니라목록과table의반복탐색비용을설명합니다."
+      },
+      {
+        "lesson": "os2533",
+        "symbols": [
+          "of_flat_dt_get_machine_name"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF machine 이름·model과 compatible fallback. root의model을조회하고없으면compatible을조회합니다. compatible이목록이어도반환은해당bytespointer로출력시첫문자열입니다. 상위machine선택의best_data가없으면compatible목록을오류로출력하고NULL을반환합니다. 자료존재와machine지원성은별도입니다. fixture model 문자열과model부재fallback을원문에서대조합니다. get_machine_name의pointer결과와match_machine의machine정보pointer결과를다른종류로표시합니다."
+      },
+      {
+        "lesson": "os2534",
+        "symbols": [
+          "__early_init_dt_declare_initrd"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF initrd 가상주소·architecture 조건. ARM64와64bitRISCV에서는이earlyhelper가__va를설정하지않습니다. 다른조건에서는initrd_start/end에가상변환을넣고below_start_ok를1로합니다. 일부platform에서너무이른__va대신phys_initrd정보를사용하도록분리한기술입니다. ARM64/RISCV64/다른architecture분기를표로만들고물리정보설정은상위check_for_initrd에서따로수행됨을표시합니다. 이선택함수fixture가실제earlyVA변환을실행한것은아닙니다."
+      },
+      {
+        "lesson": "os2535",
+        "symbols": [
+          "early_init_dt_check_for_initrd"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF initrd 범위·start/end와size. BLK_DEV_INITRD가켜지고start/end둘다있으면of_read_number로len/4cells를읽습니다. start>end는반환하고정상은phys_start=start,size=end-start입니다. 같은start/end는size0이며본문은모든property폭·len%4·지원address범위를독립검사하지않습니다. start0x1000/end0x3000의size0x2000과역순거부를계산합니다. end가exclusive끝이라는길이산식과정상cell자료전제를적고임의malformedinitrd검증으로확대하지않습니다."
+      },
+      {
+        "lesson": "os2536",
+        "symbols": [
+          "early_init_dt_check_for_elfcorehdr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF elfcorehdr cell읽기·길이guard의실제단위. CRASH_DUMP에서linux,elfcorehdr를읽고address/sizecells로두값을소비합니다. 실제guard는byte len을cells합과비교하며4배byte요구량을명시비교하지않습니다. 원문의단위차이를정확히읽고정상property계약을유지해야합니다. 선택fixture는이함수를실행하지않습니다. addr2·size1이면읽을bytes12를계산하고원문의len<3검사와구별합니다. 설명에서guard를임의로len<12라고고쳐쓰거나모든짧은자료가안전하다고판정하지않습니다."
+      },
+      {
+        "lesson": "os2537",
+        "symbols": [
+          "early_init_dt_check_for_usable_mem_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF usable-memory-range·최대2개와cap/add. chosen offset이음수면반환합니다. linux,usable-memory-range에서최대2개base/size를읽고첫range로memblock_cap_memory_range후두번째nonzero를add합니다. len modulus도cells합을사용해byte/cell단위와완전entry경계검사를같다고설명하지않습니다. high/low두range와첫cap뒤추가등록순서를그립니다. MAX_USABLE_RANGES2와낮은range를마지막에두는호환성주석을읽고property부재와0size조건을구별합니다."
+      },
+      {
+        "lesson": "os2538",
+        "symbols": [
+          "early_init_dt_scan_chosen_stdout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF early stdout 경로·alias와colon options. chosen또는chosen@0에서stdout-path,없으면linux,stdout-path를찾습니다. 첫colon앞길이로nodepath를조회하고뒤문자열을options로둡니다. 원본문자열을split하여수정하지않고길이제한path조회에전달해alias지원libfdt와연결합니다. serial0:115200n8을path/options로나눕니다. chosen부재/속성부재는ENOENT지만지정node조회실패는경고뒤0인서로다른반환정책을원문에서표시합니다."
+      },
+      {
+        "lesson": "os2539",
+        "symbols": [
+          "early_init_dt_scan_chosen_stdout"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF early console 선택·compatible table와EALREADY. earlycon table을순회해빈compatible을넘기고nodecompatible이match한entry만setup합니다. setup0또는EALREADY는0성공으로끝내고나머지는다음entry를시도합니다. 끝까지성공이없으면ENODEV이며실제UARTdriver동작은이source설명만으로실행증명하지않습니다. entry호환성검사→setup→0/EALREADY정책을표로적습니다. libfdtcompatible0match와setup0success가각각어느호출의반환인지표시합니다."
+      },
+      {
+        "lesson": "os2540",
+        "symbols": [
+          "early_init_dt_scan_root"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF root cell 기본값·big-endian설정 읽기. root경로를못찾으면ENODEV입니다. 먼저rootaddress/sizecell기본값을넣고해당property가있으면be32_to_cpup으로덮습니다. 이본문은property길이와지원cell수의전범위를따로검사하지않으며이값을후속memoryparser가사용합니다. 기본값과propertyoverride의순서를그립니다. addresscell2/sizecell1이regentry12byte에연결되는계산과정상BE32property전제를적습니다."
+      },
+      {
+        "lesson": "os2541",
+        "symbols": [
+          "dt_mem_next_cell"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF cell cursor·누적숫자와pointer증가. 현재cellpointer를저장하고callerpointer를s만큼옮긴뒤of_read_number(p,s)를반환합니다. pointer-to-pointer로주소/길이쌍의순차파싱상태를갱신합니다. 입력폭·배열끝·값표현범위는caller와of_read_number계약에의존합니다. 실제[1,2,3]에서s2는0x100000002/cursor+2,다음s1은3/+3검산을읽습니다. pointer변경과값decode의두효과를다르게표시합니다."
+      },
+      {
+        "lesson": "os2542",
+        "symbols": [
+          "early_init_dt_scan_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF memory node 선택·직계child와status. root직계child중device_type이memory인사용가능node만선택합니다. linux,usable-memory를먼저읽고없으면reg를쓰며둘다없으면넘깁니다. hotpluggable은property존재로표현됩니다. 이름만memory인모든node를무조건등록하는구현이아닙니다. device_type/status/reg우선순위를조건표로적습니다. 앞statushelper와flatproperty조회의호출관계를연결하고이실행fixture가전체memoryscan을실행하지않았다고표시합니다."
+      },
+      {
+        "lesson": "os2543",
+        "symbols": [
+          "early_init_dt_scan_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF memory reg 반복·완전entry와hotplug표시. 남은cell수가address+size합이상일때base/size를읽습니다. size0은넘기고archadd를호출한뒤found_memory=1입니다. hotpluggable이면mark_hotplug를시도하고실패는경고합니다. found_memory1이하위archadd의실제등록성공을독립확인한결과는아닙니다. addr2size1에서3cell단위소비와남은2cell의반복종료를계산합니다. archadd의void반환과found대입,hotplug표시실패를다른결과로표시합니다."
+      },
+      {
+        "lesson": "os2544",
+        "symbols": [
+          "early_init_dt_scan_chosen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF chosen 처리·없는node도cmdline설정 적용. chosen부재면chosen@0을찾고그마저없으면handle_cmdline으로갑니다. node가있으면offset을저장하고initrd/elfcorehdr를읽습니다. 없는chosen이곧함수오류반환이아니며설정commandlinefallback은계속처리하고반환0입니다. node없음/있음의경로를그립니다. chosen_node_offset이초기NOTFOUNDunsigned표현이라는점과usable-range의signed검사를연결하고C의goto분기원리를표시합니다."
+      },
+      {
+        "lesson": "os2545",
+        "symbols": [
+          "early_init_dt_scan_chosen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF boot randomness·seed NOP와CRC갱신. rng-seed가양수길이면bootloader randomness에넣고원본property를NOP로지우려시도합니다. 그뒤blobCRC를갱신합니다. NOP반환을검사하지않으며seedbytes의암호학적완전삭제를보장하는memzero코드라고설명하지않습니다. 전달→NOP시도→CRC재계산순서를적습니다. 앞libfdtNOP가token을바꾸는원리를연결하고CRC는변경확인checksum이지서명인증이아님을표시합니다."
+      },
+      {
+        "lesson": "os2546",
+        "symbols": [
+          "early_init_dt_scan_chosen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF commandline 정책·extend force default. bootargs가있으면min(propertylen,COMMAND_LINE_SIZE)로strscpy합니다. 설정에서는EXTEND가먼저검사되어공백과built-incmdline을붙이고,그다음FORCE는덮어씁니다. 둘다아니면현재cmdline이빈경우만default를넣습니다. 길이제한복사/연결과정책의선택순서를함께읽습니다. loader=\"a\"/built-in=\"b\"에서extend=\"a b\",force=\"b\",default=\"a\"를예측합니다. 빈loaderdefault=\"b\"와설정분기의우선순위를표시합니다."
+      },
+      {
+        "lesson": "os2547",
+        "symbols": [
+          "early_init_dt_add_memory_arch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 물리메모리 page정렬·앞부분잘라내기. 범위가다음page경계까지길이보다작으면버립니다. base가unaligned이면그앞bytes를size에서빼고base를올린뒤size를PAGE_MASK로내립니다. 작은정상범위에서page단위등록할완전영역을골라내는기술이며모든u64overflowguard를이본문이제공하지않습니다. page4096에서base0x2001/size0x2fff가base0x3000/size0x2000인실제검산을읽습니다. provider는memblock호출기록만수행하며실제물리메모리를등록하지않습니다."
+      },
+      {
+        "lesson": "os2548",
+        "symbols": [
+          "early_init_dt_add_memory_arch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF 물리메모리 제한·최대끝과최소offset. base가MAX를넘으면버리고끝base+size-1이MAX를넘으면줄입니다. 최소phys_offset보다전범위이면버리고일부겹치면앞을자른뒤memblock_add합니다. architecture가__weak구현을교체할수있으며선택provider는MIN0x2000/MAX0xffff의정상범위를검산했습니다. base0xf000/size0x4000이size0x1000으로줄고base0x1000/size0x4000이base0x2000/size0x3000이되는검산을읽습니다. base+sizewrap과모든platform정책을증명했다고확대하지않습니다."
+      },
+      {
+        "lesson": "os2549",
+        "symbols": [
+          "early_init_dt_alloc_memory_arch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF early tree allocation·memblock와panic. memblock_alloc(size,align)으로초기공간을얻고실패하면panic합니다. 런타임kzalloccallback과같은형식이지만부팅초기allocator와실패정책이다릅니다. 이단계가실제pageallocator나모든heap할당을대체하는함수는아닙니다. 초기memblockcallback과kernel_tree_alloc의NULL반환을두열로비교합니다. boot필수자료할당실패가다른제어흐름으로이어지는이유를원문에서적습니다."
+      },
+      {
+        "lesson": "os2550",
+        "symbols": [
+          "early_init_dt_verify"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF boot DTB verify·CRC와root cell준비. paramsNULL/header실패는false입니다. 정상은전역initial_boot_params를설정하고CRC32_BE(~0,blob,total)를저장한뒤rootcellscan을호출하고true입니다. rootscan의반환을별도검사하지않으므로true가모든후속설정의성공보증은아닙니다. 입력확인→전역pointer→CRC→rootinfo순서를그립니다. 전역__ro_after_init과__init/__initdata의부팅수명속성을연결하며CRC를암호인증으로설명하지않습니다."
+      },
+      {
+        "lesson": "os2551",
+        "symbols": [
+          "early_init_dt_scan_nodes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF boot scan 순서·chosen memory usable. chosen에서cmdline/initrd등을읽은뒤memory를scan하고usable-range를적용합니다. early_init_dt_scan은verify실패면false,성공이면이scan을호출하고true입니다. scan_nodes는전체하위단계의오류를bool로모아전파하는구조가아닙니다. verify→chosen→memory→usable범위를시간순서로그립니다. usable제한전에memory등록이이루어지는이유와반환정책의실제범위를주석달아봅니다."
+      },
+      {
+        "lesson": "os2552",
+        "symbols": [
+          "copy_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF DTB copy·totalbytes와정렬할당. fdt_totalsize만큼earlyallocator에서공간을얻고roundup_pow_of_two(FDT_V17_SIZE)정렬을요청해bytes를복사합니다. 별도DTB복사본의수명을유지하는기술입니다. header검증과size유효성은이helper안에서다시모두검사하는것이아닙니다. FDT_V17_SIZE40의power-of-two정렬64를계산합니다. flatblob복사와unflattenexpandedtree작성의두공간을그리며원본참조수명조건을연결합니다."
+      },
+      {
+        "lesson": "os2553",
+        "symbols": [
+          "unflatten_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF boot unflatten·ACPI와빈rootfallback. ACPI가켜져있으면bootloaderDTB를사용하지않고NULL로선택합니다. blob이없으면built-inemptyroot를사용하되header총길이가linkerstart/end범위를넘으면끝냅니다. 정상emptyroot는CRC를계산하고copy한뒤expandedtree를만듭니다. ACPI켜짐/DTB없음/정상bootDTB의선택표를만듭니다. __dtb_empty_root_begin/end가빌드시생기는기호임을읽고실제ACPI초기화실행을검증했다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2554",
+        "symbols": [
+          "unflatten_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF boot root와aliases·unflatten후단계. __unflatten_device_tree에of_root output과earlyallocator/detachedfalse를전달합니다. 뒤of_alias_scan이chosen/aliases등을준비하고unittest_unflatten_overlay_base를호출합니다. 이함수는unflatten반환을모든뒤단계에앞서별도guard로검사하지않습니다. of_root pointer생성→alias준비→unittesthook의순서를그립니다. blob의alias문자열조회와expandedtreealias관리의층을나누고모든실패rollback이있다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2555",
+        "symbols": [
+          "unflatten_and_copy_device_tree"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF copy뒤unflatten·initsectionblob수명. bootpointer가있으면먼저copy해initial_boot_params를바꾸고unflatten_device_tree를호출합니다. 주석은DTB가initsection에있어아직예약되지않은경우이방식을사용하고이미예약된DTB는일반unflatten을권합니다. property의원본참조수명과직접연결된사용조건입니다. initsection원본→지속공간copy→전역pointer→expandedproperty참조를그립니다. 이미예약된자료와copy가필요한자료를구별하고무조건모든DTB를복사해야한다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2556",
+        "symbols": [
+          "of_fdt_raw_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw FDT sysfs읽기·offset와count계약. initial_boot_params+off에서count를buf로memcpy하고count를반환합니다. 이callback본문은off/countbounds를직접다시검사하지않으며binattribute의크기와sysfs호출계약에의존합니다. 파일interface와원본blobpointer를연결하는기술입니다. off16/count8의읽을byte구간을그립니다. 이callback을sysfs밖에서임의인자로호출해도안전하다는설명으로확대하지않고상위interface계약을확인합니다."
+      },
+      {
+        "lesson": "os2557",
+        "symbols": [
+          "of_fdt_raw_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw FDT 공개 조건·CRC와root읽기권한. CONFIG_SYSFS에서bootblob이있고현재CRC가기록값과같을때만firmwarebinfile을만듭니다. attribute길이는fdt_totalsize,mode는S_IRUSR,writecallback은NULL입니다. mismatch면경고후0이며초기CRC가있다는것이암호학적무결성인증은아닙니다. blob없음/CRC불일치/일치의분기와읽기전용attribute를표로적습니다. late_initcall단계,rawreadcallback,변경후CRC정책을연결하고실제sysfsmount를fixture로검증했다고설명하지않습니다."
+      }
+    ]
+  }
+}

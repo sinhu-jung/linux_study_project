@@ -1,0 +1,404 @@
+{
+  "include/linux/kmsan_types.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 37,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1711",
+        "symbols": [
+          "kmsan_context_state"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN compiler ABI·인자와 반환 metadata 저장 공간. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1712",
+        "symbols": [
+          "kmsan_ctx"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 실행 문맥·cstate와 런타임 재귀 상태. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      }
+    ]
+  },
+  "mm/kmsan/kmsan.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 188,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1713",
+        "symbols": [
+          "shadow_origin_ptr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN shadow·origin pointer 쌍과 4byte granularity. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1714",
+        "symbols": [
+          "kmsan_get_context"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 문맥 선택·task와 interrupt per-CPU. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1715",
+        "symbols": [
+          "kmsan_in_runtime"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 재귀 방지·hook가 자신을 다시 부르는 경우. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1716",
+        "symbols": [
+          "kmsan_enter_runtime"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN runtime 진입·후위 증가와 종료 균형. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1717",
+        "symbols": [
+          "kmsan_extra_bits"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin extra bits·depth와 UAF 압축. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1718",
+        "symbols": [
+          "kmsan_internal_is_module_addr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 비계측 주소 분류·반열린 module·vmalloc 범위. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1719",
+        "symbols": [
+          "kmsan_report"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN report 계약·연속 구간과 reason. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1740",
+        "symbols": [
+          "kmsan_print_origin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin 종류·alloca와 chain magic. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1741",
+        "symbols": [
+          "kmsan_get_shadow_origin_ptr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata 반환 API·store와 dummy 경로 계약. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1742",
+        "symbols": [
+          "kmsan_setup_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN page metadata 연결·order와 초기 할당 선언. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1743",
+        "symbols": [
+          "kmsan_internal_unpoison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN internal 함수 계약·비수면 작업과 재귀 검사. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      }
+    ]
+  },
+  "mm/kmsan/core.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 394,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1720",
+        "symbols": [
+          "kmsan_internal_task_create"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN task 생성·문맥 zero와 thread 정보 annotation. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1721",
+        "symbols": [
+          "kmsan_internal_poison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN poison 구현·shadow FF와 origin 저장. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1722",
+        "symbols": [
+          "kmsan_internal_unpoison_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN unpoison 구현·zero shadow와 zero origin 요청. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1723",
+        "symbols": [
+          "kmsan_save_stack_with_flags"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN stack 저장·reclaim flag 제거와 비수면. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1724",
+        "symbols": [
+          "kmsan_internal_memmove_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata memmove·source와 destination 추적 유무. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1725",
+        "symbols": [
+          "kmsan_internal_memmove_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata memmove 방향·겹치는 구간 보존. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1726",
+        "symbols": [
+          "kmsan_internal_memmove_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata memmove·주소 offset과 origin index. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1727",
+        "symbols": [
+          "kmsan_internal_memmove_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin 연결 cache·연속 같은 원인의 재사용. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1728",
+        "symbols": [
+          "kmsan_internal_chain_origin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin chain·최대7과 반복 padding 원인. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1729",
+        "symbols": [
+          "kmsan_internal_chain_origin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin chain 표현·magic·현재 stack·이전 handle. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1730",
+        "symbols": [
+          "kmsan_internal_set_shadow_origin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN shadow 설정·추적하지 않는 범위와 checked. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1731",
+        "symbols": [
+          "kmsan_internal_set_shadow_origin"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN origin 설정·정렬 확대와 부분 그룹. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1732",
+        "symbols": [
+          "kmsan_vmalloc_to_page_or_null"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN vmalloc page 조회·주소 분류와 pfn 유효성. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1733",
+        "symbols": [
+          "kmsan_internal_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 범위 검사·페이지 경계에서 chunk 분할. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1734",
+        "symbols": [
+          "kmsan_internal_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 보고 그룹·clean byte에서 끊기는 run. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1735",
+        "symbols": [
+          "kmsan_internal_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 보고 그룹·origin 변경과 마지막 flush. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1736",
+        "symbols": [
+          "kmsan_internal_check_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 미추적 페이지·이전 run 보고와 상태 초기화. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1737",
+        "symbols": [
+          "kmsan_metadata_is_contiguous"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata 연속성·data 간격과 shadow·origin 간격. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1738",
+        "symbols": [
+          "kmsan_metadata_is_contiguous"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN metadata 연속성·모두 미추적과 혼합 mapping. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      },
+      {
+        "lesson": "os1739",
+        "symbols": [
+          "kmsan_metadata_is_contiguous"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole3original KMSAN types/context/core files manually authored33lessons66workedquestions; lesson KMSAN 연속성 helper의 반복 범위·짧은 경계 접근. LLVM ABI800byte arrays/context state vs guard/depth, shadow/origin pair and4bytegrains, task/percpu selection IRQ>1/NMI/reentrance/postincrement/predcrement warn balance, depth/UAFbits helper notclamp and address halfopen noninstrumented classification, report groups/reasons, taskctx zero vs current_thread_info metadata, poisonFFshadow/stack origin/freeUAFchecked and unpoison zero withgroup-preserve, save_stack64/reclaimflags strip/no-sleep, memmove dstuntracked return/srcuntracked initialized policy/backwardoverlap/mod4origindex/alignedshadowword/prevoldnew cache/chainfailurefallback, chain0/depth==7 cap/paddingcost/3magic-stack-prev entries/localunpoison, setshadow checkednull/size shadow vsorigin alignedpad and selectedalignedstart only, vmalloc/module classification andpfn, checkmemory pagechunk/min/clean-origin runs/finalflush/untracked reset/report guard/origin0sentinel, contiguous0/samepage/curaddr+PAGE loop andactualpartialcrosspage noiteration/notarbitrary correctness proof/alluntracked vs mixed mapping. Original3source bodies compile/run atO2+ASanUBSan each31831 assertions finite samealigneddata-shadow-origin arena/context/IRQ/NMI/stackdepot/report models. libc memmove shadow oracle source-dst0..23 sizes0..23; selectedorigin caching/fallback/depth/poison/unpoison/report boundaries/pointermapping. Noactual kernel mapping allocator/compiler ABIcalls/depotdedup/IRQ/NMI/task creation/informationleak reporting/allunaligned orhuge-input proof. shadow.c82..117,124..149,301..310 andreport.c99..123 crossread only, notwhole records."
+      }
+    ]
+  }
+}

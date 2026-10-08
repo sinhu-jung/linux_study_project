@@ -1,0 +1,366 @@
+{
+  "draft_lessons": 36,
+  "questions": 72,
+  "anchors": [
+    {
+      "planned_lesson": "os2057",
+      "title": "PAC 地址 bit 위치·user와 kernel mask",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 17,
+        "end": 42,
+        "anchor": "ptrauth_user_pac_mask"
+      }
+    },
+    {
+      "planned_lesson": "os2058",
+      "title": "PAC key 자료구조·128bit를 lo와 hi로 분리",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 28,
+        "end": 53,
+        "anchor": "ptrauth_key"
+      }
+    },
+    {
+      "planned_lesson": "os2059",
+      "title": "PAC user의 다섯 key·instruction data generic 분리",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 36,
+        "end": 61,
+        "anchor": "ptrauth_keys_user"
+      }
+    },
+    {
+      "planned_lesson": "os2060",
+      "title": "PAC kernel key·APIA 한 개와 설정 조건",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 53,
+        "end": 78,
+        "anchor": "ptrauth_keys_kernel"
+      }
+    },
+    {
+      "planned_lesson": "os2061",
+      "title": "PAC key 설치 매크로·값 복사와 두 register 쓰기",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 44,
+        "end": 69,
+        "anchor": "__ptrauth_key_install_nosync"
+      }
+    },
+    {
+      "planned_lesson": "os2062",
+      "title": "PAC kernel key 초기화·address 지원과 RNG 요청",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 57,
+        "end": 82,
+        "anchor": "ptrauth_keys_init_kernel"
+      }
+    },
+    {
+      "planned_lesson": "os2063",
+      "title": "PAC kernel key switch·지원 검사와 ISB 위치",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 63,
+        "end": 88,
+        "anchor": "ptrauth_keys_switch_kernel"
+      }
+    },
+    {
+      "planned_lesson": "os2064",
+      "title": "PAC user 설치·APIB APDA APDB와 generic APGA",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 74,
+        "end": 99,
+        "anchor": "ptrauth_keys_install_user"
+      }
+    },
+    {
+      "planned_lesson": "os2065",
+      "title": "PAC user 초기화·capability별 key 생성 후 설치",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 86,
+        "end": 111,
+        "anchor": "ptrauth_keys_init_user"
+      }
+    },
+    {
+      "planned_lesson": "os2066",
+      "title": "PAC 활성화·SCTLR 네 address enable bit와 ISB",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 107,
+        "end": 132,
+        "anchor": "ptrauth_enable"
+      }
+    },
+    {
+      "planned_lesson": "os2067",
+      "title": "PAC thread 초기화·user key와 enabled 상태 연결",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 119,
+        "end": 144,
+        "anchor": "ptrauth_thread_init_user"
+      }
+    },
+    {
+      "planned_lesson": "os2068",
+      "title": "PAC suspend와 thread switch·기존 user key 재설치",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 116,
+        "end": 141,
+        "anchor": "ptrauth_suspend_exit"
+      }
+    },
+    {
+      "planned_lesson": "os2069",
+      "title": "PAC 비활성 매크로·EINVAL과 인자 평가 없음",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 101,
+        "end": 126,
+        "anchor": "ptrauth_prctl_reset_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2070",
+      "title": "PAC kernel thread 매크로·init switch와 빈 fallback",
+      "path": "arch/arm64/include/asm/pointer_auth.h",
+      "excerpt": {
+        "start": 144,
+        "end": 153,
+        "anchor": "ptrauth_thread_init_kernel"
+      }
+    },
+    {
+      "planned_lesson": "os2071",
+      "title": "PAC reset API·capability와 compat 거절",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 11,
+        "end": 36,
+        "anchor": "ptrauth_prctl_reset_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2072",
+      "title": "PAC reset mask·0은 지원 key 전체 재초기화",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 11,
+        "end": 36,
+        "anchor": "ptrauth_prctl_reset_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2073",
+      "title": "PAC 부분 reset·선택 key 생성과 설치 정책",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 11,
+        "end": 36,
+        "anchor": "ptrauth_prctl_reset_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2074",
+      "title": "PAC enable flag 변환·PR bit와 SCTLR bit 대응",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 51,
+        "end": 76,
+        "anchor": "arg_to_enxx_mask"
+      }
+    },
+    {
+      "planned_lesson": "os2075",
+      "title": "PAC enabled setter·지원 ABI mask와 부분집합 검사",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 67,
+        "end": 92,
+        "anchor": "ptrauth_set_enabled_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2076",
+      "title": "PAC enabled 부분 갱신·대상 bit clear 뒤 원하는 bit set",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 67,
+        "end": 92,
+        "anchor": "ptrauth_set_enabled_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2077",
+      "title": "PAC setter의 current update·저장 task와 실행 register 분리",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 67,
+        "end": 92,
+        "anchor": "ptrauth_set_enabled_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2078",
+      "title": "PAC enabled getter·저장 상태를 API mask로 반환",
+      "path": "arch/arm64/kernel/pointer_auth.c",
+      "excerpt": {
+        "start": 93,
+        "end": 113,
+        "anchor": "ptrauth_get_enabled_keys"
+      }
+    },
+    {
+      "planned_lesson": "os2079",
+      "title": "PAC 공식 문서·주소 인증 원리와 고위 bit의 폭",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 13,
+        "end": 38,
+        "anchor": "Architecture overview"
+      }
+    },
+    {
+      "planned_lesson": "os2080",
+      "title": "PAC HINT fallback 문서·기능 없는 실행과 호환성",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 13,
+        "end": 38,
+        "anchor": "Architecture overview"
+      }
+    },
+    {
+      "planned_lesson": "os2081",
+      "title": "PAC process key lifecycle·exec 생성 fork 보존과 thread",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "Basic support"
+      }
+    },
+    {
+      "planned_lesson": "os2082",
+      "title": "PAC hardware capability 문서·PACA와 PACG 분리",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "Basic support"
+      }
+    },
+    {
+      "planned_lesson": "os2083",
+      "title": "PAC 문서의 width 예·48bit VA와 7bit PAC",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "Basic support"
+      }
+    },
+    {
+      "planned_lesson": "os2084",
+      "title": "PAC 문서의 kernel return 보호·HINT 빌드 조건",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "Basic support"
+      }
+    },
+    {
+      "planned_lesson": "os2085",
+      "title": "PAC 문서 reset 사용법·다섯 mask와 0 전체",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 41,
+        "end": 66,
+        "anchor": "Basic support"
+      }
+    },
+    {
+      "planned_lesson": "os2086",
+      "title": "PAC debugging 문서·TTBR0 mask와 instruction data 구분",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 68,
+        "end": 93,
+        "anchor": "Debugging"
+      }
+    },
+    {
+      "planned_lesson": "os2087",
+      "title": "PAC checkpoint debugging·key regset의 추가 조건",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 68,
+        "end": 93,
+        "anchor": "Debugging"
+      }
+    },
+    {
+      "planned_lesson": "os2088",
+      "title": "PAC KVM 문서·vCPU 요청 flag와 현재 함께 활성화 조건",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 88,
+        "end": 113,
+        "anchor": "Virtualization"
+      }
+    },
+    {
+      "planned_lesson": "os2089",
+      "title": "PAC KVM 문서·VHE와 미요청 guest의 register 필터",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 88,
+        "end": 113,
+        "anchor": "Virtualization"
+      }
+    },
+    {
+      "planned_lesson": "os2090",
+      "title": "PAC enabled 문서 사용법·변경 대상과 켤 대상의 두 mask",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 111,
+        "end": 136,
+        "anchor": "Enabling and disabling keys"
+      }
+    },
+    {
+      "planned_lesson": "os2091",
+      "title": "PAC legacy ABI 호환·loader의 이른 정책 선택",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 111,
+        "end": 136,
+        "anchor": "Enabling and disabling keys"
+      }
+    },
+    {
+      "planned_lesson": "os2092",
+      "title": "PAC enabled lifecycle 문서·exec reset과 fork clone 상속",
+      "path": "Documentation/arch/arm64/pointer-authentication.rst",
+      "excerpt": {
+        "start": 111,
+        "end": 136,
+        "anchor": "Enabling and disabling keys"
+      }
+    }
+  ]
+}

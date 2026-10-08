@@ -1,0 +1,42 @@
+"""Advice helpers: readahead, hugepage bounds, prefault and hole punching."""
+ROWS = [
+('Madvise WILLNEED: 준비 요청의 성공과 데이터 도착은 다르다', 'madvise_willneed',
+ '곧 사용할 메모리를 미리 준비하면 나중의 접근 지연을 줄일 수 있습니다. 그러나 준비 요청을 받아들였다는 것과 모든 페이지의 I/O 완료를 기다렸다는 것은 다릅니다. 메모리가 파일·익명·shmem 중 무엇인지에 따라 준비 경로도 달라집니다.',
+ 'CONFIG_SWAP에서 익명 매핑은 swapin walker,shmem은 shmem_swapin_range를 호출하고 lru_add_drain 뒤 0입니다. SWAP이 없으면 파일 없는 매핑은 EBADF입니다. DAX 파일은 조언을 무시하고 0입니다. 일반 파일은 별도 파일 참조를 얻고 파일 offset을 계산한 뒤 mmap 읽기 잠금을 놓고 vfs_fadvise(WILLNEED)를 호출합니다. 파일 참조를 놓고 mmap 잠금을 다시 잡은 뒤 0입니다.',
+ '페이지 크기 4096,VMA 시작 0x10000,파일 vm_pgoff=3,요청 시작 0x12000이면 파일 offset은 8192+12288=20480입니다. 가상 주소 숫자를 파일 offset으로 그대로 보내지 않습니다. 이 함수는 일반 파일 경로의 vfs_fadvise 반환값을 저장하지 않으므로 그 내부 오류가 그대로 syscall 오류가 된다고 설명하면 안 됩니다.',
+ '잠금을 놓는 동안의 파일 수명',
+ '파일시스템 fadvise가 다른 잠금을 잡을 수 있어 mmap_lock을 놓습니다. 그동안 VMA가 사라질 수 있으므로 get_file로 독립 참조를 잡고 prev=NULL로 순회자에게 재탐색을 알립니다. 함수 주석은 필요한 I/O를 예약하고 완료를 기다리지 않는다고 설명합니다. 익명 경로도 walk_page_range의 결과를 그대로 반환하는 코드가 아니므로 0을 모든 페이지 준비 성공의 증거로 사용하면 안 됩니다.',
+ ('DAX 매핑에서 WILLNEED가 0이면 반드시 미리 읽었나요?', '아닙니다.이 분기는 조언을 무시하고 0입니다.', '그렇습니다.0이면 모든 요청 페이지의 디스크 읽기가 끝났습니다.', '반환 성공의 의미를 실제 분기 동작과 구분해야 합니다.'),
+ ('일반 파일 처리 전에 get_file을 하는 이유는?', '잠금을 놓은 동안 VMA가 사라져도 파일을 유지하기 위해서입니다.', '파일의 전체 내용을 메모리에 복사하기 위해서입니다.', '파일 참조는 객체 수명 보호이며 데이터 복사 자체가 아닙니다.')),
+('DONTNEED HugeTLB 범위: 일반 길이는 올리지만 큰 페이지 끝은 내린다', 'madvise_dontneed_free_valid_vma',
+ '작은 페이지 기준으로 올린 길이를 큰 페이지 회수에 그대로 쓰면 사용자가 포함하지 않은 데이터까지 버릴 수 있습니다. 커널은 HugeTLB 매핑에서 완전히 포함된 큰 페이지만 대상으로 삼도록 별도의 범위 조건을 둡니다.',
+ '일반 VMA에서는 PFNMAP을 금지하고 DONTNEED_LOCKED가 아니면 LOCKED도 금지합니다. HugeTLB에서는 DONTNEED와 DONTNEED_LOCKED만 허용하고 시작을 huge_page_mask 기준으로 검사합니다. 끝은 huge_page_size 단위로 ALIGN_DOWN합니다. 호출자는 조정된 끝이 시작과 같으면 실제 회수 없이 0을 반환합니다.',
+ '큰 페이지 크기 2MiB,시작 0,요청 길이 3MiB이면 끝을 2MiB로 내려 첫 큰 페이지만 대상으로 합니다. 길이 1MiB이면 끝이 0이 되어 작업 없이 성공할 수 있습니다. 큰 페이지 중간 1MiB에서 시작하면 일반 4KiB 정렬을 만족해도 HugeTLB 시작 정렬 검사에서 실패합니다.',
+ 'Userfaultfd 이후 재검증',
+ 'madvise_dontneed_free는 userfaultfd_remove가 잠금을 놓은 경우 prev를 NULL로 바꾸고 mmap 읽기 잠금을 다시 잡습니다. 시작 주소로 VMA를 다시 찾고 없으면 ENOMEM,조건이 달라졌으면 EINVAL입니다. 기존 끝이 새 VMA 끝보다 크면 새 끝으로 줄입니다. 이어 DONTNEED 계열 또는 FREE helper로 갑니다. 이 잠금 해제 동안 VMA가 분할될 수 있으므로 오래된 포인터와 범위를 그대로 믿을 수 없습니다.',
+ ('2MiB HugeTLB에서 시작 0·길이 3MiB의 회수 끝은?', '2MiB입니다.', '4MiB입니다.', '요청 바깥 데이터 손실을 피하기 위해 큰 페이지 끝을 내림합니다.'),
+ ('userfaultfd 처리 중 잠금을 놓았다면 이전 VMA를 그대로 쓰나요?', '아닙니다.시작 주소로 다시 찾고 조건을 재검사합니다.', '그렇습니다.처음 검사가 성공했으면 영구히 유효합니다.', '잠금을 놓은 사이 매핑 삭제·분할·속성 변경이 가능해 재검증이 필요합니다.')),
+('Madvise Populate: 미리 Fault를 처리하며 진행량과 잠금을 복구하기', 'madvise_populate',
+ '첫 접근 때 페이지 fault 비용을 치르고 싶지 않으면 미리 읽거나 쓸 수 있는 페이지 테이블을 준비하도록 요청할 수 있습니다. 한 번의 helper 호출이 전체 범위를 처리하지 않거나 잠금을 놓을 수 있어 진행량과 잠금 상태를 따로 추적해야 합니다.',
+ 'madvise_populate는 POPULATE_WRITE인지로 write를 정하고 locked=1로 시작합니다. 반복해서 faultin_page_range에 시작·끝·write·locked 주소를 전달합니다. helper가 locked를 0으로 만들었으면 mmap 읽기 잠금을 다시 잡아 1로 복원합니다. 음수 반환은 오류로 처리하고 성공한 페이지 수에 PAGE_SIZE를 곱해 시작을 앞으로 이동합니다.',
+ '4096바이트 페이지에서 요청 범위가 3페이지이고 첫 helper가 2를 반환하면 다음 시작은 8192바이트 앞으로 갑니다. 다음 호출이 EFAULT면 전체 결과는 EFAULT지만 이미 준비한 두 페이지를 여기서 되돌리지 않습니다. POPULATE_WRITE는 이 함수가 사용자 데이터를 어떤 값으로 채우라는 의미가 아니라 write 인자를 켜서 writable prefault를 요청한다는 뜻입니다.',
+ '오류 분류와 잠금 계약',
+ 'EINTR,EINVAL,EHWPOISON,EFAULT는 해당 오류로 반환합니다. ENOMEM도 그대로이며 예상하지 못한 음수는 pr_warn_once 후 ENOMEM으로 분류합니다. 잠금 복구는 음수 검사보다 먼저라 오류 경로도 호출자에게 잠금을 보유한 상태로 돌아갑니다. 이 루프는 helper의 성공 페이지 수만큼 진행하며 0 진행을 별도 처리하지 않습니다. helper의 진전 보장 계약을 무시하고 임의의 0 반환 사례가 안전하다고 주장하지 않습니다.',
+ ('3페이지 중 2페이지 준비 뒤 EFAULT면 앞 준비가 취소되나요?', '아닙니다.이 함수에는 되돌리는 경로가 없습니다.', '그렇습니다.오류이면 모든 페이지를 원상 복구합니다.', '순차 진행과 오류 반환만 있으며 부분 효과를 롤백하는 처리는 없습니다.'),
+ ('helper가 잠금을 놓고 오류를 반환하면 잠금 복구를 생략하나요?', '아닙니다.잠금 복구를 먼저 한 뒤 오류를 검사합니다.', '그렇습니다.오류인 경우 호출자도 잠금이 없는 상태입니다.', '조건문 순서가 호출자의 잠금 해제 계약을 유지합니다.')),
+('Madvise REMOVE: 가상 주소를 파일 Hole Punch 범위로 바꾸기', 'madvise_remove',
+ '페이지 캐시만 버리는 작업과 파일의 저장 공간까지 비우는 작업은 효과가 다릅니다. REMOVE는 매핑을 이용해 파일의 해당 구간에 hole punching을 요청하므로 파일 참조·공유 쓰기 조건·파일 offset 계산이 필요합니다.',
+ 'madvise_remove는 prev=NULL로 설정하고 VM_LOCKED이면 EINVAL입니다. 파일·mapping·host가 없으면 EINVAL,공유 및 maywrite 조건을 만족하지 않으면 EACCES입니다. offset은 시작과 VMA 시작의 차이에 vm_pgoff의 바이트 offset을 더합니다. get_file 뒤 userfaultfd_remove가 잠금을 유지했으면 직접 mmap 읽기 잠금을 놓습니다. vfs_fallocate에 PUNCH_HOLE|KEEP_SIZE를 전달하고 fput,잠금 재획득 뒤 그 결과를 반환합니다.',
+ '파일 크기가 16KiB이고 계산된 offset 4KiB,길이 4KiB라면 파일시스템에 [4KiB,8KiB) 저장 공간 제거를 요청하면서 파일 전체 크기는 유지하도록 합니다. KEEP_SIZE는 파일 데이터를 모두 보존한다는 의미가 아닙니다. 실제 지원 여부와 오류는 파일시스템 fallocate 경로에 달려 있고 이 helper는 그 결과를 전달합니다.',
+ '두 잠금 해제 경로를 하나로 맞추기',
+ 'userfaultfd_remove가 true이면 아직 mmap_lock을 놓지 않은 상태여서 직접 해제합니다. false이면 이미 해제된 상태이므로 다시 unlock하지 않습니다. 어느 쪽이든 파일시스템 호출 전에는 mmap 잠금을 놓고 독립 파일 참조로 수명을 유지합니다. 파일시스템의 i_rwsem 등과 잠금 순서 충돌을 피하기 위한 구조입니다. syscall 전체를 하나의 되돌릴 수 있는 파일 트랜잭션으로 만들지는 않습니다.',
+ ('KEEP_SIZE를 지정하면 Hole Punch 대상 데이터도 보존되나요?', '아닙니다.파일 크기 유지와 구간 내용 제거는 다른 효과입니다.', '그렇습니다.크기를 유지하면 어떤 데이터도 바뀔 수 없습니다.', '논리적 파일 길이와 내부 구간의 저장 공간은 독립적으로 다룰 수 있습니다.'),
+ ('userfaultfd_remove가 이미 잠금을 놓았는데 다시 unlock하나요?', '아닙니다.true인 경로에서만 직접 unlock합니다.', '그렇습니다.항상 한 번 더 unlock합니다.', '반환값이 전달하는 잠금 상태를 따라야 이중 해제를 피할 수 있습니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'메모리','mm/madvise.c',symbol,why,principle,use,
+              '요청 성공·I/O 완료·매핑 수명·페이지 준비·파일 내용 변화를 서로 구분하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('대조 범위','Linux v6.12 mm/madvise.c의 WILLNEED·DONTNEED/FREE 유효 범위와 재검증·POPULATE·REMOVE helper를 대조했습니다. 페이지 회수 walker와 파일시스템 내부 전체 및 실제 데이터 제거 실험은 이 수업의 검증 범위에 포함하지 않습니다.')])

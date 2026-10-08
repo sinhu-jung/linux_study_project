@@ -1,0 +1,186 @@
+{
+  "draft_lessons": 18,
+  "questions": 36,
+  "anchors": [
+    {
+      "planned_lesson": "os1251",
+      "title": "LE CPU의 형식 변환·같은 순서는 유지하고 반대 순서는 교환",
+      "path": "include/uapi/linux/byteorder/little_endian.h",
+      "excerpt": {
+        "start": 40,
+        "end": 65,
+        "anchor": "__cpu_to_be32"
+      }
+    },
+    {
+      "planned_lesson": "os1252",
+      "title": "BE CPU의 형식 변환·LE 경로와 역할이 바뀐다",
+      "path": "include/uapi/linux/byteorder/big_endian.h",
+      "excerpt": {
+        "start": 34,
+        "end": 59,
+        "anchor": "__cpu_to_le32"
+      }
+    },
+    {
+      "planned_lesson": "os1253",
+      "title": "엔디언 타입 표식·__le와 __be 및 __force",
+      "path": "include/uapi/linux/byteorder/little_endian.h",
+      "excerpt": {
+        "start": 35,
+        "end": 60,
+        "anchor": "__le32_to_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1254",
+      "title": "상수 엔디언 변환·compile time 식과 network helpers",
+      "path": "include/uapi/linux/byteorder/little_endian.h",
+      "excerpt": {
+        "start": 16,
+        "end": 41,
+        "anchor": "__constant_htonl"
+      }
+    },
+    {
+      "planned_lesson": "os1255",
+      "title": "LE 헤더의 pointer 변환·읽고 값만 돌려준다",
+      "path": "include/uapi/linux/byteorder/little_endian.h",
+      "excerpt": {
+        "start": 77,
+        "end": 102,
+        "anchor": "__cpu_to_be32p"
+      }
+    },
+    {
+      "planned_lesson": "os1256",
+      "title": "BE 헤더의 pointer 변환·반대쪽 형식만 swab",
+      "path": "include/uapi/linux/byteorder/big_endian.h",
+      "excerpt": {
+        "start": 53,
+        "end": 78,
+        "anchor": "__cpu_to_le32p"
+      }
+    },
+    {
+      "planned_lesson": "os1257",
+      "title": "같은 순서의 in-place helper·no-op도 인자는 평가한다",
+      "path": "include/uapi/linux/byteorder/little_endian.h",
+      "excerpt": {
+        "start": 95,
+        "end": 107,
+        "anchor": "__cpu_to_le32s"
+      }
+    },
+    {
+      "planned_lesson": "os1258",
+      "title": "반대 순서의 in-place 변환·원본을 읽고 다시 저장",
+      "path": "include/uapi/linux/byteorder/big_endian.h",
+      "excerpt": {
+        "start": 95,
+        "end": 107,
+        "anchor": "__cpu_to_le32s"
+      }
+    },
+    {
+      "planned_lesson": "os1259",
+      "title": "network order API·hton과 ntoh의 방향 및 고정 폭",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 139,
+        "end": 164,
+        "anchor": "htonl"
+      }
+    },
+    {
+      "planned_lesson": "os1260",
+      "title": "공개 엔디언 이름의 연결·값 p s 세 API군",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "le32_add_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1261",
+      "title": "LE 저장 필드 덧셈·decode 계산 encode",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "le32_add_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1262",
+      "title": "BE 저장 필드 덧셈·network 값의 산술 경계",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 181,
+        "end": 206,
+        "anchor": "be32_add_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1263",
+      "title": "형식 덧셈의 폭·16비트 저장과 modulo wrap",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 176,
+        "end": 201,
+        "anchor": "be16_add_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1264",
+      "title": "LE32 배열 변환·in-place word 수와 경계",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 168,
+        "end": 193,
+        "anchor": "cpu_to_le32_array"
+      }
+    },
+    {
+      "planned_lesson": "os1265",
+      "title": "BE32 배열 변환·src와 dst를 분리하는 API",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 191,
+        "end": 207,
+        "anchor": "cpu_to_be32_array"
+      }
+    },
+    {
+      "planned_lesson": "os1266",
+      "title": "BE 배열의 부분 겹침·정방향 loop는 memmove가 아니다",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 199,
+        "end": 207,
+        "anchor": "be32_to_cpu_array"
+      }
+    },
+    {
+      "planned_lesson": "os1267",
+      "title": "엔디언 wrapper 포함 경로·CPU 구성 불일치 경고",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 149,
+        "end": 174,
+        "anchor": "le32_add_cpu"
+      }
+    },
+    {
+      "planned_lesson": "os1268",
+      "title": "pointer 변환과 비정렬·오래된 주석보다 실제 경로 확인",
+      "path": "include/linux/byteorder/generic.h",
+      "excerpt": {
+        "start": 160,
+        "end": 185,
+        "anchor": "le32_to_cpu_array"
+      }
+    }
+  ]
+}

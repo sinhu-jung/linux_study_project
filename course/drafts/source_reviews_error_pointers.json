@@ -1,0 +1,103 @@
+{
+  "include/linux/err.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 124,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1184",
+        "symbols": [
+          "ERR_PTR"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1185",
+        "symbols": [
+          "IS_ERR"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1186",
+        "symbols": [
+          "PTR_ERR"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1187",
+        "symbols": [
+          "IS_ERR_OR_NULL"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1188",
+        "symbols": [
+          "PTR_ERR_OR_ZERO"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1189",
+        "symbols": [
+          "ERR_CAST"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1190",
+        "symbols": [
+          "ERR_PTR_PCPU"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      },
+      {
+        "lesson": "os1191",
+        "symbols": [
+          "IS_ERR_VALUE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole err.h authored: opaque native errorpointer cast not allocation/dereference, MAXERRNO4095 unsigned-highrange and -4096/positive invalidinput notchecked, ISERR not generalpointervalidity, PTRERR decode no check, NULL ISERRfalse/ORNULLtrue/PTRERR0 callerpolicy, PTRERRORZERO NULL0/noresourcefree, ERRCAST sameerrorvalue notobjectlayoutconversion, PCPU addressspace/sparseforce not CPUallocation/selection, mustcheck vs ISERRVALUE and unlikely branchhint/assemblyguard. Exactheader3016511checks optimized andASanUBSan, all4095validerrors/thresholds/NULL/randomrawpredicate/128realobjects/cast/percpuemptyqualifiermodel; expected ignoredERRPTR compile rejection usingwarn_unused_result and-Werror=unused-result. Native long64 pointerinteger implementationdefined environment, no syntheticpointerdereference/native32/sparse/actualkernellayout proof."
+      }
+    ]
+  }
+}

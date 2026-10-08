@@ -1,0 +1,191 @@
+{
+  "include/linux/kmsan.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 410,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1866",
+        "symbols": [
+          "kmsan_task_create"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN API 분리·선언과 subsystem 구현. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1867",
+        "symbols": [
+          "kmsan_alloc_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 설정을 끈 초기화 stub과 C 인자 평가. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1868",
+        "symbols": [
+          "kmsan_memblock_free_pages"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN disabled memblock 반환true의 사용 계약. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1869",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN vmap 결과 확인·__must_check와 성공0. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1870",
+        "symbols": [
+          "kmsan_vmap_pages_range_noflush"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN mapping 문서 이름과 실제 prototype 대조. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1871",
+        "symbols": [
+          "kmsan_ioremap_page_range"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN ioremap·iounmap 새 자원의 대응 계약. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1872",
+        "symbols": [
+          "kmsan_copy_page_meta"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN page 복사 API와 추적 없는 source 정책. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1873",
+        "symbols": [
+          "kmsan_slab_free"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN slab·large API 문서와 cache 예외. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1874",
+        "symbols": [
+          "kmsan_handle_dma"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN DMA·SG·USB 선언의 방향 사용법. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1875",
+        "symbols": [
+          "kmsan_unpoison_entry_regs"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN entry_regs 문서와 공개 unpoison의 실제 조건. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1876",
+        "symbols": [
+          "kmsan_get_metadata"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN metadata getter의 NULL 계약과 disabled 선언 부재. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1877",
+        "symbols": [
+          "memset_no_sanitize_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN no-sanitize memset·직접 helper와 일반 memset. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1878",
+        "symbols": [
+          "KMSAN_WARN_ON"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN WARN 매크로·조건 한 번 평가와 반환 값. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1879",
+        "symbols": [
+          "KMSAN_WARN_ON"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 경고 시 global 비활성화와 WRITE_ONCE. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1880",
+        "symbols": [
+          "KMSAN_WARN_ON"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN 경고의 BUG 경로와 uaccess 계약. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      },
+      {
+        "lesson": "os1881",
+        "symbols": [
+          "kmsan_enable_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "KMSAN disabled 경고 alias와 기능 범위. Whole410line publicheader manuallyauthored16lessons32Qs, everydecl+disabledbranch reviewed andconnectedtopriorfullsourcealgorithms. Originalheader2configs O2+ASanUBSan4builds enabled41/disabled40 asserts. All22hookgroupsvoidstubs/true&0return/ordinaryC args evaluated, data32bytefill enabled__memset versusdisabledmemset, originalGNUstatementWARNcondonce/resultbool/globaldisableWRITEbeforeBUG/disabledWARNalias; BUGreturningrecordernotfatal kernelproof; activeexternprototypesnotexecuted. Contractsconst-forwardstruct/mustcheck/pagecopyuntrackedpolicy/mappingownership/io/mapstaledocnames/entryregsdoccontrastactualpublicunpoisonruntimeallowed/getterdisabledstubabsent/alloccacheexceptions. No actualkernel/LLVM/globalordering/allocator/hardware/WARN fatal/BUG termination/fullKbuild."
+      }
+    ]
+  }
+}

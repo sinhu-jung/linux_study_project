@@ -1,0 +1,70 @@
+{
+  "sha": "adc218676eef25575469234709c2d87185ca223a",
+  "path": "mm/util.c",
+  "decision": "partially_explained",
+  "source_region": "first allocation/string/usercopy helpers through memdup_user_nul only",
+  "evidence": [
+    {
+      "lesson": "os686",
+      "symbols": [
+        "kstrdup",
+        "kstrndup"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os687",
+      "symbols": [
+        "kstrdup_const",
+        "kfree_const"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os688",
+      "symbols": [
+        "kmemdup_noprof",
+        "kmemdup_array"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os689",
+      "symbols": [
+        "kvmemdup"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os690",
+      "symbols": [
+        "kmemdup_nul"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os691",
+      "symbols": [
+        "user_buckets",
+        "init_user_buckets",
+        "memdup_user",
+        "vmemdup_user"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os692",
+      "symbols": [
+        "strndup_user"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    },
+    {
+      "lesson": "os693",
+      "symbols": [
+        "memdup_user_nul"
+      ],
+      "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다."
+    }
+  ]
+}

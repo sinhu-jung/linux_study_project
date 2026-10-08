@@ -1,0 +1,208 @@
+{
+  "lib/llist.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 116,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os814",
+        "symbols": [
+          "llist_add_batch"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "C 포인터",
+          "원자성과 문맥"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os815",
+        "symbols": [
+          "llist_del_first"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "ABA와 Link",
+          "LIFO"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os816",
+        "symbols": [
+          "llist_del_first_this"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "NULL 전제",
+          "실패의 의미"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os817",
+        "symbols": [
+          "llist_reverse_order"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "복잡도",
+          "소유권"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      }
+    ]
+  },
+  "include/linux/llist.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 300,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os818",
+        "symbols": [
+          "llist_head",
+          "llist_node",
+          "LLIST_HEAD_INIT",
+          "LLIST_HEAD",
+          "init_llist_head",
+          "init_llist_node"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "구조체 표현",
+          "Include 연결"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os819",
+        "symbols": [
+          "llist_on_list",
+          "llist_empty",
+          "llist_next"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Marker의 갱신",
+          "예측과 동작"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os820",
+        "symbols": [
+          "__llist_add_batch",
+          "__llist_add",
+          "llist_add"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "분리된 Chain",
+          "성공 반환"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os821",
+        "symbols": [
+          "llist_del_all",
+          "__llist_del_all"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "빈 결과",
+          "재사용 전제"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os822",
+        "symbols": [
+          "llist_del_first_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Link 파괴",
+          "보호의 범위"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os823",
+        "symbols": [
+          "llist_for_each",
+          "llist_for_each_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "빈 Chain",
+          "순서"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      },
+      {
+        "lesson": "os824",
+        "symbols": [
+          "llist_entry",
+          "member_address_is_nonnull",
+          "llist_for_each_entry",
+          "llist_for_each_entry_safe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Intrusive 자료구조",
+          "Macro와 함수"
+        ],
+        "review": "Whole source read and individually authored mechanisms with explanation/principle/caller use/two worked questions: variants/macros/data representation, errors/alias/index/sentinel/tail, atomic vs plain/caller protection, selected configuration and explicit context model execution limits are accounted for in referenced sections."
+      }
+    ]
+  },
+  "include/linux/llist_api.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 1,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os818",
+        "symbols": [
+          "linux/llist.h"
+        ],
+        "sections": [
+          "Include 연결"
+        ],
+        "review": "Entire one-line header bridge read and explained in explicit card; no duplicate algorithm implementation assumed."
+      }
+    ]
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "include/linux/lockref.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 52,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1385",
+        "symbols": [
+          "lockref"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      }
+    ]
+  },
+  "lib/lockref.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 193,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1386",
+        "symbols": [
+          "CMPXCHG_LOOP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1387",
+        "symbols": [
+          "lockref_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1388",
+        "symbols": [
+          "lockref_get_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1389",
+        "symbols": [
+          "lockref_put_not_zero"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1390",
+        "symbols": [
+          "lockref_put_return"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1391",
+        "symbols": [
+          "lockref_put_or_lock"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1392",
+        "symbols": [
+          "lockref_mark_dead"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      },
+      {
+        "lesson": "os1393",
+        "symbols": [
+          "lockref_get_not_dead"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole lockref header/body read/authored: atomic-with-lock vsplainrefcount,union64/spinlock+int/layout/ARCH/SMP/SIZE condition and declarations,isdead lockedquery,macro retry100/expectedrefresh/relaxedCAS/lockheld cutoff/perfunctionfallback,existingref requirement for unconditionalget,notzero old<=0 reject vsnotdead old<0 reject andzeroallowed validlifetime,putnotzero leaveslast/putreturn newcount incl1to0 butno fallback and-1multiplecauses/putorlock0handsheldlockwithoutdecrement/markdead-128 assertion andnoautomaticfree,intoverflow bounds andpayloadordering separate. Exact fullheader/body serialspin/CAS/READONCE context models each optimized+ASanUBSan,CASdisabled53assertions/enabled57: -128,-1,0,1,2,3,10,100 countreference outcomes,lockhandoff/balance/deadquery,100forcedCASfail fallback orputreturn unchangedfailure,failedexpected refresh withcount+3 then recompute14,heldputreturn failure/noCAS,markdeadwithoutlock modelabort134. Original conditional unused parameter diagnostic onlyexcluded; sourceunchanged. No realkernel locking/nativearchCMPXCHG/concurrency/LKMM/relaxedordering/lifetime proof; invalidoverflow/freedmemory notexecuted."
+      }
+    ]
+  }
+}

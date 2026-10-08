@@ -1,0 +1,256 @@
+{
+  "draft_lessons": 25,
+  "questions": 50,
+  "anchors": [
+    {
+      "planned_lesson": "os2969",
+      "title": "IRQ domain 식별: 하드웨어 번호와 Linux 번호의 이름 공간",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 49,
+        "end": 76,
+        "anchor": "irqchip_fwnode_get_name"
+      }
+    },
+    {
+      "planned_lesson": "os2970",
+      "title": "IRQ fwnode 생성: 두 할당의 실패를 함께 정리하기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 77,
+        "end": 102,
+        "anchor": "__irq_domain_alloc_fwnode"
+      }
+    },
+    {
+      "planned_lesson": "os2971",
+      "title": "IRQ fwnode 해제: 타입 검사와 빌린 이름의 수명",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 118,
+        "end": 143,
+        "anchor": "irq_domain_free_fwnode"
+      }
+    },
+    {
+      "planned_lesson": "os2972",
+      "title": "Domain 이름 만들기: 문자열 소유권 표시와 경로 문자 치환",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 144,
+        "end": 169,
+        "anchor": "alloc_fwnode_name"
+      }
+    },
+    {
+      "planned_lesson": "os2973",
+      "title": "Domain 이름 선택: 복사·차용·지원하지 않는 조합",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 184,
+        "end": 209,
+        "anchor": "irq_domain_set_name"
+      }
+    },
+    {
+      "planned_lesson": "os2974",
+      "title": "Domain 생성 조건: 직접 매핑과 선형 역매핑을 섞지 않기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 225,
+        "end": 250,
+        "anchor": "__irq_domain_create"
+      }
+    },
+    {
+      "planned_lesson": "os2975",
+      "title": "Domain 내부 초기화: 이름 이후 참조·역매핑·콜백 준비",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 225,
+        "end": 250,
+        "anchor": "__irq_domain_create"
+      }
+    },
+    {
+      "planned_lesson": "os2976",
+      "title": "Domain 공개와 최종 free: 전역 목록 잠금과 이름 소유권",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 277,
+        "end": 302,
+        "anchor": "__irq_domain_publish"
+      }
+    },
+    {
+      "planned_lesson": "os2977",
+      "title": "Domain 구성 순서: generic chip과 init 콜백 실패 되돌리기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 308,
+        "end": 333,
+        "anchor": "__irq_domain_instantiate"
+      }
+    },
+    {
+      "planned_lesson": "os2978",
+      "title": "Domain descriptor 준비: 실패 로그 뒤에도 계속하는 경로",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 296,
+        "end": 321,
+        "anchor": "irq_domain_instantiate_descs"
+      }
+    },
+    {
+      "planned_lesson": "os2979",
+      "title": "Domain 생성 wrapper: 오류 포인터와 NULL의 계약 차이",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 371,
+        "end": 396,
+        "anchor": "irq_domain_instantiate"
+      }
+    },
+    {
+      "planned_lesson": "os2980",
+      "title": "레거시 IRQ domain: 하드웨어 시작 오프셋을 포함한 크기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 510,
+        "end": 536,
+        "anchor": "irq_domain_create_legacy"
+      }
+    },
+    {
+      "planned_lesson": "os2981",
+      "title": "Domain 제거: 매핑부터 정리해야 하는 호출자 계약",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 385,
+        "end": 410,
+        "anchor": "irq_domain_remove"
+      }
+    },
+    {
+      "planned_lesson": "os2982",
+      "title": "Domain bus token 변경: 이름 할당 실패의 부분 반영",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 413,
+        "end": 438,
+        "anchor": "irq_domain_update_bus_token"
+      }
+    },
+    {
+      "planned_lesson": "os2983",
+      "title": "Firmware 사양으로 domain 찾기: select·match·기본 비교의 우선순위",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 537,
+        "end": 562,
+        "anchor": "irq_find_matching_fwspec"
+      }
+    },
+    {
+      "planned_lesson": "os2984",
+      "title": "기본 IRQ domain: 편의 포인터와 수명 관리의 차이",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 584,
+        "end": 609,
+        "anchor": "irq_set_default_host"
+      }
+    },
+    {
+      "planned_lesson": "os2985",
+      "title": "NOMAP 상태: 빌드 지원과 객체 플래그가 모두 필요하다",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 607,
+        "end": 634,
+        "anchor": "irq_domain_is_nomap"
+      }
+    },
+    {
+      "planned_lesson": "os2986",
+      "title": "IRQ 역매핑의 배열과 트리: 조밀한 번호와 큰 번호를 함께 다루기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 627,
+        "end": 652,
+        "anchor": "irq_domain_set_mapping"
+      }
+    },
+    {
+      "planned_lesson": "os2987",
+      "title": "IRQ 연결 전 검사: 번호 범위·descriptor 존재·기존 소속",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 682,
+        "end": 707,
+        "anchor": "irq_domain_associate_locked"
+      }
+    },
+    {
+      "planned_lesson": "os2988",
+      "title": "IRQ map 콜백 실패: 필드 rollback과 조용한 EPERM",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 682,
+        "end": 707,
+        "anchor": "irq_domain_associate_locked"
+      }
+    },
+    {
+      "planned_lesson": "os2989",
+      "title": "연속 IRQ 연결: 반복 호출이 전체 원자 작업은 아니다",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 737,
+        "end": 762,
+        "anchor": "irq_domain_associate_many"
+      }
+    },
+    {
+      "planned_lesson": "os2990",
+      "title": "IRQ 연결 해제 순서: 새 요청 차단·실행 동기화·역매핑 제거",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 646,
+        "end": 671,
+        "anchor": "irq_domain_disassociate"
+      }
+    },
+    {
+      "planned_lesson": "os2991",
+      "title": "직접 IRQ 매핑: Linux 번호를 하드웨어 번호로 함께 쓰기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 763,
+        "end": 788,
+        "anchor": "irq_create_direct_mapping"
+      }
+    },
+    {
+      "planned_lesson": "os2992",
+      "title": "새 IRQ 매핑 할당: 번호 확보 후 연결 실패 되돌리기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 795,
+        "end": 820,
+        "anchor": "irq_create_mapping_affinity_locked"
+      }
+    },
+    {
+      "planned_lesson": "os2993",
+      "title": "기존 IRQ 매핑 재사용: 검사와 생성 사이 경쟁을 막기",
+      "path": "kernel/irq/irqdomain.c",
+      "excerpt": {
+        "start": 834,
+        "end": 859,
+        "anchor": "irq_create_mapping_affinity"
+      }
+    }
+  ]
+}

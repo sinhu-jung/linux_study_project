@@ -1,0 +1,42 @@
+"""Task address space lookup, clone sharing, release and vfork completion."""
+ROWS = [
+('다른 태스크의 mm 얻기: 참조 획득과 접근 허용은 별개','mm_access',
+ '다른 프로세스의 주소 공간 포인터만 읽으면 그 프로세스가 종료하거나 exec하는 동안 대상이 바뀔 수 있습니다. 객체 수명을 유지할 참조와, 그 주소 공간을 읽어도 되는 권한 검사는 서로 다른 책임입니다.',
+ 'get_task_mm은 PF_KTHREAD이면 NULL입니다. 그 외에는 task_lock 아래 task->mm을 읽고 있으면 mmget한 뒤 잠금을 풉니다. mm_access는 exec_update_lock의 killable 읽기 잠금을 먼저 얻으며 실패하면 ERR_PTR(err)입니다. mm을 얻었고 current->mm과 다르면서 ptrace_may_access가 거짓이면 mmput 후 ERR_PTR(-EACCES)로 바꿉니다. 마지막에 읽기 잠금을 풉니다.',
+ '주소 공간이 없는 태스크는 NULL,잠금 대기 중 중단이나 접근 거부는 오류 포인터,성공은 참조를 가진 mm 포인터입니다. 이 세 결과를 구별해야 합니다. 성공 후에는 사용을 마치고 mmput해야 합니다. current->mm과 같은 경우에는 이 함수 안의 ptrace 검사를 건너뛰지만 모든 시스템 호출의 권한 정책이 없어지는 뜻은 아닙니다.',
+ 'exec와 포인터 수명 보호의 차이',
+ 'task_lock은 포인터를 관찰하고 참조를 얻는 짧은 구간을 보호합니다. exec_update_lock은 exec와 접근 판단의 관계를 직렬화합니다. 참조를 얻었다고 페이지 테이블이나 사용자 데이터가 모두 불변이 되는 것은 아니므로 실제 메모리 접근에는 별도 계약이 필요합니다. 커널 태스크가 잠시 사용자 mm을 빌린 경우도 PF_KTHREAD 검사에서 제외한다는 점이 단순 task->mm!=NULL 검사와 다릅니다.',
+ ('mm_access의 NULL과 ERR_PTR(-EACCES)는 같은 결과인가요?','아닙니다. mm 부재와 접근 거부를 구별합니다.','그렇습니다. 둘 다 일반 NULL 포인터입니다.','성공 포인터·NULL·오류 포인터라는 반환 계약을 분리해야 오류 코드를 잃지 않습니다.'),
+ ('접근 거부를 반환하기 전에 얻은 mm 참조는?','mmput으로 반환합니다.','오류이므로 그대로 남겨 둡니다.','get_task_mm이 증가시킨 참조를 거부 분기에서 되돌려 수명 누수를 막습니다.')),
+('CLONE_VM과 주소 공간 복제: 구조체 복사 뒤 재초기화','copy_mm',
+ '자식이 부모의 같은 주소 공간을 볼 것인지, 별도 주소 공간 객체를 가질 것인지는 프로세스 생성의 핵심 선택입니다. 단순히 mm_struct를 memcpy하면 잠금과 계수까지 복사되므로 새 객체의 관리 상태를 다시 초기화해야 합니다.',
+ 'copy_mm은 자식의 fault·문맥 전환 계수를0으로 하고 mm,active_mm을 NULL로 시작합니다. 부모 current->mm이 없으면0입니다. CLONE_VM이면 mmget하고 같은 객체를 선택합니다. 아니면 dup_mm 실패 시 -ENOMEM입니다. 성공하면 mm과 active_mm을 설정하고 sched_mm_cid_fork를 호출합니다.',
+ '공유 경로에서는 부모와 자식의 mm 포인터가 같고 참조가 하나 늘어납니다. 복제 경로의 dup_mm은 새 객체 할당,기존 구조 복사,mm_init,dup_mmap 순서입니다. 이는 사용자 물리 메모리 전부를 memcpy한다는 뜻이 아닙니다. 매핑 복제와 쓰기 시 복사 같은 세부 정책은 dup_mmap 및 하위 구현의 별도 범위입니다.',
+ '부분 초기화 실패를 되돌리는 순서',
+ 'mm_init 자체 실패는 내부에서 확보한 문맥·페이지 디렉터리 등을 단계별로 되돌리고 mm도 해제해 NULL을 반환합니다. dup_mmap 실패나 binfmt 모듈 참조 획득 실패는 dup_mm의 free_pt로 가서 아직 얻지 못한 모듈 참조를 mmput이 내리지 않도록 binfmt=NULL로 하고 owner를 비운 뒤 mmput합니다. 성공 때는 hiwater_rss와 hiwater_vm도 현재 값으로 설정합니다. CONFIG_DETECT_HUNG_TASK일 때 자식의 last_switch_count와 last_switch_time을 초기화하는 분기도 있습니다.',
+ ('CLONE_VM이면 mm_struct를 새로 복사하나요?','아닙니다. 기존 mm을 mmget해 공유합니다.','그렇습니다. 항상 전체 구조를 새로 만듭니다.','공유 분기는 dup_mm을 호출하지 않으며 포인터를 기존 객체로 선택합니다.'),
+ ('free_pt에서 binfmt=NULL로 만드는 이유는?','아직 획득하지 않은 모듈 참조를 mmput이 반환하지 않게 합니다.','사용자 실행 파일을 디스크에서 삭제하기 위해서입니다.','주석은 해당 실패 경로에서 모듈 참조를 아직 얻지 않았다는 정리 순서의 조건을 명시합니다.')),
+('mm_release와 mmput: 태스크 분리 통지와 참조 반환','mm_release',
+ '주소 공간 참조 하나를 내려놓는 것과 태스크가 그 주소 공간 사용을 끝내며 대기자에게 알리는 것은 다른 사건입니다. 초기화 실패 중 새 mm을 버리는 작업마다 사용자 스레드 종료 통지를 보내면 잘못된 동작이 됩니다.',
+ 'mm_release는 uprobe 태스크 상태 정리와 deactivate_mm을 호출합니다. clear_child_tid가 있고 mm_users>1이면 그 사용자 주소에0을 쓰고 FUTEX_WAKE로 최대1명을 깨웁니다. put_user의 오류는 검사하지 않습니다. clear_child_tid는 조건 내부 쓰기 여부와 무관하게 NULL로 정리됩니다. vfork_done이 있으면 완료 helper를 호출합니다.',
+ 'clear_child_tid가 있고 mm_users=2라면0 쓰기와 futex 깨우기를 시도합니다. mm_users=1이면 그 두 동작은 건너뛰지만 태스크의 clear_child_tid 포인터는 비웁니다. 사용자 포인터가 잘못됐다면 put_user가 실패할 수 있으며 이 함수는 성공 보장을 반환하는 인터페이스가 아닙니다.',
+ '종료와 exec의 앞단 정리',
+ 'exit_mm_release는 futex_exit_release 뒤에 공통 mm_release를,exec_mm_release는 futex_exec_release 뒤에 공통 경로를 호출합니다. mmput은 참조 수를 내려 마지막 사용자일 때 주소 공간 자원을 정리하는 별도 함수입니다. mm_release의 주석에 있는 설명을 실제 조건과 혼동하지 말고 이 버전 본문의 clear_child_tid와 mm_users 검사로 동작을 판단해야 합니다.',
+ ('mm_users1이면 clear_child_tid 포인터도 유지하나요?','아닙니다. 사용자 쓰기는 건너뛰어도 포인터는 NULL로 만듭니다.','그렇습니다. 아무 상태도 바꾸지 않습니다.','포인터 초기화는 mm_users>1 조건 밖이며 clear_child_tid가 있는 분기 안에 있습니다.'),
+ ('put_user 오류를 검사해 mm_release가 errno를 반환하나요?','아닙니다. void 함수이고 그 오류를 검사하지 않습니다.','그렇습니다. 사용자 쓰기 실패마다 -EFAULT를 반환합니다.','함수 시그니처와 오류를 무시한다는 원문 주석을 함께 확인해야 합니다.')),
+('vfork 완료 대기: 자식이 보관한 completion 포인터의 수명','wait_for_vfork_done',
+ 'vfork 경로에서 부모는 자식이 공유 상태 사용을 마칠 때까지 기다립니다. 완료 객체를 가리키는 포인터가 자식에 남아 있는데 부모가 대기를 중단하고 돌아가면 나중 완료 통지가 이미 수명이 끝난 객체를 건드릴 수 있어 연결 해제가 필요합니다.',
+ 'kernel_clone의 CLONE_VFORK 분기는 자식 vfork_done에 부모 completion 주소를 넣고 초기화한 뒤 자식 태스크 참조를 얻습니다. 자식을 깨운 뒤 wait_for_vfork_done으로 갑니다. 이 helper는 freezer 진입 처리를 하고 TASK_KILLABLE|TASK_FREEZABLE 상태로 completion을 기다린 뒤 freezer를 나옵니다. 중단되면 task_lock 아래 자식 vfork_done=NULL로 바꾸고 모든 경우 put_task_struct합니다.',
+ '정상 완료 쪽 complete_vfork_done은 task_lock 아래 포인터를 읽고 있으면 먼저 NULL로 만든 뒤 complete합니다. 부모 대기 중단 쪽도 같은 task_lock을 쓰므로 완료 통지와 포인터 분리를 직렬화합니다. 정상 대기 완료 때만 kernel_clone은 VFORK_DONE ptrace 이벤트를 보내며 wait의 중단 반환을 생성 자체의 errno로 그대로 반환하는 코드는 아닙니다.',
+ '태스크 참조와 완료 객체는 다른 수명이다',
+ 'get_task_struct/put_task_struct는 자식 태스크 객체가 대기 경로 중 사라지지 않게 합니다. vfork_done을 NULL로 만드는 것은 그 태스크 안에 저장된 외부 completion 연결을 제거하는 동작입니다. 둘 중 하나가 다른 하나를 대신하지 않습니다. mm_release가 자식의 사용 종료 시 complete_vfork_done을 부르는 연결과,부모의 중단 경로를 함께 봐야 한쪽 성공 사례만으로 수명을 설명하는 오류를 피할 수 있습니다.',
+ ('부모 대기가 중단되면 자식의 completion 연결은?','task_lock 아래 NULL로 지웁니다.','자식이 언젠가 알아서 사용할 때까지 그대로 둡니다.','부모가 더 이상 기다리지 않는 completion에 뒤늦게 접근하지 않도록 연결을 끊습니다.'),
+ ('정상 완료 helper는 complete 전후 언제 포인터를 비우나요?','먼저 NULL로 만든 뒤 complete합니다.','complete를 호출한 뒤 잠금 없이 비웁니다.','원문은 task_lock 안에서 포인터 분리와 완료 통지를 순서대로 실행합니다.')),
+]
+
+def register(topic,q,detail):
+    for title,symbol,why,principle,use,dt,body,qa,qb in ROWS:
+        topic(title,'프로세스','kernel/fork.c',symbol,why,principle,use,
+              '태스크·mm·completion의 소유권, 참조와 잠금, 실패 정리 순서를 각각 표시하세요.',
+              q(title+' · '+qa[0],*qa[1:]),q(title+' · '+qb[0],*qb[1:]),
+              details=[detail(dt,body),detail('검토 범위','Linux v6.12 fork.c의 mm 조회·접근·복제·분리·vfork 대기와 연결된 초기화/생성 부분을 대조했습니다. fork.c 전체 구현 검토 완료가 아니며 실제 fork 경쟁·시그널 중단·exec 실행 시험은 아닙니다.')])

@@ -1,0 +1,905 @@
+{
+  "lib/string.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os627",
+        "symbols": [
+          "strcmp",
+          "strncmp"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "파일의 구성",
+          "API와 구현",
+          "NUL과 크기"
+        ],
+        "review": "Unsigned byte·세 비교 반환·NUL·count0·한도와 전체 일치 구분·arch/FORTIFY 및 파일 구성 metadata를 전체 loop와 대조."
+      },
+      {
+        "lesson": "os628",
+        "symbols": [
+          "strncasecmp",
+          "strcasecmp"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "반환 크기",
+          "0 한도"
+        ],
+        "review": "두 함수의 len0·NUL·같은 raw byte 최적 경로·tolower·반환 차이·ASCII계열 byte 계약과 Unicode 한계를 대조."
+      },
+      {
+        "lesson": "os629",
+        "symbols": [
+          "strcpy",
+          "strncpy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "변수 이름과 반환",
+          "고정 공간의 의미"
+        ],
+        "review": "원래 목적 반환·NUL 포함 복사·count칸 padding·src 증가 조건·잘림NUL미보장·capacity/overlap 전제 대조."
+      },
+      {
+        "lesson": "os630",
+        "symbols": [
+          "sized_strscpy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "읽기 경계",
+          "반환 단위",
+          "Word 읽기 Helper"
+        ],
+        "review": "전체 count guard·max/page/정렬·KMSAN disable·word mask·res/count 변화·byte fallback·E2BIG/NUL 계약 대조.8offset×80length×89count 원본 실행 검산."
+      },
+      {
+        "lesson": "os631",
+        "symbols": [
+          "strcat",
+          "strncat"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "0 한도",
+          "성공 정보"
+        ],
+        "review": "목적NUL 탐색·source추가·count0 bypass·count한도와 별도종료·원래목적 반환·공간전제 대조."
+      },
+      {
+        "lesson": "os632",
+        "symbols": [
+          "strlcat"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "먼저 읽는 길이",
+          "정수 범위"
+        ],
+        "review": "strlen 두 개·need length보관·BUG_ON dsize>=count·공간차감·축소·builtinmemcpy/NUL·반환 계약 대조."
+      },
+      {
+        "lesson": "os633",
+        "symbols": [
+          "stpcpy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Compiler 생성 참조",
+          "Restrict와 겹침"
+        ],
+        "review": "원본 prototype/정의·restrict·NUL복사뒤끝pointer·compiler libcall 존재이유·bounds미지원 대조."
+      },
+      {
+        "lesson": "os634",
+        "symbols": [
+          "strchr",
+          "strchrnul",
+          "strnchrnul",
+          "strrchr",
+          "strnchr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Pointer의 수정 권한",
+          "NUL 검색",
+          "0 한도"
+        ],
+        "review": "다섯 전체 loop의 최초/마지막·c char축소·NUL 검색·NULL/끝/범위끝 반환·count0·const source 수정권한 대조."
+      },
+      {
+        "lesson": "os635",
+        "symbols": [
+          "strlen",
+          "strnlen"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "빈 문자열",
+          "0 Count"
+        ],
+        "review": "전체 NUL검색·count 선평가·pointer차이·한도미종료·byte길이 대조."
+      },
+      {
+        "lesson": "os636",
+        "symbols": [
+          "strspn",
+          "strcspn",
+          "strpbrk"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "빈 집합",
+          "계산 비용"
+        ],
+        "review": "세 전체 loop의 membership strchr·긍정/부정조건·길이/주소반환·빈집합·중첩탐색비용 대조."
+      },
+      {
+        "lesson": "os637",
+        "symbols": [
+          "strsep"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "구분자 집합",
+          "Literal과 수명"
+        ],
+        "review": "char**caller상태·NULL종료·첫delimiter NUL변경·뒤pointer·빈token·공유backing수명 대조."
+      },
+      {
+        "lesson": "os638",
+        "symbols": [
+          "memset",
+          "memset16",
+          "memset32",
+          "memset64"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Byte 축소",
+          "Zero와 객체 초기화"
+        ],
+        "review": "전체 네 폭·count단위·pointer증가·value축소·원래주소·MMIO계약 및 zero객체 초기화차이 대조."
+      },
+      {
+        "lesson": "os639",
+        "symbols": [
+          "memcpy",
+          "memmove"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Source와 목적 관계",
+          "Memcpy 구현과 API"
+        ],
+        "review": "앞/뒤 복사·동일주소·count바이트·NUL자료·겹침과IO계약 대조;양방향overlap 원본 실행 검산."
+      },
+      {
+        "lesson": "os640",
+        "symbols": [
+          "memcmp",
+          "bcmp"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Endian과순서",
+          "반환범위"
+        ],
+        "review": "word equality skip뒤byte순서재검사·unsigned차이·count/NUL·bcmp zero/nonzero만의 계약·padding/timing 전제 대조.32word영역 모든 첫불일치위치 실행."
+      },
+      {
+        "lesson": "os641",
+        "symbols": [
+          "memscan",
+          "memchr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "공간0",
+          "검사 대상"
+        ],
+        "review": "byte축소·binary0·범위끝/NULL 반환·count0·returned pointer해석 대조."
+      },
+      {
+        "lesson": "os642",
+        "symbols": [
+          "strstr",
+          "strnstr"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "단순 탐색 비용",
+          "범위와 읽기"
+        ],
+        "review": "needle strlen·빈needle·candidate memcmp·len갱신·strnstr에haystackNUL종료없음·naive비용 대조.원본실행 A NUL B C의뒤BC일치 검산."
+      },
+      {
+        "lesson": "os643",
+        "symbols": [
+          "check_bytes8",
+          "memchr_inv"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "반복 값 구성",
+          "반복 값의 세 경로",
+          "서명과 Count",
+          "큰 Count 전제"
+        ],
+        "review": "전체 threshold16·value64곱셈3분기·prefix8정렬·unsigned int words한도·word불일치후byte정밀검사·tail·NULL 대조.8offset×97length의각불일치위치원본실행 검산."
+      }
+    ]
+  },
+  "include/asm-generic/word-at-a-time.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os644",
+        "symbols": [
+          "word_at_a_time",
+          "has_zero",
+          "prep_zero_mask",
+          "create_zero_mask",
+          "count_masked_bytes",
+          "find_zero",
+          "zero_bytemask"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Borrow 예",
+          "폭별 Count",
+          "유효 Prefix 계산",
+          "입력 전제",
+          "발췌 위치",
+          "Endian의 첫 위치"
+        ],
+        "review": "전체 generic header의endian두분기·constants·32/64count·mask변환·첫위치·bytesprefix·borrow오표시 전제 대조.64bitLE/BE산술을255nonzero×8zero위치각각실행;BE는명시값packing이며실제BE커널실행아님.32bit유효prefix0/FF/FFFF/FFFFFF 식도0/1/2/3검산."
+      }
+    ]
+  },
+  "lib/kstrtox.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os645",
+        "symbols": [
+          "_parse_integer_fixup_radix"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Simple 변환과 차이",
+          "위치와 값",
+          "부호의 순서"
+        ],
+        "review": "기수0 선택·유효hex다음문자·16prefix 소비·base변경·부호 처리의바깥순서·simple변환문서와의차이대조."
+      },
+      {
+        "lesson": "os646",
+        "symbols": [
+          "_parse_integer_limit",
+          "_parse_integer"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Overflow 부등식",
+          "상위4bit와 기수",
+          "문자 수"
+        ],
+        "review": "digit값·base검사·max_chars·multiply-add·maxbase16상위4bit 최적검사·overflow부등식·bit31flag·consumedcount·내부output대입·INT_MAX전달전체대조."
+      },
+      {
+        "lesson": "os647",
+        "symbols": [
+          "_kstrtoull",
+          "kstrtoull"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "오류 순서",
+          "입력 공백"
+        ],
+        "review": "+처리·overflow/0digit우선오류·단일newline·전체NUL·localtmp후성공대입·unsignedminus금지·erroroutput보존대조.원본실행경계확인."
+      },
+      {
+        "lesson": "os648",
+        "symbols": [
+          "kstrtoll"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "부호0",
+          "표현과 계약"
+        ],
+        "review": "음수unsignedmagnitude·unsignednegation→signedcast양수거부·양수signedcast음수거부·정확한LLONGMIN/MAX·-0·calleroutput보존대조."
+      },
+      {
+        "lesson": "os649",
+        "symbols": [
+          "_kstrtoul",
+          "_kstrtol",
+          "kstrtouint",
+          "kstrtoint",
+          "kstrtou16",
+          "kstrtos16",
+          "kstrtou8",
+          "kstrtos8"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "User Alias",
+          "공개 Alias",
+          "Long 빠른 경로",
+          "결과 보존"
+        ],
+        "review": "전체폭별큰tmp변환·cast동일성·ERANGE·성공대입·headerlong크기/정렬fastpath·numeric/useralias·must_check와ABI폭계약대조.602u8/s8값·wide경계실행."
+      },
+      {
+        "lesson": "os650",
+        "symbols": [
+          "kstrtobool"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "출력 보존",
+          "숫자 Parser와 차이"
+        ],
+        "review": "첫YyTt1/NnFf0·o의다음n/f·NULL·EINVAL·성공만대입·전체끝미검증을대조.원본onion/ofgarbage실행확인."
+      },
+      {
+        "lesson": "os651",
+        "symbols": [
+          "kstrto_from_user",
+          "kstrtoull_from_user",
+          "kstrtoll_from_user",
+          "kstrtoul_from_user",
+          "kstrtol_from_user",
+          "kstrtouint_from_user",
+          "kstrtoint_from_user",
+          "kstrtou16_from_user",
+          "kstrtos16_from_user",
+          "kstrtou8_from_user",
+          "kstrtos8_from_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Macro로 생성되는 함수",
+          "Kernel·User 경계",
+          "NUL 공간"
+        ],
+        "review": "macro전부와10생성함수의buffer식·mincount·부분copyEFAULT·NUL·g변환·긴입력prefix잘림·headeruseraliases대조.원본macro에서u8잘림과copyfault모의실행확인."
+      },
+      {
+        "lesson": "os652",
+        "symbols": [
+          "kstrtobool_from_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Macro를 쓰지 않는 이유",
+          "전체 입력과 다름"
+        ],
+        "review": "별도4bytebuf·최대3copy·EFAULT·NUL·boolprefix·base불필요·count0 EINVAL전체대조.실제kerneluserfault는미실행."
+      }
+    ]
+  },
+  "lib/kstrtox.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os646",
+        "symbols": [
+          "_parse_integer_limit",
+          "_parse_integer",
+          "KSTRTOX_OVERFLOW"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Overflow 부등식",
+          "상위4bit와 기수",
+          "문자 수"
+        ],
+        "review": "내부header전체guard·bit31 KSTRTOX_OVERFLOW정의·limit/max_chars와_parse_integer선언을변환helper구현과연결."
+      },
+      {
+        "lesson": "os645",
+        "symbols": [
+          "_parse_integer_fixup_radix"
+        ],
+        "sections": [
+          "위치와 값"
+        ],
+        "review": "내부header의_parse_integer_fixup_radix선언을기수와pointer수정계약에연결."
+      }
+    ]
+  },
+  "include/linux/kstrtox.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os645",
+        "symbols": [
+          "simple_strtoul",
+          "simple_strtol",
+          "simple_strtoull",
+          "simple_strtoll"
+        ],
+        "sections": [
+          "Simple 변환과 차이"
+        ],
+        "review": "공개header끝의simple_strto4선언과범위overflow미검사·첫non-digit종료·가능한kstrto권고·구분자parse문서를해설과연결."
+      },
+      {
+        "lesson": "os649",
+        "symbols": [
+          "_kstrtoul",
+          "_kstrtol",
+          "kstrtouint",
+          "kstrtoint",
+          "kstrtou16",
+          "kstrtos16",
+          "kstrtou8",
+          "kstrtos8",
+          "kstrtoul",
+          "kstrtol",
+          "kstrtou64",
+          "kstrtos64",
+          "kstrtou32",
+          "kstrtos32",
+          "__must_check"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "User Alias",
+          "공개 Alias",
+          "Long 빠른 경로",
+          "결과 보존"
+        ],
+        "review": "공개header전체numeric폭별선언·must_check·longsizeof/alignfastwrapper·64/32alias forwarder·문법/오류주석을본문과연결.구현의축소검사는lib/kstrtox.c에있음."
+      },
+      {
+        "lesson": "os651",
+        "symbols": [
+          "kstrtoull_from_user",
+          "kstrtoll_from_user",
+          "kstrtoul_from_user",
+          "kstrtol_from_user",
+          "kstrtouint_from_user",
+          "kstrtoint_from_user",
+          "kstrtou16_from_user",
+          "kstrtos16_from_user",
+          "kstrtou8_from_user",
+          "kstrtos8_from_user",
+          "kstrtou64_from_user",
+          "kstrtos64_from_user",
+          "kstrtou32_from_user",
+          "kstrtos32_from_user"
+        ],
+        "sections": [
+          "사용 방법과 적용 조건",
+          "Macro로 생성되는 함수",
+          "Kernel·User 경계"
+        ],
+        "review": "공개header의10from_user서명·__user/count/base/output과4개의64/32alias inline정의전체를확인.실제usercopy macro는lib/kstrtox.c의해설과연결."
+      },
+      {
+        "lesson": "os650",
+        "symbols": [
+          "kstrtobool"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "출력 보존",
+          "숫자 Parser와 차이"
+        ],
+        "review": "공개header의Boolean함수선언·입력/output형·user주소/count와must_check를본문의구현계약과연결."
+      },
+      {
+        "lesson": "os652",
+        "symbols": [
+          "kstrtobool_from_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "Macro를 쓰지 않는 이유",
+          "전체 입력과 다름"
+        ],
+        "review": "공개header의Boolean함수선언·입력/output형·user주소/count와must_check를본문의구현계약과연결."
+      }
+    ]
+  },
+  "lib/string_helpers.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os653",
+        "symbols": [
+          "string_get_size",
+          "units_10",
+          "units_2",
+          "rounding"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "크기 표시·Napier 축소와 세 유효숫자 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os654",
+        "symbols": [
+          "parse_int_array_user",
+          "free_buf"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "사용자 정수 배열·두 번 파싱과 소유권 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os655",
+        "symbols": [
+          "string_unescape",
+          "unescape_space",
+          "unescape_special"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Unescape·제자리 변환과 0 용량의 의미 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os656",
+        "symbols": [
+          "unescape_octal",
+          "unescape_hex"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Octal·Hex Unescape의 자리 수 경계 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os657",
+        "symbols": [
+          "string_escape_mem",
+          "escape_passthrough",
+          "escape_space",
+          "escape_special",
+          "escape_null",
+          "escape_octal",
+          "escape_hex"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Escape Memory·필요 길이와 자동 NUL 없음 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os658",
+        "symbols": [
+          "string_escape_mem",
+          "escape_passthrough",
+          "escape_space",
+          "escape_special",
+          "escape_null",
+          "escape_octal",
+          "escape_hex"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Escape 선택·Only 사전과 Append 우선순위 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os659",
+        "symbols": [
+          "kstrdup_quotable"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Quotable 복제·두 번 변환과 할당 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os660",
+        "symbols": [
+          "kstrdup_quotable_cmdline"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "명령행 로그·Argument NUL을 공백으로 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os661",
+        "symbols": [
+          "kstrdup_quotable_file"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "파일 경로 로그·오류 표식과 임시 공간 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os662",
+        "symbols": [
+          "strreplace",
+          "kstrdup_and_replace"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "문자 교체·원본 수정과 복제 선택 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os663",
+        "symbols": [
+          "kasprintf_strarray",
+          "kfree_strarray"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "문자열 배열·부분 할당 실패 정리 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os664",
+        "symbols": [
+          "devm_kasprintf_strarray",
+          "struct strarray",
+          "devm_kfree_strarray"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Devm 문자열 배열·Device Resource 등록 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os665",
+        "symbols": [
+          "strim",
+          "skip_spaces"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "공백 정리·반환 위치와 Allocation 시작 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os666",
+        "symbols": [
+          "sysfs_streq"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Sysfs 비교·마지막 Newline 하나 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os667",
+        "symbols": [
+          "match_string",
+          "__sysfs_match_string"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "이름 배열 검색·한도와 첫 NULL 종료 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os668",
+        "symbols": [
+          "memcpy_and_pad"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "복사와 Padding·목적 길이 기준 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      },
+      {
+        "lesson": "os669",
+        "symbols": [
+          "__fortify_report",
+          "__fortify_panic",
+          "__read_overflow2_field",
+          "__write_overflow_field",
+          "fortify_func_name"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FORTIFY 보고·Reason 해석과 Panic CONFIG guard・reason extraction・table bound・read/write direction・WARN reporting・report then BUG and compile-warning placeholders individually explained. Runtime panic not executed; authored source-branch evidence only."
+      }
+    ]
+  },
+  "include/linux/string_helpers.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os670",
+        "symbols": [
+          "string_is_terminated",
+          "string_upper",
+          "string_lower",
+          "string_unescape_inplace",
+          "string_unescape_any",
+          "string_unescape_any_inplace",
+          "string_escape_mem_any_np",
+          "string_escape_str",
+          "string_escape_str_any_np",
+          "UNESCAPE_ALL_MASK",
+          "ESCAPE_ALL_MASK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "문자 Helper Header·Inline Wrapper와 Byte Case 전체 함수의 조건·진행·종료·소유권·오류·flags 경계를 해설 및 개별 두 문제와 대조. 원본 helper/header 실행 fixture로 경계와 모의 할당 실패 정리를 검산. FORTIFY panic은 원본 분기 읽기만 수행."
+      }
+    ]
+  },
+  "lib/ctype.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os671",
+        "symbols": [
+          "_ctype",
+          "_U",
+          "_L",
+          "_D",
+          "_C",
+          "_P",
+          "_S",
+          "_X",
+          "_SP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "모든256칸 bit를 독립 범위 계산과 대조. 각 분류 bit, ASCII·Latin1 영역, NUL 공백 배제, mask 합성과 EOF 비지원 해설·문제·답지 작성."
+      }
+    ]
+  },
+  "include/linux/ctype.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os672",
+        "symbols": [
+          "__ismask",
+          "isalnum",
+          "isalpha",
+          "iscntrl",
+          "isgraph",
+          "islower",
+          "isprint",
+          "ispunct",
+          "isspace",
+          "isupper",
+          "isxdigit",
+          "isascii",
+          "toascii",
+          "isdigit",
+          "__tolower",
+          "__toupper",
+          "_tolower",
+          "isodigit"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header 전체 guard·compiler·bits·table extern·모든분류·builtin digit 선택·unsigned byte 축소·public case·내부 OR·octal 범위를 개별 해설 및256값 검산. EOF/UTF8 계약과223→191 예 포함."
+      }
+    ]
+  },
+  "include/linux/string_choices.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os673",
+        "symbols": [
+          "str_enable_disable",
+          "str_disable_enable",
+          "str_enabled_disabled",
+          "str_disabled_enabled",
+          "str_hi_lo",
+          "str_lo_hi",
+          "str_high_low",
+          "str_low_high",
+          "str_read_write",
+          "str_write_read",
+          "str_on_off",
+          "str_off_on",
+          "str_yes_no",
+          "str_no_yes",
+          "str_up_down",
+          "str_down_up",
+          "str_true_false",
+          "str_false_true",
+          "str_plural"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Header 전체 아홉쌍 bool 함수·역방향 macro·plural·const literal 소유권·한 번 평가·방향·linker dedup 목적을 해설하고 false/true·0/1/2 plural 실행 검산."
+      }
+    ]
+  },
+  "lib/argv_split.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os684",
+        "symbols": [
+          "count_argc",
+          "argv_free",
+          "argv_split"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "빈 입력",
+          "부분 실패",
+          "복제 한도"
+        ],
+        "review": "전체 source의 복제 먼저·공백/nonspace 상태전이·argc+2·숨긴 첫 ownership 칸·NULL sentinel·argcp 선택·배열실패 정리·argv_free의 pointer복원 대조. 원본 실행으로 빈·따옴표·Latin1공백·실패 두 단계와누수0 검산."
+      }
+    ]
+  },
+  "include/linux/args.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os685",
+        "symbols": [
+          "__COUNT_ARGS",
+          "COUNT_ARGS",
+          "__CONCAT",
+          "CONCATENATE"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "자리 이동",
+          "먼저 확장",
+          "파일과 이식성"
+        ],
+        "review": "Header 전체 고정 placeholder·GNU빈인자 제거·15개 상한과16번째선택·두단계token결합·guard 해설. 원본실행0/1/3/15인자와16번째73선택 및strscpy실제dispatch 검산."
+      }
+    ]
+  }
+}

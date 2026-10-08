@@ -1,0 +1,417 @@
+{
+  "mm/util.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "evidence": [
+      {
+        "lesson": "os694",
+        "symbols": [
+          "vma_set_file",
+          "vma_is_stack_for_current"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Swap 이후 Local",
+          "Stack 경계",
+          "파일 전체의 연결"
+        ],
+        "review": "VMA 보조·Stack 주소와 File 참조 교체의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os695",
+        "symbols": [
+          "randomize_stack_top",
+          "STACK_RND_MASK"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "성장 방향",
+          "Page Alignment"
+        ],
+        "review": "Stack ASLR·Page Mask와 성장 방향의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os696",
+        "symbols": [
+          "randomize_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Overflow와 Alignment",
+          "Modulo의 한계"
+        ],
+        "review": "Randomize Page·정렬과 Range 한도의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os697",
+        "symbols": [
+          "arch_pick_mmap_layout",
+          "arch_randomize_brk",
+          "arch_mmap_rnd",
+          "mmap_is_legacy",
+          "mmap_base",
+          "MIN_GAP",
+          "MAX_GAP"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Gap 경계",
+          "Compat Random",
+          "위로 성장",
+          "대체와 시험 연결"
+        ],
+        "review": "Mmap 배치 선택·Legacy와 Top Down의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os698",
+        "symbols": [
+          "__account_locked_vm",
+          "account_locked_vm"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "단위",
+          "Wrapper 경로"
+        ],
+        "review": "Locked VM 회계·쓰기 Lock과 Memlock 한도의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os699",
+        "symbols": [
+          "vm_mmap_pgoff",
+          "vm_mmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Offset 단위",
+          "오류와 주소"
+        ],
+        "review": "Kernel Mmap Wrapper·Security와 Lock 이후 처리의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os700",
+        "symbols": [
+          "kmalloc_gfp_adjust",
+          "__kvmalloc_node_noprof"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "큰 요청 Flags",
+          "Huge Vmap 선택",
+          "원래 Flags"
+        ],
+        "review": "KVMalloc 대체 경로·GFP와 Page 크기의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os701",
+        "symbols": [
+          "kvfree",
+          "kvfree_sensitive"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "해제 Context",
+          "지정 영역만"
+        ],
+        "review": "KV 해제·주소 계열과 민감 자료 지우기의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os702",
+        "symbols": [
+          "kvrealloc_noprof"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "복사 크기",
+          "0 크기",
+          "KASAN과 Tag"
+        ],
+        "review": "KV 재할당·기존 자료 보존과 실패 Ownership의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os703",
+        "symbols": [
+          "__vmalloc_array_noprof",
+          "vmalloc_array_noprof",
+          "__vcalloc_noprof",
+          "vcalloc_noprof"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "주변 Wrapper",
+          "크기 단위"
+        ],
+        "review": "Vmalloc Array·곱셈 검사와 Zero Flag의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os704",
+        "symbols": [
+          "folio_anon_vma",
+          "folio_mapping"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "정확한 Tag",
+          "Slab 예외"
+        ],
+        "review": "Folio Mapping·Pointer Tag와 Swap 우선순위의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os705",
+        "symbols": [
+          "folio_copy",
+          "folio_mc_copy"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "목적 크기",
+          "오류 의미"
+        ],
+        "review": "Folio 복사·Page 반복과 중간 Poison 오류의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os706",
+        "symbols": [
+          "overcommit_ratio_handler",
+          "sync_overcommit_as",
+          "overcommit_policy_handler",
+          "overcommit_kbytes_handler"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "동기화 Callback",
+          "두 한도 설정"
+        ],
+        "review": "Overcommit 정책 교체·Batch와 Per CPU 동기화의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os707",
+        "symbols": [
+          "vm_commit_limit",
+          "vm_memory_committed",
+          "vm_committed_as",
+          "sysctl_overcommit_memory",
+          "sysctl_overcommit_ratio",
+          "sysctl_overcommit_kbytes",
+          "sysctl_max_map_count",
+          "sysctl_user_reserve_kbytes",
+          "sysctl_admin_reserve_kbytes"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Kb에서 Page",
+          "Counter와 Cacheline",
+          "기본 변수와 표식"
+        ],
+        "review": "Commit Limit·RAM·Huge Page·Swap의 단위의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os708",
+        "symbols": [
+          "__vm_enough_memory"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "GUESS의 실제 조건",
+          "Reserve의 두 종류",
+          "승인과 물리 공급"
+        ],
+        "review": "메모리 예약 허용·먼저 회계하고 실패 복원의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os709",
+        "symbols": [
+          "get_cmdline"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Setproctitle 경로",
+          "Ref 정리"
+        ],
+        "review": "Get Cmdline·범위 Snapshot과 종료 보정의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os710",
+        "symbols": [
+          "memcmp_pages"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Weak 대체",
+          "주소와 Page"
+        ],
+        "review": "Page 비교·Local Mapping의 역순 해제의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os711",
+        "symbols": [
+          "mem_dump_obj"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "출력 이어쓰기",
+          "Special Pointer"
+        ],
+        "review": "객체 Provenance·Debug 설정과 주소 분류의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os712",
+        "symbols": [
+          "page_offline_rwsem",
+          "page_offline_freeze",
+          "page_offline_thaw",
+          "page_offline_begin",
+          "page_offline_end"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "문제 상황",
+          "짧은 이름의 역할"
+        ],
+        "review": "Page Offline·Reader와 전환 Writer의 RW Semaphore의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os713",
+        "symbols": [
+          "flush_dcache_folio"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Architecture 선택",
+          "수명과 접근"
+        ],
+        "review": "Folio Cache Flush·Architecture Fallback 반복의 전체 함수·조건부 구현·전역 연결·목적·오류·단위·주소와수명·context 조건을 실제 원본과 대조하여 두 문제 및 풀이를 작성했습니다. 실행은 해당 manifest의 명시적 primitive 모의 환경이며 native kernel 경합·모든 architecture 검증으로 계산하지 않습니다."
+      },
+      {
+        "lesson": "os686",
+        "symbols": [
+          "kstrdup",
+          "kstrndup"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "NULL과 빈 문자열",
+          "읽기 전제"
+        ]
+      },
+      {
+        "lesson": "os687",
+        "symbols": [
+          "kstrdup_const",
+          "kfree_const"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Const와 물리 배치",
+          "사용 경로"
+        ]
+      },
+      {
+        "lesson": "os688",
+        "symbols": [
+          "kmemdup_noprof",
+          "kmemdup_array"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "Profiling 경로",
+          "NUMA와 호출 위치"
+        ]
+      },
+      {
+        "lesson": "os689",
+        "symbols": [
+          "kvmemdup"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "주소의 두 의미",
+          "실패 후 원본"
+        ]
+      },
+      {
+        "lesson": "os690",
+        "symbols": [
+          "kmemdup_nul"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "길이를 아는 경우",
+          "덧셈 전제"
+        ]
+      },
+      {
+        "lesson": "os691",
+        "symbols": [
+          "user_buckets",
+          "init_user_buckets",
+          "memdup_user",
+          "vmemdup_user"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "파일 내부 자원",
+          "오류 이후 출력"
+        ]
+      },
+      {
+        "lesson": "os692",
+        "symbols": [
+          "strndup_user"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "두 단계 경쟁",
+          "복사 오류 전달"
+        ]
+      },
+      {
+        "lesson": "os693",
+        "symbols": [
+          "memdup_user_nul"
+        ],
+        "review": "원본 body의 길이·NUL·allocation 계열·error pointer·usercopy 오류 정리·조건부 소유권을 개별 해설과 두 문제에 대조했습니다. 실제 body 실행은 명시적인 allocator·rodata·usercopy 모의 환경을 사용했습니다.",
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "문자열·자료 경계",
+          "앞 수업의 호출"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "arch/arm64/mm/fixmap.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 172,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2214",
+        "symbols": [
+          "NR_BM_PTE_TABLES"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap runtime 범위·PCI영역과static assertion. fixmap전체시작이 PCI_IO_END보다높아야한다는 static_assert로두 virtual예약영역의충돌을막습니다. NR_BM_PTE_TABLES는전체범위를 PMD크기로덮는 entry수이고 PMDtable수는 1이어야한다는별도 assert가있습니다. 주소예약범위와 table용량을 compile계약으로연결합니다. SPAN_NR_ENTRIES의 vend−1끝처리를읽고 1개 boundary안과 2개 boundary를넘는예제를계산합니다. fixtureTOP/PCI숫자는실제 kernelvirtual배치가아닙니다."
+      },
+      {
+        "lesson": "os2215",
+        "symbols": [
+          "__BM_TABLE_IDX"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap table row index·전체시작에서의차이. __BM_TABLE_IDX는 addr를해당 levelshift로나눈 entry번호에서전체 fixmap시작의 entry번호를뺍니다. FIXADDR_TOT_START와기준 level을공통으로사용해 compactbm_pte행 index를구합니다. BM_PTE_TABLE_IDX는 PMD_SHIFT를선택합니다. start가 PMD중간에있어도 row0부터시작하는예제를그립니다. 절대 virtualpage번호를곧장작은배열 index로사용하지않습니다."
+      },
+      {
+        "lesson": "os2216",
+        "symbols": [
+          "fixmap_pte"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap PTE lookup·행과page내index. fixmap_pte는 bm_pte[BM_PTE_TABLE_IDX(addr)][pte_index(addr)]를반환합니다. 큰영역에서어느 PTEtable행인지와그 table안의어느 pageentry인지두단계로찾습니다. 실제 bm_pte는 page-alignedBSS배열이며초기화용정적 table입니다. 2차원배열 row·column을 virtual주소 bit와연결합니다. fixture는 scalarPTE와 providerindex를사용했으며 actualhardwarepagetablewalk가아닙니다."
+      },
+      {
+        "lesson": "os2217",
+        "symbols": [
+          "early_fixmap_init_pte"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap PTE 초기화·빈PMD에만table연결. PTE초기화는 READ_ONCE로 PMD값을읽고 pmd_none일때만해당 bm_pte행의 physicalsymbol주소로__pmd_populate합니다. 이미있는 PMD를무조건덮어쓰지않습니다. READ_ONCE는선택읽기표현이며전체 table트랜잭션이나동시안전성을혼자증명하는기술은아닙니다. 첫초기화의 populate와다시초기화할때카운터불변인 fixture를읽습니다. 실제 descriptor형식과 CPU관찰은 provider문맥밖입니다."
+      },
+      {
+        "lesson": "os2218",
+        "symbols": [
+          "early_fixmap_init_pmd"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap PMD 초기화·경계별loop와 기존PUD. PMD초기화는 PUD가없으면 bm_pmd의 physical주소로연결하고 pmd_offset_kimg로시작 PMD를얻습니다. 각 PMD경계까지 next를계산해 PTE초기화를호출하고 pointer를늘려 end까지이동합니다. end는 half-open경계이고 do/while은호출된범위를적어도한번처리합니다. FIXADDR_TOT_START부터 TOP까지몇 PMDboundary를넘는지그립니다. tablelevel과 loop의주소단위를읽습니다."
+      },
+      {
+        "lesson": "os2219",
+        "symbols": [
+          "early_fixmap_init_pud"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap PUD 초기화·16K shared-top 예외. level>3이고기존 P4D가 bm_pud의 physical주소와다르면 sharedtopcase검사를수행합니다. 주석은 kernelmapping과 fixmap이같은 topentry를쓰는 16K/4level경우라고설명하고 16K설정이아니면 BUG_ON입니다. P4D가없으면 bm_pud를연결한뒤 PUD아래초기화를계속합니다. fixture의다른기존 table값에서 4level+16K조건은허용되고다른 page조건은 BUGprovider에들어가는것을비교합니다. 실제 sharedkernelmapping을만들어검증한것은아닙니다."
+      },
+      {
+        "lesson": "os2220",
+        "symbols": [
+          "early_fixmap_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap 초기호출·early physicalsymbol과 lm_alias. 초기호출은전체 START/TOP범위에서 PGD·P4D를얻고 PUD초기화를시작합니다. 주석은일반 p*d_populate가내부 virt_to_phys를사용해 kernel상수에직접맞지않고이시점은 lm_alias를쓰기에도너무일러__p*d_populate와__pa_symbol을쓴다고설명합니다. earlyboot에서사용가능한주소변환과나중일반 mappinghelper를구별합니다. fixturephysicalidentityprovider가실제 kernel이미지주소변환을증명한다고하지않습니다."
+      },
+      {
+        "lesson": "os2221",
+        "symbols": [
+          "__set_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap 설정guard·FIX_HOLE와전체끝. __set_fixmap은 idx<=FIX_HOLE또는 idx>=전체끝 marker를 BUG_ON으로거부합니다. genericfix_to_virt는상한만검사하므로 mapping설정이 hole0을거부하는별도계약입니다. 유효 index에서주소를구하고해당 PTEpointer를찾습니다. index0·전체끝은 BUG,1부터끝−1은선택 PTE변경인 fixture를풉니다. 잘못된 index를 pointer로직접쓰기하지않는계약입니다."
+      },
+      {
+        "lesson": "os2222",
+        "symbols": [
+          "__set_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap PTE 설정·PFN과protection. pgprot_val(flags)가 0아니면 physical주소를 PAGE_SHIFT로나눠 PFN을얻고 pfn_pte의 flags와함께__set_pte합니다. physicalpage내 offset은 PTE의 pageframe에들어가지않으며 offsetwrapper가반환 virtualbyte주소에따로붙입니다. helper는입력 physicalpagealignment오류를별도로반환하지않습니다. physical0x12345678의 pagebase와 offset을분리하고설정 PTE와 offsetwrapper를연결합니다. fixturePTEvalue는 provider표현이며 actualhardwaredescriptorbit가아닙니다."
+      },
+      {
+        "lesson": "os2223",
+        "symbols": [
+          "__set_fixmap"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Fixmap clear·PTE삭제와page TLBflush. flags가 0이면__pte_clear후해당 virtualpage의 TLBkernel범위 flush를수행합니다. nonzeroflags설정 branch에는같은명시적 flush호출줄이없습니다. 이함수가 IRQ문맥에서도호출돼향후 TLBbroadcast에 IPI가필요하면문제가된다는주석으로문맥제약을연결합니다. clear때주소부터+PAGE_SIZE까지 flushprovider를확인합니다. 실제 TLB·IPI·IRQhardware효과와 counter관찰을구별합니다."
+      },
+      {
+        "lesson": "os2224",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT remap 주소·0과8byte정렬 조건. remap은 physical0또는 MIN_FDT_ALIGN로나눈나머지가있으면 NULL입니다. 고정 bootheader는정렬 8과최대 2MB를정하고 BUILD_BUG_ON(MIN<8)도있습니다. 최소 8byte정렬은첫 pagechunk안에서 magic·size두필드를읽을수있는배치조건과연결됩니다. page끝 8byte앞정렬주소에서도두 32bit필드가첫 page에들어가는그림을그립니다. fixture는 FDTfieldprovider이고실제 blobbyteparser가아닙니다."
+      },
+      {
+        "lesson": "os2225",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT remap pagebase·고정virtualbase와offset. physical주소를 PAGE_SIZE로내려 base를얻고나머지 offset을구합니다. FDTslot의고정 virtualbase에같은 offset을더해 dt_virt를만듭니다. physical주소자체를 kernelpointer로캐스팅해읽는것이아니라 mapping된가상위치에서필드를읽는기술입니다. physicalbase+24와 virtualFDTbase+24의관계를그립니다. provider가 virtual주소를 dereference하지않고선택필드를주는문맥임을구별합니다."
+      },
+      {
+        "lesson": "os2226",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT first chunk·magic 확인과 출력size 보존. 우선 1page를 create_mapping_noalloc으로연결해 magic과 size를읽습니다. magic이 FDT_MAGIC과다르면 NULL이고 size출력에대입하기전이라 caller의 size값이유지됩니다. 첫 mapping이이미실행된뒤의오류이며이함수에그 mapping을되돌리는줄은없습니다. badmagic에서 mapping1회·size123유지·NULL인 fixture를풉니다. noallochelper의실제 mapping정책과실패반환은외부구현으로이어읽습니다."
+      },
+      {
+        "lesson": "os2227",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT totalsize·상한검사와출력 변경시점. magic뒤 fdt_totalsize를*size에저장하고 MAX_FDT_SIZE보다크면 NULL입니다. 정상범위의 MAX2MB는허용하고 MAX+1은첫 mapping뒤거부합니다. cap오류라도 size출력은이미필드값으로바뀌었습니다. 이부분만으로전체 FDT내용과모든필드관계를검증하는 parser가되는것은아닙니다. MAX·MAX+1과 badmagic의 size변경차이를표로풉니다. fixture는정상 int범위의 size상한예제와별도타입경계예제를구별합니다."
+      },
+      {
+        "lesson": "os2228",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT 추가mapping·offset+size의전체window. offset+size가 1page를넘으면같은 physicalbase와 virtualbase에서그합만큼 create_mapping_noalloc을다시호출합니다. 첫 page만이아니라전체연속 window를 mapping하는길이를제공합니다. 같으면추가호출이없고반환은최초 dt_virt입니다. offset8·sizePAGE_SIZE면두번째길이 PAGE_SIZE+8,offset0·sizePAGE_SIZE면 1회인예제를풉니다. 실제 helper의 page올림등은외부구현계약입니다."
+      },
+      {
+        "lesson": "os2229",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT helper 한계·zero size와전체parser구분. 이 helper본문은 size의최소값·structureoffset·버전·reserve범위등을모두검사하지않습니다. fixture의선택 magic정상·size0필드는첫 mapping뒤 pointer를반환합니다. 따라서이 helper의 nonNULL만으로완전한 FDT검증성공이라고읽으면안됩니다. 실제 boot상위검증과 libfdtparser계약을이어읽어야합니다. 선택 fieldprovider의 size0결과와정상 FDT최소 header요건을구별합니다. invalidblob을추천입력으로사용하지않고함수경계의역할을이해합니다."
+      },
+      {
+        "lesson": "os2230",
+        "symbols": [
+          "fixmap_remap_fdt"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "FDT size 타입경계·u32필드와int출력. fdt_totalsize의 32bit필드를 int출력에대입하는부분은 C변환규약을읽어야합니다. 선택 nativeGCC문맥에서 UINT32_MAX는 size−1이되고 signedMAX비교와 unsignedPAGE_SIZE비교가다른결과를냅니다. provider는거대한 length호출을기록할뿐실제 mapping을만들지않았습니다. 이예제로전체 kernel취약성이나실제 boot허용을결론내리지않습니다. valid정상 size계약과표현범위를벗어난선택 field값을구별합니다. 원문 MAX상수타입·PAGE_SIZE타입·phys_addr_tlength를고정소스와연결해단계별변환을읽습니다."
+      }
+    ]
+  }
+}

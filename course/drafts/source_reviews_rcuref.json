@@ -1,0 +1,138 @@
+{
+  "include/linux/rcuref.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 155,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1394",
+        "symbols": [
+          "rcuref_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1395",
+        "symbols": [
+          "rcuref_read"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1396",
+        "symbols": [
+          "rcuref_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1398",
+        "symbols": [
+          "__rcuref_put"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1402",
+        "symbols": [
+          "rcuref_put_rcusafe"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1403",
+        "symbols": [
+          "rcuref_put"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      }
+    ]
+  },
+  "lib/rcuref.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 281,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os1397",
+        "symbols": [
+          "rcuref_get_slowpath"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1399",
+        "symbols": [
+          "rcuref_put_slowpath"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1400",
+        "symbols": [
+          "rcuref_put_slowpath"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      },
+      {
+        "lesson": "os1401",
+        "symbols": [
+          "rcuref_put_slowpath"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "Whole rcuref header andlib implementation/full theoretical documentation authored: biasedcount0=1ref/init/read zones/MAXREF storedvsread+1,all six stateconstants/live/saturation/dead/NOREF transition margins,unconditionalrelaxedget/controldependency/RCUstablepointer externalordering/slowpathdeadreject-satrestoretrue andleak-vsoverflow,releaseput/helpercontextwarning/internalcallrule,NOREFtoDEADreleaseCAS/acquireaftercontroldep/trueonlydestructionpermission/noautomaticfree/forcedCASfail no-retry,falsemultiplecauses/imbalancewarning/deadrestore/satrestore,NOREF revivalbeforedeadCAS vsDEAD getfail,RCUsafe contextvsnormal preemptwrapper/deconstructionUAFinterleaving/graceperiodblocking andbalancednesteddepth,memoryordering distinctlifetime/realbenchmark distinctions/forwarddeclarations/includeguard. Exactfullsource serialunsigned32atomic/preempt/RCU/WARNcondition/orderhook models30025assertions eachoptimized+ASanUBSan:10000init/get-put pairs,MAXREFread0x80000000 before saturation,dead/getfail/putimbalance/satzone,NOREFrevival,forcedlastCASfailONEREF/DEAD false/noacquire,nesteddepth2restore,validheldrcusafe andmissingcontextwarning,slowpathsnapshotreturnlive. Not realgraceperiod/concurrency/LKMM/allarchitecture proof; warningcondition count not once-only log count; no unsafe memory/ordering claim."
+      }
+    ]
+  }
+}

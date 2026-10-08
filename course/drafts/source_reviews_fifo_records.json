@@ -1,0 +1,218 @@
+{
+  "lib/kfifo.c": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 595,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os910",
+        "symbols": [
+          "__kfifo_alloc",
+          "__kfifo_free"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "배열 할당 검사",
+          "해제 책임"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os911",
+        "symbols": [
+          "__kfifo_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "0의 경계",
+          "기존 저장 소유권"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os912",
+        "symbols": [
+          "kfifo_unused",
+          "__kfifo_in",
+          "__kfifo_out_peek",
+          "__kfifo_out"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "공개 단위",
+          "기존 선언 연결"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os913",
+        "symbols": [
+          "kfifo_copy_in",
+          "kfifo_copy_out"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "입력 배리어",
+          "복사 전제"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os915",
+        "symbols": [
+          "__kfifo_out_linear"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "소비 별도",
+          "빈 경계"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os918",
+        "symbols": [
+          "__kfifo_max_r",
+          "__KFIFO_PEEK",
+          "__kfifo_peek_n",
+          "__KFIFO_POKE",
+          "__kfifo_poke_n",
+          "__kfifo_len_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "단순화 전제",
+          "길이 0"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os919",
+        "symbols": [
+          "__kfifo_in_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "저장과 공개",
+          "공개 매크로"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os920",
+        "symbols": [
+          "kfifo_out_copy_r",
+          "__kfifo_out_peek_r",
+          "__kfifo_out_r",
+          "__kfifo_skip_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "0 요청",
+          "동적 레코드형"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os921",
+        "symbols": [
+          "__kfifo_out_linear_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "원본 보존",
+          "반환 관찰 시험"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os922",
+        "symbols": [
+          "kfifo_copy_from_user",
+          "__kfifo_from_user",
+          "kfifo_copy_to_user",
+          "__kfifo_to_user"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "출력 오류",
+          "단위와 형식"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os923",
+        "symbols": [
+          "__kfifo_from_user_r",
+          "__kfifo_to_user_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "빈 출력",
+          "모의 uaccess"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os924",
+        "symbols": [
+          "setup_sgl_buf",
+          "setup_sgl"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "DMA sentinel",
+          "영 길이"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os925",
+        "symbols": [
+          "__kfifo_dma_in_prepare",
+          "__kfifo_dma_out_prepare"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "오류 검사 없음",
+          "장치 동기화"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      },
+      {
+        "lesson": "os926",
+        "symbols": [
+          "__kfifo_dma_in_prepare_r",
+          "__kfifo_dma_in_finish_r",
+          "__kfifo_dma_out_prepare_r"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건",
+          "출력 준비 범위",
+          "모의 DMA 범위"
+        ],
+        "review": "Whole595line lib and971line header read, individually authored all stream/record/usercopy/DMA/typed/query/reset/skip/lock/aliases/prototypes/type macros. Units, pointer ownership and power rounding0 caller constraints, header-vs-body init rounding discrepancy, record truncated whole consumption/zero-length commit, userfault partial storage vs counters, sg nents/byte finish, record linear unmasked/unbounded/emptytail discrepancy explicitly taught. Sequential original-body model execution excludes real kernel uaccess/SMP/IRQ/DMA engine proof."
+      }
+    ]
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "include/linux/sched/task_stack.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 119,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2031",
+        "symbols": [
+          "task_stack_page"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "태스크 스택 포인터 조회·수명 참조와 구별. THREAD_INFO_IN_TASK 설정의 task_stack_page는 task->stack을 그대로 반환합니다. 종료할 수 있는 다른 태스크의 스택은 조회 직후 해제될 수 있으므로 원문 주석은 try_get_task_stack을 쓰라고 설명합니다. 주소를 알아내는 연산과 해당 메모리를 사용하는 동안 수명을 유지하는 연산이 다릅니다. task_stack_page와 try_get_task_stack의 호출 목적을 나란히 적으세요. 모델은 유효 배열 주소를 반환하며 실제 태스크 종료 경쟁을 실행하지 않습니다. 상위 stack wrapper의 getter/putter와 연결합니다."
+      },
+      {
+        "lesson": "os2032",
+        "symbols": [
+          "setup_thread_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "task 내부 thread info 설정·setup 매크로의 빈 본문. THREAD_INFO_IN_TASK 설정은 setup_thread_stack(new,old)를 빈 do-while 매크로로 정의합니다. 매크로 본문에 인자가 쓰이지 않아 이 선택 경로에서는 인자의 부작용도 평가되지 않습니다. 구형 함수 경로와 달리 thread info를 stack 바닥에서 복사하는 연산이 필요 없는 형태입니다. new_task()·old_task()에 호출 counter를 둔 모델에서 0회인지 확인합니다. 함수 호출처럼 생긴 매크로도 인자 평가 계약이 다를 수 있으므로 부작용을 의존하지 않는 사용법을 유지합니다."
+      },
+      {
+        "lesson": "os2033",
+        "symbols": [
+          "end_of_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "task 내부 thread info의 스택 끝·성장 방향 조건. THREAD_INFO_IN_TASK에서 아래로 자라는 stack의 끝 검사 주소는 task->stack 시작입니다. STACK_GROWSUP이면 stack+THREAD_SIZE를 unsigned long pointer로 바꾼 뒤 1을 빼 마지막 word 주소를 반환합니다. 시작과 마지막 usable long의 역할이 성장 방향에 따라 달라집니다. 4096바이트·long 8바이트 모델에서 grows-up이면 base+4088을 계산하세요. 실제 architecture의 THREAD_SIZE는 설정에 따르며 이 fixture의 상수와 모든 kernel 크기가 같다고 외우지 않습니다."
+      },
+      {
+        "lesson": "os2034",
+        "symbols": [
+          "setup_thread_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "구형 thread info 초기화·구조체 복사와 task 재연결. THREAD_INFO_IN_TASK가 없고 architecture가 별도 thread 함수를 제공하지 않는 구형 경로는 새 thread_info에 이전 구조체를 복사한 뒤 task 멤버를 새 task로 바꿉니다. 전체 복사만 하면 이전 태스크를 가리키는 포인터가 남으므로 새 소유자를 다시 연결합니다. 모델의 marker 42는 복사되지만 task 포인터는 새 task가 되는지 확인합니다. 이 경로는 C 함수 인자가 각각 한 번 평가되며 빈 매크로와 평가 계약이 다릅니다."
+      },
+      {
+        "lesson": "os2035",
+        "symbols": [
+          "end_of_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "구형 스택 끝·thread info 위의 usable long. 구형 grows-down 경로는 task_thread_info(p)+1을 unsigned long pointer로 바꿔 반환합니다. +1은 thread_info 구조체 크기만큼 이동하여 스택 바닥의 메타데이터 바로 위를 선택합니다. grows-up이면 thread info 시작+THREAD_SIZE에서 long 하나를 뺍니다. 모델의 16바이트 thread_info 뒤 첫 word를 계산하세요. 그보다 아래로 스택이 내려가면 thread info를 손상시킬 수 있다는 원문 주석과 STACK_END_MAGIC 검사를 연결합니다."
+      },
+      {
+        "lesson": "os2036",
+        "symbols": [
+          "try_get_task_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "태스크 스택 참조 획득·inc_not_zero와 NULL 실패. THREAD_INFO_IN_TASK의 try_get_task_stack은 stack_refcount를 refcount_inc_not_zero로 증가시킬 수 있으면 stack pointer를 반환하고 아니면 NULL입니다. 0인 수명 참조를 이 helper로 되살리지 않습니다. 정상적인 참조 획득 성공은 읽기 기간을 보호하는 사용 계약이며 태스크 실행 상태 정지와 다릅니다. 모델의 참조 1은 2가 되고 성공 포인터를, 0은 유지되며 NULL을 반환하는지 봅니다. refcount helper의 실제 saturation·atomic ordering은 앞 수업 원문을 이어 읽으며 이 fixture는 순차 정상 count 모델입니다."
+      },
+      {
+        "lesson": "os2037",
+        "symbols": [
+          "try_get_task_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "구형 스택 getter·포인터 반환과 빈 put. THREAD_INFO_IN_TASK가 꺼진 경로는 getter가 task_stack_page를 반환하고 put_task_stack은 빈 함수입니다. 이 경로에는 stack_refcount 증가 조건을 넣지 않습니다. 상위 공통 호출 형태를 유지해도 설정별 수명 관리 방식은 다르므로 한 설정의 카운터 효과를 모든 설정에 확대하면 안 됩니다. 참조 count 0 모델에서도 구형 getter가 stack pointer를 반환하는지 확인합니다. actual 태스크 수명 보호는 해당 architecture 및 task 관리 문맥을 읽어야 하며 이 반환만으로 어떤 태스크든 안전하다고 사용하지 않습니다."
+      },
+      {
+        "lesson": "os2038",
+        "symbols": [
+          "put_task_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "태스크 스택 반납·실제 fork.c release 조건 연결. 활성 설정에서 이 헤더의 put_task_stack은 extern 선언이며 실제 fork.c는 refcount_dec_and_test가 마지막 참조를 알리면 release_task_stack을 부릅니다. release는 TASK_DEAD가 아니면 경고 후 반환해 조기 해제보다 남기는 쪽을 선택합니다. 선언·마지막 참조·태스크 상태 검사의 세 역할을 연결해야 합니다. kernel/fork.c 572~585행의 부분 원문을 함께 읽습니다. 이 수업은 해당 부분을 교차 확인한 것이며 fork.c 전체 해설 완료로 기록하지 않습니다. fixture의 put 모델은 카운터 반납만 수행하고 실제 해제·TASK_DEAD 경쟁을 실행하지 않습니다."
+      },
+      {
+        "lesson": "os2039",
+        "symbols": [
+          "task_stack_end_corrupted"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "스택 끝 magic 검사·sentinel과 검출 범위. task_stack_end_corrupted는 end_of_stack이 가리키는 word가 STACK_END_MAGIC와 다른지 비교합니다. 알려진 sentinel을 손상 여부의 징후로 사용하는 기술입니다. 모든 stack 바이트·모든 잘못된 접근을 검사하는 완전한 검출기가 아니며 magic이 유지된 오류도 별도 원리로 찾아야 합니다. uapi magic.h에서 확인한 0x57AC6E9D를 유효 end word에 쓰고 다른 값 1로 바꾸어 결과를 비교합니다. end_of_stack의 성장 방향·thread info 배치를 먼저 확인해야 올바른 위치를 검사합니다."
+      },
+      {
+        "lesson": "os2040",
+        "symbols": [
+          "object_is_on_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "현재 스택 위 객체 판별·tag 제거와 반열린 범위. object_is_on_stack은 current stack pointer를 얻고 kasan_reset_tag(obj)로 태그를 제거한 뒤 obj>=stack과 obj<stack+THREAD_SIZE를 검사합니다. 현재 스택의 주소 위치를 판별하는 함수이며 다른 task를 조회하는 인자는 없습니다. raw tagged pointer를 그대로 경계 비교하지 않게 하는 순서입니다. 유효 배열의 low·high-1·high를 각각 true·true·false로 계산하고 tag mask 모델의 위치도 확인합니다. 실제 KASAN tag 규칙과 CPU pointer 표현은 별도 helper이며 모델의 상위 byte mask로 모든 구현을 대체하지 않습니다."
+      },
+      {
+        "lesson": "os2041",
+        "symbols": [
+          "object_is_on_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "스택 위 객체 위치·전체 객체 크기 검사와 구별. 이 API에는 obj 크기 인자가 없어 시작 pointer의 위치만 검사합니다. stack high-1의 pointer가 true여도 그곳에서 16바이트 객체를 읽으면 범위를 넘을 수 있습니다. 앞 arm64 stackinfo_on_stack의 sp·size 전체 포함 검사와 다른 질문을 답합니다. 같은 high-1 주소로 위치 판별과 size16 전체 포함을 비교하세요. 실제 코드에서 객체 범위가 필요하면 위치 bool만으로 충분하다고 해석하지 말고 해당 호출자의 크기 계약을 확인합니다."
+      },
+      {
+        "lesson": "os2042",
+        "symbols": [
+          "stack_not_used"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "stack_not_used 설정·외부 측정과 비활성 0. DEBUG_STACK_USAGE이면 stack_not_used는 외부 함수로 선언되고 아니면 inline 함수가 0을 반환합니다. 비활성 0은 모든 실제 태스크의 사용하지 않은 공간을 측정해 얻은 값이라는 뜻이 아닙니다. 측정 코드가 없는 설정의 반환 규약입니다. 모델은 debug 외부 callback 123과 비활성 0을 구별합니다. 실제 측정의 fill pattern·검사 loop·사용량 의미는 외부 구현을 추가로 읽어야 하며 이 숫자 모델은 측정 방법을 실행하지 않습니다."
+      },
+      {
+        "lesson": "os2043",
+        "symbols": [
+          "kstack_end"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "kstack_end bitmask·페이지 경계의 한 word 창. architecture가 별도 KSTACK_END를 제공하지 않으면 generic 함수는 addr+sizeof(void*)-1을 THREAD_SIZE-sizeof(void*) mask로 검사합니다. 정렬된 페이지 경계 부근의 마지막 word 크기 창을 판별하는 식이며 task pointer나 실제 allocated stack을 받지 않습니다. 값 true만으로 해당 주소의 메모리 수명을 보장하지 않습니다. THREAD_SIZE4096·pointer8 모델에서 aligned base와 base-1..base-7은 true, base-8은 false인 창을 계산하세요. 4096개 offset을 독립 word 단위 나눗셈 oracle과 비교했으며 실제 APM BIOS 입력은 재현하지 않습니다."
+      },
+      {
+        "lesson": "os2044",
+        "symbols": [
+          "end_of_stack"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "태스크 스택 architecture override·설정별 구현 책임. THREAD_INFO_IN_TASK가 없고 __HAVE_THREAD_FUNCTIONS가 있으면 generic task_stack_page·setup·end 구현 블록이 생략될 수 있습니다. __HAVE_ARCH_KSTACK_END가 있으면 generic kstack_end도 제공되지 않습니다. override 조건은 architecture가 해당 계약을 제공하는 문맥을 읽어야 하는 표시입니다. 헤더의 if·elif·ifndef를 영역으로 나누세요. fixture는 generic override 없는 경로를 시험했으며 architecture 전용 layout이나 kstack_end 구현까지 모두 실행한 결과는 아닙니다."
+      },
+      {
+        "lesson": "os2045",
+        "symbols": [
+          "exit_task_stack_account"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "태스크 스택 관리 선언·회계와 cache와 magic 설정. 헤더에는 exit_task_stack_account, thread_stack_cache_init, set_task_stack_end_magic의 외부 선언도 있습니다. 각각 종료 회계·스택 cache 초기화·끝 magic 설정의 진입점이며 선언 자체가 해당 본문을 실행하지 않습니다. stack lifetime API와 함께 task 생성·종료 경로로 연결해 읽는 기준입니다. magic 검사와 설정 함수의 이름을 구별하고 kernel/fork.c의 계정 해제 부분 원문도 확인하세요. 이 수업은 선언의 역할과 부분 교차 확인을 다루며 fork.c 전체 또는 allocator cache 본문까지 완성했다고 기록하지 않습니다."
+      }
+    ]
+  }
+}

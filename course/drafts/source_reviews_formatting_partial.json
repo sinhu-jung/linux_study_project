@@ -1,0 +1,675 @@
+{
+  "sha": "adc218676eef25575469234709c2d87185ca223a",
+  "decision": "partially_explained",
+  "path": "lib/vsprintf.c",
+  "read_regions": [
+    {
+      "start": 35,
+      "end": 3018,
+      "state": "authored_selected_mechanisms"
+    }
+  ],
+  "reason": "Selected conversion/output/object policy bodies authored; pointer extensions, format parser, vsnprintf/scanning and binary printf remainder must be authored before whole file complete.",
+  "evidence": [
+    {
+      "lesson": "os714",
+      "symbols": [
+        "simple_strntoull",
+        "simple_strtoull",
+        "simple_strtoul"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "무제한 Wrapper",
+        "읽기와 변환의 제한"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os715",
+      "symbols": [
+        "simple_strntoll",
+        "simple_strtoll",
+        "simple_strtol"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Plus와 공백",
+        "결과와 상태"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os716",
+      "symbols": [
+        "skip_atoi"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "값의 자릿수",
+        "Overflow 한계"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os717",
+      "symbols": [
+        "decpair",
+        "put_dec_trunc8"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "고정소수점 나눗셈",
+        "알고리즘의 목적"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os718",
+      "symbols": [
+        "put_dec_full8",
+        "put_dec"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "묶음 수의 한도",
+        "전체 문자열 방향"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os719",
+      "symbols": [
+        "put_dec_full4",
+        "put_dec_helper4",
+        "put_dec"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "계수의 유래",
+        "정확성의 범위"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os720",
+      "symbols": [
+        "num_to_str"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "실패와 부분 쓰기",
+        "정렬된 임시 공간"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os721",
+      "symbols": [
+        "number",
+        "printf_spec",
+        "format_type",
+        "SIGN",
+        "LEFT",
+        "PLUS",
+        "SPACE",
+        "ZEROPAD",
+        "SMALL",
+        "SPECIAL",
+        "FIELD_WIDTH_MAX",
+        "PRECISION_MAX",
+        "special_hex_number"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "자료구조",
+        "정해진 Flag 값",
+        "부호 경계"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os722",
+      "symbols": [
+        "move_right",
+        "widen_string",
+        "string_nocheck"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "출력 잘림",
+        "Precision"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os723",
+      "symbols": [
+        "err_ptr",
+        "error_string",
+        "check_pointer_msg",
+        "check_pointer",
+        "string",
+        "pointer_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Error 이름 출력",
+        "기본 주소 출력 보조"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os724",
+      "symbols": [
+        "fill_ptr_key",
+        "vsprintf_init_hashval",
+        "filled_random_ptr_key",
+        "ptr_key",
+        "debug_boot_weak_hash_enable"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "자료 위치 표식",
+        "초기 Boot 옵션"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os725",
+      "symbols": [
+        "__ptr_to_hashval",
+        "ptr_to_hashval"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "원본 주석 해석",
+        "출력과 객체 수명"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os726",
+      "symbols": [
+        "ptr_to_id",
+        "default_pointer",
+        "no_hash_pointers",
+        "debug_boot_weak_hash"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "서로 다른 크기",
+        "로그 해석"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os727",
+      "symbols": [
+        "restricted_pointer",
+        "kptr_restrict"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "권한 변경 시나리오",
+        "Zero 출력의 의미"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os728",
+      "symbols": [
+        "dentry_name",
+        "file_dentry_name"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Root 처리",
+        "모의 시험 범위"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os729",
+      "symbols": [
+        "bdev_name"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "설정과 계약",
+        "Spec 전달"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os730",
+      "symbols": [
+        "symbol_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Return Address",
+        "표시 모드의 범위"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os731",
+      "symbols": [
+        "resource_string",
+        "default_str_spec",
+        "default_flag_spec",
+        "default_dec_spec",
+        "default_dec02_spec",
+        "default_dec04_spec"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "범위의 끝",
+        "내부와 외부 Buffer"
+      ],
+      "review": "선택 함수 본문·분기·길이·반환·실패·계약을 원본과 대조하여 개별 해설 및 두 문제의 풀이를 작성했습니다. 전체 vsprintf.c의 나머지 format·scanner·binary printf 부분은 계속 작성해야 합니다."
+    },
+    {
+      "lesson": "os732",
+      "symbols": [
+        "hex_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Negative와 Zero",
+        "논리적 출력 길이"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os733",
+      "symbols": [
+        "bitmap_string",
+        "bitmap_list_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "작은 자료구조",
+        "빈 집합"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os734",
+      "symbols": [
+        "mac_address_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "고정 내부 Buffer",
+        "Nibble 변환"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os735",
+      "symbols": [
+        "ip4_string",
+        "ip4_addr_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Zero octet 연결",
+        "Wrapper"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os736",
+      "symbols": [
+        "ip6_string",
+        "ip6_addr_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "대소문자 의미",
+        "내부 공간"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os737",
+      "symbols": [
+        "ip6_compressed_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Endian",
+        "IPv4 Tail"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os738",
+      "symbols": [
+        "ip6_addr_string_sa",
+        "ip4_addr_string_sa"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "수집 후 고정 순서",
+        "압축 선택"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os739",
+      "symbols": [
+        "ip_addr_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Tagged 선택",
+        "검사 범위"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os740",
+      "symbols": [
+        "escaped_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Zero 공간",
+        "Engine 재사용"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os741",
+      "symbols": [
+        "va_format"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "ABI에 따른 Va List",
+        "타입 계약"
+      ],
+      "review": "선택 원본의 주소·bit·separator·단위·순서·출력 길이와 사용 조건을 읽고 개별 해설·두 문제·풀이를 작성했습니다. 표시 adapter와 모의 engine의 검증 범위를 구분했습니다."
+    },
+    {
+      "lesson": "os742",
+      "symbols": [
+        "uuid_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "고정 형태",
+        "자료와 표시"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os743",
+      "symbols": [
+        "netdev_bits"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "타입 폭",
+        "특별 오류"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os744",
+      "symbols": [
+        "fourcc_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "표식과 CPU",
+        "순서"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os745",
+      "symbols": [
+        "address_val"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "주소 공간 구분",
+        "Fallback selector"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os746",
+      "symbols": [
+        "date_str",
+        "time_str",
+        "rtc_str"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "최소 폭",
+        "time의 Raw"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os747",
+      "symbols": [
+        "time64_str",
+        "time_and_date"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "표시 Adapter",
+        "사전 접근 전제"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os748",
+      "symbols": [
+        "clock"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "표시와 제어",
+        "런타임과 빌드"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os749",
+      "symbols": [
+        "format_flags"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "순서와 중복",
+        "Zero의 표시"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os750",
+      "symbols": [
+        "page_flags_fields",
+        "pff",
+        "format_page_flags"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "자료구조",
+        "정보 보존"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os751",
+      "symbols": [
+        "flags_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "강제 Type 표식",
+        "Page 특별 표시"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os752",
+      "symbols": [
+        "fwnode_full_name_string",
+        "fwnode_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Refcount 0 조건",
+        "폭 적용"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os753",
+      "symbols": [
+        "device_node_string"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Flag 문자",
+        "Padding과 Precision"
+      ],
+      "review": "Metadata formatter의 타입·배열·mask·단위·수명과 CONFIG·형식 분기를 원본과 대조하고 개별 원리·사용법·두 문제·풀이를 작성했습니다. 표시 body 시험과 실제 backend·kernel context 실행의 범위를 구분합니다."
+    },
+    {
+      "lesson": "os754",
+      "symbols": [
+        "pointer",
+        "rust_fmt_argument",
+        "no_hash_pointers_enable"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Symbol Descriptor",
+        "No Hash 설정",
+        "API 문서 연결"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    },
+    {
+      "lesson": "os755",
+      "symbols": [
+        "format_decode"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "작은 상태기계",
+        "길이 Modifier",
+        "지원 범위"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    },
+    {
+      "lesson": "os756",
+      "symbols": [
+        "set_field_width",
+        "set_precision"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "표현 경계",
+        "상태와 검사의 위치"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    },
+    {
+      "lesson": "os757",
+      "symbols": [
+        "vsnprintf"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "INVALID 뒤 정지",
+        "별표 Precision 차이",
+        "Suffix 소비"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    },
+    {
+      "lesson": "os758",
+      "symbols": [
+        "vscnprintf",
+        "scnprintf",
+        "snprintf"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "공통 결과",
+        "Int와 Size"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    },
+    {
+      "lesson": "os759",
+      "symbols": [
+        "vsprintf",
+        "sprintf"
+      ],
+      "sections": [
+        "기술·자료구조·알고리즘의 원리",
+        "사용 방법과 적용 조건",
+        "Wrapper도 API",
+        "실행 시험 범위"
+      ],
+      "review": "전체 formatter 분배와 decoder/engine의 상태·타입·반환·용량·NUL·오류정지 계약을 원본과 대조하여 해설과 두 문제의 풀이를 작성했습니다. 원본 실행과 모의 destination route 시험을 구분합니다."
+    }
+  ]
+}

@@ -1,0 +1,235 @@
+{
+  "include/linux/of_irq.h": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "decision": "explained",
+    "read_regions": [
+      {
+        "start": 1,
+        "end": 126,
+        "state": "whole_file_read_and_authored"
+      }
+    ],
+    "evidence": [
+      {
+        "lesson": "os2713",
+        "symbols": [
+          "of_irq_init_cb_t"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 초기화타입·controller와parent callback. typedef int(*of_irq_init_cb_t)(device_node*,device_node*)는controller와interruptparent를받는initcallback타입입니다. irq.c의descriptor에저장돼parent준비순서로호출됩니다. guard와types/irq/irqdomain/ioport/ofinclude가공개interface를연결하며typedef자체가IRQ를등록하지는않습니다. callback의두node와intstatus를그립니다. controllerinit,장치IRQspecifierparse,Linuxvirqmapping이서로다른단계임을앞수업에연결합니다."
+      },
+      {
+        "lesson": "os2714",
+        "symbols": [
+          "OF_IMAP_OLDWORLD_MAC"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ workaround bits·독립flag선택. OLDWORLD_MAC는bit0값1,NO_PHANDLE은bit1값2입니다. 서로다른호환경로를표현하는bitflags로AND검사합니다. 원문은32bitPowerMac에만적용되는조건과전역workaround/defaultPIC의선언을구별합니다. 일반IRQ설정flag와같은공간이아닙니다. 두flag의OR3에서각AND결과1/2를계산합니다. OldWorld별도parser와defaultPIC선택의다른정책을irq.c원문에연결합니다."
+      },
+      {
+        "lesson": "os2715",
+        "symbols": [
+          "of_irq_parse_oldworld"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF PPC32+PMAC 공개호환·AND설정조건. CONFIG_PPC32와CONFIG_PPC_PMAC가둘다정의되면workaround/defaultPIC는extern이며OldWorldparser외부선언을제공합니다. 둘중하나만정의되면else입니다. 두조건의AND와다른OF_IRQguard는서로독립된전처리선택입니다. 두설정의00/10/01/11표를만듭니다. fixture의둘함께/각하나syntax검산과실제PowerMac구현/boot실행의차이를기록합니다."
+      },
+      {
+        "lesson": "os2716",
+        "symbols": [
+          "of_irq_parse_oldworld"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF PPC호환 꺼짐·상수와OldWorld EINVAL. 특수설정AND가꺼지면workarounds0/defaultPICNULL의macro와OldWorldEINVALinline을제공합니다. out_irq를작성하지않습니다. 이fallback은실제특수tree를해석하고실패하는코드가아니라해당기능이없는표현입니다. 변경없는header에서상수0/NULL과parseEINVAL을검산했습니다. 활성extern과stub두위치를비교하고반환실패에서output을정상값으로사용하지않습니다."
+      },
+      {
+        "lesson": "os2717",
+        "symbols": [
+          "of_irq_parse_raw"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF raw IRQ 공개interface·BE주소와CPUargs. rawparser와irq_create_of_mapping,to_resourceprototype은OF_IRQ블록앞에있습니다. raw주소는const __be32*,specifier는of_phandle_argsoutput이며mapping은unsignedLinuxvirq입니다. 선언존재만으로모든설정에서함수정의가link된다고판정하지않습니다. rawstatus0/음수,virqpositive/0,resourceint의다른결과를표로적습니다. BE주소cell과CPUargs를앞rawparser해설에연결하고이fixture는해당외부함수를실행하지않습니다."
+      },
+      {
+        "lesson": "os2718",
+        "symbols": [
+          "irq_create_of_mapping"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ mapping과resource·번호와status. mappingprototype은of_phandle_args를받아unsignedvirq를반환합니다. resourceprototype은int결과와선택resourcepointer를사용합니다. specifier,domainregistry,virq번호,resource관리구조가서로다른자료이며모든정수를같은hardware번호로쓰면안됩니다. controllerlocalspecifier7→Linuxvirq55→resource55의층을그립니다. 실제domain생성/IRQdelivery는다른kernel구현을읽어야하고wrapperprovider검산과구별합니다."
+      },
+      {
+        "lesson": "os2719",
+        "symbols": [
+          "of_irq_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 활성공개 API·parse get count MSI. OF_IRQ활성은controllerinit,parseone,count/get/name/table,parent및MSIdomain/map/configure선언을제공합니다. 함수별void/status/번호/pointer의실패표현이다르며실제부팅실행순서와caller수명계약은irq.c에연결됩니다. 각interface의반환형과실패값을표로적습니다. enabledparent의device_node*와disabledvoid*타입차이도원문에서확인하고C의pointer변환과동작보장을혼동하지않습니다."
+      },
+      {
+        "lesson": "os2720",
+        "symbols": [
+          "of_irq_init"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·controller초기화. CONFIG_OF_IRQ꺼짐에서of_irq_init은staticinlinefallback입니다. controller목록수집과parent우선initcallback을하지않습니다. 결과는빈body입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 빈body을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2721",
+        "symbols": [
+          "of_irq_parse_one"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·specifier파싱. CONFIG_OF_IRQ꺼짐에서of_irq_parse_one은staticinlinefallback입니다. 속성조회나out_irqspecifier작성을하지않습니다. 결과는-EINVAL입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. -EINVAL을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2722",
+        "symbols": [
+          "of_irq_count"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·specifier개수. CONFIG_OF_IRQ꺼짐에서of_irq_count은staticinlinefallback입니다. parse반복으로IRQ개수를세지않습니다. 결과는0입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 0을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2723",
+        "symbols": [
+          "of_irq_get"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·IRQ번호조회. CONFIG_OF_IRQ꺼짐에서of_irq_get은staticinlinefallback입니다. IRQdomain조회나Linuxvirqmapping을하지않습니다. 결과는0입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 0을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2724",
+        "symbols": [
+          "of_irq_get_byname"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·이름IRQ조회. CONFIG_OF_IRQ꺼짐에서of_irq_get_byname은staticinlinefallback입니다. 이름목록을검색하지않고NULLname도활성구현처럼EINVAL로검사하지않습니다. 결과는0입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 0을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2725",
+        "symbols": [
+          "of_irq_to_resource_table"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·IRQresource표. CONFIG_OF_IRQ꺼짐에서of_irq_to_resource_table은staticinlinefallback입니다. resource배열을작성하지않습니다. 결과는0입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 0을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2726",
+        "symbols": [
+          "of_irq_find_parent"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·IRQparentnode. CONFIG_OF_IRQ꺼짐에서of_irq_find_parent은staticinlinefallback입니다. node참조검색을하지않고반환형은void *입니다. 결과는NULL입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. NULL을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2727",
+        "symbols": [
+          "of_msi_get_domain"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·msi-parentdomain. CONFIG_OF_IRQ꺼짐에서of_msi_get_domain은staticinlinefallback입니다. phandleiterator로MSIdomain을찾지않습니다. 결과는NULL입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. NULL을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2728",
+        "symbols": [
+          "of_msi_map_get_device_domain"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·MSImapdomain. CONFIG_OF_IRQ꺼짐에서of_msi_map_get_device_domain은staticinlinefallback입니다. msi-map계층변환이나tokenhost조회를하지않습니다. 결과는NULL입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. NULL을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2729",
+        "symbols": [
+          "of_msi_configure"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·MSI관계설정. CONFIG_OF_IRQ꺼짐에서of_msi_configure은staticinlinefallback입니다. device의MSIdomain을설정하지않습니다. 결과는빈body입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. 빈body을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2730",
+        "symbols": [
+          "of_msi_map_id"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF IRQ 꺼짐·MSIIDidentity. CONFIG_OF_IRQ꺼짐에서of_msi_map_id은staticinlinefallback입니다. 입력ID를그대로돌려주고map/mask를적용하지않습니다. 결과는id_in입니다. 명시기능부재와유효0개/0번호/NULLdomain을caller가구별해야하며활성구현의하위호출을실행한증거가아닙니다. extern과두번째inline위치를비교합니다. id_in을해당반환형식에맞게처리하고선택output의이전값을성공자료로사용하지않습니다. MSIidentity는각bit와보수의선택64값을원본stub에서검산했습니다."
+      },
+      {
+        "lesson": "os2731",
+        "symbols": [
+          "irq_of_parse_and_map"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF SPARC 예외선언·IRQguard와OR. OF_IRQ또는SPARC이면공개parse-mapprototype을선언합니다. SPARC는다르게구현하지만공개prototype은같다는원문계약입니다. OF_IRQ하나만보고항상stub이라고판정하지않으며다른platform의외부정의를별도로확인합니다. OF_IRQ0/SPARC1의syntax와두설정OR를표로적습니다. 원문의주석과실제전처리조건을구별해읽고SPARCIRQdelivery를실행했다고설명하지않습니다."
+      },
+      {
+        "lesson": "os2732",
+        "symbols": [
+          "irq_of_parse_and_map"
+        ],
+        "sections": [
+          "기술·자료구조·알고리즘의 원리",
+          "사용 방법과 적용 조건"
+        ],
+        "review": "OF parse-map 꺼짐·unsigned0fallback. OF_IRQ와SPARC둘다꺼지면unsignedinline은0을반환합니다. specifier를파싱하거나mapping을하지않습니다. 활성간편wrapper의parse오류0과값이같아도설정별수행작업이다르며caller는유효positivevirq를확인해야합니다. 설정00에서원본stub0을검산했습니다. 활성편의wrapper와꺼짐fallback의제어흐름을비교하고IRQ번호0을성공장치로사용하지않습니다."
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "이진 검색 · 정렬 불변식",
+  "observation": "lib/bsearch.c의 wrapper 다음 include/linux/bsearch.h의 __inline_bsearch에서 base·num 변경을 1,3,5,7,9 배열의 키 7로 추적하세요.",
+  "details": [
+    {"title": "Wrapper와 실제 구현", "text": "lib/bsearch.c의 bsearch는 __inline_bsearch를 호출하는 공개 wrapper입니다. 실제 loop는 include/linux/bsearch.h에 있습니다. EXPORT_SYMBOL은 모듈 연결, NOKPROBE_SYMBOL은 해당 함수를 kprobe 대상에서 제외하는 정보이며 배열 비교 loop가 아닙니다."},
+    {"title": "절반 범위 갱신", "text": "pivot은 base+(num>>1)*size입니다. cmp(key,pivot)==0이면 그 pointer를 반환합니다. 양수이면 key가 더 크므로 base를 pivot 다음으로 옮기고 num을 하나 줄인 뒤 절반으로 만듭니다. 음수이면 base를 그대로 두고 num만 절반으로 줄입니다. 다섯 원소 중 middle index2 뒤에는 두 원소가 남습니다."},
+    {"title": "키 7의 추적", "text": "1·3·5·7·9에서 num5의 pivot은5입니다. key7이 크므로 base는7, num은(5-1)>>1=2입니다. 다음 pivot은9이고 key7이 작으므로 base7 유지·num1입니다. 마지막 pivot7이 같아 해당 배열 원소 주소를 반환합니다."},
+    {"title": "키 타입과 크기", "text": "key와 배열 원소 타입은 달라도 됩니다. 이름 문자열 key와 구조체의 name을 비교하는 callback도 가능합니다. Size는 원소 바이트 크기이고 num은 원소 개수입니다. 정렬 기준·읽을 수 있는 배열 범위·size 곱셈 범위와 pointer 수명은 호출자가 보장합니다."},
+    {"title": "중복과 동기화", "text": "중복 key의 첫 원소·마지막 원소를 찾아주는 API가 아닙니다. 비교가 0인 pivot 하나를 즉시 반환합니다. 배열이 검색 중 바뀌면 절반 제거의 근거가 깨질 수 있으므로 caller가 안정된 정렬 배열을 제공합니다. Num=0이면 loop를 건너뛰고 NULL입니다."}
+  ]
+}
