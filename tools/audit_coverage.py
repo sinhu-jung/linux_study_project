@@ -10,10 +10,12 @@ import os
 from pathlib import Path
 import subprocess
 
+from lesson_storage import ensure_lessons_cache
 ROOT = Path(__file__).resolve().parent.parent
 GIT = os.environ.get('STUDY_GIT', '/opt/homebrew/bin/git' if Path('/opt/homebrew/bin/git').exists() else 'git')
 
 def build():
+    ensure_lessons_cache(ROOT)
     git = lambda *args: subprocess.check_output([GIT, '-C', str(ROOT/'linux'), *args])
     sha = git('rev-parse', 'HEAD').decode().strip()
     files = git('ls-tree','-r','--name-only','-z','HEAD').decode().split('\0')[:-1]

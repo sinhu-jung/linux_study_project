@@ -74,9 +74,13 @@ def source(path, symbol, occurrence=1):
         end += 1
     return '\n'.join(lines[start:end]) + '\n', {'start': start + 1, 'end': end, 'anchor': symbol}
 
+import sys
+sys.path.insert(0, str(ROOT / 'tools'))
+from lesson_storage import load_lessons, write_lessons
+
 def build():
     path = ROOT / 'course/lessons.json'
-    current = json.loads(path.read_text(encoding='utf-8'))
+    current = load_lessons(ROOT)
     base = [item for item in current if not item.get('authored_topic')]
     new = []
     errors = []
@@ -118,7 +122,7 @@ def build():
         raise SystemExit('\n'.join(errors))
     for lesson in base + new:
         support.enrich(lesson)
-    path.write_text(json.dumps(base + new, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    write_lessons(ROOT, base + new)
     os_lessons = [item for item in base + new if item.get('track') == 'os']
     syllabus = ['# Linux v6.12 OS 학습 교재와 문제·답지', '',
                 f'{len(os_lessons)}개 수업. 실제 원본은 각 파일·행 범위로 연결됩니다.', '',

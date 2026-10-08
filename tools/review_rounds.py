@@ -8,9 +8,11 @@ from pathlib import Path
 import subprocess
 import sys
 from datetime import datetime,timezone
+from lesson_storage import ensure_lessons_cache
 ROOT=Path(__file__).resolve().parent.parent
 
 def digest():
+    ensure_lessons_cache(ROOT)
     paths=sorted([* (ROOT/'tools').glob('*.py'),* (ROOT/'tools').glob('*.html'),
                  * (ROOT/'course').glob('*.py'),ROOT/'course/lessons.json',
                  ROOT/'course/units.json',ROOT/'tests/review_course.py'])

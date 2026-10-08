@@ -1,12 +1,13 @@
 """Versioned C and OS lessons; source excerpts always come from the pinned Git tree."""
 import json
+from lesson_storage import load_lessons
 
 class Course:
     TRACKS = {'os': 'OS 원리 · 기술 · 자료구조', 'c': '필요할 때 배우는 C 기초'}
 
     def __init__(self, root, connection, git, lock):
         self.root, self.connection, self.git, self.lock = root, connection, git, lock
-        self.lessons = json.loads((root / 'course/lessons.json').read_text(encoding='utf-8'))
+        self.lessons = load_lessons(root)
         self.ids = [lesson['id'] for lesson in self.lessons]
         with connection() as db:
             db.execute('CREATE TABLE IF NOT EXISTS course_progress(id TEXT PRIMARY KEY, passed INTEGER NOT NULL DEFAULT 0, draft TEXT NOT NULL DEFAULT \'\', answers TEXT NOT NULL DEFAULT \'[]\', updated TEXT DEFAULT CURRENT_TIMESTAMP)')

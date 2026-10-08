@@ -3,6 +3,7 @@
 An inventory is evidence of indexed source coverage, not of explained technology coverage.
 """
 import json
+from lesson_storage import load_lessons
 import os
 from pathlib import Path
 import re
@@ -21,7 +22,7 @@ def build():
   metadata,path=record.split('\t',1)
   mode,kind,blob=metadata.split()
   files.append({'path':path,'blob':blob,'kind':kind,'subsystem':path.split('/')[0] if '/' in path else 'root'})
- lessons=json.loads((ROOT/'course/lessons.json').read_text(encoding='utf-8'))
+ lessons=load_lessons(ROOT)
  ready={}
  for lesson in lessons:
   if lesson['kind']=='kernel': ready.setdefault(lesson['path'],[]).append(lesson['id'])

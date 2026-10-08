@@ -1,4 +1,5 @@
 import json
+from lesson_storage import load_lessons
 import re
 from pathlib import Path
 from index_knowledge import build
@@ -10,7 +11,7 @@ class Knowledge:
    self.data=json.loads(self.path.read_text(encoding='utf-8'))
    if self.data.get('sha')!=sha or 'binding_specs' not in self.data:self.data=build()
   else:self.data=build()
-  lessons=json.loads((root/'course/lessons.json').read_text(encoding='utf-8'))
+  lessons=load_lessons(root)
   self.data['lessons']=[{'id':l['id'],'title':l['title'],'path':l['path'],'excerpt':l.get('excerpt'),'group':l.get('area','OS 시작'),'summary':l['concepts'][1]['text'],'questions':len(l['questions']),'ready':True} for l in lessons if l.get('track')=='os']
   self.data['coverage_note']=f"해설·원리·사용 조건·문제·답지가 있는 OS 수업 {len(self.data['lessons'])}개를 분야별로 제공합니다. 각 수업은 고정된 Linux v6.12 원본에 연결됩니다. 전체 원본·공식 문서도 별도 탐색할 수 있습니다."
  def handle(self,query):

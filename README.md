@@ -259,7 +259,7 @@ py -3 -X utf8 .\tools\index_knowledge.py
 | `start-study.sh` | Linux / macOS 실행 |
 | `start-study.command` | macOS 더블클릭 실행 |
 | `course/files/` | 작은 C 학습 예제 |
-| `course/lessons.json` | 두 과정의 원리, 사용법, 모델, 문제, 답지 |
+| `course/lesson-parts.json`, `course/lesson-parts/*.json` | Git에 저장하는 두 과정의 원리·문제·답지 (50개 수업씩 분할) |
 | `course/topics.py` | 추가 134개 수업의 주제별 해설·문제 원고 |
 | `course/syllabus.md` | OS 3455개 수업 전체 해설·문제·답지 |
 | `course/coverage.json` | 29개 분야와 수업 작성 명세 |
@@ -520,3 +520,27 @@ IRQ domain 대조 보강: `os3045`–`os3046`은 debugfs 비활성 빌드의 빈
 `os3435`–`os3446`는 task_work와 경로 문자열의 12개 수업·24개 문제입니다. 등록·취소·종료 경쟁, 뒤에서 채우는 버퍼, 이름 변경 재시도, 마운트 경계와 getcwd 반환값을 설명합니다. 두 파일 검토 기록: `data/linux-taskwork-path-review.json`.
 
 `os3447`–`os3455`는 블록 I/O 태그의 9개 수업·18개 문제입니다. 예약 번호·공정성·대기 경쟁·요청 참조·순회·완료 대기·초기화·깊이 변경·고유 태그를 설명합니다. 원문 684줄 검토 기록: `data/linux-blk-mq-tag-review.json`.
+
+
+## GitHub에 올리는 방법
+
+교재는 `course/lesson-parts.json`의 순서대로 `course/lesson-parts/*.json`을 읽습니다.
+Windows·Linux·macOS 모두 기존 실행 방법을 그대로 사용하며 Git LFS는 필요하지 않습니다.
+`course/lessons.json`은 검사 도구가 필요할 때 재생성하는 로컬 합본 캐시이며 Git에서 제외합니다.
+새로 clone한 저장소에도 분할 교재가 포함되어 있으므로 교재를 다시 만들지 않고 실행할 수 있습니다.
+학습 진도는 기존 `data/progress.sqlite3`에 그대로 보관되고 Git에는 올라가지 않습니다.
+
+교재를 수정할 때는 `course/topics*.py`를 수정한 뒤 `python tools/build_curriculum.py`를 실행합니다.
+생성된 분할 JSON과 목록 파일도 함께 커밋하세요. 합본 캐시를 직접 수정해도 학습 화면에는 반영되지 않습니다.
+Python 실행 명령은 Windows 환경에 따라 `py -3`으로 바꿀 수 있습니다.
+
+```sh
+python tools/check_git_sizes.py
+git add .
+git commit -m "Update Linux study course"
+git push origin main
+```
+
+크기 검사는 현재 Git 추적 파일과 새 파일 중 50 MiB 이상인 파일이 있으면 실패합니다.
+이미 푸시된 과거 커밋에는 이전 합본이 남아 있으므로 clone 시 과거 데이터도 내려받습니다.
+이번 변경은 이력을 덮어쓰지 않으며 이후 커밋부터 분할 교재를 사용합니다.
