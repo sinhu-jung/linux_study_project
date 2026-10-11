@@ -1,0 +1,176 @@
+{
+  "id": "file-bf1b86155c18e04c",
+  "path": "drivers/pci/of_property.c",
+  "title": "PCI 동적 속성 생성: 주소 셀·2회 순회·interrupt-map",
+  "area": "PCI · 직렬화 · 비트 연산 · 배열 · 인터럽트 · 메모리 관리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "주소 인코딩과 모든 속성 생성 도우미, 최상위 호출 순서 전체를 분석합니다.",
+  "guide": [
+    "직렬화용 배열은 셀 개수와 쓰기 커서가 일치해야 하며 중간 실패의 정리는 호출 계층별로 구분해야 합니다.",
+    "비트 필드, 64비트 분할, 배열 압축, 크기 계산 후 생성하는 2회 순회와 changeset 수명을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "상수와 셀 자료구조",
+      "text": "GPL-2.0+ 파일은 PCI, OF, OF IRQ, bitfield, bits와 내부 pci.h를 포함합니다. 주소 셀 3개, 크기 셀 2개, 최대 INTx pin 4개를 정의합니다. of_pci_addr_pair는 주소3+크기2이고 이 파일의 of_pci_range는 자식 주소3+부모 주소3+크기2입니다. 여기의 셀 배열 구조체는 다른 주소 헤더에서 이름이 같은 CPU 주소·크기 필드 구조체와 구분해야 합니다. 호환 문자열 enum은 vendor/device, 전체 class, 하위 프로그램 인터페이스를 제외한 class의 세 항목과 개수입니다."
+    },
+    {
+      "title": "주소 비트 필드",
+      "text": "공간 코드는 IO=1,MEM32=2,MEM64=3입니다. NONRELOC는 비트31, PREFETCH는 비트30, SS는25..24, BUS는23..16, DEV는15..11, FUNC는10..8, REG는7..0입니다. set_address는 FIELD_PREP로 버스·슬롯·함수를 첫 셀에 넣고 flags와 reg_num을 OR합니다. REG 마스크 상수는 정의되어 있지만 reg_num에 FIELD_PREP나 마스킹을 적용하는 코드는 없습니다. reloc가 거짓일 때만 NONRELOC와 주소 상·하위32비트를 씁니다. 참일 때 뒤 두 셀을 0으로 만드는 코드는 없으므로 호출자의 초기화 상태가 중요합니다."
+    },
+    {
+      "title": "자원 플래그 선택과 bus-range",
+      "text": "get_addr_flags는 IO, MEM_64, MEM 순서로 검사하며 어느 것도 아니면 -EINVAL입니다. 유효할 때만 출력 flags를 0으로 초기화하고 PREFETCH와 SS를 넣습니다. 실패 시 출력값 초기화는 없습니다. bus_range 도우미는 subordinate->busn_res.start와 end를 u32 배열로 만들어 changeset에 추가합니다. subordinate가 NULL인지 검사하는 코드는 이 함수에 없으며 상위 호출의 브리지 전제에 의존합니다."
+    },
+    {
+      "title": "ranges 배열 압축",
+      "text": "브리지이면 PCI_BRIDGE_RESOURCES에서 PCI_BRIDGE_RESOURCE_NUM개, 아니면 표준 BAR 영역에서 PCI_STD_NUM_BARS개를 대상으로 kcalloc합니다. j는 원본 자원 인덱스, i는 유효 출력 엔트리 수입니다. resource_size가 0이거나 플래그 변환이 실패하면 건너뛰어 출력 배열을 빈틈없이 채웁니다. 부모 주소에는 res.start와 flags를 비재배치 주소로 씁니다. 브리지는 부모 주소 셀3개를 자식 주소에 그대로 복사하고 endpoint는 child_addr[0]=j, 나머지 두 셀은 kcalloc의 0을 유지합니다. size는 상·하위32비트입니다. i개의 8셀 엔트리만 속성에 추가하고 성공·실패 모두 임시 rp를 해제합니다."
+    },
+    {
+      "title": "reg와 interrupts",
+      "text": "reg 도우미는 0으로 초기화한 주소·크기 쌍에 reloc=true로 버스·슬롯·함수만 넣고 다섯 셀 전체를 추가합니다. interrupts 도우미는 PCI_INTERRUPT_PIN 읽기 오류를 반환하고 pin=0이면 속성을 만들지 않은 채 0, 나머지는 pin을 u32 속성으로 추가합니다. intr_ctrl도 같은 pin 읽기·0 검사를 한 뒤 #interrupt-cells=1과 값 없는 interrupt-controller 속성을 순서대로 추가합니다. 마지막 추가 실패 시 앞선 changeset 항목을 여기서 되돌리지는 않습니다."
+    },
+    {
+      "title": "네 pin의 상위 IRQ 해석",
+      "text": "intr_map은 상위 PCI 장치의 OF 노드, 없으면 버스 OF 노드를 사용하며 둘 다 없으면 -EINVAL입니다. 현재 버스 번호와 devfn으로 laddr의 첫 셀을 빅엔디언 변환하고 나머지는 0입니다. pin1..4 각각 out_irq의 부모와 한 개 인수를 설정해 raw 파싱합니다. 실패한 pin은 np=NULL로 표시하고 계속합니다. 성공 시 #address-cells 읽기를 시도하지만 오류는 검사하지 않으며 addr_sz는 최초 0으로 초기화되어 있습니다."
+    },
+    {
+      "title": "interrupt-map 크기 계산",
+      "text": "subordinate->devices의 각 자식에 대해 pin1..4를 swizzle하고 해당 상위 결과가 있는 경우에만 map_sz에 5+addr_sz+args_count를 더합니다. 고정5셀은 자식 주소3, pin1, 부모 phandle1입니다. map_sz는 u32이며 누적 오버플로를 직접 검사하는 코드는 없습니다. 0이면 속성을 생성하지 않고 성공하며, 이는 모든 파싱 실패뿐 아니라 자식이 없는 경우에도 가능합니다. 양수이면 그 셀 수만큼 kcalloc합니다."
+    },
+    {
+      "title": "interrupt-map 쓰기 커서",
+      "text": "같은 자식·pin 순회로 실제 배열을 채웁니다. 자식 주소 첫 셀을 쓰고 커서를 3셀 전진시켜 나머지 두 셀의 0을 유지합니다. 원래 pin과 해석된 부모 phandle을 쓰고 addr_sz가 있으면 부모 reg의 해당 셀들을 읽어 넣습니다. 읽기 실패는 해제 경로로 갑니다. 마지막에 out_irq.args를 memcpy합니다. 크기 계산 순회와 생성 순회의 선택 조건이 맞아야 버퍼 길이와 커서가 일치하는 구조입니다. 자식 C개에 대해 두 번의 4핀 순회를 하므로 IRQ 파싱·속성 읽기 비용을 제외한 방문 수는 C에 선형입니다."
+    },
+    {
+      "title": "IRQ 속성 추가와 수명 한계",
+      "text": "생성한 interrupt-map, #interrupt-cells=1, interrupt-map-mask={0xffff00,0,0,7}을 순서대로 추가합니다. 첫 셀 마스크는 버스·devfn 비트 영역을 포함하며 단순 슬롯만의 마스크가 아닙니다. 각 실패는 int_map 해제 후 오류를 반환하지만 이미 추가한 changeset 항목은 여기서 삭제하지 않습니다. 성공도 임시 int_map을 해제합니다. 이 도우미에는 성공한 out_irq[i].np에 대한 명시적 of_node_put 호출이 없으며 참조 수명의 완전한 판단에는 하위 파서 계약도 함께 봐야 합니다."
+    },
+    {
+      "title": "compatible 문자열",
+      "text": "vendor/device는 pci%x,%x, 전체 class는 pciclass,%06x, class>>8은 pciclass,%04x로 kasprintf합니다. 세 문자열을 string_array로 추가한 뒤 각각 kfree하고 그 반환값을 돌려줍니다. 개별 kasprintf 실패를 검사하고 조기에 반환하는 코드는 없습니다. 따라서 모든 포인터가 유효하다고 이 본문만으로 보장하거나 로컬에서 모든 할당 실패를 처리한다고 설명하면 안 됩니다."
+    },
+    {
+      "title": "최상위 순서와 changeset",
+      "text": "of_pci_add_properties는 브리지이면 device_type=pci,bus-range,interrupt-map을, endpoint이면 intr_ctrl을 먼저 수행합니다. 공통 순서는 ranges,#address-cells=3,#size-cells=2,reg,compatible,interrupts입니다. 각 단계 실패는 즉시 반환합니다. 추가 속성이 changeset destroy에서 해제된다는 주석은 있지만 이 함수 자체는 changeset을 apply하거나 destroy하지 않습니다. 앞서 작성한 of.c의 호출자는 생성·추가·apply 및 실패 정리를 담당하므로 두 파일을 연결해 수명을 읽어야 합니다."
+    },
+    {
+      "title": "전체 범위",
+      "text": "두 셀 구조체, 모든 비트 상수와 enum, 주소·플래그 도우미, bus-range/ranges/reg/interrupts/controller/map/compatible 생성 및 최상위 함수를 모두 대조했습니다. 자원 주소를 별도 변환 없이 res.start에서 가져오는 점과 endpoint의 BAR 인덱스 보존도 반영했습니다. 실제 PCI 장치, IRQ 라우팅, 동적 트리 변경이나 커널 빌드는 실행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "ranges에서 유효 자원 j=0과 j=3만 남으면 출력 i와 endpoint child_addr[0]은?",
+      "options": [
+        "출력은 두 엔트리이고 child 인덱스는 0과 3이다",
+        "출력은 네 엔트리이고 모든 인덱스를 0으로 바꾼다"
+      ],
+      "answer": 0,
+      "explanation": "i는 압축된 출력 위치이고 j는 원래 BAR 위치입니다. endpoint 자식 첫 셀에는 j를 저장하므로 건너뛴 자원 때문에 BAR 번호가 재부여되지 않습니다."
+    },
+    {
+      "prompt": "set_address에서 reloc=true이면 뒤 주소 셀 두 개를 직접 지우는가?",
+      "options": [
+        "그렇다. 항상 0을 대입한다",
+        "아니다. 뒤 두 셀을 쓰지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "prop[1],prop[2] 쓰기는 !reloc 블록 안에만 있습니다. reg 호출자가 구조체를 0으로 초기화한 덕분에 결과가 0인 것과 함수가 지우는 것은 다릅니다."
+    },
+    {
+      "prompt": "interrupt-map에서 부모 주소2셀과 IRQ 인수3셀이 필요하면 엔트리 길이는?",
+      "options": [
+        "10셀",
+        "5셀"
+      ],
+      "answer": 0,
+      "explanation": "고정5셀에 addr_sz=2와 args_count=3을 더합니다. 크기 계산과 커서 이동 모두 이 구조를 따라야 합니다."
+    },
+    {
+      "prompt": "부모 IRQ 파싱이 성공해도 자식 장치가 하나도 없으면 map은 생성되는가?",
+      "options": [
+        "그렇다. 항상 네 pin 엔트리를 생성한다",
+        "아니다. map_sz=0이어서 성공 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "map_sz 누적은 자식 목록 순회 안에서 이루어집니다. 모든 pin 파싱 실패만이 map_sz=0의 유일한 원인은 아닙니다."
+    },
+    {
+      "prompt": "compatible 도우미가 세 kasprintf의 NULL을 각각 검사하는가?",
+      "options": [
+        "아니다. 별도 검사 없이 배열 추가 함수에 전달한다",
+        "그렇다. 첫 NULL에서 모든 이후 할당을 생략한다"
+      ],
+      "answer": 0,
+      "explanation": "세 할당 뒤 바로 of_changeset_add_prop_string_array를 호출합니다. 후속 kfree는 있지만 개별 실패의 조기 처리는 없습니다."
+    },
+    {
+      "prompt": "최상위 속성 추가 함수가 중간 실패할 때 이전 속성을 직접 destroy하는가?",
+      "options": [
+        "그렇다. 내부에서 항상 apply와 destroy를 모두 수행한다",
+        "아니다. 오류를 반환하며 changeset 정리는 호출 계층의 책임이다"
+      ],
+      "answer": 1,
+      "explanation": "본문은 매 단계 ret 검사 후 반환합니다. 실제 apply나 destroy 호출은 없으며 of.c의 생성 호출 경로와 함께 수명을 확인해야 합니다."
+    },
+    {
+      "prompt": "pin=0일 때 interrupts와 interrupt-controller 도우미의 동작은?",
+      "options": [
+        "둘 다 속성을 추가하지 않고 0을 반환한다",
+        "둘 다 pin0 속성을 반드시 추가한다"
+      ],
+      "answer": 0,
+      "explanation": "설정 바이트 읽기 다음 if(!pin)return 0이 있습니다. 정상 반환과 실제 속성 생성은 동일한 사실이 아닙니다."
+    },
+    {
+      "prompt": "interrupt-map-mask의 첫 값 0xffff00은 슬롯 번호만 비교하는가?",
+      "options": [
+        "그렇다. 모든 버스·함수 비트는 제외한다",
+        "아니다. 버스 번호와 devfn 영역의 비트를 포함한다"
+      ],
+      "answer": 1,
+      "explanation": "주소 첫 셀의 버스는23..16,장치는15..11,함수는10..8입니다. 마스크는23..8 전체를 포함하므로 슬롯만의 필터로 해석하면 틀립니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * Copyright (C) 2022-2023, Advanced Micro Devices, Inc.\n */\n\n#include <linux/pci.h>\n#include <linux/of.h>\n#include <linux/of_irq.h>\n#include <linux/bitfield.h>\n#include <linux/bits.h>\n#include \"pci.h\"\n\n#define OF_PCI_ADDRESS_CELLS\t\t3\n#define OF_PCI_SIZE_CELLS\t\t2\n#define OF_PCI_MAX_INT_PIN\t\t4\n\nstruct of_pci_addr_pair {\n\tu32\t\tphys_addr[OF_PCI_ADDRESS_CELLS];\n\tu32\t\tsize[OF_PCI_SIZE_CELLS];\n};\n\n/*\n * Each entry in the ranges table is a tuple containing the child address,\n * the parent address, and the size of the region in the child address space.\n * Thus, for PCI, in each entry parent address is an address on the primary\n * side and the child address is the corresponding address on the secondary\n * side.\n */\nstruct of_pci_range {\n\tu32\t\tchild_addr[OF_PCI_ADDRESS_CELLS];\n\tu32\t\tparent_addr[OF_PCI_ADDRESS_CELLS];\n\tu32\t\tsize[OF_PCI_SIZE_CELLS];\n};\n\n#define OF_PCI_ADDR_SPACE_IO\t\t0x1\n#define OF_PCI_ADDR_SPACE_MEM32\t\t0x2\n#define OF_PCI_ADDR_SPACE_MEM64\t\t0x3\n\n#define OF_PCI_ADDR_FIELD_NONRELOC\tBIT(31)\n#define OF_PCI_ADDR_FIELD_SS\t\tGENMASK(25, 24)\n#define OF_PCI_ADDR_FIELD_PREFETCH\tBIT(30)\n#define OF_PCI_ADDR_FIELD_BUS\t\tGENMASK(23, 16)\n#define OF_PCI_ADDR_FIELD_DEV\t\tGENMASK(15, 11)\n#define OF_PCI_ADDR_FIELD_FUNC\t\tGENMASK(10, 8)\n#define OF_PCI_ADDR_FIELD_REG\t\tGENMASK(7, 0)\n\nenum of_pci_prop_compatible {\n\tPROP_COMPAT_PCI_VVVV_DDDD,\n\tPROP_COMPAT_PCICLASS_CCSSPP,\n\tPROP_COMPAT_PCICLASS_CCSS,\n\tPROP_COMPAT_NUM,\n};\n\nstatic void of_pci_set_address(struct pci_dev *pdev, u32 *prop, u64 addr,\n\t\t\t       u32 reg_num, u32 flags, bool reloc)\n{\n\tprop[0] = FIELD_PREP(OF_PCI_ADDR_FIELD_BUS, pdev->bus->number) |\n\t\tFIELD_PREP(OF_PCI_ADDR_FIELD_DEV, PCI_SLOT(pdev->devfn)) |\n\t\tFIELD_PREP(OF_PCI_ADDR_FIELD_FUNC, PCI_FUNC(pdev->devfn));\n\tprop[0] |= flags | reg_num;\n\tif (!reloc) {\n\t\tprop[0] |= OF_PCI_ADDR_FIELD_NONRELOC;\n\t\tprop[1] = upper_32_bits(addr);\n\t\tprop[2] = lower_32_bits(addr);\n\t}\n}\n\nstatic int of_pci_get_addr_flags(struct resource *res, u32 *flags)\n{\n\tu32 ss;\n\n\tif (res->flags & IORESOURCE_IO)\n\t\tss = OF_PCI_ADDR_SPACE_IO;\n\telse if (res->flags & IORESOURCE_MEM_64)\n\t\tss = OF_PCI_ADDR_SPACE_MEM64;\n\telse if (res->flags & IORESOURCE_MEM)\n\t\tss = OF_PCI_ADDR_SPACE_MEM32;\n\telse\n\t\treturn -EINVAL;\n\n\t*flags = 0;\n\tif (res->flags & IORESOURCE_PREFETCH)\n\t\t*flags |= OF_PCI_ADDR_FIELD_PREFETCH;\n\n\t*flags |= FIELD_PREP(OF_PCI_ADDR_FIELD_SS, ss);\n\n\treturn 0;\n}\n\nstatic int of_pci_prop_bus_range(struct pci_dev *pdev,\n\t\t\t\t struct of_changeset *ocs,\n\t\t\t\t struct device_node *np)\n{\n\tu32 bus_range[] = { pdev->subordinate->busn_res.start,\n\t\t\t    pdev->subordinate->busn_res.end };\n\n\treturn of_changeset_add_prop_u32_array(ocs, np, \"bus-range\", bus_range,\n\t\t\t\t\t       ARRAY_SIZE(bus_range));\n}\n\nstatic int of_pci_prop_ranges(struct pci_dev *pdev, struct of_changeset *ocs,\n\t\t\t      struct device_node *np)\n{\n\tstruct of_pci_range *rp;\n\tstruct resource *res;\n\tint i, j, ret;\n\tu32 flags, num;\n\tu64 val64;\n\n\tif (pci_is_bridge(pdev)) {\n\t\tnum = PCI_BRIDGE_RESOURCE_NUM;\n\t\tres = &pdev->resource[PCI_BRIDGE_RESOURCES];\n\t} else {\n\t\tnum = PCI_STD_NUM_BARS;\n\t\tres = &pdev->resource[PCI_STD_RESOURCES];\n\t}\n\n\trp = kcalloc(num, sizeof(*rp), GFP_KERNEL);\n\tif (!rp)\n\t\treturn -ENOMEM;\n\n\tfor (i = 0, j = 0; j < num; j++) {\n\t\tif (!resource_size(&res[j]))\n\t\t\tcontinue;\n\n\t\tif (of_pci_get_addr_flags(&res[j], &flags))\n\t\t\tcontinue;\n\n\t\tval64 = res[j].start;\n\t\tof_pci_set_address(pdev, rp[i].parent_addr, val64, 0, flags,\n\t\t\t\t   false);\n\t\tif (pci_is_bridge(pdev)) {\n\t\t\tmemcpy(rp[i].child_addr, rp[i].parent_addr,\n\t\t\t       sizeof(rp[i].child_addr));\n\t\t} else {\n\t\t\t/*\n\t\t\t * For endpoint device, the lower 64-bits of child\n\t\t\t * address is always zero.\n\t\t\t */\n\t\t\trp[i].child_addr[0] = j;\n\t\t}\n\n\t\tval64 = resource_size(&res[j]);\n\t\trp[i].size[0] = upper_32_bits(val64);\n\t\trp[i].size[1] = lower_32_bits(val64);\n\n\t\ti++;\n\t}\n\n\tret = of_changeset_add_prop_u32_array(ocs, np, \"ranges\", (u32 *)rp,\n\t\t\t\t\t      i * sizeof(*rp) / sizeof(u32));\n\tkfree(rp);\n\n\treturn ret;\n}\n\nstatic int of_pci_prop_reg(struct pci_dev *pdev, struct of_changeset *ocs,\n\t\t\t   struct device_node *np)\n{\n\tstruct of_pci_addr_pair reg = { 0 };\n\n\t/* configuration space */\n\tof_pci_set_address(pdev, reg.phys_addr, 0, 0, 0, true);\n\n\treturn of_changeset_add_prop_u32_array(ocs, np, \"reg\", (u32 *)&reg,\n\t\t\t\t\t       sizeof(reg) / sizeof(u32));\n}\n\nstatic int of_pci_prop_interrupts(struct pci_dev *pdev,\n\t\t\t\t  struct of_changeset *ocs,\n\t\t\t\t  struct device_node *np)\n{\n\tint ret;\n\tu8 pin;\n\n\tret = pci_read_config_byte(pdev, PCI_INTERRUPT_PIN, &pin);\n\tif (ret != 0)\n\t\treturn ret;\n\n\tif (!pin)\n\t\treturn 0;\n\n\treturn of_changeset_add_prop_u32(ocs, np, \"interrupts\", (u32)pin);\n}\n\nstatic int of_pci_prop_intr_ctrl(struct pci_dev *pdev, struct of_changeset *ocs,\n\t\t\t\t struct device_node *np)\n{\n\tint ret;\n\tu8 pin;\n\n\tret = pci_read_config_byte(pdev, PCI_INTERRUPT_PIN, &pin);\n\tif (ret != 0)\n\t\treturn ret;\n\n\tif (!pin)\n\t\treturn 0;\n\n\tret = of_changeset_add_prop_u32(ocs, np, \"#interrupt-cells\", 1);\n\tif (ret)\n\t\treturn ret;\n\n\treturn of_changeset_add_prop_bool(ocs, np, \"interrupt-controller\");\n}\n\nstatic int of_pci_prop_intr_map(struct pci_dev *pdev, struct of_changeset *ocs,\n\t\t\t\tstruct device_node *np)\n{\n\tu32 i, addr_sz[OF_PCI_MAX_INT_PIN] = { 0 }, map_sz = 0;\n\tstruct of_phandle_args out_irq[OF_PCI_MAX_INT_PIN];\n\t__be32 laddr[OF_PCI_ADDRESS_CELLS] = { 0 };\n\tu32 int_map_mask[] = { 0xffff00, 0, 0, 7 };\n\tstruct device_node *pnode;\n\tstruct pci_dev *child;\n\tu32 *int_map, *mapp;\n\tint ret;\n\tu8 pin;\n\n\tpnode = pci_device_to_OF_node(pdev->bus->self);\n\tif (!pnode)\n\t\tpnode = pci_bus_to_OF_node(pdev->bus);\n\n\tif (!pnode) {\n\t\tpci_err(pdev, \"failed to get parent device node\");\n\t\treturn -EINVAL;\n\t}\n\n\tladdr[0] = cpu_to_be32((pdev->bus->number << 16) | (pdev->devfn << 8));\n\tfor (pin = 1; pin <= OF_PCI_MAX_INT_PIN;  pin++) {\n\t\ti = pin - 1;\n\t\tout_irq[i].np = pnode;\n\t\tout_irq[i].args_count = 1;\n\t\tout_irq[i].args[0] = pin;\n\t\tret = of_irq_parse_raw(laddr, &out_irq[i]);\n\t\tif (ret) {\n\t\t\tout_irq[i].np = NULL;\n\t\t\tpci_dbg(pdev, \"parse irq %d failed, ret %d\", pin, ret);\n\t\t\tcontinue;\n\t\t}\n\t\tof_property_read_u32(out_irq[i].np, \"#address-cells\",\n\t\t\t\t     &addr_sz[i]);\n\t}\n\n\tlist_for_each_entry(child, &pdev->subordinate->devices, bus_list) {\n\t\tfor (pin = 1; pin <= OF_PCI_MAX_INT_PIN; pin++) {\n\t\t\ti = pci_swizzle_interrupt_pin(child, pin) - 1;\n\t\t\tif (!out_irq[i].np)\n\t\t\t\tcontinue;\n\t\t\tmap_sz += 5 + addr_sz[i] + out_irq[i].args_count;\n\t\t}\n\t}\n\n\t/*\n\t * Parsing interrupt failed for all pins. In this case, it does not\n\t * need to generate interrupt-map property.\n\t */\n\tif (!map_sz)\n\t\treturn 0;\n\n\tint_map = kcalloc(map_sz, sizeof(u32), GFP_KERNEL);\n\tif (!int_map)\n\t\treturn -ENOMEM;\n\tmapp = int_map;\n\n\tlist_for_each_entry(child, &pdev->subordinate->devices, bus_list) {\n\t\tfor (pin = 1; pin <= OF_PCI_MAX_INT_PIN; pin++) {\n\t\t\ti = pci_swizzle_interrupt_pin(child, pin) - 1;\n\t\t\tif (!out_irq[i].np)\n\t\t\t\tcontinue;\n\n\t\t\t*mapp = (child->bus->number << 16) |\n\t\t\t\t(child->devfn << 8);\n\t\t\tmapp += OF_PCI_ADDRESS_CELLS;\n\t\t\t*mapp = pin;\n\t\t\tmapp++;\n\t\t\t*mapp = out_irq[i].np->phandle;\n\t\t\tmapp++;\n\t\t\tif (addr_sz[i]) {\n\t\t\t\tret = of_property_read_u32_array(out_irq[i].np,\n\t\t\t\t\t\t\t\t \"reg\", mapp,\n\t\t\t\t\t\t\t\t addr_sz[i]);\n\t\t\t\tif (ret)\n\t\t\t\t\tgoto failed;\n\t\t\t}\n\t\t\tmapp += addr_sz[i];\n\t\t\tmemcpy(mapp, out_irq[i].args,\n\t\t\t       out_irq[i].args_count * sizeof(u32));\n\t\t\tmapp += out_irq[i].args_count;\n\t\t}\n\t}\n\n\tret = of_changeset_add_prop_u32_array(ocs, np, \"interrupt-map\", int_map,\n\t\t\t\t\t      map_sz);\n\tif (ret)\n\t\tgoto failed;\n\n\tret = of_changeset_add_prop_u32(ocs, np, \"#interrupt-cells\", 1);\n\tif (ret)\n\t\tgoto failed;\n\n\tret = of_changeset_add_prop_u32_array(ocs, np, \"interrupt-map-mask\",\n\t\t\t\t\t      int_map_mask,\n\t\t\t\t\t      ARRAY_SIZE(int_map_mask));\n\tif (ret)\n\t\tgoto failed;\n\n\tkfree(int_map);\n\treturn 0;\n\nfailed:\n\tkfree(int_map);\n\treturn ret;\n}\n\nstatic int of_pci_prop_compatible(struct pci_dev *pdev,\n\t\t\t\t  struct of_changeset *ocs,\n\t\t\t\t  struct device_node *np)\n{\n\tconst char *compat_strs[PROP_COMPAT_NUM] = { 0 };\n\tint i, ret;\n\n\tcompat_strs[PROP_COMPAT_PCI_VVVV_DDDD] =\n\t\tkasprintf(GFP_KERNEL, \"pci%x,%x\", pdev->vendor, pdev->device);\n\tcompat_strs[PROP_COMPAT_PCICLASS_CCSSPP] =\n\t\tkasprintf(GFP_KERNEL, \"pciclass,%06x\", pdev->class);\n\tcompat_strs[PROP_COMPAT_PCICLASS_CCSS] =\n\t\tkasprintf(GFP_KERNEL, \"pciclass,%04x\", pdev->class >> 8);\n\n\tret = of_changeset_add_prop_string_array(ocs, np, \"compatible\",\n\t\t\t\t\t\t compat_strs, PROP_COMPAT_NUM);\n\tfor (i = 0; i < PROP_COMPAT_NUM; i++)\n\t\tkfree(compat_strs[i]);\n\n\treturn ret;\n}\n\nint of_pci_add_properties(struct pci_dev *pdev, struct of_changeset *ocs,\n\t\t\t  struct device_node *np)\n{\n\tint ret;\n\n\t/*\n\t * The added properties will be released when the\n\t * changeset is destroyed.\n\t */\n\tif (pci_is_bridge(pdev)) {\n\t\tret = of_changeset_add_prop_string(ocs, np, \"device_type\",\n\t\t\t\t\t\t   \"pci\");\n\t\tif (ret)\n\t\t\treturn ret;\n\n\t\tret = of_pci_prop_bus_range(pdev, ocs, np);\n\t\tif (ret)\n\t\t\treturn ret;\n\n\t\tret = of_pci_prop_intr_map(pdev, ocs, np);\n\t\tif (ret)\n\t\t\treturn ret;\n\t} else {\n\t\tret = of_pci_prop_intr_ctrl(pdev, ocs, np);\n\t\tif (ret)\n\t\t\treturn ret;\n\t}\n\n\tret = of_pci_prop_ranges(pdev, ocs, np);\n\tif (ret)\n\t\treturn ret;\n\n\tret = of_changeset_add_prop_u32(ocs, np, \"#address-cells\",\n\t\t\t\t\tOF_PCI_ADDRESS_CELLS);\n\tif (ret)\n\t\treturn ret;\n\n\tret = of_changeset_add_prop_u32(ocs, np, \"#size-cells\",\n\t\t\t\t\tOF_PCI_SIZE_CELLS);\n\tif (ret)\n\t\treturn ret;\n\n\tret = of_pci_prop_reg(pdev, ocs, np);\n\tif (ret)\n\t\treturn ret;\n\n\tret = of_pci_prop_compatible(pdev, ocs, np);\n\tif (ret)\n\t\treturn ret;\n\n\tret = of_pci_prop_interrupts(pdev, ocs, np);\n\tif (ret)\n\t\treturn ret;\n\n\treturn 0;\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7fa8ffff1c36946566856574c8144fcdd5e1faf0750332e89e3bba69d3a999b9",
+    "scope": "whole-file",
+    "line_count": 392,
+    "authoring_source": "course/file_units/pci_of_properties.py",
+    "sections": [
+      "상수와 셀 자료구조",
+      "주소 비트 필드",
+      "자원 플래그 선택과 bus-range",
+      "ranges 배열 압축",
+      "reg와 interrupts",
+      "네 pin의 상위 IRQ 해석",
+      "interrupt-map 크기 계산",
+      "interrupt-map 쓰기 커서",
+      "IRQ 속성 추가와 수명 한계",
+      "compatible 문자열",
+      "최상위 순서와 changeset",
+      "전체 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/of_property.c"
+    }
+  ]
+}

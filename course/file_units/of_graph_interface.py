@@ -1,0 +1,24 @@
+"""Whole-file OF graph endpoint interface and iterator contracts."""
+ROWS = [dict(
+    path='include/linux/of_graph.h', title='OF 그래프 헤더: 포트·엔드포인트와 순회 참조 수명',
+    intro='엔드포인트 구조체, 순회 매크로, 11개 활성 API와 모든 비활성 stub을 분석합니다.',
+    principle='그래프의 식별자, 노드 포인터, 순회 중 보유한 참조는 서로 다른 개념입니다.',
+    use='계층적 식별자, 그래프 연결 조회, 반복자와 조기 종료 시 자원 해제를 학습합니다.',
+    area='장치 트리 · 그래프 · 반복자 · 참조 수명 · 조건부 컴파일',
+    sections=[
+        ('헤더와 데이터 모델', 'GPL-2.0과 OF graph binding parsing helpers 설명, 저작권·저자 표기 뒤 __LINUX_OF_GRAPH_H guard가 있습니다. types.h와 errno.h를 포함합니다. of_endpoint의 unsigned int port는 소속 포트 reg 속성의 식별자, unsigned int id는 엔드포인트 reg 식별자, const device_node *local_node는 해당 엔드포인트 노드 포인터입니다. id와 port는 배열 위치나 포인터가 아니라 서로 다른 계층의 식별자입니다.'),
+        ('반복자의 시작과 진행', 'for_each_endpoint_of_node(parent,child)는 get_next_endpoint(parent,NULL)로 시작하고 child!=NULL 동안 반복합니다. 증감식은 get_next_endpoint(parent,child)로 이전 노드를 넘깁니다. child는 매번 반환값으로 덮어쓰므로 반복 상태가 이 포인터와 하위 함수에 의해 유지됩니다. 이 헤더는 순회 매크로만 정의하며 실제 포트 탐색 순서나 내부 참조 갱신 구현은 제공하지 않습니다.'),
+        ('조기 종료와 참조 수명', '매크로 주석은 루프를 중간에 빠져나오면 of_node_put(child)를 수동으로 호출해야 한다고 명시합니다. break나 return은 다음 증감식을 실행하지 않으므로 정상적인 다음 항목 이동 경로에만 의존해서 현재 참조가 정리될 것이라 가정하면 안 됩니다. 이 계약은 커널 객체 참조의 수명과 C 제어 흐름을 연결하는 예입니다. 매크로 본문에 자동 정리 블록이나 cleanup 속성이 있는 것은 아닙니다.'),
+        ('존재·파싱·개수 API', 'CONFIG_OF 활성에서는 is_present가 const node에서 bool, parse_endpoint가 const node와 of_endpoint 출력 포인터에서 int, get_endpoint_count가 const node에서 unsigned int를 반환합니다. 파싱 결과 구조체와 개수는 다른 결과입니다. 선언만으로 누락 reg의 기본값이나 파싱 오류의 상세 종류를 확정할 수 없으며 local_node 포인터의 const도 참조 획득·해제를 자동으로 수행하지 않습니다.'),
+        ('로컬 조회 API', 'get_port_by_id는 node와 u32 id로 포트 노드 포인터를 반환하고 get_next_endpoint는 const parent와 previous 포인터를 받습니다. get_endpoint_by_regs는 const parent와 int port_reg, int reg를 받습니다. 두 reg 인수가 signed int라는 사실만으로 음수 값의 특별한 의미를 추정해서는 안 됩니다. 이 헤더에는 검색 조건을 해석하는 구현이 없습니다.'),
+        ('원격 연결과 부모 조회', 'get_remote_endpoint, get_remote_port_parent, get_remote_port는 각각 const node를 받는 별도 함수입니다. get_port_parent는 비const node 포인터를 받으며 get_remote_node는 const node에 u32 port와 endpoint 식별자를 추가로 받습니다. 모두 device_node 포인터를 반환하지만 엔드포인트, 포트, 부모, 원격 장치 조회를 같은 호출로 치환할 수는 없습니다. 연결을 따라가는 실제 알고리즘과 각 함수의 참조 반환 계약은 구현에서 추가로 확인해야 합니다.'),
+        ('비활성 구성의 결과', 'CONFIG_OF가 없으면 is_present는 false, parse_endpoint는 -ENOSYS, get_endpoint_count는 0이며 나머지 여덟 포인터 함수는 NULL입니다. parse_endpoint는 출력 구조체를 초기화하지 않고 get_next_endpoint stub도 previous에 대해 put을 호출하지 않습니다. 매크로를 정상 시작하면 첫 호출부터 NULL이어서 본문은 실행되지 않습니다. 활성 함수의 부수 효과를 비활성 stub에도 존재한다고 추정하면 안 됩니다.'),
+        ('전체 검토 범위', '파일의 포함·guard·주석, of_endpoint의 모든 필드, 순회 매크로와 조기 종료 계약, 11개 활성 선언과 11개 stub을 모두 대조했습니다. 그래프의 전체 순회 알고리즘이나 하드웨어 연결 검증은 이 헤더에 없으며 실행하지도 않았습니다. 파일의 인터페이스 범위와 외부 구현에서 확인할 사항을 구분해 학습합니다.')
+    ], questions=[
+        ('of_endpoint의 port와 id는 각각 무엇을 나타내는가?', '소속 포트의 reg 식별자와 엔드포인트의 reg 식별자', '동일한 노드 포인터를 두 번 저장한 값', '구조체 주석이 두 계층의 reg 값을 구분합니다. local_node가 별도의 포인터 필드이며 식별자를 메모리 주소로 해석하면 안 됩니다.'),
+        ('for_each_endpoint_of_node에서 원하는 항목을 찾고 break할 때 주석이 요구하는 것은?', '현재 child에 of_node_put을 수동으로 호출한다', '매크로가 모든 조기 종료에서 자동으로 put하므로 아무것도 하지 않는다', 'break는 for의 다음 증감식을 건너뜁니다. 원문 주석은 루프를 벗어날 때 현재 child의 참조를 명시적으로 해제하라고 안내하며 매크로 자체에 자동 정리는 없습니다.'),
+        ('OF 비활성의 parse_endpoint 실패 후 출력 구조체는 0으로 초기화되는가?', '아니다. 본문은 -ENOSYS 반환뿐이다', '그렇다. port와 id와 local_node를 모두 초기화한다', '출력 인수에 쓰는 문장이 없습니다. 호출자는 실패한 파싱 결과를 유효한 엔드포인트 정보로 사용해서는 안 됩니다.'),
+        ('OF 비활성에서 순회 매크로의 본문은 몇 번 실행되는가?', '0번', '빈 엔드포인트를 나타내기 위해 반드시 1번', '초기 get_next_endpoint가 NULL을 반환하고 첫 조건 child!=NULL이 거짓입니다. NULL은 여기서 본문을 실행하는 항목이 아니라 반복 종료를 뜻합니다.'),
+        ('이 헤더만 읽고 get_endpoint_by_regs의 음수 인수 의미를 확정할 수 있는가?', '없다. int 인수를 받는 선언만 제공된다', '있다. signed 타입이면 언제나 모든 항목 선택을 뜻한다', '타입이 표현 가능한 값의 범위와 함수가 그 값에 부여하는 의미는 다릅니다. 특별 값의 계약은 구현이나 해당 문서에서 확인해야 합니다.')
+    ]
+)]

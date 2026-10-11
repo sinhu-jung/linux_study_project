@@ -1,0 +1,171 @@
+{
+  "id": "file-833e2d9c95f14ad5",
+  "path": "drivers/of/device.c",
+  "title": "OF 장치 구현: DMA 설정의 부분 갱신·uevent·버스 이름",
+  "area": "드라이버 모델 · DMA · IOMMU · 문자열 · mutex · 오류 복구",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "매칭부터 DMA·예약 풀·이벤트 문자열·이름 생성까지 모든 함수 본문을 분석합니다.",
+  "guide": [
+    "설정 실패가 모든 이전 변경을 되돌리는 것은 아니며 반환 오류와 객체 상태를 함께 추적해야 합니다.",
+    "범위 마스크, 참조 해제, 조건부 오류 전파, 연결 리스트 잠금과 문자열 버퍼 경계를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "구성과 장치 매칭",
+      "text": "GPL-2.0 파일은 OF, 주소, IOMMU, 예약 메모리, DMA, slab, 플랫폼과 내부 of_private 정의를 포함합니다. of_match_device는 matches 부재, dev->of_node 부재, of_node_reused이면 NULL이고 나머지는 of_match_node에 위임합니다. dev 자체의 NULL 검사는 없으므로 matches가 존재하는 경우 NULL dev를 안전하게 처리한다고 주장할 수 없습니다. get_match_data는 dev->driver->of_match_table로 이 함수를 호출하고 매칭 없으면 NULL, 있으면 match->data입니다."
+    },
+    {
+      "title": "제한 DMA 풀 후보 검색",
+      "text": "of_dma_set_restricted_buffer는 DMA_RESTRICTED_POOL 미지원이면 즉시 반환합니다. 먼저 dev->of_node의 memory-region을 u32 크기로 세고 count<=0이면 DMA 설정용 np에서 다시 셉니다. count가 양수이면 각 phandle을 읽어 restricted-dma-pool 호환성과 available을 모두 만족하는 첫 노드를 선택합니다. 매 반복에서 node를 put하며 선택한 경우도 put 후 break합니다. i<count일 때만 원래 목록과 index로 예약 메모리 초기화를 시도하고 실패하면 경고합니다. 음수 count는 순회를 실행하지 않으며 여러 후보를 모두 초기화하지도 않습니다."
+    },
+    {
+      "title": "DMA 범위의 시작 노드와 오류 정책",
+      "text": "of_dma_configure_id는 np==dev->of_node이면 __of_get_dma_parent(np), 아니면 of_node_get(np)로 bus_np를 얻습니다. of_dma_get_range 호출 후 bus_np 참조를 put합니다. 범위 조회 실패에서 force_dma가 거짓이면 -ENODEV만 성공 0으로 바꾸고 다른 오류는 전파합니다. force_dma가 참이면 음수 오류여도 설정을 계속합니다. 조회 성공이면 dma_range_map_max(map)으로 end를 구하고 set_map을 참으로 표시합니다."
+    },
+    {
+      "title": "마스크 제한과 객체 변경",
+      "text": "dma_mask 포인터가 없으면 경고 후 coherent_dma_mask의 주소로 대체합니다. end가 0이면 기존 coherent_dma_mask를 우선 사용하고 그것도 0이면 32비트 최댓값으로 정합니다. mask=DMA_BIT_MASK(ilog2(end)+1)를 만들고 coherent_dma_mask와 *dma_mask에 AND합니다. 예를 들어 end=0x1800의 비트 폭 마스크는 0x1fff로 end 자체와 다릅니다. set_map일 때만 bus_dma_limit=end와 dma_range_map=map을 저장하므로 유효한 범위가 없던 강제 설정에서 이 두 필드를 새 값으로 덮지 않습니다."
+    },
+    {
+      "title": "IOMMU 지연과 부분 복구",
+      "text": "np의 coherent 여부를 얻은 뒤 of_iommu_configure(dev,np,id)를 호출합니다. -EPROBE_DEFER이면 set_map일 때 dma_range_map을 NULL로 지우고 map을 kfree한 뒤 같은 오류를 반환합니다. 이미 바꾼 DMA 마스크, dma_mask 포인터, bus_dma_limit를 이전 값으로 복구하는 코드는 없습니다. 다른 IOMMU 오류는 치명 오류로 반환하지 않고 arch_setup_dma_ops(dev,coherent)를 호출합니다. ret가 0이 아니면 제한 풀 설정을 시도하고 최종 0을 반환합니다. 제한 풀 초기화 실패도 경고에 그칩니다."
+    },
+    {
+      "title": "개행 포함 modalias",
+      "text": "of_device_modalias는 dev/node 부재 또는 재사용 노드를 -ENODEV로 거부합니다. of_modalias에 len-2를 전달해 개행과 NUL 공간을 남기며 음수 결과를 전파하고 결과 sl>len-2이면 -ENOMEM입니다. 맞으면 str[sl++]에 개행, 그 뒤 NUL을 쓰고 개행을 포함한 길이를 반환합니다. len>=2를 이 함수에서 선행 검사하는 코드는 없습니다. 작은 길이가 항상 안전하게 정규화된다고 덧붙이면 원문보다 강한 주장입니다."
+    },
+    {
+      "title": "일반 uevent의 속성과 별칭",
+      "text": "of_device_uevent는 dev/node 부재만 검사하며 of_node_reused 검사는 없습니다. OF_NAME과 OF_FULLNAME을 추가하고 type이 있으면 OF_TYPE도 넣습니다. compatible 문자열을 쉼표로 합치지 않고 OF_COMPATIBLE_0부터 각각 추가한 뒤 OF_COMPATIBLE_N을 기록합니다. 이후 seen을 0으로 되돌리고 of_mutex를 잡아 aliases_lookup 연결 리스트에서 같은 노드인 항목의 OF_ALIAS_n을 추가합니다. 잠금은 별칭 순회 구간에 적용됩니다. add_uevent_var의 실패 반환은 이 void 함수에서 검사하지 않으며 별칭 개수 변수를 별도로 내보내지도 않습니다."
+    },
+    {
+      "title": "MODALIAS 환경 버퍼 이어쓰기",
+      "text": "of_device_uevent_modalias는 재사용 노드까지 거부하고 먼저 MODALIAS=를 추가합니다. 추가 실패는 -ENOMEM입니다. 문자열 마지막 NUL 위치인 env->buf[buflen-1]에 of_modalias를 써 이어 붙이며 크기 인수는 sizeof(buf)-buflen입니다. 음수 결과를 전파하고 sl이 그 크기 이상이면 -ENOMEM, 성공이면 buflen에 sl을 더합니다. 실패 때 앞서 추가한 MODALIAS= 항목이나 부분 버퍼 쓰기를 롤백하는 코드는 없습니다. 일반 modalias 함수처럼 개행을 추가하지도 않습니다."
+    },
+    {
+      "title": "주소 기반 이름 생성",
+      "text": "of_device_make_bus_id는 dev->of_node부터 node->parent가 있는 동안 반복합니다. reg가 있고 of_translate_address가 OF_BAD_ADDR가 아니면 주소를 이름 앞에 쓰고 종료합니다. mask 속성 읽기 성공 시 ffs(mask)-1도 16진수 구성 요소로 넣습니다. 이는 마스크의 값 자체나 설정 비트 개수가 아니라 첫 설정 비트의 0 기반 위치이며 mask=0을 별도로 거부하지 않습니다. 기존 이름이 있으면 새 주소·노드 이름 뒤에 콜론으로 이어 붙입니다."
+    },
+    {
+      "title": "부모 이름으로의 fallback",
+      "text": "주소를 얻지 못하면 node->full_name의 kbasename을 기존 이름 앞에 콜론으로 붙이고 부모로 이동합니다. 기존 이름이 없으면 basename만 사용합니다. 루트 자체는 parent가 없으므로 이 루프에서 처리하지 않습니다. 노드 체인의 깊이에 따른 상향 순회이며 별도 전체 장치 이름 집합을 검색하는 중복 검사 코드는 없습니다. dev_set_name의 반환값도 검사하지 않습니다. 문자열 구성 비용까지 포함하면 단순히 깊이만으로 전체 시간 복잡도를 확정할 수 없습니다."
+    },
+    {
+      "title": "공개 심볼과 전체 범위",
+      "text": "of_match_device와 get_match_data는 EXPORT_SYMBOL, configure_id·modalias·uevent·uevent_modalias·make_bus_id는 EXPORT_SYMBOL_GPL입니다. 제한 풀 도우미는 static입니다. 모든 여덟 함수의 성공·실패·참조·문자열 경로를 대조했습니다. 연결 리스트 선형 검색, 비트 폭 계산, 부분 상태 갱신과 잠금 범위를 학습 주제로 연결했으며 실제 DMA·IOMMU·uevent나 장치 이름 등록을 커널에서 실행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "DMA 범위 조회가 -ENODEV이고 force_dma가 거짓이면?",
+      "options": [
+        "즉시 0을 반환하고 이후 설정을 진행하지 않는다",
+        "반드시 -ENODEV를 그대로 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "ret<0 분기의 return ret==-ENODEV ? 0 : ret가 적용됩니다. 성공값으로 반환하는 것과 DMA 설정을 끝까지 수행한 것은 다릅니다."
+    },
+    {
+      "prompt": "IOMMU -EPROBE_DEFER 경로가 DMA 상태를 모두 원래대로 되돌리는가?",
+      "options": [
+        "그렇다. 저장된 모든 필드를 이전 값으로 복원한다",
+        "아니다. 범위 맵 정리는 하지만 마스크와 bus_dma_limit 복구는 없다"
+      ],
+      "answer": 1,
+      "explanation": "DMA 마스크 제한과 bus limit 설정은 IOMMU 호출보다 앞에 있습니다. 지연 분기는 조건부 map 포인터 초기화와 kfree만 하므로 전체 트랜잭션 롤백이 아닙니다."
+    },
+    {
+      "prompt": "제한 DMA 풀 후보가 여러 개면 모두 초기화하는가?",
+      "options": [
+        "아니다. 호환성과 available을 만족하는 첫 항목에서 멈춘다",
+        "그렇다. memory-region의 모든 항목을 무조건 초기화한다"
+      ],
+      "answer": 0,
+      "explanation": "조건을 만족하면 node를 put한 뒤 break합니다. 이후 선택된 i로 한 번 초기화하며 count 오류나 후보 없음은 초기화로 이어지지 않습니다."
+    },
+    {
+      "prompt": "end=0x1800이면 비트 폭으로 만든 DMA 마스크는?",
+      "options": [
+        "항상 end와 동일한 0x1800",
+        "0x1fff"
+      ],
+      "answer": 1,
+      "explanation": "ilog2(end)+1은 필요한 비트 수를 정하고 DMA_BIT_MASK는 해당 하위 비트를 모두 1로 만듭니다. 정확한 버스 상한 end는 유효 범위가 있을 때 bus_dma_limit에 별도로 저장합니다."
+    },
+    {
+      "prompt": "일반 uevent 함수가 add_uevent_var 실패를 호출자에게 오류로 반환하는가?",
+      "options": [
+        "아니다. void 함수이며 각 반환값을 검사하지 않는다",
+        "그렇다. 첫 실패 때 -ENOMEM을 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "이 동작은 별도 of_device_uevent_modalias와 다릅니다. 일반 함수는 compatible 인덱스도 추가 호출 결과와 무관하게 증가시키므로 전체 환경 변수가 모두 들어갔다고 보장할 수 없습니다."
+    },
+    {
+      "prompt": "uevent MODALIAS 생성 실패 시 처음 넣은 MODALIAS= 항목은 자동으로 제거되는가?",
+      "options": [
+        "그렇다. 모든 실패 경로에서 buflen과 항목 수를 복원한다",
+        "아니다. 이 함수에 롤백 코드가 없다"
+      ],
+      "answer": 1,
+      "explanation": "먼저 항목을 추가한 뒤 그 마지막 NUL 위치부터 내용을 씁니다. 뒤의 길이 오류나 음수 결과는 곧바로 반환하므로 호출 전 상태 복원이 구현되어 있지 않습니다."
+    },
+    {
+      "prompt": "장치 이름의 mask 구성 요소가 표현하는 것은?",
+      "options": [
+        "ffs(mask)-1로 구한 첫 설정 비트의 0 기반 위치",
+        "mask의 설정 비트 개수"
+      ],
+      "answer": 0,
+      "explanation": "예를 들어 mask=0x18이면 첫 설정 비트는 위치 3입니다. 여러 비트가 있어도 개수를 세지 않으며 0 입력에 대한 별도 검증도 없습니다."
+    },
+    {
+      "prompt": "일반 uevent와 modalias 함수가 of_node_reused를 똑같이 거부하는가?",
+      "options": [
+        "그렇다. 파일의 모든 함수가 공통으로 거부한다",
+        "아니다. 일반 uevent에는 그 검사가 없다"
+      ],
+      "answer": 1,
+      "explanation": "of_device_modalias와 uevent_modalias는 재사용 노드를 검사하지만 일반 uevent는 dev와 node 부재만 검사합니다. 파일 전체에 공통 선행 조건이 있다고 추정하지 말고 각 본문을 읽어야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/kernel.h>\n#include <linux/of.h>\n#include <linux/of_device.h>\n#include <linux/of_address.h>\n#include <linux/of_iommu.h>\n#include <linux/of_reserved_mem.h>\n#include <linux/dma-direct.h> /* for bus_dma_region */\n#include <linux/dma-map-ops.h>\n#include <linux/init.h>\n#include <linux/mod_devicetable.h>\n#include <linux/slab.h>\n#include <linux/platform_device.h>\n\n#include <asm/errno.h>\n#include \"of_private.h\"\n\n/**\n * of_match_device - Tell if a struct device matches an of_device_id list\n * @matches: array of of device match structures to search in\n * @dev: the of device structure to match against\n *\n * Used by a driver to check whether an platform_device present in the\n * system is in its list of supported devices.\n */\nconst struct of_device_id *of_match_device(const struct of_device_id *matches,\n\t\t\t\t\t   const struct device *dev)\n{\n\tif (!matches || !dev->of_node || dev->of_node_reused)\n\t\treturn NULL;\n\treturn of_match_node(matches, dev->of_node);\n}\nEXPORT_SYMBOL(of_match_device);\n\nstatic void\nof_dma_set_restricted_buffer(struct device *dev, struct device_node *np)\n{\n\tstruct device_node *node, *of_node = dev->of_node;\n\tint count, i;\n\n\tif (!IS_ENABLED(CONFIG_DMA_RESTRICTED_POOL))\n\t\treturn;\n\n\tcount = of_property_count_elems_of_size(of_node, \"memory-region\",\n\t\t\t\t\t\tsizeof(u32));\n\t/*\n\t * If dev->of_node doesn't exist or doesn't contain memory-region, try\n\t * the OF node having DMA configuration.\n\t */\n\tif (count <= 0) {\n\t\tof_node = np;\n\t\tcount = of_property_count_elems_of_size(\n\t\t\tof_node, \"memory-region\", sizeof(u32));\n\t}\n\n\tfor (i = 0; i < count; i++) {\n\t\tnode = of_parse_phandle(of_node, \"memory-region\", i);\n\t\t/*\n\t\t * There might be multiple memory regions, but only one\n\t\t * restricted-dma-pool region is allowed.\n\t\t */\n\t\tif (of_device_is_compatible(node, \"restricted-dma-pool\") &&\n\t\t    of_device_is_available(node)) {\n\t\t\tof_node_put(node);\n\t\t\tbreak;\n\t\t}\n\t\tof_node_put(node);\n\t}\n\n\t/*\n\t * Attempt to initialize a restricted-dma-pool region if one was found.\n\t * Note that count can hold a negative error code.\n\t */\n\tif (i < count && of_reserved_mem_device_init_by_idx(dev, of_node, i))\n\t\tdev_warn(dev, \"failed to initialise \\\"restricted-dma-pool\\\" memory node\\n\");\n}\n\n/**\n * of_dma_configure_id - Setup DMA configuration\n * @dev:\tDevice to apply DMA configuration\n * @np:\t\tPointer to OF node having DMA configuration\n * @force_dma:  Whether device is to be set up by of_dma_configure() even if\n *\t\tDMA capability is not explicitly described by firmware.\n * @id:\t\tOptional const pointer value input id\n *\n * Try to get devices's DMA configuration from DT and update it\n * accordingly.\n *\n * If platform code needs to use its own special DMA configuration, it\n * can use a platform bus notifier and handle BUS_NOTIFY_ADD_DEVICE events\n * to fix up DMA configuration.\n */\nint of_dma_configure_id(struct device *dev, struct device_node *np,\n\t\t\tbool force_dma, const u32 *id)\n{\n\tconst struct bus_dma_region *map = NULL;\n\tstruct device_node *bus_np;\n\tu64 mask, end = 0;\n\tbool coherent, set_map = false;\n\tint ret;\n\n\tif (np == dev->of_node)\n\t\tbus_np = __of_get_dma_parent(np);\n\telse\n\t\tbus_np = of_node_get(np);\n\n\tret = of_dma_get_range(bus_np, &map);\n\tof_node_put(bus_np);\n\tif (ret < 0) {\n\t\t/*\n\t\t * For legacy reasons, we have to assume some devices need\n\t\t * DMA configuration regardless of whether \"dma-ranges\" is\n\t\t * correctly specified or not.\n\t\t */\n\t\tif (!force_dma)\n\t\t\treturn ret == -ENODEV ? 0 : ret;\n\t} else {\n\t\t/* Determine the overall bounds of all DMA regions */\n\t\tend = dma_range_map_max(map);\n\t\tset_map = true;\n\t}\n\n\t/*\n\t * If @dev is expected to be DMA-capable then the bus code that created\n\t * it should have initialised its dma_mask pointer by this point. For\n\t * now, we'll continue the legacy behaviour of coercing it to the\n\t * coherent mask if not, but we'll no longer do so quietly.\n\t */\n\tif (!dev->dma_mask) {\n\t\tdev_warn(dev, \"DMA mask not set\\n\");\n\t\tdev->dma_mask = &dev->coherent_dma_mask;\n\t}\n\n\tif (!end && dev->coherent_dma_mask)\n\t\tend = dev->coherent_dma_mask;\n\telse if (!end)\n\t\tend = (1ULL << 32) - 1;\n\n\t/*\n\t * Limit coherent and dma mask based on size and default mask\n\t * set by the driver.\n\t */\n\tmask = DMA_BIT_MASK(ilog2(end) + 1);\n\tdev->coherent_dma_mask &= mask;\n\t*dev->dma_mask &= mask;\n\t/* ...but only set bus limit and range map if we found valid dma-ranges earlier */\n\tif (set_map) {\n\t\tdev->bus_dma_limit = end;\n\t\tdev->dma_range_map = map;\n\t}\n\n\tcoherent = of_dma_is_coherent(np);\n\tdev_dbg(dev, \"device is%sdma coherent\\n\",\n\t\tcoherent ? \" \" : \" not \");\n\n\tret = of_iommu_configure(dev, np, id);\n\tif (ret == -EPROBE_DEFER) {\n\t\t/* Don't touch range map if it wasn't set from a valid dma-ranges */\n\t\tif (set_map)\n\t\t\tdev->dma_range_map = NULL;\n\t\tkfree(map);\n\t\treturn -EPROBE_DEFER;\n\t}\n\t/* Take all other IOMMU errors to mean we'll just carry on without it */\n\tdev_dbg(dev, \"device is%sbehind an iommu\\n\",\n\t\t!ret ? \" \" : \" not \");\n\n\tarch_setup_dma_ops(dev, coherent);\n\n\tif (ret)\n\t\tof_dma_set_restricted_buffer(dev, np);\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(of_dma_configure_id);\n\nconst void *of_device_get_match_data(const struct device *dev)\n{\n\tconst struct of_device_id *match;\n\n\tmatch = of_match_device(dev->driver->of_match_table, dev);\n\tif (!match)\n\t\treturn NULL;\n\n\treturn match->data;\n}\nEXPORT_SYMBOL(of_device_get_match_data);\n\n/**\n * of_device_modalias - Fill buffer with newline terminated modalias string\n * @dev:\tCalling device\n * @str:\tModalias string\n * @len:\tSize of @str\n */\nssize_t of_device_modalias(struct device *dev, char *str, ssize_t len)\n{\n\tssize_t sl;\n\n\tif (!dev || !dev->of_node || dev->of_node_reused)\n\t\treturn -ENODEV;\n\n\tsl = of_modalias(dev->of_node, str, len - 2);\n\tif (sl < 0)\n\t\treturn sl;\n\tif (sl > len - 2)\n\t\treturn -ENOMEM;\n\n\tstr[sl++] = '\\n';\n\tstr[sl] = 0;\n\treturn sl;\n}\nEXPORT_SYMBOL_GPL(of_device_modalias);\n\n/**\n * of_device_uevent - Display OF related uevent information\n * @dev:\tDevice to display the uevent information for\n * @env:\tKernel object's userspace event reference to fill up\n */\nvoid of_device_uevent(const struct device *dev, struct kobj_uevent_env *env)\n{\n\tconst char *compat, *type;\n\tstruct alias_prop *app;\n\tstruct property *p;\n\tint seen = 0;\n\n\tif ((!dev) || (!dev->of_node))\n\t\treturn;\n\n\tadd_uevent_var(env, \"OF_NAME=%pOFn\", dev->of_node);\n\tadd_uevent_var(env, \"OF_FULLNAME=%pOF\", dev->of_node);\n\ttype = of_node_get_device_type(dev->of_node);\n\tif (type)\n\t\tadd_uevent_var(env, \"OF_TYPE=%s\", type);\n\n\t/* Since the compatible field can contain pretty much anything\n\t * it's not really legal to split it out with commas. We split it\n\t * up using a number of environment variables instead. */\n\tof_property_for_each_string(dev->of_node, \"compatible\", p, compat) {\n\t\tadd_uevent_var(env, \"OF_COMPATIBLE_%d=%s\", seen, compat);\n\t\tseen++;\n\t}\n\tadd_uevent_var(env, \"OF_COMPATIBLE_N=%d\", seen);\n\n\tseen = 0;\n\tmutex_lock(&of_mutex);\n\tlist_for_each_entry(app, &aliases_lookup, link) {\n\t\tif (dev->of_node == app->np) {\n\t\t\tadd_uevent_var(env, \"OF_ALIAS_%d=%s\", seen,\n\t\t\t\t       app->alias);\n\t\t\tseen++;\n\t\t}\n\t}\n\tmutex_unlock(&of_mutex);\n}\nEXPORT_SYMBOL_GPL(of_device_uevent);\n\nint of_device_uevent_modalias(const struct device *dev, struct kobj_uevent_env *env)\n{\n\tint sl;\n\n\tif ((!dev) || (!dev->of_node) || dev->of_node_reused)\n\t\treturn -ENODEV;\n\n\t/* Devicetree modalias is tricky, we add it in 2 steps */\n\tif (add_uevent_var(env, \"MODALIAS=\"))\n\t\treturn -ENOMEM;\n\n\tsl = of_modalias(dev->of_node, &env->buf[env->buflen-1],\n\t\t\t sizeof(env->buf) - env->buflen);\n\tif (sl < 0)\n\t\treturn sl;\n\tif (sl >= (sizeof(env->buf) - env->buflen))\n\t\treturn -ENOMEM;\n\tenv->buflen += sl;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(of_device_uevent_modalias);\n\n/**\n * of_device_make_bus_id - Use the device node data to assign a unique name\n * @dev: pointer to device structure that is linked to a device tree node\n *\n * This routine will first try using the translated bus address to\n * derive a unique name. If it cannot, then it will prepend names from\n * parent nodes until a unique name can be derived.\n */\nvoid of_device_make_bus_id(struct device *dev)\n{\n\tstruct device_node *node = dev->of_node;\n\tconst __be32 *reg;\n\tu64 addr;\n\tu32 mask;\n\n\t/* Construct the name, using parent nodes if necessary to ensure uniqueness */\n\twhile (node->parent) {\n\t\t/*\n\t\t * If the address can be translated, then that is as much\n\t\t * uniqueness as we need. Make it the first component and return\n\t\t */\n\t\treg = of_get_property(node, \"reg\", NULL);\n\t\tif (reg && (addr = of_translate_address(node, reg)) != OF_BAD_ADDR) {\n\t\t\tif (!of_property_read_u32(node, \"mask\", &mask))\n\t\t\t\tdev_set_name(dev, dev_name(dev) ? \"%llx.%x.%pOFn:%s\" : \"%llx.%x.%pOFn\",\n\t\t\t\t\t     addr, ffs(mask) - 1, node, dev_name(dev));\n\n\t\t\telse\n\t\t\t\tdev_set_name(dev, dev_name(dev) ? \"%llx.%pOFn:%s\" : \"%llx.%pOFn\",\n\t\t\t\t\t     addr, node, dev_name(dev));\n\t\t\treturn;\n\t\t}\n\n\t\t/* format arguments only used if dev_name() resolves to NULL */\n\t\tdev_set_name(dev, dev_name(dev) ? \"%s:%s\" : \"%s\",\n\t\t\t     kbasename(node->full_name), dev_name(dev));\n\t\tnode = node->parent;\n\t}\n}\nEXPORT_SYMBOL_GPL(of_device_make_bus_id);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "cf8f77133cf15587976eeb4adf0d4116f1890fe93770ddc98da7c378d06cb2a8",
+    "scope": "whole-file",
+    "line_count": 319,
+    "authoring_source": "course/file_units/of_device_implementation.py",
+    "sections": [
+      "구성과 장치 매칭",
+      "제한 DMA 풀 후보 검색",
+      "DMA 범위의 시작 노드와 오류 정책",
+      "마스크 제한과 객체 변경",
+      "IOMMU 지연과 부분 복구",
+      "개행 포함 modalias",
+      "일반 uevent의 속성과 별칭",
+      "MODALIAS 환경 버퍼 이어쓰기",
+      "주소 기반 이름 생성",
+      "부모 이름으로의 fallback",
+      "공개 심볼과 전체 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/device.c"
+    }
+  ]
+}

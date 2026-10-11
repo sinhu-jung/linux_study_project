@@ -1,0 +1,157 @@
+{
+  "id": "file-7f16ac61455dadaa",
+  "path": "drivers/pci/ecam.c",
+  "title": "PCI ECAM: 전체 창과 버스별 매핑·비트 오프셋",
+  "area": "PCI ECAM · 가상 주소 · MMIO · 자원 관리 · 비트 연산",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "설정 공간 생성·해제, 버스 추가·제거, 주소 계산과 세 연산 테이블 전체를 분석합니다.",
+  "guide": [
+    "주소 공간 여유에 따라 매핑 단위를 달리하되 버스 번호를 창 시작 기준으로 정규화해야 합니다.",
+    "지연 자원 할당, 배열 인덱스 정규화, 비트 필드 주소 계산과 공통 오류 정리를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "아키텍처별 매핑 전략",
+      "text": "GPL-2.0 파일은 device,io,kernel,module,pci,pci-ecam,slab을 포함합니다. per_bus_mapping은 !IS_ENABLED(CONFIG_64BIT)입니다. 64비트에서는 넓은 가상 주소 공간을 이용해 전체 설정 창을 한 번 매핑하고, 그 외에는 버스마다 따로 매핑한다는 주석이 있습니다. 두 방식은 배열 winp와 단일 win 포인터로 구분됩니다."
+    },
+    {
+      "title": "생성과 유효 범위",
+      "text": "pci_ecam_create는 busr.start>end이면 ERR_PTR(-EINVAL),cfg kzalloc 실패면 ERR_PTR(-ENOMEM)입니다. ops->bus_shift가0이면 PCIE_ECAM_BUS_SHIFT를 기본으로 선택하고 부모·ops·버스 범위·플래그·유효 shift를 cfg에 저장합니다. 요구 버스 수와 cfgres 크기>>shift로 계산한 수용 가능 수를 비교해 초과하면 end를 start+줄인 개수-1로 바꾸고 경고합니다. 수용 가능 수가0인지 별도 검사하거나 임의 bus_shift의 유효 범위를 검증하는 코드는 없습니다."
+    },
+    {
+      "title": "물리 자원 예약과 초기 매핑",
+      "text": "bsz=1<<bus_shift로 버스당 크기를 구합니다. cfg->res는 cfgres의 전체 시작·끝을 복사하고 MEM|BUSY와 PCI ECAM 이름을 설정합니다. iomem_resource에 request_resource_conflict로 예약하며 충돌이면 -EBUSY와 로그 후 공통 정리입니다. 버스 범위를 줄였더라도 물리 예약 범위 자체는 원래 cfgres 전체입니다. 버스별 방식은 포인터 배열만 kcalloc하고 실제 버스 창은 아직 매핑하지 않습니다. 전체 방식은 bus_range*bsz 크기를 pci_remap_cfgspace합니다."
+    },
+    {
+      "title": "추가 초기화와 실패 정리",
+      "text": "ops->init이 있으면 기본 예약·배열 또는 전체 매핑 뒤에 호출하고 오류를 전파합니다. 성공하면 cfg를 반환합니다. 전체 매핑 실패는 로그 후 -ENOMEM,배열 실패도 -ENOMEM이며 모든 이들 오류는 pci_ecam_free 후 ERR_PTR(err)로 나갑니다. 성공 포인터와 오류 포인터를 구분해야 하며 NULL만 검사하는 반환 계약이 아닙니다."
+    },
+    {
+      "title": "전체 해제",
+      "text": "pci_ecam_free는 버스별 배열이 있으면 현재 busr 크기만큼 순회해 각 비NULL 매핑을 iounmap하고 배열을 kfree합니다. 전체 방식에서는 win이 있으면 한 번 unmap합니다. res.parent가 있을 때만 물리 resource를 release하고 cfg를 해제합니다. cfg 자체가 NULL인지 검사하지 않습니다. ops->init이 추가로 만든 모든 외부 자원을 이 함수가 자동으로 안다는 뜻도 아닙니다."
+    },
+    {
+      "title": "버스별 추가와 제거",
+      "text": "add_bus는 전체 매핑 방식이면 범위 검사 전에0을 반환합니다. 버스별 방식은 bus 번호 범위를 검사한 뒤 시작 번호를 빼 상대 인덱스로 만들고 res.start+인덱스*bsz를 매핑해 winp에 넣습니다. 기존 슬롯이 이미 매핑되었는지 확인하는 코드는 없습니다. remove_bus는 버스별 방식과 유효 범위에서만 작동하며 해당 슬롯이 있으면 unmap 후 NULL로 지웁니다. 이후 전체 free가 같은 슬롯을 다시 unmap하지 않게 하는 상태 변경입니다."
+    },
+    {
+      "title": "설정 주소의 기준점",
+      "text": "map_bus는 범위 밖 버스면 NULL입니다. 안쪽이면 시작 버스 번호를 빼고 버스별 방식에서는 base=winp[상대번호],busn=0으로 바꿉니다. 전체 방식에서는 base=win이며 상대 busn을 유지합니다. 버스별 base에 이미 버스 오프셋이 반영되므로 다시 busn을 더하지 않는 구조입니다. base가 NULL인지 별도로 검사하지 않으므로 add_bus 성공 등 호출 수명 전제를 함께 확인해야 합니다."
+    },
+    {
+      "title": "사용자 shift와 기본 ECAM 식",
+      "text": "map_bus는 cfg->bus_shift가 아니라 원래 cfg->ops->bus_shift가0인지로 분기합니다. 0이 아니면 bus_offset=(busn&BUS_MASK)<<bus_shift,devfn_offset=(devfn&DEVFN_MASK)<<(bus_shift-8),where&=REG_MASK로 만들고 비트 OR한 값을 base에 더합니다. 0이면 PCIE_ECAM_OFFSET 매크로에 위임합니다. 시작에 계산하는 unsigned devfn_shift는 ops shift가0일 때에도 존재하지만 그 값으로 시프트하는 분기는 실행되지 않습니다. 임의의 비표준 shift에서 필드가 겹치지 않는지까지 검사하는 코드는 없습니다."
+    },
+    {
+      "title": "세 연산 테이블",
+      "text": "pci_generic_ecam_ops는 add/remove/map을 공통 함수로,read/write를 generic_config_read/write로 지정합니다. bus_shift는 명시하지 않아 기본0입니다. ACPI와 PCI_QUIRKS가 모두 정의되면 pci_32b_ops는 read32/write32를, pci_32b_read_ops는 read32와 일반 write를 사용합니다. 후자의 read only라는 주석은 쓰기 금지를 뜻하지 않고 읽기 접근 방식만32비트로 제한하는 테이블입니다. create/free/map과 generic ops는 GPL export이고 이 파일의 두 quirk 테이블에는 export 문장이 없습니다."
+    },
+    {
+      "title": "전체 범위와 검증 한계",
+      "text": "전역 매핑 정책, 생성·해제, 두 버스 콜백, map 함수, 공통 및 조건부 테이블 전체를 대조했습니다. B개 버스의 개별 매핑 해제는 O(B),주소 계산 자체는 O(1)이고 전체 매핑의 실제 비용은 하위 매핑 구현에 의존합니다. 실제 ECAM 접근, 비표준 장치 설정이나 커널 빌드는 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "버스별 방식에서 create가 각 버스 설정 공간까지 즉시 매핑하는가?",
+      "options": [
+        "아니다. 포인터 배열을 만들고 add_bus에서 개별 매핑한다",
+        "그렇다. create가 항상 모든 버스를 한 번에 매핑한다"
+      ],
+      "answer": 0,
+      "explanation": "create의 per_bus 분기는 kcalloc뿐입니다. 실제 pci_remap_cfgspace 호출은 해당 방식의 add_bus에 있습니다."
+    },
+    {
+      "prompt": "버스별 map_bus에서 busn을0으로 바꾸는 이유는?",
+      "options": [
+        "항상 실제 버스 번호가0이기 때문이다",
+        "선택한 버스의 base에 이미 그 버스 위치가 반영되어 있기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "winp 인덱스로 선택한 매핑은 개별 버스 창입니다. 버스 오프셋을 다시 적용하면 같은 변위를 중복 계산하게 됩니다."
+    },
+    {
+      "prompt": "요구 버스 수를 줄이면 cfg->res의 물리 예약 범위도 같이 줄이는가?",
+      "options": [
+        "아니다. cfgres 전체 시작·끝을 복사한다",
+        "그렇다. 반드시 줄인 버스 수만큼 res.end를 수정한다"
+      ],
+      "answer": 0,
+      "explanation": "줄이는 필드는 cfg->busr.end와 bus_range입니다. cfg->res.end는 cfgres->end를 그대로 받으므로 버스 범위와 예약 범위를 구분해야 합니다."
+    },
+    {
+      "prompt": "pci_32b_read_ops에는 write 함수가 없는가?",
+      "options": [
+        "그렇다. 읽기 전용이라 모든 쓰기를 금지한다",
+        "아니다. 일반 pci_generic_config_write가 지정되어 있다"
+      ],
+      "answer": 1,
+      "explanation": "이름과 주석의32비트 읽기 전용 제한은 접근 폭 선택을 뜻합니다. 테이블에는 쓰기 콜백이 실제로 있습니다."
+    },
+    {
+      "prompt": "버스 제거 후 winp 슬롯을 NULL로 만드는 이유는?",
+      "options": [
+        "후속 free가 해제된 매핑을 다시 처리하지 않도록 상태를 지운다",
+        "물리 자원 예약 전체를 동시에 해제하기 위해서다"
+      ],
+      "answer": 0,
+      "explanation": "remove_bus는 개별 iounmap과 슬롯 초기화만 합니다. 전체 물리 예약 해제는 pci_ecam_free의 별도 단계입니다."
+    },
+    {
+      "prompt": "create 실패 반환을 NULL 여부만으로 판정해도 되는가?",
+      "options": [
+        "그렇다. 모든 실패는 NULL이다",
+        "아니다. ERR_PTR에 음수 오류를 담아 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "EINVAL,ENOMEM,EBUSY 및 init 오류가 오류 포인터로 반환됩니다. 정상 포인터와 오류 포인터를 구별하는 계약을 따라야 합니다."
+    },
+    {
+      "prompt": "map_bus의 기본 오프셋 분기는 어떤 shift를 검사하는가?",
+      "options": [
+        "원래 ops->bus_shift가0인지 검사한다",
+        "항상 기본값으로 보정된 cfg->bus_shift만 검사한다"
+      ],
+      "answer": 0,
+      "explanation": "create는 cfg에 유효 shift를 저장하지만 map은 ops의 원래 값으로 표준 매크로 사용 여부를 선택합니다. 두 필드를 같은 값으로 가정하면 분기 해석이 틀립니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Copyright 2016 Broadcom\n */\n\n#include <linux/device.h>\n#include <linux/io.h>\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/pci.h>\n#include <linux/pci-ecam.h>\n#include <linux/slab.h>\n\n/*\n * On 64-bit systems, we do a single ioremap for the whole config space\n * since we have enough virtual address range available.  On 32-bit, we\n * ioremap the config space for each bus individually.\n */\nstatic const bool per_bus_mapping = !IS_ENABLED(CONFIG_64BIT);\n\n/*\n * Create a PCI config space window\n *  - reserve mem region\n *  - alloc struct pci_config_window with space for all mappings\n *  - ioremap the config space\n */\nstruct pci_config_window *pci_ecam_create(struct device *dev,\n\t\tstruct resource *cfgres, struct resource *busr,\n\t\tconst struct pci_ecam_ops *ops)\n{\n\tunsigned int bus_shift = ops->bus_shift;\n\tstruct pci_config_window *cfg;\n\tunsigned int bus_range, bus_range_max, bsz;\n\tstruct resource *conflict;\n\tint err;\n\n\tif (busr->start > busr->end)\n\t\treturn ERR_PTR(-EINVAL);\n\n\tcfg = kzalloc(sizeof(*cfg), GFP_KERNEL);\n\tif (!cfg)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\t/* ECAM-compliant platforms need not supply ops->bus_shift */\n\tif (!bus_shift)\n\t\tbus_shift = PCIE_ECAM_BUS_SHIFT;\n\n\tcfg->parent = dev;\n\tcfg->ops = ops;\n\tcfg->busr.start = busr->start;\n\tcfg->busr.end = busr->end;\n\tcfg->busr.flags = IORESOURCE_BUS;\n\tcfg->bus_shift = bus_shift;\n\tbus_range = resource_size(&cfg->busr);\n\tbus_range_max = resource_size(cfgres) >> bus_shift;\n\tif (bus_range > bus_range_max) {\n\t\tbus_range = bus_range_max;\n\t\tcfg->busr.end = busr->start + bus_range - 1;\n\t\tdev_warn(dev, \"ECAM area %pR can only accommodate %pR (reduced from %pR desired)\\n\",\n\t\t\t cfgres, &cfg->busr, busr);\n\t}\n\tbsz = 1 << bus_shift;\n\n\tcfg->res.start = cfgres->start;\n\tcfg->res.end = cfgres->end;\n\tcfg->res.flags = IORESOURCE_MEM | IORESOURCE_BUSY;\n\tcfg->res.name = \"PCI ECAM\";\n\n\tconflict = request_resource_conflict(&iomem_resource, &cfg->res);\n\tif (conflict) {\n\t\terr = -EBUSY;\n\t\tdev_err(dev, \"can't claim ECAM area %pR: address conflict with %s %pR\\n\",\n\t\t\t&cfg->res, conflict->name, conflict);\n\t\tgoto err_exit;\n\t}\n\n\tif (per_bus_mapping) {\n\t\tcfg->winp = kcalloc(bus_range, sizeof(*cfg->winp), GFP_KERNEL);\n\t\tif (!cfg->winp)\n\t\t\tgoto err_exit_malloc;\n\t} else {\n\t\tcfg->win = pci_remap_cfgspace(cfgres->start, bus_range * bsz);\n\t\tif (!cfg->win)\n\t\t\tgoto err_exit_iomap;\n\t}\n\n\tif (ops->init) {\n\t\terr = ops->init(cfg);\n\t\tif (err)\n\t\t\tgoto err_exit;\n\t}\n\tdev_info(dev, \"ECAM at %pR for %pR\\n\", &cfg->res, &cfg->busr);\n\treturn cfg;\n\nerr_exit_iomap:\n\tdev_err(dev, \"ECAM ioremap failed\\n\");\nerr_exit_malloc:\n\terr = -ENOMEM;\nerr_exit:\n\tpci_ecam_free(cfg);\n\treturn ERR_PTR(err);\n}\nEXPORT_SYMBOL_GPL(pci_ecam_create);\n\nvoid pci_ecam_free(struct pci_config_window *cfg)\n{\n\tint i;\n\n\tif (per_bus_mapping) {\n\t\tif (cfg->winp) {\n\t\t\tfor (i = 0; i < resource_size(&cfg->busr); i++)\n\t\t\t\tif (cfg->winp[i])\n\t\t\t\t\tiounmap(cfg->winp[i]);\n\t\t\tkfree(cfg->winp);\n\t\t}\n\t} else {\n\t\tif (cfg->win)\n\t\t\tiounmap(cfg->win);\n\t}\n\tif (cfg->res.parent)\n\t\trelease_resource(&cfg->res);\n\tkfree(cfg);\n}\nEXPORT_SYMBOL_GPL(pci_ecam_free);\n\nstatic int pci_ecam_add_bus(struct pci_bus *bus)\n{\n\tstruct pci_config_window *cfg = bus->sysdata;\n\tunsigned int bsz = 1 << cfg->bus_shift;\n\tunsigned int busn = bus->number;\n\tphys_addr_t start;\n\n\tif (!per_bus_mapping)\n\t\treturn 0;\n\n\tif (busn < cfg->busr.start || busn > cfg->busr.end)\n\t\treturn -EINVAL;\n\n\tbusn -= cfg->busr.start;\n\tstart = cfg->res.start + busn * bsz;\n\n\tcfg->winp[busn] = pci_remap_cfgspace(start, bsz);\n\tif (!cfg->winp[busn])\n\t\treturn -ENOMEM;\n\n\treturn 0;\n}\n\nstatic void pci_ecam_remove_bus(struct pci_bus *bus)\n{\n\tstruct pci_config_window *cfg = bus->sysdata;\n\tunsigned int busn = bus->number;\n\n\tif (!per_bus_mapping || busn < cfg->busr.start || busn > cfg->busr.end)\n\t\treturn;\n\n\tbusn -= cfg->busr.start;\n\tif (cfg->winp[busn]) {\n\t\tiounmap(cfg->winp[busn]);\n\t\tcfg->winp[busn] = NULL;\n\t}\n}\n\n/*\n * Function to implement the pci_ops ->map_bus method\n */\nvoid __iomem *pci_ecam_map_bus(struct pci_bus *bus, unsigned int devfn,\n\t\t\t       int where)\n{\n\tstruct pci_config_window *cfg = bus->sysdata;\n\tunsigned int bus_shift = cfg->ops->bus_shift;\n\tunsigned int devfn_shift = cfg->ops->bus_shift - 8;\n\tunsigned int busn = bus->number;\n\tvoid __iomem *base;\n\tu32 bus_offset, devfn_offset;\n\n\tif (busn < cfg->busr.start || busn > cfg->busr.end)\n\t\treturn NULL;\n\n\tbusn -= cfg->busr.start;\n\tif (per_bus_mapping) {\n\t\tbase = cfg->winp[busn];\n\t\tbusn = 0;\n\t} else\n\t\tbase = cfg->win;\n\n\tif (cfg->ops->bus_shift) {\n\t\tbus_offset = (busn & PCIE_ECAM_BUS_MASK) << bus_shift;\n\t\tdevfn_offset = (devfn & PCIE_ECAM_DEVFN_MASK) << devfn_shift;\n\t\twhere &= PCIE_ECAM_REG_MASK;\n\n\t\treturn base + (bus_offset | devfn_offset | where);\n\t}\n\n\treturn base + PCIE_ECAM_OFFSET(busn, devfn, where);\n}\nEXPORT_SYMBOL_GPL(pci_ecam_map_bus);\n\n/* ECAM ops */\nconst struct pci_ecam_ops pci_generic_ecam_ops = {\n\t.pci_ops\t= {\n\t\t.add_bus\t= pci_ecam_add_bus,\n\t\t.remove_bus\t= pci_ecam_remove_bus,\n\t\t.map_bus\t= pci_ecam_map_bus,\n\t\t.read\t\t= pci_generic_config_read,\n\t\t.write\t\t= pci_generic_config_write,\n\t}\n};\nEXPORT_SYMBOL_GPL(pci_generic_ecam_ops);\n\n#if defined(CONFIG_ACPI) && defined(CONFIG_PCI_QUIRKS)\n/* ECAM ops for 32-bit access only (non-compliant) */\nconst struct pci_ecam_ops pci_32b_ops = {\n\t.pci_ops\t= {\n\t\t.add_bus\t= pci_ecam_add_bus,\n\t\t.remove_bus\t= pci_ecam_remove_bus,\n\t\t.map_bus\t= pci_ecam_map_bus,\n\t\t.read\t\t= pci_generic_config_read32,\n\t\t.write\t\t= pci_generic_config_write32,\n\t}\n};\n\n/* ECAM ops for 32-bit read only (non-compliant) */\nconst struct pci_ecam_ops pci_32b_read_ops = {\n\t.pci_ops\t= {\n\t\t.add_bus\t= pci_ecam_add_bus,\n\t\t.remove_bus\t= pci_ecam_remove_bus,\n\t\t.map_bus\t= pci_ecam_map_bus,\n\t\t.read\t\t= pci_generic_config_read32,\n\t\t.write\t\t= pci_generic_config_write,\n\t}\n};\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "4ae41c8b936311010a867f6c23a51d7ac1f763eaee204a49434443d74f9f0e87",
+    "scope": "whole-file",
+    "line_count": 233,
+    "authoring_source": "course/file_units/pci_ecam_mapping.py",
+    "sections": [
+      "아키텍처별 매핑 전략",
+      "생성과 유효 범위",
+      "물리 자원 예약과 초기 매핑",
+      "추가 초기화와 실패 정리",
+      "전체 해제",
+      "버스별 추가와 제거",
+      "설정 주소의 기준점",
+      "사용자 shift와 기본 ECAM 식",
+      "세 연산 테이블",
+      "전체 범위와 검증 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/ecam.c"
+    }
+  ]
+}

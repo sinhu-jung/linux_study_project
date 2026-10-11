@@ -1,0 +1,133 @@
+{
+  "id": "file-5d0253bdf6300bf6",
+  "path": "drivers/pci/host-bridge.c",
+  "title": "PCI 호스트 브리지: 참조 획득과 자원 창 오프셋 변환",
+  "area": "PCI · 메모리 주소 · 구간 알고리즘 · 참조 수명",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "루트 조회, 객체 수명 도우미, 해제 콜백 설정과 양방향 주소 변환을 전체 분석합니다.",
+  "guide": [
+    "주소 변환은 해당 범위를 포함하는 첫 창의 오프셋을 적용하며, 창을 못 찾으면 이 구현은 항등 변환을 합니다.",
+    "부모 체인 순회, 구간 포함 관계, 선형 검색, 가역 변환의 전제와 참조 카운트를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "루트 버스 조회",
+      "text": "GPL-2.0 파일은 kernel,pci,module 및 내부 pci.h를 포함합니다. find_pci_root_bus는 parent가 있는 동안 부모로 올라가 최상단 버스를 반환합니다. 입력 NULL이나 부모 사이클을 검사하지 않으며 정상 트리를 전제로 합니다. 높이 H에서 O(H) 방문과 O(1) 추가 공간입니다. pci_find_host_bridge는 그 root_bus->bridge를 to_pci_host_bridge로 변환할 뿐 새 참조를 얻는 코드는 없습니다."
+    },
+    {
+      "title": "객체 참조와 해제 콜백",
+      "text": "pci_get_host_bridge_device는 장치 버스에서 루트를 찾아 bridge의 kobj에 kobject_get을 호출한 뒤 device 포인터를 반환합니다. pci_put_host_bridge_device는 같은 종류의 kobj에 kobject_put을 합니다. find 함수의 단순 포인터 조회와 get 함수의 수명 연장을 구분해야 합니다. pci_set_host_bridge_release는 release_fn과 release_data를 구조체 필드에 저장할 뿐 콜백을 즉시 실행하지 않습니다. 이전 데이터 해제나 잠금도 이 본문에는 없습니다."
+    },
+    {
+      "title": "자원에서 버스 주소로",
+      "text": "pcibios_resource_to_bus는 호스트 windows 목록을 순서대로 훑고 resource_contains(window->res,res)가 참인 첫 창의 offset을 선택합니다. 시작 offset은 0이며 못 찾으면 그대로입니다. 결과 region.start/end는 res.start/end에서 offset을 각각 뺀 값입니다. 이 함수 본문에는 별도 resource_type 비교가 없고 포함 판정 세부 사항은 resource_contains에 위임합니다. region 이외의 속성을 수정하거나 실패 코드를 반환하지 않습니다."
+    },
+    {
+      "title": "버스 구간 포함 조건",
+      "text": "내부 region_contains는 바깥 start<=안쪽 start와 바깥 end>=안쪽 end를 모두 요구합니다. 일부만 겹치는 구간을 허용하는 교집합 검사가 아닙니다. 빈 구간이나 start>end의 유효성을 따로 검사하지 않으며 타입·플래그도 비교하지 않습니다. 같은 시작·끝의 동일 구간은 포함으로 판정됩니다."
+    },
+    {
+      "title": "버스 주소에서 자원으로",
+      "text": "pcibios_bus_to_resource는 출력 res의 현재 resource_type과 창의 타입이 다르면 건너뜁니다. 같은 타입의 창을 버스 좌표로 바꾸기 위해 start/end에서 그 창의 offset을 뺀 뒤 region_contains로 전체 입력 구간 포함을 확인합니다. 첫 일치 offset을 선택하고 res.start/end에 region.start/end+offset을 씁니다. 따라서 호출자는 res의 타입 정보를 미리 준비해야 하며 이 함수가 타입을 채우는 것은 아닙니다. 일치 창이 없으면 offset=0으로 주소를 그대로 씁니다."
+    },
+    {
+      "title": "순서·복잡도와 산술 한계",
+      "text": "두 변환 모두 첫 일치에서 break하므로 겹치는 창의 선택은 목록 순서에 의존합니다. 루트 깊이 H와 창 수 W에 대해 본문의 검색 비용은 O(H+W)입니다. 두 끝점에 같은 오프셋을 적용해 범위 길이는 정상적인 비오버플로 산술에서 유지됩니다. 다만 덧셈·뺄셈 오버플로 검사, 복수 창을 잇는 구간 분할, 오류 보고는 없습니다. 같은 창이 양방향으로 선택된다는 전제 없이 모든 입력의 왕복 변환이 보장된다고 단정하면 안 됩니다."
+    },
+    {
+      "title": "전체 검토 범위",
+      "text": "루트 helper, find/get/put, release setter, 두 주소 변환과 포함 helper까지 모든 여덟 함수를 대조했습니다. find_host_bridge와 release setter는 GPL export, 두 주소 변환은 일반 export입니다. 창 목록의 잠금은 이 두 함수 안에 보이지 않습니다. 실제 PCI 주소 접근, 장치 제거 중 동시 호출이나 커널 빌드는 실행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "자원 범위 0x1100..0x11ff에 offset=0x1000인 창을 선택하면 버스 범위는?",
+      "options": [
+        "0x100..0x1ff",
+        "0x2100..0x21ff"
+      ],
+      "answer": 0,
+      "explanation": "resource_to_bus는 두 끝점에서 offset을 뺍니다. 반대 방향 함수에서 더하는 것과 방향을 구분해야 합니다."
+    },
+    {
+      "prompt": "어느 창에도 전체 구간이 포함되지 않으면 변환 함수는 어떻게 하는가?",
+      "options": [
+        "항상 -EINVAL을 반환하고 출력을 건드리지 않는다",
+        "offset=0으로 주소를 그대로 기록한다"
+      ],
+      "answer": 1,
+      "explanation": "두 함수는 void이며 offset의 초기값 0을 유지합니다. 실패를 반환하는 API라고 가정하면 실제 동작을 놓칩니다."
+    },
+    {
+      "prompt": "bus_to_resource 호출 전 res의 flags는 무관한가?",
+      "options": [
+        "아니다. resource_type(res)를 창 타입과 비교한다",
+        "그렇다. 함수가 모든 flags를 새로 채운다"
+      ],
+      "answer": 0,
+      "explanation": "첫 필터에서 출력 resource의 기존 타입을 읽습니다. 본문 마지막에는 start/end만 쓰므로 타입 준비는 호출자의 전제입니다."
+    },
+    {
+      "prompt": "find_host_bridge와 get_host_bridge_device가 같은 참조 수명 동작을 하는가?",
+      "options": [
+        "그렇다. 둘 다 무조건 새 참조를 얻는다",
+        "아니다. get 함수에는 kobject_get이 있고 find에는 없다"
+      ],
+      "answer": 1,
+      "explanation": "단순 검색 포인터와 수명을 연장하는 참조 획득을 구분해야 합니다. get으로 얻은 device는 대응하는 put 도우미로 내려놓습니다."
+    },
+    {
+      "prompt": "[100,200]이 [150,250]을 region_contains로 포함하는가?",
+      "options": [
+        "아니다. 끝점 250이 바깥 끝점 200보다 크다",
+        "그렇다. 일부라도 겹치면 포함이다"
+      ],
+      "answer": 0,
+      "explanation": "포함은 두 부등식이 모두 참이어야 합니다. 겹침과 전체 포함은 다른 구간 관계입니다."
+    },
+    {
+      "prompt": "서로 다른 offset의 두 창이 모두 포함 조건을 만족하면?",
+      "options": [
+        "자동으로 두 offset의 평균을 낸다",
+        "목록에서 먼저 만난 창을 선택한다"
+      ],
+      "answer": 1,
+      "explanation": "첫 일치에서 offset을 저장하고 break합니다. 우선순위 정렬이나 최소 창 선택 알고리즘은 이 파일에 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Host bridge related code\n */\n\n#include <linux/kernel.h>\n#include <linux/pci.h>\n#include <linux/module.h>\n\n#include \"pci.h\"\n\nstatic struct pci_bus *find_pci_root_bus(struct pci_bus *bus)\n{\n\twhile (bus->parent)\n\t\tbus = bus->parent;\n\n\treturn bus;\n}\n\nstruct pci_host_bridge *pci_find_host_bridge(struct pci_bus *bus)\n{\n\tstruct pci_bus *root_bus = find_pci_root_bus(bus);\n\n\treturn to_pci_host_bridge(root_bus->bridge);\n}\nEXPORT_SYMBOL_GPL(pci_find_host_bridge);\n\nstruct device *pci_get_host_bridge_device(struct pci_dev *dev)\n{\n\tstruct pci_bus *root_bus = find_pci_root_bus(dev->bus);\n\tstruct device *bridge = root_bus->bridge;\n\n\tkobject_get(&bridge->kobj);\n\treturn bridge;\n}\n\nvoid  pci_put_host_bridge_device(struct device *dev)\n{\n\tkobject_put(&dev->kobj);\n}\n\nvoid pci_set_host_bridge_release(struct pci_host_bridge *bridge,\n\t\t\t\t void (*release_fn)(struct pci_host_bridge *),\n\t\t\t\t void *release_data)\n{\n\tbridge->release_fn = release_fn;\n\tbridge->release_data = release_data;\n}\nEXPORT_SYMBOL_GPL(pci_set_host_bridge_release);\n\nvoid pcibios_resource_to_bus(struct pci_bus *bus, struct pci_bus_region *region,\n\t\t\t     struct resource *res)\n{\n\tstruct pci_host_bridge *bridge = pci_find_host_bridge(bus);\n\tstruct resource_entry *window;\n\tresource_size_t offset = 0;\n\n\tresource_list_for_each_entry(window, &bridge->windows) {\n\t\tif (resource_contains(window->res, res)) {\n\t\t\toffset = window->offset;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tregion->start = res->start - offset;\n\tregion->end = res->end - offset;\n}\nEXPORT_SYMBOL(pcibios_resource_to_bus);\n\nstatic bool region_contains(struct pci_bus_region *region1,\n\t\t\t    struct pci_bus_region *region2)\n{\n\treturn region1->start <= region2->start && region1->end >= region2->end;\n}\n\nvoid pcibios_bus_to_resource(struct pci_bus *bus, struct resource *res,\n\t\t\t     struct pci_bus_region *region)\n{\n\tstruct pci_host_bridge *bridge = pci_find_host_bridge(bus);\n\tstruct resource_entry *window;\n\tresource_size_t offset = 0;\n\n\tresource_list_for_each_entry(window, &bridge->windows) {\n\t\tstruct pci_bus_region bus_region;\n\n\t\tif (resource_type(res) != resource_type(window->res))\n\t\t\tcontinue;\n\n\t\tbus_region.start = window->res->start - window->offset;\n\t\tbus_region.end = window->res->end - window->offset;\n\n\t\tif (region_contains(&bus_region, region)) {\n\t\t\toffset = window->offset;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tres->start = region->start + offset;\n\tres->end = region->end + offset;\n}\nEXPORT_SYMBOL(pcibios_bus_to_resource);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7e2c5b48c65502be430c2c54074af1ed1b0e3b4eddb5aa4ed773d3f4070fa373",
+    "scope": "whole-file",
+    "line_count": 101,
+    "authoring_source": "course/file_units/pci_host_bridge_translation.py",
+    "sections": [
+      "루트 버스 조회",
+      "객체 참조와 해제 콜백",
+      "자원에서 버스 주소로",
+      "버스 구간 포함 조건",
+      "버스 주소에서 자원으로",
+      "순서·복잡도와 산술 한계",
+      "전체 검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/host-bridge.c"
+    }
+  ]
+}

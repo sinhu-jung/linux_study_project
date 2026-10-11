@@ -1,0 +1,30 @@
+"""Whole-file OF device matching, DMA configuration, events and bus naming."""
+ROWS = [dict(
+    path='drivers/of/device.c', title='OF 장치 구현: DMA 설정의 부분 갱신·uevent·버스 이름',
+    intro='매칭부터 DMA·예약 풀·이벤트 문자열·이름 생성까지 모든 함수 본문을 분석합니다.',
+    principle='설정 실패가 모든 이전 변경을 되돌리는 것은 아니며 반환 오류와 객체 상태를 함께 추적해야 합니다.',
+    use='범위 마스크, 참조 해제, 조건부 오류 전파, 연결 리스트 잠금과 문자열 버퍼 경계를 학습합니다.',
+    area='드라이버 모델 · DMA · IOMMU · 문자열 · mutex · 오류 복구',
+    sections=[
+        ('구성과 장치 매칭', 'GPL-2.0 파일은 OF, 주소, IOMMU, 예약 메모리, DMA, slab, 플랫폼과 내부 of_private 정의를 포함합니다. of_match_device는 matches 부재, dev->of_node 부재, of_node_reused이면 NULL이고 나머지는 of_match_node에 위임합니다. dev 자체의 NULL 검사는 없으므로 matches가 존재하는 경우 NULL dev를 안전하게 처리한다고 주장할 수 없습니다. get_match_data는 dev->driver->of_match_table로 이 함수를 호출하고 매칭 없으면 NULL, 있으면 match->data입니다.'),
+        ('제한 DMA 풀 후보 검색', 'of_dma_set_restricted_buffer는 DMA_RESTRICTED_POOL 미지원이면 즉시 반환합니다. 먼저 dev->of_node의 memory-region을 u32 크기로 세고 count<=0이면 DMA 설정용 np에서 다시 셉니다. count가 양수이면 각 phandle을 읽어 restricted-dma-pool 호환성과 available을 모두 만족하는 첫 노드를 선택합니다. 매 반복에서 node를 put하며 선택한 경우도 put 후 break합니다. i<count일 때만 원래 목록과 index로 예약 메모리 초기화를 시도하고 실패하면 경고합니다. 음수 count는 순회를 실행하지 않으며 여러 후보를 모두 초기화하지도 않습니다.'),
+        ('DMA 범위의 시작 노드와 오류 정책', 'of_dma_configure_id는 np==dev->of_node이면 __of_get_dma_parent(np), 아니면 of_node_get(np)로 bus_np를 얻습니다. of_dma_get_range 호출 후 bus_np 참조를 put합니다. 범위 조회 실패에서 force_dma가 거짓이면 -ENODEV만 성공 0으로 바꾸고 다른 오류는 전파합니다. force_dma가 참이면 음수 오류여도 설정을 계속합니다. 조회 성공이면 dma_range_map_max(map)으로 end를 구하고 set_map을 참으로 표시합니다.'),
+        ('마스크 제한과 객체 변경', 'dma_mask 포인터가 없으면 경고 후 coherent_dma_mask의 주소로 대체합니다. end가 0이면 기존 coherent_dma_mask를 우선 사용하고 그것도 0이면 32비트 최댓값으로 정합니다. mask=DMA_BIT_MASK(ilog2(end)+1)를 만들고 coherent_dma_mask와 *dma_mask에 AND합니다. 예를 들어 end=0x1800의 비트 폭 마스크는 0x1fff로 end 자체와 다릅니다. set_map일 때만 bus_dma_limit=end와 dma_range_map=map을 저장하므로 유효한 범위가 없던 강제 설정에서 이 두 필드를 새 값으로 덮지 않습니다.'),
+        ('IOMMU 지연과 부분 복구', 'np의 coherent 여부를 얻은 뒤 of_iommu_configure(dev,np,id)를 호출합니다. -EPROBE_DEFER이면 set_map일 때 dma_range_map을 NULL로 지우고 map을 kfree한 뒤 같은 오류를 반환합니다. 이미 바꾼 DMA 마스크, dma_mask 포인터, bus_dma_limit를 이전 값으로 복구하는 코드는 없습니다. 다른 IOMMU 오류는 치명 오류로 반환하지 않고 arch_setup_dma_ops(dev,coherent)를 호출합니다. ret가 0이 아니면 제한 풀 설정을 시도하고 최종 0을 반환합니다. 제한 풀 초기화 실패도 경고에 그칩니다.'),
+        ('개행 포함 modalias', 'of_device_modalias는 dev/node 부재 또는 재사용 노드를 -ENODEV로 거부합니다. of_modalias에 len-2를 전달해 개행과 NUL 공간을 남기며 음수 결과를 전파하고 결과 sl>len-2이면 -ENOMEM입니다. 맞으면 str[sl++]에 개행, 그 뒤 NUL을 쓰고 개행을 포함한 길이를 반환합니다. len>=2를 이 함수에서 선행 검사하는 코드는 없습니다. 작은 길이가 항상 안전하게 정규화된다고 덧붙이면 원문보다 강한 주장입니다.'),
+        ('일반 uevent의 속성과 별칭', 'of_device_uevent는 dev/node 부재만 검사하며 of_node_reused 검사는 없습니다. OF_NAME과 OF_FULLNAME을 추가하고 type이 있으면 OF_TYPE도 넣습니다. compatible 문자열을 쉼표로 합치지 않고 OF_COMPATIBLE_0부터 각각 추가한 뒤 OF_COMPATIBLE_N을 기록합니다. 이후 seen을 0으로 되돌리고 of_mutex를 잡아 aliases_lookup 연결 리스트에서 같은 노드인 항목의 OF_ALIAS_n을 추가합니다. 잠금은 별칭 순회 구간에 적용됩니다. add_uevent_var의 실패 반환은 이 void 함수에서 검사하지 않으며 별칭 개수 변수를 별도로 내보내지도 않습니다.'),
+        ('MODALIAS 환경 버퍼 이어쓰기', 'of_device_uevent_modalias는 재사용 노드까지 거부하고 먼저 MODALIAS=를 추가합니다. 추가 실패는 -ENOMEM입니다. 문자열 마지막 NUL 위치인 env->buf[buflen-1]에 of_modalias를 써 이어 붙이며 크기 인수는 sizeof(buf)-buflen입니다. 음수 결과를 전파하고 sl이 그 크기 이상이면 -ENOMEM, 성공이면 buflen에 sl을 더합니다. 실패 때 앞서 추가한 MODALIAS= 항목이나 부분 버퍼 쓰기를 롤백하는 코드는 없습니다. 일반 modalias 함수처럼 개행을 추가하지도 않습니다.'),
+        ('주소 기반 이름 생성', 'of_device_make_bus_id는 dev->of_node부터 node->parent가 있는 동안 반복합니다. reg가 있고 of_translate_address가 OF_BAD_ADDR가 아니면 주소를 이름 앞에 쓰고 종료합니다. mask 속성 읽기 성공 시 ffs(mask)-1도 16진수 구성 요소로 넣습니다. 이는 마스크의 값 자체나 설정 비트 개수가 아니라 첫 설정 비트의 0 기반 위치이며 mask=0을 별도로 거부하지 않습니다. 기존 이름이 있으면 새 주소·노드 이름 뒤에 콜론으로 이어 붙입니다.'),
+        ('부모 이름으로의 fallback', '주소를 얻지 못하면 node->full_name의 kbasename을 기존 이름 앞에 콜론으로 붙이고 부모로 이동합니다. 기존 이름이 없으면 basename만 사용합니다. 루트 자체는 parent가 없으므로 이 루프에서 처리하지 않습니다. 노드 체인의 깊이에 따른 상향 순회이며 별도 전체 장치 이름 집합을 검색하는 중복 검사 코드는 없습니다. dev_set_name의 반환값도 검사하지 않습니다. 문자열 구성 비용까지 포함하면 단순히 깊이만으로 전체 시간 복잡도를 확정할 수 없습니다.'),
+        ('공개 심볼과 전체 범위', 'of_match_device와 get_match_data는 EXPORT_SYMBOL, configure_id·modalias·uevent·uevent_modalias·make_bus_id는 EXPORT_SYMBOL_GPL입니다. 제한 풀 도우미는 static입니다. 모든 여덟 함수의 성공·실패·참조·문자열 경로를 대조했습니다. 연결 리스트 선형 검색, 비트 폭 계산, 부분 상태 갱신과 잠금 범위를 학습 주제로 연결했으며 실제 DMA·IOMMU·uevent나 장치 이름 등록을 커널에서 실행하지 않았습니다.')
+    ], questions=[
+        ('DMA 범위 조회가 -ENODEV이고 force_dma가 거짓이면?', '즉시 0을 반환하고 이후 설정을 진행하지 않는다', '반드시 -ENODEV를 그대로 반환한다', 'ret<0 분기의 return ret==-ENODEV ? 0 : ret가 적용됩니다. 성공값으로 반환하는 것과 DMA 설정을 끝까지 수행한 것은 다릅니다.'),
+        ('IOMMU -EPROBE_DEFER 경로가 DMA 상태를 모두 원래대로 되돌리는가?', '아니다. 범위 맵 정리는 하지만 마스크와 bus_dma_limit 복구는 없다', '그렇다. 저장된 모든 필드를 이전 값으로 복원한다', 'DMA 마스크 제한과 bus limit 설정은 IOMMU 호출보다 앞에 있습니다. 지연 분기는 조건부 map 포인터 초기화와 kfree만 하므로 전체 트랜잭션 롤백이 아닙니다.'),
+        ('제한 DMA 풀 후보가 여러 개면 모두 초기화하는가?', '아니다. 호환성과 available을 만족하는 첫 항목에서 멈춘다', '그렇다. memory-region의 모든 항목을 무조건 초기화한다', '조건을 만족하면 node를 put한 뒤 break합니다. 이후 선택된 i로 한 번 초기화하며 count 오류나 후보 없음은 초기화로 이어지지 않습니다.'),
+        ('end=0x1800이면 비트 폭으로 만든 DMA 마스크는?', '0x1fff', '항상 end와 동일한 0x1800', 'ilog2(end)+1은 필요한 비트 수를 정하고 DMA_BIT_MASK는 해당 하위 비트를 모두 1로 만듭니다. 정확한 버스 상한 end는 유효 범위가 있을 때 bus_dma_limit에 별도로 저장합니다.'),
+        ('일반 uevent 함수가 add_uevent_var 실패를 호출자에게 오류로 반환하는가?', '아니다. void 함수이며 각 반환값을 검사하지 않는다', '그렇다. 첫 실패 때 -ENOMEM을 반환한다', '이 동작은 별도 of_device_uevent_modalias와 다릅니다. 일반 함수는 compatible 인덱스도 추가 호출 결과와 무관하게 증가시키므로 전체 환경 변수가 모두 들어갔다고 보장할 수 없습니다.'),
+        ('uevent MODALIAS 생성 실패 시 처음 넣은 MODALIAS= 항목은 자동으로 제거되는가?', '아니다. 이 함수에 롤백 코드가 없다', '그렇다. 모든 실패 경로에서 buflen과 항목 수를 복원한다', '먼저 항목을 추가한 뒤 그 마지막 NUL 위치부터 내용을 씁니다. 뒤의 길이 오류나 음수 결과는 곧바로 반환하므로 호출 전 상태 복원이 구현되어 있지 않습니다.'),
+        ('장치 이름의 mask 구성 요소가 표현하는 것은?', 'ffs(mask)-1로 구한 첫 설정 비트의 0 기반 위치', 'mask의 설정 비트 개수', '예를 들어 mask=0x18이면 첫 설정 비트는 위치 3입니다. 여러 비트가 있어도 개수를 세지 않으며 0 입력에 대한 별도 검증도 없습니다.'),
+        ('일반 uevent와 modalias 함수가 of_node_reused를 똑같이 거부하는가?', '아니다. 일반 uevent에는 그 검사가 없다', '그렇다. 파일의 모든 함수가 공통으로 거부한다', 'of_device_modalias와 uevent_modalias는 재사용 노드를 검사하지만 일반 uevent는 dev와 node 부재만 검사합니다. 파일 전체에 공통 선행 조건이 있다고 추정하지 말고 각 본문을 읽어야 합니다.')
+    ]
+)]

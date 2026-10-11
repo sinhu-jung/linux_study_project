@@ -1,0 +1,134 @@
+{
+  "id": "file-54d8a36b922ed21c",
+  "path": "drivers/pci/controller/Makefile",
+  "title": "PCI 컨트롤러 빌드: 설정별 객체와 ACPI 우회 선택",
+  "area": "Kbuild · PCI 컨트롤러 · 조건부 빌드 · ACPI · 모듈",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "모든 객체·하위 디렉터리 항목과 마지막 중첩 조건을 대조합니다.",
+  "guide": [
+    "빌드 목록은 파일 선택을 정의하며 실제 장치 매칭과 실행 시 probe는 별도 단계입니다.",
+    "선언적 의존 관계, 조건 조합, 공통 객체 재사용과 빌드·실행 단계 구분을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "Kbuild 형태",
+      "text": "GPL-2.0 Makefile은 obj-$(CONFIG_...) += 대상으로 선택 결과를 누적합니다. 설정이 y이면 obj-y,m이면 obj-m에 들어가는 방식이며 실제 m 허용 여부와 의존성은 Kconfig를 확인해야 합니다. 이 파일에는 컴파일러 명령을 직접 실행하는 recipe나 장치 탐색 코드는 없습니다. 객체 목록에 이름이 있다는 사실만으로 현재 구성에서 해당 드라이버가 활성이라고 할 수 없습니다."
+    },
+    {
+      "title": "초기 컨트롤러와 하위 디렉터리",
+      "text": "PCIE_CADENCE는 cadence/를 선택합니다. PCI_FTPCI100→pci-ftpci100.o,PCI_IXP4XX→pci-ixp4xx.o,PCI_HYPERV→pci-hyperv.o,PCI_HYPERV_INTERFACE→pci-hyperv-intf.o,PCI_MVEBU→pci-mvebu.o,PCI_AARDVARK→pci-aardvark.o,PCI_TEGRA→pci-tegra.o,PCI_RCAR_GEN2→pci-rcar-gen2.o입니다. 각 설정 이름에는 CONFIG_ 접두사가 붙습니다. Hyper-V 본체와 interface는 이 목록에서 별도 선택입니다."
+    },
+    {
+      "title": "R-Car와 호스트 공통 코드",
+      "text": "PCIE_RCAR_HOST는 pcie-rcar.o와 pcie-rcar-host.o를,PCIE_RCAR_EP는 같은 pcie-rcar.o와 pcie-rcar-ep.o를 추가합니다. 공통 객체를 두 경로가 참조하는 구조입니다. PCI_HOST_COMMON→pci-host-common.o,PCI_HOST_GENERIC→pci-host-generic.o,PCI_HOST_THUNDER_ECAM→pci-thunder-ecam.o,PCI_HOST_THUNDER_PEM→pci-thunder-pem.o입니다. GENERIC을 선택하는 줄 자체가 COMMON도 선택하는 것은 아니므로 상호 의존은 Kconfig에서 확인해야 합니다."
+    },
+    {
+      "title": "Xilinx·X-Gene·Versatile",
+      "text": "PCIE_XILINX→pcie-xilinx.o,PCIE_XILINX_NWL→pcie-xilinx-nwl.o,PCIE_XILINX_CPM→pcie-xilinx-cpm.o,PCIE_XILINX_DMA_PL→pcie-xilinx-dma-pl.o입니다. PCI_V3_SEMI→pci-v3-semi.o,PCI_XGENE→pci-xgene.o,PCI_XGENE_MSI→pci-xgene-msi.o,PCI_VERSATILE→pci-versatile.o가 이어집니다. X-Gene 본체와 MSI 지원은 서로 다른 객체 항목입니다."
+    },
+    {
+      "title": "iProc·Altera·Rockchip",
+      "text": "PCIE_IPROC→pcie-iproc.o,PCIE_IPROC_MSI→pcie-iproc-msi.o,PCIE_IPROC_PLATFORM→pcie-iproc-platform.o,PCIE_IPROC_BCMA→pcie-iproc-bcma.o입니다. PCIE_ALTERA→pcie-altera.o,PCIE_ALTERA_MSI→pcie-altera-msi.o도 분리됩니다. PCIE_ROCKCHIP→pcie-rockchip.o,PCIE_ROCKCHIP_EP→pcie-rockchip-ep.o,PCIE_ROCKCHIP_HOST→pcie-rockchip-host.o가 각각 있습니다. 이 Makefile은 세 Rockchip 객체를 하나의 합성 객체로 묶는 -y 목록을 정의하지 않습니다."
+    },
+    {
+      "title": "나머지 개별 객체",
+      "text": "PCIE_MEDIATEK→pcie-mediatek.o,PCIE_MEDIATEK_GEN3→pcie-mediatek-gen3.o,VMD→vmd.o,PCIE_BRCMSTB→pcie-brcmstb.o,PCI_LOONGSON→pci-loongson.o,PCIE_HISI_ERR→pcie-hisi-error.o,PCIE_APPLE→pcie-apple.o,PCIE_MT7621→pcie-mt7621.o입니다. 각 이름은 별도 설정값으로 선택되며 파일 이름의 유사성만으로 공통 실행 경로나 같은 하드웨어 지원이라고 단정할 수 없습니다."
+    },
+    {
+      "title": "무조건 방문하는 세 디렉터리",
+      "text": "dwc/,mobiveil/,plda/는 obj-y에 직접 추가됩니다. 주석은 pcie-hisi.o quirk가 PCIE_DW 없이도 필요하다고 설명합니다. 하위 디렉터리를 빌드 탐색에 포함하는 것과 그 안의 모든 드라이버 객체를 무조건 링크하는 것은 다릅니다. 구체적인 내부 선택은 각 하위 Makefile과 소스의 조건을 확인해야 합니다."
+    },
+    {
+      "title": "ACPI quirk 선택 경로",
+      "text": "마지막은 ifdef CONFIG_ACPI 안에 ifdef CONFIG_PCI_QUIRKS가 있고 두 조건 안에서 obj-$(CONFIG_ARM64)에 pci-thunder-ecam.o,pci-thunder-pem.o,pci-xgene.o를 추가합니다. 주석은 일반 ACPI pci_root.c가 비표준 ECAM 장치의 MCFG quirk를 사용할 수 있도록 개별 DT 드라이버 설정에만 의존하지 않으려는 목적을 설명합니다. 필요한 부분만 내부 ifdef로 빌드한다고도 명시합니다. 위의 개별 설정 경로와 이 추가 경로를 함께 확인해야 합니다."
+    },
+    {
+      "title": "전체 범위와 한계",
+      "text": "모든 CONFIG별 객체,두 R-Car 다중 객체 줄,조건부 cadence/,세 obj-y 디렉터리,ACPI·QUIRKS 중첩 조건 및 주석 전체를 대조했습니다. 설정→빌드 대상의 매핑은 의존 그래프의 일부이며 최종 플랫폼 지원 판정은 Kconfig와 해당 소스까지 필요합니다. 실제 커널 빌드나 각 컨트롤러 실행은 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "R-Car host와 endpoint 선택이 공통으로 추가하는 객체는?",
+      "options": [
+        "pcie-rcar.o",
+        "pci-host-generic.o"
+      ],
+      "answer": 0,
+      "explanation": "HOST 줄과 EP 줄 모두 pcie-rcar.o를 포함하고 각자 host 또는 ep 전용 객체를 더합니다."
+    },
+    {
+      "prompt": "obj-y += dwc/이면 그 안의 모든 장치 드라이버가 무조건 활성인가?",
+      "options": [
+        "그렇다. 모든 하위 소스가 아무 조건 없이 링크된다",
+        "아니다. 하위 빌드 목록과 소스 조건을 추가로 확인해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "디렉터리 방문과 개별 객체 선택은 별도 단계입니다. 주석은 특정 quirk가 필요해 디렉터리를 포함하는 이유를 설명합니다."
+    },
+    {
+      "prompt": "개별 Thunder 설정 없이도 마지막 quirk 경로가 객체를 선택할 수 있는 조건은?",
+      "options": [
+        "ACPI와 PCI_QUIRKS 조건 안에서 ARM64가 선택되는 경우",
+        "PCI_HOST_GENERIC 하나만 활성인 경우"
+      ],
+      "answer": 0,
+      "explanation": "두 ifdef 안의 obj-$(CONFIG_ARM64)가 해당 객체를 추가합니다. 개별 DT 드라이버 설정만 보면 이 경로를 놓칩니다."
+    },
+    {
+      "prompt": "이 Makefile의 GENERIC 줄 자체가 COMMON 설정까지 켜는가?",
+      "options": [
+        "그렇다. +=가 다른 CONFIG 값을 자동 변경한다",
+        "아니다. 각 객체 줄은 별도이며 설정 의존은 다른 곳에서 확인한다"
+      ],
+      "answer": 1,
+      "explanation": "obj 목록 추가는 CONFIG 변수를 활성화하는 select 문장이 아닙니다. Kconfig의 의존 관계와 Kbuild의 객체 선택을 구분해야 합니다."
+    },
+    {
+      "prompt": "X-Gene 본체와 MSI는 같은 한 객체 항목인가?",
+      "options": [
+        "아니다. pci-xgene.o와 pci-xgene-msi.o가 별도 설정에 연결된다",
+        "그렇다. 본체 선택 줄이 MSI 객체까지 항상 추가한다"
+      ],
+      "answer": 0,
+      "explanation": "PCI_XGENE와 PCI_XGENE_MSI가 각각 다른 객체를 선택합니다. 실제 동시 선택 여부는 설정 의존을 함께 봐야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "# SPDX-License-Identifier: GPL-2.0\nobj-$(CONFIG_PCIE_CADENCE) += cadence/\nobj-$(CONFIG_PCI_FTPCI100) += pci-ftpci100.o\nobj-$(CONFIG_PCI_IXP4XX) += pci-ixp4xx.o\nobj-$(CONFIG_PCI_HYPERV) += pci-hyperv.o\nobj-$(CONFIG_PCI_HYPERV_INTERFACE) += pci-hyperv-intf.o\nobj-$(CONFIG_PCI_MVEBU) += pci-mvebu.o\nobj-$(CONFIG_PCI_AARDVARK) += pci-aardvark.o\nobj-$(CONFIG_PCI_TEGRA) += pci-tegra.o\nobj-$(CONFIG_PCI_RCAR_GEN2) += pci-rcar-gen2.o\nobj-$(CONFIG_PCIE_RCAR_HOST) += pcie-rcar.o pcie-rcar-host.o\nobj-$(CONFIG_PCIE_RCAR_EP) += pcie-rcar.o pcie-rcar-ep.o\nobj-$(CONFIG_PCI_HOST_COMMON) += pci-host-common.o\nobj-$(CONFIG_PCI_HOST_GENERIC) += pci-host-generic.o\nobj-$(CONFIG_PCI_HOST_THUNDER_ECAM) += pci-thunder-ecam.o\nobj-$(CONFIG_PCI_HOST_THUNDER_PEM) += pci-thunder-pem.o\nobj-$(CONFIG_PCIE_XILINX) += pcie-xilinx.o\nobj-$(CONFIG_PCIE_XILINX_NWL) += pcie-xilinx-nwl.o\nobj-$(CONFIG_PCIE_XILINX_CPM) += pcie-xilinx-cpm.o\nobj-$(CONFIG_PCIE_XILINX_DMA_PL) += pcie-xilinx-dma-pl.o\nobj-$(CONFIG_PCI_V3_SEMI) += pci-v3-semi.o\nobj-$(CONFIG_PCI_XGENE) += pci-xgene.o\nobj-$(CONFIG_PCI_XGENE_MSI) += pci-xgene-msi.o\nobj-$(CONFIG_PCI_VERSATILE) += pci-versatile.o\nobj-$(CONFIG_PCIE_IPROC) += pcie-iproc.o\nobj-$(CONFIG_PCIE_IPROC_MSI) += pcie-iproc-msi.o\nobj-$(CONFIG_PCIE_IPROC_PLATFORM) += pcie-iproc-platform.o\nobj-$(CONFIG_PCIE_IPROC_BCMA) += pcie-iproc-bcma.o\nobj-$(CONFIG_PCIE_ALTERA) += pcie-altera.o\nobj-$(CONFIG_PCIE_ALTERA_MSI) += pcie-altera-msi.o\nobj-$(CONFIG_PCIE_ROCKCHIP) += pcie-rockchip.o\nobj-$(CONFIG_PCIE_ROCKCHIP_EP) += pcie-rockchip-ep.o\nobj-$(CONFIG_PCIE_ROCKCHIP_HOST) += pcie-rockchip-host.o\nobj-$(CONFIG_PCIE_MEDIATEK) += pcie-mediatek.o\nobj-$(CONFIG_PCIE_MEDIATEK_GEN3) += pcie-mediatek-gen3.o\nobj-$(CONFIG_VMD) += vmd.o\nobj-$(CONFIG_PCIE_BRCMSTB) += pcie-brcmstb.o\nobj-$(CONFIG_PCI_LOONGSON) += pci-loongson.o\nobj-$(CONFIG_PCIE_HISI_ERR) += pcie-hisi-error.o\nobj-$(CONFIG_PCIE_APPLE) += pcie-apple.o\nobj-$(CONFIG_PCIE_MT7621) += pcie-mt7621.o\n\n# pcie-hisi.o quirks are needed even without CONFIG_PCIE_DW\nobj-y\t\t\t\t+= dwc/\nobj-y\t\t\t\t+= mobiveil/\nobj-y\t\t\t\t+= plda/\n\n\n# The following drivers are for devices that use the generic ACPI\n# pci_root.c driver but don't support standard ECAM config access.\n# They contain MCFG quirks to replace the generic ECAM accessors with\n# device-specific ones that are shared with the DT driver.\n\n# The ACPI driver is generic and should not require driver-specific\n# config options to be enabled, so we always build these drivers on\n# ARM64 and use internal ifdefs to only build the pieces we need\n# depending on whether ACPI, the DT driver, or both are enabled.\n\nifdef CONFIG_ACPI\nifdef CONFIG_PCI_QUIRKS\nobj-$(CONFIG_ARM64) += pci-thunder-ecam.o\nobj-$(CONFIG_ARM64) += pci-thunder-pem.o\nobj-$(CONFIG_ARM64) += pci-xgene.o\nendif\nendif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "8ed092823fc3fa4f455effad9675401aa3e24e743150d220c42f38045362ebbc",
+    "scope": "whole-file",
+    "line_count": 65,
+    "authoring_source": "course/file_units/pci_controller_build.py",
+    "sections": [
+      "Kbuild 형태",
+      "초기 컨트롤러와 하위 디렉터리",
+      "R-Car와 호스트 공통 코드",
+      "Xilinx·X-Gene·Versatile",
+      "iProc·Altera·Rockchip",
+      "나머지 개별 객체",
+      "무조건 방문하는 세 디렉터리",
+      "ACPI quirk 선택 경로",
+      "전체 범위와 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/controller/Makefile"
+    }
+  ]
+}

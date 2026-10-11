@@ -8,6 +8,7 @@
   }
   const KEY = 'linux-cs-learning-v1', PAGE = 30, intervals = [1,3,7,14,30];
   const lessons = bank.lessons, byId = new Map(lessons.map(l => [l.id,l]));
+  if(bank.reading_audit&&$('readingProgress'))$('readingProgress').textContent=`현재 ${bank.reading_audit.introductions_and_answer_sets_rewritten}개 수업과 ${bank.reading_audit.questions_rewritten}개 문제를 쉬운 말로 다시 썼습니다. 나머지 ${bank.reading_audit.remaining_lessons_for_individual_rewrite.toLocaleString()}개 수업은 개별 재작성 중입니다. 낱말 풀이만 추가한 수업은 완료로 세지 않습니다.`;
   const fileOption=document.createElement('option');fileOption.value='files';fileOption.textContent='파일 전체 해설 · 작성 완료 묶음';$('track').append(fileOption);
   if(bank.file_progress){const p=document.createElement('p');p.className='notice';p.textContent=`전체 ${bank.file_progress.total.toLocaleString()}개 원본 파일 중 현재 새 파일별 교재 ${bank.file_progress.authored.toLocaleString()}개. 기존 함수별 수업 연결은 파일 전체 완료로 세지 않습니다. 나머지 파일은 작성·재검토 중입니다.`;document.querySelector('header').after(p);}
   const qmap = new Map();
@@ -46,7 +47,7 @@
     const names=[...new Set(lessons.filter(l=>track==='all'||l.track===track).map(l=>l.area||'C 기초'))].sort();
     $('area').replaceChildren(Object.assign(el('option','전체 분야'),{value:''}),...names.map(n=>Object.assign(el('option',n),{value:n})));
   }
-  const searchText=new Map(lessons.map(l=>[l.id,JSON.stringify([l.title,l.area,l.id,l.intro,l.guide,l.concepts,l.questions,l.path]).toLowerCase()]));
+  const searchText=new Map(lessons.map(l=>[l.id,JSON.stringify([l.title,l.area,l.id,l.intro,l.guide,l.concepts,l.questions,l.path,l.beginner]).toLowerCase()]));
   function qualifies(l) {
     const track=$('track').value, area=$('area').value, term=$('search').value.trim().toLowerCase(), mode=$('mode').value;
     if(track!=='all'&&l.track!==track || area&&(l.area||'C 기초')!==area || term&&!searchText.get(l.id).includes(term))return false;
@@ -74,18 +75,42 @@
     }
   }
   function detail(parent,title,value) {if(!value)return;const d=el('details');d.append(el('summary',title));rich(d,value);parent.append(d);return d;}
+  function glossary(parent, terms, question=false) {
+    if(!terms?.length)return;
+    const d=el('details',undefined,'glossary');d.open=!question;
+    d.append(el('summary',question?'문제에 나온 말 찾아보기':'이 수업의 낱말 사전'));
+    if(!question){
+      const label=el('label','모르는 말을 찾아보세요'),input=el('input');input.type='search';input.placeholder='예: 포인터, IRQ';label.append(input);d.append(label);
+      input.oninput=()=>{for(const row of d.querySelectorAll('.glossary-entry'))row.hidden=!row.dataset.search.includes(input.value.trim().toLowerCase());};
+    }
+    const list=el('dl');
+    for(const term of terms){const row=el('div',undefined,'glossary-entry');row.dataset.search=[term.term,...term.aliases,term.meaning].join(' ').toLowerCase();row.append(el('dt',term.aliases.join(' / ')),el('dd',term.meaning));list.append(row);}d.append(list);
+    parent.append(d);
+  }
+  const glossaryPatterns=(bank.glossary||[]).map(t=>t.aliases.map(a=>new RegExp(/^[\x00-\x7F]+$/.test(a)?'(^|[^A-Za-z0-9_])'+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^A-Za-z0-9_])':a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i')));
+  function questionTerms(q){const text=[q.prompt,...q.options,q.explanation].join(' ');return (bank.glossary||[]).filter((_,i)=>glossaryPatterns[i].some(p=>p.test(text)));}
   function rememberNote(){if(selected&&$('note').value!==state.notes[selected.id]){state.notes[selected.id]=$('note').value;save();}}
   function open(id) {
     rememberNote();selected=byId.get(id);if(!selected)return;
     state.last=id;save();location.hash=encodeURIComponent(id);
     const l=selected, box=$('lesson');box.classList.remove('hidden');box.replaceChildren();
     $('welcome').classList.add('hidden');
-    box.append(el('div',`${l.id} / ${l.area||'C 기초'}`,'tag'),el('h2',l.title),el('p',l.intro));
+    const easy=$('readingMode').value==='easy';
+    box.append(el('div',`${l.id} / ${l.area||'C 기초'}`,'tag'),el('h2',l.title));
+    if(easy&&l.beginner){
+      const b=el('section',undefined,'beginner');
+      b.append(el('h3','생활 속에서 생각해 보기'),el('p',l.beginner.story),el('h3','컴퓨터에서는 이렇게 불러요'),el('p',l.beginner.meaning),el('h3','종이와 연필로 해 보기'),el('p',l.beginner.exercise));box.append(b);
+    }else box.append(el('p',l.intro));
+    if(easy&&!l.beginner)box.append(el('p','이 수업은 아직 전문 내용을 담고 있어요. 아래 낱말 사전을 보며 한 문장씩 읽어 보세요. 입문 30단계를 먼저 읽으면 도움이 됩니다. 쉬운 말로 고치는 작업이 더 필요합니다.','notice'));
     if(l.path)box.append(el('p','연결 소스: '+l.path+(l.excerpt?` · ${l.excerpt.start}–${l.excerpt.end}행`:''),'muted'));
-    const concepts=el('section');rich(concepts,l.guide);rich(concepts,l.concepts);box.append(concepts);
-    const deep=detail(box,l.track==='files'?'파일 전체 해설 · 동작·CS·경계 조건':'쉽게 풀어 읽기',l.deep_dive);if(l.track==='files'&&deep)deep.open=true;detail(box,'용어·읽기 도움말',l.reading_support);
+    if(easy)glossary(box,(l.reading_aid?.terms||[]).map(i=>bank.glossary[i]));
+    const concepts=easy&&l.beginner?el('details'):el('section');
+    if(easy&&l.beginner)concepts.append(el('summary',l.easy_review?'코드를 한 단계씩 읽기':'더 깊이 읽기 · 원래 개념 설명'),el('p',l.intro));
+    rich(concepts,l.guide);rich(concepts,l.concepts);box.append(concepts);
+    const deep=detail(box,l.track==='files'?'파일 전체 해설 · 동작과 주의할 조건':'더 깊이 읽기 · 원리 설명',l.deep_dive);if(!easy&&l.track==='files'&&deep)deep.open=true;detail(box,'추가 읽기 도움말',l.reading_support);
     if(l.practice){const p=el('section');p.append(el('h3','직접 해보기'),el('p','아래 실습은 자동 실행되지 않습니다. Linux 명령은 Linux/WSL에서 실행하세요.','muted'));if(l.practice.command)p.append(el('pre',l.practice.command));if(l.practice.expected){const d=el('details');d.append(el('summary','예상 결과·확인 기준'));rich(d,l.practice.expected);p.append(d);}box.append(p);}
     detail(box,'단계별 원리 실험',l.experiment);
+    if(l.technical_original){const old=l.technical_original;detail(box,'원래 전문 설명과 비교하기',{intro:old.intro,guide:old.guide,concepts:old.concepts,experiment:old.experiment,reading_support:old.reading_support});}
     if(l.annotated){const d=el('details');d.append(el('summary',l.source_review?'파일 전체 원본':'전체 코드 해설·주석 답지'),el('pre',l.annotated));box.append(d);}
     if(l.references){const d=el('details');d.append(el('summary','참고 자료'));for(const ref of l.references){const url=typeof ref==='string'?ref:(ref.url||ref.href);if(url&&/^https?:\/\//.test(url)){const a=el('a',typeof ref==='object'?(ref.title||url):url);a.href=url;a.target='_blank';a.rel='noopener noreferrer';d.append(a,el('br'));}else rich(d,ref);}box.append(d);}
     const practice=$('practice');practice.classList.remove('hidden');practice.replaceChildren(el('h2','문제 · 정답의 이유까지 확인하기'),el('p','답을 선택해 채점하거나 풀이를 먼저 볼 수 있습니다. 풀이 열람은 진도를 올리지 않습니다.','muted'));
@@ -101,7 +126,14 @@
     const radios=q.options.map((option,j)=>{const label=el('label',undefined,'option'),radio=document.createElement('input');radio.type='radio';radio.name=`q-${l.id}-${i}`;radio.value=j;label.append(radio,el('span',option));field.append(label);return radio;});
     const controls=el('div',undefined,'toolbar'),check=el('button','채점','primary'),retry=el('button','다시 풀기');retry.hidden=true;controls.append(check,retry);field.append(controls);
     const feedback=el('div');feedback.setAttribute('role','status');field.append(feedback);
-    const solution=el('details');solution.append(el('summary','정답과 해설 보기'),el('p',`정답: ${q.options[q.answer]}`),el('p',q.explanation,'answer'));field.append(solution);
+    const solution=el('details');solution.append(el('summary','정답과 해설 보기'),el('p',`정답: ${q.options[q.answer]}`));
+    const answer=el('div',undefined,'answer');
+    // Paragraph breaks only: preserve every authored character and code token.
+    if($('readingMode').value==='easy')for(const sentence of q.explanation.split(/(?<=[.!?])\s+(?=[가-힣A-Z0-9])/u))answer.append(el('p',sentence));
+    else answer.append(el('p',q.explanation));
+    solution.append(answer);field.append(solution);
+    if(q.original_explanation)detail(solution,'원래 전문 해설과 비교하기',q.original_explanation);
+    if($('readingMode').value==='easy')glossary(field,questionTerms(q),true);
     check.onclick=()=>{
       const choice=radios.findIndex(r=>r.checked);if(choice<0){feedback.textContent='답을 먼저 선택해 주세요.';return;}
       const correct=choice===q.answer, now=Date.now(), old=state.answers[key], sameDay=old&&new Date(old.reviewed).toDateString()===new Date(now).toDateString();
@@ -114,6 +146,7 @@
     parent.append(field);
   }
   $('track').onchange=()=>{areas();page=0;listing();};$('area').onchange=$('mode').onchange=()=>{page=0;listing();};
+  $('readingMode').onchange=()=>{if(selected)open(selected.id);};
   let searchTimer;$('search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{page=0;listing();},150);};
   $('prevPage').onclick=()=>{page--;listing();};$('nextPage').onclick=()=>{page++;listing();};
   $('begin').onclick=()=>open(lessons.find(l=>l.track==='foundations'&&l.questions.some((_,i)=>!state.answers[`${l.id}:${i}`]?.correct))?.id||'cs01');

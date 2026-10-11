@@ -52,6 +52,7 @@ class LearningTest(unittest.TestCase):
             data = (root / 'data/learning-bank.js').read_text(encoding='utf-8')
             bank = json.loads(data.removeprefix('window.LEARNING_BANK = ').removesuffix(';\n'))
             for actual, source in zip(bank['lessons'], expected):
+                self.assertIn('terms', actual.pop('reading_aid'))
                 for q in actual['questions']:
                     self.assertRegex(q.pop('fingerprint'), r'^[0-9a-f]{24}$')
                 self.assertEqual(actual, source)

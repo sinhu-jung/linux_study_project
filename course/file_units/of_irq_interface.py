@@ -1,0 +1,26 @@
+"""Whole-file OF IRQ interfaces, workaround gates, MSI fallbacks."""
+ROWS = [dict(
+    path='include/linux/of_irq.h', title='OF IRQ 헤더: 파싱·매핑·MSI와 구성별 계약',
+    intro='IRQ 헤더 전체의 선언, PowerMac 예외, OF_IRQ 대체 함수와 SPARC 분기를 분석합니다.',
+    principle='파싱 결과, IRQ 번호, 도메인 포인터, ID 변환은 서로 다른 출력 계약을 갖습니다.',
+    use='조건부 컴파일의 논리식, 콜백 타입, 출력 인수, 항등 함수와 오류 처리를 학습합니다.',
+    area='인터럽트 · IRQ 도메인 · MSI · 장치 트리 · 타입 시스템',
+    sections=[
+        ('포함 파일과 콜백 타입', 'GPL-2.0과 __OF_IRQ_H guard 아래 types, errno, irq, irqdomain, ioport, of 헤더를 포함합니다. of_irq_init_cb_t는 device_node 포인터 두 개를 받고 int를 반환하는 함수 포인터 typedef입니다. 타입 선언 자체가 콜백을 호출하거나 두 인수의 참조 수명을 관리하지는 않습니다. 이 파일에는 IRQ 테이블이나 트리 탐색 루프가 없습니다.'),
+        ('32비트 PowerMac 예외', 'OF_IMAP_OLDWORLD_MAC은 0x00000001, OF_IMAP_NO_PHANDLE은 0x00000002입니다. CONFIG_PPC32와 CONFIG_PPC_PMAC이 모두 정의되면 of_irq_workarounds unsigned int와 of_irq_dflt_pic 노드 포인터를 extern으로 선언하고 oldworld 파서를 선언합니다. 그 외에는 앞의 두 이름이 각각 (0), (NULL) 매크로가 되며 oldworld 파서는 -EINVAL만 반환합니다. 비활성 구성의 이름을 쓰기 가능한 전역 변수로 생각하면 안 됩니다.'),
+        ('조건 밖의 공통 선언', 'of_irq_parse_raw는 const __be32 *addr와 of_phandle_args 출력 포인터를 받아 int를 반환합니다. __be32 표기는 주소 셀의 빅엔디언 타입 정보를 드러내지만 이 헤더에서 변환을 수행하지는 않습니다. irq_create_of_mapping은 phandle 인수 구조체 포인터를 받아 unsigned int를 반환하고 of_irq_to_resource는 노드, index, resource 포인터를 받아 int를 반환합니다. 이 세 선언은 CONFIG_OF_IRQ 블록 밖에 있으며 이 파일에는 대응하는 비활성 stub이 없습니다.'),
+        ('활성 IRQ API 묶음', 'CONFIG_OF_IRQ가 정의되면 init은 of_device_id 매칭 테이블을 받는 void 선언입니다. parse_one은 노드와 index에서 of_phandle_args를 출력하며 count, get, get_byname은 int 결과를 제공합니다. to_resource_table은 resource 배열 포인터와 nr_irqs를 받고 find_parent는 device_node 포인터를 반환합니다. 실제 인덱스 검증, 탐색 순서, 오류 코드와 부모 노드 참조 획득 여부는 여기의 선언만으로 확정할 수 없습니다.'),
+        ('비활성 IRQ 결과와 출력 버퍼', 'OF_IRQ가 없으면 init은 빈 함수이고 parse_one은 -EINVAL입니다. count, get, get_byname, to_resource_table은 0을 반환합니다. parse_one은 out_irq를, to_resource_table은 res를 초기화하지 않습니다. 따라서 0이라는 값만 보고 resource 배열이 채워졌다고 판단하면 안 됩니다. find_parent의 활성 반환 타입은 struct device_node *이지만 비활성 inline의 선언은 void *이며 NULL을 반환한다는 타입 차이도 확인해야 합니다.'),
+        ('MSI 도메인 선언', 'of_msi_get_domain은 device, device_node, enum irq_domain_bus_token을 받아 irq_domain 포인터를 반환합니다. of_msi_map_get_device_domain은 device, u32 id, u32 bus_token을 받아 같은 포인터 타입을 반환합니다. token의 표현 타입이 두 선언에서 다릅니다. OF_IRQ 비활성에서는 두 함수 모두 NULL을 반환합니다. 도메인의 구성이나 ID 테이블 조회는 이 헤더의 활성 경로에 구현되어 있지 않습니다.'),
+        ('MSI의 무동작과 항등 변환', 'of_msi_configure는 활성에서 외부 void 선언, 비활성에서는 빈 함수입니다. of_msi_map_id는 device, msi_np, u32 id_in을 받아 u32를 반환합니다. 비활성 본문은 id_in을 그대로 반환하는 항등 함수입니다. 항상 0이나 오류 값을 반환하는 stub이 아니며 입력 ID가 37이면 결과도 37입니다. 입력 보존이라는 계약과 실제 MSI 매핑 수행은 구분해야 합니다.'),
+        ('SPARC의 별도 진입 조건', '마지막 irq_of_parse_and_map 선언은 defined(CONFIG_OF_IRQ) || defined(CONFIG_SPARC) 조건입니다. 주석은 SPARC가 다른 구현을 사용하지만 공통 프로토타입을 쓴다고 설명합니다. 둘 중 하나만 정의되어도 외부 unsigned int 함수 선언을 제공하고 둘 다 없으면 inline에서 0을 반환합니다. 앞의 OF_IRQ 전용 블록과 다른 논리합이며, 주변 주석의 축약 표현보다 실제 #if 식을 기준으로 분기를 판정해야 합니다.'),
+        ('전체 검토 범위', '포함 파일, typedef, 두 workaround 상수와 전역 이름, oldworld 함수, 조건 밖의 세 선언, OF_IRQ 블록의 IRQ·MSI 선언과 모든 stub, 마지막 SPARC 공통 프로토타입까지 대조했습니다. 호출자의 반환값 검사와 출력 버퍼 수명 문제를 학습 대상으로 연결했습니다. 실제 IRQ 등록·하드웨어 인터럽트·MSI 전송이나 구성별 커널 빌드는 검증하지 않았습니다.')
+    ], questions=[
+        ('OF_IRQ 비활성의 parse_one과 to_resource_table이 출력 저장소를 초기화하는가?', '둘 다 출력 저장소에 쓰지 않는다', '둘 다 구조체와 배열을 0으로 채운다', '본문은 각각 -EINVAL과 0을 반환할 뿐입니다. 출력 인수를 받는 인터페이스와 출력값이 실제로 생성되었다는 사실은 다릅니다.'),
+        ('OF_IRQ는 없고 SPARC만 정의되면 irq_of_parse_and_map은 어떤 형태인가?', '외부 함수 선언이다', '무조건 0을 반환하는 inline이다', '마지막 조건은 OF_IRQ 또는 SPARC의 논리합입니다. SPARC 단독으로도 참이며 헤더 주석은 SPARC의 별도 구현을 설명합니다.'),
+        ('OF_IRQ 비활성에서 of_msi_map_id에 id_in=37을 주면?', '37을 반환한다', '항상 0을 반환한다', '대체 본문은 return id_in입니다. 이것은 입력을 보존하는 항등 변환이고 도메인을 조회하거나 새 ID를 할당하는 작업은 없습니다.'),
+        ('PowerMac 관련 두 CONFIG 조건이 모두 만족하지 않으면 of_irq_workarounds는 수정 가능한 전역인가?', '아니다. 이 헤더에서는 (0) 매크로다', '그렇다. extern unsigned int가 항상 선언된다', 'extern 선언은 논리곱 조건 안에 있습니다. 비활성 분기의 매크로 치환 결과는 상수이므로 변수처럼 값을 대입할 수 없습니다.'),
+        ('of_irq_find_parent의 활성·비활성 반환 타입 표기는 같은가?', '활성은 device_node 포인터, 비활성은 void 포인터다', '둘 다 반드시 int로 선언된다', '원문에서 활성 extern은 struct device_node *이고 비활성 inline은 void *입니다. NULL이라는 결과만 요약하면 이 선언상의 차이를 놓칩니다.'),
+        ('irq_create_of_mapping의 구현이나 비활성 stub이 이 헤더에 있는가?', '없다. 조건 밖의 외부 선언만 있다', '있다. OF_IRQ가 없으면 이 헤더가 -EINVAL을 반환한다', 'raw 파싱, mapping 생성, 단일 resource 변환의 세 선언은 주 OF_IRQ 블록 밖에 놓입니다. 다른 함수의 대체 반환값을 이 함수에 일반화하면 안 됩니다.')
+    ]
+)]

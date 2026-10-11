@@ -16,7 +16,7 @@ const root=path.resolve(__dirname,'..'), key='linux-cs-learning-v1';
   assert.match(await page.locator('#practice .question').first().innerText(),/답을 먼저/);
   // Wrong answer creates a review item, revealing alone does not grade.
   let first=page.locator('#practice .question').first();
-  await first.locator('summary').click();
+  await first.getByText('정답과 해설 보기',{exact:true}).click();
   assert.equal(await page.evaluate(k=>Object.keys(JSON.parse(localStorage.getItem(k)).answers).length,key),0);
   await first.locator('input').nth(0).check();await first.getByRole('button',{name:'채점',exact:true}).click();
   let record=await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).answers['cs01:0'],key);
@@ -45,17 +45,27 @@ const root=path.resolve(__dirname,'..'), key='linux-cs-learning-v1';
   await page.evaluate(k=>{let s=JSON.parse(localStorage.getItem(k));s.answers['cs01:0'].signature='obsolete';localStorage.setItem(k,JSON.stringify(s));},key);await page.reload();await page.locator('#mode').selectOption('due');
   assert.match(await page.locator('#listCount').innerText(),/^0개/);
   // Every foundation plus representative lessons from every source part renders.
-  const samples=await page.evaluate(()=>window.LEARNING_BANK.lessons.filter((l,i)=>l.track==='foundations'||l.track==='files'||i%50===0||i===window.LEARNING_BANK.lessons.length-1).map(l=>({id:l.id,title:l.title,count:l.questions.length})));
+  const samples=await page.evaluate(()=>window.LEARNING_BANK.lessons.filter((l,i)=>l.track==='foundations'||l.track==='files'||l.easy_review||i%50===0||i===window.LEARNING_BANK.lessons.length-1).map(l=>({id:l.id,title:l.title,count:l.questions.length})));
   for(const l of samples){await page.evaluate(id=>location.hash=id,l.id);await page.waitForFunction(title=>document.querySelector('#lesson h2')?.textContent===title,l.title);assert.equal(await page.locator('#practice .question').count(),l.count);}
   await page.locator('#track').selectOption('files');await page.locator('#mode').selectOption('all');
   const fileCount=await page.evaluate(()=>window.LEARNING_BANK.whole_file_lessons);
   assert.match(await page.locator('#listCount').innerText(),new RegExp('^'+fileCount+'개'));
   await page.locator('#track').selectOption('all');await page.locator('#mode').selectOption('all');await page.locator('#search').fill('cs30');await page.waitForFunction(()=>document.querySelector('#listCount').textContent.startsWith('1개'));
   await page.locator('#list button').first().click();assert.match(await page.locator('#lesson h2').innerText(),/키·값/);
+  assert.equal(await page.locator('#readingMode').inputValue(),'easy');
+  assert.match(await page.locator('#lesson .beginner').innerText(),/이름표/);
+  assert.ok(await page.locator('#lesson .glossary-entry').count()>0);
+  assert.ok(await page.locator('#practice .question').first().locator('.glossary-entry').count()>0);
+  const glossarySearch=page.locator('#lesson .glossary input');await glossarySearch.fill('메모리');
+  assert.ok(await page.locator('#lesson .glossary-entry:visible').count()>0);
+  await glossarySearch.fill('no-such-word-123');assert.equal(await page.locator('#lesson .glossary-entry:visible').count(),0);
+  await glossarySearch.fill('');
+  await page.locator('#readingMode').selectOption('technical');assert.equal(await page.locator('#lesson .beginner').count(),0);
+  await page.locator('#readingMode').selectOption('easy');assert.equal(await page.locator('#lesson .beginner').count(),1);
   await page.screenshot({path:path.join(root,'data/learning-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(root,'data/learning-mobile.png'),fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({browser:'chromium',sampledLessons:samples.length,passed:['grading','reveal without credit','wrong filter','due filter','spaced repetition','notes','reload','backup roundtrip','invalid import rejection','revision invalidation','search','desktop','mobile'],errors},null,2));
+  console.log(JSON.stringify({browser:'chromium',sampledLessons:samples.length,passed:['grading','reveal without credit','wrong filter','due filter','spaced repetition','notes','reload','backup roundtrip','invalid import rejection','revision invalidation','search','beginner mode','contextual glossary','glossary search','technical mode','desktop','mobile'],errors},null,2));
  } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
