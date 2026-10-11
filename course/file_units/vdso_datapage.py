@@ -1,0 +1,34 @@
+"""Complete vDSO data-page layout and namespace contract."""
+ROWS = [dict(
+    path='include/vdso/datapage.h',
+    title='vDSO 데이터 페이지: 시간 기준값·namespace·RNG 메타데이터',
+    intro='clock mask, 시간 구조체, union, 공유 심볼과 아키텍처 include까지 전체 레이아웃을 읽습니다.',
+    principle='같은 공유 메모리를 native·compat reader가 읽으므로 필드의 폭·배치·단위·페이지 역할을 함께 유지해야 합니다.',
+    use='vDSO reader가 필요한 clock 데이터를 선택하고 namespace 페이지에서 host 시각에 offset을 더하는 구조를 이해합니다.',
+    area='공유 메모리 · ABI 레이아웃 · union · 고정 소수점 · namespace · 링커 visibility · 캐시',
+    sections=[
+        ('파일 전체와 조건부 포함', 'GPL-2.0과 guard 안에서 __ASSEMBLY__가 아닐 때만 C 내용을 제공합니다. compiler와 UAPI time/types/errno, vDSO bits/clocksource/ktime/limits/math64/processor/time/time32/time64를 포함합니다. 뒤에는 clock mask, 시간·데이터·RNG 구조체, 공유 심볼, 페이지 union과 아키텍처 getter include가 있습니다.'),
+        ('아키텍처 추가 데이터', 'CONFIG_ARCH_HAS_VDSO_DATA이면 asm/vdso/data.h를 포함하고 아니면 빈 struct arch_vdso_data를 정의합니다. 공통 데이터 구조체의 마지막 멤버로 이 타입을 사용합니다. 모든 아키텍처에서 전체 구조체의 크기와 마지막 데이터가 항상 같다고 가정할 수 없습니다.'),
+        ('Clock ID 배열 크기와 분류', 'VDSO_BASES는 CLOCK_TAI+1입니다. VDSO_HRES는 REALTIME, MONOTONIC, BOOTTIME, TAI의 BIT를 합친 mask이고 COARSE는 REALTIME_COARSE와 MONOTONIC_COARSE, RAW는 MONOTONIC_RAW 비트입니다. 배열 길이는 clock ID 인덱싱을 위한 것이지 모든 슬롯이 가속을 지원한다는 뜻은 아닙니다. 이 mask는 숫자 ID를 단순 OR한 CLOCKS_MASK와 다르게 BIT(ID)를 씁니다.'),
+        ('두 데이터 묶음', 'CS_HRES_COARSE=0, CS_RAW=1, CS_BASES=2입니다. 고해상도·coarse용 clocksource 정보와 raw용 정보를 나누는 인덱스이며 각 묶음 안에는 clock ID로 접근하는 basetime 배열이 있습니다. CS_BASES와 VDSO_BASES는 서로 다른 배열 차원을 의미합니다.'),
+        ('Timestamp의 의미', 'vdso_timestamp는 u64 sec와 u64 nsec입니다. 고해상도에서는 cycle_last에 대응하는 기준 시각이고 nsec는 shift만큼 왼쪽 이동한 값이며, coarse에서는 그대로 반환할 실제 시각입니다. 주석의 vdso_data.cs[x].shift라는 표기와 달리 실제 구조체에는 cs 배열 멤버가 없고 외부 data 배열의 각 원소에 shift가 있습니다. 주석의 표현과 실제 필드 접근을 구분합니다.'),
+        ('데이터의 앞부분', 'vdso_data는 u32 seq, s32 clock_mode, u64 cycle_last, 조건부 u64 max_cycles, u64 mask, u32 mult와 shift 순서입니다. max_cycles는 64비트 곱셈 overflow 없이 처리할 최대 cycle 정보이며 GENERIC_VDSO_OVERFLOW_PROTECT일 때만 있습니다. 자주 읽는 realtime/monotonic 관련 데이터를 앞쪽 cache line에 배치하려는 의도가 주석에 설명됩니다.'),
+        ('Basetime과 offset의 union', '익명 union 안에는 vdso_timestamp basetime[VDSO_BASES]와 timens_offset offset[VDSO_BASES]가 같은 저장 공간을 공유합니다. 시스템 전체 VVAR 페이지는 기준 시각을, namespace용 특수 페이지는 clock별 offset을 저장합니다. 두 배열을 동시에 독립적으로 보관하는 구조가 아니므로 어떤 페이지인지에 맞게 해석해야 합니다.'),
+        ('Namespace 페이지의 특별 상태', '주석은 namespace 페이지가 seq=1, clock_mode=VDSO_CLOCKMODE_TIMENS를 설정해 namespace 처리 경로로 보내야 한다고 명시합니다. namespace reader는 실제 시스템 VVAR 페이지를 얻어 host 시각을 읽고 clock별 offset을 더합니다. 일반 sequence reader가 홀수를 기다리는 규칙만 적용해 이 특수 페이지를 영원히 기다려야 하는 고장 상태로 해석하면 안 됩니다. 실제 reader의 namespace 분기와 함께 이해해야 합니다.'),
+        ('조정하지 않는 clock', 'time namespace가 조정하지 않는 clock의 offset은 0이어야 한다는 계약입니다. 페이지에 clock ID 슬롯이 있다고 모든 clock에 임의 offset을 적용하도록 허용하는 것은 아닙니다. 이 파일은 계약과 저장 형식을 설명하며 각 offset의 설정·권한 검사 함수를 구현하지 않습니다.'),
+        ('나머지 필드', 'union 뒤에는 s32 tz_minuteswest, s32 tz_dsttime, u32 hrtimer_res, u32 __unused, arch_vdso_data arch_data가 있습니다. timezone 단위·종류, 해상도와 예약 필드를 서로 구분합니다. __unused가 있다고 임의의 새 ABI 의미를 부여해도 된다는 뜻은 아닙니다. 주석은 64비트와 compat 코드의 동시 사용 때문에 구조 변경에 주의하라고 합니다.'),
+        ('RNG 메타데이터', 'vdso_rng_data는 u64 generation과 u8 is_ready를 가집니다. generation은 RNG reseed 횟수에 관한 카운터, is_ready는 초기화 여부 표시입니다. 구조체에 난수 출력 바이트나 전체 생성기 상태 배열이 들어 있는 것은 아닙니다. 정확한 증가·동기화 동작은 이 선언만으로 실행되지 않습니다.'),
+        ('숨겨진 심볼과 재배치', '_vdso_data[CS_BASES], _timens_data[CS_BASES], 단일 _vdso_rng_data를 extern hidden visibility로 선언합니다. 주석은 GOT 경유와 다른 라이브러리의 심볼 대체를 피하고 필요한 PC-relative relocation을 생성하려는 이유를 설명합니다. 데이터 페이지의 절대 주소를 링크할 수 없다는 제약과 연결되며, hidden은 데이터 암호화나 사용자 읽기 금지를 뜻하지 않습니다.'),
+        ('페이지 저장 union', 'vdso_data_store는 data[CS_BASES]와 u8 page[1U<<CONFIG_PAGE_SHIFT]를 union으로 겹칩니다. union 크기는 각 멤버 크기와 정렬 조건에 의해 결정되므로 이 정의 자체가 data가 항상 한 페이지 이내인지 검사하는 static assertion은 아닙니다. 두 데이터 복사본을 별도 페이지에 두는 struct로 읽지 않습니다.'),
+        ('아키텍처 reader 요구와 선택', '주석은 gettimeofday 헤더가 __arch_get_vdso_data, __arch_get_hw_counter 및 gettimeofday/clock_gettime/clock_getres fallback을 제공해야 한다고 열거합니다. ENABLE_COMPAT_VDSO이면 compat_gettimeofday.h, 아니면 gettimeofday.h를 포함합니다. fallback을 여기서 직접 정의하거나 모든 clock 조회를 무조건 syscall로 보내는 것은 아닙니다.'),
+        ('검증 범위와 CS', '모든 상수·필드·extern·union과 설정 분기를 다뤘습니다. 두 인덱스 차원, 저장 공간 재사용, native/compat 공통 레이아웃, 특별한 sequence 상태, 링커 접근 방식이 핵심입니다. 모든 아키텍처 레이아웃의 실제 크기를 측정하거나 namespace reader 전체를 실행한 결과는 아닙니다.')
+    ],
+    questions=[
+        ('CS_BASES와 VDSO_BASES는 같은 개수인가?', '아니다. 두 clocksource 묶음과 clock ID 슬롯 수를 각각 나타낸다', '그렇다. 둘 다 반드시 2이다', '바깥 vdso_data 배열과 안쪽 basetime 배열은 다른 차원입니다. 이름에 BASES가 공통이어도 용도가 다릅니다.'),
+        ('basetime과 offset 배열은 동시에 별도 공간에 저장되는가?', '아니다. union으로 같은 저장 공간을 공유한다', '그렇다. 두 배열의 크기가 합산되어 저장된다', '페이지의 역할에 따라 어느 멤버를 해석할지 달라집니다. struct의 독립 멤버와 union을 구분합니다.'),
+        ('namespace 페이지의 seq=1은 무조건 갱신이 끝나지 않은 오류 상태인가?', '아니다. TIMENS mode와 함께 특별한 namespace 경로를 선택하는 계약이다', '그렇다. 모든 홀수 seq는 영원히 기다려야 한다', '일반 reader 규칙만으로 특수 페이지를 해석하면 안 됩니다. namespace 처리 경로가 host 페이지 조회와 offset 적용을 담당합니다.'),
+        ('hidden visibility는 공유 시간을 암호화한다는 의미인가?', '아니다. 심볼 대체와 GOT 재배치를 피하기 위한 링크 속성이다', '그렇다. 데이터 자체를 사용자 공간에서 읽지 못하게 한다', '주석은 PC-relative relocation 필요성을 설명합니다. 접근 방식과 데이터 비밀성은 다른 개념입니다.'),
+        ('vdso_rng_data에 들어 있는 것은?', 'reseed generation과 초기화 여부이다', '최종 난수 문자열 전체이다', '필드는 u64 generation, u8 is_ready 두 개입니다. 이름의 state information을 난수 출력 저장소라고 확대하지 않습니다.'),
+        ('VDSO_HRES는 어떻게 clock들을 표현하는가?', 'BIT(clock ID)들을 OR한 비트 집합이다', 'clock ID 숫자들을 그대로 더한 최대 ID이다', '배열 인덱스와 포함 여부 mask는 표현 방식이 다릅니다. 실제 매크로의 BIT를 확인합니다.')
+    ]
+)]

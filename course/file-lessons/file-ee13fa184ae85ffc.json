@@ -1,0 +1,91 @@
+{
+  "id": "file-ee13fa184ae85ffc",
+  "path": "include/kunit/visibility.h",
+  "title": "KUnit 조건부 심볼 공개: C linkage와 모듈 namespace",
+  "area": "C linkage · 모듈 연결 · 조건부 컴파일 · 테스트 접근성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 매크로의 활성·비활성 확장과 namespace 계약을 전체 분석합니다.",
+  "guide": [
+    "번역 단위 내부 linkage와 모듈 심볼 export는 서로 다른 공개 범위입니다.",
+    "전처리 조건,static,심볼 export와 namespace import를 구분합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "활성 구성",
+      "text": "GPL-2.0 guard 안에서 IS_ENABLED(CONFIG_KUNIT)이면 VISIBLE_IF_KUNIT은 빈 토큰으로 확장됩니다. 즉 원래 정의에 static을 추가하지 않습니다. 이것만으로 모든 심볼이 자동 export되거나 함수가 실행되는 것은 아닙니다."
+    },
+    {
+      "title": "Export와 import",
+      "text": "활성일 때 EXPORT_SYMBOL_IF_KUNIT(symbol)은 EXPORT_SYMBOL_NS(symbol,EXPORTED_FOR_KUNIT_TESTING)로 확장됩니다. 문서는 이를 사용하는 테스트 파일에 MODULE_IMPORT_NS(EXPORTED_FOR_KUNIT_TESTING)가 필요하다고 설명합니다. 이 매크로는 EXPORT_SYMBOL_GPL이 아니라 EXPORT_SYMBOL_NS를 선택합니다. namespace는 C++ namespace 블록과 다른 모듈 심볼 분류입니다."
+    },
+    {
+      "title": "비활성 구성",
+      "text": "else에서 VISIBLE_IF_KUNIT은 static,EXPORT_SYMBOL_IF_KUNIT(symbol)은 빈 토큰이 됩니다. 테스트 전용 외부 공개를 줄이되 함수 본문을 자동 삭제하는 매크로는 아닙니다. 실제 사용 위치가 올바른 정의 문맥이어야 합니다. 헤더 자체에는 include가 없으므로 IS_ENABLED와 export 매크로가 보이는 문맥도 필요합니다."
+    },
+    {
+      "title": "전체 범위",
+      "text": "SPDX,guard,설명 주석,두 구성의 매크로 네 정의를 모두 대조했습니다. 모듈 로딩 실험이나 생성 object의 심볼 테이블 검사를 실행한 것은 아니며 전처리 확장과 선언상 공개 범위를 설명합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "KUnit 비활성일 때 VISIBLE_IF_KUNIT은 무엇인가?",
+      "options": [
+        "static",
+        "extern"
+      ],
+      "answer": 0,
+      "explanation": "전처리 else 분기에 static이 명시되어 번역 단위 내부 linkage를 구성합니다."
+    },
+    {
+      "prompt": "활성일 때 VISIBLE_IF_KUNIT만 붙이면 모듈 export까지 자동 수행되는가?",
+      "options": [
+        "그렇다. 빈 확장이 심볼 테이블을 자동 생성한다",
+        "아니다. export는 별도 매크로다"
+      ],
+      "answer": 1,
+      "explanation": "VISIBLE은 빈 토큰이고 EXPORT_SYMBOL_IF_KUNIT이 별도 namespace export를 담당합니다. C linkage와 모듈 공개를 구분합니다."
+    },
+    {
+      "prompt": "테스트가 해당 export namespace를 쓰려면 문서상 필요한 선언은?",
+      "options": [
+        "MODULE_IMPORT_NS(EXPORTED_FOR_KUNIT_TESTING)",
+        "임의의 C++ namespace 블록"
+      ],
+      "answer": 0,
+      "explanation": "헤더 주석이 정확한 namespace import를 요구합니다. 런타임 함수 호출이 아니라 모듈 연결 메타데이터입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * KUnit API to allow symbols to be conditionally visible during KUnit\n * testing\n *\n * Copyright (C) 2022, Google LLC.\n * Author: Rae Moar <rmoar@google.com>\n */\n\n#ifndef _KUNIT_VISIBILITY_H\n#define _KUNIT_VISIBILITY_H\n\n#if IS_ENABLED(CONFIG_KUNIT)\n    /**\n     * VISIBLE_IF_KUNIT - A macro that sets symbols to be static if\n     * CONFIG_KUNIT is not enabled. Otherwise if CONFIG_KUNIT is enabled\n     * there is no change to the symbol definition.\n     */\n    #define VISIBLE_IF_KUNIT\n    /**\n     * EXPORT_SYMBOL_IF_KUNIT(symbol) - Exports symbol into\n     * EXPORTED_FOR_KUNIT_TESTING namespace only if CONFIG_KUNIT is\n     * enabled. Must use MODULE_IMPORT_NS(EXPORTED_FOR_KUNIT_TESTING)\n     * in test file in order to use symbols.\n     * @symbol: the symbol identifier to export\n     */\n    #define EXPORT_SYMBOL_IF_KUNIT(symbol) EXPORT_SYMBOL_NS(symbol, \\\n\t    EXPORTED_FOR_KUNIT_TESTING)\n#else\n    #define VISIBLE_IF_KUNIT static\n    #define EXPORT_SYMBOL_IF_KUNIT(symbol)\n#endif\n\n#endif /* _KUNIT_VISIBILITY_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "377e2d4bc28d3e309fd9d3fbca69e91c5dd9e295ecf3b3b8efb4c6ec1d7ab704",
+    "scope": "whole-file",
+    "line_count": 34,
+    "authoring_source": "course/file_units/kunit_user_memory.py",
+    "sections": [
+      "활성 구성",
+      "Export와 import",
+      "비활성 구성",
+      "전체 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/visibility.h"
+    }
+  ]
+}

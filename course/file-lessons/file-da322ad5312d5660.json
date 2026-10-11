@@ -1,0 +1,87 @@
+{
+  "id": "file-da322ad5312d5660",
+  "path": "include/linux/textsearch_fsm.h",
+  "title": "FSM 토큰 헤더 전체: 문자 조건과 반복 조건의 분리",
+  "area": "유한 상태 머신 · 토큰 배열 · 문자 분류",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "검색 패턴을 텍스트 정규표현식이 아니라 구조체 배열로 전달하는 형식입니다.",
+  "guide": [
+    "type은 어떤 바이트를 허용할지, recur는 몇 번 허용할지, value는 특정 문자 값을 나타냅니다.",
+    "배열의 바이트 길이를 공통 prepare에 넘깁니다. 열거형 이름이 정규표현식 엔진의 모든 탐색·되돌리기 의미를 보장하는 것은 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 선언",
+      "text": "SPDX와 guard, types 포함, 문자 종류 enum과 최대값 매크로, 반복 enum과 최대값 매크로, ts_fsm_token 구조체 및 endif로 구성됩니다. 함수 정의나 문자표는 없습니다."
+    },
+    {
+      "title": "문자 종류",
+      "text": "SPECIFIC은 value와 같은 문자, WILDCARD는 모든 바이트, DIGIT/XDIGIT은 숫자·16진 숫자, PRINT/GRAPH는 표시 가능 문자 분류, ALPHA/ALNUM은 알파벳·영숫자입니다. ASCII/CNTRL/LOWER/UPPER/PUNCT/SPACE도 정의합니다. 종류 번호는 0부터 순서대로 부여하며 __TS_FSM_TYPE_MAX는 실제 종류가 아닌 끝 표식입니다."
+    },
+    {
+      "title": "반복 종류",
+      "text": "SINGLE은 한 번, PERHAPS는 0 또는 1번, ANY는 0회 이상, MULTI는 1회 이상입니다. HEAD_IGNORE는 앞부분을 건너뛰는 특별한 토큰이며 구현은 첫 위치이면서 뒤에 다른 토큰이 있을 때만 허용합니다. __TS_FSM_RECUR_MAX도 끝 표식이고 공개 최대값은 그보다 1 작습니다."
+    },
+    {
+      "title": "구조체의 표현",
+      "text": "type은 __u16, recur와 value는 각각 __u8입니다. 구현은 sizeof(ts_fsm_token) 단위로 입력을 나누고 나머지가 있으면 거부합니다. type 필드는 입력에서는 enum 번호지만 초기화 후 내부 복사본에서는 문자 분류 비트 마스크로 바뀝니다. 외부 표현과 내부 표현을 구분해야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "조건과 반복의 직교적 표현, 토큰 기반 중간 표현, sentinel과 최대 유효값, 바이트 단위 패턴 길이, 내부 정규화를 학습합니다. 이 구조체를 바이트 스트림으로 직렬화할 때 CPU 표현과 ABI를 무시한 공통 파일 형식이라고 가정하면 안 됩니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "SPECIFIC의 비교 대상 문자는 어느 필드에 있는가?",
+      "options": [
+        "value에 있다",
+        "recur에 있다"
+      ],
+      "answer": 0,
+      "explanation": "type은 조건 종류이고 recur는 반복 종류입니다. 특정 바이트의 실제 값은 value에 둡니다."
+    },
+    {
+      "prompt": "__TS_FSM_TYPE_MAX를 유효한 type으로 전달할 수 있는가?",
+      "options": [
+        "있다. 와일드카드의 다른 이름이다",
+        "없다. 마지막 유효값은 그보다 1 작다"
+      ],
+      "answer": 1,
+      "explanation": "끝 표식 다음에 TYPE_MAX를 끝 표식-1로 정의합니다. 구현은 이 최대값보다 큰 종류를 거부합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_TEXTSEARCH_FSM_H\n#define __LINUX_TEXTSEARCH_FSM_H\n\n#include <linux/types.h>\n\nenum {\n\tTS_FSM_SPECIFIC,\t/* specific character */\n\tTS_FSM_WILDCARD,\t/* any character */\n\tTS_FSM_DIGIT,\t\t/* isdigit() */\n\tTS_FSM_XDIGIT,\t\t/* isxdigit() */\n\tTS_FSM_PRINT,\t\t/* isprint() */\n\tTS_FSM_ALPHA,\t\t/* isalpha() */\n\tTS_FSM_ALNUM,\t\t/* isalnum() */\n\tTS_FSM_ASCII,\t\t/* isascii() */\n\tTS_FSM_CNTRL,\t\t/* iscntrl() */\n\tTS_FSM_GRAPH,\t\t/* isgraph() */\n\tTS_FSM_LOWER,\t\t/* islower() */\n\tTS_FSM_UPPER,\t\t/* isupper() */\n\tTS_FSM_PUNCT,\t\t/* ispunct() */\n\tTS_FSM_SPACE,\t\t/* isspace() */\n\t__TS_FSM_TYPE_MAX,\n};\n#define TS_FSM_TYPE_MAX (__TS_FSM_TYPE_MAX - 1)\n\nenum {\n\tTS_FSM_SINGLE,\t\t/* 1 occurrence */\n\tTS_FSM_PERHAPS,\t\t/* 1 or 0 occurrence */\n\tTS_FSM_ANY,\t\t/* 0..n occurrences */\n\tTS_FSM_MULTI,\t\t/* 1..n occurrences */\n\tTS_FSM_HEAD_IGNORE,\t/* 0..n ignored occurrences at head */\n\t__TS_FSM_RECUR_MAX,\n};\n#define TS_FSM_RECUR_MAX (__TS_FSM_RECUR_MAX - 1)\n\n/**\n * struct ts_fsm_token - state machine token (state)\n * @type: type of token\n * @recur: number of recurrences\n * @value: character value for TS_FSM_SPECIFIC\n */\nstruct ts_fsm_token\n{\n\t__u16\t\ttype;\n\t__u8\t\trecur;\n\t__u8\t\tvalue;\n};\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "c9d580250fee44abd55a38bfeea4f17844579dccf0240678f716a9ec4db22244",
+    "scope": "whole-file",
+    "line_count": 49,
+    "authoring_source": "course/file_units/finite_state_search.py",
+    "sections": [
+      "전체 선언",
+      "문자 종류",
+      "반복 종류",
+      "구조체의 표현",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/textsearch_fsm.h"
+    }
+  ]
+}

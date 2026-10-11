@@ -1,0 +1,139 @@
+{
+  "id": "file-aef5244721a53913",
+  "path": "arch/arm/lib/delay.c",
+  "title": "ARM 지연 구현 전체: timer 선택과 보정 이후 동결",
+  "area": "타이머 해상도 · busy wait · 고정소수점 · 초기화 상태 기계 · 함수 포인터",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "기본 loop 구현에서 적합한 타이머 기반 busy wait로 교체하는 경로를 해설합니다.",
+  "guide": [
+    "타이머 해상도와 등록 시기를 검사해 더 나은 구현을 선택하고,보정 후에는 교체하지 않습니다.",
+    "delay.h의 함수 포인터와 fixed-point 값을 실제 tick 대기로 연결합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 기본 전략",
+      "text": "GPL-2.0-only·OpenRISC 기반 설명·저작권 뒤 clocksource/delay/init/kernel/module/timex 헤더를 포함합니다. arm_delay_ops는 __ro_after_init이며 초기 세 callback은 __loop 계열입니다. static delay_timer,delay_calibrated,delay_res로 선택 상태를 관리합니다. 초기화 후 읽기 전용 지정과 부팅 중 선택을 구분합니다."
+    },
+    {
+      "title": "현재 타이머 조회",
+      "text": "read_current_timer는 등록된 delay_timer가 없으면 -ENXIO입니다. 있으면 callback 결과를 *timer_val에 저장하고0을 반환합니다. GPL 심벌로 export하며 출력 포인터의 NULL 검사는 없습니다. 실패 시 출력값을0으로 초기화하는 본문도 없습니다."
+    },
+    {
+      "title": "주기에서 나노초",
+      "text": "cyc_to_ns는 (cyc*mult)>>shift로 변환합니다. 등록 단계에서 clocks_calc_mult_shift에 입력 주파수,출력 NSEC_PER_SEC,3600을 전달해 계수를 구한 뒤1cycle의 정수 ns를 계산합니다. 이 값은 선택 기준의 해상도 추정이며 실제 함수 호출 지연 전체를 측정한 값이 아닙니다."
+    },
+    {
+      "title": "타이머 busy wait",
+      "text": "__timer_delay는 get_cycles의 시작값을 저장하고 현재 값과의 차이가 요청 cycles보다 작은 동안 cpu_relax합니다. sleep이나 스케줄러 타이머 대기는 아닙니다. wraparound와 큰 요청의 안전성은 counter 폭·호출 범위와 함께 판단해야 하며 임의 길이를 무제한 지원한다고 설명하지 않습니다."
+    },
+    {
+      "title": "고정소수점 값 처리",
+      "text": "__timer_const_udelay는 unsigned long xloops를 unsigned long long으로 확대하고 ticks_per_jiffy를 곱한 뒤 UDELAY_SHIFT만큼 이동한 값으로 __timer_delay를 호출합니다. __timer_udelay는 usecs*UDELAY_MULT를 먼저 계산해 이 함수에 넘깁니다. 뒤에서64비트로 확장하더라도 그 전에 수행된 곱셈의 폭 제한이 자동으로 없어지는 것은 아닙니다."
+    },
+    {
+      "title": "해상도 상한 검사",
+      "text": "register_current_timer_delay는1tick의 res가1000ns보다 크면 오류 메시지 후 반환합니다. 정확히1000ns이면 이 검사만으로 거부하지 않습니다. 주파수0이나 callback NULL 등의 별도 유효성 검사는 이 본문에 없으므로 적합한 timer 구조체를 제공해야 합니다."
+    },
+    {
+      "title": "더 좋은 timer 선택",
+      "text": "delay_calibrated가 거짓이고 delay_res가0이거나 새 res가 더 작을 때 선택합니다. 같은 비0 해상도는 개선으로 세지 않습니다. 선택하면 포인터,lpj_fine=timer->freq/HZ,delay_res를 기록하고 ticks_per_jiffy에 lpj_fine의 개인 복사본을 둡니다. 주석은 cpufreq가 loops_per_jiffy를 조정할 수 있어 별도 값을 보존한다고 설명합니다."
+    },
+    {
+      "title": "함수 포인터 교체",
+      "text": "선택 성공 시 delay,const_udelay,udelay를 모두 timer 기반 함수로 바꿉니다. 구조체 자체를 복사하는 대신 timer 포인터를 보관하므로 제공 객체와 callback의 수명이 이후 사용을 견뎌야 합니다. 조건에 맞지 않으면 중복·늦은 등록을 무시한다는 메시지를 남깁니다."
+    },
+    {
+      "title": "보정 종료 상태",
+      "text": "calibrate_delay_is_known은 delay_calibrated=true로 만든 뒤 lpj_fine을 반환합니다. 이름과 달리 상태를 전혀 바꾸지 않는 순수 조회 함수가 아닙니다. calibration_delay_done도 true를 설정합니다. 이후 더 작은 res가 등록돼도 선택 조건의 !delay_calibrated를 통과하지 못합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "초기 전략 교체,상태 기반 등록 차단,정수 변환 계수와 해상도 비교,단위 변환의 중간 폭,borrowed 포인터 수명,조회 API의 부작용을 학습합니다. 이 해설은 실제 ARM cycle counter 속도나 모든 wraparound 시나리오를 측정한 결과가 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "timer가 없을 때 read_current_timer의 결과는?",
+      "options": [
+        "-ENXIO이며 출력값을 새로 쓰지 않는다",
+        "0을 반환하고 출력값도0이다"
+      ],
+      "answer": 0,
+      "explanation": "첫 분기에서 즉시 오류를 반환합니다. 출력 대입은 timer가 있는 경로에만 있습니다."
+    },
+    {
+      "prompt": "새 해상도가 정확히1000ns이면 상한 검사에서 거부되는가?",
+      "options": [
+        "그렇다.1000 이상을 모두 거부한다",
+        "아니다.1000보다 클 때 거부한다"
+      ],
+      "answer": 1,
+      "explanation": "조건은 res>1000입니다. 이후 보정 상태와 기존 해상도 비교 조건은 별도로 만족해야 합니다."
+    },
+    {
+      "prompt": "보정 완료 뒤 더 정밀한 timer를 등록하면?",
+      "options": [
+        "현재 선택을 바꾸지 않는다",
+        "항상 더 정밀한 timer로 교체한다"
+      ],
+      "answer": 0,
+      "explanation": "등록 선택에는 !delay_calibrated가 필요합니다. 보정 종료 함수들이 이 상태를true로 설정합니다."
+    },
+    {
+      "prompt": "타이머 기반 지연은 CPU를 수면시키는가?",
+      "options": [
+        "그렇다. msleep을 호출한다",
+        "아니다. get_cycles를 반복 확인하는 busy wait이다"
+      ],
+      "answer": 1,
+      "explanation": "루프는 counter 차이와 cpu_relax를 사용합니다. timer를 기준으로 측정한다는 것과 sleep은 별개입니다."
+    },
+    {
+      "prompt": "calibrate_delay_is_known은 단순한 무부작용 조회인가?",
+      "options": [
+        "아니다. delay_calibrated를true로 바꾼다",
+        "그렇다. lpj_fine만 읽는다"
+      ],
+      "answer": 0,
+      "explanation": "반환 전에 보정 상태를 갱신하며 후속 timer 등록의 선택 가능성에 영향을 줍니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Delay loops based on the OpenRISC implementation.\n *\n * Copyright (C) 2012 ARM Limited\n *\n * Author: Will Deacon <will.deacon@arm.com>\n */\n\n#include <linux/clocksource.h>\n#include <linux/delay.h>\n#include <linux/init.h>\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/timex.h>\n\n/*\n * Default to the loop-based delay implementation.\n */\nstruct arm_delay_ops arm_delay_ops __ro_after_init = {\n\t.delay\t\t= __loop_delay,\n\t.const_udelay\t= __loop_const_udelay,\n\t.udelay\t\t= __loop_udelay,\n};\n\nstatic const struct delay_timer *delay_timer;\nstatic bool delay_calibrated;\nstatic u64 delay_res;\n\nint read_current_timer(unsigned long *timer_val)\n{\n\tif (!delay_timer)\n\t\treturn -ENXIO;\n\n\t*timer_val = delay_timer->read_current_timer();\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(read_current_timer);\n\nstatic inline u64 cyc_to_ns(u64 cyc, u32 mult, u32 shift)\n{\n\treturn (cyc * mult) >> shift;\n}\n\nstatic void __timer_delay(unsigned long cycles)\n{\n\tcycles_t start = get_cycles();\n\n\twhile ((get_cycles() - start) < cycles)\n\t\tcpu_relax();\n}\n\nstatic void __timer_const_udelay(unsigned long xloops)\n{\n\tunsigned long long loops = xloops;\n\tloops *= arm_delay_ops.ticks_per_jiffy;\n\t__timer_delay(loops >> UDELAY_SHIFT);\n}\n\nstatic void __timer_udelay(unsigned long usecs)\n{\n\t__timer_const_udelay(usecs * UDELAY_MULT);\n}\n\nvoid __init register_current_timer_delay(const struct delay_timer *timer)\n{\n\tu32 new_mult, new_shift;\n\tu64 res;\n\n\tclocks_calc_mult_shift(&new_mult, &new_shift, timer->freq,\n\t\t\t       NSEC_PER_SEC, 3600);\n\tres = cyc_to_ns(1ULL, new_mult, new_shift);\n\n\tif (res > 1000) {\n\t\tpr_err(\"Ignoring delay timer %ps, which has insufficient resolution of %lluns\\n\",\n\t\t\ttimer, res);\n\t\treturn;\n\t}\n\n\tif (!delay_calibrated && (!delay_res || (res < delay_res))) {\n\t\tpr_info(\"Switching to timer-based delay loop, resolution %lluns\\n\", res);\n\t\tdelay_timer\t\t\t= timer;\n\t\tlpj_fine\t\t\t= timer->freq / HZ;\n\t\tdelay_res\t\t\t= res;\n\n\t\t/* cpufreq may scale loops_per_jiffy, so keep a private copy */\n\t\tarm_delay_ops.ticks_per_jiffy\t= lpj_fine;\n\t\tarm_delay_ops.delay\t\t= __timer_delay;\n\t\tarm_delay_ops.const_udelay\t= __timer_const_udelay;\n\t\tarm_delay_ops.udelay\t\t= __timer_udelay;\n\t} else {\n\t\tpr_info(\"Ignoring duplicate/late registration of read_current_timer delay\\n\");\n\t}\n}\n\nunsigned long calibrate_delay_is_known(void)\n{\n\tdelay_calibrated = true;\n\treturn lpj_fine;\n}\n\nvoid calibration_delay_done(void)\n{\n\tdelay_calibrated = true;\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "effc7cd7e7ea29ca6ee253bdccc06ad6151aa50948469f1e7615d662f275c1da",
+    "scope": "whole-file",
+    "line_count": 105,
+    "authoring_source": "course/file_units/arm_delay.py",
+    "sections": [
+      "전체 구성과 기본 전략",
+      "현재 타이머 조회",
+      "주기에서 나노초",
+      "타이머 busy wait",
+      "고정소수점 값 처리",
+      "해상도 상한 검사",
+      "더 좋은 timer 선택",
+      "함수 포인터 교체",
+      "보정 종료 상태",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/lib/delay.c"
+    }
+  ]
+}

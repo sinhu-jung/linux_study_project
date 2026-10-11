@@ -1,0 +1,149 @@
+{
+  "id": "file-ada172032dfffca4",
+  "path": "include/linux/time64.h",
+  "title": "Timespec64: 정규화, 유효성, 포화 변환의 차이",
+  "area": "시간 표현 · 정규화 · 오버플로 · 사전식 비교 · 고정 폭 정수",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "자료형과 상수, 비교·산술·검사·변환 helper 전체를 구분합니다.",
+  "guide": [
+    "초와 나노초로 나눈 표현의 정상 범위와 단일 s64 나노초 표현의 범위는 같지 않습니다.",
+    "시간 입력을 검사할 때와 시간을 계산할 때 서로 다른 경계 규칙을 적용합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 자료형",
+      "text": "GPL-2.0과 guard, math64/vdso time64 include 뒤 time64_t를 __s64, timeu64_t를 __u64로 정의하고 UAPI time.h를 포함합니다. timespec64는 time64_t tv_sec와 long tv_nsec이며 itimerspec64는 it_interval과 it_value 두 timespec64를 가집니다. 이름의 64가 모든 필드의 폭을 64비트로 고정한다는 뜻은 아닙니다."
+    },
+    {
+      "title": "시간 범위 상수",
+      "text": "PSEC_PER_NSEC는 1000L입니다. TIME64_MAX/MIN과 KTIME_MAX/MIN은 같은 s64 최대·최솟값이지만 사용하는 단위와 의미를 구분해야 합니다. KTIME_SEC_MAX/MIN은 해당 값을 NSEC_PER_SEC로 나눈 초 경계이며 signed 나눗셈의 0 방향 절단을 따릅니다. 초 필드가 s64 범위라고 그 전체를 s64 나노초로 표현할 수 있는 것은 아닙니다."
+    },
+    {
+      "title": "시각 설정의 여유",
+      "text": "TIME_UPTIME_SEC_MAX는 30*365일을 초로 계산한 상수이고 TIME_SETTOD_SEC_MAX는 KTIME_SEC_MAX에서 이를 뺀 값입니다. 주석은 장기간 uptime을 남기도록 설정 가능 시간을 제한한다고 설명합니다. 이는 실제 달력의 윤년을 세어 정확히 30년 뒤를 계산하는 함수가 아닙니다."
+    },
+    {
+      "title": "동등성과 비교",
+      "text": "timespec64_equal은 두 필드가 모두 같은지 검사합니다. compare는 초가 작거나 크면 -1 또는 1, 초가 같으면 나노초 차이를 반환하므로 항상 -1/0/1만 반환하지는 않습니다. 정상 범위의 나노초일 때 부호로 순서를 판단합니다. 임의로 비정규화된 입력을 자동 정규화하거나 큰 잘못된 값의 뺄셈을 보호하지 않습니다."
+    },
+    {
+      "title": "더하기와 빼기",
+      "text": "timespec64_add/sub는 초와 나노초를 각각 더하거나 뺀 뒤 set_normalized_timespec64에 넘겨 결과 구조체를 반환합니다. 정상 표현에서는 1초를 넘거나 음수인 나노초를 초로 올리거나 빌려야 합니다. 정규화 함수의 구현은 이 파일 밖에 있으며 helper 호출 전에 이미 수행하는 초 덧셈·뺄셈의 overflow를 이 inline들이 검사하지 않습니다."
+    },
+    {
+      "title": "일반 유효성",
+      "text": "timespec64_valid는 tv_sec<0이면 false입니다. 나노초를 unsigned long으로 변환해 NSEC_PER_SEC 이상인지 검사하므로 음수 나노초도 거부합니다. 허용 나노초는 0..999999999입니다. 음수 초를 가진 정상화된 기간 표현이 수학적으로 가능하더라도 이 입력 검사에는 통과하지 못합니다. 검사와 정규화는 다른 작업입니다."
+    },
+    {
+      "title": "엄격 검사와 시각 설정 검사",
+      "text": "valid_strict는 일반 검사 뒤 초가 KTIME_SEC_MAX 이상이면 거부합니다. valid_settod는 일반 검사 뒤 TIME_SETTOD_SEC_MAX 이상이면 거부합니다. 둘 다 경계와 같은 값도 거부하는 >= 조건입니다. 나노초까지 보아 경계 초에서 일부 값만 허용하는 검사가 아닙니다."
+    },
+    {
+      "title": "나노초 변환의 포화",
+      "text": "timespec64_to_ns는 tv_sec>=KTIME_SEC_MAX이면 KTIME_MAX, tv_sec<=KTIME_SEC_MIN이면 KTIME_MIN을 바로 반환합니다. 그 사이에서는 sec*NSEC_PER_SEC+nsec를 계산합니다. 경계 초가 같을 때도 나노초를 확인하지 않고 제한하므로 수학적 총합을 계산한 뒤 정확히 overflow일 때만 포화하는 함수와 다릅니다. tv_nsec 자체를 검사하거나 임의의 잘못된 값까지 안전하게 더해 주지는 않습니다."
+    },
+    {
+      "title": "외부 변환과 안전한 덧셈 선언",
+      "text": "ns_to_timespec64는 s64 나노초를 구조체로 바꾸는 외부 함수 선언입니다. timespec64_add_safe도 외부 선언이며 주석은 두 입력이 양수라고 가정하고 overflow 시 TIME64_MAX를 돌려준다고 설명합니다. 실제 반환형은 timespec64이므로 헤더 주석만으로 overflow 때의 모든 필드 값을 단정하지 않습니다. 해당 함수 본문을 별도로 확인해야 합니다."
+    },
+    {
+      "title": "나노초의 제자리 추가",
+      "text": "timespec64_add_ns는 a->tv_nsec+ns를 __iter_div_u64_rem으로 나눠 몫을 초에 더하고 나머지를 tv_nsec에 저장합니다. ns는 u64이며 같은 지역 변수가 나머지 출력 저장소로 재사용됩니다. __always_inline은 x86-64 vDSO에서 외부 커널 함수를 호출할 수 없다는 주석과 연결됩니다. 음수 ns를 받는 인터페이스가 아니며 합산이나 초 증가의 overflow 검사는 없습니다."
+    },
+    {
+      "title": "반복 나눗셈의 비용",
+      "text": "관련 vDSO helper는 나머지가 제수보다 작은 때까지 제수를 빼므로 add_ns의 처리 비용은 넘기는 초 수에 비례합니다. 임의의 거대한 u64 나노초 증가분을 일정 시간에 처리하는 일반 나눗셈으로 생각하면 안 됩니다. 몫도 u32이므로 값의 범위와 사용 문맥을 지켜야 합니다."
+    },
+    {
+      "title": "CS와 검증 범위",
+      "text": "표현의 유효성, 정규화, 경계 포화, 산술 overflow 검출은 각각 다른 기능입니다. 전체 헤더의 선언과 구현을 구분한 자료이며 여기서 선언된 외부 함수들까지 모두 실행 검증하거나 전체 파일 학습으로 집계한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "timespec64_compare는 항상 -1,0,1 중 하나만 반환하는가?",
+      "options": [
+        "아니다. 초가 같으면 나노초 차이를 반환한다",
+        "그렇다. 모든 경로에서 값이 세 개로 제한된다"
+      ],
+      "answer": 0,
+      "explanation": "호출자는 반환값의 부호를 검사해야 합니다. 예를 들어 같은 초에서 나노초가 100과 20이면 80을 반환합니다."
+    },
+    {
+      "prompt": "tv_sec=-1, tv_nsec=500000000은 timespec64_valid를 통과하는가?",
+      "options": [
+        "그렇다. 정규화된 표현이면 모두 허용한다",
+        "아니다. 음수 초를 거부한다"
+      ],
+      "answer": 1,
+      "explanation": "이는 -0.5초의 정규화된 표현일 수 있지만 이 검사는 음수 초를 별도로 거부합니다. 수학적인 정상화와 API 입력 정책을 구분합니다."
+    },
+    {
+      "prompt": "tv_sec가 KTIME_SEC_MAX와 같을 때 to_ns는 어떻게 처리하는가?",
+      "options": [
+        "나노초 필드를 보지 않고 KTIME_MAX를 반환한다",
+        "항상 두 필드를 정확히 곱하고 더한 값을 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "실제 조건은 >=입니다. 경계 초에서 수학적으로 일부 값이 들어맞아도 이 함수는 보수적으로 한계값을 반환합니다."
+    },
+    {
+      "prompt": "timespec64_add가 정규화를 호출하면 초 덧셈 overflow도 자동 검출되는가?",
+      "options": [
+        "그렇다. 정규화 함수가 이미 잃은 상위 비트를 복원한다",
+        "아니다. 초 덧셈은 호출 전에 수행되며 별도 검사가 없다"
+      ],
+      "answer": 1,
+      "explanation": "표현을 정리하는 것과 산술 범위를 보호하는 것은 다릅니다. add_safe라는 별도 인터페이스의 전제도 확인해야 합니다."
+    },
+    {
+      "prompt": "timespec64_add_ns를 임의로 큰 ns에도 고정 비용 연산이라고 할 수 있는가?",
+      "options": [
+        "아니다. 호출하는 helper는 반복 뺄셈을 사용한다",
+        "그렇다. 이름에 div가 있으면 항상 단일 CPU 나눗셈이다"
+      ],
+      "answer": 0,
+      "explanation": "실제 helper 본문이 알고리즘을 결정합니다. 큰 몫은 많은 반복을 만들고 반환 몫의 u32 폭도 고려해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_TIME64_H\n#define _LINUX_TIME64_H\n\n#include <linux/math64.h>\n#include <vdso/time64.h>\n\ntypedef __s64 time64_t;\ntypedef __u64 timeu64_t;\n\n#include <uapi/linux/time.h>\n\nstruct timespec64 {\n\ttime64_t\ttv_sec;\t\t\t/* seconds */\n\tlong\t\ttv_nsec;\t\t/* nanoseconds */\n};\n\nstruct itimerspec64 {\n\tstruct timespec64 it_interval;\n\tstruct timespec64 it_value;\n};\n\n/* Parameters used to convert the timespec values: */\n#define PSEC_PER_NSEC\t\t\t1000L\n\n/* Located here for timespec[64]_valid_strict */\n#define TIME64_MAX\t\t\t((s64)~((u64)1 << 63))\n#define TIME64_MIN\t\t\t(-TIME64_MAX - 1)\n\n#define KTIME_MAX\t\t\t((s64)~((u64)1 << 63))\n#define KTIME_MIN\t\t\t(-KTIME_MAX - 1)\n#define KTIME_SEC_MAX\t\t\t(KTIME_MAX / NSEC_PER_SEC)\n#define KTIME_SEC_MIN\t\t\t(KTIME_MIN / NSEC_PER_SEC)\n\n/*\n * Limits for settimeofday():\n *\n * To prevent setting the time close to the wraparound point time setting\n * is limited so a reasonable uptime can be accomodated. Uptime of 30 years\n * should be really sufficient, which means the cutoff is 2232. At that\n * point the cutoff is just a small part of the larger problem.\n */\n#define TIME_UPTIME_SEC_MAX\t\t(30LL * 365 * 24 *3600)\n#define TIME_SETTOD_SEC_MAX\t\t(KTIME_SEC_MAX - TIME_UPTIME_SEC_MAX)\n\nstatic inline int timespec64_equal(const struct timespec64 *a,\n\t\t\t\t   const struct timespec64 *b)\n{\n\treturn (a->tv_sec == b->tv_sec) && (a->tv_nsec == b->tv_nsec);\n}\n\n/*\n * lhs < rhs:  return <0\n * lhs == rhs: return 0\n * lhs > rhs:  return >0\n */\nstatic inline int timespec64_compare(const struct timespec64 *lhs, const struct timespec64 *rhs)\n{\n\tif (lhs->tv_sec < rhs->tv_sec)\n\t\treturn -1;\n\tif (lhs->tv_sec > rhs->tv_sec)\n\t\treturn 1;\n\treturn lhs->tv_nsec - rhs->tv_nsec;\n}\n\nextern void set_normalized_timespec64(struct timespec64 *ts, time64_t sec, s64 nsec);\n\nstatic inline struct timespec64 timespec64_add(struct timespec64 lhs,\n\t\t\t\t\t\tstruct timespec64 rhs)\n{\n\tstruct timespec64 ts_delta;\n\tset_normalized_timespec64(&ts_delta, lhs.tv_sec + rhs.tv_sec,\n\t\t\t\tlhs.tv_nsec + rhs.tv_nsec);\n\treturn ts_delta;\n}\n\n/*\n * sub = lhs - rhs, in normalized form\n */\nstatic inline struct timespec64 timespec64_sub(struct timespec64 lhs,\n\t\t\t\t\t\tstruct timespec64 rhs)\n{\n\tstruct timespec64 ts_delta;\n\tset_normalized_timespec64(&ts_delta, lhs.tv_sec - rhs.tv_sec,\n\t\t\t\tlhs.tv_nsec - rhs.tv_nsec);\n\treturn ts_delta;\n}\n\n/*\n * Returns true if the timespec64 is norm, false if denorm:\n */\nstatic inline bool timespec64_valid(const struct timespec64 *ts)\n{\n\t/* Dates before 1970 are bogus */\n\tif (ts->tv_sec < 0)\n\t\treturn false;\n\t/* Can't have more nanoseconds then a second */\n\tif ((unsigned long)ts->tv_nsec >= NSEC_PER_SEC)\n\t\treturn false;\n\treturn true;\n}\n\nstatic inline bool timespec64_valid_strict(const struct timespec64 *ts)\n{\n\tif (!timespec64_valid(ts))\n\t\treturn false;\n\t/* Disallow values that could overflow ktime_t */\n\tif ((unsigned long long)ts->tv_sec >= KTIME_SEC_MAX)\n\t\treturn false;\n\treturn true;\n}\n\nstatic inline bool timespec64_valid_settod(const struct timespec64 *ts)\n{\n\tif (!timespec64_valid(ts))\n\t\treturn false;\n\t/* Disallow values which cause overflow issues vs. CLOCK_REALTIME */\n\tif ((unsigned long long)ts->tv_sec >= TIME_SETTOD_SEC_MAX)\n\t\treturn false;\n\treturn true;\n}\n\n/**\n * timespec64_to_ns - Convert timespec64 to nanoseconds\n * @ts:\t\tpointer to the timespec64 variable to be converted\n *\n * Returns the scalar nanosecond representation of the timespec64\n * parameter.\n */\nstatic inline s64 timespec64_to_ns(const struct timespec64 *ts)\n{\n\t/* Prevent multiplication overflow / underflow */\n\tif (ts->tv_sec >= KTIME_SEC_MAX)\n\t\treturn KTIME_MAX;\n\n\tif (ts->tv_sec <= KTIME_SEC_MIN)\n\t\treturn KTIME_MIN;\n\n\treturn ((s64) ts->tv_sec * NSEC_PER_SEC) + ts->tv_nsec;\n}\n\n/**\n * ns_to_timespec64 - Convert nanoseconds to timespec64\n * @nsec:\tthe nanoseconds value to be converted\n *\n * Returns the timespec64 representation of the nsec parameter.\n */\nextern struct timespec64 ns_to_timespec64(s64 nsec);\n\n/**\n * timespec64_add_ns - Adds nanoseconds to a timespec64\n * @a:\t\tpointer to timespec64 to be incremented\n * @ns:\t\tunsigned nanoseconds value to be added\n *\n * This must always be inlined because its used from the x86-64 vdso,\n * which cannot call other kernel functions.\n */\nstatic __always_inline void timespec64_add_ns(struct timespec64 *a, u64 ns)\n{\n\ta->tv_sec += __iter_div_u64_rem(a->tv_nsec + ns, NSEC_PER_SEC, &ns);\n\ta->tv_nsec = ns;\n}\n\n/*\n * timespec64_add_safe assumes both values are positive and checks for\n * overflow. It will return TIME64_MAX in case of overflow.\n */\nextern struct timespec64 timespec64_add_safe(const struct timespec64 lhs,\n\t\t\t\t\t const struct timespec64 rhs);\n\n#endif /* _LINUX_TIME64_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a446306ae55b4ede8ca6ae72a0ee80f6a202e9058402214414975ebdd71763f3",
+    "scope": "whole-file",
+    "line_count": 171,
+    "authoring_source": "course/file_units/time64_arithmetic.py",
+    "sections": [
+      "전체 구성과 자료형",
+      "시간 범위 상수",
+      "시각 설정의 여유",
+      "동등성과 비교",
+      "더하기와 빼기",
+      "일반 유효성",
+      "엄격 검사와 시각 설정 검사",
+      "나노초 변환의 포화",
+      "외부 변환과 안전한 덧셈 선언",
+      "나노초의 제자리 추가",
+      "반복 나눗셈의 비용",
+      "CS와 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/time64.h"
+    }
+  ]
+}

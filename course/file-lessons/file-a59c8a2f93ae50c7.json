@@ -1,0 +1,162 @@
+{
+  "id": "file-a59c8a2f93ae50c7",
+  "path": "lib/kunit/try-catch.c",
+  "title": "KUnit 중단 실행기: kthread·completion·오류 상태 전이",
+  "area": "동시성 · 상태 머신 · 오류 처리 · 스레드 수명 · 타임아웃",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "worker 생성부터 종료 대기, 명시적 throw와 fault·timeout 처리까지 파일 전체를 분석합니다.",
+  "guide": [
+    "worker 종료와 테스트의 논리적 결과를 별도로 표현하고 종료 동기화 후 복구 callback을 호출합니다.",
+    "completion, task 참조, sentinel 오류값, 협력적 스레드 중단과 timeout의 한계를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "구성과 명시적 throw",
+      "text": "GPL-2.0 파일은 test,completion,kernel,kthread,sched/task와 내부 초기화 헤더를 포함합니다. kunit_try_catch_throw는 try_result=-EFAULT를 기록하고 kthread_exit(0)으로 현재 worker를 종료하며 GPL export됩니다. kthread 종료 코드 0과 try_result의 -EFAULT는 다른 상태 저장 경로입니다. throw 안에서 catch를 직접 호출하지 않습니다."
+    },
+    {
+      "title": "Worker adapter의 sentinel",
+      "text": "adapter는 void *data를 try_catch로 해석하고 try_result=-EINTR를 먼저 저장한 뒤 try(context)를 호출합니다. callback이 정상 반환한 후 여전히 -EINTR이면 0으로 바꿉니다. callback이 다른 결과를 썼다면 그대로 유지합니다. 중간에 종료되어 후처리가 실행되지 않으면 sentinel이 남아 fault 경로를 구분하는 데 쓰입니다. adapter 자체의 정상 반환은 0입니다."
+    },
+    {
+      "title": "고정 timeout",
+      "text": "timeout helper는 300*msecs_to_jiffies(MSEC_PER_SEC)를 반환해 5분 대기를 설정합니다. 긴 주석은 테스트 크기별 timeout 등을 미래 논의로 적지만 현재 크기 분류별 분기는 없습니다. 시간 단위 milliseconds에서 jiffies로 변환하는 것과 실제 wait가 반환하는 잔여 ticks를 구분해야 합니다."
+    },
+    {
+      "title": "실행 준비와 생성 실패",
+      "text": "run은 상태의 test를 지역 변수로 가져오고 context를 저장하고 try_result=0으로 초기화합니다. kthread_create에 adapter,상태 포인터와 고정 이름을 전달합니다. IS_ERR이면 PTR_ERR를 결과에 저장하고 catch(context)를 호출한 뒤 바로 반환합니다. 이 경로에는 task 참조 획득이나 worker wakeup이 없으며 아래 공통 오류 로그 분기에도 도달하지 않습니다."
+    },
+    {
+      "title": "Task 참조와 completion 주소",
+      "text": "생성 성공 후 get_task_struct로 참조를 보유합니다. 주석은 task->vfork_done이 내부 kthread->exited를 가리키며 종료 시 NULL로 바뀌므로 task_done 지역 변수에 주소를 복사한다고 설명합니다. 이 복사를 한 뒤 wake_up_process로 시작합니다. 종료 이후 task->vfork_done을 다시 읽어 기다리는 순서가 아닙니다."
+    },
+    {
+      "title": "대기와 timeout 후 stop",
+      "text": "wait_for_completion_timeout(task_done,timeout)의 결과를 time_remaining에 저장합니다. 0이면 try_result=-ETIMEDOUT로 쓰고 kthread_stop을 호출합니다. stop의 반환값을 결과에 대입하지 않습니다. kthread_stop은 임의의 코드를 강제로 없애는 기능이 아니므로 try가 영원히 반환하지 않는 상황에서 5분이 run의 엄격한 상한이라고 설명할 수 없습니다. timeout은 대기 만료 후 stop을 요청하는 분기입니다."
+    },
+    {
+      "title": "참조 반환과 결과 확인",
+      "text": "대기 및 필요한 stop 뒤 put_task_struct하고 try_result를 exit_code로 복사합니다. 0이면 catch 없이 반환합니다. worker가 정상 반환했는지와 모든 assertion·expectation의 종합 성공 여부는 다른 계층일 수 있으므로 이 0을 전체 테스트 성공의 유일한 지표라고 단정하지 않습니다."
+    },
+    {
+      "title": "명시적 중단의 정규화",
+      "text": "exit_code=-EFAULT이면 try_result를 0으로 바꾼 후 마지막 catch를 호출합니다. 따라서 catch가 결과를 조회할 때 원래 throw sentinel 대신 0을 봅니다. throw는 의도된 제어 흐름이고 실행기 자체의 예외 오류로 남기지 않는 처리입니다. 별도 테스트 실패 상태까지 이 코드가 성공으로 되돌리는 것은 아닙니다."
+    },
+    {
+      "title": "Fault와 timeout 로그",
+      "text": "exit_code=-EINTR이면 test->last_seen.file 존재 여부에 따라 마지막 파일·줄을 포함한 try faulted 또는 짧은 메시지를 기록합니다. -ETIMEDOUT이면 try timed out을 기록합니다. 그 밖의 nonzero는 Unknown error와 정수 코드를 기록합니다. 이들 분기는 결과를 0으로 바꾸지 않고 catch(context)로 이어집니다."
+    },
+    {
+      "title": "실행 문맥과 동시성 한계",
+      "text": "try는 새 kthread에서 실행되고 catch는 run을 호출한 경로에서 실행됩니다. 지역 context 자체를 복제하거나 참조 카운팅하지 않으므로 실행 및 복구가 끝날 때까지 저장소가 유효해야 합니다. timeout 직후 worker도 결과를 변경할 수 있는 경계까지 별도 원자적 상태 머신으로 막는 코드는 없습니다. completion 종료 동기화와 임의 동시 쓰기 안전성을 혼동하지 않습니다."
+    },
+    {
+      "title": "전체 흐름 검토",
+      "text": "throw,adapter,timeout helper,run의 생성 오류·정상 종료·명시적 중단·fault·timeout·기타 오류와 두 GPL export를 모두 대조했습니다. C++ stack unwinding이나 일반 객체 destructor 실행을 구현하는 코드가 아닙니다. 실제 커널 스레드 fault와 5분 대기 실험을 실행하지 않았으며 내용 검증은 고정 소스 분석입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "throw는 catch를 어디서 직접 호출하는가?",
+      "options": [
+        "throw 안에서는 호출하지 않는다. run이 종료 결과를 보고 호출한다",
+        "kthread_exit 다음 줄에서 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "throw는 -EFAULT 저장 후 noreturn 종료입니다. catch 실행은 run의 공통 오류 처리 끝에 있습니다."
+    },
+    {
+      "prompt": "try가 정상 반환하고 결과가 여전히 -EINTR이면?",
+      "options": [
+        "무조건 timeout으로 바꾼다",
+        "adapter가 0으로 바꾼다"
+      ],
+      "answer": 1,
+      "explanation": "진입 전 -EINTR는 미완료 sentinel이며 정상 반환 후 동일할 때만 지웁니다. 다른 오류값은 보존합니다."
+    },
+    {
+      "prompt": "kthread_create가 실패한 경우 결과와 복구는?",
+      "options": [
+        "PTR_ERR를 저장하고 catch를 호출해 반환한다",
+        "wake_up_process를 호출한 뒤 정상 성공으로 처리한다"
+      ],
+      "answer": 0,
+      "explanation": "IS_ERR 분기는 생성된 task를 가정하지 않고 즉시 복구합니다. 공통 하단 로그 분기와도 다릅니다."
+    },
+    {
+      "prompt": "vfork_done 주소를 wakeup 전에 복사하는 이유는?",
+      "options": [
+        "completion 내용을 문자열로 출력하려고",
+        "종료 시 task의 필드가 NULL로 바뀌므로 기다릴 completion 주소를 보존하려고"
+      ],
+      "answer": 1,
+      "explanation": "소스 주석이 내부 kthread->exited와 필드 변경을 설명합니다. 주소 보존과 task 참조 획득이 함께 나타납니다."
+    },
+    {
+      "prompt": "throw 뒤 catch에서 try_result를 읽으면 일반적으로 어떤 값인가?",
+      "options": [
+        "run이 정규화한 0이다",
+        "항상 -EFAULT가 그대로다"
+      ],
+      "answer": 0,
+      "explanation": "exit_code 지역 변수는 -EFAULT지만 저장 필드는 catch 전 0으로 변경됩니다. 지역 snapshot과 객체 상태를 구분합니다."
+    },
+    {
+      "prompt": "5분 timeout이 있으면 어떤 try 코드도 정확히 5분 안에 run에서 벗어나는가?",
+      "options": [
+        "그렇다. kthread_stop이 즉시 모든 명령을 강제 제거한다",
+        "그렇게 보장할 수 없다. 만료 후 kthread_stop도 종료를 기다릴 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "대기 timeout과 worker의 협력적 종료는 별개입니다. 원본 코드의 stop 호출을 강제 kill로 해석하면 안 됩니다."
+    },
+    {
+      "prompt": "정상 exit_code=0이면 catch가 실행되는가?",
+      "options": [
+        "아니다. catch 호출 전에 return한다",
+        "그렇다. 모든 종료 경로에서 무조건 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "생성 실패와 nonzero 결과에서는 catch를 호출하지만 정상 0은 조기 반환합니다. 따라서 catch를 모든 경우의 finally로 보아서는 안 됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * An API to allow a function, that may fail, to be executed, and recover in a\n * controlled manner.\n *\n * Copyright (C) 2019, Google LLC.\n * Author: Brendan Higgins <brendanhiggins@google.com>\n */\n\n#include <kunit/test.h>\n#include <linux/completion.h>\n#include <linux/kernel.h>\n#include <linux/kthread.h>\n#include <linux/sched/task.h>\n\n#include \"try-catch-impl.h\"\n\nvoid __noreturn kunit_try_catch_throw(struct kunit_try_catch *try_catch)\n{\n\ttry_catch->try_result = -EFAULT;\n\tkthread_exit(0);\n}\nEXPORT_SYMBOL_GPL(kunit_try_catch_throw);\n\nstatic int kunit_generic_run_threadfn_adapter(void *data)\n{\n\tstruct kunit_try_catch *try_catch = data;\n\n\ttry_catch->try_result = -EINTR;\n\ttry_catch->try(try_catch->context);\n\tif (try_catch->try_result == -EINTR)\n\t\ttry_catch->try_result = 0;\n\n\treturn 0;\n}\n\nstatic unsigned long kunit_test_timeout(void)\n{\n\t/*\n\t * TODO(brendanhiggins@google.com): We should probably have some type of\n\t * variable timeout here. The only question is what that timeout value\n\t * should be.\n\t *\n\t * The intention has always been, at some point, to be able to label\n\t * tests with some type of size bucket (unit/small, integration/medium,\n\t * large/system/end-to-end, etc), where each size bucket would get a\n\t * default timeout value kind of like what Bazel does:\n\t * https://docs.bazel.build/versions/master/be/common-definitions.html#test.size\n\t * There is still some debate to be had on exactly how we do this. (For\n\t * one, we probably want to have some sort of test runner level\n\t * timeout.)\n\t *\n\t * For more background on this topic, see:\n\t * https://mike-bland.com/2011/11/01/small-medium-large.html\n\t *\n\t * If tests timeout due to exceeding sysctl_hung_task_timeout_secs,\n\t * the task will be killed and an oops generated.\n\t */\n\treturn 300 * msecs_to_jiffies(MSEC_PER_SEC); /* 5 min */\n}\n\nvoid kunit_try_catch_run(struct kunit_try_catch *try_catch, void *context)\n{\n\tstruct kunit *test = try_catch->test;\n\tstruct task_struct *task_struct;\n\tstruct completion *task_done;\n\tint exit_code, time_remaining;\n\n\ttry_catch->context = context;\n\ttry_catch->try_result = 0;\n\ttask_struct = kthread_create(kunit_generic_run_threadfn_adapter,\n\t\t\t\t     try_catch, \"kunit_try_catch_thread\");\n\tif (IS_ERR(task_struct)) {\n\t\ttry_catch->try_result = PTR_ERR(task_struct);\n\t\ttry_catch->catch(try_catch->context);\n\t\treturn;\n\t}\n\tget_task_struct(task_struct);\n\t/*\n\t * As for a vfork(2), task_struct->vfork_done (pointing to the\n\t * underlying kthread->exited) can be used to wait for the end of a\n\t * kernel thread. It is set to NULL when the thread exits, so we\n\t * keep a copy here.\n\t */\n\ttask_done = task_struct->vfork_done;\n\twake_up_process(task_struct);\n\n\ttime_remaining = wait_for_completion_timeout(task_done,\n\t\t\t\t\t\t     kunit_test_timeout());\n\tif (time_remaining == 0) {\n\t\ttry_catch->try_result = -ETIMEDOUT;\n\t\tkthread_stop(task_struct);\n\t}\n\n\tput_task_struct(task_struct);\n\texit_code = try_catch->try_result;\n\n\tif (!exit_code)\n\t\treturn;\n\n\tif (exit_code == -EFAULT)\n\t\ttry_catch->try_result = 0;\n\telse if (exit_code == -EINTR) {\n\t\tif (test->last_seen.file)\n\t\t\tkunit_err(test, \"try faulted: last line seen %s:%d\\n\",\n\t\t\t\t  test->last_seen.file, test->last_seen.line);\n\t\telse\n\t\t\tkunit_err(test, \"try faulted\\n\");\n\t} else if (exit_code == -ETIMEDOUT)\n\t\tkunit_err(test, \"try timed out\\n\");\n\telse if (exit_code)\n\t\tkunit_err(test, \"Unknown error: %d\\n\", exit_code);\n\n\ttry_catch->catch(try_catch->context);\n}\nEXPORT_SYMBOL_GPL(kunit_try_catch_run);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "08d4d720aae13a1dd97de60e2a5f325dabc865a45044d6ba9c076931b22646a5",
+    "scope": "whole-file",
+    "line_count": 116,
+    "authoring_source": "course/file_units/kunit_try_catch.py",
+    "sections": [
+      "구성과 명시적 throw",
+      "Worker adapter의 sentinel",
+      "고정 timeout",
+      "실행 준비와 생성 실패",
+      "Task 참조와 completion 주소",
+      "대기와 timeout 후 stop",
+      "참조 반환과 결과 확인",
+      "명시적 중단의 정규화",
+      "Fault와 timeout 로그",
+      "실행 문맥과 동시성 한계",
+      "전체 흐름 검토"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/try-catch.c"
+    }
+  ]
+}

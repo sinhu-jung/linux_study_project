@@ -1,0 +1,140 @@
+{
+  "id": "file-a01ee21fc7a1080e",
+  "path": "include/linux/interval_tree_generic.h",
+  "title": "구간 트리 생성 매크로 전체: 최대 끝값과 겹침 순회",
+  "area": "구간 트리 · 확장 레드블랙 트리 · 가지치기 · C 매크로",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "사용자의 노드 타입과 필드에 맞는 구간 트리 함수를 생성하는 매크로 템플릿입니다.",
+  "guide": [
+    "시작점으로 정렬하고 각 서브트리의 최대 끝점을 저장합니다. 이 집계와 최소 시작점 캐시로 겹칠 수 없는 범위를 제외합니다.",
+    "유효한 닫힌 구간과 일관된 집계·트리 연결을 유지해야 합니다. 일반 interval_tree.h로 충분한지 먼저 검토하라는 원문 안내도 따릅니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "SPDX·작성자 설명, rbtree_augmented.h 포함, 템플릿 인자 문서, INTERVAL_TREE_DEFINE 매크로 하나로 구성됩니다. 매크로 확장은 최대값 콜백, insert/remove, 내부 subtree_search, iter_first/iter_next를 생성합니다. 일반적인 include guard는 없으며 함수 심볼 중복을 피하려면 확장 위치와 접두사를 관리해야 합니다."
+    },
+    {
+      "title": "여덟 템플릿 인자",
+      "text": "ITSTRUCT는 객체 타입, ITRB는 rb_node 멤버, ITTYPE은 끝점 타입, ITSUBTREE는 최대 끝값 필드입니다. ITSTART/ITLAST는 노드의 시작·끝 접근자이고 ITSTATIC은 공개 함수의 static 여부, ITPREFIX는 생성 이름 접두사입니다. 내부 subtree_search와 콜백은 static입니다. 토큰 결합 ##으로 접두사_insert 등의 이름을 만듭니다."
+    },
+    {
+      "title": "집계 콜백 생성",
+      "text": "RB_DECLARE_CALLBACKS_MAX는 ITLAST 값을 기준으로 서브트리 최대값을 유지하는 콜백을 생성합니다. 삽입과 삭제는 같은 콜백 집합을 사용합니다. 최대값이 오래된 상태면 검색이 존재하는 구간을 가지치기로 제외할 수 있으므로 집계는 선택적인 통계가 아니라 검색 정확성의 일부입니다."
+    },
+    {
+      "title": "삽입 경로",
+      "text": "insert는 시작점을 비교하며 내려가고 방문한 조상의 ITSUBTREE가 새 last보다 작으면 갱신합니다. 같은 시작점은 오른쪽으로 갑니다. 오른쪽 이동이 있으면 leftmost=false로 기록합니다. 새 노드의 집계는 자기 last로 설정한 뒤 rb_link_node와 rb_insert_augmented_cached를 호출해 균형과 최소값 캐시를 유지합니다."
+    },
+    {
+      "title": "삭제와 객체 책임",
+      "text": "remove는 rb_erase_augmented_cached에 노드·루트·콜백을 넘깁니다. 객체를 free하거나 시작·끝 값을 초기화하지 않습니다. 검색 중 삭제를 섞거나 끝점 필드를 직접 바꾸는 동작은 별도 동기화·수명·재삽입 절차가 필요합니다. 이 템플릿 자체에는 락이 없습니다."
+    },
+    {
+      "title": "닫힌 구간의 겹침",
+      "text": "노드와 query [start,last]의 겹침은 ITSTART(node)<=last이고 start<=ITLAST(node)일 때입니다. 끝점을 공유하는 구간도 포함됩니다. 구간이 유효한지 start<=last를 검사하는 분기는 없으므로 호출자가 형식을 지켜야 합니다. 검색 조건은 두 비교를 모두 요구합니다."
+    },
+    {
+      "title": "subtree_search의 불변식",
+      "text": "내부 검색에 들어갈 때 start<=node->ITSUBTREE여서 적어도 한 노드가 query 시작 이상에서 끝난다는 정보가 있습니다. 왼쪽 자식의 집계도 이 조건을 만족하면 그쪽으로 먼저 내려갑니다. 아니라면 현재 노드의 두 겹침 조건을 검사하고, 현재 시작이 query 끝 이하일 때만 오른쪽 후보를 검토합니다. 조건을 만족하는 오른쪽 집계가 없으면 NULL입니다."
+    },
+    {
+      "title": "왼쪽 우선 탐색이 안전한 이유",
+      "text": "왼쪽에서 끝점 조건을 만족하는 가장 왼쪽 노드의 시작이 이미 query 끝보다 크면 그 오른쪽 노드들도 시작 조건을 만족할 수 없습니다. 따라서 모든 노드를 백트래킹하며 방문할 필요가 없습니다. 이는 시작점 정렬과 최대 끝값 불변식이 함께 성립할 때의 논리입니다."
+    },
+    {
+      "title": "iter_first의 O(1) 빠른 거부",
+      "text": "빈 트리면 NULL입니다. 루트의 최대 끝값<query 시작이면 모든 구간이 너무 왼쪽이고, 캐시된 최소 시작점>query 끝이면 모든 구간이 너무 오른쪽이므로 즉시 NULL입니다. 두 검사를 통과했다고 실제 겹침이 보장되지는 않습니다. [1,2]와 [10,11] 사이 query[5,6]처럼 전체 외곽 범위 안의 빈틈일 수 있어 subtree_search가 필요합니다."
+    },
+    {
+      "title": "iter_next의 오른쪽 탐색",
+      "text": "현재 일치 노드의 오른쪽 자식을 먼저 봅니다. 그 집계가 query 시작 이상이면 subtree_search로 다음 가장 왼쪽 일치를 찾습니다. 이 함수는 유효한 현재 노드와 같은 query의 순회 문맥을 전제로 하며 임의의 NULL 노드를 넘기는 방어 분기는 없습니다."
+    },
+    {
+      "title": "iter_next의 조상 이동",
+      "text": "오른쪽이 적합하지 않으면 부모로 올라갑니다. 오른쪽 자식에서 올라온 동안은 그 부모도 이미 지나온 중위 위치이므로 계속 올라가고, 왼쪽 자식에서 올라온 첫 부모를 다음 후보로 삼습니다. 루트를 넘으면 종료합니다. 후보 시작이 query 끝보다 크면 이후도 불가능해 종료하고, 끝점 조건이 맞으면 반환합니다. 아니면 그 후보의 오른쪽 부분을 다음 반복에서 검사합니다."
+    },
+    {
+      "title": "CS 연결과 비용",
+      "text": "침입형 트리의 코드 생성, 서브트리 집계, 캐시된 전역 경계, 중위 후속자, 두 조건의 결합으로 하는 가지치기를 학습합니다. 삽입·삭제·첫 검색은 균형 트리 높이에 의존하며 결과를 k개 출력하려면 적어도 k개를 방문해야 합니다. 빠른 거부가 O(1)인 것과 모든 검색·전체 열거가 O(1)이라는 주장은 다릅니다. 여기서는 전체 매크로를 원본 대조했으며 실제 회전·콜백 실행 검증은 별도입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "최대 끝값과 최소 시작점 검사를 통과하면 반드시 겹치는 노드가 있는가?",
+      "options": [
+        "아니다. 저장 구간 사이 빈틈에 query가 있을 수 있다",
+        "그렇다. 전체 외곽 범위가 곧 구간들의 합집합이다"
+      ],
+      "answer": 0,
+      "explanation": "[1,2]와 [10,11]의 외곽 범위는[1,11]이지만[5,6]과 겹치는 노드는 없습니다. 빠른 거부 뒤 실제 검색이 필요합니다."
+    },
+    {
+      "prompt": "삽입 경로의 조상 최대 끝값을 갱신하지 않으면?",
+      "options": [
+        "출력 통계만 달라지고 검색에는 영향이 없다",
+        "검색에서 존재하는 구간을 잘못 제외할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "subtree_search는 집계값으로 해당 서브트리 방문 여부를 결정합니다. 너무 작은 값은 잘못된 미발견을 만들 수 있습니다."
+    },
+    {
+      "prompt": "iter_next가 오른쪽 자식에서 부모로 올라오면 그 부모를 즉시 반환하는가?",
+      "options": [
+        "아니다. 이미 지나온 위치이므로 더 올라간다",
+        "그렇다. 모든 부모가 다음 중위 노드다"
+      ],
+      "answer": 0,
+      "explanation": "중위 순서는 왼쪽·부모·오른쪽입니다. 오른쪽에서 올라왔다면 부모는 이미 앞선 위치이고 왼쪽에서 올라온 조상을 찾아야 합니다."
+    },
+    {
+      "prompt": "같은 시작점을 가진 다른 구간을 삽입하면?",
+      "options": [
+        "시작점 중복 오류를 반환한다",
+        "오른쪽 경로로 진행해 함께 저장할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "비교가 start<parent_start일 때만 왼쪽입니다. else는 오른쪽이며 중복 거부 분기가 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n  Interval Trees\n  (C) 2012  Michel Lespinasse <walken@google.com>\n\n\n  include/linux/interval_tree_generic.h\n*/\n\n#include <linux/rbtree_augmented.h>\n\n/*\n * Template for implementing interval trees\n *\n * ITSTRUCT:   struct type of the interval tree nodes\n * ITRB:       name of struct rb_node field within ITSTRUCT\n * ITTYPE:     type of the interval endpoints\n * ITSUBTREE:  name of ITTYPE field within ITSTRUCT holding last-in-subtree\n * ITSTART(n): start endpoint of ITSTRUCT node n\n * ITLAST(n):  last endpoint of ITSTRUCT node n\n * ITSTATIC:   'static' or empty\n * ITPREFIX:   prefix to use for the inline tree definitions\n *\n * Note - before using this, please consider if generic version\n * (interval_tree.h) would work for you...\n */\n\n#define INTERVAL_TREE_DEFINE(ITSTRUCT, ITRB, ITTYPE, ITSUBTREE,\t\t      \\\n\t\t\t     ITSTART, ITLAST, ITSTATIC, ITPREFIX)\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n/* Callbacks for augmented rbtree insert and remove */\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nRB_DECLARE_CALLBACKS_MAX(static, ITPREFIX ## _augment,\t\t\t      \\\n\t\t\t ITSTRUCT, ITRB, ITTYPE, ITSUBTREE, ITLAST)\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n/* Insert / remove interval nodes from the tree */\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nITSTATIC void ITPREFIX ## _insert(ITSTRUCT *node,\t\t\t      \\\n\t\t\t\t  struct rb_root_cached *root)\t \t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\tstruct rb_node **link = &root->rb_root.rb_node, *rb_parent = NULL;    \\\n\tITTYPE start = ITSTART(node), last = ITLAST(node);\t\t      \\\n\tITSTRUCT *parent;\t\t\t\t\t\t      \\\n\tbool leftmost = true;\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\twhile (*link) {\t\t\t\t\t\t\t      \\\n\t\trb_parent = *link;\t\t\t\t\t      \\\n\t\tparent = rb_entry(rb_parent, ITSTRUCT, ITRB);\t\t      \\\n\t\tif (parent->ITSUBTREE < last)\t\t\t\t      \\\n\t\t\tparent->ITSUBTREE = last;\t\t\t      \\\n\t\tif (start < ITSTART(parent))\t\t\t\t      \\\n\t\t\tlink = &parent->ITRB.rb_left;\t\t\t      \\\n\t\telse {\t\t\t\t\t\t\t      \\\n\t\t\tlink = &parent->ITRB.rb_right;\t\t\t      \\\n\t\t\tleftmost = false;\t\t\t\t      \\\n\t\t}\t\t\t\t\t\t\t      \\\n\t}\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\tnode->ITSUBTREE = last;\t\t\t\t\t\t      \\\n\trb_link_node(&node->ITRB, rb_parent, link);\t\t\t      \\\n\trb_insert_augmented_cached(&node->ITRB, root,\t\t\t      \\\n\t\t\t\t   leftmost, &ITPREFIX ## _augment);\t      \\\n}\t\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nITSTATIC void ITPREFIX ## _remove(ITSTRUCT *node,\t\t\t      \\\n\t\t\t\t  struct rb_root_cached *root)\t\t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\trb_erase_augmented_cached(&node->ITRB, root, &ITPREFIX ## _augment);  \\\n}\t\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n/*\t\t\t\t\t\t\t\t\t      \\\n * Iterate over intervals intersecting [start;last]\t\t\t      \\\n *\t\t\t\t\t\t\t\t\t      \\\n * Note that a node's interval intersects [start;last] iff:\t\t      \\\n *   Cond1: ITSTART(node) <= last\t\t\t\t\t      \\\n * and\t\t\t\t\t\t\t\t\t      \\\n *   Cond2: start <= ITLAST(node)\t\t\t\t\t      \\\n */\t\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nstatic ITSTRUCT *\t\t\t\t\t\t\t      \\\nITPREFIX ## _subtree_search(ITSTRUCT *node, ITTYPE start, ITTYPE last)\t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\twhile (true) {\t\t\t\t\t\t\t      \\\n\t\t/*\t\t\t\t\t\t\t      \\\n\t\t * Loop invariant: start <= node->ITSUBTREE\t\t      \\\n\t\t * (Cond2 is satisfied by one of the subtree nodes)\t      \\\n\t\t */\t\t\t\t\t\t\t      \\\n\t\tif (node->ITRB.rb_left) {\t\t\t\t      \\\n\t\t\tITSTRUCT *left = rb_entry(node->ITRB.rb_left,\t      \\\n\t\t\t\t\t\t  ITSTRUCT, ITRB);\t      \\\n\t\t\tif (start <= left->ITSUBTREE) {\t\t\t      \\\n\t\t\t\t/*\t\t\t\t\t      \\\n\t\t\t\t * Some nodes in left subtree satisfy Cond2.  \\\n\t\t\t\t * Iterate to find the leftmost such node N.  \\\n\t\t\t\t * If it also satisfies Cond1, that's the     \\\n\t\t\t\t * match we are looking for. Otherwise, there \\\n\t\t\t\t * is no matching interval as nodes to the    \\\n\t\t\t\t * right of N can't satisfy Cond1 either.     \\\n\t\t\t\t */\t\t\t\t\t      \\\n\t\t\t\tnode = left;\t\t\t\t      \\\n\t\t\t\tcontinue;\t\t\t\t      \\\n\t\t\t}\t\t\t\t\t\t      \\\n\t\t}\t\t\t\t\t\t\t      \\\n\t\tif (ITSTART(node) <= last) {\t\t/* Cond1 */\t      \\\n\t\t\tif (start <= ITLAST(node))\t/* Cond2 */\t      \\\n\t\t\t\treturn node;\t/* node is leftmost match */  \\\n\t\t\tif (node->ITRB.rb_right) {\t\t\t      \\\n\t\t\t\tnode = rb_entry(node->ITRB.rb_right,\t      \\\n\t\t\t\t\t\tITSTRUCT, ITRB);\t      \\\n\t\t\t\tif (start <= node->ITSUBTREE)\t\t      \\\n\t\t\t\t\tcontinue;\t\t\t      \\\n\t\t\t}\t\t\t\t\t\t      \\\n\t\t}\t\t\t\t\t\t\t      \\\n\t\treturn NULL;\t/* No match */\t\t\t\t      \\\n\t}\t\t\t\t\t\t\t\t      \\\n}\t\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nITSTATIC ITSTRUCT *\t\t\t\t\t\t\t      \\\nITPREFIX ## _iter_first(struct rb_root_cached *root,\t\t\t      \\\n\t\t\tITTYPE start, ITTYPE last)\t\t\t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\tITSTRUCT *node, *leftmost;\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\tif (!root->rb_root.rb_node)\t\t\t\t\t      \\\n\t\treturn NULL;\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\t/*\t\t\t\t\t\t\t\t      \\\n\t * Fastpath range intersection/overlap between A: [a0, a1] and\t      \\\n\t * B: [b0, b1] is given by:\t\t\t\t\t      \\\n\t *\t\t\t\t\t\t\t\t      \\\n\t *         a0 <= b1 && b0 <= a1\t\t\t\t\t      \\\n\t *\t\t\t\t\t\t\t\t      \\\n\t *  ... where A holds the lock range and B holds the smallest\t      \\\n\t * 'start' and largest 'last' in the tree. For the later, we\t      \\\n\t * rely on the root node, which by augmented interval tree\t      \\\n\t * property, holds the largest value in its last-in-subtree.\t      \\\n\t * This allows mitigating some of the tree walk overhead for\t      \\\n\t * for non-intersecting ranges, maintained and consulted in O(1).     \\\n\t */\t\t\t\t\t\t\t\t      \\\n\tnode = rb_entry(root->rb_root.rb_node, ITSTRUCT, ITRB);\t\t      \\\n\tif (node->ITSUBTREE < start)\t\t\t\t\t      \\\n\t\treturn NULL;\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\tleftmost = rb_entry(root->rb_leftmost, ITSTRUCT, ITRB);\t\t      \\\n\tif (ITSTART(leftmost) > last)\t\t\t\t\t      \\\n\t\treturn NULL;\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\treturn ITPREFIX ## _subtree_search(node, start, last);\t\t      \\\n}\t\t\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\nITSTATIC ITSTRUCT *\t\t\t\t\t\t\t      \\\nITPREFIX ## _iter_next(ITSTRUCT *node, ITTYPE start, ITTYPE last)\t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\tstruct rb_node *rb = node->ITRB.rb_right, *prev;\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\twhile (true) {\t\t\t\t\t\t\t      \\\n\t\t/*\t\t\t\t\t\t\t      \\\n\t\t * Loop invariants:\t\t\t\t\t      \\\n\t\t *   Cond1: ITSTART(node) <= last\t\t\t      \\\n\t\t *   rb == node->ITRB.rb_right\t\t\t\t      \\\n\t\t *\t\t\t\t\t\t\t      \\\n\t\t * First, search right subtree if suitable\t\t      \\\n\t\t */\t\t\t\t\t\t\t      \\\n\t\tif (rb) {\t\t\t\t\t\t      \\\n\t\t\tITSTRUCT *right = rb_entry(rb, ITSTRUCT, ITRB);\t      \\\n\t\t\tif (start <= right->ITSUBTREE)\t\t\t      \\\n\t\t\t\treturn ITPREFIX ## _subtree_search(right,     \\\n\t\t\t\t\t\t\t\tstart, last); \\\n\t\t}\t\t\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\t\t/* Move up the tree until we come from a node's left child */ \\\n\t\tdo {\t\t\t\t\t\t\t      \\\n\t\t\trb = rb_parent(&node->ITRB);\t\t\t      \\\n\t\t\tif (!rb)\t\t\t\t\t      \\\n\t\t\t\treturn NULL;\t\t\t\t      \\\n\t\t\tprev = &node->ITRB;\t\t\t\t      \\\n\t\t\tnode = rb_entry(rb, ITSTRUCT, ITRB);\t\t      \\\n\t\t\trb = node->ITRB.rb_right;\t\t\t      \\\n\t\t} while (prev == rb);\t\t\t\t\t      \\\n\t\t\t\t\t\t\t\t\t      \\\n\t\t/* Check if the node intersects [start;last] */\t\t      \\\n\t\tif (last < ITSTART(node))\t\t/* !Cond1 */\t      \\\n\t\t\treturn NULL;\t\t\t\t\t      \\\n\t\telse if (start <= ITLAST(node))\t\t/* Cond2 */\t      \\\n\t\t\treturn node;\t\t\t\t\t      \\\n\t}\t\t\t\t\t\t\t\t      \\\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "be967d888816b1c1d859ba02478cbea1a684e1f2180debef0c33d27f828f48f1",
+    "scope": "whole-file",
+    "line_count": 187,
+    "authoring_source": "course/file_units/interval_template.py",
+    "sections": [
+      "파일 전체 구성",
+      "여덟 템플릿 인자",
+      "집계 콜백 생성",
+      "삽입 경로",
+      "삭제와 객체 책임",
+      "닫힌 구간의 겹침",
+      "subtree_search의 불변식",
+      "왼쪽 우선 탐색이 안전한 이유",
+      "iter_first의 O(1) 빠른 거부",
+      "iter_next의 오른쪽 탐색",
+      "iter_next의 조상 이동",
+      "CS 연결과 비용"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/interval_tree_generic.h"
+    }
+  ]
+}

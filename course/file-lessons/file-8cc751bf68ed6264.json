@@ -1,0 +1,101 @@
+{
+  "id": "file-8cc751bf68ed6264",
+  "path": "arch/arm64/kernel/vdso/vgetrandom.c",
+  "title": "ARM64 vDSO 난수 진입점: FPSIMD 기능 분기와 지원 조회",
+  "area": "CPU 기능 선택 · vDSO ABI · 기능 조회 · syscall fallback · opaque state",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "공개 getrandom wrapper의 자료형 선언과 두 실행 경로를 전체 분석합니다.",
+  "guide": [
+    "빠른 구현의 하드웨어 지원 여부와 기본 syscall 지원 여부를 구별해야 하며, 기능 조회는 일반 데이터 요청과 다른 계약을 가집니다.",
+    "지원 조회의 특수 인수 조합과 fallback에서 opaque state를 전달하지 않는 이유를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 선언과 의존성",
+      "text": "GPL-2.0 표기 뒤 uapi/asm-generic/errno.h를 포함합니다. typeof(__cvdso_getrandom) __kernel_getrandom으로 공통 함수의 자료형을 이용한 원형을 선언하고 같은 공개 함수 본문을 정의합니다. 관련 Makefile이 공통 구현을 -include로 제공하는 문맥과 함께 읽어야 합니다. typeof 선언이 공통 함수를 이 시점에 실행하는 것은 아닙니다."
+    },
+    {
+      "title": "다섯 인수와 반환형",
+      "text": "__kernel_getrandom은 buffer, size_t len, unsigned int flags, opaque_state, size_t opaque_len을 받고 ssize_t를 반환합니다. 앞 세 인수는 난수 요청, 뒤 두 인수는 vDSO 상태 영역에 관한 인터페이스입니다. 반환값을 bool 성공 여부나 항상 len과 같은 값으로 단순화하지 않습니다."
+    },
+    {
+      "title": "FPSIMD가 지원되는 경로",
+      "text": "alternative_has_cap_likely(ARM64_HAS_FPSIMD)가 참이면 다섯 인수를 그대로 __cvdso_getrandom에 전달하고 결과를 반환합니다. 이 wrapper 자체에 ChaCha 연산·키 재생성·상태 잠금 구현은 없습니다. FPSIMD 조건은 공통 경로를 선택하는 조건이지 모든 호출이 syscall 없이 성공한다는 보장은 아닙니다."
+    },
+    {
+      "title": "미지원 시 특수 조회 거부",
+      "text": "FPSIMD 경로를 선택하지 못했을 때 opaque_len==~0UL, buffer==NULL, len==0, flags==0 네 조건이 모두 참이면 -ENOSYS를 반환합니다. 확인한 공통 구현에서 이 조합은 opaque_state에 상태 영역의 크기·mmap 설정 등을 알려주는 조회입니다. wrapper의 이 분기는 조회를 syscall의 빈 요청으로 바꾸지 않고 명시적으로 지원하지 않음을 알립니다. opaque_state가 NULL인지 검사하는 조건은 여기에 없습니다."
+    },
+    {
+      "title": "일반 요청의 syscall 전환",
+      "text": "위 특수 조합이 아니면 getrandom_syscall(buffer,len,flags)를 호출합니다. opaque_state와 opaque_len은 이 호출에 전달하지 않습니다. 따라서 FPSIMD가 없다는 이유만으로 일반 getrandom 요청을 모두 ENOSYS로 끝내는 코드가 아닙니다. 예를 들어 len=0이어도 opaque_len이 sentinel이 아니면 이 wrapper는 일반 fallback을 선택합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "전체 선언·조건·반환 경로를 다뤘습니다. 하드웨어 기능 탐지와 사용자 API 기능 조회, opaque state를 사용하는 빠른 구현과 기본 syscall의 차이가 핵심입니다. 공통 난수 알고리즘 전체는 별도 파일 범위이며 이 학습으로 완료 집계하지 않습니다. 실제 ARM64 FPSIMD 유무별 실행 시험은 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "FPSIMD가 없으면 모든 난수 요청이 -ENOSYS인가?",
+      "options": [
+        "아니다. 특수 조회 조합 외에는 getrandom syscall로 전환한다",
+        "그렇다. 이 wrapper는 CPU 기능이 없으면 항상 실패한다"
+      ],
+      "answer": 0,
+      "explanation": "ENOSYS는 opaque_len sentinel과 NULL buffer·0 len·0 flags가 모두 맞는 조회 경로입니다. 일반 요청은 앞 세 인수를 syscall helper에 전달합니다."
+    },
+    {
+      "prompt": "지원 조회를 나타내는 인수 조합은?",
+      "options": [
+        "buffer만 NULL이면 나머지 인수와 관계없이 조회이다",
+        "opaque_len=~0UL, buffer=NULL, len=0, flags=0이다"
+      ],
+      "answer": 1,
+      "explanation": "조건은 네 항의 AND입니다. 일반적인 빈 난수 요청과 상태 영역 정보를 묻는 특수 호출을 구분합니다."
+    },
+    {
+      "prompt": "getrandom_syscall fallback에 opaque_state도 전달하는가?",
+      "options": [
+        "아니다. buffer·len·flags 세 인수만 전달한다",
+        "그렇다. 다섯 인수가 그대로 syscall 레지스터에 들어간다"
+      ],
+      "answer": 0,
+      "explanation": "상태 영역은 vDSO 인터페이스의 확장 부분입니다. wrapper의 fallback 호출 표현을 보면 기본 syscall에 전달하는 인수는 세 개뿐입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n#include <uapi/asm-generic/errno.h>\n\ntypeof(__cvdso_getrandom) __kernel_getrandom;\n\nssize_t __kernel_getrandom(void *buffer, size_t len, unsigned int flags, void *opaque_state, size_t opaque_len)\n{\n\tif (alternative_has_cap_likely(ARM64_HAS_FPSIMD))\n\t\treturn __cvdso_getrandom(buffer, len, flags, opaque_state, opaque_len);\n\n\tif (unlikely(opaque_len == ~0UL && !buffer && !len && !flags))\n\t\treturn -ENOSYS;\n\treturn getrandom_syscall(buffer, len, flags);\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e403dbb216fbbf87249ea5ec462e3c5ba49ed109571c296cde9b97b9ba9cd466",
+    "scope": "whole-file",
+    "line_count": 15,
+    "authoring_source": "course/file_units/arm64_vdso_random_entry.py",
+    "sections": [
+      "전체 선언과 의존성",
+      "다섯 인수와 반환형",
+      "FPSIMD가 지원되는 경로",
+      "미지원 시 특수 조회 거부",
+      "일반 요청의 syscall 전환",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/vgetrandom.c"
+    }
+  ]
+}

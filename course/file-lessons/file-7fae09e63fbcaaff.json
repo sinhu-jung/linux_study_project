@@ -1,0 +1,101 @@
+{
+  "id": "file-7fae09e63fbcaaff",
+  "path": "arch/s390/kernel/rethook.c",
+  "title": "s390 rethook C 경로: GPR14 복귀점과 GPR15 frame",
+  "area": "레지스터 ABI · 반환 주소 · 아키텍처 어댑터 · callback · 진단 재진입",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "준비·복귀 보정·callback의 세 함수와 probe 금지 표시를 전체 파일에서 학습합니다.",
+  "guide": [
+    "원래 반환 주소 보존과 실제 복귀 register 보정은 별개의 시점에 수행됩니다.",
+    "x86·RISC-V·LoongArch와 비교하여 s390의 반환 후킹 계약을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 범위",
+      "text": "GPL-2.0-or-later, 공통 rethook/kprobes와 로컬 헤더 include 뒤 prepare, fixup, callback이 있습니다. 마지막에는 외부 assembly trampoline도 NOKPROBE_SYMBOL로 표시합니다. 이 C 파일에 assembly trampoline 본문이나 PSW를 읽고 쓰는 코드가 들어 있지는 않습니다."
+    },
+    {
+      "title": "준비 단계",
+      "text": "arch_rethook_prepare는 regs->gprs[14]를 rh->ret_addr에, gprs[15]를 rh->frame에 저장합니다. 이후 gprs[14]를 arch_rethook_trampoline 주소로 바꿉니다. 원래 복귀점은 교체 전에 보관됩니다. bool mcount는 이 본문에서 사용하지 않습니다. register snapshot의 수정과 실제 CPU 복원은 구분해야 합니다."
+    },
+    {
+      "title": "실제 복귀점 보정",
+      "text": "arch_rethook_fixup_return은 correct_ret_addr를 gprs[14]에 대입합니다. node를 다시 할당하거나 frame 값을 갱신하는 코드가 아니며 stack 주소를 직접 역참조해 쓰는 x86 fixup과 다릅니다. 반환형은 void이고 수정 결과는 regs에 남습니다."
+    },
+    {
+      "title": "공통 handler 연결",
+      "text": "callback은 rethook_trampoline_handler(regs,regs->gprs[15])의 결과를 unsigned long으로 그대로 반환합니다. 준비 단계에서 보관했던 frame 기준과 같은 GPR15 값을 전달합니다. 이 C 파일만으로 assembly가 callback의 반환 register와 수정된 pt_regs를 어떤 순서로 적용하는지까지 확인한 것으로 계산하지 않습니다."
+    },
+    {
+      "title": "수명과 호출 전제",
+      "text": "세 함수 모두 NOKPROBE_SYMBOL 대상이고 trampoline도 동일하게 제외됩니다. 이 함수들에는 NULL 확인, node pool 수명 관리, 반환 주소 유효성 검사나 잠금이 없습니다. 공통 계층 및 호출 문맥이 마련한 유효한 인자를 사용하는 어댑터입니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "호출 규약별 register 번호의 의미, 원래 값 저장 후 치환, 포인터 인자를 통한 부수효과와 별도 반환값의 차이, 계측 대상에서 내부 구현을 제외하는 재진입 경계를 학습합니다. 전체 C 파일 대조는 s390의 PSW 전환과 assembly 복귀 경로까지 실행 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "원래 반환 주소와 frame에 대응하는 슬롯은?",
+      "options": [
+        "각각 gprs[14]와 gprs[15]이다",
+        "각각 gprs[15]와 gprs[14]이다"
+      ],
+      "answer": 0,
+      "explanation": "prepare의 두 저장문과 callback의 frame 인자를 함께 확인하면 두 역할을 구분할 수 있습니다."
+    },
+    {
+      "prompt": "fixup은 실제 복귀 주소를 어디에 쓰는가?",
+      "options": [
+        "rh->frame만 수정한다",
+        "regs->gprs[14]에 쓴다"
+      ],
+      "answer": 1,
+      "explanation": "fixup에는 node 인자가 없고 correct_ret_addr를 반환 register snapshot에 대입합니다."
+    },
+    {
+      "prompt": "이 C 파일의 callback이 PSW를 직접 변경하는가?",
+      "options": [
+        "아니다. 공통 handler를 호출하고 결과를 반환한다",
+        "그렇다. PSW 주소 필드를 직접 덮어쓴다"
+      ],
+      "answer": 0,
+      "explanation": "본문에는 PSW 접근이 없습니다. 아키텍처의 일반적 지식을 해당 파일에 없는 동작으로 덧붙이지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n#include <linux/rethook.h>\n#include <linux/kprobes.h>\n#include \"rethook.h\"\n\nvoid arch_rethook_prepare(struct rethook_node *rh, struct pt_regs *regs, bool mcount)\n{\n\trh->ret_addr = regs->gprs[14];\n\trh->frame = regs->gprs[15];\n\n\t/* Replace the return addr with trampoline addr */\n\tregs->gprs[14] = (unsigned long)&arch_rethook_trampoline;\n}\nNOKPROBE_SYMBOL(arch_rethook_prepare);\n\nvoid arch_rethook_fixup_return(struct pt_regs *regs,\n\t\t\t       unsigned long correct_ret_addr)\n{\n\t/* Replace fake return address with real one. */\n\tregs->gprs[14] = correct_ret_addr;\n}\nNOKPROBE_SYMBOL(arch_rethook_fixup_return);\n\n/*\n * Called from arch_rethook_trampoline\n */\nunsigned long arch_rethook_trampoline_callback(struct pt_regs *regs)\n{\n\treturn rethook_trampoline_handler(regs, regs->gprs[15]);\n}\nNOKPROBE_SYMBOL(arch_rethook_trampoline_callback);\n\n/* assembler function that handles the rethook must not be probed itself */\nNOKPROBE_SYMBOL(arch_rethook_trampoline);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "62adfc4125ab1c3293c3e86c4f9a19e060f6848e7575bcd86063dcc53370eaba",
+    "scope": "whole-file",
+    "line_count": 34,
+    "authoring_source": "course/file_units/s390_rethook.py",
+    "sections": [
+      "전체 범위",
+      "준비 단계",
+      "실제 복귀점 보정",
+      "공통 handler 연결",
+      "수명과 호출 전제",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/s390/kernel/rethook.c"
+    }
+  ]
+}

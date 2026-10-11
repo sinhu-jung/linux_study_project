@@ -1,0 +1,77 @@
+{
+  "id": "file-95c420cceedf0a5f",
+  "path": "include/asm-generic/irq_regs.h",
+  "title": "IRQ 프레임 헤더 전체: 새 포인터 설정과 이전 문맥 복구",
+  "area": "공개 헤더 · 빌드 구성·호출 계약",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "인터럽트가 중첩될 때 이전 프레임 포인터를 어떻게 복구할 수 있는지 작은 helper 두 개로 배웁니다.",
+  "guide": [
+    "DECLARE_PER_CPU는 CPU별 __irq_regs 포인터 저장소의 선언입니다. get_irq_regs는 __this_cpu_read로 현재 CPU 값을 반환합니다. set_irq_regs는 이전 값을 읽고 새 값을 쓰며 이전 값을 반환합니다.",
+    "old=set_irq_regs(new)로 진입하고 종료 시 set_irq_regs(old)로 복원하는 호출 패턴을 이해합니다. helper는 CPU 이동을 막는 잠금이나 프레임의 참조 수 획득을 자체 제공하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX·설명·저작권, _ASM_GENERIC_IRQ_REGS_H 가드, percpu.h, 현재 예외 프레임 포인터 설명, per-CPU 선언, get/set inline 정의, 가드 종료가 전체입니다. 실제 fallback 저장소 정의는 lib/irq_regs.c에 있으며 선언은 저장소를 중복 생성하지 않습니다."
+    },
+    {
+      "title": "상태 추적",
+      "text": "현재 CPU 포인터가 A일 때 set_irq_regs(B)는 A를 반환하고 저장값을 B로 바꿉니다. 안쪽에서 set_irq_regs(C)는 B를 반환합니다. 안쪽 종료 때 B를 복구하고 바깥 종료 때 A를 복구하면 중첩 순서를 보존합니다. 저장소는 포인터 한 칸이므로 이전 상태를 보관하는 변수는 호출자가 관리합니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "per-CPU 자료는 CPU 간의 같은 슬롯 충돌을 줄이지만 잘못된 문맥에서 이동하는 호출자를 자동 고정하지 않습니다. __this_cpu_read/write와 프레임의 유효 수명을 호출 문맥에 맞춰 사용해야 합니다. set은 새 프레임 내용을 복사하는 것이 아니라 주소 값을 바꾸는 함수입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "저장값 A에서 set_irq_regs(B)의 반환값과 새 저장값은?",
+      "options": [
+        "반환 A, 저장 B",
+        "반환 B, 저장 A"
+      ],
+      "answer": 0,
+      "explanation": "old_regs에 읽은 A를 보관하고 B를 쓴 뒤 old_regs를 반환합니다. 반환값으로 이전 문맥을 복원할 수 있습니다."
+    },
+    {
+      "prompt": "이 헤더가 이전 프레임 포인터의 스택을 자동 유지하는가?",
+      "options": [
+        "그렇다. set 호출마다 내부 리스트에 누적한다",
+        "아니다. 이전 반환값 보관·복구는 호출자가 한다"
+      ],
+      "answer": 1,
+      "explanation": "helper 내부에는 연결 리스트나 배열 push가 없습니다. per-CPU 포인터 하나와 지역 변수 old_regs만 사용합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/* Fallback per-CPU frame pointer holder\n *\n * Copyright (C) 2006 Red Hat, Inc. All Rights Reserved.\n * Written by David Howells (dhowells@redhat.com)\n */\n\n#ifndef _ASM_GENERIC_IRQ_REGS_H\n#define _ASM_GENERIC_IRQ_REGS_H\n\n#include <linux/percpu.h>\n\n/*\n * Per-cpu current frame pointer - the location of the last exception frame on\n * the stack\n */\nDECLARE_PER_CPU(struct pt_regs *, __irq_regs);\n\nstatic inline struct pt_regs *get_irq_regs(void)\n{\n\treturn __this_cpu_read(__irq_regs);\n}\n\nstatic inline struct pt_regs *set_irq_regs(struct pt_regs *new_regs)\n{\n\tstruct pt_regs *old_regs;\n\n\told_regs = __this_cpu_read(__irq_regs);\n\t__this_cpu_write(__irq_regs, new_regs);\n\treturn old_regs;\n}\n\n#endif /* _ASM_GENERIC_IRQ_REGS_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "9eb0bbf4cdcfe676ef9f6b267bda18032d08cb38256b7f7f5cc6ddfda7a1d124",
+    "scope": "whole-file",
+    "line_count": 33,
+    "authoring_source": "course/file_units/core_contract_headers.py",
+    "sections": [
+      "전체 파일",
+      "상태 추적",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/irq_regs.h"
+    }
+  ]
+}

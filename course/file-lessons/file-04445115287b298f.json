@@ -1,0 +1,96 @@
+{
+  "id": "file-04445115287b298f",
+  "path": "include/linux/timerqueue.h",
+  "title": "Timerqueue 공개 헤더 전체: 최소값 조회와 노드 표시",
+  "area": "시간순 큐 · 레드블랙 트리 · 최소값 캐시",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "추가·삭제·후속 노드 API와 캐시된 최소값 조회, 초기화 helper를 제공합니다.",
+  "guide": [
+    "큐의 첫 만료 노드는 rb_first_cached로 얻습니다. 노드 연결 여부는 RB_EMPTY_NODE 표식을 통해 확인합니다.",
+    "객체의 만료값과 노드 초기화를 구분하고 큐 접근을 외부에서 직렬화해야 합니다. queued 검사는 특정 큐의 소유권을 확인하는 검색이 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX·guard 뒤에 rbtree와 timerqueue_types를 포함합니다. add/del/iterate_next 선언 세 개, getnext/init/node_queued/init_head inline 네 개, endif가 전부입니다."
+    },
+    {
+      "title": "최소값 조회",
+      "text": "timerqueue_getnext는 rb_first_cached로 왼쪽 끝을 읽고 rb_entry_safe로 포함 객체를 구합니다. 빈 큐의 NULL을 안전하게 NULL 결과로 바꾸며 트리를 매번 왼쪽으로 내려가는 탐색은 하지 않습니다. 이 함수는 큐에서 노드를 제거하지 않습니다."
+    },
+    {
+      "title": "노드 초기화 범위",
+      "text": "timerqueue_init은 RB_CLEAR_NODE(&node->node)만 수행합니다. expires에 현재 시간이나0을 넣지 않으므로 호출자가 사용할 만료값을 지정해야 합니다. node_queued는 !RB_EMPTY_NODE이며 유효하게 초기화·삽입·삭제한 노드라는 계약 아래에서 사용합니다."
+    },
+    {
+      "title": "헤드 초기화와 소유권",
+      "text": "init_head는 RB_ROOT_CACHED를 대입하여 빈 루트와 캐시를 설정합니다. 이미 사용 중인 큐의 노드를 안전하게 순회·해제하는 clear 연산이 아닙니다. node_queued에는 head 인자가 없어 어느 큐에 연결되었는지 검증할 수 없습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "캐시 조회의 O(1) 비용, 비어 있는 포인터의 안전한 포함 객체 변환, 상태 표식과 실제 소속의 차이, 초기화와 자원 정리의 차이를 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "timerqueue_init이 expires를0으로 초기화하는가?",
+      "options": [
+        "아니다. rb_node의 미연결 표식만 설정한다",
+        "그렇다. 구조체 전체를 지운다"
+      ],
+      "answer": 0,
+      "explanation": "본문은 RB_CLEAR_NODE 호출 하나입니다. 시간값은 별도로 설정해야 합니다."
+    },
+    {
+      "prompt": "getnext가 빈 큐를 받으면?",
+      "options": [
+        "반드시 잘못된 객체 주소를 반환한다",
+        "NULL을 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "rb_first_cached 결과를 rb_entry_safe로 변환하므로 NULL을 포함 객체처럼 계산하지 않습니다."
+    },
+    {
+      "prompt": "node_queued만으로 특정 head에 속했는지 알 수 있는가?",
+      "options": [
+        "없다. 함수에 head 인자가 없다",
+        "있다. 노드의 모든 조상을 순회한다"
+      ],
+      "answer": 0,
+      "explanation": "검사는 노드의 미연결 표식만 봅니다. 다른 큐인지 판정하는 로직은 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_TIMERQUEUE_H\n#define _LINUX_TIMERQUEUE_H\n\n#include <linux/rbtree.h>\n#include <linux/timerqueue_types.h>\n\nextern bool timerqueue_add(struct timerqueue_head *head,\n\t\t\t   struct timerqueue_node *node);\nextern bool timerqueue_del(struct timerqueue_head *head,\n\t\t\t   struct timerqueue_node *node);\nextern struct timerqueue_node *timerqueue_iterate_next(\n\t\t\t\t\t\tstruct timerqueue_node *node);\n\n/**\n * timerqueue_getnext - Returns the timer with the earliest expiration time\n *\n * @head: head of timerqueue\n *\n * Returns a pointer to the timer node that has the earliest expiration time.\n */\nstatic inline\nstruct timerqueue_node *timerqueue_getnext(struct timerqueue_head *head)\n{\n\tstruct rb_node *leftmost = rb_first_cached(&head->rb_root);\n\n\treturn rb_entry_safe(leftmost, struct timerqueue_node, node);\n}\n\nstatic inline void timerqueue_init(struct timerqueue_node *node)\n{\n\tRB_CLEAR_NODE(&node->node);\n}\n\nstatic inline bool timerqueue_node_queued(struct timerqueue_node *node)\n{\n\treturn !RB_EMPTY_NODE(&node->node);\n}\n\nstatic inline void timerqueue_init_head(struct timerqueue_head *head)\n{\n\thead->rb_root = RB_ROOT_CACHED;\n}\n#endif /* _LINUX_TIMERQUEUE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "032cc2f66d2400fa24aff0894c58f9121f0ae2bda25d818b31edd9041aca12a1",
+    "scope": "whole-file",
+    "line_count": 44,
+    "authoring_source": "course/file_units/timer_queues.py",
+    "sections": [
+      "전체 파일",
+      "최소값 조회",
+      "노드 초기화 범위",
+      "헤드 초기화와 소유권",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/timerqueue.h"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "id": "file-9361d02b4ffd6e41",
+  "path": "arch/x86/include/asm/vdso/clocksource.h",
+  "title": "x86 vDSO 모드 목록: TSC·PV clock·Hyper-V clock",
+  "area": "전처리 매크로 · 열거형 확장 · 아키텍처 추상화 · 기능 표식",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "아키텍처 열거자 목록 매크로와 지원 표식을 전체 범위로 읽습니다.",
+  "guide": [
+    "플랫폼별 열거자 목록을 공통 enum에 삽입하면 공통 인터페이스와 아키텍처별 종류를 분리할 수 있습니다.",
+    "x86 clock mode의 정의 위치와 실제 실행 가능성의 차이를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "GPL-2.0과 include guard 안에 VDSO_ARCH_CLOCKMODES와 HAVE_VDSO_CLOCKMODE_HVCLOCK 두 매크로만 있습니다. include, 함수, enum 정의 자체는 없습니다. 하드웨어 clock을 읽거나 활성화하는 코드는 아닙니다."
+    },
+    {
+      "title": "열거자 목록 삽입",
+      "text": "VDSO_ARCH_CLOCKMODES는 TSC, PVCLOCK, HVCLOCK 세 열거자 이름을 쉼표로 연결합니다. 공통 include/vdso/clocksource.h의 enum 안에서 사용되며 일반적인 해당 확장에서는 NONE=0 뒤에 1,2,3으로 들어가고 MAX는 4가 됩니다. 이 헤더 단독으로 세 이름을 정수 매크로로 정의하는 것은 아닙니다."
+    },
+    {
+      "title": "지원 표식",
+      "text": "HAVE_VDSO_CLOCKMODE_HVCLOCK은 대체 토큰 없이 정의됩니다. 따라서 #ifdef로 이름의 정의 여부를 확인하는 표식이지 숫자 값 1이 대입된 변수가 아닙니다. 표식이 있다고 현재 VM이 Hyper-V이거나 그 clock이 선택됐다는 뜻은 아닙니다."
+    },
+    {
+      "title": "정의와 실행의 경계",
+      "text": "TSC·PV clock·Hyper-V clock 모드의 이름을 제공하지만 사용 가능한 CPU 기능, clocksource 선택, 읽기 실패와 fallback은 다른 구현에서 판단합니다. 전체 파일 학습을 x86 시간 조회 구현 전체 검증으로 세지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 헤더만 포함하면 TSC 모드가 정수 #define으로 만들어지는가?",
+      "options": [
+        "아니다. 공통 enum에 삽입할 열거자 목록을 제공한다",
+        "그렇다. 각 이름에 독립적으로 #define 1이 붙는다"
+      ],
+      "answer": 0,
+      "explanation": "VDSO_ARCH_CLOCKMODES의 확장 위치가 enum이므로 열거자가 됩니다. 전처리 목록과 최종 C 선언을 구분합니다."
+    },
+    {
+      "prompt": "HAVE_VDSO_CLOCKMODE_HVCLOCK 정의가 현재 Hyper-V clock 사용을 증명하는가?",
+      "options": [
+        "그렇다. 모든 x86 시스템이 즉시 Hyper-V clock을 사용한다",
+        "아니다. 모드 정의의 존재를 나타내는 표식이다"
+      ],
+      "answer": 1,
+      "explanation": "빌드 시 정의와 런타임 선택은 별개입니다. 이 파일에는 clock 선택 코드가 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_VDSO_CLOCKSOURCE_H\n#define __ASM_VDSO_CLOCKSOURCE_H\n\n#define VDSO_ARCH_CLOCKMODES\t\\\n\tVDSO_CLOCKMODE_TSC,\t\\\n\tVDSO_CLOCKMODE_PVCLOCK,\t\\\n\tVDSO_CLOCKMODE_HVCLOCK\n\n#define HAVE_VDSO_CLOCKMODE_HVCLOCK\n\n#endif /* __ASM_VDSO_CLOCKSOURCE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "6bb54ee7e0e045ee1973b92f090583f3b6f8f13de6ed04a1d9e85422c373e53b",
+    "scope": "whole-file",
+    "line_count": 12,
+    "authoring_source": "course/file_units/x86_vdso_hooks.py",
+    "sections": [
+      "파일 전체",
+      "열거자 목록 삽입",
+      "지원 표식",
+      "정의와 실행의 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vdso/clocksource.h"
+    }
+  ]
+}

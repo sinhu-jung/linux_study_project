@@ -1,0 +1,106 @@
+{
+  "id": "file-a30c564600efa3b0",
+  "path": "include/linux/textsearch.h",
+  "title": "Textsearch 헤더 전체: 전략 콜백·검색 상태·사설 할당",
+  "area": "문자열 검색 · KMP · 함수 포인터 · 모듈 수명",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "검색 알고리즘과 데이터 공급자를 분리하는 공통 자료구조와 inline API입니다.",
+  "guide": [
+    "ts_config는 재사용할 설정과 콜백을, ts_state는 개별 검색의 offset과 제어 버퍼를 보관합니다. 알고리즘 구현은 ts_ops를 통해 교체됩니다.",
+    "공유 설정과 검색별 상태를 구분하고, 콜백이 보관하는 데이터의 수명과 동시 사용 조건을 보장해야 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 선언",
+      "text": "SPDX와 guard 뒤에 types/list/kernel/err/slab 의존성이 있습니다. module과 config 전방 선언, TS_AUTOLOAD=1과 TS_IGNORECASE=2, state/ops/config 구조체, 검색·조회 inline 네 개, 공통 외부 API 다섯 개, 사설 메모리 정렬·할당·조회 함수로 끝납니다."
+    },
+    {
+      "title": "검색별 상태",
+      "text": "ts_state는 unsigned int offset과 char cb[48]을 가집니다. offset은 다음 검색 시작점이고 cb는 get_next_block이 지속 정보를 저장하는 공간입니다. find는 offset만 0으로 만들며 cb 전체를 지우지 않습니다. 데이터 공급자가 필요한 필드를 초기화해야 합니다."
+    },
+    {
+      "title": "전략과 수명 정보",
+      "text": "ts_ops는 이름, init/find/destroy/get_pattern/get_pattern_len 함수 포인터, owner 모듈과 연결 리스트 노드를 가집니다. 공통 계층은 같은 인터페이스로 알고리즘을 다룹니다. destroy는 선택적 콜백이며 알고리즘별 추가 자원이 없을 수 있습니다."
+    },
+    {
+      "title": "데이터 공급 콜백",
+      "text": "config는 ops와 flags 외에 get_next_block과 finish를 가집니다. 공급자는 consumed에 해당하는 다음 데이터 주소를 *dst에 넣고 길이를 반환하며 0으로 끝을 알립니다. consumed0은 새 검색을 뜻하고 cb를 활용할 수 있습니다. 입력이 여러 블록으로 나뉘어도 알고리즘이 필요한 상태를 유지할 수 있습니다."
+    },
+    {
+      "title": "inline 호출 순서",
+      "text": "textsearch_next는 ops->find를 호출한 뒤 finish가 있으면 결과가 성공이든 실패든 호출하고 저장한 검색 결과를 반환합니다. find는 offset0으로 설정한 뒤 next로 넘깁니다. get_pattern과 get_pattern_len은 해당 ops 콜백을 그대로 호출합니다. UINT_MAX는 미발견 표식입니다."
+    },
+    {
+      "title": "8바이트 경계와 0 초기화",
+      "text": "TS_PRIV_ALIGN은 길이를 8의 배수로 올립니다. alloc_ts_config는 정렬된 config 크기+payload를 kzalloc하고 실패하면 ERR_PTR(-ENOMEM)을 반환합니다. ts_config_priv는 config 주소를 바이트 포인터로 바꿔 동일한 정렬 크기만큼 더합니다. 이 함수가 모든 정렬 요구나 payload 산술 오버플로를 검사하는 것은 아닙니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "전략 패턴, 함수 포인터, 제어 상태와 공유 설정 분리, 외부 입력 공급, 오류 포인터와 소유권을 연결합니다. finish는 검색 호출 후 정리이며 config 자체의 destroy와 역할이 다릅니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "textsearch_find가 cb[48]도 0으로 지우는가?",
+      "options": [
+        "아니다. offset만 0으로 설정한다",
+        "그렇다. ts_state 전체를 초기화한다"
+      ],
+      "answer": 0,
+      "explanation": "inline 구현은 state->offset=0 한 줄 뒤에 next를 호출합니다. cb 초기화는 데이터 공급 방식이 책임집니다."
+    },
+    {
+      "prompt": "미발견이어도 finish 콜백을 호출하는가?",
+      "options": [
+        "아니다. 성공한 경우만 호출한다",
+        "그렇다. 콜백이 있으면 find 결과와 관계없이 호출한다"
+      ],
+      "answer": 1,
+      "explanation": "textsearch_next는 find 반환값을 저장하고 finish 존재 여부만 검사합니다. 검색 결과의 값으로 분기하지 않습니다."
+    },
+    {
+      "prompt": "alloc_ts_config 실패는 NULL로만 표현되는가?",
+      "options": [
+        "아니다. ERR_PTR(-ENOMEM)을 반환한다",
+        "그렇다. kzalloc 결과를 그대로 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "kzalloc의 NULL을 오류 포인터로 바꾸는 분기가 있습니다. 호출자는 IS_ERR 계약을 따라야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_TEXTSEARCH_H\n#define __LINUX_TEXTSEARCH_H\n\n#include <linux/types.h>\n#include <linux/list.h>\n#include <linux/kernel.h>\n#include <linux/err.h>\n#include <linux/slab.h>\n\nstruct module;\n\nstruct ts_config;\n\n#define TS_AUTOLOAD\t1 /* Automatically load textsearch modules when needed */\n#define TS_IGNORECASE\t2 /* Searches string case insensitively */\n\n/**\n * struct ts_state - search state\n * @offset: offset for next match\n * @cb: control buffer, for persistent variables of get_next_block()\n */\nstruct ts_state\n{\n\tunsigned int\t\toffset;\n\tchar\t\t\tcb[48];\n};\n\n/**\n * struct ts_ops - search module operations\n * @name: name of search algorithm\n * @init: initialization function to prepare a search\n * @find: find the next occurrence of the pattern\n * @destroy: destroy algorithm specific parts of a search configuration\n * @get_pattern: return head of pattern\n * @get_pattern_len: return length of pattern\n * @owner: module reference to algorithm\n */\nstruct ts_ops\n{\n\tconst char\t\t*name;\n\tstruct ts_config *\t(*init)(const void *, unsigned int, gfp_t, int);\n\tunsigned int\t\t(*find)(struct ts_config *,\n\t\t\t\t\tstruct ts_state *);\n\tvoid\t\t\t(*destroy)(struct ts_config *);\n\tvoid *\t\t\t(*get_pattern)(struct ts_config *);\n\tunsigned int\t\t(*get_pattern_len)(struct ts_config *);\n\tstruct module\t\t*owner;\n\tstruct list_head\tlist;\n};\n\n/**\n * struct ts_config - search configuration\n * @ops: operations of chosen algorithm\n * @flags: flags\n * @get_next_block: callback to fetch the next block to search in\n * @finish: callback to finalize a search\n */\nstruct ts_config\n{\n\tstruct ts_ops\t\t*ops;\n\tint \t\t\tflags;\n\n\t/**\n\t * @get_next_block: fetch next block of data\n\t * @consumed: number of bytes consumed by the caller\n\t * @dst: destination buffer\n\t * @conf: search configuration\n\t * @state: search state\n\t *\n\t * Called repeatedly until 0 is returned. Must assign the\n\t * head of the next block of data to &*dst and return the length\n\t * of the block or 0 if at the end. consumed == 0 indicates\n\t * a new search. May store/read persistent values in state->cb.\n\t */\n\tunsigned int\t\t(*get_next_block)(unsigned int consumed,\n\t\t\t\t\t\t  const u8 **dst,\n\t\t\t\t\t\t  struct ts_config *conf,\n\t\t\t\t\t\t  struct ts_state *state);\n\n\t/**\n\t * @finish: finalize/clean a series of get_next_block() calls\n\t * @conf: search configuration\n\t * @state: search state\n\t *\n\t * Called after the last use of get_next_block(), may be used\n\t * to cleanup any leftovers.\n\t */\n\tvoid\t\t\t(*finish)(struct ts_config *conf,\n\t\t\t\t\t  struct ts_state *state);\n};\n\n/**\n * textsearch_next - continue searching for a pattern\n * @conf: search configuration\n * @state: search state\n *\n * Continues a search looking for more occurrences of the pattern.\n * textsearch_find() must be called to find the first occurrence\n * in order to reset the state.\n *\n * Returns the position of the next occurrence of the pattern or\n * UINT_MAX if not match was found.\n */ \nstatic inline unsigned int textsearch_next(struct ts_config *conf,\n\t\t\t\t\t   struct ts_state *state)\n{\n\tunsigned int ret = conf->ops->find(conf, state);\n\n\tif (conf->finish)\n\t\tconf->finish(conf, state);\n\n\treturn ret;\n}\n\n/**\n * textsearch_find - start searching for a pattern\n * @conf: search configuration\n * @state: search state\n *\n * Returns the position of first occurrence of the pattern or\n * UINT_MAX if no match was found.\n */ \nstatic inline unsigned int textsearch_find(struct ts_config *conf,\n\t\t\t\t\t   struct ts_state *state)\n{\n\tstate->offset = 0;\n\treturn textsearch_next(conf, state);\n}\n\n/**\n * textsearch_get_pattern - return head of the pattern\n * @conf: search configuration\n */\nstatic inline void *textsearch_get_pattern(struct ts_config *conf)\n{\n\treturn conf->ops->get_pattern(conf);\n}\n\n/**\n * textsearch_get_pattern_len - return length of the pattern\n * @conf: search configuration\n */\nstatic inline unsigned int textsearch_get_pattern_len(struct ts_config *conf)\n{\n\treturn conf->ops->get_pattern_len(conf);\n}\n\nextern int textsearch_register(struct ts_ops *);\nextern int textsearch_unregister(struct ts_ops *);\nextern struct ts_config *textsearch_prepare(const char *, const void *,\n\t\t\t\t\t    unsigned int, gfp_t, int);\nextern void textsearch_destroy(struct ts_config *conf);\nextern unsigned int textsearch_find_continuous(struct ts_config *,\n\t\t\t\t\t       struct ts_state *,\n\t\t\t\t\t       const void *, unsigned int);\n\n\n#define TS_PRIV_ALIGNTO\t8\n#define TS_PRIV_ALIGN(len) (((len) + TS_PRIV_ALIGNTO-1) & ~(TS_PRIV_ALIGNTO-1))\n\nstatic inline struct ts_config *alloc_ts_config(size_t payload,\n\t\t\t\t\t\tgfp_t gfp_mask)\n{\n\tstruct ts_config *conf;\n\n\tconf = kzalloc(TS_PRIV_ALIGN(sizeof(*conf)) + payload, gfp_mask);\n\tif (conf == NULL)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\treturn conf;\n}\n\nstatic inline void *ts_config_priv(struct ts_config *conf)\n{\n\treturn ((u8 *) conf + TS_PRIV_ALIGN(sizeof(struct ts_config)));\n}\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ac2f1a341bdf38c749641c52832bb8468c92fd4419470abea2af022095d86ca8",
+    "scope": "whole-file",
+    "line_count": 179,
+    "authoring_source": "course/file_units/text_search.py",
+    "sections": [
+      "전체 선언",
+      "검색별 상태",
+      "전략과 수명 정보",
+      "데이터 공급 콜백",
+      "inline 호출 순서",
+      "8바이트 경계와 0 초기화",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/textsearch.h"
+    }
+  ]
+}

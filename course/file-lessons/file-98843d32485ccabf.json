@@ -1,0 +1,91 @@
+{
+  "id": "file-98843d32485ccabf",
+  "path": "include/uapi/linux/limits.h",
+  "title": "UAPI 한계 상수 전체: 길이·단위·현재 자원 제한의 구분",
+  "area": "정수 표현 · 상한·ABI·이진 크기 단위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "이름과 숫자가 나타내는 대상과 단위를 읽고 실제 호출의 제한과 구분합니다.",
+  "guide": [
+    "13개 상수를 정의하며 파일·경로·입력큐·파이프·확장속성·그룹·신호 관련 크기를 제공합니다. 이 파일 자체에는 런타임 조회나 제한 적용 코드가 없습니다.",
+    "정의된 상수가 현재 프로세스의 모든 자원 제한이나 모든 파일시스템의 실제 제한을 단독으로 설명한다고 가정하지 않습니다. 호출·파일시스템·설정의 계약을 함께 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX syscall note,guard,NR_OPEN1024,NGROUPS_MAX65536,ARG_MAX131072,LINK_MAX127,MAX_CANON255,MAX_INPUT255,NAME_MAX255,PATH_MAX4096,PIPE_BUF4096,XATTR_NAME_MAX255,XATTR_SIZE_MAX65536,XATTR_LIST_MAX65536,RTSIG_MAX32와#endif입니다."
+    },
+    {
+      "title": "문자열과 입력큐",
+      "text": "NAME_MAX는파일이름,PATH_MAX는NUL을포함한경로문자수라는주석입니다. MAX_CANON과MAX_INPUT은canonical 입력큐와type-ahead 버퍼에관한상수입니다. 같은255라도서로다른객체의규칙입니다. ARG_MAX의주석은exec 인자와환경의바이트를가리키며실제호출한계의모든계산을이파일에서수행하지는않습니다."
+    },
+    {
+      "title": "파이프와 확장속성",
+      "text": "PIPE_BUF는파이프원자적쓰기의바이트수라는주석이며총파이프용량이라는뜻이아닙니다. XATTR_NAME_MAX는이름,XATTR_SIZE_MAX는값,XATTR_LIST_MAX는이름목록크기입니다. 이름·값·목록을하나의동일한길이로처리하면안됩니다."
+    },
+    {
+      "title": "자원과CS",
+      "text": "NR_OPEN,NGROUPS_MAX,LINK_MAX,RTSIG_MAX도각각별도의상수정의입니다. 현재FD제한을NR_OPEN하나로결정하거나상수정의가실제허용값을매번조회한다고해석하지않습니다. ABI에노출된이름,단위,포함상한,실행시정책의차이를학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "PIPE_BUF4096이 파이프 전체 용량을 뜻하는가?",
+      "options": [
+        "아니다. 주석은 원자적 쓰기의 크기를 가리킨다",
+        "그렇다. 모든파이프는정확히4096바이트만저장한다"
+      ],
+      "answer": 0,
+      "explanation": "원자성기준과버퍼총용량은다른개념입니다. 이define만으로총용량을결정할수없습니다."
+    },
+    {
+      "prompt": "PATH_MAX 주석은 종료 NUL을 포함하는가?",
+      "options": [
+        "포함하지않는다",
+        "포함한다"
+      ],
+      "answer": 1,
+      "explanation": "원문은including nul이라고명시합니다. 문자열내용길이와저장공간을구분해야합니다."
+    },
+    {
+      "prompt": "XATTR_SIZE_MAX와XATTR_LIST_MAX는 같은 대상을 제한하는가?",
+      "options": [
+        "아니다. 속성값과속성이름목록이다",
+        "그렇다. 둘다파일경로길이다"
+      ],
+      "answer": 0,
+      "explanation": "숫자는둘다65536이지만주석의대상이다릅니다. 단위와대상을같이읽어야합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPI_LINUX_LIMITS_H\n#define _UAPI_LINUX_LIMITS_H\n\n#define NR_OPEN\t        1024\n\n#define NGROUPS_MAX    65536\t/* supplemental group IDs are available */\n#define ARG_MAX       131072\t/* # bytes of args + environ for exec() */\n#define LINK_MAX         127\t/* # links a file may have */\n#define MAX_CANON        255\t/* size of the canonical input queue */\n#define MAX_INPUT        255\t/* size of the type-ahead buffer */\n#define NAME_MAX         255\t/* # chars in a file name */\n#define PATH_MAX        4096\t/* # chars in a path name including nul */\n#define PIPE_BUF        4096\t/* # bytes in atomic write to a pipe */\n#define XATTR_NAME_MAX   255\t/* # chars in an extended attribute name */\n#define XATTR_SIZE_MAX 65536\t/* size of an extended attribute value (64k) */\n#define XATTR_LIST_MAX 65536\t/* size of extended attribute namelist (64k) */\n\n#define RTSIG_MAX\t  32\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "5c047eb319a61e211442af30493b420eb9e721a1eceee552258dce0d5a26dede",
+    "scope": "whole-file",
+    "line_count": 21,
+    "authoring_source": "course/file_units/numeric_limits.py",
+    "sections": [
+      "전체 파일",
+      "문자열과 입력큐",
+      "파이프와 확장속성",
+      "자원과CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/limits.h"
+    }
+  ]
+}

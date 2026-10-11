@@ -1,0 +1,91 @@
+{
+  "id": "file-32bde954fbc18ae0",
+  "path": "include/linux/sizes.h",
+  "title": "크기 상수 전체: 1바이트부터64TiB까지의2의 거듭제곱",
+  "area": "정수 표현 · 상한·ABI·이진 크기 단위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "메모리 영역 크기를읽기쉬운이름으로표현하는상수모음입니다.",
+  "guide": [
+    "SZ_1부터SZ_512,SZ_1K부터SZ_512K,SZ_1M부터SZ_512M,SZ_1G부터SZ_512G,SZ_1T부터SZ_64T를정의합니다. 각구간은2배씩증가하며K/M/G/T는여기서1024진배율입니다.",
+    "단위이름은십진1000진접두사가아닙니다. 상수가크다고그값을받는변수타입이자동으로넓어지거나메모리가확보되는것은아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0-only SPDX,파일명주석,guard,linux/const.h include,연속된47개크기매크로,#endif입니다. 값은2^0부터2^46까지모든지수의2의거듭제곱을포함합니다."
+    },
+    {
+      "title": "작은 크기와 타입",
+      "text": "SZ_1K=0x400=1024,SZ_4K=4096,SZ_1M=1048576입니다. SZ_1G와SZ_2G까지는접미사없는16진리터럴이며C의정수리터럴타입규칙에따릅니다. 특히0x80000000을항상양의signed int로보면안됩니다."
+    },
+    {
+      "title": "큰 크기와 공통 매크로",
+      "text": "SZ_4G이상은_AC(hex,ULL)로C에서는unsigned long long접미사를붙입니다. 공통const계층은어셈블리에서는접미사를제거합니다. SZ_4G는2^32이므로32비트unsigned에저장하면표현할수없습니다."
+    },
+    {
+      "title": "CS와 사용 전제",
+      "text": "2의거듭제곱크기는메모리정렬·영역계산을표현하기편하지만SZ_4K가모든대상의PAGE_SIZE라는뜻은아닙니다. 상수명은크기를나타내며실제페이지설정·할당·범위검증을수행하지않습니다. 전체표는각이름의이진배율을독립계산해검산할수있습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "SZ_1K의 값은?",
+      "options": [
+        "1024",
+        "1000"
+      ],
+      "answer": 0,
+      "explanation": "원문0x400은2^10입니다. 이파일의크기접두사는이진배율입니다."
+    },
+    {
+      "prompt": "SZ_4G를32비트unsigned에정확히저장할수있는가?",
+      "options": [
+        "있다.상수에ULL이붙으면대상변수도자동확장된다",
+        "없다.2^32는최대값2^32-1을넘는다"
+      ],
+      "answer": 1,
+      "explanation": "상수의타입과대입대상의폭은별개입니다. 좁은타입으로변환하면값을보존하지못합니다."
+    },
+    {
+      "prompt": "SZ_4K가항상커널페이지크기인가?",
+      "options": [
+        "아니다.4096이라는크기상수일뿐이다",
+        "그렇다.모든대상의페이지설정을정의한다"
+      ],
+      "answer": 0,
+      "explanation": "이헤더는페이지설정을읽지않습니다. 타깃의PAGE_SIZE와일치하는지는별도문제입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * include/linux/sizes.h\n */\n#ifndef __LINUX_SIZES_H__\n#define __LINUX_SIZES_H__\n\n#include <linux/const.h>\n\n#define SZ_1\t\t\t\t0x00000001\n#define SZ_2\t\t\t\t0x00000002\n#define SZ_4\t\t\t\t0x00000004\n#define SZ_8\t\t\t\t0x00000008\n#define SZ_16\t\t\t\t0x00000010\n#define SZ_32\t\t\t\t0x00000020\n#define SZ_64\t\t\t\t0x00000040\n#define SZ_128\t\t\t\t0x00000080\n#define SZ_256\t\t\t\t0x00000100\n#define SZ_512\t\t\t\t0x00000200\n\n#define SZ_1K\t\t\t\t0x00000400\n#define SZ_2K\t\t\t\t0x00000800\n#define SZ_4K\t\t\t\t0x00001000\n#define SZ_8K\t\t\t\t0x00002000\n#define SZ_16K\t\t\t\t0x00004000\n#define SZ_32K\t\t\t\t0x00008000\n#define SZ_64K\t\t\t\t0x00010000\n#define SZ_128K\t\t\t\t0x00020000\n#define SZ_256K\t\t\t\t0x00040000\n#define SZ_512K\t\t\t\t0x00080000\n\n#define SZ_1M\t\t\t\t0x00100000\n#define SZ_2M\t\t\t\t0x00200000\n#define SZ_4M\t\t\t\t0x00400000\n#define SZ_8M\t\t\t\t0x00800000\n#define SZ_16M\t\t\t\t0x01000000\n#define SZ_32M\t\t\t\t0x02000000\n#define SZ_64M\t\t\t\t0x04000000\n#define SZ_128M\t\t\t\t0x08000000\n#define SZ_256M\t\t\t\t0x10000000\n#define SZ_512M\t\t\t\t0x20000000\n\n#define SZ_1G\t\t\t\t0x40000000\n#define SZ_2G\t\t\t\t0x80000000\n\n#define SZ_4G\t\t\t\t_AC(0x100000000, ULL)\n#define SZ_8G\t\t\t\t_AC(0x200000000, ULL)\n#define SZ_16G\t\t\t\t_AC(0x400000000, ULL)\n#define SZ_32G\t\t\t\t_AC(0x800000000, ULL)\n#define SZ_64G\t\t\t\t_AC(0x1000000000, ULL)\n#define SZ_128G\t\t\t\t_AC(0x2000000000, ULL)\n#define SZ_256G\t\t\t\t_AC(0x4000000000, ULL)\n#define SZ_512G\t\t\t\t_AC(0x8000000000, ULL)\n\n#define SZ_1T\t\t\t\t_AC(0x10000000000, ULL)\n#define SZ_2T\t\t\t\t_AC(0x20000000000, ULL)\n#define SZ_4T\t\t\t\t_AC(0x40000000000, ULL)\n#define SZ_8T\t\t\t\t_AC(0x80000000000, ULL)\n#define SZ_16T\t\t\t\t_AC(0x100000000000, ULL)\n#define SZ_32T\t\t\t\t_AC(0x200000000000, ULL)\n#define SZ_64T\t\t\t\t_AC(0x400000000000, ULL)\n\n#endif /* __LINUX_SIZES_H__ */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "67fe2ba4a05c73e3ce41b8249a5a63e609639ba9876ea0a2a828fd2755a3efa7",
+    "scope": "whole-file",
+    "line_count": 63,
+    "authoring_source": "course/file_units/numeric_limits.py",
+    "sections": [
+      "전체 구성",
+      "작은 크기와 타입",
+      "큰 크기와 공통 매크로",
+      "CS와 사용 전제"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/sizes.h"
+    }
+  ]
+}

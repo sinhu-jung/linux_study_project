@@ -1,0 +1,125 @@
+{
+  "id": "file-b0a27d1ab7e4af01",
+  "path": "Documentation/mm/page_table_check.rst",
+  "title": "페이지 테이블 검사 설계: 잘못된 공유와 독립적인 검증",
+  "area": "메모리 격리 · 접근 권한 · 불변식 · 독립 검증 · 진단 비용",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "검사 목적, 중복 매핑 규칙표, 활성화 조건과 MM 상태에 대한 독립성을 문서 전체에 걸쳐 해설합니다.",
+  "guide": [
+    "일부 잘못된 공유를 동기적으로 발견하는 검증은 메모리 안전성 전체를 증명하는 것과 다릅니다.",
+    "페이지 매핑 관련 커널 오류를 진단할 때 검사 범위와 비용을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서 구성과 목적",
+      "text": "GPL-2.0 표시 뒤 Introduction, Double mapping detection logic, Enabling, Implementation notes의 네 부분이 있습니다. 사용자 공간이 페이지에 접근 가능하도록 PTE·PMD 등을 추가하는 시점에 검사하여 일부 메모리 손상을 방지하는 기능입니다. 모든 메모리 오류·커널 버그를 포괄하는 검증이라고 설명하지 않습니다."
+    },
+    {
+      "title": "동기적인 진단과 비용",
+      "text": "대부분의 검출된 손상에서는 커널을 중단시키며, 잘못된 매핑 시점에 발견하면 훨씬 뒤에 발생하는 손상 증상보다 원인을 찾기 쉽다고 설명합니다. 추가 성능·메모리 비용이 있어 기본적으로 꺼져 있으며 강화 효과와 비용을 비교하여 활성화합니다. 모든 위반이 동일한 경고나 동일한 복구 경로로 처리된다는 뜻은 아닙니다."
+    },
+    {
+      "title": "엔트리 플래그 조합 검사",
+      "text": "문서는 userfaultfd의 write-protect 비트와 writable 플래그의 불법 조합을 경고하는 용도를 설명합니다. 즉시 데이터가 훼손되지 않아도 읽기 전용이어야 하는 내용을 쓸 수 있게 되면 나중에 손상될 수 있습니다. 상태 조합의 오류와 실제 데이터 쓰기로 발생하는 결과 사이에 시간 차이가 있습니다."
+    },
+    {
+      "title": "규칙표의 다섯 행",
+      "text": "Anonymous→Anonymous 읽기 매핑은 허용, 읽기/쓰기 매핑은 금지입니다. Anonymous→Named와 Named→Anonymous는 권한과 무관하게 금지, Named→Named는 권한과 무관하게 허용입니다. 이 표는 이미 존재하는 매핑과 새 매핑 사이의 검사 규칙이며 anonymous 메모리에 대한 모든 쓰기를 전역 금지한다는 뜻은 아닙니다. Named는 여기서 매핑 분류이며 파일 이름 문자열을 비교하는 알고리즘은 제시하지 않습니다."
+    },
+    {
+      "title": "활성화 절차",
+      "text": "PAGE_TABLE_CHECK=y로 빌드하고 page_table_check=on으로 부팅합니다. 해당 플랫폼에 ARCH_SUPPORTS_PAGE_TABLE_CHECK가 있어야 구성할 수 있습니다. PAGE_TABLE_CHECK_ENFORCED를 빌드하면 별도 부팅 매개변수 없이 기본 활성화를 얻을 수 있다고 설명합니다. 이 문서만으로 모든 아키텍처가 기능을 지원한다고 추정하지 않습니다."
+    },
+    {
+      "title": "ENFORCED 이름의 해석",
+      "text": "관련 v6.12 구현을 대조하면 ENFORCED는 초기 enabled 값에 반영되고 early parameter는 kstrtobool로 같은 값을 파싱합니다. 문서의 별도 매개변수 없이 활성화한다는 설명을 어떤 명령행 설정으로도 절대 변경할 수 없다는 주장으로 확대하지 않습니다. 문서 학습 중 구현을 대조한 부분이며 구현 파일 전체 완료를 뜻하지는 않습니다."
+    },
+    {
+      "title": "VMA와 독립된 상태",
+      "text": "검사는 VMA 정보를 의도적으로 사용하지 않고 제한된 struct page 정보 외에는 MM 상태에 의존하지 않으려 한다고 설명합니다. 기존 MM과 별도의 상태 기계를 두어 잘못된 사용자 페이지 공유를 확인합니다. 검증 대상의 동일한 잘못된 상태를 그대로 믿으면 독립 검증 효과가 약해진다는 설계 관점과 연결할 수 있습니다."
+    },
+    {
+      "title": "EXCLUSIVE_SYSTEM_RAM 의존 이유",
+      "text": "이 구성이 없으면 /dev/mem으로 임의 물리 메모리를 매핑할 수 있고 사용자 매핑이 남은 동안 페이지가 anonymous에서 named 등으로 바뀌어 검사에 손상으로 나타날 수 있다고 설명합니다. EXCLUSIVE_SYSTEM_RAM이 있어도 I/O 페이지의 /dev/mem 매핑은 허용될 수 있지만 항상 named로 취급되어 표의 논리를 깨지 않는다고 합니다. 이를 모든 I/O 매핑을 차단한다는 뜻으로 읽지 않습니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "접근 권한과 별칭, 상태 전이의 허용 표, 별도 검증 상태 기계, 오류를 원인 가까이에서 발견하는 동기 진단, 비용과 관측 범위를 학습합니다. 문서와 해당 버전 소스 대조는 커널을 실제로 오류 매핑으로 중단시키는 실행 시험과는 구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "규칙표에서 Named→Named의 중복 매핑은?",
+      "options": [
+        "권한과 무관하게 허용한다",
+        "쓰기 권한이 있으면 무조건 금지한다"
+      ],
+      "answer": 0,
+      "explanation": "표의 마지막 행은 Any/Allow입니다. anonymous 중복 쓰기 제한을 모든 유형에 동일하게 적용하지 않습니다."
+    },
+    {
+      "prompt": "PAGE_TABLE_CHECK=y만 설정하면 문서의 기본 활성화 절차가 끝나는가?",
+      "options": [
+        "그렇다. 빌드 포함과 활성화는 항상 같다",
+        "아니다. 보통 page_table_check=on 또는 ENFORCED 설정이 필요하다"
+      ],
+      "answer": 1,
+      "explanation": "문서는 빌드 옵션과 부팅 옵션을 나누어 설명하고 ENFORCED를 대안으로 제시합니다."
+    },
+    {
+      "prompt": "VMA 정보를 사용하지 않으려는 설계 이유는?",
+      "options": [
+        "검증 대상 MM 상태에 지나치게 의존하지 않는 별도 검사를 두기 위해서다",
+        "페이지 테이블 검사가 어떤 페이지 정보도 읽지 않기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "문서는 제한된 struct page 정보는 사용한다고 명시합니다. 독립성은 모든 입력이 없다는 뜻이 아닙니다."
+    },
+    {
+      "prompt": "EXCLUSIVE_SYSTEM_RAM은 문서에서 모든 I/O /dev/mem 매핑을 금지하는가?",
+      "options": [
+        "그렇다. I/O 예외는 전혀 없다",
+        "아니다. 허용될 수 있는 I/O 페이지는 named로 취급한다고 설명한다"
+      ],
+      "answer": 1,
+      "explanation": "마지막 문단은 I/O 매핑 가능성과 named 분류가 검사 논리와 양립하는 이유를 다룹니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": ".. SPDX-License-Identifier: GPL-2.0\n\n================\nPage Table Check\n================\n\nIntroduction\n============\n\nPage table check allows to harden the kernel by ensuring that some types of\nthe memory corruptions are prevented.\n\nPage table check performs extra verifications at the time when new pages become\naccessible from the userspace by getting their page table entries (PTEs PMDs\netc.) added into the table.\n\nIn case of most detected corruption, the kernel is crashed. There is a small\nperformance and memory overhead associated with the page table check. Therefore,\nit is disabled by default, but can be optionally enabled on systems where the\nextra hardening outweighs the performance costs. Also, because page table check\nis synchronous, it can help with debugging double map memory corruption issues,\nby crashing kernel at the time wrong mapping occurs instead of later which is\noften the case with memory corruptions bugs.\n\nIt can also be used to do page table entry checks over various flags, dump\nwarnings when illegal combinations of entry flags are detected.  Currently,\nuserfaultfd is the only user of such to sanity check wr-protect bit against\nany writable flags.  Illegal flag combinations will not directly cause data\ncorruption in this case immediately, but that will cause read-only data to\nbe writable, leading to corrupt when the page content is later modified.\n\nDouble mapping detection logic\n==============================\n\n+-------------------+-------------------+-------------------+------------------+\n| Current Mapping   | New mapping       | Permissions       | Rule             |\n+===================+===================+===================+==================+\n| Anonymous         | Anonymous         | Read              | Allow            |\n+-------------------+-------------------+-------------------+------------------+\n| Anonymous         | Anonymous         | Read / Write      | Prohibit         |\n+-------------------+-------------------+-------------------+------------------+\n| Anonymous         | Named             | Any               | Prohibit         |\n+-------------------+-------------------+-------------------+------------------+\n| Named             | Anonymous         | Any               | Prohibit         |\n+-------------------+-------------------+-------------------+------------------+\n| Named             | Named             | Any               | Allow            |\n+-------------------+-------------------+-------------------+------------------+\n\nEnabling Page Table Check\n=========================\n\nBuild kernel with:\n\n- PAGE_TABLE_CHECK=y\n  Note, it can only be enabled on platforms where ARCH_SUPPORTS_PAGE_TABLE_CHECK\n  is available.\n\n- Boot with 'page_table_check=on' kernel parameter.\n\nOptionally, build kernel with PAGE_TABLE_CHECK_ENFORCED in order to have page\ntable support without extra kernel parameter.\n\nImplementation notes\n====================\n\nWe specifically decided not to use VMA information in order to avoid relying on\nMM states (except for limited \"struct page\" info). The page table check is a\nseparate from Linux-MM state machine that verifies that the user accessible\npages are not falsely shared.\n\nPAGE_TABLE_CHECK depends on EXCLUSIVE_SYSTEM_RAM. The reason is that without\nEXCLUSIVE_SYSTEM_RAM, users are allowed to map arbitrary physical memory\nregions into the userspace via /dev/mem. At the same time, pages may change\ntheir properties (e.g., from anonymous pages to named pages) while they are\nstill being mapped in the userspace, leading to \"corruption\" detected by the\npage table check.\n\nEven with EXCLUSIVE_SYSTEM_RAM, I/O pages may be still allowed to be mapped via\n/dev/mem. However, these pages are always considered as named pages, so they\nwon't break the logic used in the page table check.\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "08287de09709ba482bf6c841cd26cbc27eb1dd889c5bb59497649ad1650790d1",
+    "scope": "whole-file",
+    "line_count": 80,
+    "authoring_source": "course/file_units/page_table_check_contract.py",
+    "sections": [
+      "문서 구성과 목적",
+      "동기적인 진단과 비용",
+      "엔트리 플래그 조합 검사",
+      "규칙표의 다섯 행",
+      "활성화 절차",
+      "ENFORCED 이름의 해석",
+      "VMA와 독립된 상태",
+      "EXCLUSIVE_SYSTEM_RAM 의존 이유",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/mm/page_table_check.rst"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "id": "file-28523ef06a4bb657",
+  "path": "scripts/file-size.sh",
+  "title": "파일 크기 helper: ls 결과를 위치 인수로 해석하기",
+  "area": "shell · 파일 metadata · 명령 치환",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 줄의 shell 본문에서 입력·출력·실패 처리의 실제 계약을 분석합니다.",
+  "guide": [
+    "도구 출력의 필드 위치를 이용하는 작은 helper도 출력 형식과 종료 상태에 의존합니다.",
+    "위치 인수 재설정, 명령 치환과 파일 metadata 크기를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 동작",
+      "text": "#!/bin/sh, GPL-2.0 뒤 set -- $(ls -dn \"$1\")와 printf 두 명령이 있습니다. -d는 디렉터리 자체 정보를, -n은 숫자 UID·GID를 사용하는 긴 목록 정보를 요청합니다. 최초 첫 인수는 ls에 따옴표로 전달하지만 그 출력은 따옴표 없는 명령 치환으로 단어 분리하여 새 위치 인수로 설정합니다."
+    },
+    {
+      "title": "다섯 번째 필드",
+      "text": "printf는 새 $5를 문자열로 출력하고 newline을 붙입니다. 일반 파일의 긴 ls 출력에서 권한·링크 수·UID·GID 다음의 byte 크기 필드에 해당합니다. 파일 내용을 읽어 직접 세는 알고리즘은 아닙니다. 모든 특수 파일 유형의 긴 출력이 동일한 크기 필드 의미를 가진다고 확대하지 않습니다. link-vmlinux.sh는 생성된 kallsyms 객체 파일 크기 비교에 사용합니다."
+    },
+    {
+      "title": "오류와 범위",
+      "text": "인수 개수 검사, set -e, ls 실패의 명시적 상태 검사, 숫자 검증이 없습니다. ls 실패 후에도 printf가 빈 문자열 등을 출력하고 성공할 수 있으므로 helper 출력만으로 대상 존재를 확인하는 API가 아닙니다. 전체 원본을 검토했으며 Windows 호스트의 ls로 Linux 파일 크기 동작을 대신 검증하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "set -- 실행 뒤 $5는 무엇을 의미하는가?",
+      "options": [
+        "ls 출력에서 분리된 다섯 번째 필드",
+        "스크립트 실행 시의 다섯 번째 입력 인수"
+      ],
+      "answer": 0,
+      "explanation": "set --가 위치 인수 전체를 다시 설정합니다. 최초 인수와 이후 인수의 의미가 달라집니다."
+    },
+    {
+      "prompt": "이 스크립트가 크기를 얻는 방식은?",
+      "options": [
+        "파일 내용을 한 byte씩 읽고 합산",
+        "긴 ls 출력의 metadata 필드 사용"
+      ],
+      "answer": 1,
+      "explanation": "본문에는 ls와 printf만 있습니다. 특수 파일까지 동일 계약을 가정하지 말고 실제 호출 대상인 객체 파일과 연결합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\nset -- $(ls -dn \"$1\")\nprintf '%s\\n' \"$5\"\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "78df01ba026fc532dd8a45be4b7d0f7887da824dffdc9a08b4bdd243ae847f91",
+    "scope": "whole-file",
+    "line_count": 4,
+    "authoring_source": "course/file_units/btf_build_helpers.py",
+    "sections": [
+      "전체 동작",
+      "다섯 번째 필드",
+      "오류와 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/file-size.sh"
+    }
+  ]
+}

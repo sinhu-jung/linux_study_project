@@ -1,0 +1,130 @@
+{
+  "id": "file-8f30051d0625922b",
+  "path": "include/linux/sched/task_stack.h",
+  "title": "Task kernel stack: 위치·참조 수명·끝 표식",
+  "area": "객체 수명 · 참조 카운트 · 포인터 산술 · 메모리 배치 · 경계 표식",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "thread_info 배치에 따른 스택 계산, 수명 보호, 주소 범위 판별과 끝 표식 검사를 전체 헤더로 학습합니다.",
+  "guide": [
+    "스택 주소를 얻는 것, 스택 수명을 보호하는 것, 주소가 범위 안인지 검사하는 것은 서로 다른 작업입니다.",
+    "다른 task의 stack trace를 읽는 코드와 스택 손상 진단을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0, guard와 sched/magic/refcount/kasan include 뒤 thread_info 배치별 helper, get/put, accounting 선언, magic 검사, 주소 판별, 디버그 사용량 및 kstack_end가 있습니다. 실제 stack 메모리 할당·해제나 task 스케줄링을 구현하는 파일은 아닙니다."
+    },
+    {
+      "title": "Thread info가 task 안에 있는 구성",
+      "text": "THREAD_INFO_IN_TASK이면 task_stack_page는 task->stack을 반환하는 always-inline입니다. 주석은 종료할 수 있는 다른 task에 대해 이 포인터만 얻으면 밑에서 해제될 수 있으므로 try_get_task_stack을 사용하라고 합니다. setup_thread_stack은 빈 do/while 매크로이며 인자를 본문에서 사용하지 않습니다. 스택 내용을 복사하거나 실제 할당하는 동작이 없습니다."
+    },
+    {
+      "title": "끝 표식 주소와 성장 방향",
+      "text": "THREAD_INFO_IN_TASK에서 위로 자라는 stack이면 stack+THREAD_SIZE를 unsigned long 포인터로 바꾸고 한 칸 뺀 주소를 반환합니다. 따라서 THREAD_SIZE-1바이트 주소가 아니라 마지막 unsigned long 자리입니다. 아래로 자라는 경우에는 stack 시작을 반환합니다. end_of_stack은 현재 실행의 stack pointer를 읽는 함수가 아닙니다."
+    },
+    {
+      "title": "Thread info가 stack에 있는 기본 경로",
+      "text": "THREAD_INFO_IN_TASK가 아니며 __HAVE_THREAD_FUNCTIONS도 없으면 기본 task_stack_page 매크로를 제공합니다. setup_thread_stack은 기존 task의 thread_info 구조체를 새 task의 것에 복사한 뒤 그 task 필드를 새 task 포인터로 고칩니다. 전체 kernel stack 복사가 아닙니다. 위로 자라면 thread_info 기준 THREAD_SIZE 끝의 마지막 long, 아래로 자라면 thread_info 구조체 바로 다음을 end_of_stack으로 사용합니다. 아키텍처가 thread 함수를 제공하는 구성에서는 이 기본 정의를 건너뜁니다."
+    },
+    {
+      "title": "Try get과 put의 구성별 차이",
+      "text": "THREAD_INFO_IN_TASK이면 refcount_inc_not_zero(&stack_refcount)가 성공해야 주소를 반환하고 아니면 NULL입니다. 이미 0인 참조를 되살리지 않는 획득 패턴입니다. put_task_stack은 외부 함수 선언으로 실제 감소·해제 코드는 여기 없습니다. 다른 구성의 try_get은 주소를 바로 반환하고 put은 빈 함수입니다. 모든 구성에서 같은 refcount 연산이 일어난다고 설명하면 틀립니다."
+    },
+    {
+      "title": "끝 magic의 의미",
+      "text": "task_stack_end_corrupted는 end_of_stack이 가리키는 unsigned long을 읽어 STACK_END_MAGIC과 다른지 비교합니다. set_task_stack_end_magic은 외부 선언입니다. 끝 표식이 달라졌다는 검출과 전체 stack의 모든 바이트가 정상이라는 증명은 다릅니다. 이 매크로는 NULL이나 stack 수명을 별도로 검사하지 않습니다."
+    },
+    {
+      "title": "현재 stack 안의 주소",
+      "text": "object_is_on_stack은 current의 stack 시작을 얻고 obj에 kasan_reset_tag를 적용한 뒤 [stack,stack+THREAD_SIZE) 안인지 검사합니다. 끝 주소는 포함하지 않습니다. 객체 크기를 받지 않으므로 큰 객체 전체가 범위 안에 들어가는지 증명하지 않으며, 시작 주소만 검사합니다. 다른 task나 모든 IRQ stack을 열거하는 함수도 아닙니다. void 포인터 산술은 커널의 컴파일 환경에서 사용하는 표현입니다."
+    },
+    {
+      "title": "Accounting과 디버그 선언",
+      "text": "exit_task_stack_account와 thread_stack_cache_init은 외부 함수 선언으로 제공됩니다. DEBUG_STACK_USAGE이면 stack_not_used가 외부 구현으로 연결되고 아니면 0을 반환하는 inline입니다. 이 0을 실제 미사용 바이트가 없다는 측정 결과로 단정하면 안 됩니다. 기능 미포함 때문에 측정을 하지 않은 경우입니다."
+    },
+    {
+      "title": "Kstack end의 산술 판별",
+      "text": "__HAVE_ARCH_KSTACK_END가 없으면 kstack_end는 !( (addr+sizeof(void*)-1) & (THREAD_SIZE-sizeof(void*)) )를 반환합니다. 주석은 일부 APM BIOS의 stack 비정렬을 고려한다고 설명합니다. 주소를 상수 경계와 비교하는 형태이지 특정 task의 stack 포인터나 magic을 읽는 검사가 아닙니다. 따라서 참이라는 사실만으로 유효하게 할당된 stack 주소라고 보장하지 않습니다. 포인터 폭과 THREAD_SIZE가 산술 의미를 결정합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "메타데이터를 객체 안 또는 할당 영역 안에 두는 배치 차이, 참조 0의 객체 부활 방지, 경계 표식에 의한 제한적 손상 감지, 반열린 주소 범위와 객체 전체 범위의 차이를 학습합니다. 주소 획득·pin·실행 정지는 같은 작업이 아니며 이 헤더를 읽었다고 task 경쟁이나 아키텍처 stack 경계를 실행 시험한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "task_stack_page로 다른 task의 주소를 얻으면 종료 경쟁에서도 수명이 보호되는가?",
+      "options": [
+        "아니다. 관련 구성에서는 try_get_task_stack으로 참조를 얻어야 한다",
+        "그렇다. 포인터 반환은 항상 참조 증가를 포함한다"
+      ],
+      "answer": 0,
+      "explanation": "task_stack_page 본문은 주소 반환뿐입니다. 헤더 주석은 다른 task가 종료할 수 있으면 try_get을 사용하라고 명시합니다."
+    },
+    {
+      "prompt": "위로 자라는 stack의 end_of_stack이 가리키는 곳은?",
+      "options": [
+        "항상 할당 끝에서 1바이트 앞이다",
+        "할당 끝의 마지막 unsigned long 자리이다"
+      ],
+      "answer": 1,
+      "explanation": "unsigned long 포인터로 변환한 뒤 1을 빼므로 sizeof(unsigned long)만큼 이동합니다. 포인터 산술의 단위를 확인해야 합니다."
+    },
+    {
+      "prompt": "object_is_on_stack이 참이면 객체 전체가 stack에 들어가는가?",
+      "options": [
+        "그렇게 보장하지 않는다. 전달된 주소 하나만 검사한다",
+        "그렇다. 객체 크기를 자동으로 알아내 검사한다"
+      ],
+      "answer": 0,
+      "explanation": "크기 인자가 없으며 tagged 주소를 정리한 뒤 범위 비교만 합니다. 객체 끝을 검사하는 코드가 없습니다."
+    },
+    {
+      "prompt": "DEBUG_STACK_USAGE가 없을 때 stack_not_used의 0은 실제 사용량 측정인가?",
+      "options": [
+        "그렇다. 모든 stack이 완전히 사용되었다는 뜻이다",
+        "아니다. 비활성 stub의 고정 반환값이다"
+      ],
+      "answer": 1,
+      "explanation": "조건부 컴파일로 외부 측정 함수 대신 return 0이 선택됩니다. 기능 유무를 결과의 단위와 함께 해석해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_SCHED_TASK_STACK_H\n#define _LINUX_SCHED_TASK_STACK_H\n\n/*\n * task->stack (kernel stack) handling interfaces:\n */\n\n#include <linux/sched.h>\n#include <linux/magic.h>\n#include <linux/refcount.h>\n#include <linux/kasan.h>\n\n#ifdef CONFIG_THREAD_INFO_IN_TASK\n\n/*\n * When accessing the stack of a non-current task that might exit, use\n * try_get_task_stack() instead.  task_stack_page will return a pointer\n * that could get freed out from under you.\n */\nstatic __always_inline void *task_stack_page(const struct task_struct *task)\n{\n\treturn task->stack;\n}\n\n#define setup_thread_stack(new,old)\tdo { } while(0)\n\nstatic __always_inline unsigned long *end_of_stack(const struct task_struct *task)\n{\n#ifdef CONFIG_STACK_GROWSUP\n\treturn (unsigned long *)((unsigned long)task->stack + THREAD_SIZE) - 1;\n#else\n\treturn task->stack;\n#endif\n}\n\n#elif !defined(__HAVE_THREAD_FUNCTIONS)\n\n#define task_stack_page(task)\t((void *)(task)->stack)\n\nstatic inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)\n{\n\t*task_thread_info(p) = *task_thread_info(org);\n\ttask_thread_info(p)->task = p;\n}\n\n/*\n * Return the address of the last usable long on the stack.\n *\n * When the stack grows down, this is just above the thread\n * info struct. Going any lower will corrupt the threadinfo.\n *\n * When the stack grows up, this is the highest address.\n * Beyond that position, we corrupt data on the next page.\n */\nstatic inline unsigned long *end_of_stack(struct task_struct *p)\n{\n#ifdef CONFIG_STACK_GROWSUP\n\treturn (unsigned long *)((unsigned long)task_thread_info(p) + THREAD_SIZE) - 1;\n#else\n\treturn (unsigned long *)(task_thread_info(p) + 1);\n#endif\n}\n\n#endif\n\n#ifdef CONFIG_THREAD_INFO_IN_TASK\nstatic inline void *try_get_task_stack(struct task_struct *tsk)\n{\n\treturn refcount_inc_not_zero(&tsk->stack_refcount) ?\n\t\ttask_stack_page(tsk) : NULL;\n}\n\nextern void put_task_stack(struct task_struct *tsk);\n#else\nstatic inline void *try_get_task_stack(struct task_struct *tsk)\n{\n\treturn task_stack_page(tsk);\n}\n\nstatic inline void put_task_stack(struct task_struct *tsk) {}\n#endif\n\nvoid exit_task_stack_account(struct task_struct *tsk);\n\n#define task_stack_end_corrupted(task) \\\n\t\t(*(end_of_stack(task)) != STACK_END_MAGIC)\n\nstatic inline int object_is_on_stack(const void *obj)\n{\n\tvoid *stack = task_stack_page(current);\n\n\tobj = kasan_reset_tag(obj);\n\treturn (obj >= stack) && (obj < (stack + THREAD_SIZE));\n}\n\nextern void thread_stack_cache_init(void);\n\n#ifdef CONFIG_DEBUG_STACK_USAGE\nunsigned long stack_not_used(struct task_struct *p);\n#else\nstatic inline unsigned long stack_not_used(struct task_struct *p)\n{\n\treturn 0;\n}\n#endif\nextern void set_task_stack_end_magic(struct task_struct *tsk);\n\n#ifndef __HAVE_ARCH_KSTACK_END\nstatic inline int kstack_end(void *addr)\n{\n\t/* Reliable end of stack detection:\n\t * Some APM bios versions misalign the stack\n\t */\n\treturn !(((unsigned long)addr+sizeof(void*)-1) & (THREAD_SIZE-sizeof(void*)));\n}\n#endif\n\n#endif /* _LINUX_SCHED_TASK_STACK_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "57323641cc01aff14a12272d4af6c30bd97f3bbf4d14ba615ea0e5ade53eaa24",
+    "scope": "whole-file",
+    "line_count": 119,
+    "authoring_source": "course/file_units/task_stack_interface.py",
+    "sections": [
+      "전체 구성",
+      "Thread info가 task 안에 있는 구성",
+      "끝 표식 주소와 성장 방향",
+      "Thread info가 stack에 있는 기본 경로",
+      "Try get과 put의 구성별 차이",
+      "끝 magic의 의미",
+      "현재 stack 안의 주소",
+      "Accounting과 디버그 선언",
+      "Kstack end의 산술 판별",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/sched/task_stack.h"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "id": "file-287ac86b67afc270",
+  "path": "Documentation/driver-api/io-mapping.rst",
+  "title": "I/O 매핑 지침 전체: 호출 문맥과 LIFO 해제",
+  "area": "가상 주소 공간 · WC · 스택 수명 · 호출 문맥 · API 전환",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "작은 주소 공간에서 큰 장치 영역을 부분 매핑하는 목적과 매핑 사용 계약을 해설합니다.",
+  "guide": [
+    "매핑 객체의 범위와 임시 주소의 수명·문맥을 구분하고 중첩 매핑은 스택 순서로 해제합니다.",
+    "직전에 읽은 io-mapping.h와 대조하여 문서의 간략한 시그니처와 실제 선언의 차이까지 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "도입부의 문제",
+      "text": "문서는32비트 CPU에서 큰 graphics aperture 전체를 ioremap_wc하면 커널 가상 주소 공간을 많이 소비하는 문제를 설명합니다. io_mapping은 장치의 작은 영역을 효율적으로 CPU에 매핑하는 추상화입니다. 물리 장치 영역의 크기를 줄이는 기술이 아니라 필요한 가상 매핑 범위를 관리하는 설계입니다."
+    },
+    {
+      "title": "객체 생성과 단위",
+      "text": "초기화 때 create_wc로 객체를 만들며 base는 문서상 bus address,size는 활성화할 영역 크기이고 둘 다 byte 단위입니다. 이 WC 객체는 대응 atomic/local/일반 map_wc API로 사용합니다. 실제 헤더는 base를 resource_size_t로 받으므로 문서의 unsigned long 표기를 모든 아키텍처의 정확한 선언으로 옮기면 안 됩니다."
+    },
+    {
+      "title": "임시 페이지 매핑의 전제",
+      "text": "문서는 local과 atomic 임시 매핑이 한 페이지를 가리키는 주소를 반환한다고 설명합니다. offset은 객체 내부 byte offset이며 페이지 정렬이 필요합니다. 생성한 범위 밖 접근이나 정렬되지 않은 offset은 정의된 결과가 없다고 명시합니다. 특정 구현이 pointer+offset을 계산해 준다고 API 계약이 임의 offset을 허용하는 것으로 바뀌지 않습니다."
+    },
+    {
+      "title": "호출 문맥의 주소",
+      "text": "임시 매핑은 호출자 문맥에서만 유효하며 전역 가시성을 보장하지 않습니다. 주소값을 얻었다는 사실만으로 다른 태스크에 넘겨 사용하게 하거나 수명 이후에 재사용할 수 있는 것은 아닙니다. 데이터 공유와 매핑 주소의 유효 범위는 별개입니다."
+    },
+    {
+      "title": "Local의 부수 효과",
+      "text": "문서는32비트 x86의 local 매핑이 구현상 migration을 막는 부수 효과를 갖지만 호출자는 이에 의존하면 안 된다고 설명합니다. 따라서 local 매핑을 CPU 고정 API의 대체물로 사용하지 않습니다. 다른 구성에서 같은 부수 효과가 있어야 한다고 추측하지도 않습니다."
+    },
+    {
+      "title": "Atomic의 사용 지침과 RT 차이",
+      "text": "문서는 atomic 매핑이 선점과 pagefault를 막는 부수 효과가 있으며 새 코드에서는 local을 쓰라고 권고합니다. 고정 버전 헤더를 대조하면 PREEMPT_RT에서는 preempt_disable 대신 migrate_disable을 사용하므로 문서의 선점 설명을 모든 구성에 그대로 적용하면 부정확합니다. 기존 코드가 pagefault·선점 제약에 의존한다면 함수 이름만 치환할 수 없습니다."
+    },
+    {
+      "title": "스택식 중첩",
+      "text": "예제는 addr1을 매핑한 뒤 addr2를 매핑하고 addr2,addr1 순서로 해제합니다. 내부 추적이 스택이므로 LIFO가 요구됩니다. 서로 다른 map1,map2 객체를 사용했다는 이유로 호출 순서 제약이 없어지지 않습니다. 해제 인자는 해당 마지막 매핑 호출이 반환한 주소여야 합니다."
+    },
+    {
+      "title": "해제 함수의 짝",
+      "text": "local에는 unmap_local,atomic에는 unmap_atomic을 대응시킵니다. 해제는 주소의 임시 수명과 해당 부수 효과를 되돌리는 단계입니다. 객체를 해제하는 free와 한 번의 매핑을 해제하는 unmap은 역할이 다릅니다."
+    },
+    {
+      "title": "일반 매핑과 수면",
+      "text": "문서는 매핑을 유지한 채 수면할 필요가 있으면 일반 map_wc를 사용할 수 있고 더 느릴 수 있다고 설명합니다. 일반 주소는 전역 가시성을 가지며 임시 매핑의 문맥 부수 효과가 없습니다. 전역 가시성이 데이터 경쟁까지 자동 해결한다는 뜻은 아니며 다른 사용자와의 수명·동기화 계약은 여전히 필요합니다."
+    },
+    {
+      "title": "문서 시그니처 보완",
+      "text": "문서의 일반 map_wc 예시는 mapping,offset 두 인자만 표시하지만 실제 include/linux/io-mapping.h는 mapping,offset,size 세 인자입니다. 반환 포인터도 실제 헤더는 __iomem 주석이 있습니다. 예제를 복사해 구현할 때는 이 고정 버전의 실제 선언을 기준으로 맞춥니다."
+    },
+    {
+      "title": "객체의 최종 수명",
+      "text": "일반 매핑은 io_mapping_unmap으로 해제하고 드라이버 종료 때 객체는 io_mapping_free로 해제합니다. 남은 주소 사용을 끝내기 전에 객체를 해제해도 된다는 문서가 아닙니다. init/fini처럼 헤더에 있는 모든 API가 이 짧은 사용 지침에 나열된 것은 아니라는 범위 차이도 유지합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "주소 공간 절약,부분 매핑,스택 규율,문맥별 가시성,부수 효과에 의존한 코드의 전환,문서와 선언 대조를 학습합니다. 문서 해설과 소스 검사는 특정 장치의 WC 동작이나 모든 중첩 실행을 검증한 것이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "map1에서 addr1, map2에서 addr2를 차례로 얻었다면 해제 순서는?",
+      "options": [
+        "addr2 다음 addr1이다",
+        "객체가 다르면 어떤 순서든 허용된다"
+      ],
+      "answer": 0,
+      "explanation": "문서는 스택 추적으로 인해 역순 해제를 요구합니다. 객체 구분만으로 중첩 순서가 독립이 되지 않습니다."
+    },
+    {
+      "prompt": "local 매핑의 x86 migration 방지 부수 효과에 호출자가 의존해도 되는가?",
+      "options": [
+        "된다. 모든 플랫폼의 CPU 고정 계약이다",
+        "안 된다. 문서가 의존하지 말라고 명시한다"
+      ],
+      "answer": 1,
+      "explanation": "구현상 부수 효과와 API의 보장된 계약을 구분합니다. 필요한 CPU 고정은 해당 목적의 계약으로 확보해야 합니다."
+    },
+    {
+      "prompt": "문서 예시처럼 실제 map_wc가 mapping,offset 두 인자만 받는가?",
+      "options": [
+        "아니다. 이 버전 헤더에는 size도 필요하다",
+        "그렇다. 실제 선언에도 size가 없다"
+      ],
+      "answer": 0,
+      "explanation": "간략한 문서 예시와 실제 헤더의 불일치를 확인했습니다. 구현 시 고정 버전의 세 인자 선언을 사용해야 합니다."
+    },
+    {
+      "prompt": "임시 매핑에 페이지 정렬되지 않은 offset을 사용해도 되는가?",
+      "options": [
+        "된다. 모든 구성에서 byte offset을 자동 보존한다",
+        "안 된다. 문서는 결과가 정의되지 않는다고 한다"
+      ],
+      "answer": 1,
+      "explanation": "일부 구현의 주소 계산과 API 사용 전제를 분리해야 합니다. 동적 PFN 매핑 경로를 포함한 공통 계약입니다."
+    },
+    {
+      "prompt": "atomic 매핑을 local로 바꿀 때 고려할 것은?",
+      "options": [
+        "기존 코드가 선점·pagefault 관련 부수 효과에 의존했는지이다",
+        "함수 이름만 바꾸면 모든 문맥 보장이 그대로라는 점이다"
+      ],
+      "answer": 0,
+      "explanation": "local은 atomic wrapper와 동일한 상태 변경을 보장하지 않습니다. PREEMPT_RT의 migration 분기도 실제 헤더와 함께 확인합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "========================\nThe io_mapping functions\n========================\n\nAPI\n===\n\nThe io_mapping functions in linux/io-mapping.h provide an abstraction for\nefficiently mapping small regions of an I/O device to the CPU. The initial\nusage is to support the large graphics aperture on 32-bit processors where\nioremap_wc cannot be used to statically map the entire aperture to the CPU\nas it would consume too much of the kernel address space.\n\nA mapping object is created during driver initialization using::\n\n\tstruct io_mapping *io_mapping_create_wc(unsigned long base,\n\t\t\t\t\t\tunsigned long size)\n\n'base' is the bus address of the region to be made\nmappable, while 'size' indicates how large a mapping region to\nenable. Both are in bytes.\n\nThis _wc variant provides a mapping which may only be used with\nio_mapping_map_atomic_wc(), io_mapping_map_local_wc() or\nio_mapping_map_wc().\n\nWith this mapping object, individual pages can be mapped either temporarily\nor long term, depending on the requirements. Of course, temporary maps are\nmore efficient. They come in two flavours::\n\n\tvoid *io_mapping_map_local_wc(struct io_mapping *mapping,\n\t\t\t\t      unsigned long offset)\n\n\tvoid *io_mapping_map_atomic_wc(struct io_mapping *mapping,\n\t\t\t\t       unsigned long offset)\n\n'offset' is the offset within the defined mapping region.  Accessing\naddresses beyond the region specified in the creation function yields\nundefined results. Using an offset which is not page aligned yields an\nundefined result. The return value points to a single page in CPU address\nspace.\n\nThis _wc variant returns a write-combining map to the page and may only be\nused with mappings created by io_mapping_create_wc()\n\nTemporary mappings are only valid in the context of the caller. The mapping\nis not guaranteed to be globally visible.\n\nio_mapping_map_local_wc() has a side effect on X86 32bit as it disables\nmigration to make the mapping code work. No caller can rely on this side\neffect.\n\nio_mapping_map_atomic_wc() has the side effect of disabling preemption and\npagefaults. Don't use in new code. Use io_mapping_map_local_wc() instead.\n\nNested mappings need to be undone in reverse order because the mapping\ncode uses a stack for keeping track of them::\n\n addr1 = io_mapping_map_local_wc(map1, offset1);\n addr2 = io_mapping_map_local_wc(map2, offset2);\n ...\n io_mapping_unmap_local(addr2);\n io_mapping_unmap_local(addr1);\n\nThe mappings are released with::\n\n\tvoid io_mapping_unmap_local(void *vaddr)\n\tvoid io_mapping_unmap_atomic(void *vaddr)\n\n'vaddr' must be the value returned by the last io_mapping_map_local_wc() or\nio_mapping_map_atomic_wc() call. This unmaps the specified mapping and\nundoes the side effects of the mapping functions.\n\nIf you need to sleep while holding a mapping, you can use the regular\nvariant, although this may be significantly slower::\n\n\tvoid *io_mapping_map_wc(struct io_mapping *mapping,\n\t\t\t\tunsigned long offset)\n\nThis works like io_mapping_map_atomic/local_wc() except it has no side\neffects and the pointer is globally visible.\n\nThe mappings are released with::\n\n\tvoid io_mapping_unmap(void *vaddr)\n\nUse for pages mapped with io_mapping_map_wc().\n\nAt driver close time, the io_mapping object must be freed::\n\n\tvoid io_mapping_free(struct io_mapping *mapping)\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "67f7d48b01a747fc21d8253daff0c3004ffb7190fe055dc5bef111ef997820d0",
+    "scope": "whole-file",
+    "line_count": 91,
+    "authoring_source": "course/file_units/io_mapping_document.py",
+    "sections": [
+      "도입부의 문제",
+      "객체 생성과 단위",
+      "임시 페이지 매핑의 전제",
+      "호출 문맥의 주소",
+      "Local의 부수 효과",
+      "Atomic의 사용 지침과 RT 차이",
+      "스택식 중첩",
+      "해제 함수의 짝",
+      "일반 매핑과 수면",
+      "문서 시그니처 보완",
+      "객체의 최종 수명",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/driver-api/io-mapping.rst"
+    }
+  ]
+}

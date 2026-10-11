@@ -1,0 +1,130 @@
+{
+  "id": "file-33e97f2a0ef5257d",
+  "path": "include/uapi/linux/time.h",
+  "title": "공개 시간 헤더: 구형 구조체, timer 종류, clock ID",
+  "area": "UAPI · 조건부 컴파일 · 식별자 안정성 · 호환성 · 단위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "조건부 구조체 정의와 모든 clock·timer 상수를 원본 값에 따라 읽습니다.",
+  "guide": [
+    "ABI 식별자는 구현이 사라져도 함부로 재사용할 수 없으며 숫자 ID와 비트 집합을 구분해야 합니다.",
+    "시간 헤더에서 선언한 형식과 실제 지원되는 clock 기능을 혼동하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0 WITH Linux-syscall-note, guard, types/time_types include 뒤 사용자 공간용 구형 구조체 네 개, timezone, interval timer ID, clock ID와 관련 상수, TIMER_ABSTIME이 있습니다. 실제 clock 조회나 timer 생성 함수 구현은 없습니다."
+    },
+    {
+      "title": "사용자 공간 조건부 정의",
+      "text": "__KERNEL__이 정의되지 않았을 때 timespec, timeval, itimerspec, itimerval을 정의합니다. timespec만 추가로 _STRUCT_TIMESPEC guard를 확인하고 정의 후 그 매크로를 설정합니다. 커널 빌드에서 같은 구형 태그를 그대로 노출하는 구조가 아닙니다. 이 UAPI 헤더를 사용자 libc time.h와 아무 고려 없이 함께 include해도 된다는 보장은 아닙니다."
+    },
+    {
+      "title": "구형 구조체 전체 필드",
+      "text": "timespec은 __kernel_old_time_t tv_sec와 long tv_nsec, timeval은 __kernel_old_time_t tv_sec와 __kernel_suseconds_t tv_usec입니다. itimerspec은 timespec의 it_interval과 it_value, itimerval은 timeval의 같은 두 필드를 가집니다. period/interval과 expiration/current value라는 주석을 가지며 나노초와 마이크로초 단위를 구분합니다."
+    },
+    {
+      "title": "Timezone 구조체",
+      "text": "timezone은 int tz_minuteswest와 tz_dsttime을 가집니다. 전자는 Greenwich 서쪽 방향의 분, 후자는 DST 보정 종류라고 주석에 설명됩니다. 지역 이름이나 역사적인 시간대 전환 규칙을 저장하는 구조가 아닙니다. 이 정의는 __KERNEL__ 조건문 밖에 있습니다."
+    },
+    {
+      "title": "Interval timer ID",
+      "text": "ITIMER_REAL=0, ITIMER_VIRTUAL=1, ITIMER_PROF=2입니다. 이 파일은 식별자만 정의합니다. 구체적 시간 계수 방식, 신호 종류, syscall 동작은 구현과 해당 인터페이스 자료를 별도로 확인해야 합니다. clock ID와 같은 숫자가 있어도 같은 식별자 공간이라고 대입하지 않습니다."
+    },
+    {
+      "title": "Clock ID 0부터 6",
+      "text": "CLOCK_REALTIME=0, CLOCK_MONOTONIC=1, CLOCK_PROCESS_CPUTIME_ID=2, CLOCK_THREAD_CPUTIME_ID=3, CLOCK_MONOTONIC_RAW=4, CLOCK_REALTIME_COARSE=5, CLOCK_MONOTONIC_COARSE=6입니다. 이름은 서로 다른 시계 종류를 구별하는 ID이며 이 헤더 자체가 각 시계의 분해능이나 하드웨어 제공 여부를 보증하지 않습니다."
+    },
+    {
+      "title": "Clock ID 7부터 11과 예약",
+      "text": "CLOCK_BOOTTIME=7, CLOCK_REALTIME_ALARM=8, CLOCK_BOOTTIME_ALARM=9, CLOCK_SGI_CYCLE=10, CLOCK_TAI=11입니다. 특히 SGI_CYCLE은 드라이버가 제거되었지만 ID를 placeholder로 남기며 재사용하지 말라는 주석이 있습니다. 정의가 남았다는 이유로 해당 clock이 동작한다고 가정하면 안 됩니다."
+    },
+    {
+      "title": "상한과 마스크 이름",
+      "text": "MAX_CLOCKS=16이며 여기서 정의한 clock ID가 연속 16개 존재한다는 뜻은 아닙니다. CLOCKS_MASK는 CLOCK_REALTIME|CLOCK_MONOTONIC이므로 실제 값은 1이고 CLOCKS_MONO도 CLOCK_MONOTONIC입니다. CLOCKS_MASK를 모든 clock ID에 대해 1<<ID를 합친 지원 비트맵이라고 읽으면 원본 식과 다릅니다."
+    },
+    {
+      "title": "절대 시각 플래그",
+      "text": "TIMER_ABSTIME=0x01을 POSIX interval timer 설정 관련 플래그로 정의합니다. 실제 호출이 플래그를 어떻게 처리하고 어느 clock에서 허용하는지는 해당 구현 책임입니다. 헤더 상수 하나가 모든 timeout 인자를 절대 시각으로 바꾸는 것은 아닙니다."
+    },
+    {
+      "title": "CS와 검증 경계",
+      "text": "조건부 공개 범위, long 기반 구형 ABI, ID 재사용 금지, 매크로 이름과 실제 식의 차이가 핵심입니다. 전체 상수와 선언을 학습하지만 연결된 syscall 전체 구현을 이 파일 완료에 포함하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "CLOCK_SGI_CYCLE 상수가 남아 있으면 드라이버도 반드시 존재하는가?",
+      "options": [
+        "아니다. 제거된 드라이버의 ID를 재사용하지 않도록 남긴 것이다",
+        "그렇다. 상수 정의가 있으면 모든 커널에서 호출이 성공한다"
+      ],
+      "answer": 0,
+      "explanation": "본문 주석은 드라이버 제거와 placeholder 유지 이유를 명시합니다. 공개 ABI 번호의 수명은 구현 기능의 수명과 다를 수 있습니다."
+    },
+    {
+      "prompt": "CLOCKS_MASK의 이 파일 내 실제 값은?",
+      "options": [
+        "모든 clock ID 비트를 켠 65535이다",
+        "1이다"
+      ],
+      "answer": 1,
+      "explanation": "식은 0|1입니다. 이름만 보고 지원 시계 전체의 비트 집합이라고 추정하지 않습니다."
+    },
+    {
+      "prompt": "구형 timespec 정의를 둘러싼 추가 guard는?",
+      "options": [
+        "_STRUCT_TIMESPEC이다",
+        "모든 구조체마다 자동으로 생성되는 C 태그 검사이다"
+      ],
+      "answer": 0,
+      "explanation": "__KERNEL__ 조건 밖의 전처리 처리와 별도로 timespec에는 명시적인 매크로 guard가 있습니다. C 타입 검사를 대신하는 일반 기능은 아닙니다."
+    },
+    {
+      "prompt": "MAX_CLOCKS=16이면 이 헤더에 clock ID 16개가 정의되어 있는가?",
+      "options": [
+        "그렇다. 0부터 15까지 모두 이름이 정의되어 있다",
+        "아니다. 상한과 실제 나열된 ID 수는 다르다"
+      ],
+      "answer": 1,
+      "explanation": "이 파일은 0부터 11까지의 이름을 나열하며 그중 10은 placeholder입니다. 상한 숫자로 기능 목록을 추측하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPI_LINUX_TIME_H\n#define _UAPI_LINUX_TIME_H\n\n#include <linux/types.h>\n#include <linux/time_types.h>\n\n#ifndef __KERNEL__\n#ifndef _STRUCT_TIMESPEC\n#define _STRUCT_TIMESPEC\nstruct timespec {\n\t__kernel_old_time_t\ttv_sec;\t\t/* seconds */\n\tlong\t\t\ttv_nsec;\t/* nanoseconds */\n};\n#endif\n\nstruct timeval {\n\t__kernel_old_time_t\ttv_sec;\t\t/* seconds */\n\t__kernel_suseconds_t\ttv_usec;\t/* microseconds */\n};\n\nstruct itimerspec {\n\tstruct timespec it_interval;/* timer period */\n\tstruct timespec it_value;\t/* timer expiration */\n};\n\nstruct itimerval {\n\tstruct timeval it_interval;/* timer interval */\n\tstruct timeval it_value;\t/* current value */\n};\n#endif\n\nstruct timezone {\n\tint\ttz_minuteswest;\t/* minutes west of Greenwich */\n\tint\ttz_dsttime;\t/* type of dst correction */\n};\n\n/*\n * Names of the interval timers, and structure\n * defining a timer setting:\n */\n#define\tITIMER_REAL\t\t0\n#define\tITIMER_VIRTUAL\t\t1\n#define\tITIMER_PROF\t\t2\n\n/*\n * The IDs of the various system clocks (for POSIX.1b interval timers):\n */\n#define CLOCK_REALTIME\t\t\t0\n#define CLOCK_MONOTONIC\t\t\t1\n#define CLOCK_PROCESS_CPUTIME_ID\t2\n#define CLOCK_THREAD_CPUTIME_ID\t\t3\n#define CLOCK_MONOTONIC_RAW\t\t4\n#define CLOCK_REALTIME_COARSE\t\t5\n#define CLOCK_MONOTONIC_COARSE\t\t6\n#define CLOCK_BOOTTIME\t\t\t7\n#define CLOCK_REALTIME_ALARM\t\t8\n#define CLOCK_BOOTTIME_ALARM\t\t9\n/*\n * The driver implementing this got removed. The clock ID is kept as a\n * place holder. Do not reuse!\n */\n#define CLOCK_SGI_CYCLE\t\t\t10\n#define CLOCK_TAI\t\t\t11\n\n#define MAX_CLOCKS\t\t\t16\n#define CLOCKS_MASK\t\t\t(CLOCK_REALTIME | CLOCK_MONOTONIC)\n#define CLOCKS_MONO\t\t\tCLOCK_MONOTONIC\n\n/*\n * The various flags for setting POSIX.1b interval timers:\n */\n#define TIMER_ABSTIME\t\t\t0x01\n\n#endif /* _UAPI_LINUX_TIME_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "deedd00a0e8dbb98dbbb08120537c7b393baf91249923c96ae5458d7eb2b3a8b",
+    "scope": "whole-file",
+    "line_count": 75,
+    "authoring_source": "course/file_units/time_abi.py",
+    "sections": [
+      "전체 구성",
+      "사용자 공간 조건부 정의",
+      "구형 구조체 전체 필드",
+      "Timezone 구조체",
+      "Interval timer ID",
+      "Clock ID 0부터 6",
+      "Clock ID 7부터 11과 예약",
+      "상한과 마스크 이름",
+      "절대 시각 플래그",
+      "CS와 검증 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/time.h"
+    }
+  ]
+}

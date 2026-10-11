@@ -1,0 +1,130 @@
+{
+  "id": "file-c043ddbc2b159ef5",
+  "path": "lib/textsearch.c",
+  "title": "Textsearch 공통 계층 전체: 등록 목록·RCU·설정 수명",
+  "area": "문자열 검색 · KMP · 함수 포인터 · 모듈 수명",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "알고리즘 등록과 선택, 모듈 참조, 연속 데이터 공급을 담당하는 공통 구현입니다.",
+  "guide": [
+    "수정은 스핀락으로 직렬화하고 조회는 RCU 목록에서 수행합니다. 선택한 알고리즘의 모듈 참조를 확보해 설정이 살아 있는 동안 유지합니다.",
+    "설정은 prepare 후 사용하고 destroy로 해제합니다. 각 검색에는 별도 상태가 필요하며 설정 콜백을 동시에 바꾸는 사용까지 자동 안전해지는 것은 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 문서",
+      "text": "SPDX와 작성자 뒤에 소개·아키텍처 ASCII 그림·사용법·chicken 검색 예제가 있습니다. 의존 헤더 뒤에 전역 ops 리스트와 스핀락, 조회·등록·해제, 연속 입력 상태와 콜백, 연속 검색·prepare·destroy 구현 및 export가 있습니다. 문서의 finish 단계는 실제 헤더의 next wrapper까지 함께 보면 호출 주체가 명확해집니다."
+    },
+    {
+      "title": "이름 조회와 모듈 참조",
+      "text": "lookup_ts_algo는 rcu_read_lock 안에서 이름을 strcmp로 비교합니다. 일치한 항목은 try_module_get(owner)이 성공해야 반환하며 실패하면 NULL입니다. RCU 읽기 보호는 목록 접근 동안, 모듈 참조는 이후 사용 동안의 수명과 관련됩니다. 이름만 찾았다고 모듈 수명이 확보되는 것은 아닙니다."
+    },
+    {
+      "title": "등록 검증과 중복",
+      "text": "textsearch_register는 name과 find/init/get_pattern/get_pattern_len 누락을 -EINVAL로 거부합니다. destroy는 필수 조건에 없습니다. 락 안에서 같은 이름을 찾으면 -EEXIST, 없으면 list_add_tail_rcu로 추가합니다. ops 포인터 자체는 유효해야 하며 NULL 포인터를 자동 방어하는 함수가 아닙니다."
+    },
+    {
+      "title": "등록 해제의 범위",
+      "text": "unregister는 락 아래에서 이름이 아니라 ops 포인터 동일성을 찾아 list_del_rcu하고 성공합니다. 없으면 -ENOENT입니다. 이 함수 자체에는 synchronize_rcu나 메모리 해제가 없습니다. 따라서 반환 즉시 임의의 ops 메모리를 재사용해도 된다는 근거로 삼지 말고 모듈·RCU 수명 규칙까지 확인해야 합니다."
+    },
+    {
+      "title": "연속 데이터 어댑터",
+      "text": "ts_linear_state는 len과 data를 가지며 state->cb 안에 놓입니다. get_linear_data는 consumed<len이면 data+consumed와 남은 길이를 반환하고 아니면 0입니다. find_continuous는 config의 get_next_block을 이 함수로 설정하고 cb의 두 필드를 쓴 뒤 textsearch_find를 호출합니다. len은 바이트 길이이므로 데이터 중간의 NUL도 입력에 포함될 수 있습니다."
+    },
+    {
+      "title": "공유 설정의 전제",
+      "text": "소개는 별도 ts_state를 주면 설정을 반복·병렬 사용한다고 설명합니다. 그러나 find_continuous는 conf->get_next_block을 쓰므로 서로 다른 공급 방식으로 설정을 동시에 재구성하는 경우까지 그 설명을 확장하면 안 됩니다. 콜백과 데이터 수명이 안정된 사용 조건을 구분해야 합니다."
+    },
+    {
+      "title": "prepare와 자동 로딩",
+      "text": "len0은 ERR_PTR(-EINVAL)로 먼저 거부합니다. 이름 조회 후 CONFIG_MODULES이고 TS_AUTOLOAD 플래그가 켜져 있을 때만 request_module(\"ts_%s\",algo)를 요청하고 다시 조회합니다. 찾지 못하면 -ENOENT입니다. 주석은 NFS 등에 있는 모듈 요청이 교착을 일으킬 수 있는 문맥 때문에 항상 자동 로딩하지 않는다고 설명합니다."
+    },
+    {
+      "title": "초기화 실패와 성공의 소유권",
+      "text": "조회 성공 후 ops->init을 호출합니다. 오류 포인터면 해당 오류 번호를 보관하고 확보한 모듈 참조를 module_put으로 반환합니다. 성공하면 conf->ops를 채우고 설정을 반환하며 모듈 참조를 유지합니다. 검색 알고리즘마다 패턴 형식이 다를 수 있다는 문서 경고도 있습니다."
+    },
+    {
+      "title": "destroy의 순서",
+      "text": "conf->ops가 있으면 선택적 알고리즘 destroy를 먼저 부르고 module_put을 수행합니다. 마지막에 공통 설정 메모리를 kfree합니다. 알고리즘의 추가 자원 정리와 공통 메모리 정리는 별도 단계입니다. 오류 포인터를 이 함수에 넘겨도 된다는 계약은 없습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "플러그인 레지스트리, 읽기와 쓰기의 동기화 차이, 모듈 참조 계수, 어댑터 콜백, 두 단계 정리와 오류 전파를 학습합니다. 문서·헤더·알고리즘의 경계를 함께 대조했으며 실제 RCU 경쟁과 모듈 로딩의 실행 검증은 별도입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "등록 시 같은 이름의 다른 ops가 있으면?",
+      "options": [
+        "-EEXIST를 반환한다",
+        "기존 항목을 자동 교체한다"
+      ],
+      "answer": 0,
+      "explanation": "락 안에서 이름을 비교해 errout으로 이동합니다. 기존 항목을 삭제하거나 교체하지 않습니다."
+    },
+    {
+      "prompt": "unregister는 무엇으로 항목을 찾는가?",
+      "options": [
+        "name 문자열만 같으면 어느 구조체든 제거한다",
+        "등록했던 ops 포인터의 동일성으로 찾는다"
+      ],
+      "answer": 1,
+      "explanation": "삭제 루프의 조건은 o==ops입니다. 등록의 이름 중복 검사와 삭제의 식별 기준은 다릅니다."
+    },
+    {
+      "prompt": "알고리즘 init이 실패하면 이미 잡은 모듈 참조는?",
+      "options": [
+        "오류 경로에서 module_put으로 반환한다",
+        "성공 여부와 관계없이 영구 유지한다"
+      ],
+      "answer": 0,
+      "explanation": "errout은 ops가 있으면 module_put을 호출합니다. 성공한 설정만 참조를 유지하다 destroy에서 돌려줍니다."
+    },
+    {
+      "prompt": "자동 모듈 로딩은 항상 수행되는가?",
+      "options": [
+        "그렇다. 알고리즘 이름을 못 찾으면 무조건 요청한다",
+        "아니다. 모듈 설정과 TS_AUTOLOAD 조건이 필요하다"
+      ],
+      "answer": 1,
+      "explanation": "CONFIG_MODULES 조건 안에서 ops==NULL과 TS_AUTOLOAD를 확인합니다. 호출 문맥에 따른 교착 위험을 피하려는 정책입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/textsearch.c\tGeneric text search interface\n *\n * Authors:\tThomas Graf <tgraf@suug.ch>\n * \t\tPablo Neira Ayuso <pablo@netfilter.org>\n *\n * ==========================================================================\n */\n\n/**\n * DOC: ts_intro\n * INTRODUCTION\n *\n *   The textsearch infrastructure provides text searching facilities for\n *   both linear and non-linear data. Individual search algorithms are\n *   implemented in modules and chosen by the user.\n *\n * ARCHITECTURE\n *\n * .. code-block:: none\n *\n *     User\n *     +----------------+\n *     |        finish()|<--------------(6)-----------------+\n *     |get_next_block()|<--------------(5)---------------+ |\n *     |                |                     Algorithm   | |\n *     |                |                    +------------------------------+\n *     |                |                    |  init()   find()   destroy() |\n *     |                |                    +------------------------------+\n *     |                |       Core API           ^       ^          ^\n *     |                |      +---------------+  (2)     (4)        (8)\n *     |             (1)|----->| prepare()     |---+       |          |\n *     |             (3)|----->| find()/next() |-----------+          |\n *     |             (7)|----->| destroy()     |----------------------+\n *     +----------------+      +---------------+\n *\n *   (1) User configures a search by calling textsearch_prepare() specifying\n *       the search parameters such as the pattern and algorithm name.\n *   (2) Core requests the algorithm to allocate and initialize a search\n *       configuration according to the specified parameters.\n *   (3) User starts the search(es) by calling textsearch_find() or\n *       textsearch_next() to fetch subsequent occurrences. A state variable\n *       is provided to the algorithm to store persistent variables.\n *   (4) Core eventually resets the search offset and forwards the find()\n *       request to the algorithm.\n *   (5) Algorithm calls get_next_block() provided by the user continuously\n *       to fetch the data to be searched in block by block.\n *   (6) Algorithm invokes finish() after the last call to get_next_block\n *       to clean up any leftovers from get_next_block. (Optional)\n *   (7) User destroys the configuration by calling textsearch_destroy().\n *   (8) Core notifies the algorithm to destroy algorithm specific\n *       allocations. (Optional)\n *\n * USAGE\n *\n *   Before a search can be performed, a configuration must be created\n *   by calling textsearch_prepare() specifying the searching algorithm,\n *   the pattern to look for and flags. As a flag, you can set TS_IGNORECASE\n *   to perform case insensitive matching. But it might slow down\n *   performance of algorithm, so you should use it at own your risk.\n *   The returned configuration may then be used for an arbitrary\n *   amount of times and even in parallel as long as a separate struct\n *   ts_state variable is provided to every instance.\n *\n *   The actual search is performed by either calling\n *   textsearch_find_continuous() for linear data or by providing\n *   an own get_next_block() implementation and\n *   calling textsearch_find(). Both functions return\n *   the position of the first occurrence of the pattern or UINT_MAX if\n *   no match was found. Subsequent occurrences can be found by calling\n *   textsearch_next() regardless of the linearity of the data.\n *\n *   Once you're done using a configuration it must be given back via\n *   textsearch_destroy.\n *\n * EXAMPLE::\n *\n *   int pos;\n *   struct ts_config *conf;\n *   struct ts_state state;\n *   const char *pattern = \"chicken\";\n *   const char *example = \"We dance the funky chicken\";\n *\n *   conf = textsearch_prepare(\"kmp\", pattern, strlen(pattern),\n *                             GFP_KERNEL, TS_AUTOLOAD);\n *   if (IS_ERR(conf)) {\n *       err = PTR_ERR(conf);\n *       goto errout;\n *   }\n *\n *   pos = textsearch_find_continuous(conf, &state, example, strlen(example));\n *   if (pos != UINT_MAX)\n *       panic(\"Oh my god, dancing chickens at %d\\n\", pos);\n *\n *   textsearch_destroy(conf);\n */\n/* ========================================================================== */\n\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/init.h>\n#include <linux/rculist.h>\n#include <linux/rcupdate.h>\n#include <linux/err.h>\n#include <linux/textsearch.h>\n#include <linux/slab.h>\n\nstatic LIST_HEAD(ts_ops);\nstatic DEFINE_SPINLOCK(ts_mod_lock);\n\nstatic inline struct ts_ops *lookup_ts_algo(const char *name)\n{\n\tstruct ts_ops *o;\n\n\trcu_read_lock();\n\tlist_for_each_entry_rcu(o, &ts_ops, list) {\n\t\tif (!strcmp(name, o->name)) {\n\t\t\tif (!try_module_get(o->owner))\n\t\t\t\to = NULL;\n\t\t\trcu_read_unlock();\n\t\t\treturn o;\n\t\t}\n\t}\n\trcu_read_unlock();\n\n\treturn NULL;\n}\n\n/**\n * textsearch_register - register a textsearch module\n * @ops: operations lookup table\n *\n * This function must be called by textsearch modules to announce\n * their presence. The specified &@ops must have %name set to a\n * unique identifier and the callbacks find(), init(), get_pattern(),\n * and get_pattern_len() must be implemented.\n *\n * Returns 0 or -EEXISTS if another module has already registered\n * with same name.\n */\nint textsearch_register(struct ts_ops *ops)\n{\n\tint err = -EEXIST;\n\tstruct ts_ops *o;\n\n\tif (ops->name == NULL || ops->find == NULL || ops->init == NULL ||\n\t    ops->get_pattern == NULL || ops->get_pattern_len == NULL)\n\t\treturn -EINVAL;\n\n\tspin_lock(&ts_mod_lock);\n\tlist_for_each_entry(o, &ts_ops, list) {\n\t\tif (!strcmp(ops->name, o->name))\n\t\t\tgoto errout;\n\t}\n\n\tlist_add_tail_rcu(&ops->list, &ts_ops);\n\terr = 0;\nerrout:\n\tspin_unlock(&ts_mod_lock);\n\treturn err;\n}\nEXPORT_SYMBOL(textsearch_register);\n\n/**\n * textsearch_unregister - unregister a textsearch module\n * @ops: operations lookup table\n *\n * This function must be called by textsearch modules to announce\n * their disappearance for examples when the module gets unloaded.\n * The &ops parameter must be the same as the one during the\n * registration.\n *\n * Returns 0 on success or -ENOENT if no matching textsearch\n * registration was found.\n */\nint textsearch_unregister(struct ts_ops *ops)\n{\n\tint err = 0;\n\tstruct ts_ops *o;\n\n\tspin_lock(&ts_mod_lock);\n\tlist_for_each_entry(o, &ts_ops, list) {\n\t\tif (o == ops) {\n\t\t\tlist_del_rcu(&o->list);\n\t\t\tgoto out;\n\t\t}\n\t}\n\n\terr = -ENOENT;\nout:\n\tspin_unlock(&ts_mod_lock);\n\treturn err;\n}\nEXPORT_SYMBOL(textsearch_unregister);\n\nstruct ts_linear_state\n{\n\tunsigned int\tlen;\n\tconst void\t*data;\n};\n\nstatic unsigned int get_linear_data(unsigned int consumed, const u8 **dst,\n\t\t\t\t    struct ts_config *conf,\n\t\t\t\t    struct ts_state *state)\n{\n\tstruct ts_linear_state *st = (struct ts_linear_state *) state->cb;\n\n\tif (likely(consumed < st->len)) {\n\t\t*dst = st->data + consumed;\n\t\treturn st->len - consumed;\n\t}\n\n\treturn 0;\n}\n\n/**\n * textsearch_find_continuous - search a pattern in continuous/linear data\n * @conf: search configuration\n * @state: search state\n * @data: data to search in\n * @len: length of data\n *\n * A simplified version of textsearch_find() for continuous/linear data.\n * Call textsearch_next() to retrieve subsequent matches.\n *\n * Returns the position of first occurrence of the pattern or\n * %UINT_MAX if no occurrence was found.\n */\nunsigned int textsearch_find_continuous(struct ts_config *conf,\n\t\t\t\t\tstruct ts_state *state,\n\t\t\t\t\tconst void *data, unsigned int len)\n{\n\tstruct ts_linear_state *st = (struct ts_linear_state *) state->cb;\n\n\tconf->get_next_block = get_linear_data;\n\tst->data = data;\n\tst->len = len;\n\n\treturn textsearch_find(conf, state);\n}\nEXPORT_SYMBOL(textsearch_find_continuous);\n\n/**\n * textsearch_prepare - Prepare a search\n * @algo: name of search algorithm\n * @pattern: pattern data\n * @len: length of pattern\n * @gfp_mask: allocation mask\n * @flags: search flags\n *\n * Looks up the search algorithm module and creates a new textsearch\n * configuration for the specified pattern.\n *\n * Note: The format of the pattern may not be compatible between\n *       the various search algorithms.\n *\n * Returns a new textsearch configuration according to the specified\n * parameters or a ERR_PTR(). If a zero length pattern is passed, this\n * function returns EINVAL.\n */\nstruct ts_config *textsearch_prepare(const char *algo, const void *pattern,\n\t\t\t\t     unsigned int len, gfp_t gfp_mask, int flags)\n{\n\tint err = -ENOENT;\n\tstruct ts_config *conf;\n\tstruct ts_ops *ops;\n\t\n\tif (len == 0)\n\t\treturn ERR_PTR(-EINVAL);\n\n\tops = lookup_ts_algo(algo);\n#ifdef CONFIG_MODULES\n\t/*\n\t * Why not always autoload you may ask. Some users are\n\t * in a situation where requesting a module may deadlock,\n\t * especially when the module is located on a NFS mount.\n\t */\n\tif (ops == NULL && flags & TS_AUTOLOAD) {\n\t\trequest_module(\"ts_%s\", algo);\n\t\tops = lookup_ts_algo(algo);\n\t}\n#endif\n\n\tif (ops == NULL)\n\t\tgoto errout;\n\n\tconf = ops->init(pattern, len, gfp_mask, flags);\n\tif (IS_ERR(conf)) {\n\t\terr = PTR_ERR(conf);\n\t\tgoto errout;\n\t}\n\n\tconf->ops = ops;\n\treturn conf;\n\nerrout:\n\tif (ops)\n\t\tmodule_put(ops->owner);\n\t\t\n\treturn ERR_PTR(err);\n}\nEXPORT_SYMBOL(textsearch_prepare);\n\n/**\n * textsearch_destroy - destroy a search configuration\n * @conf: search configuration\n *\n * Releases all references of the configuration and frees\n * up the memory.\n */\nvoid textsearch_destroy(struct ts_config *conf)\n{\n\tif (conf->ops) {\n\t\tif (conf->ops->destroy)\n\t\t\tconf->ops->destroy(conf);\n\t\tmodule_put(conf->ops->owner);\n\t}\n\n\tkfree(conf);\n}\nEXPORT_SYMBOL(textsearch_destroy);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "577ca5fe086d2e1e508b6b3fb2588487e77617fa6d6f8cd4b4379af25c3fd83b",
+    "scope": "whole-file",
+    "line_count": 323,
+    "authoring_source": "course/file_units/text_search.py",
+    "sections": [
+      "전체 파일과 문서",
+      "이름 조회와 모듈 참조",
+      "등록 검증과 중복",
+      "등록 해제의 범위",
+      "연속 데이터 어댑터",
+      "공유 설정의 전제",
+      "prepare와 자동 로딩",
+      "초기화 실패와 성공의 소유권",
+      "destroy의 순서",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/textsearch.c"
+    }
+  ]
+}

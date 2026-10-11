@@ -1,0 +1,130 @@
+{
+  "id": "file-94f64d7c20a12d8b",
+  "path": "include/linux/timecounter.h",
+  "title": "Cyclecounter와 timecounter: 하드웨어 tick과 나노초 상태 분리",
+  "area": "운영체제 · 시간 측정 · 고정 소수점 · 모듈러 산술 · 하드웨어 추상화",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 구조체, 마스크 매크로, 두 inline 함수와 세 공개 함수의 계약을 읽습니다.",
+  "guide": [
+    "하드웨어 관측은 cyclecounter로 추상화하고, 경과 시간과 소수 나노초의 누적 상태는 timecounter가 보관합니다.",
+    "장치 시계의 tick을 기준 시각이 있는 나노초 값으로 바꾸는 드라이버 코드를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 선언 구조",
+      "text": "GPL-2.0-or-later 표시와 clocksource.h에서 옮겨 왔다는 주석, guard와 types include 뒤 CYCLECOUNTER_MASK, 두 구조체, 두 inline 함수, init/read/cyc2time 선언이 있습니다. 이 헤더가 특정 하드웨어를 초기화하거나 타이머 인터럽트를 등록하지는 않습니다."
+    },
+    {
+      "title": "하드웨어 폭 마스크",
+      "text": "CYCLECOUNTER_MASK(bits)는 bits<64이면 (1ULL<<bits)-1, 아니면 u64로 변환한 -1을 반환합니다. 예를 들어 8비트는 255, 64비트는 모든 비트가 1입니다. 조건식 덕분에 bits=64에서 1ULL<<64를 평가하지 않습니다. bits=0은 0이고, 음수 등 잘못된 폭을 검사하는 함수는 아닙니다. bits 인자가 여러 번 나타나므로 부작용 있는 표현식을 피합니다."
+    },
+    {
+      "title": "Cyclecounter의 네 필드",
+      "text": "read는 const cyclecounter 포인터를 받아 u64 tick을 반환하는 callback입니다. mask는 하드웨어 카운터 폭의 하위 비트 마스크, mult는 나노초 변환의 분자, shift는 2의 거듭제곱 분모의 지수입니다. cyclecounter 자체에는 직전 tick이나 누적 시간이 없어 상태 없는 접근 추상화입니다. 특정 read callback의 잠금 규칙은 구현자와 사용자가 정합니다."
+    },
+    {
+      "title": "Timecounter의 다섯 필드",
+      "text": "cc는 기반 cyclecounter, cycle_last는 마지막 관측 tick, nsec는 누적 나노초, mask는 frac를 보관할 하위 비트 마스크, frac는 누적된 소수 나노초입니다. cc->mask와 tc->mask는 역할이 다릅니다. 전자는 하드웨어 래핑 계산이고 후자는 고정 소수점 나머지입니다."
+    },
+    {
+      "title": "소수점 보존 변환",
+      "text": "cyclecounter_cyc2ns는 ns=cycles*mult+*frac를 계산하고 *frac=ns&mask를 저장한 뒤 ns>>shift를 반환합니다. mask가 shift에 맞는 하위 비트 마스크라는 전제에서 몫은 정수 나노초, 나머지는 다음 호출로 넘길 소수 단위입니다. 예를 들어 mult=3, shift=2, mask=3에서 한 tick씩 네 번 변환하면 반환값은 0,1,1,1이며 합계 3ns입니다. 매번 소수 부분을 버리면 모두 0이 됩니다."
+    },
+    {
+      "title": "정수 산술의 전제",
+      "text": "계산 중간값은 u64이고 포화 연산이나 overflow 검사가 없습니다. mult/shift 선택과 한 번에 변환하는 cycles 범위는 호출자가 보장해야 합니다. shift는 u32라는 이유만으로 임의의 큰 값도 유효하지 않습니다. 구현의 1ULL<<shift와 우측 shift에 맞는 범위가 필요합니다. 이 표현은 부동 소수점이 아니라 정수 고정 소수점입니다."
+    },
+    {
+      "title": "시각 보정",
+      "text": "timecounter_adjtime는 tc->nsec += delta 한 줄입니다. s64 delta가 음수면 일반적인 범위에서 시각을 뒤로 옮길 수 있습니다. u64 nsec와의 연산은 unsigned 모듈러 산술이므로 0 아래로 내리면 포화하지 않고 래핑할 수 있습니다. cycle_last나 frac를 재설정하지 않으며 자체 잠금도 없습니다. 따라서 nsec가 증가한다는 구조체 설명을 수동 보정까지 금지한 단조성 보장으로 읽지 않습니다."
+    },
+    {
+      "title": "초기화와 읽기 계약",
+      "text": "init은 준비된 cc와 임의의 시작 나노초 시각을 연결합니다. read는 시작값에 경과 나노초를 더한 시각을 돌려줍니다. 하드웨어 초기화, 동시 접근의 직렬화, 하드웨어가 한 주기를 도는 것보다 자주 읽는 일은 사용자 책임입니다. 나노초 u64의 약 585년 범위는 하드웨어를 585년 동안 읽지 않아도 된다는 뜻이 아닙니다."
+    },
+    {
+      "title": "과거 tick 변환 계약",
+      "text": "cyc2time는 저장된 기준 시각 주변의 tick을 같은 시간축으로 변환하며 과거 tick도 지원합니다. 헤더는 mask+1 주기의 반주기 이내 범위를 설명합니다. 주기의 정확한 절반 떨어진 점은 과거와 미래를 구분할 수 없으며 구현은 뒤쪽으로 해석합니다. 긴 시간 전에 저장한 tick은 이 API만으로 어느 회전의 값인지 복원할 수 없습니다."
+    },
+    {
+      "title": "검증과 학습 연결",
+      "text": "전체 API의 역할과 실제 구현과 연결되는 호출 조건을 설명합니다. 하드웨어 주파수 보정이나 실제 장치 정확도를 측정한 자료는 아닙니다. 두 종류의 마스크, 나머지 누적을 통한 정밀도 유지, epoch 선택, 단조 증가와 시간 보정의 차이를 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "cc->mask와 tc->mask는 같은 의미인가?",
+      "options": [
+        "아니다. 하드웨어 폭과 소수점 나머지 폭을 각각 나타낸다",
+        "그렇다. 모두 장치 레지스터의 비트 수만 나타낸다"
+      ],
+      "answer": 0,
+      "explanation": "tick 차이에는 cc->mask를, 변환 후 frac 저장에는 tc->mask를 사용합니다. 구체적인 값이 우연히 같더라도 역할은 다릅니다."
+    },
+    {
+      "prompt": "mult=3, shift=2에서 frac를 보존하며 한 tick을 네 번 변환한 나노초 합은?",
+      "options": [
+        "0ns이다",
+        "3ns이다"
+      ],
+      "answer": 1,
+      "explanation": "3/4ns를 네 번 더하는 고정 소수점 누적입니다. 나머지가 3,2,1,0으로 이어지며 정수 반환값은 0,1,1,1입니다."
+    },
+    {
+      "prompt": "timecounter_adjtime는 frac와 마지막 tick도 초기화하는가?",
+      "options": [
+        "아니다. nsec에 delta만 더한다",
+        "그렇다. 하드웨어를 다시 읽어 전부 초기화한다"
+      ],
+      "answer": 0,
+      "explanation": "inline 본문은 nsec += delta 한 줄입니다. 다른 상태를 바꾸지 않으며 음수 보정과 unsigned 경계 처리는 사용자가 이해해야 합니다."
+    },
+    {
+      "prompt": "64비트 나노초 범위가 길면 하드웨어 카운터를 오랫동안 읽지 않아도 되는가?",
+      "options": [
+        "그렇다. 585년마다 읽어도 모든 tick을 복원한다",
+        "아니다. 하드웨어 래핑 주기보다 자주 읽어야 한다"
+      ],
+      "answer": 1,
+      "explanation": "누적 결과의 폭과 샘플링 가능한 간격은 다릅니다. 여러 하드웨어 회전을 놓치면 마스크 차이만으로 회전 수를 알 수 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n * linux/include/linux/timecounter.h\n *\n * based on code that migrated away from\n * linux/include/linux/clocksource.h\n */\n#ifndef _LINUX_TIMECOUNTER_H\n#define _LINUX_TIMECOUNTER_H\n\n#include <linux/types.h>\n\n/* simplify initialization of mask field */\n#define CYCLECOUNTER_MASK(bits) (u64)((bits) < 64 ? ((1ULL<<(bits))-1) : -1)\n\n/**\n * struct cyclecounter - hardware abstraction for a free running counter\n *\tProvides completely state-free accessors to the underlying hardware.\n *\tDepending on which hardware it reads, the cycle counter may wrap\n *\taround quickly. Locking rules (if necessary) have to be defined\n *\tby the implementor and user of specific instances of this API.\n *\n * @read:\t\treturns the current cycle value\n * @mask:\t\tbitmask for two's complement\n *\t\t\tsubtraction of non-64-bit counters,\n *\t\t\tsee CYCLECOUNTER_MASK() helper macro\n * @mult:\t\tcycle to nanosecond multiplier\n * @shift:\t\tcycle to nanosecond divisor (power of two)\n */\nstruct cyclecounter {\n\tu64 (*read)(const struct cyclecounter *cc);\n\tu64 mask;\n\tu32 mult;\n\tu32 shift;\n};\n\n/**\n * struct timecounter - layer above a &struct cyclecounter which counts nanoseconds\n *\tContains the state needed by timecounter_read() to detect\n *\tcycle counter wrap around. Initialize with\n *\ttimecounter_init(). Also used to convert cycle counts into the\n *\tcorresponding nanosecond counts with timecounter_cyc2time(). Users\n *\tof this code are responsible for initializing the underlying\n *\tcycle counter hardware, locking issues and reading the time\n *\tmore often than the cycle counter wraps around. The nanosecond\n *\tcounter will only wrap around after ~585 years.\n *\n * @cc:\t\t\tthe cycle counter used by this instance\n * @cycle_last:\t\tmost recent cycle counter value seen by\n *\t\t\ttimecounter_read()\n * @nsec:\t\tcontinuously increasing count\n * @mask:\t\tbit mask for maintaining the 'frac' field\n * @frac:\t\taccumulated fractional nanoseconds\n */\nstruct timecounter {\n\tconst struct cyclecounter *cc;\n\tu64 cycle_last;\n\tu64 nsec;\n\tu64 mask;\n\tu64 frac;\n};\n\n/**\n * cyclecounter_cyc2ns - converts cycle counter cycles to nanoseconds\n * @cc:\t\tPointer to cycle counter.\n * @cycles:\tCycles\n * @mask:\tbit mask for maintaining the 'frac' field\n * @frac:\tpointer to storage for the fractional nanoseconds.\n *\n * Returns: cycle counter cycles converted to nanoseconds\n */\nstatic inline u64 cyclecounter_cyc2ns(const struct cyclecounter *cc,\n\t\t\t\t      u64 cycles, u64 mask, u64 *frac)\n{\n\tu64 ns = (u64) cycles;\n\n\tns = (ns * cc->mult) + *frac;\n\t*frac = ns & mask;\n\treturn ns >> cc->shift;\n}\n\n/**\n * timecounter_adjtime - Shifts the time of the clock.\n * @tc:\t\tThe &struct timecounter to adjust\n * @delta:\tDesired change in nanoseconds.\n */\nstatic inline void timecounter_adjtime(struct timecounter *tc, s64 delta)\n{\n\ttc->nsec += delta;\n}\n\n/**\n * timecounter_init - initialize a time counter\n * @tc:\t\t\tPointer to time counter which is to be initialized/reset\n * @cc:\t\t\tA cycle counter, ready to be used.\n * @start_tstamp:\tArbitrary initial time stamp.\n *\n * After this call the current cycle register (roughly) corresponds to\n * the initial time stamp. Every call to timecounter_read() increments\n * the time stamp counter by the number of elapsed nanoseconds.\n */\nextern void timecounter_init(struct timecounter *tc,\n\t\t\t     const struct cyclecounter *cc,\n\t\t\t     u64 start_tstamp);\n\n/**\n * timecounter_read - return nanoseconds elapsed since timecounter_init()\n *                    plus the initial time stamp\n * @tc:          Pointer to time counter.\n *\n * In other words, keeps track of time since the same epoch as\n * the function which generated the initial time stamp.\n *\n * Returns: nanoseconds since the initial time stamp\n */\nextern u64 timecounter_read(struct timecounter *tc);\n\n/**\n * timecounter_cyc2time - convert a cycle counter to same\n *                        time base as values returned by\n *                        timecounter_read()\n * @tc:\t\tPointer to time counter.\n * @cycle_tstamp:\ta value returned by tc->cc->read()\n *\n * Cycle counts that are converted correctly as long as they\n * fall into the interval [-1/2 max cycle count, +1/2 max cycle count],\n * with \"max cycle count\" == cs->mask+1.\n *\n * This allows conversion of cycle counter values which were generated\n * in the past.\n *\n * Returns: cycle counter converted to nanoseconds since the initial time stamp\n */\nextern u64 timecounter_cyc2time(const struct timecounter *tc,\n\t\t\t\tu64 cycle_tstamp);\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "b55b506341bd55927c87f7420cbfda3ec9f5573d3b99ac9a8facde01ae60bcc7",
+    "scope": "whole-file",
+    "line_count": 137,
+    "authoring_source": "course/file_units/timecounter.py",
+    "sections": [
+      "전체 선언 구조",
+      "하드웨어 폭 마스크",
+      "Cyclecounter의 네 필드",
+      "Timecounter의 다섯 필드",
+      "소수점 보존 변환",
+      "정수 산술의 전제",
+      "시각 보정",
+      "초기화와 읽기 계약",
+      "과거 tick 변환 계약",
+      "검증과 학습 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/timecounter.h"
+    }
+  ]
+}

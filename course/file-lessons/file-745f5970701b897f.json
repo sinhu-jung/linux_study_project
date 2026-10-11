@@ -1,0 +1,105 @@
+{
+  "id": "file-745f5970701b897f",
+  "path": "lib/crc8.c",
+  "title": "CRC8 전체 구현: GF(2)의 선형성과 표 생성",
+  "area": "CRC · 비트 연산 · 오류 검출",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "고정 표가 아니라 다항식과 비트 방향에 맞는 표를 먼저 생성합니다. 표 생성과 메시지 처리는 서로 다른 단계입니다.",
+  "guide": [
+    "crc8_populate_msb는 i=1,2,...128로 기존 구간을 두 배씩 채웁니다. t를 왼쪽 이동하고 이전 최상위 비트에 따라 polynomial을 XOR합니다. crc8_populate_lsb는 i=128,64,...1로 내려가며 오른쪽 이동과 최하위 비트 기준 XOR로 표를 채웁니다. crc8은 table[(crc XOR byte)&0xff]로 데이터 상태를 갱신합니다.",
+    "표는 256바이트 공간을 제공하고 사용 전에 알맞은 다항식으로 초기화해야 합니다. 메시지 처리 중 다른 실행 흐름이 표를 다시 만들면 안 됩니다. 초기값과 최종 보수 처리는 호출자의 프로토콜 계약입니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "상단 저작권·허용문은 원본 메타데이터로 보존합니다. pr_fmt 정의와 printk.h 포함은 출력 형식 기반을 제공하지만 이 파일의 세 함수 안에는 로그 출력이 없습니다. crc8.h가 크기와 선언을, module.h가 export와 모듈 정보를 제공합니다. 세 함수가 모두 EXPORT_SYMBOL 대상입니다."
+    },
+    {
+      "title": "MSB 표 생성의 불변식",
+      "text": "처음 table[0]=0입니다. i 단계 직전 table[0..i-1]가 완성되어 있고 안쪽 루프가 table[i+j]=table[j] XOR t로 다음 구간을 채웁니다. t는 새 비트에 해당하는 기저 전이입니다. GF(2)의 선형성 때문에 비트 조합의 전이를 XOR로 만들 수 있습니다. 전체 추가 대입은 1+2+4+...+128=255회입니다."
+    },
+    {
+      "title": "LSB 표 생성의 순서",
+      "text": "첫 단계 i=128에서 table[128]을 만들고 다음 i=64에서 table[64],table[192]를 만듭니다. j는 2*i씩 증가하므로 읽는 table[j]는 이전 단계에 준비된 조합입니다. 방향이 반대인 다항식 비트 표현도 함께 맞춰야 하며 MSB 다항식 값을 그대로 LSB 함수에 넘기면 일반적으로 다른 CRC가 됩니다."
+    },
+    {
+      "title": "버퍼 처리와 경계",
+      "text": "crc8은 표를 생성하지 않고 nbytes만큼 읽습니다. nbytes=0이면 초기 crc를 그대로 돌려줍니다. crc와 입력이 u8이므로 XOR는 0..255이고 &0xff가 인덱스 폭을 명시합니다. 반환형 u8에 저장될 때 상위 비트가 잘리며 표 생성의 t 갱신도 이 폭을 이용합니다. 동적 할당·오류 코드·최종 보수는 없습니다."
+    },
+    {
+      "title": "계산과 복잡도",
+      "text": "MSB polynomial=0x07이면 table[0]=0, table[1]=7, table[2]=14, table[3]=9입니다. 초기 crc=0에 [1,2]를 처리하면 첫 상태 7, 다음 인덱스 5, table[5]=0x1B입니다. 두 표 생성은 256칸을 채우는 고정 비용이고 메시지 n바이트의 시간은 O(n), 추가 상태 O(1)입니다. CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "MSB 표 생성에서 table[i+j]=table[j] XOR t가 가능한 근거는?",
+      "options": [
+        "GF(2) 전이의 선형성을 사용한다",
+        "일반 정수 덧셈의 자리올림을 사용한다"
+      ],
+      "answer": 0,
+      "explanation": "다항식 계수는 0과 1이고 합은 XOR입니다. 기존 조합에 새 비트의 전이를 XOR해 결합하므로 산술 자리올림은 필요하지 않습니다."
+    },
+    {
+      "prompt": "crc8()을 호출하면 전달한 빈 표를 자동으로 초기화하는가?",
+      "options": [
+        "그렇다. 첫 바이트에서 다항식을 추론한다",
+        "아니다. populate를 먼저 호출해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "crc8의 본문에는 표 대입이나 다항식 인자가 없습니다. 읽기 전에 별도 populate 함수로 완성해야 합니다."
+    },
+    {
+      "prompt": "MSB polynomial=7, 초기 0, 입력 [1,2]의 결과는?",
+      "options": [
+        "0x1B",
+        "0x09"
+      ],
+      "answer": 0,
+      "explanation": "첫 조회 tab[1]=7, 두 번째 조회 tab[7 XOR 2]=tab[5]=0x1B입니다. tab[3]=9를 쓰는 것은 이전 상태 갱신을 누락한 계산입니다."
+    },
+    {
+      "prompt": "메시지를 계산하는 동안 다른 스레드가 같은 표를 다시 생성해도 안전한가?",
+      "options": [
+        "그렇다. const 매개변수가 다른 별칭의 쓰기도 막는다",
+        "아니다. 초기화 완료 후 변경하지 않거나 적절히 동기화해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "const는 해당 포인터를 통한 쓰기를 제한할 뿐 다른 별칭의 변경을 막는 잠금이 아닙니다. 혼합된 다항식 전이 표를 읽으면 결과도 올바르지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/*\n * Copyright (c) 2011 Broadcom Corporation\n *\n * Permission to use, copy, modify, and/or distribute this software for any\n * purpose with or without fee is hereby granted, provided that the above\n * copyright notice and this permission notice appear in all copies.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF\n * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY\n * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES\n * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION\n * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN\n * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n */\n\n#define pr_fmt(fmt)\t\tKBUILD_MODNAME \": \" fmt\n\n#include <linux/module.h>\n#include <linux/crc8.h>\n#include <linux/printk.h>\n\n/**\n * crc8_populate_msb - fill crc table for given polynomial in reverse bit order.\n *\n * @table:\ttable to be filled.\n * @polynomial:\tpolynomial for which table is to be filled.\n */\nvoid crc8_populate_msb(u8 table[CRC8_TABLE_SIZE], u8 polynomial)\n{\n\tint i, j;\n\tconst u8 msbit = 0x80;\n\tu8 t = msbit;\n\n\ttable[0] = 0;\n\n\tfor (i = 1; i < CRC8_TABLE_SIZE; i *= 2) {\n\t\tt = (t << 1) ^ (t & msbit ? polynomial : 0);\n\t\tfor (j = 0; j < i; j++)\n\t\t\ttable[i+j] = table[j] ^ t;\n\t}\n}\nEXPORT_SYMBOL(crc8_populate_msb);\n\n/**\n * crc8_populate_lsb - fill crc table for given polynomial in regular bit order.\n *\n * @table:\ttable to be filled.\n * @polynomial:\tpolynomial for which table is to be filled.\n */\nvoid crc8_populate_lsb(u8 table[CRC8_TABLE_SIZE], u8 polynomial)\n{\n\tint i, j;\n\tu8 t = 1;\n\n\ttable[0] = 0;\n\n\tfor (i = (CRC8_TABLE_SIZE >> 1); i; i >>= 1) {\n\t\tt = (t >> 1) ^ (t & 1 ? polynomial : 0);\n\t\tfor (j = 0; j < CRC8_TABLE_SIZE; j += 2*i)\n\t\t\ttable[i+j] = table[j] ^ t;\n\t}\n}\nEXPORT_SYMBOL(crc8_populate_lsb);\n\n/**\n * crc8 - calculate a crc8 over the given input data.\n *\n * @table: crc table used for calculation.\n * @pdata: pointer to data buffer.\n * @nbytes: number of bytes in data buffer.\n * @crc: previous returned crc8 value.\n */\nu8 crc8(const u8 table[CRC8_TABLE_SIZE], const u8 *pdata, size_t nbytes, u8 crc)\n{\n\t/* loop over the buffer data */\n\twhile (nbytes-- > 0)\n\t\tcrc = table[(crc ^ *pdata++) & 0xff];\n\n\treturn crc;\n}\nEXPORT_SYMBOL(crc8);\n\nMODULE_DESCRIPTION(\"CRC8 (by Williams, Ross N.) function\");\nMODULE_AUTHOR(\"Broadcom Corporation\");\nMODULE_LICENSE(\"Dual BSD/GPL\");\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "af736395d981866539b4b004d03944155b776baea968714b66e91d903a657e9d",
+    "scope": "whole-file",
+    "line_count": 86,
+    "authoring_source": "course/file_units/crc_fundamentals.py",
+    "sections": [
+      "파일 전체 구성",
+      "MSB 표 생성의 불변식",
+      "LSB 표 생성의 순서",
+      "버퍼 처리와 경계",
+      "계산과 복잡도"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc8.c"
+    }
+  ]
+}

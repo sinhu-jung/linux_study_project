@@ -1,0 +1,173 @@
+{
+  "id": "file-06f35bc0f661879e",
+  "path": "kernel/trace/rethook.c",
+  "title": "Rethook 공통 구현: 중첩 후킹 리스트와 지연 해제",
+  "area": "객체 풀 · RCU · 연결 리스트 · 중첩 호출 · 오류 포인터 · 수명 관리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "할당부터 정지·재활용·원래 주소 검색·handler 실행·task 종료 정리까지 전체 구현을 추적합니다.",
+  "guide": [
+    "handler 실행 중에는 주소 복원을 위한 리스트를 유지하고, 정지 표시와 실제 저장소 해제는 분리합니다.",
+    "각 아키텍처 trampoline이 호출하는 공통 수명 관리와 반환 주소 검색을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0, rethook 로그 접두어와 include 뒤 task 정리, RCU 해제, 관리 객체 할당, node 재활용·획득, hook 추가, 주소 검색, weak fixup과 trampoline handler가 있습니다. 실제 register 치환은 arch 함수에 맡기고 공통 코드는 task별 rethooks 리스트와 objpool을 관리합니다."
+    },
+    {
+      "title": "종료 task의 남은 node",
+      "text": "rethook_flush_task는 __llist_del_all로 task의 리스트를 떼고 각 node를 container_of로 복구합니다. 다음 포인터를 먼저 저장한 뒤 재활용마다 preempt_disable/enable로 감쌉니다. 주석은 죽은 task가 호출했지만 다시는 반환하지 않을 함수의 남은 instance를 정리한다고 설명합니다. 이 경로는 사용자 handler를 실행하지 않습니다."
+    },
+    {
+      "title": "Stop과 free의 차이",
+      "text": "stop은 rcu_assign_pointer로 handler를 NULL로 만듭니다. 진행 중 handler 종료까지 기다리는 동작은 아니므로 필요하면 stop 뒤 RCU 대기를 하고 free하라는 계약입니다. free는 stop 후 call_rcu를 예약하며 callback이 objpool_fini를 호출합니다. 호출자는 free 후 rh를 만지면 안 되고 data의 별도 수명도 고려해야 합니다. free 호출 즉시 모든 대여 node가 사라지는 것은 아닙니다."
+    },
+    {
+      "title": "Pool callback과 객체 해제",
+      "text": "node 초기화 callback은 node->rethook=context를 설정하고 0을 반환합니다. pool 최종 callback은 context인 관리 객체를 kfree하고 0을 반환합니다. 관리 객체가 다른 구조체에 embedding되면 안 된다는 헤더 계약이 이 해제 경로와 연결됩니다. rethook_get_handler는 RCU 읽기 조건을 확인하는 rcu_dereference_check로 함수 포인터를 얻습니다."
+    },
+    {
+      "title": "Alloc 실패와 반환형",
+      "text": "handler가 NULL, num<=0, size가 node 구조보다 작으면 ERR_PTR(-EINVAL)입니다. 관리 객체 kzalloc 실패는 ERR_PTR(-ENOMEM)입니다. 성공하면 data와 handler를 저장하고 GFP_KERNEL로 objpool_init을 호출합니다. pool 초기화가 실패하면 rh를 해제하고 반환 원인과 관계없이 ENOMEM 오류 포인터로 돌립니다. 이 함수의 실패를 단순 NULL 검사만으로 처리하면 안 됩니다."
+    },
+    {
+      "title": "재활용의 두 경로",
+      "text": "recycle은 handler가 아직 있으면 objpool_push로 node를 돌려줍니다. handler가 NULL이면 node의 rcu_head로 callback을 예약하고 그 callback에서 objpool_drop을 수행합니다. stop 상태와 data 포인터 NULL 여부를 혼동하지 않습니다. 지연 해제 callback은 node->rethook으로 pool에 접근하므로 전체 수명 설계가 연결되어 있습니다."
+    },
+    {
+      "title": "Try get의 호출 문맥",
+      "text": "try_get 주석은 호출자가 preemption을 꺼야 한다고 명시합니다. 함수 자체가 그 책임을 대신 수행하지 않습니다. handler가 NULL이면 NULL이며, FTRACE_VALIDATE_RCU_IS_WATCHING 또는 KPROBE_EVENTS_ON_NOTRACE 구성에서는 rcu_is_watching이 아니어도 NULL입니다. 그 외 objpool_pop 결과를 반환하므로 pool 소진도 NULL이 될 수 있습니다. 호출 때마다 새 node를 GFP_KERNEL로 할당하는 경로가 아닙니다."
+    },
+    {
+      "title": "함수 진입 hook",
+      "text": "hook은 arch_rethook_prepare로 원래 반환 주소를 보존·교체한 뒤 __llist_add로 current의 리스트에 node를 넣습니다. 주석은 실제 함수 진입 시점의 regs가 필요하며 ftrace mcount 문맥이면 mcount=true, 실제 진입 kprobe 문맥이면 false를 전달하라고 합니다. 일부 아키텍처가 이 인자를 사용하지 않더라도 공통 API의 문맥 계약은 남아 있습니다."
+    },
+    {
+      "title": "내부 원래 주소 검색",
+      "text": "__rethook_find_ret_addr는 *cur가 NULL이면 리스트 처음, 아니면 그 다음 node에서 시작합니다. ret_addr가 trampoline인 node들을 건너뛰고 첫 실제 주소를 찾으면 *cur를 그 node로 갱신해 반환합니다. 없으면 0이며 실패 경로에서 cursor를 NULL로 초기화하지 않습니다. 같은 함수에 여러 hook이 쌓이면 앞선 hook이 보관한 주소가 trampoline일 수 있다는 구조와 연결됩니다."
+    },
+    {
+      "title": "외부 검색의 frame 조건",
+      "text": "rethook_find_ret_addr는 cur 자체가 NULL이면 WARN_ON_ONCE 후 0이고, 다른 task가 task_is_running이면 0입니다. 내부 검색을 반복해 실제 주소를 가진 node의 frame이 요청 frame과 같을 때 반환합니다. 첫 호출의 *cur는 NULL이어야 합니다. task 상태 검사만으로 대상의 실행 상태를 잠금으로 고정하는 것은 아니며 호출자는 current 또는 실행하지 않는 task라는 전제를 지켜야 합니다."
+    },
+    {
+      "title": "기본 fixup",
+      "text": "weak arch_rethook_fixup_return은 빈 본문입니다. 주석은 handler 안의 stacktrace를 위해 stack에 있는 실제 반환 주소를 보정해야 하는 아키텍처가 구현할 수 있다고 설명합니다. 공통 handler는 이 hook을 호출하지만 모든 아키텍처가 반드시 같은 위치에 저장한다는 뜻은 아닙니다."
+    },
+    {
+      "title": "Trampoline의 주소 결정",
+      "text": "trampoline handler는 내부 검색으로 current 리스트에서 첫 실제 복귀 주소와 해당 node를 찾습니다. 없으면 오류 로그 후 BUG_ON입니다. 주소가 있으면 instruction_pointer_set으로 regs의 IP를 먼저 설정하고 preempt_disable_notrace로 이후 rh 접근과 리스트 처리를 보호합니다. 실제 반환값과 regs snapshot 변경이 모두 존재합니다."
+    },
+    {
+      "title": "사용자 handler 실행 중 리스트 유지",
+      "text": "리스트 처음부터 실제 주소를 가진 node까지 각 handler를 실행합니다. frame이 다르면 WARN_ON_ONCE 후 handler 실행 루프를 멈춥니다. handler가 NULL이면 호출을 생략합니다. 인자는 node, rh->data, correct_ret_addr, regs입니다. 이때 리스트를 미리 unlink하지 않는 이유는 handler 안의 stackdump가 원래 주소를 복원할 수 있어야 하기 때문입니다."
+    },
+    {
+      "title": "Fixup·분리·재활용 순서",
+      "text": "handler 루프 뒤 arch fixup을 수행하고 current 리스트 head를 검색된 node의 다음으로 옮긴 뒤 node->next를 NULL로 잘라 사용 구간을 분리합니다. 처음부터 그 구간 전체를 recycle하고 preempt_enable_notrace 후 실제 주소를 반환합니다. frame 경고로 앞 루프가 멈춰도 뒤의 fixup과 분리·재활용은 계속됩니다. 경고가 함수 전체의 즉시 반환이라고 설명하면 틀립니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "연결 리스트를 shadow stack처럼 사용하는 방법, null handler를 통한 정지 상태, 오류 포인터와 NULL의 차이, RCU 유예와 objpool의 결합, 관측을 위해 제거를 늦추는 순서를 학습합니다. 여러 helper는 NOKPROBE_SYMBOL로 재계측을 막습니다. 전체 원본 대조는 실제 handler/free 경쟁이나 모든 아키텍처의 중첩 후킹 실행 시험을 대신하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "rethook_alloc 실패를 NULL 검사만으로 충분히 판별하는가?",
+      "options": [
+        "아니다. ERR_PTR로 오류를 반환한다",
+        "그렇다. 모든 할당 API는 실패하면 NULL이다"
+      ],
+      "answer": 0,
+      "explanation": "인자 오류는 EINVAL, 메모리·pool 실패는 ENOMEM을 오류 포인터에 담습니다. try_get의 NULL 반환과 구분해야 합니다."
+    },
+    {
+      "prompt": "rethook_stop이 이미 실행 중인 handler 종료를 기다리는가?",
+      "options": [
+        "그렇다. stop 반환 뒤 모든 callback이 반드시 종료되어 있다",
+        "아니다. handler를 NULL로 게시하며 대기는 별도 계약이다"
+      ],
+      "answer": 1,
+      "explanation": "주석은 기다려야 한다면 stop 뒤 RCU 대기 후 free하라고 명시합니다. 정지 표시와 실행 완료 대기는 다릅니다."
+    },
+    {
+      "prompt": "handler 실행 전에 리스트를 unlink하지 않는 이유는?",
+      "options": [
+        "handler 안의 stackdump가 원래 반환 주소를 찾을 수 있어야 해서다",
+        "연결 리스트는 실행 중에는 읽을 수 없는 자료구조라서다"
+      ],
+      "answer": 0,
+      "explanation": "원본 주석의 목적입니다. 먼저 callback들을 수행하고 fixup 뒤 사용 구간을 분리합니다."
+    },
+    {
+      "prompt": "주소 검색 cursor는 성공 때 어떻게 갱신되는가?",
+      "options": [
+        "항상 해당 node의 다음으로 미리 이동한다",
+        "실제 반환 주소를 가진 node를 가리키게 된다"
+      ],
+      "answer": 1,
+      "explanation": "다음 검색은 저장된 node의 next에서 시작합니다. 성공 시 저장 위치와 다음 호출의 출발점을 구분합니다."
+    },
+    {
+      "prompt": "try_get은 내부에서 preemption을 끄는가?",
+      "options": [
+        "아니다. 호출자가 꺼야 한다",
+        "그렇다. 함수 이름의 try가 자동 보호를 뜻한다"
+      ],
+      "answer": 0,
+      "explanation": "주석이 caller must disable preemption이라고 명시하며 본문에 disable 호출은 없습니다."
+    },
+    {
+      "prompt": "frame 불일치 경고가 나면 trampoline handler 전체가 즉시 반환하는가?",
+      "options": [
+        "그렇다. 남은 node를 그대로 두고 0을 반환한다",
+        "아니다. handler 루프만 중단하고 뒤 정리 경로는 계속한다"
+      ],
+      "answer": 1,
+      "explanation": "조건 안의 break는 while 루프를 끝냅니다. 이후 fixup, 사용 리스트 분리, recycle과 실제 주소 반환이 이어집니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n#define pr_fmt(fmt) \"rethook: \" fmt\n\n#include <linux/bug.h>\n#include <linux/kallsyms.h>\n#include <linux/kprobes.h>\n#include <linux/preempt.h>\n#include <linux/rethook.h>\n#include <linux/slab.h>\n\n/* Return hook list (shadow stack by list) */\n\n/*\n * This function is called from delayed_put_task_struct() when a task is\n * dead and cleaned up to recycle any kretprobe instances associated with\n * this task. These left over instances represent probed functions that\n * have been called but will never return.\n */\nvoid rethook_flush_task(struct task_struct *tk)\n{\n\tstruct rethook_node *rhn;\n\tstruct llist_node *node;\n\n\tnode = __llist_del_all(&tk->rethooks);\n\twhile (node) {\n\t\trhn = container_of(node, struct rethook_node, llist);\n\t\tnode = node->next;\n\t\tpreempt_disable();\n\t\trethook_recycle(rhn);\n\t\tpreempt_enable();\n\t}\n}\n\nstatic void rethook_free_rcu(struct rcu_head *head)\n{\n\tstruct rethook *rh = container_of(head, struct rethook, rcu);\n\tobjpool_fini(&rh->pool);\n}\n\n/**\n * rethook_stop() - Stop using a rethook.\n * @rh: the struct rethook to stop.\n *\n * Stop using a rethook to prepare for freeing it. If you want to wait for\n * all running rethook handler before calling rethook_free(), you need to\n * call this first and wait RCU, and call rethook_free().\n */\nvoid rethook_stop(struct rethook *rh)\n{\n\trcu_assign_pointer(rh->handler, NULL);\n}\n\n/**\n * rethook_free() - Free struct rethook.\n * @rh: the struct rethook to be freed.\n *\n * Free the rethook. Before calling this function, user must ensure the\n * @rh::data is cleaned if needed (or, the handler can access it after\n * calling this function.) This function will set the @rh to be freed\n * after all rethook_node are freed (not soon). And the caller must\n * not touch @rh after calling this.\n */\nvoid rethook_free(struct rethook *rh)\n{\n\trethook_stop(rh);\n\n\tcall_rcu(&rh->rcu, rethook_free_rcu);\n}\n\nstatic int rethook_init_node(void *nod, void *context)\n{\n\tstruct rethook_node *node = nod;\n\n\tnode->rethook = context;\n\treturn 0;\n}\n\nstatic int rethook_fini_pool(struct objpool_head *head, void *context)\n{\n\tkfree(context);\n\treturn 0;\n}\n\nstatic inline rethook_handler_t rethook_get_handler(struct rethook *rh)\n{\n\treturn (rethook_handler_t)rcu_dereference_check(rh->handler,\n\t\t\t\t\t\t\trcu_read_lock_any_held());\n}\n\n/**\n * rethook_alloc() - Allocate struct rethook.\n * @data: a data to pass the @handler when hooking the return.\n * @handler: the return hook callback function, must NOT be NULL\n * @size: node size: rethook node and additional data\n * @num: number of rethook nodes to be preallocated\n *\n * Allocate and initialize a new rethook with @data and @handler.\n * Return pointer of new rethook, or error codes for failures.\n *\n * Note that @handler == NULL means this rethook is going to be freed.\n */\nstruct rethook *rethook_alloc(void *data, rethook_handler_t handler,\n\t\t\t      int size, int num)\n{\n\tstruct rethook *rh;\n\n\tif (!handler || num <= 0 || size < sizeof(struct rethook_node))\n\t\treturn ERR_PTR(-EINVAL);\n\n\trh = kzalloc(sizeof(struct rethook), GFP_KERNEL);\n\tif (!rh)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\trh->data = data;\n\trcu_assign_pointer(rh->handler, handler);\n\n\t/* initialize the objpool for rethook nodes */\n\tif (objpool_init(&rh->pool, num, size, GFP_KERNEL, rh,\n\t\t\t rethook_init_node, rethook_fini_pool)) {\n\t\tkfree(rh);\n\t\treturn ERR_PTR(-ENOMEM);\n\t}\n\treturn rh;\n}\n\nstatic void free_rethook_node_rcu(struct rcu_head *head)\n{\n\tstruct rethook_node *node = container_of(head, struct rethook_node, rcu);\n\tstruct rethook *rh = node->rethook;\n\n\tobjpool_drop(node, &rh->pool);\n}\n\n/**\n * rethook_recycle() - return the node to rethook.\n * @node: The struct rethook_node to be returned.\n *\n * Return back the @node to @node::rethook. If the @node::rethook is already\n * marked as freed, this will free the @node.\n */\nvoid rethook_recycle(struct rethook_node *node)\n{\n\trethook_handler_t handler;\n\n\thandler = rethook_get_handler(node->rethook);\n\tif (likely(handler))\n\t\tobjpool_push(node, &node->rethook->pool);\n\telse\n\t\tcall_rcu(&node->rcu, free_rethook_node_rcu);\n}\nNOKPROBE_SYMBOL(rethook_recycle);\n\n/**\n * rethook_try_get() - get an unused rethook node.\n * @rh: The struct rethook which pools the nodes.\n *\n * Get an unused rethook node from @rh. If the node pool is empty, this\n * will return NULL. Caller must disable preemption.\n */\nstruct rethook_node *rethook_try_get(struct rethook *rh)\n{\n\trethook_handler_t handler = rethook_get_handler(rh);\n\n\t/* Check whether @rh is going to be freed. */\n\tif (unlikely(!handler))\n\t\treturn NULL;\n\n#if defined(CONFIG_FTRACE_VALIDATE_RCU_IS_WATCHING) || defined(CONFIG_KPROBE_EVENTS_ON_NOTRACE)\n\t/*\n\t * This expects the caller will set up a rethook on a function entry.\n\t * When the function returns, the rethook will eventually be reclaimed\n\t * or released in the rethook_recycle() with call_rcu().\n\t * This means the caller must be run in the RCU-availabe context.\n\t */\n\tif (unlikely(!rcu_is_watching()))\n\t\treturn NULL;\n#endif\n\n\treturn (struct rethook_node *)objpool_pop(&rh->pool);\n}\nNOKPROBE_SYMBOL(rethook_try_get);\n\n/**\n * rethook_hook() - Hook the current function return.\n * @node: The struct rethook node to hook the function return.\n * @regs: The struct pt_regs for the function entry.\n * @mcount: True if this is called from mcount(ftrace) context.\n *\n * Hook the current running function return. This must be called when the\n * function entry (or at least @regs must be the registers of the function\n * entry.) @mcount is used for identifying the context. If this is called\n * from ftrace (mcount) callback, @mcount must be set true. If this is called\n * from the real function entry (e.g. kprobes) @mcount must be set false.\n * This is because the way to hook the function return depends on the context.\n */\nvoid rethook_hook(struct rethook_node *node, struct pt_regs *regs, bool mcount)\n{\n\tarch_rethook_prepare(node, regs, mcount);\n\t__llist_add(&node->llist, &current->rethooks);\n}\nNOKPROBE_SYMBOL(rethook_hook);\n\n/* This assumes the 'tsk' is the current task or is not running. */\nstatic unsigned long __rethook_find_ret_addr(struct task_struct *tsk,\n\t\t\t\t\t     struct llist_node **cur)\n{\n\tstruct rethook_node *rh = NULL;\n\tstruct llist_node *node = *cur;\n\n\tif (!node)\n\t\tnode = tsk->rethooks.first;\n\telse\n\t\tnode = node->next;\n\n\twhile (node) {\n\t\trh = container_of(node, struct rethook_node, llist);\n\t\tif (rh->ret_addr != (unsigned long)arch_rethook_trampoline) {\n\t\t\t*cur = node;\n\t\t\treturn rh->ret_addr;\n\t\t}\n\t\tnode = node->next;\n\t}\n\treturn 0;\n}\nNOKPROBE_SYMBOL(__rethook_find_ret_addr);\n\n/**\n * rethook_find_ret_addr -- Find correct return address modified by rethook\n * @tsk: Target task\n * @frame: A frame pointer\n * @cur: a storage of the loop cursor llist_node pointer for next call\n *\n * Find the correct return address modified by a rethook on @tsk in unsigned\n * long type.\n * The @tsk must be 'current' or a task which is not running. @frame is a hint\n * to get the currect return address - which is compared with the\n * rethook::frame field. The @cur is a loop cursor for searching the\n * kretprobe return addresses on the @tsk. The '*@cur' should be NULL at the\n * first call, but '@cur' itself must NOT NULL.\n *\n * Returns found address value or zero if not found.\n */\nunsigned long rethook_find_ret_addr(struct task_struct *tsk, unsigned long frame,\n\t\t\t\t    struct llist_node **cur)\n{\n\tstruct rethook_node *rhn = NULL;\n\tunsigned long ret;\n\n\tif (WARN_ON_ONCE(!cur))\n\t\treturn 0;\n\n\tif (tsk != current && task_is_running(tsk))\n\t\treturn 0;\n\n\tdo {\n\t\tret = __rethook_find_ret_addr(tsk, cur);\n\t\tif (!ret)\n\t\t\tbreak;\n\t\trhn = container_of(*cur, struct rethook_node, llist);\n\t} while (rhn->frame != frame);\n\n\treturn ret;\n}\nNOKPROBE_SYMBOL(rethook_find_ret_addr);\n\nvoid __weak arch_rethook_fixup_return(struct pt_regs *regs,\n\t\t\t\t      unsigned long correct_ret_addr)\n{\n\t/*\n\t * Do nothing by default. If the architecture which uses a\n\t * frame pointer to record real return address on the stack,\n\t * it should fill this function to fixup the return address\n\t * so that stacktrace works from the rethook handler.\n\t */\n}\n\n/* This function will be called from each arch-defined trampoline. */\nunsigned long rethook_trampoline_handler(struct pt_regs *regs,\n\t\t\t\t\t unsigned long frame)\n{\n\tstruct llist_node *first, *node = NULL;\n\tunsigned long correct_ret_addr;\n\trethook_handler_t handler;\n\tstruct rethook_node *rhn;\n\n\tcorrect_ret_addr = __rethook_find_ret_addr(current, &node);\n\tif (!correct_ret_addr) {\n\t\tpr_err(\"rethook: Return address not found! Maybe there is a bug in the kernel\\n\");\n\t\tBUG_ON(1);\n\t}\n\n\tinstruction_pointer_set(regs, correct_ret_addr);\n\n\t/*\n\t * These loops must be protected from rethook_free_rcu() because those\n\t * are accessing 'rhn->rethook'.\n\t */\n\tpreempt_disable_notrace();\n\n\t/*\n\t * Run the handler on the shadow stack. Do not unlink the list here because\n\t * stackdump inside the handlers needs to decode it.\n\t */\n\tfirst = current->rethooks.first;\n\twhile (first) {\n\t\trhn = container_of(first, struct rethook_node, llist);\n\t\tif (WARN_ON_ONCE(rhn->frame != frame))\n\t\t\tbreak;\n\t\thandler = rethook_get_handler(rhn->rethook);\n\t\tif (handler)\n\t\t\thandler(rhn, rhn->rethook->data,\n\t\t\t\tcorrect_ret_addr, regs);\n\n\t\tif (first == node)\n\t\t\tbreak;\n\t\tfirst = first->next;\n\t}\n\n\t/* Fixup registers for returning to correct address. */\n\tarch_rethook_fixup_return(regs, correct_ret_addr);\n\n\t/* Unlink used shadow stack */\n\tfirst = current->rethooks.first;\n\tcurrent->rethooks.first = node->next;\n\tnode->next = NULL;\n\n\twhile (first) {\n\t\trhn = container_of(first, struct rethook_node, llist);\n\t\tfirst = first->next;\n\t\trethook_recycle(rhn);\n\t}\n\tpreempt_enable_notrace();\n\n\treturn correct_ret_addr;\n}\nNOKPROBE_SYMBOL(rethook_trampoline_handler);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e2396a408328618d929d65c55165728fbfff41a4b9e71902b73c13765141ae68",
+    "scope": "whole-file",
+    "line_count": 337,
+    "authoring_source": "course/file_units/rethook_core.py",
+    "sections": [
+      "전체 구성",
+      "종료 task의 남은 node",
+      "Stop과 free의 차이",
+      "Pool callback과 객체 해제",
+      "Alloc 실패와 반환형",
+      "재활용의 두 경로",
+      "Try get의 호출 문맥",
+      "함수 진입 hook",
+      "내부 원래 주소 검색",
+      "외부 검색의 frame 조건",
+      "기본 fixup",
+      "Trampoline의 주소 결정",
+      "사용자 handler 실행 중 리스트 유지",
+      "Fixup·분리·재활용 순서",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/trace/rethook.c"
+    }
+  ]
+}

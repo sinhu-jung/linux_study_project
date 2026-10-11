@@ -1,0 +1,106 @@
+{
+  "id": "file-08ad400c60c88c82",
+  "path": "include/linux/stringhash.h",
+  "title": "이름 해시 전체: 불안정한 해시 계약과 길이 결합",
+  "area": "해시 테이블 · 비트 혼합 · 정수 표현",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "짧은 경로 구성 요소에 맞춘 바이트 문자열 해시 인터페이스입니다.",
+  "guide": [
+    "바이트 단위 경로는 salt를 초기 상태로 삼아 부분 갱신하고 마지막에32비트로 혼합합니다. hash_len은 길이와 해시를 u64의 두 절반에 담습니다.",
+    "버전·아키텍처·부팅을 넘어 값이 같다는 보장이 없습니다. 영속 파일 식별자나 악의적 충돌에 강한 인증값으로 사용하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX와 guard, compiler/types/hash 의존성, 안정성·충돌 관련 계약, 바이트별 초기화·갱신·최종화, full_name_hash 선언, hashlen 매크로 세 개, hashlen_string 선언과 endif로 구성됩니다."
+    },
+    {
+      "title": "명시적인 불안정성",
+      "text": "주석은 커널 버전, 아키텍처뿐 아니라 같은 커널의 다른 부팅에서도 안정성을 보장하지 않는다고 설명합니다. 하드웨어 감지나 의도적 무작위화에 의존할 수 있습니다. 악의적인 입력의 충돌 방어를 위한 함수가 아니라 짧은 pathname component에 최적화되어 있습니다."
+    },
+    {
+      "title": "한 바이트씩 갱신",
+      "text": "init_name_hash(salt)는 salt를 unsigned long으로 변환합니다. partial_name_hash(c,prevhash)는 (prevhash+(c<<4)+(c>>4))*11입니다. 반환형 폭의 unsigned 산술로 계산합니다. 이 함수 자체는 tolower를 하지 않으므로 대소문자 정규화가 필요하면 호출자가 수행합니다. 예시 주석과 실제 인자 있는 초기화 매크로의 선언을 구분해야 합니다."
+    },
+    {
+      "title": "마지막 혼합",
+      "text": "end_name_hash는 hash_long(hash,32)를 호출해32비트 결과를 얻습니다. 주석은 상위 비트가 dcache의 테이블 인덱스로 유용하도록 한다고 설명합니다. 중간 상태를 그대로 잘라내는 것과 구분합니다."
+    },
+    {
+      "title": "워드 단위 구현 선택",
+      "text": "full_name_hash는 salt·문자열 포인터·명시적 길이를 받는 외부 __pure 함수입니다. CONFIG_DCACHE_WORD_ACCESS일 때 워드 단위로 더 빠른 다른 해시를 계산할 수 있고, 아니면 바이트별 경로의 wrapper로 돌아간다는 설명이 있습니다. 이 헤더에는 해당 외부 함수 본문이 없으므로 세부 읽기 알고리즘을 여기서 추측하지 않습니다."
+    },
+    {
+      "title": "hash_len의 표현",
+      "text": "hashlen_create는 (u64)len<<32와 (u32)hash를 OR합니다. hashlen_hash는 하위32비트, hashlen_len은 오른쪽으로32비트 옮긴 하위32비트를 추출합니다. 예를 들어 길이3·해시0x12345678이면0x0000000312345678입니다. 길이와 해시의 정보 폭은 각각32비트입니다."
+    },
+    {
+      "title": "NUL 종료 API와 CS",
+      "text": "hashlen_string은 NUL 종료 이름의 길이와 해시를 결합해 반환하는 선언입니다. full_name_hash의 명시적 길이와 입력 계약이 다릅니다. 해시와 동일성, salt와 인증 키의 차이, 비트 필드 포장, 구현 선택에 따른 안정성 계약을 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "같은 파일 이름의 해시를 부팅 사이에 영구 ID로 믿어도 되는가?",
+      "options": [
+        "안 된다. 부팅 사이 안정성도 보장하지 않는다",
+        "된다. 같은 이름은 항상 같은 값이어야 한다"
+      ],
+      "answer": 0,
+      "explanation": "이 헤더는 부팅·버전·아키텍처에 걸친 값의 안정성을 명시적으로 보장하지 않습니다."
+    },
+    {
+      "prompt": "hash_len의 상위32비트에는 무엇이 들어가는가?",
+      "options": [
+        "문자열 해시다",
+        "문자열 길이다"
+      ],
+      "answer": 1,
+      "explanation": "생성식은 길이를32비트 왼쪽으로 이동하고 해시의 하위32비트를 OR합니다."
+    },
+    {
+      "prompt": "partial_name_hash가 자동으로 대소문자를 통일하는가?",
+      "options": [
+        "아니다. 호출자가 전달한 숫자 c를 그대로 계산한다",
+        "그렇다. 내부에서 항상 tolower를 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "함수 본문은 이동·더하기·곱셈뿐입니다. 예시의 tolower는 호출자 쪽 처리입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_STRINGHASH_H\n#define __LINUX_STRINGHASH_H\n\n#include <linux/compiler.h>\t/* For __pure */\n#include <linux/types.h>\t/* For u32, u64 */\n#include <linux/hash.h>\n\n/*\n * Routines for hashing strings of bytes to a 32-bit hash value.\n *\n * These hash functions are NOT GUARANTEED STABLE between kernel\n * versions, architectures, or even repeated boots of the same kernel.\n * (E.g. they may depend on boot-time hardware detection or be\n * deliberately randomized.)\n *\n * They are also not intended to be secure against collisions caused by\n * malicious inputs; much slower hash functions are required for that.\n *\n * They are optimized for pathname components, meaning short strings.\n * Even if a majority of files have longer names, the dynamic profile of\n * pathname components skews short due to short directory names.\n * (E.g. /usr/lib/libsesquipedalianism.so.3.141.)\n */\n\n/*\n * Version 1: one byte at a time.  Example of use:\n *\n * unsigned long hash = init_name_hash;\n * while (*p)\n *\thash = partial_name_hash(tolower(*p++), hash);\n * hash = end_name_hash(hash);\n *\n * Although this is designed for bytes, fs/hfsplus/unicode.c\n * abuses it to hash 16-bit values.\n */\n\n/* Hash courtesy of the R5 hash in reiserfs modulo sign bits */\n#define init_name_hash(salt)\t\t(unsigned long)(salt)\n\n/* partial hash update function. Assume roughly 4 bits per character */\nstatic inline unsigned long\npartial_name_hash(unsigned long c, unsigned long prevhash)\n{\n\treturn (prevhash + (c << 4) + (c >> 4)) * 11;\n}\n\n/*\n * Finally: cut down the number of bits to a int value (and try to avoid\n * losing bits).  This also has the property (wanted by the dcache)\n * that the msbits make a good hash table index.\n */\nstatic inline unsigned int end_name_hash(unsigned long hash)\n{\n\treturn hash_long(hash, 32);\n}\n\n/*\n * Version 2: One word (32 or 64 bits) at a time.\n * If CONFIG_DCACHE_WORD_ACCESS is defined (meaning <asm/word-at-a-time.h>\n * exists, which describes major Linux platforms like x86 and ARM), then\n * this computes a different hash function much faster.\n *\n * If not set, this falls back to a wrapper around the preceding.\n */\nextern unsigned int __pure full_name_hash(const void *salt, const char *, unsigned int);\n\n/*\n * A hash_len is a u64 with the hash of a string in the low\n * half and the length in the high half.\n */\n#define hashlen_hash(hashlen) ((u32)(hashlen))\n#define hashlen_len(hashlen)  ((u32)((hashlen) >> 32))\n#define hashlen_create(hash, len) ((u64)(len)<<32 | (u32)(hash))\n\n/* Return the \"hash_len\" (hash and length) of a null-terminated string */\nextern u64 __pure hashlen_string(const void *salt, const char *name);\n\n#endif\t/* __LINUX_STRINGHASH_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d5516b7211c9c44dbec9aa3aff42515eefaaa24afb7a130496c483262cc1891f",
+    "scope": "whole-file",
+    "line_count": 79,
+    "authoring_source": "course/file_units/hash_contracts.py",
+    "sections": [
+      "전체 파일",
+      "명시적인 불안정성",
+      "한 바이트씩 갱신",
+      "마지막 혼합",
+      "워드 단위 구현 선택",
+      "hash_len의 표현",
+      "NUL 종료 API와 CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/stringhash.h"
+    }
+  ]
+}

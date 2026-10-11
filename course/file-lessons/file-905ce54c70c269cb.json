@@ -1,0 +1,148 @@
+{
+  "id": "file-905ce54c70c269cb",
+  "path": "include/linux/math.h",
+  "title": "수학 헤더 전체: 반올림·분수·절댓값의 타입 계약",
+  "area": "정수 타입 · 전처리·ABI·고정소수점",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "계산식이 짧아도 인자 평가 횟수, 정수 승격, 폭, 부호가 결과를 바꿀 수 있습니다.",
+  "guide": [
+    "이 헤더는 정렬·나눗셈 반올림 매크로, 분수 구조체, mult_frac, abs/abs_diff, reciprocal_scale과 거듭제곱·제곱근 선언을 모읍니다.",
+    "각 매크로의 전제 조건을 따로 확인합니다. 모든 API가 임의 부호·0 제수·오버플로·부수효과 있는 인자를 안전하게 처리한다는 공통 규약은 없습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 의존성",
+      "text": "include guard 안에 types.h, asm/div64.h, uapi/linux/kernel.h가 있습니다. types는 정수형, div64는 do_div, UAPI 연결은 __KERNEL_DIV_ROUND_UP 같은 상수를 제공합니다. GNU typeof, statement expression, builtin_choose_expr 등을 사용하므로 순수 ISO C만의 표현식 모음이 아닙니다."
+    },
+    {
+      "title": "2의 거듭제곱 배수",
+      "text": "__round_mask는 y-1을 x 타입으로 변환합니다. round_up은 ((x-1)|mask)+1, round_down은 x&~mask입니다. y는 양의2의 거듭제곱이어야 합니다. x=13,y=8이면 각각16과8입니다. mask의 폭을 x에 맞추는 것은 ~mask가 상위 비트를 잘못 제거하지 않도록 하는 장치입니다. 표현 범위를 넘는 결과까지 검출하지는 않습니다."
+    },
+    {
+      "title": "일반 배수 올림·내림",
+      "text": "roundup은 y를 지역 변수에 저장하고 (x+y-1)/y*y를 계산합니다. rounddown은 x를 저장하여 x-x%y를 반환합니다. 비음수13과 배수6이면18과12입니다. 제수0은 허용되지 않으며 x+y-1도 넘칠 수 있습니다. 음수의 C 나눗셈은0 방향 절단이므로 이름만 보고 수학적 바닥 함수라고 가정하지 않습니다."
+    },
+    {
+      "title": "나눗셈 결과의 올림",
+      "text": "DIV_ROUND_UP은 UAPI의 __KERNEL_DIV_ROUND_UP 별칭입니다. DIV_ROUND_DOWN_ULL은 ll을 unsigned long long 임시 변수에 저장하고 do_div로 몫을 구합니다. DIV_ROUND_UP_ULL은 ll+d-1을 만든 뒤 같은 경로를 씁니다. d 표현식은 여러 곳에 등장하므로 부수효과 없는 값을 전달해야 합니다. SECTOR_T 버전은 BITS_PER_LONG==32이면 ULL 경로, 아니면 일반 경로입니다."
+    },
+    {
+      "title": "가장 가까운 정수",
+      "text": "DIV_ROUND_CLOSEST는 인자의 부호 타입과 값의 부호 관계에 따라 d/2를 더하거나 빼고 나눕니다. 표현 가능한 signed 예제5/2는3, -5/2는-3으로 정확히 중간이면0에서 먼 쪽입니다. 음수와 unsigned 제수를 섞는 등 주석이 배제한 경우에는 적용하지 않습니다. ULL 버전은 unsigned 분자와32비트 제수 계약이며 덧셈 오버플로를 자동 검출하지 않습니다."
+    },
+    {
+      "title": "분수 데이터 타입과 계산",
+      "text": "__STRUCT_FRACT로 s8,u8,s16,u16,s32,u32 각각 numerator/denominator 구조체를 만든 뒤 생성 매크로를 undef합니다. 분모가0인지 검사하거나 약분하지 않는 저장 형식입니다. mult_frac는 x=q*d+r로 나누어 q*n+r*n/d를 계산합니다. x=10,n=3,d=4이면 q=2,r=2이므로7입니다. 불필요한 x*n 중간값은 줄이지만 q*n 또는 r*n까지 무조건 안전한 것은 아닙니다."
+    },
+    {
+      "title": "sector_div의 효과",
+      "text": "sector_div(a,b)는 do_div(a,b) 별칭입니다. 몫을 반환하는 일반 함수처럼 읽지 않습니다. do_div 계약에 따라 a를 몫으로 변경하고 표현식 값으로 나머지를 얻습니다. 실제 아키텍처 구현은 포함된 div64 헤더에서 확인해야 합니다."
+    },
+    {
+      "title": "abs와 abs_diff",
+      "text": "abs는 builtin 타입 선택을 통해 unsigned도 대응 signed로 변환한 뒤 부호를 검사합니다. plain char는 signed char처럼 해석하지만 반환형은 char로 보존합니다. 표현할 수 없는 최소 signed int/long의 양수값까지 만들어주는 API가 아닙니다. abs_diff는 두 지역 변수 주소 비교로 타입 불일치 진단을 유도하고 큰 값에서 작은 값을 뺍니다. signed 타입의 양끝 차이는 넘칠 수 있고 같은 값의 차이는0이므로 주석의 positive를 항상 엄격한 양수라고 읽으면 안 됩니다."
+    },
+    {
+      "title": "reciprocal_scale",
+      "text": "(u64)val*ep_ro의 상위32비트를 취해 floor(val*ep_ro/2^32)를 반환합니다. ep_ro>0이면0 이상 ep_ro 미만이며 나머지 연산이 아닙니다. val=2^31,ep_ro=10이면5입니다. ep_ro=0이면0이 반환되지만 빈 배열에 유효한 인덱스가 생기는 것은 아닙니다."
+    },
+    {
+      "title": "마지막 선언과 폭 분기",
+      "text": "int_pow는 u64 밑과 unsigned 지수, int_sqrt는 unsigned long을 사용합니다. BITS_PER_LONG<64이면 int_sqrt64 외부 선언이고 그 외에는 int_sqrt(x)를 u32로 반환하는 인라인 함수입니다. 선언을 읽는 것과 각 구현 파일을 읽는 것은 다른 범위의 학습입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "13을6의 배수로 올릴 때 적절한 API와 값은?",
+      "options": [
+        "roundup(13,6),18",
+        "round_up(13,6),항상18"
+      ],
+      "answer": 0,
+      "explanation": "round_up의 비트 마스크 공식은2의 거듭제곱 배수 전용입니다. 임의 양의 배수에는 roundup의 나눗셈 공식을 사용합니다."
+    },
+    {
+      "prompt": "mult_frac(10,3,4)의 값은?",
+      "options": [
+        "6",
+        "7"
+      ],
+      "answer": 1,
+      "explanation": "몫2에3을 곱한6과 나머지2*3/4의 정수 몫1을 더합니다. x/d를 먼저 계산한 뒤 나머지를 버리는 식과 다릅니다."
+    },
+    {
+      "prompt": "DIV_ROUND_CLOSEST(-5,2)는 안전한 signed 예제에서?",
+      "options": [
+        "-3",
+        "-2"
+      ],
+      "answer": 0,
+      "explanation": "부호가 다르므로 d/2를 빼서(-5-1)/2=-3으로 계산합니다. 정확한 중간은0에서 먼 정수입니다."
+    },
+    {
+      "prompt": "reciprocal_scale(2^31,10)은?",
+      "options": [
+        "8",
+        "5"
+      ],
+      "answer": 1,
+      "explanation": "2^31*10을2^32로 나눈 값은5입니다. 2^31%10인8과 다릅니다."
+    },
+    {
+      "prompt": "abs_diff가 signed 타입의 모든 차이 오버플로를 막는가?",
+      "options": [
+        "아니다. 큰 값에서 작은 값을 빼도 표현 범위를 넘을 수 있다",
+        "그렇다. 부호 순서만 맞추면 항상 안전하다"
+      ],
+      "answer": 0,
+      "explanation": "INT_MAX-INT_MIN의 수학적 결과는 int의 양수 범위를 넘습니다. 비교 방향과 결과 표현 가능성은 별개입니다."
+    },
+    {
+      "prompt": "분수 구조체 생성이 분모0을 막는가?",
+      "options": [
+        "그렇다. 생성 매크로가 분모를 자동 검사한다",
+        "아니다. 두 정수 필드를 정의할 뿐이다"
+      ],
+      "answer": 1,
+      "explanation": "구조체 선언에는 생성자나 조건 검사 코드가 없습니다. 데이터 형식과 유효성 검증은 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_MATH_H\n#define _LINUX_MATH_H\n\n#include <linux/types.h>\n#include <asm/div64.h>\n#include <uapi/linux/kernel.h>\n\n/*\n * This looks more complex than it should be. But we need to\n * get the type for the ~ right in round_down (it needs to be\n * as wide as the result!), and we want to evaluate the macro\n * arguments just once each.\n */\n#define __round_mask(x, y) ((__typeof__(x))((y)-1))\n\n/**\n * round_up - round up to next specified power of 2\n * @x: the value to round\n * @y: multiple to round up to (must be a power of 2)\n *\n * Rounds @x up to next multiple of @y (which must be a power of 2).\n * To perform arbitrary rounding up, use roundup() below.\n */\n#define round_up(x, y) ((((x)-1) | __round_mask(x, y))+1)\n\n/**\n * round_down - round down to next specified power of 2\n * @x: the value to round\n * @y: multiple to round down to (must be a power of 2)\n *\n * Rounds @x down to next multiple of @y (which must be a power of 2).\n * To perform arbitrary rounding down, use rounddown() below.\n */\n#define round_down(x, y) ((x) & ~__round_mask(x, y))\n\n#define DIV_ROUND_UP __KERNEL_DIV_ROUND_UP\n\n#define DIV_ROUND_DOWN_ULL(ll, d) \\\n\t({ unsigned long long _tmp = (ll); do_div(_tmp, d); _tmp; })\n\n#define DIV_ROUND_UP_ULL(ll, d) \\\n\tDIV_ROUND_DOWN_ULL((unsigned long long)(ll) + (d) - 1, (d))\n\n#if BITS_PER_LONG == 32\n# define DIV_ROUND_UP_SECTOR_T(ll,d) DIV_ROUND_UP_ULL(ll, d)\n#else\n# define DIV_ROUND_UP_SECTOR_T(ll,d) DIV_ROUND_UP(ll,d)\n#endif\n\n/**\n * roundup - round up to the next specified multiple\n * @x: the value to up\n * @y: multiple to round up to\n *\n * Rounds @x up to next multiple of @y. If @y will always be a power\n * of 2, consider using the faster round_up().\n */\n#define roundup(x, y) (\t\t\t\t\t\\\n{\t\t\t\t\t\t\t\\\n\ttypeof(y) __y = y;\t\t\t\t\\\n\t(((x) + (__y - 1)) / __y) * __y;\t\t\\\n}\t\t\t\t\t\t\t\\\n)\n/**\n * rounddown - round down to next specified multiple\n * @x: the value to round\n * @y: multiple to round down to\n *\n * Rounds @x down to next multiple of @y. If @y will always be a power\n * of 2, consider using the faster round_down().\n */\n#define rounddown(x, y) (\t\t\t\t\\\n{\t\t\t\t\t\t\t\\\n\ttypeof(x) __x = (x);\t\t\t\t\\\n\t__x - (__x % (y));\t\t\t\t\\\n}\t\t\t\t\t\t\t\\\n)\n\n/*\n * Divide positive or negative dividend by positive or negative divisor\n * and round to closest integer. Result is undefined for negative\n * divisors if the dividend variable type is unsigned and for negative\n * dividends if the divisor variable type is unsigned.\n */\n#define DIV_ROUND_CLOSEST(x, divisor)(\t\t\t\\\n{\t\t\t\t\t\t\t\\\n\ttypeof(x) __x = x;\t\t\t\t\\\n\ttypeof(divisor) __d = divisor;\t\t\t\\\n\t(((typeof(x))-1) > 0 ||\t\t\t\t\\\n\t ((typeof(divisor))-1) > 0 ||\t\t\t\\\n\t (((__x) > 0) == ((__d) > 0))) ?\t\t\\\n\t\t(((__x) + ((__d) / 2)) / (__d)) :\t\\\n\t\t(((__x) - ((__d) / 2)) / (__d));\t\\\n}\t\t\t\t\t\t\t\\\n)\n/*\n * Same as above but for u64 dividends. divisor must be a 32-bit\n * number.\n */\n#define DIV_ROUND_CLOSEST_ULL(x, divisor)(\t\t\\\n{\t\t\t\t\t\t\t\\\n\ttypeof(divisor) __d = divisor;\t\t\t\\\n\tunsigned long long _tmp = (x) + (__d) / 2;\t\\\n\tdo_div(_tmp, __d);\t\t\t\t\\\n\t_tmp;\t\t\t\t\t\t\\\n}\t\t\t\t\t\t\t\\\n)\n\n#define __STRUCT_FRACT(type)\t\t\t\t\\\nstruct type##_fract {\t\t\t\t\t\\\n\t__##type numerator;\t\t\t\t\\\n\t__##type denominator;\t\t\t\t\\\n};\n__STRUCT_FRACT(s8)\n__STRUCT_FRACT(u8)\n__STRUCT_FRACT(s16)\n__STRUCT_FRACT(u16)\n__STRUCT_FRACT(s32)\n__STRUCT_FRACT(u32)\n#undef __STRUCT_FRACT\n\n/* Calculate \"x * n / d\" without unnecessary overflow or loss of precision. */\n#define mult_frac(x, n, d)\t\\\n({\t\t\t\t\\\n\ttypeof(x) x_ = (x);\t\\\n\ttypeof(n) n_ = (n);\t\\\n\ttypeof(d) d_ = (d);\t\\\n\t\t\t\t\\\n\ttypeof(x_) q = x_ / d_;\t\\\n\ttypeof(x_) r = x_ % d_;\t\\\n\tq * n_ + r * n_ / d_;\t\\\n})\n\n#define sector_div(a, b) do_div(a, b)\n\n/**\n * abs - return absolute value of an argument\n * @x: the value.  If it is unsigned type, it is converted to signed type first.\n *     char is treated as if it was signed (regardless of whether it really is)\n *     but the macro's return type is preserved as char.\n *\n * Return: an absolute value of x.\n */\n#define abs(x)\t__abs_choose_expr(x, long long,\t\t\t\t\\\n\t\t__abs_choose_expr(x, long,\t\t\t\t\\\n\t\t__abs_choose_expr(x, int,\t\t\t\t\\\n\t\t__abs_choose_expr(x, short,\t\t\t\t\\\n\t\t__abs_choose_expr(x, char,\t\t\t\t\\\n\t\t__builtin_choose_expr(\t\t\t\t\t\\\n\t\t\t__builtin_types_compatible_p(typeof(x), char),\t\\\n\t\t\t(char)({ signed char __x = (x); __x<0?-__x:__x; }), \\\n\t\t\t((void)0)))))))\n\n#define __abs_choose_expr(x, type, other) __builtin_choose_expr(\t\\\n\t__builtin_types_compatible_p(typeof(x),   signed type) ||\t\\\n\t__builtin_types_compatible_p(typeof(x), unsigned type),\t\t\\\n\t({ signed type __x = (x); __x < 0 ? -__x : __x; }), other)\n\n/**\n * abs_diff - return absolute value of the difference between the arguments\n * @a: the first argument\n * @b: the second argument\n *\n * @a and @b have to be of the same type. With this restriction we compare\n * signed to signed and unsigned to unsigned. The result is the subtraction\n * the smaller of the two from the bigger, hence result is always a positive\n * value.\n *\n * Return: an absolute value of the difference between the @a and @b.\n */\n#define abs_diff(a, b) ({\t\t\t\\\n\ttypeof(a) __a = (a);\t\t\t\\\n\ttypeof(b) __b = (b);\t\t\t\\\n\t(void)(&__a == &__b);\t\t\t\\\n\t__a > __b ? (__a - __b) : (__b - __a);\t\\\n})\n\n/**\n * reciprocal_scale - \"scale\" a value into range [0, ep_ro)\n * @val: value\n * @ep_ro: right open interval endpoint\n *\n * Perform a \"reciprocal multiplication\" in order to \"scale\" a value into\n * range [0, @ep_ro), where the upper interval endpoint is right-open.\n * This is useful, e.g. for accessing a index of an array containing\n * @ep_ro elements, for example. Think of it as sort of modulus, only that\n * the result isn't that of modulo. ;) Note that if initial input is a\n * small value, then result will return 0.\n *\n * Return: a result based on @val in interval [0, @ep_ro).\n */\nstatic inline u32 reciprocal_scale(u32 val, u32 ep_ro)\n{\n\treturn (u32)(((u64) val * ep_ro) >> 32);\n}\n\nu64 int_pow(u64 base, unsigned int exp);\nunsigned long int_sqrt(unsigned long);\n\n#if BITS_PER_LONG < 64\nu32 int_sqrt64(u64 x);\n#else\nstatic inline u32 int_sqrt64(u64 x)\n{\n\treturn (u32)int_sqrt(x);\n}\n#endif\n\n#endif\t/* _LINUX_MATH_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "469c11207b365e55cd0ed45c379930b3c7ee7e0ea60137db9d05d6ee460e8c67",
+    "scope": "whole-file",
+    "line_count": 210,
+    "authoring_source": "course/file_units/math_contracts.py",
+    "sections": [
+      "전체 구성과 의존성",
+      "2의 거듭제곱 배수",
+      "일반 배수 올림·내림",
+      "나눗셈 결과의 올림",
+      "가장 가까운 정수",
+      "분수 데이터 타입과 계산",
+      "sector_div의 효과",
+      "abs와 abs_diff",
+      "reciprocal_scale",
+      "마지막 선언과 폭 분기"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/math.h"
+    }
+  ]
+}

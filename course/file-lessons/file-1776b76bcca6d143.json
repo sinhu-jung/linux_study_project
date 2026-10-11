@@ -1,0 +1,77 @@
+{
+  "id": "file-1776b76bcca6d143",
+  "path": ".rustfmt.toml",
+  "title": "Rust 포맷 설정 전체: 활성 옵션과 주석의 차이",
+  "area": "빌드·개발 도구·접근 정책",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "설정 파일에 이름이 보인다고 해서 해당 기능이 실제로 활성화된 것은 아닙니다.",
+  "guide": [
+    "활성 설정은 edition=\"2021\"과 newline_style=\"Unix\" 두 개입니다. 아래 다섯 옵션은 #으로 주석 처리되어 활성 옵션이 아닙니다. 주석은 향후 안정화되면 사용할 수 있는 실험적 포맷 기능을 남겨둔 이유를 설명합니다.",
+    "포맷터의 입력 문법 edition과 줄바꿈을 맞추는 설정입니다. 이 파일만 수정한다고 Rust 컴파일러의 실제 빌드 edition이나 모든 코드 의미가 자동 변경되는 것은 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "두 활성 대입 뒤에 unstable 옵션 설명 주석과 format_code_in_doc_comments, reorder_impl_items, comment_width, wrap_comments, normalize_comments의 주석 처리된 예시가 있습니다. 값이 쓰여 있어도 # 뒤 내용은 TOML의 활성 대입이 아닙니다."
+    },
+    {
+      "title": "효과와 비효과",
+      "text": "newline_style=\"Unix\"는 포맷터 출력의 LF 줄바꿈을 지정합니다. edition=\"2021\"은 rustfmt의 파싱·포맷 문맥 설정입니다. 주석 상태의 comment_width=100을 현재 강제되는 100글자 제한이라고 소개하면 틀립니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "구성의 유효 상태와 제안·기록 상태를 구별하는 연습입니다. 도구 버전, 지원 옵션, 실제 호출 인자가 최종 동작을 결정하므로 주석을 실행 설정으로 세면 재현 가능한 빌드나 포맷 검증을 해칠 수 있습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일은 현재 comment_width=100을 활성화하는가?",
+      "options": [
+        "아니다. 해당 줄은 주석이다",
+        "그렇다. 숫자가 파일에 있으므로 적용된다"
+      ],
+      "answer": 0,
+      "explanation": "#comment_width = 100은 주석 처리되어 TOML 설정값으로 읽히지 않습니다. 활성화 의도와 현재 활성 상태는 다릅니다."
+    },
+    {
+      "prompt": "활성 줄바꿈 설정은?",
+      "options": [
+        "Windows 형식 CRLF",
+        "Unix 형식 LF"
+      ],
+      "answer": 1,
+      "explanation": "newline_style에 문자열 Unix가 지정되어 있습니다. 이 설정은 포맷터 출력 규칙이며 이미 존재하는 모든 파일이 읽는 즉시 수정된다는 뜻은 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "edition = \"2021\"\nnewline_style = \"Unix\"\n\n# Unstable options that help catching some mistakes in formatting and that we may want to enable\n# when they become stable.\n#\n# They are kept here since they are useful to run from time to time.\n#format_code_in_doc_comments = true\n#reorder_impl_items = true\n#comment_width = 100\n#wrap_comments = true\n#normalize_comments = true\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "b2aaa0727b5c31d2caed8a6865347de1def4b99bb95f844e158351b07cdc7974",
+    "scope": "whole-file",
+    "line_count": 12,
+    "authoring_source": "course/file_units/build_and_policy.py",
+    "sections": [
+      "전체 파일",
+      "효과와 비효과",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/.rustfmt.toml"
+    }
+  ]
+}

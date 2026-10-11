@@ -1,0 +1,125 @@
+{
+  "id": "file-0759f19f28c2348c",
+  "path": "arch/x86/include/asm/vvar.h",
+  "title": "X86 VVAR 배치: 선언·정의·링커 모드의 분리",
+  "area": "전처리 · 토큰 결합 · 문자열화 · 링커 스크립트 · 공유 매핑 · 정렬",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "EMIT_VVAR 분기, 배열과 단일 객체 매크로, 고정 offset 두 개와 정리 규칙을 읽습니다.",
+  "guide": [
+    "공유 변수의 C 타입 선언과 실제 섹션 배치를 다른 확장 모드로 연결하여 커널·사용자 매핑이 같은 데이터를 가리키게 합니다.",
+    "VVAR 이름 연결과 고정 offset, hidden 참조와 별도 정의의 관계를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 메모리 역할",
+      "text": "GPL-2.0-only와 설명 주석, guard 뒤 EMIT_VVAR 분기와 일반 C 분기가 있고 끝에 시간 배열·RNG 단일 객체 선언 및 매크로 정리가 있습니다. 주석은 커널 데이터 페이지에 사용자용 추가 read-only 매핑을 제공한다고 설명합니다. 읽기 전용 매핑은 주소를 숨기거나 데이터를 암호화한다는 뜻이 아닙니다."
+    },
+    {
+      "title": "EMIT_VVAR 모드",
+      "text": "EMIT_VVAR가 정의되어 있으면 DECLARE_VVAR와 DECLARE_VVAR_SINGLE 모두 EMIT_VVAR(name,offset)으로 확장됩니다. type 인자는 이 경로에서 사용하지 않습니다. 주석상 커널 링커 스크립트의 배치와 커널 코드의 offset 값 가져오기에 이용합니다. C extern 선언을 출력하는 모드와 구분해야 합니다."
+    },
+    {
+      "title": "일반 C의 배열 선언",
+      "text": "일반 분기는 extern char __vvar_page를 선언합니다. DECLARE_VVAR는 vvar_와 name을 ##로 결합한 배열, timens_와 name을 결합한 배열 두 개를 각각 CS_BASES 길이의 extern hidden으로 선언합니다. offset 인자는 이 분기의 C 선언에는 들어가지 않습니다. 페이지 안 위치는 다른 배치 문맥과 연결하여 결정합니다."
+    },
+    {
+      "title": "일반 C의 단일 선언과 접근",
+      "text": "DECLARE_VVAR_SINGLE은 hidden extern vvar_name 단일 객체만 만들며 timens 배열 별칭을 만들지 않습니다. VVAR(name)은 vvar_name, TIMENS(name)은 timens_name을 가리키도록 토큰을 결합합니다. 실제 name이 _vdso_data처럼 밑줄로 시작하므로 결합한 식별자의 밑줄 개수까지 전처리 규칙을 그대로 따릅니다."
+    },
+    {
+      "title": "정의 매크로",
+      "text": "DEFINE_VVAR(type,name)은 name[CS_BASES]를, DEFINE_VVAR_SINGLE은 단일 name 객체를 정의합니다. 둘 다 section(\".vvar_\" #name), aligned(16), __visible 속성을 붙입니다. #name은 문자열화이며 여기의 정의 이름은 vvar_ 접두사를 자동으로 붙인 이름이 아닙니다. 선언용 alias와 실제 저장소 정의의 연결은 링커 배치와 함께 읽어야 합니다."
+    },
+    {
+      "title": "시간 배열의 offset",
+      "text": "DECLARE_VVAR(128,struct vdso_data,_vdso_data)가 명시되어 있습니다. EMIT 모드에서는 이름과 offset을 내보내고 C 모드에서는 시간·namespace 배열의 extern 참조를 선언합니다. 숫자 128은 페이지 안 배치 offset이지 vdso_data 필드 개수나 배열 길이가 아닙니다."
+    },
+    {
+      "title": "RNG 단일 객체의 offset",
+      "text": "_SINGLE_DATA가 정의되지 않았을 때 이를 정의하고 DECLARE_VVAR_SINGLE(640,struct vdso_rng_data,_vdso_rng_data)를 사용합니다. 이 경로는 단일 RNG 객체용이며 CS_BASES개 RNG 배열을 선언하지 않습니다. 안쪽 _SINGLE_DATA 조건과 바깥 파일 guard는 별도 전처리 상태입니다."
+    },
+    {
+      "title": "정리와 경계",
+      "text": "파일 끝에서 DECLARE_VVAR와 DECLARE_VVAR_SINGLE을 undef합니다. 일반 분기의 VVAR/TIMENS/DEFINE 두 매크로는 여기서 undef하지 않습니다. 이 파일은 DEFINE_VVAR를 실제로 호출해 저장소를 만드는 곳이 아니며 주석도 다른 파일이 정의해야 한다고 명시합니다. 모든 설정에서 전체 레이아웃이 고정 크기에 맞는지는 실제 정의와 링커 결과까지 확인해야 합니다."
+    },
+    {
+      "title": "CS와 검증 범위",
+      "text": "매크로의 동일 목록을 서로 다른 출력으로 재사용하는 방법, 선언과 저장소 정의, 섹션 정렬과 페이지 offset, 접근 권한과 심볼 visibility의 차이를 학습합니다. 전체 헤더를 읽었지만 x86 이미지 링크나 사용자 매핑을 실제로 실행 검증한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "EMIT_VVAR 모드에서 DECLARE_VVAR의 type 인자는 사용되는가?",
+      "options": [
+        "아니다. name과 offset만 EMIT_VVAR에 넘긴다",
+        "그렇다. 항상 extern C 구조체 선언을 만든다"
+      ],
+      "answer": 0,
+      "explanation": "이 모드는 링커 배치나 offset 정보 출력용입니다. 같은 매크로 호출도 전처리 문맥에 따라 결과가 달라집니다."
+    },
+    {
+      "prompt": "일반 DECLARE_VVAR와 SINGLE의 차이는?",
+      "options": [
+        "둘 다 무조건 두 개의 단일 객체를 정의한다",
+        "전자는 시간·namespace 배열 둘을, 후자는 vvar 단일 객체만 선언한다"
+      ],
+      "answer": 1,
+      "explanation": "extern 선언과 실제 정의를 구분하며 배열 길이 CS_BASES도 확인해야 합니다."
+    },
+    {
+      "prompt": "DEFINE_VVAR의 aligned(16)은 변수 offset이 항상 16이라는 뜻인가?",
+      "options": [
+        "아니다. 정렬 요구이며 명시한 배치 offset과 다르다",
+        "그렇다. 모든 객체가 같은 offset 16에 겹친다"
+      ],
+      "answer": 0,
+      "explanation": "정렬은 주소의 배수 조건이고 선언 목록의 128·640은 배치 위치입니다."
+    },
+    {
+      "prompt": "이 헤더는 시간 배열의 저장소를 실제 정의하는가?",
+      "options": [
+        "그렇다. extern만 있으면 새 저장소가 자동으로 생성된다",
+        "아니다. 정의 매크로를 제공하고 목록에서는 선언 매크로를 사용한다"
+      ],
+      "answer": 1,
+      "explanation": "주석도 다른 파일이 DEFINE_VVAR로 정의해야 한다고 설명합니다. 선언·정의·링커 연결을 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * vvar.h: Shared vDSO/kernel variable declarations\n * Copyright (c) 2011 Andy Lutomirski\n *\n * A handful of variables are accessible (read-only) from userspace\n * code in the vsyscall page and the vdso.  They are declared here.\n * Some other file must define them with DEFINE_VVAR.\n *\n * In normal kernel code, they are used like any other variable.\n * In user code, they are accessed through the VVAR macro.\n *\n * These variables live in a page of kernel data that has an extra RO\n * mapping for userspace.  Each variable needs a unique offset within\n * that page; specify that offset with the DECLARE_VVAR macro.  (If\n * you mess up, the linker will catch it.)\n */\n\n#ifndef _ASM_X86_VVAR_H\n#define _ASM_X86_VVAR_H\n\n#ifdef EMIT_VVAR\n/*\n * EMIT_VVAR() is used by the kernel linker script to put vvars in the\n * right place. Also, it's used by kernel code to import offsets values.\n */\n#define DECLARE_VVAR(offset, type, name) \\\n\tEMIT_VVAR(name, offset)\n#define DECLARE_VVAR_SINGLE(offset, type, name) \\\n\tEMIT_VVAR(name, offset)\n\n#else\n\nextern char __vvar_page;\n\n#define DECLARE_VVAR(offset, type, name)\t\t\t\t\\\n\textern type vvar_ ## name[CS_BASES]\t\t\t\t\\\n\t__attribute__((visibility(\"hidden\")));\t\t\t\t\\\n\textern type timens_ ## name[CS_BASES]\t\t\t\t\\\n\t__attribute__((visibility(\"hidden\")));\t\t\t\t\\\n\n#define DECLARE_VVAR_SINGLE(offset, type, name)\t\t\t\t\\\n\textern type vvar_ ## name\t\t\t\t\t\\\n\t__attribute__((visibility(\"hidden\")));\t\t\t\t\\\n\n#define VVAR(name) (vvar_ ## name)\n#define TIMENS(name) (timens_ ## name)\n\n#define DEFINE_VVAR(type, name)\t\t\t\t\t\t\\\n\ttype name[CS_BASES]\t\t\t\t\t\t\\\n\t__attribute__((section(\".vvar_\" #name), aligned(16))) __visible\n\n#define DEFINE_VVAR_SINGLE(type, name)\t\t\t\t\t\\\n\ttype name\t\t\t\t\t\t\t\\\n\t__attribute__((section(\".vvar_\" #name), aligned(16))) __visible\n\n#endif\n\n/* DECLARE_VVAR(offset, type, name) */\n\nDECLARE_VVAR(128, struct vdso_data, _vdso_data)\n\n#if !defined(_SINGLE_DATA)\n#define _SINGLE_DATA\nDECLARE_VVAR_SINGLE(640, struct vdso_rng_data, _vdso_rng_data)\n#endif\n\n#undef DECLARE_VVAR\n#undef DECLARE_VVAR_SINGLE\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "04b6e7ae84ed75b0c61899ee68374924d577882f3ac4121a762e6548c7092876",
+    "scope": "whole-file",
+    "line_count": 71,
+    "authoring_source": "course/file_units/x86_vvar_layout.py",
+    "sections": [
+      "파일 전체와 메모리 역할",
+      "EMIT_VVAR 모드",
+      "일반 C의 배열 선언",
+      "일반 C의 단일 선언과 접근",
+      "정의 매크로",
+      "시간 배열의 offset",
+      "RNG 단일 객체의 offset",
+      "정리와 경계",
+      "CS와 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vvar.h"
+    }
+  ]
+}

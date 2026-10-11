@@ -1,0 +1,86 @@
+{
+  "id": "file-2e99e148535b0fce",
+  "path": "scripts/pahole-version.sh",
+  "title": "Pahole 버전 probe: 실행 파일 확인과 문자열 치환",
+  "area": "도구 탐지 · shell · 버전 인코딩 · 문자열 치환",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "도구 발견 실패와 버전 출력 가공의 전체 제어 흐름을 분석합니다.",
+  "guide": [
+    "버전 문자열을 정수처럼 표현하는 규칙과 실제 산술 변환은 서로 다를 수 있습니다.",
+    "command -v, 실행 가능 검사, 전체 인수 전달, sed 치환 범위를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "용도와 사전 검사",
+      "text": "#!/bin/sh, GPL-2.0 주석은 pahole 경로를 인수로 받고 v1.19를 119처럼 출력한다고 설명합니다. command -v \"$@\"의 결과에 -x 검사를 적용합니다. 실행 가능 파일로 확인하지 못하면 stdout에 0을 출력하고 exit 1입니다. 오류 sentinel과 실패 종료 상태를 함께 반환합니다."
+    },
+    {
+      "title": "도구 실행과 치환",
+      "text": "검사를 통과하면 \"$@\" --version으로 전달받은 명령과 인수를 실행하고 sed -E로 v(숫자).(숫자)를 두 그룹의 단순 연결로 바꿉니다. v1.19는 119지만 v1.9는 19이며 세 자리로 zero padding하는 산술 변환은 아닙니다. 버전 문자열 시작·끝 앵커가 없어 접두·접미의 다른 문자를 전부 지우는 식도 아닙니다."
+    },
+    {
+      "title": "실패 처리의 한계",
+      "text": "버전 형식이 맞지 않으면 sed가 원문을 남길 수 있고 숫자만인지 다시 검사하지 않습니다. set -e나 pipefail이 없으며 pipeline의 앞 도구 실패를 별도로 검사하지 않습니다. command -v로 실행 가능성을 확인한 사실과 --version 실행 성공은 별개입니다. 전체 파일을 검토했으며 실제 pahole을 이 환경에서 실행한 검증은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "실행 가능한 pahole을 찾지 못하면 출력과 종료 상태는?",
+      "options": [
+        "0 출력, 종료 상태 1",
+        "아무 출력 없이 성공 0"
+      ],
+      "answer": 0,
+      "explanation": "if 분기에 echo 0과 exit 1이 모두 있습니다. 값만 읽고 성공으로 오해하면 안 됩니다."
+    },
+    {
+      "prompt": "치환식이 v1.9에 적용되면 결과는?",
+      "options": [
+        "109",
+        "19"
+      ],
+      "answer": 1,
+      "explanation": "두 숫자 그룹을 그대로 연결합니다. 주석의 세 자리 예시는 한 자리 minor에 대한 padding 구현이 아닙니다."
+    },
+    {
+      "prompt": "버전 출력에 다른 접미사가 있으면 자동으로 모두 제거되는가?",
+      "options": [
+        "아니다. 일치하는 v숫자.숫자 부분만 치환한다",
+        "그렇다. 출력 전체를 정수 parser가 처리한다"
+      ],
+      "answer": 0,
+      "explanation": "sed 식에는 전체 줄을 감싸는 앵커나 정수 검증이 없습니다. 치환과 검증을 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n#\n# Usage: $ ./pahole-version.sh pahole\n#\n# Prints pahole's version in a 3-digit form, such as 119 for v1.19.\n\nif [ ! -x \"$(command -v \"$@\")\" ]; then\n\techo 0\n\texit 1\nfi\n\n\"$@\" --version | sed -E 's/v([0-9]+)\\.([0-9]+)/\\1\\2/'\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7640978c9f22186f8305f7574c5713a731ce5ad9dca6dc2e762f214208208ecc",
+    "scope": "whole-file",
+    "line_count": 13,
+    "authoring_source": "course/file_units/btf_build_helpers.py",
+    "sections": [
+      "용도와 사전 검사",
+      "도구 실행과 치환",
+      "실패 처리의 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/pahole-version.sh"
+    }
+  ]
+}

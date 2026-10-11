@@ -1,0 +1,110 @@
+{
+  "id": "file-787082b6a9b4c280",
+  "path": "lib/strnlen_user.c",
+  "title": "사용자 문자열 길이 전체: NUL 포함·초과값·TOCTOU",
+  "area": "문자열·파서 · 메모리 수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "사용자 메모리의 길이를 먼저 재고 나중에 복사하면 그 사이 내용이 바뀔 수 있습니다. 원문은 이 사용 패턴을 경고합니다.",
+  "guide": [
+    "do_strnlen_user는 시작 주소를 워드 경계 아래로 맞추고 원래 시작 이전 바이트를 1로 가려 잘못된 NUL 감지를 막습니다. 워드별 0바이트를 찾아 NUL을 포함한 길이를 반환합니다. fault는 0, 제한 초과는 count보다 큰 값입니다.",
+    "반환 0은 빈 문자열의 길이가 아니라 예외 또는 잘못된 count입니다. 빈 문자열은 정상이라면 1입니다. 길이 초과를 ==count+1로만 검사하지 말고 >count로 검사합니다. 나중에 쓸 문자열은 길이 관찰에 의존하기보다 제한된 복사로 확보하는 것이 원문 권고입니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "SPDX, kernel/export/uaccess/mm/bitops/word-at-a-time 헤더, 내부 워드 길이 함수, 공개 wrapper와 export가 전체입니다. 복사 함수와 달리 목적지 버퍼가 없으며 입력 메모리의 바이트만 관찰합니다."
+    },
+    {
+      "title": "정렬과 보정",
+      "text": "align은 src 주소의 워드 내 오프셋입니다. src에서 align을 빼고 max에 align을 더해 경계를 맞춥니다. 첫 워드에 aligned_byte_mask(align)을 OR하여 원래 시작 이전 바이트를 0이 아닌 값으로 만듭니다. NUL 위치를 찾으면 res+find_zero+1-align으로 원래 시작 기준이며 NUL 포함인 길이를 계산합니다."
+    },
+    {
+      "title": "왜 count+1만 나오지 않는가",
+      "text": "정렬된 워드 하나를 읽으면 그 안에서 사용자 count를 조금 넘는 위치의 NUL도 발견할 수 있습니다. 이때 직접 위치 식으로 반환되어 count+1보다 클 수 있습니다. 워드에서 NUL을 못 찾고 제한을 소진한 별도 경로는 count+1을 반환합니다. 그래서 API 계약은 특정 sentinel 한 값이 아니라 >count입니다."
+    },
+    {
+      "title": "wrapper와 실패",
+      "text": "count<=0이면 먼저 0입니다. masked 접근 또는 일반 주소 검증·user_read_access_begin 경로로 내부 함수를 호출하고 접근 종료를 수행합니다. 일반 경로의 max는 TASK_SIZE_MAX와 count로 제한합니다. 읽기 fault나 허용 주소 공간 끝을 너무 일찍 만나는 경우도 0입니다. 사용자 문맥용이며 page fault가 가능하면 잠들 수 있습니다."
+    },
+    {
+      "title": "TOCTOU와 복사 계약",
+      "text": "길이 조회 뒤 사용자 스레드가 문자열을 바꿀 수 있어 조회값으로 무제한 후속 복사를 허용하면 안 됩니다. strncpy_from_user 등으로 크기를 제한한 복사본을 얻고 그 반환 규약을 검사합니다. 이 함수의 NUL 포함 길이와 복사 함수의 NUL 제외 성공 길이를 혼동하지 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "정렬 최적화와 추상 API의 관찰 범위, 단일 초과 sentinel과 범위 기반 오류 계약, TOCTOU를 연결합니다. 워드 앞·뒤에 접근 가능한 메모리가 있다는 아키텍처 uaccess 규약을 단순 사용자 공간 strlen과 같은 것으로 대체하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "정상적인 빈 사용자 문자열의 반환값은?",
+      "options": [
+        "1",
+        "0"
+      ],
+      "answer": 0,
+      "explanation": "마지막 NUL도 크기에 포함합니다. 반환 0은 예외 또는 count 오류를 나타내므로 정상 빈 문자열과 구별됩니다."
+    },
+    {
+      "prompt": "길이 초과를 검사하는 올바른 비교는?",
+      "options": [
+        "반환값 == count+1만",
+        "반환값 > count"
+      ],
+      "answer": 1,
+      "explanation": "워드 단위 검색이 count보다 더 뒤의 NUL을 발견하면 count+1보다 큰 실제 위치를 반환할 수 있습니다. 원문은 >count 검사를 요구합니다."
+    },
+    {
+      "prompt": "길이를 먼저 얻으면 그 길이가 후속 복사 때도 유효하다고 보장되는가?",
+      "options": [
+        "아니다. 사용자 메모리가 그 사이 변경될 수 있다",
+        "그렇다. 함수가 사용자 스레드를 계속 정지시킨다"
+      ],
+      "answer": 0,
+      "explanation": "길이 조회는 영구 잠금이나 snapshot 획득이 아닙니다. 원문은 안정된 복사본을 얻기 위해 strncpy_from_user를 사용하도록 경고합니다."
+    },
+    {
+      "prompt": "첫 워드에 aligned_byte_mask를 OR하는 이유는?",
+      "options": [
+        "문자열 전체를 0으로 지우려고",
+        "원래 시작 주소 이전 바이트에서 NUL을 잘못 찾지 않으려고"
+      ],
+      "answer": 1,
+      "explanation": "읽기를 정렬하기 위해 주소를 앞당겼으므로 앞의 무관한 바이트를 검색 대상에서 제외해야 합니다. OR한 1비트로 그 바이트들이 0으로 보이지 않게 만듭니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/uaccess.h>\n#include <linux/mm.h>\n#include <linux/bitops.h>\n\n#include <asm/word-at-a-time.h>\n\n/*\n * Do a strnlen, return length of string *with* final '\\0'.\n * 'count' is the user-supplied count, while 'max' is the\n * address space maximum.\n *\n * Return 0 for exceptions (which includes hitting the address\n * space maximum), or 'count+1' if hitting the user-supplied\n * maximum count.\n *\n * NOTE! We can sometimes overshoot the user-supplied maximum\n * if it fits in a aligned 'long'. The caller needs to check\n * the return value against \"> max\".\n */\nstatic __always_inline long do_strnlen_user(const char __user *src, unsigned long count, unsigned long max)\n{\n\tconst struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;\n\tunsigned long align, res = 0;\n\tunsigned long c;\n\n\t/*\n\t * Do everything aligned. But that means that we\n\t * need to also expand the maximum..\n\t */\n\talign = (sizeof(unsigned long) - 1) & (unsigned long)src;\n\tsrc -= align;\n\tmax += align;\n\n\tunsafe_get_user(c, (unsigned long __user *)src, efault);\n\tc |= aligned_byte_mask(align);\n\n\tfor (;;) {\n\t\tunsigned long data;\n\t\tif (has_zero(c, &data, &constants)) {\n\t\t\tdata = prep_zero_mask(c, data, &constants);\n\t\t\tdata = create_zero_mask(data);\n\t\t\treturn res + find_zero(data) + 1 - align;\n\t\t}\n\t\tres += sizeof(unsigned long);\n\t\t/* We already handled 'unsigned long' bytes. Did we do it all ? */\n\t\tif (unlikely(max <= sizeof(unsigned long)))\n\t\t\tbreak;\n\t\tmax -= sizeof(unsigned long);\n\t\tunsafe_get_user(c, (unsigned long __user *)(src+res), efault);\n\t}\n\tres -= align;\n\n\t/*\n\t * Uhhuh. We hit 'max'. But was that the user-specified maximum\n\t * too? If so, return the marker for \"too long\".\n\t */\n\tif (res >= count)\n\t\treturn count+1;\n\n\t/*\n\t * Nope: we hit the address space limit, and we still had more\n\t * characters the caller would have wanted. That's 0.\n\t */\nefault:\n\treturn 0;\n}\n\n/**\n * strnlen_user: - Get the size of a user string INCLUDING final NUL.\n * @str: The string to measure.\n * @count: Maximum count (including NUL character)\n *\n * Context: User context only. This function may sleep if pagefaults are\n *          enabled.\n *\n * Get the size of a NUL-terminated string in user space.\n *\n * Returns the size of the string INCLUDING the terminating NUL.\n * If the string is too long, returns a number larger than @count. User\n * has to check the return value against \"> count\".\n * On exception (or invalid count), returns 0.\n *\n * NOTE! You should basically never use this function. There is\n * almost never any valid case for using the length of a user space\n * string, since the string can be changed at any time by other\n * threads. Use \"strncpy_from_user()\" instead to get a stable copy\n * of the string.\n */\nlong strnlen_user(const char __user *str, long count)\n{\n\tunsigned long max_addr, src_addr;\n\n\tif (unlikely(count <= 0))\n\t\treturn 0;\n\n\tif (can_do_masked_user_access()) {\n\t\tlong retval;\n\n\t\tstr = masked_user_access_begin(str);\n\t\tretval = do_strnlen_user(str, count, count);\n\t\tuser_read_access_end();\n\t\treturn retval;\n\t}\n\n\tmax_addr = TASK_SIZE_MAX;\n\tsrc_addr = (unsigned long)untagged_addr(str);\n\tif (likely(src_addr < max_addr)) {\n\t\tunsigned long max = max_addr - src_addr;\n\t\tlong retval;\n\n\t\t/*\n\t\t * Truncate 'max' to the user-specified limit, so that\n\t\t * we only have one limit we need to check in the loop\n\t\t */\n\t\tif (max > count)\n\t\t\tmax = count;\n\n\t\tif (user_read_access_begin(str, max)) {\n\t\t\tretval = do_strnlen_user(str, count, max);\n\t\t\tuser_read_access_end();\n\t\t\treturn retval;\n\t\t}\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL(strnlen_user);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d381740465a4cd3eae9552de774032dc03499442fe4099228c8d3b015d3d9185",
+    "scope": "whole-file",
+    "line_count": 129,
+    "authoring_source": "course/file_units/string_boundaries.py",
+    "sections": [
+      "파일 전체 구성",
+      "정렬과 보정",
+      "왜 count+1만 나오지 않는가",
+      "wrapper와 실패",
+      "TOCTOU와 복사 계약",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/strnlen_user.c"
+    }
+  ]
+}

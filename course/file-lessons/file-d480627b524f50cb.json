@@ -1,0 +1,139 @@
+{
+  "id": "file-d480627b524f50cb",
+  "path": "mm/ioremap.c",
+  "title": "정규 I/O 매핑 전체: 가상 영역 할당과 실패 정리",
+  "area": "I/O 메모리 · vmalloc 영역 · 페이지 정렬 · 오류 경로 · 주소 범위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "물리 I/O 범위를 커널 가상 영역에 매핑하고 페이지 offset을 보존하는 공통 구현을 해설합니다.",
+  "guide": [
+    "가상 주소 공간 확보와 페이지 테이블 설치를 분리하고 설치 실패 시 확보한 영역을 정리합니다.",
+    "고정 슬롯을 사용하는 early_ioremap과 비교하되 정규 매핑의 slab 가용성 조건을 함께 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0·역사적 PC I/O 설명·저작권 뒤 vmalloc/mm/io/export/ioremap 헤더를 포함합니다. generic_ioremap_prot, 조건부 public ioremap_prot, generic_iounmap, 조건부 public iounmap이 전부입니다. 특정 PCI 장치를 탐색하거나 장치 자원의 소유권을 예약하는 코드는 없습니다."
+    },
+    {
+      "title": "정규 할당 전제",
+      "text": "generic_ioremap_prot는 slab_is_available가 거짓이면 WARN_ON_ONCE 후 NULL을 반환합니다. 주석은 너무 이른 플랫폼 드라이버가 이 경로에 도달할 수 있음을 설명합니다. 정규 함수가 초기 부팅 매핑으로 자동 대체되는 경로는 없습니다."
+    },
+    {
+      "title": "범위 검사",
+      "text": "last_addr=phys_addr+size-1을 구해 size0 또는 last_addr<phys_addr이면 NULL입니다. 물리 주소의 wraparound를 거부하려는 검사입니다. 장치 자원 소유권, 모든 메모리 타입의 적합성 또는 뒤의 정렬 산술까지 전부 검증하는 일반 유효성 증명으로 확대하지 않습니다."
+    },
+    {
+      "title": "페이지 정렬과 offset",
+      "text": "offset은 phys_addr의 페이지 내부 비트이고 phys_addr에서 이를 빼 페이지 시작으로 내립니다. size는 PAGE_ALIGN(size+offset)으로 확장합니다. 예를 들어4KiB 페이지에서 phys=0x12345,size=0x100이면 정렬 물리주소0x12000,offset0x345,매핑 길이0x1000입니다. 최종 반환 주소에는 offset을 다시 더합니다."
+    },
+    {
+      "title": "가상 영역 확보",
+      "text": "__get_vm_area_caller에 정렬된 size, VM_IOREMAP, IOREMAP_START/END, 호출자 주소를 전달합니다. 실패하면 NULL입니다. 성공하면 area->addr를 vaddr로 얻고 area->phys_addr에 정렬된 물리주소를 기록합니다. 이것은 물리 장치 메모리 자체를 새로 할당하는 함수가 아닙니다."
+    },
+    {
+      "title": "매핑 설치와 오류 정리",
+      "text": "ioremap_page_range(vaddr,vaddr+size,phys_addr,prot)를 호출합니다. 결과가0이 아니면 free_vm_area(area) 후 NULL이며 성공하면 vaddr+offset을 __iomem 포인터로 반환합니다. 구체적인 페이지 테이블 구축과 정리 helper의 내부 동작은 다른 파일의 범위입니다. 본문에 없는 자동 재시도나 다른 캐시 속성 fallback을 추가해 설명하지 않습니다."
+    },
+    {
+      "title": "보호 속성 wrapper",
+      "text": "ioremap_prot가 매크로로 이미 제공되지 않았을 때만 public 함수를 정의합니다. unsigned long prot를 __pgprot로 감싸 generic 함수에 넘기고 EXPORT_SYMBOL로 공개합니다. generic 함수는 pgprot_t를 받습니다. 이 wrapper가 요청 속성을 장치별로 검증하거나 변환 정책을 새로 결정하는 것은 아닙니다."
+    },
+    {
+      "title": "공통 해제",
+      "text": "generic_iounmap은 전달 주소를 unsigned long으로 변환해 PAGE_MASK로 내림 정렬합니다. is_ioremap_addr(vaddr)가 참일 때만 vunmap을 호출합니다. 유효한 반환 주소의 페이지 내부 offset을 제거하는 과정이며 임의의 매핑 중간 페이지 포인터도 올바른 해제 인자라는 뜻은 아닙니다. 이 함수는 해제할 size를 받지 않습니다."
+    },
+    {
+      "title": "주소 분류와 해제 경계",
+      "text": "is_ioremap_addr는 별도 헤더의 영역 판별이며 실제 살아 있는 매핑의 소유권 검사와 다릅니다. 범위 밖 주소이면 여기서는 아무 작업 없이 반환하지만 범위 안의 임의 주소에 안전한 해제가 보장되는 것은 아닙니다. iounmap도 #ifndef로 조건부 정의하고 generic 함수에 위임한 뒤 EXPORT_SYMBOL로 공개합니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "물리·가상 주소 분리, 페이지 내 offset 복원, 가상 영역 확보와 PTE 설치의 단계, 오류 cleanup, typed protection wrapper, 매크로 기반 아키텍처 대체를 학습합니다. 원본 대응 검사는 실제 MMU·장치 I/O와 모든 경쟁 실행의 검증이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "slab이 아직 없을 때 generic_ioremap_prot는?",
+      "options": [
+        "경고 후 NULL을 반환한다",
+        "자동으로 early_ioremap을 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "첫 조건이 WARN_ON_ONCE(!slab_is_available())와 return NULL입니다. 초기 매핑 API로 전환하는 본문은 없습니다."
+    },
+    {
+      "prompt": "4KiB 페이지에서 phys0x12345,size0x100의 정렬 매핑 길이는?",
+      "options": [
+        "0x100이다",
+        "0x1000이다"
+      ],
+      "answer": 1,
+      "explanation": "size+offset=0x445를 페이지 크기로 올림합니다. 반환 주소에는0x345를 복원하지만 설치 범위는 페이지 단위입니다."
+    },
+    {
+      "prompt": "ioremap_page_range가 실패하면 확보한 영역은?",
+      "options": [
+        "free_vm_area로 정리하고 NULL을 반환한다",
+        "성공 포인터를 반환한 뒤 나중에 해제한다"
+      ],
+      "answer": 0,
+      "explanation": "페이지 범위 설치의 비0 결과를 실패로 처리하는 명시적 경로입니다. 호출자는 NULL을 확인해야 합니다."
+    },
+    {
+      "prompt": "generic_iounmap은 원래 요청 size를 인자로 받는가?",
+      "options": [
+        "그렇다. early_iounmap처럼 주소와 size를 비교한다",
+        "아니다. 주소를 정렬해 영역 판별 후 vunmap한다"
+      ],
+      "answer": 1,
+      "explanation": "정규 함수의 시그니처는 주소 하나입니다. 초기 고정 슬롯 구현의 prev_size 비교를 그대로 적용하면 틀립니다."
+    },
+    {
+      "prompt": "is_ioremap_addr가 참이면 그 주소의 매핑 소유권도 검증됐는가?",
+      "options": [
+        "아니다. 주소 영역 분류일 뿐이다",
+        "그렇다. 소유자와 모든 PTE를 검사한다"
+      ],
+      "answer": 0,
+      "explanation": "헤더의 helper는 태그 처리 후 범위 비교를 수행합니다. 살아 있는 매핑 조회나 소유권 검사는 그 본문에 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Re-map IO memory to kernel address space so that we can access it.\n * This is needed for high PCI addresses that aren't mapped in the\n * 640k-1MB IO memory area on PC's\n *\n * (C) Copyright 1995 1996 Linus Torvalds\n */\n#include <linux/vmalloc.h>\n#include <linux/mm.h>\n#include <linux/io.h>\n#include <linux/export.h>\n#include <linux/ioremap.h>\n\nvoid __iomem *generic_ioremap_prot(phys_addr_t phys_addr, size_t size,\n\t\t\t\t   pgprot_t prot)\n{\n\tunsigned long offset, vaddr;\n\tphys_addr_t last_addr;\n\tstruct vm_struct *area;\n\n\t/* An early platform driver might end up here */\n\tif (WARN_ON_ONCE(!slab_is_available()))\n\t\treturn NULL;\n\n\t/* Disallow wrap-around or zero size */\n\tlast_addr = phys_addr + size - 1;\n\tif (!size || last_addr < phys_addr)\n\t\treturn NULL;\n\n\t/* Page-align mappings */\n\toffset = phys_addr & (~PAGE_MASK);\n\tphys_addr -= offset;\n\tsize = PAGE_ALIGN(size + offset);\n\n\tarea = __get_vm_area_caller(size, VM_IOREMAP, IOREMAP_START,\n\t\t\t\t    IOREMAP_END, __builtin_return_address(0));\n\tif (!area)\n\t\treturn NULL;\n\tvaddr = (unsigned long)area->addr;\n\tarea->phys_addr = phys_addr;\n\n\tif (ioremap_page_range(vaddr, vaddr + size, phys_addr, prot)) {\n\t\tfree_vm_area(area);\n\t\treturn NULL;\n\t}\n\n\treturn (void __iomem *)(vaddr + offset);\n}\n\n#ifndef ioremap_prot\nvoid __iomem *ioremap_prot(phys_addr_t phys_addr, size_t size,\n\t\t\t   unsigned long prot)\n{\n\treturn generic_ioremap_prot(phys_addr, size, __pgprot(prot));\n}\nEXPORT_SYMBOL(ioremap_prot);\n#endif\n\nvoid generic_iounmap(volatile void __iomem *addr)\n{\n\tvoid *vaddr = (void *)((unsigned long)addr & PAGE_MASK);\n\n\tif (is_ioremap_addr(vaddr))\n\t\tvunmap(vaddr);\n}\n\n#ifndef iounmap\nvoid iounmap(volatile void __iomem *addr)\n{\n\tgeneric_iounmap(addr);\n}\nEXPORT_SYMBOL(iounmap);\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "0fbda7e24749b383c432c86b2d011ff03f41f7eb90d5209a149739ae642df348",
+    "scope": "whole-file",
+    "line_count": 74,
+    "authoring_source": "course/file_units/generic_ioremap.py",
+    "sections": [
+      "전체 구성",
+      "정규 할당 전제",
+      "범위 검사",
+      "페이지 정렬과 offset",
+      "가상 영역 확보",
+      "매핑 설치와 오류 정리",
+      "보호 속성 wrapper",
+      "공통 해제",
+      "주소 분류와 해제 경계",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/mm/ioremap.c"
+    }
+  ]
+}

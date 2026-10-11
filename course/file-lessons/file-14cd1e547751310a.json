@@ -1,0 +1,144 @@
+{
+  "id": "file-14cd1e547751310a",
+  "path": "arch/arm/include/asm/barrier.h",
+  "title": "ARM 장벽 전체: 세대별 명령과 DMA·SMP 범위",
+  "area": "ARM 명령 · 조건부 컴파일 · DMA · 공유 영역 · 투기 마스크",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "32비트 ARM의 아키텍처 세대, SoC 보완 장벽, 공유 범위와 투기 마스크를 해설합니다.",
+  "guide": [
+    "장벽 종류뿐 아니라 CPU 세대와 적용 영역, 구성 조건을 함께 읽어야 실제 동작을 알 수 있습니다.",
+    "ARM64 구현과 구별하면서 generic barrier 계층으로 연결되는 정의를 추적합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 경계와 NOP",
+      "text": "GPL-2.0·guard·비어셈블리 조건 안에 전체 C 정의가 있습니다. nop은 mov r0,r0를 volatile asm으로 사용합니다. 이 정의에는 memory clobber가 없으며 NOP를 장벽과 동일시하지 않습니다. 마지막에 asm-generic/barrier.h를 포함합니다."
+    },
+    {
+      "title": "이벤트와 대기 명령",
+      "text": "ARM 아키텍처7 이상 또는6이면서 CONFIG_CPU_32v6K이면 sev/wfe/wfi를 해당 명령과 memory clobber로 정의합니다. 그렇지 않은 분기에서는 wfe만 빈 do-while로 정의합니다. 세 함수 모두 항상 빈 기본값을 갖는다고 설명하면 틀립니다. 대기 명령은 특정 공유 변수 조건을 자체적으로 검사하지 않습니다."
+    },
+    {
+      "title": "ARMv7 이상 장벽",
+      "text": "isb/dsb/dmb는 전달 option을 문자열화해 명령 뒤에 붙이며 memory clobber를 둡니다. 개념상 명령 흐름 동기화, 완료 요구, 메모리 순서의 역할을 구분합니다. CONFIG_THUMB2_KERNEL이면 CSDB는 .inst.w 0xf3af8014이고 아니면 .inst 0xe320f014입니다. csdb()는 이 문자열을 memory clobber와 함께 asm으로 실행합니다."
+    },
+    {
+      "title": "XSC3와 ARMv6",
+      "text": "CONFIG_CPU_XSC3 또는 아키텍처6에서는 isb가 mcr p15,c7,c5,4, dsb가 c7,c10,4, dmb가 c7,c10,5 조합을 사용합니다. 입력 레지스터에0을 전달하고 memory clobber를 선언합니다. 이 분기의 형식 인자 x는 명령 문자열에 반영되지 않으므로 새 세대의 option 문자열 처리를 그대로 적용하면 안 됩니다."
+    },
+    {
+      "title": "FA526과 그 밖의 경로",
+      "text": "FA526은 isb와 dsb에 위와 같은 대응 mcr를 사용하지만 dmb는 빈 asm과 memory clobber입니다. 마지막 기본 분기는 isb와 dmb가 빈 asm, dsb만 c7,c10,4 mcr입니다. 이후 CSDB나 csdb가 아직 없으면 각각 빈 정의를 제공합니다. 빈 asm의 compiler 장벽과 하드웨어 명령은 다릅니다."
+    },
+    {
+      "title": "SoC 보완 장벽",
+      "text": "CONFIG_ARM_HEAVY_MB이면 soc_mb 함수 포인터와 arm_heavy_mb 함수를 extern 선언하고 __arm_heavy_mb는 dsb(x) 뒤 arm_heavy_mb()를 실행합니다. 아니면 dsb(x)만 실행합니다. 이 헤더는 soc_mb의 호출·설정 구현을 담지 않으므로 포인터가 여기서 바로 호출된다고 설명하지 않습니다."
+    },
+    {
+      "title": "공개 장벽의 구성 조건",
+      "text": "CONFIG_ARM_DMA_MEM_BUFFERABLE 또는 CONFIG_SMP이면 mb는 인자 없는 heavy 장벽, rmb는 dsb(), wmb는 st를 넘긴 heavy 장벽입니다. dma_rmb는 dmb(osh), dma_wmb는 dmb(oshst)입니다. 둘 다 꺼진 구성에서는 이 다섯 공개 매크로가 compiler barrier입니다. 공개 wmb 경로와 내부 SMP 쓰기 장벽의 명령 종류가 같다고 추측하지 않습니다."
+    },
+    {
+      "title": "공유 영역과 SMP",
+      "text": "__smp_mb는 dmb(ish), __smp_rmb는 같은 내부 full 장벽, __smp_wmb는 dmb(ishst)입니다. ish는 inner-shareable, osh는 outer-shareable 범위이고 st는 저장 접근에 관련된 장벽 옵션입니다. DMA와 CPU 간 공유 영역의 선택을 구별하되 실제 장치의 일관성 계약은 별도로 확인해야 합니다."
+    },
+    {
+      "title": "투기 인덱스 마스크",
+      "text": "CONFIG_CPU_SPECTRE이면 unsigned long idx,sz를 받아 cmp idx,sz와 sbc mask,idx,idx 뒤 CSDB 문자열을 실행합니다. ARM의 unsigned 비교에서 idx<sz이면 carry가0이므로 idx-idx-(1-C)=-1로 모든 비트1을 얻고, idx>=sz이면 carry1로0입니다. x86 sbb의 borrow 설명을 ARM carry 의미에 그대로 대입하면 틀립니다."
+    },
+    {
+      "title": "마스크 제약과 재정의 표시",
+      "text": "mask 출력은 레지스터, idx도 레지스터, sz는 Ir 제약이며 cc clobber를 선언합니다. 이 asm 블록은 CSDB 문자열을 붙이며 별도 csdb() 매크로를 호출하는 것이 아닙니다. 함수 뒤 같은 이름의 자기참조 매크로를 정의해 공통 nospec 헤더의 #ifndef가 아키텍처 제공 여부를 인지하게 합니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "명령 집합 세대별 fallback, compiler와 CPU 장벽, 공유 영역, 구성별 동작, carry를 이용한 branchless mask와 전처리 탐지를 학습합니다. 이 파일은 acquire/release 모든 API 본문을 직접 정의하지 않으며 generic 헤더가 나머지를 제공합니다. 실제 ARM 장치 실행 시험이나 모든 투기 취약점 검증을 수행한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "구형 이벤트 명령 분기에서 빈 기본값을 제공하는 것은?",
+      "options": [
+        "wfe만이다",
+        "sev/wfe/wfi 모두이다"
+      ],
+      "answer": 0,
+      "explanation": "#else에는 wfe의 빈 do-while 정의만 있습니다. 존재하지 않는 두 기본 정의를 추측해 추가하면 소스 설명이 달라집니다."
+    },
+    {
+      "prompt": "ARM DMA와 SMP 장벽의 공유 영역 옵션은?",
+      "options": [
+        "모두 항상 같은 ish 계열이다",
+        "DMA는 osh 계열, SMP는 ish 계열이다"
+      ],
+      "answer": 1,
+      "explanation": "dma_rmb/wmb는 osh/oshst, __smp_mb/wmb는 ish/ishst입니다. 구성 조건과 실제 대상 메모리도 함께 확인해야 합니다."
+    },
+    {
+      "prompt": "CONFIG_ARM_HEAVY_MB에서 __arm_heavy_mb의 순서는?",
+      "options": [
+        "dsb 후 arm_heavy_mb 함수 호출이다",
+        "함수 호출 뒤 dsb이다"
+      ],
+      "answer": 0,
+      "explanation": "do-while 본문은 dsb(x); arm_heavy_mb()입니다. soc_mb 포인터를 이 매크로가 직접 호출하는 것은 아닙니다."
+    },
+    {
+      "prompt": "ARM cmp에서 idx==sz이면 sbc 기반 mask는?",
+      "options": [
+        "모든 비트1이다",
+        "0이다"
+      ],
+      "answer": 1,
+      "explanation": "같으면 unsigned borrow가 없고 carry1입니다. sbc는 idx-idx-(1-C)이므로0입니다. idx<sz일 때 carry0으로-1이 됩니다."
+    },
+    {
+      "prompt": "array_index_mask_nospec 자기참조 매크로는 어떤 역할인가?",
+      "options": [
+        "공통 헤더의 전처리 검사에 구현 존재를 알린다",
+        "런타임에서 함수를 무한 재귀 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "같은 이름의 매크로는 #ifndef의 정의 여부 검사에 사용됩니다. C 함수 본문에 재귀 호출이 추가되는 것은 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_BARRIER_H\n#define __ASM_BARRIER_H\n\n#ifndef __ASSEMBLY__\n\n#define nop() __asm__ __volatile__(\"mov\\tr0,r0\\t@ nop\\n\\t\");\n\n#if __LINUX_ARM_ARCH__ >= 7 ||\t\t\\\n\t(__LINUX_ARM_ARCH__ == 6 && defined(CONFIG_CPU_32v6K))\n#define sev()\t__asm__ __volatile__ (\"sev\" : : : \"memory\")\n#define wfe()\t__asm__ __volatile__ (\"wfe\" : : : \"memory\")\n#define wfi()\t__asm__ __volatile__ (\"wfi\" : : : \"memory\")\n#else\n#define wfe()\tdo { } while (0)\n#endif\n\n#if __LINUX_ARM_ARCH__ >= 7\n#define isb(option) __asm__ __volatile__ (\"isb \" #option : : : \"memory\")\n#define dsb(option) __asm__ __volatile__ (\"dsb \" #option : : : \"memory\")\n#define dmb(option) __asm__ __volatile__ (\"dmb \" #option : : : \"memory\")\n#ifdef CONFIG_THUMB2_KERNEL\n#define CSDB\t\".inst.w 0xf3af8014\"\n#else\n#define CSDB\t\".inst\t0xe320f014\"\n#endif\n#define csdb() __asm__ __volatile__(CSDB : : : \"memory\")\n#elif defined(CONFIG_CPU_XSC3) || __LINUX_ARM_ARCH__ == 6\n#define isb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c5, 4\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#define dsb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c10, 4\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#define dmb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c10, 5\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#elif defined(CONFIG_CPU_FA526)\n#define isb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c5, 4\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#define dsb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c10, 4\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#define dmb(x) __asm__ __volatile__ (\"\" : : : \"memory\")\n#else\n#define isb(x) __asm__ __volatile__ (\"\" : : : \"memory\")\n#define dsb(x) __asm__ __volatile__ (\"mcr p15, 0, %0, c7, c10, 4\" \\\n\t\t\t\t    : : \"r\" (0) : \"memory\")\n#define dmb(x) __asm__ __volatile__ (\"\" : : : \"memory\")\n#endif\n\n#ifndef CSDB\n#define CSDB\n#endif\n#ifndef csdb\n#define csdb()\n#endif\n\n#ifdef CONFIG_ARM_HEAVY_MB\nextern void (*soc_mb)(void);\nextern void arm_heavy_mb(void);\n#define __arm_heavy_mb(x...) do { dsb(x); arm_heavy_mb(); } while (0)\n#else\n#define __arm_heavy_mb(x...) dsb(x)\n#endif\n\n#if defined(CONFIG_ARM_DMA_MEM_BUFFERABLE) || defined(CONFIG_SMP)\n#define mb()\t\t__arm_heavy_mb()\n#define rmb()\t\tdsb()\n#define wmb()\t\t__arm_heavy_mb(st)\n#define dma_rmb()\tdmb(osh)\n#define dma_wmb()\tdmb(oshst)\n#else\n#define mb()\t\tbarrier()\n#define rmb()\t\tbarrier()\n#define wmb()\t\tbarrier()\n#define dma_rmb()\tbarrier()\n#define dma_wmb()\tbarrier()\n#endif\n\n#define __smp_mb()\tdmb(ish)\n#define __smp_rmb()\t__smp_mb()\n#define __smp_wmb()\tdmb(ishst)\n\n#ifdef CONFIG_CPU_SPECTRE\nstatic inline unsigned long array_index_mask_nospec(unsigned long idx,\n\t\t\t\t\t\t    unsigned long sz)\n{\n\tunsigned long mask;\n\n\tasm volatile(\n\t\t\"cmp\t%1, %2\\n\"\n\t\"\tsbc\t%0, %1, %1\\n\"\n\tCSDB\n\t: \"=r\" (mask)\n\t: \"r\" (idx), \"Ir\" (sz)\n\t: \"cc\");\n\n\treturn mask;\n}\n#define array_index_mask_nospec array_index_mask_nospec\n#endif\n\n#include <asm-generic/barrier.h>\n\n#endif /* !__ASSEMBLY__ */\n#endif /* __ASM_BARRIER_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "81af4951183749c6918dee9f6dbb5b2493e6eb2e5122ba8d9f2a0f9ab8692a55",
+    "scope": "whole-file",
+    "line_count": 103,
+    "authoring_source": "course/file_units/arm_alpha_barriers.py",
+    "sections": [
+      "파일 경계와 NOP",
+      "이벤트와 대기 명령",
+      "ARMv7 이상 장벽",
+      "XSC3와 ARMv6",
+      "FA526과 그 밖의 경로",
+      "SoC 보완 장벽",
+      "공개 장벽의 구성 조건",
+      "공유 영역과 SMP",
+      "투기 인덱스 마스크",
+      "마스크 제약과 재정의 표시",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/barrier.h"
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "id": "file-97c5331499098f2a",
+  "path": "kernel/sched/completion.c",
+  "title": "Completion 구현 전체: 신호 소비와 대기 경쟁",
+  "area": "동기화 · 대기 큐 · 스케줄링 · 객체 수명",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "완료 알림을 누적하고 대기 큐를 깨우며, 시간 초과·신호 중단·비대기 소비를 처리합니다.",
+  "guide": [
+    "done과 큐를 같은 raw spinlock으로 보호하고 잠들기 전에 잠금을 놓습니다. UINT_MAX는 소비되지 않는 전체 완료 표식이며 성공 반환과 timeout을 구별합니다.",
+    "completion은 보통 상호 배제보다 동기화 지점입니다. 기다리기가 끝나거나 시간이 초과되어도 다른 실행 주체가 구조체를 더 사용할 수 있으므로 별도의 수명 계약이 필요합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0과 설계 주석 뒤 알림 공통 함수, current CPU/일반/전체 알림, 공통 대기 내부 함수와 스케줄러 선택, 아홉 대기 wrapper, try_wait와 completion_done이 있습니다. public 함수들은 EXPORT_SYMBOL을 사용하지만 이 파일의 complete_on_current_cpu에는 별도 EXPORT_SYMBOL이 없습니다. 원문 자체에는 include 행이 없어 단독 사용자 공간 소스처럼 컴파일하는 파일로 해석하지 않습니다."
+    },
+    {
+      "title": "일반 완료 알림",
+      "text": "complete_with_flags는 wait.lock을 raw_spin_lock_irqsave로 잡습니다. done이 UINT_MAX가 아니면1 증가시키고 swake_up_locked로 한 대기자를 깨운 뒤 IRQ 상태를 복원합니다. 대기자가 아직 없어도 done이 남아 나중의 대기가 소비할 수 있습니다. complete는 wake_flags0, complete_on_current_cpu는 WF_CURRENT_CPU를 전달하며 완료 대상을 다른 completion으로 바꾸는 함수가 아닙니다."
+    },
+    {
+      "title": "전체 완료 알림",
+      "text": "complete_all은 RT 문맥 lockdep 검사를 수행하고 잠금 안에서 done=UINT_MAX, swake_up_all_locked를 실행합니다. 이후 대기들도 표식을 소비하지 않아 계속 통과할 수 있습니다. 재사용은 모든 이전 대기자가 깨어나 완료한 것을 별도로 보장한 뒤 reinit해야 합니다. complete_all 호출만으로 그들이 이미 CPU에서 후속 작업을 끝냈다는 뜻은 아닙니다."
+    },
+    {
+      "title": "대기 공통 진입",
+      "text": "__wait_for_common은 might_sleep, 빈 complete_acquire hook, raw_spin_lock_irq, do_wait_for_common, unlock_irq, 빈 release hook 순서입니다. 기다리는 경로는 잠들 수 있고 IRQ 저장·복원이 아닌 lock_irq/unlock_irq를 쓰므로 IRQ를 꺼둔 문맥에서 무심코 호출해서는 안 됩니다. 알림 경로의 irqsave 사용과 구별합니다."
+    },
+    {
+      "title": "큐 등록과 수면",
+      "text": "done이0이면 지역 swait 항목을 선언합니다. 반복에서 signal_pending_state를 확인한 뒤 큐 등록, current 상태 설정, 잠금과 IRQ 해제, action(timeout)으로 수면, 잠금 재획득 순서로 진행합니다. done이 없고 timeout이 남으면 반복합니다. 큐 등록과 상태 확인을 같은 잠금 아래 수행해 알림과 수면 진입 사이의 경쟁을 조정합니다."
+    },
+    {
+      "title": "대기 정리와 반환",
+      "text": "루프가 끝나면 __finish_swait로 항목을 정리합니다. 여전히 done이0이면 timeout 또는 -ERESTARTSYS를 반환합니다. done이 있으면 UINT_MAX가 아닌 경우 하나 감소시키고 timeout ?: 1을 반환합니다. 시간 잔여량이0이어도 완료 상태를 소비했다면1을 돌려 timeout0과 구별합니다."
+    },
+    {
+      "title": "신호 검사와 완료 상태",
+      "text": "신호 확인은 done0으로 대기 루프에 들어왔을 때 수행합니다. 이미 완료 신호가 준비되어 있으면 루프를 건너뛰어 소비하므로 pending signal이 있다는 사실만으로 모든 호출이 반드시 -ERESTARTSYS가 되는 것은 아닙니다. 정상적인 잠금 규칙 아래 신호 중단과 완료 소비 중 어느 상태를 확인했는지에 따라 반환을 이해합니다."
+    },
+    {
+      "title": "스케줄러 동작 선택",
+      "text": "wait_for_common은 schedule_timeout, wait_for_common_io는 io_schedule_timeout을 action으로 전달합니다. IO 변형은 호출자를 IO 대기로 회계 처리하는 점이 다르며 다른 형태의 완료 객체나 별도 done 알고리즘을 만들지 않습니다."
+    },
+    {
+      "title": "비인터럽트 wrapper",
+      "text": "wait_for_completion과 io는 MAX_SCHEDULE_TIMEOUT과 TASK_UNINTERRUPTIBLE을 사용하고 결과를 반환하지 않습니다. timeout 및 io_timeout은 지정 jiffies와 같은 태스크 상태를 사용해0이면 시간 초과, 양수이면 완료를 반환합니다. 양수는 남은 jiffies 또는 최소1이지 소요 시간이나 완료한 스레드 수가 아닙니다."
+    },
+    {
+      "title": "인터럽트·killable·state wrapper",
+      "text": "interruptible은 TASK_INTERRUPTIBLE, killable은 TASK_KILLABLE, state는 전달한 상태를 사용합니다. 시간 제한 없는 세 함수는 공통 결과가 -ERESTARTSYS이면 그 오류를, 아니면0을 반환합니다. timeout 두 변형은 공통 long 결과를 그대로 반환해 음수 중단·0초과·양수 완료를 구별합니다. killable은 일반적인 모든 신호와 동일한 중단 조건으로 해석하지 않습니다."
+    },
+    {
+      "title": "비대기 소비",
+      "text": "try_wait_for_completion은 READ_ONCE(done)가0이면 잠금 없이 false입니다. 양수 관측이면 irqsave 잠금을 잡고 다시 done을 검사해 경쟁 소비를 확인합니다. 여전히 양수이면 UINT_MAX를 제외하고 감소한 뒤 true입니다. 첫 관측 직후 새 알림이 와도 이번 호출이 false일 수 있으며 이는 미래 상태를 예약하는 API가 아닙니다."
+    },
+    {
+      "title": "completion_done의 실제 의미",
+      "text": "이 함수는 READ_ONCE(done)가0이면 false, 아니면 wait.lock을 한 번 잡았다 놓고 true입니다. done을 감소시키지 않고 잠금 안에서 다시 읽지도 않으며 대기 큐 길이를 검사하지 않습니다. kernel-doc의 대기자 유무 설명을 실제 대기자 수 검사로 해석하면 틀립니다. 특히 complete_all 뒤 true여도 이전 대기자가 아직 진행 중일 수 있습니다."
+    },
+    {
+      "title": "관측과 객체 해제의 경계",
+      "text": "completion_done의 잠금 왕복은 완료를 기록한 complete가 아직 해당 잠금 아래 구조체를 만지는 구간을 지나도록 동기화하려는 목적이라는 주석이 있습니다. 그렇다고 미래 알림자·다른 대기자·소비자를 모두 종료시키는 수명 장벽은 아닙니다. 경쟁 소비 후에도 재검사 없이 true일 수 있으므로 성공한 try_wait와도 다릅니다."
+    },
+    {
+      "title": "깨우기 순서와 공정성",
+      "text": "complete 문서는 큐에 들어간 순서대로 한 대기자를 깨운다고 설명합니다. 깨우기 순서가 곧 모든 CPU에서 후속 작업까지 끝나는 순서는 아니며 새 비대기 소비자와의 경쟁도 별도입니다. 주석의 깨울 때 태스크 상태 접근 전 full barrier 설명은 실제 wakeup 경로에 관한 것이고 빈 acquire/release hook이 그 장벽이라는 뜻은 아닙니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "누적 알림과 일회성 이벤트의 차이, 조건 검사와 수면 등록, 소비 경쟁, 특수 표식, timeout의 경계 반환, wakeup과 실행 완료의 차이, 비동기 객체 수명을 학습합니다. 이 파일의 전체 경로를 읽어 해설했으며 실제 스케줄러·IRQ·RT의 모든 경쟁 실행을 실험한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "대기자가 없을 때 complete를 두 번 호출하면 뒤의 일반 대기 두 번은?",
+      "options": [
+        "done에 남은 두 알림을 각각 소비할 수 있다",
+        "깨울 스레드가 없었으므로 두 알림은 모두 사라진다"
+      ],
+      "answer": 0,
+      "explanation": "complete는 큐를 깨우기 전에 done을 증가시킵니다. 일반 성공 대기는 하나씩 감소하므로 먼저 온 완료 신호도 보존됩니다."
+    },
+    {
+      "prompt": "complete_all 뒤 성공한 대기가 done을 하나씩 줄이는가?",
+      "options": [
+        "그렇다. 마지막 대기자 뒤 자동으로0이 된다",
+        "아니다. UINT_MAX 표식은 감소하지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "공통 대기와 try_wait 모두 UINT_MAX를 감소 대상에서 제외합니다. 이후 재사용에는 안전한 시점의 reinit이 필요합니다."
+    },
+    {
+      "prompt": "timeout 잔여량이0인데 잠금을 다시 잡았을 때 완료를 소비했다면 반환은?",
+      "options": [
+        "최소1로 성공을 나타낸다",
+        "반드시0으로 실패를 나타낸다"
+      ],
+      "answer": 0,
+      "explanation": "성공 끝부분은 timeout ?: 1입니다. 완료를 소비한 호출과 완료 없이 시간만 지난 호출을 반환값0으로 혼동하지 않게 합니다."
+    },
+    {
+      "prompt": "try_wait가 첫 관측에서 양수를 보았으면 잠금 뒤 무조건 성공하는가?",
+      "options": [
+        "그렇다. READ_ONCE가 완료 신호를 예약한다",
+        "아니다. 다른 소비자가 가져갔을 수 있어 다시 검사한다"
+      ],
+      "answer": 1,
+      "explanation": "잠금 안에서 done0이면 false로 바꿉니다. 관측은 소비 권한 확보가 아니며 실제 감소는 잠금 아래 수행합니다."
+    },
+    {
+      "prompt": "completion_done이 true이면 complete_all로 깨운 모든 스레드가 실행을 끝냈는가?",
+      "options": [
+        "아니다. 대기자 종료 여부를 검사하지 않는다",
+        "그렇다. 내부에서 모든 스레드 종료를 기다린다"
+      ],
+      "answer": 0,
+      "explanation": "함수는 done 관측과 잠금 왕복만 합니다. complete_all은 UINT_MAX를 남기므로 아직 깨어나 처리 중인 대기자가 있어도 true일 수 있습니다."
+    },
+    {
+      "prompt": "interruptible_timeout 반환을 단순 if(ret)로 성공 판정해도 되는가?",
+      "options": [
+        "된다.0이 아닌 모든 값은 완료 성공이다",
+        "안 된다. 음수 -ERESTARTSYS도 참으로 해석된다"
+      ],
+      "answer": 1,
+      "explanation": "이 변형은 음수 중단,0시간 초과,양수 완료의 세 범주입니다. 부호와0 여부를 구분해야 합니다."
+    },
+    {
+      "prompt": "IO 대기 변형이 사용하는 핵심 차이는?",
+      "options": [
+        "수면 action을 io_schedule_timeout으로 선택해 IO 대기로 회계 처리한다",
+        "done 대신 별도의 파일 디스크립터를 기다린다"
+      ],
+      "answer": 0,
+      "explanation": "공통 완료 상태와 대기 루프는 공유합니다. IO 변형은 스케줄러에 전달하는 수면 함수가 다릅니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n/*\n * Generic wait-for-completion handler;\n *\n * It differs from semaphores in that their default case is the opposite,\n * wait_for_completion default blocks whereas semaphore default non-block. The\n * interface also makes it easy to 'complete' multiple waiting threads,\n * something which isn't entirely natural for semaphores.\n *\n * But more importantly, the primitive documents the usage. Semaphores would\n * typically be used for exclusion which gives rise to priority inversion.\n * Waiting for completion is a typically sync point, but not an exclusion point.\n */\n\nstatic void complete_with_flags(struct completion *x, int wake_flags)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&x->wait.lock, flags);\n\n\tif (x->done != UINT_MAX)\n\t\tx->done++;\n\tswake_up_locked(&x->wait, wake_flags);\n\traw_spin_unlock_irqrestore(&x->wait.lock, flags);\n}\n\nvoid complete_on_current_cpu(struct completion *x)\n{\n\treturn complete_with_flags(x, WF_CURRENT_CPU);\n}\n\n/**\n * complete: - signals a single thread waiting on this completion\n * @x:  holds the state of this particular completion\n *\n * This will wake up a single thread waiting on this completion. Threads will be\n * awakened in the same order in which they were queued.\n *\n * See also complete_all(), wait_for_completion() and related routines.\n *\n * If this function wakes up a task, it executes a full memory barrier before\n * accessing the task state.\n */\nvoid complete(struct completion *x)\n{\n\tcomplete_with_flags(x, 0);\n}\nEXPORT_SYMBOL(complete);\n\n/**\n * complete_all: - signals all threads waiting on this completion\n * @x:  holds the state of this particular completion\n *\n * This will wake up all threads waiting on this particular completion event.\n *\n * If this function wakes up a task, it executes a full memory barrier before\n * accessing the task state.\n *\n * Since complete_all() sets the completion of @x permanently to done\n * to allow multiple waiters to finish, a call to reinit_completion()\n * must be used on @x if @x is to be used again. The code must make\n * sure that all waiters have woken and finished before reinitializing\n * @x. Also note that the function completion_done() can not be used\n * to know if there are still waiters after complete_all() has been called.\n */\nvoid complete_all(struct completion *x)\n{\n\tunsigned long flags;\n\n\tlockdep_assert_RT_in_threaded_ctx();\n\n\traw_spin_lock_irqsave(&x->wait.lock, flags);\n\tx->done = UINT_MAX;\n\tswake_up_all_locked(&x->wait);\n\traw_spin_unlock_irqrestore(&x->wait.lock, flags);\n}\nEXPORT_SYMBOL(complete_all);\n\nstatic inline long __sched\ndo_wait_for_common(struct completion *x,\n\t\t   long (*action)(long), long timeout, int state)\n{\n\tif (!x->done) {\n\t\tDECLARE_SWAITQUEUE(wait);\n\n\t\tdo {\n\t\t\tif (signal_pending_state(state, current)) {\n\t\t\t\ttimeout = -ERESTARTSYS;\n\t\t\t\tbreak;\n\t\t\t}\n\t\t\t__prepare_to_swait(&x->wait, &wait);\n\t\t\t__set_current_state(state);\n\t\t\traw_spin_unlock_irq(&x->wait.lock);\n\t\t\ttimeout = action(timeout);\n\t\t\traw_spin_lock_irq(&x->wait.lock);\n\t\t} while (!x->done && timeout);\n\t\t__finish_swait(&x->wait, &wait);\n\t\tif (!x->done)\n\t\t\treturn timeout;\n\t}\n\tif (x->done != UINT_MAX)\n\t\tx->done--;\n\treturn timeout ?: 1;\n}\n\nstatic inline long __sched\n__wait_for_common(struct completion *x,\n\t\t  long (*action)(long), long timeout, int state)\n{\n\tmight_sleep();\n\n\tcomplete_acquire(x);\n\n\traw_spin_lock_irq(&x->wait.lock);\n\ttimeout = do_wait_for_common(x, action, timeout, state);\n\traw_spin_unlock_irq(&x->wait.lock);\n\n\tcomplete_release(x);\n\n\treturn timeout;\n}\n\nstatic long __sched\nwait_for_common(struct completion *x, long timeout, int state)\n{\n\treturn __wait_for_common(x, schedule_timeout, timeout, state);\n}\n\nstatic long __sched\nwait_for_common_io(struct completion *x, long timeout, int state)\n{\n\treturn __wait_for_common(x, io_schedule_timeout, timeout, state);\n}\n\n/**\n * wait_for_completion: - waits for completion of a task\n * @x:  holds the state of this particular completion\n *\n * This waits to be signaled for completion of a specific task. It is NOT\n * interruptible and there is no timeout.\n *\n * See also similar routines (i.e. wait_for_completion_timeout()) with timeout\n * and interrupt capability. Also see complete().\n */\nvoid __sched wait_for_completion(struct completion *x)\n{\n\twait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);\n}\nEXPORT_SYMBOL(wait_for_completion);\n\n/**\n * wait_for_completion_timeout: - waits for completion of a task (w/timeout)\n * @x:  holds the state of this particular completion\n * @timeout:  timeout value in jiffies\n *\n * This waits for either a completion of a specific task to be signaled or for a\n * specified timeout to expire. The timeout is in jiffies. It is not\n * interruptible.\n *\n * Return: 0 if timed out, and positive (at least 1, or number of jiffies left\n * till timeout) if completed.\n */\nunsigned long __sched\nwait_for_completion_timeout(struct completion *x, unsigned long timeout)\n{\n\treturn wait_for_common(x, timeout, TASK_UNINTERRUPTIBLE);\n}\nEXPORT_SYMBOL(wait_for_completion_timeout);\n\n/**\n * wait_for_completion_io: - waits for completion of a task\n * @x:  holds the state of this particular completion\n *\n * This waits to be signaled for completion of a specific task. It is NOT\n * interruptible and there is no timeout. The caller is accounted as waiting\n * for IO (which traditionally means blkio only).\n */\nvoid __sched wait_for_completion_io(struct completion *x)\n{\n\twait_for_common_io(x, MAX_SCHEDULE_TIMEOUT, TASK_UNINTERRUPTIBLE);\n}\nEXPORT_SYMBOL(wait_for_completion_io);\n\n/**\n * wait_for_completion_io_timeout: - waits for completion of a task (w/timeout)\n * @x:  holds the state of this particular completion\n * @timeout:  timeout value in jiffies\n *\n * This waits for either a completion of a specific task to be signaled or for a\n * specified timeout to expire. The timeout is in jiffies. It is not\n * interruptible. The caller is accounted as waiting for IO (which traditionally\n * means blkio only).\n *\n * Return: 0 if timed out, and positive (at least 1, or number of jiffies left\n * till timeout) if completed.\n */\nunsigned long __sched\nwait_for_completion_io_timeout(struct completion *x, unsigned long timeout)\n{\n\treturn wait_for_common_io(x, timeout, TASK_UNINTERRUPTIBLE);\n}\nEXPORT_SYMBOL(wait_for_completion_io_timeout);\n\n/**\n * wait_for_completion_interruptible: - waits for completion of a task (w/intr)\n * @x:  holds the state of this particular completion\n *\n * This waits for completion of a specific task to be signaled. It is\n * interruptible.\n *\n * Return: -ERESTARTSYS if interrupted, 0 if completed.\n */\nint __sched wait_for_completion_interruptible(struct completion *x)\n{\n\tlong t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_INTERRUPTIBLE);\n\n\tif (t == -ERESTARTSYS)\n\t\treturn t;\n\treturn 0;\n}\nEXPORT_SYMBOL(wait_for_completion_interruptible);\n\n/**\n * wait_for_completion_interruptible_timeout: - waits for completion (w/(to,intr))\n * @x:  holds the state of this particular completion\n * @timeout:  timeout value in jiffies\n *\n * This waits for either a completion of a specific task to be signaled or for a\n * specified timeout to expire. It is interruptible. The timeout is in jiffies.\n *\n * Return: -ERESTARTSYS if interrupted, 0 if timed out, positive (at least 1,\n * or number of jiffies left till timeout) if completed.\n */\nlong __sched\nwait_for_completion_interruptible_timeout(struct completion *x,\n\t\t\t\t\t  unsigned long timeout)\n{\n\treturn wait_for_common(x, timeout, TASK_INTERRUPTIBLE);\n}\nEXPORT_SYMBOL(wait_for_completion_interruptible_timeout);\n\n/**\n * wait_for_completion_killable: - waits for completion of a task (killable)\n * @x:  holds the state of this particular completion\n *\n * This waits to be signaled for completion of a specific task. It can be\n * interrupted by a kill signal.\n *\n * Return: -ERESTARTSYS if interrupted, 0 if completed.\n */\nint __sched wait_for_completion_killable(struct completion *x)\n{\n\tlong t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE);\n\n\tif (t == -ERESTARTSYS)\n\t\treturn t;\n\treturn 0;\n}\nEXPORT_SYMBOL(wait_for_completion_killable);\n\nint __sched wait_for_completion_state(struct completion *x, unsigned int state)\n{\n\tlong t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, state);\n\n\tif (t == -ERESTARTSYS)\n\t\treturn t;\n\treturn 0;\n}\nEXPORT_SYMBOL(wait_for_completion_state);\n\n/**\n * wait_for_completion_killable_timeout: - waits for completion of a task (w/(to,killable))\n * @x:  holds the state of this particular completion\n * @timeout:  timeout value in jiffies\n *\n * This waits for either a completion of a specific task to be\n * signaled or for a specified timeout to expire. It can be\n * interrupted by a kill signal. The timeout is in jiffies.\n *\n * Return: -ERESTARTSYS if interrupted, 0 if timed out, positive (at least 1,\n * or number of jiffies left till timeout) if completed.\n */\nlong __sched\nwait_for_completion_killable_timeout(struct completion *x,\n\t\t\t\t     unsigned long timeout)\n{\n\treturn wait_for_common(x, timeout, TASK_KILLABLE);\n}\nEXPORT_SYMBOL(wait_for_completion_killable_timeout);\n\n/**\n *\ttry_wait_for_completion - try to decrement a completion without blocking\n *\t@x:\tcompletion structure\n *\n *\tReturn: 0 if a decrement cannot be done without blocking\n *\t\t 1 if a decrement succeeded.\n *\n *\tIf a completion is being used as a counting completion,\n *\tattempt to decrement the counter without blocking. This\n *\tenables us to avoid waiting if the resource the completion\n *\tis protecting is not available.\n */\nbool try_wait_for_completion(struct completion *x)\n{\n\tunsigned long flags;\n\tbool ret = true;\n\n\t/*\n\t * Since x->done will need to be locked only\n\t * in the non-blocking case, we check x->done\n\t * first without taking the lock so we can\n\t * return early in the blocking case.\n\t */\n\tif (!READ_ONCE(x->done))\n\t\treturn false;\n\n\traw_spin_lock_irqsave(&x->wait.lock, flags);\n\tif (!x->done)\n\t\tret = false;\n\telse if (x->done != UINT_MAX)\n\t\tx->done--;\n\traw_spin_unlock_irqrestore(&x->wait.lock, flags);\n\treturn ret;\n}\nEXPORT_SYMBOL(try_wait_for_completion);\n\n/**\n *\tcompletion_done - Test to see if a completion has any waiters\n *\t@x:\tcompletion structure\n *\n *\tReturn: 0 if there are waiters (wait_for_completion() in progress)\n *\t\t 1 if there are no waiters.\n *\n *\tNote, this will always return true if complete_all() was called on @X.\n */\nbool completion_done(struct completion *x)\n{\n\tunsigned long flags;\n\n\tif (!READ_ONCE(x->done))\n\t\treturn false;\n\n\t/*\n\t * If ->done, we need to wait for complete() to release ->wait.lock\n\t * otherwise we can end up freeing the completion before complete()\n\t * is done referencing it.\n\t */\n\traw_spin_lock_irqsave(&x->wait.lock, flags);\n\traw_spin_unlock_irqrestore(&x->wait.lock, flags);\n\treturn true;\n}\nEXPORT_SYMBOL(completion_done);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "0a0426c7ba68149a7018383513591439e97f84a9af56fb5bd7a53095de3d8204",
+    "scope": "whole-file",
+    "line_count": 353,
+    "authoring_source": "course/file_units/completions.py",
+    "sections": [
+      "전체 구성",
+      "일반 완료 알림",
+      "전체 완료 알림",
+      "대기 공통 진입",
+      "큐 등록과 수면",
+      "대기 정리와 반환",
+      "신호 검사와 완료 상태",
+      "스케줄러 동작 선택",
+      "비인터럽트 wrapper",
+      "인터럽트·killable·state wrapper",
+      "비대기 소비",
+      "completion_done의 실제 의미",
+      "관측과 객체 해제의 경계",
+      "깨우기 순서와 공정성",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/sched/completion.c"
+    }
+  ]
+}

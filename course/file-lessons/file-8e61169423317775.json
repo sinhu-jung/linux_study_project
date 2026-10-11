@@ -1,0 +1,82 @@
+{
+  "id": "file-8e61169423317775",
+  "path": "include/asm-generic/mcs_spinlock.h",
+  "title": "Generic MCS 아키텍처 헤더 전체: 기본 구현을 선택하는 빈 확장 지점",
+  "area": "아키텍처 추상화 · 메모리 장벽 · 이벤트 대기 · MCS",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "아키텍처가 대기·인계 매크로를 대체할 수 있음을 문서화하는 최소 헤더입니다.",
+  "guide": [
+    "구현을 정의하지 않는 것도 의도된 인터페이스입니다. 포함 측이 매크로 존재 여부를 검사해 기본 구현을 제공하므로 빈 헤더가 잠금 기능 부재를 뜻하지 않습니다.",
+    "실행 코드는 kernel/locking/mcs_spinlock.h의 fallback과 함께 확인합니다. 주석의 과거 경로와 현재 파일 위치를 구별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "include guard와 주석만 있고 구조체·함수·실행 매크로 정의는 없습니다. 주석은 arch_mcs_spin_lock_contended(l), arch_mcs_spin_unlock_contended(l) 두 확장 이름을 열거합니다. 이 파일 자체에는 SPDX 행이 없습니다."
+    },
+    {
+      "title": "기본값 선택",
+      "text": "아키텍처에서 이 기본 헤더를 선택하면 두 이름을 미리 정의하지 않습니다. kernel/locking/mcs_spinlock.h의 ifndef 블록이 acquire 대기와 release 저장의 기본 구현을 제공합니다. 이 관계를 헤더만 보고 MCS가 비활성화되었다고 해석하면 안 됩니다."
+    },
+    {
+      "title": "주석 참조 경로",
+      "text": "주석은 kernel/locking/mcs_spinlock.c를 가리키지만 이 버전에서 읽은 generic 구조체와 inline 알고리즘의 파일은 kernel/locking/mcs_spinlock.h입니다. 독자는 현재 트리의 실제 경로를 따라야 하며 존재하지 않는 참조 파일까지 작성 완료로 세지 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "아키텍처별 override와 generic fallback, 전처리 매크로의 존재 여부를 이용한 기능 선택, 문서 링크와 현재 구현 위치의 대조를 학습합니다. 파일이 짧아도 빌드 구조에서 맡는 역할은 별도 설명할 수 있습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 헤더에 lock 함수가 없으면 MCS 잠금도 구현되지 않는가?",
+      "options": [
+        "아니다. 포함 측 generic 헤더가 기본 구현을 제공한다",
+        "그렇다. 이 헤더를 쓰는 아키텍처는 MCS를 사용할 수 없다"
+      ],
+      "answer": 0,
+      "explanation": "이 파일은 확장 지점만 남깁니다. kernel/locking/mcs_spinlock.h가 매크로 미정의 조건에서 실제 fallback을 정의합니다."
+    },
+    {
+      "prompt": "주석의 mcs_spinlock.c 경로를 현재 구현 위치로 그대로 믿어도 되는가?",
+      "options": [
+        "그렇다. 주석의 모든 파일 링크는 자동 갱신된다",
+        "아니다. 현재 트리에서 실제 mcs_spinlock.h 구현을 확인해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "문서화된 참조도 코드 이동 뒤 오래될 수 있습니다. 존재하는 원본 파일을 대조하는 것이 학습 범위와 구현 근거를 정확하게 유지하는 방법입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#ifndef __ASM_MCS_SPINLOCK_H\n#define __ASM_MCS_SPINLOCK_H\n\n/*\n * Architectures can define their own:\n *\n *   arch_mcs_spin_lock_contended(l)\n *   arch_mcs_spin_unlock_contended(l)\n *\n * See kernel/locking/mcs_spinlock.c.\n */\n\n#endif /* __ASM_MCS_SPINLOCK_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "3e1b74ae3a62955f000de80484ce0f45ed54d20f37202ee108909b28cc84ccd6",
+    "scope": "whole-file",
+    "line_count": 13,
+    "authoring_source": "course/file_units/mcs_arch_headers.py",
+    "sections": [
+      "전체 구성",
+      "기본값 선택",
+      "주석 참조 경로",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/mcs_spinlock.h"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "id": "file-40ce5d9381fd02c5",
+  "path": "Documentation/locking/robust-futexes.rst",
+  "title": "Robust futex 설계 전체: 종료 비용과 사용자 공간 보유 목록",
+  "area": "장애 복구 · 비용 모델 · 연결 리스트 · 주소 공간 · ABI",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "소유자 사망 문제를 해결하기 위해 VMA 전체 검색 대신 스레드별 보유 잠금 목록을 채택한 설계 배경입니다.",
+  "guide": [
+    "정상 무경합 경로를 사용자 공간에 유지하면서 종료에 필요한 최소 메타데이터를 등록합니다. 복구 비용을 전체 주소 공간 규모보다 실제 보유 목록에 연결합니다.",
+    "역사적 설계 문서로 읽고 성능 수치·아키텍처 지원 현황·상한 주장은 현재 코드와 구분합니다. OWNER_DIED 통지는 보호 데이터의 자동 복원을 뜻하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서 전체 구성",
+      "text": "제목·작성자, Background, 새 사용자 목록 접근, Performance, Implementation details, Testing/architecture support로 구성됩니다. 패치 도입 당시의 서술이 많으므로 현재 v6.12의 기능 목록이나 실측 결과로 그대로 취급하지 않습니다."
+    },
+    {
+      "title": "일반 futex의 비용 이점과 정보 공백",
+      "text": "문서는 무경합 획득·해제를 사용자 공간에서 처리하고 경합 시 WAIT/WAKE로 커널 대기 큐를 연결하는 개요를 설명합니다. 대기 상태가 사라지면 커널에 지속적인 잠금별 소유 정보가 없다는 점이 가벼움의 장점이자 소유자 사망 정리의 어려움입니다. 모든 사용자 잠금의 소유 상태를 커널이 평소부터 추적한다고 가정하지 않습니다."
+    },
+    {
+      "title": "Robustness의 목적",
+      "text": "공유 잠금을 가진 프로세스가 충돌·강제 종료하면 기다리던 쪽에 소유자 사망을 알리고 새 소유자가 데이터 복구 가능성을 판단하게 합니다. 문서의 과거 yum 사례와 재부팅 필요 주장은 당시 문제의 동기이며 현재 모든 잠금 오류의 유일한 해결책이라는 뜻이 아닙니다."
+    },
+    {
+      "title": "VMA 기반 접근의 문제",
+      "text": "기존 제안은 VMA에 robust 정보를 붙이고 REGISTER/DEREGISTER/RECOVER 변형과 종료 시 모든 VMA 검색을 요구했습니다. 복잡한 동기화와 스레드마다 전체 VMA를 훑는 비용이 문제였다고 설명합니다. 문서의 마이크로초·밀리초 비교와 캐시 영향은 당시 설명이며 현재 장치에서 재측정한 값이 아닙니다."
+    },
+    {
+      "title": "보유 목록 접근",
+      "text": "새 방식은 사용자 공간이 스레드별 현재 보유 잠금 목록을 관리하고 set_robust_list로 head를 등록합니다. 종료 시 미등록이면 간단한 포인터 검사, 등록됐지만 비었으면 짧게 끝나고 비어 있지 않으면 목록을 순회합니다. 등록 한 번이라는 설명은 일반 사용 패턴이지 이 문서만으로 syscall 재등록이 ABI상 금지되었다고 판정할 근거는 아닙니다."
+    },
+    {
+      "title": "사용자 입력을 신뢰하지 않기",
+      "text": "커널은 종료 중인 스레드의 목록을 잠금 없이 읽는 설계를 설명하지만 사용자 주소가 언제나 유효하거나 악의적 수정이 없다는 뜻은 아닙니다. 문서 자체도 목록을 신뢰하지 않고 조심스럽게 걷는다고 명시합니다. 현재 구현의 주소 접근 실패와 순회 제한을 함께 봐야 합니다."
+    },
+    {
+      "title": "Pending으로 중간 상태 보완",
+      "text": "획득 뒤 목록 연결 전 사망하면 정상 목록만으로는 보유 잠금을 찾지 못합니다. list_op_pending을 획득 시도 전에 설정하고 목록 갱신 이후 지워 그 틈을 보완합니다. 제거·반납의 정확한 단계는 robust-futex-ABI 문서의 pending 설정→목록 제거→반납→pending 해제와 함께 읽습니다."
+    },
+    {
+      "title": "설계 차이와 주장 범위",
+      "text": "목록 방식은 모든 VMA 검색, 개별 잠금 등록 syscall, robust 추적 전용 잠금별 커널 할당, 별도 FUTEX_RECOVER를 피하는 장점을 설명합니다. 이는 경합 futex나 PI 상태에 커널 자원이 전혀 들지 않는다는 뜻이 아닙니다. 원문의 no resource limits를 현재 순회 상한 부재로 읽으면 틀리며 v6.12 ROBUST_LIST_LIMIT은2048입니다."
+    },
+    {
+      "title": "성능 절의 역사적 맥락",
+      "text": "문서는2GHz CPU에서 백만 개 잠금 목록 처리130ms/30ms와 사용자 공간의 백만 WAKE 호출256ms를 보고합니다. 이 수업에서 실행한 벤치마크가 아니며 현재2048 순회 상한을 사용하는 커널에서 그 실험이 그대로 재현된다고 할 수 없습니다. 성능 절의 FUTEX_WAIT set 표기는 플래그 문맥상 뒤에서 정의하는 FUTEX_WAITERS와 구별해 읽습니다."
+    },
+    {
+      "title": "ABI와 상태 비트",
+      "text": "set/get_robust_list 등록·조회 시그니처, task의 robust_list에 포인터 저장, OWNER_DIED0x40000000, WAITERS0x80000000 및 나머지 TID 비트를 설명합니다. 소유자 사망 표시·대기자 깨우기 이후 데이터 복구는 사용자 공간 책임입니다. 일반 robust 목록 설계 설명을 PI 소유권 처리의 모든 세부사항으로 확대하지 않습니다."
+    },
+    {
+      "title": "테스트와 아키텍처 절",
+      "text": "저자는 당시 x86/i386·x86_64 syscall과 glibc 시험, 손상 목록 시험을 보고하고 다른 아키텍처 연결 작업을 언급합니다. 이는 도입 당시 지원 현황으로 현재 다른 아키텍처에 robust syscall이 없다고 주장하면 안 됩니다. 끝의 아키텍처 원자 비교 교환 helper 요구도 실제 현재 파일명·인터페이스와 별도 대조해야 합니다."
+    },
+    {
+      "title": "CS 연결과 한계",
+      "text": "희소한 보유 자원 목록과 전체 주소 공간 검색의 비용 차이, 정상 경로 비용과 복구 비용의 분리, 사용자 메타데이터 검증, 진행 중 연산 기록, 역사적 성능 자료 해석을 학습합니다. 문서 전체를 설명하지만 현재 모든 아키텍처 지원이나 복구 경로를 실행 검증했다고 주장하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "VMA 전체 검색 대신 보유 목록을 쓰는 핵심 비용 이점은?",
+      "options": [
+        "종료 정리 대상을 해당 스레드의 보유 목록으로 좁힐 수 있다",
+        "모든 주소 공간을 매 획득마다 반드시 검색한다"
+      ],
+      "answer": 0,
+      "explanation": "VMA 수가 많아도 보유한 robust 잠금은 적을 수 있습니다. 등록 여부·빈 목록을 빠르게 확인하고 필요한 목록만 처리하는 설계입니다."
+    },
+    {
+      "prompt": "문서의 no resource limits는 v6.12에 목록 순회 상한이 없다는 증거인가?",
+      "options": [
+        "그렇다. 사용자 목록은 무한히 순회한다",
+        "아니다. 현재 ROBUST_LIST_LIMIT=2048과 구분해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "역사적 설계상의 자원 관리 장점과 현재 커널의 악성·순환 목록 방어 상한은 다릅니다. 실제 상수와 코드가 현재 동작의 근거입니다."
+    },
+    {
+      "prompt": "정상 목록만으로 획득 직후 사망을 항상 찾을 수 있는가?",
+      "options": [
+        "아니다. 목록 연결 전의 틈을 pending 항목이 보완한다",
+        "그렇다. 원자 획득이 목록 포인터까지 자동 수정한다"
+      ],
+      "answer": 0,
+      "explanation": "사용자 공간 원자 lock word 변경과 리스트 연결은 별개 단계입니다. 중간에 종료될 수 있어 진행 중 항목의 주소를 별도로 공개합니다."
+    },
+    {
+      "prompt": "백만 잠금130ms 수치를 이 프로젝트가 현재 측정한 성능으로 제시해도 되는가?",
+      "options": [
+        "된다. 모든 CPU에서 동일한 고정 시간이다",
+        "안 된다. 문서 저자의 과거 환경 측정이다"
+      ],
+      "answer": 1,
+      "explanation": "CPU·커널·상한·경합 상태가 모두 결과에 영향을 줍니다. 문서에 기록된 실험과 현재 직접 검증한 결과를 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "========================================\nA description of what robust futexes are\n========================================\n\n:Started by: Ingo Molnar <mingo@redhat.com>\n\nBackground\n----------\n\nwhat are robust futexes? To answer that, we first need to understand\nwhat futexes are: normal futexes are special types of locks that in the\nnoncontended case can be acquired/released from userspace without having\nto enter the kernel.\n\nA futex is in essence a user-space address, e.g. a 32-bit lock variable\nfield. If userspace notices contention (the lock is already owned and\nsomeone else wants to grab it too) then the lock is marked with a value\nthat says \"there's a waiter pending\", and the sys_futex(FUTEX_WAIT)\nsyscall is used to wait for the other guy to release it. The kernel\ncreates a 'futex queue' internally, so that it can later on match up the\nwaiter with the waker - without them having to know about each other.\nWhen the owner thread releases the futex, it notices (via the variable\nvalue) that there were waiter(s) pending, and does the\nsys_futex(FUTEX_WAKE) syscall to wake them up.  Once all waiters have\ntaken and released the lock, the futex is again back to 'uncontended'\nstate, and there's no in-kernel state associated with it. The kernel\ncompletely forgets that there ever was a futex at that address. This\nmethod makes futexes very lightweight and scalable.\n\n\"Robustness\" is about dealing with crashes while holding a lock: if a\nprocess exits prematurely while holding a pthread_mutex_t lock that is\nalso shared with some other process (e.g. yum segfaults while holding a\npthread_mutex_t, or yum is kill -9-ed), then waiters for that lock need\nto be notified that the last owner of the lock exited in some irregular\nway.\n\nTo solve such types of problems, \"robust mutex\" userspace APIs were\ncreated: pthread_mutex_lock() returns an error value if the owner exits\nprematurely - and the new owner can decide whether the data protected by\nthe lock can be recovered safely.\n\nThere is a big conceptual problem with futex based mutexes though: it is\nthe kernel that destroys the owner task (e.g. due to a SEGFAULT), but\nthe kernel cannot help with the cleanup: if there is no 'futex queue'\n(and in most cases there is none, futexes being fast lightweight locks)\nthen the kernel has no information to clean up after the held lock!\nUserspace has no chance to clean up after the lock either - userspace is\nthe one that crashes, so it has no opportunity to clean up. Catch-22.\n\nIn practice, when e.g. yum is kill -9-ed (or segfaults), a system reboot\nis needed to release that futex based lock. This is one of the leading\nbugreports against yum.\n\nTo solve this problem, the traditional approach was to extend the vma\n(virtual memory area descriptor) concept to have a notion of 'pending\nrobust futexes attached to this area'. This approach requires 3 new\nsyscall variants to sys_futex(): FUTEX_REGISTER, FUTEX_DEREGISTER and\nFUTEX_RECOVER. At do_exit() time, all vmas are searched to see whether\nthey have a robust_head set. This approach has two fundamental problems\nleft:\n\n - it has quite complex locking and race scenarios. The vma-based\n   approach had been pending for years, but they are still not completely\n   reliable.\n\n - they have to scan _every_ vma at sys_exit() time, per thread!\n\nThe second disadvantage is a real killer: pthread_exit() takes around 1\nmicrosecond on Linux, but with thousands (or tens of thousands) of vmas\nevery pthread_exit() takes a millisecond or more, also totally\ndestroying the CPU's L1 and L2 caches!\n\nThis is very much noticeable even for normal process sys_exit_group()\ncalls: the kernel has to do the vma scanning unconditionally! (this is\nbecause the kernel has no knowledge about how many robust futexes there\nare to be cleaned up, because a robust futex might have been registered\nin another task, and the futex variable might have been simply mmap()-ed\ninto this process's address space).\n\nThis huge overhead forced the creation of CONFIG_FUTEX_ROBUST so that\nnormal kernels can turn it off, but worse than that: the overhead makes\nrobust futexes impractical for any type of generic Linux distribution.\n\nSo something had to be done.\n\nNew approach to robust futexes\n------------------------------\n\nAt the heart of this new approach there is a per-thread private list of\nrobust locks that userspace is holding (maintained by glibc) - which\nuserspace list is registered with the kernel via a new syscall [this\nregistration happens at most once per thread lifetime]. At do_exit()\ntime, the kernel checks this user-space list: are there any robust futex\nlocks to be cleaned up?\n\nIn the common case, at do_exit() time, there is no list registered, so\nthe cost of robust futexes is just a simple current->robust_list != NULL\ncomparison. If the thread has registered a list, then normally the list\nis empty. If the thread/process crashed or terminated in some incorrect\nway then the list might be non-empty: in this case the kernel carefully\nwalks the list [not trusting it], and marks all locks that are owned by\nthis thread with the FUTEX_OWNER_DIED bit, and wakes up one waiter (if\nany).\n\nThe list is guaranteed to be private and per-thread at do_exit() time,\nso it can be accessed by the kernel in a lockless way.\n\nThere is one race possible though: since adding to and removing from the\nlist is done after the futex is acquired by glibc, there is a few\ninstructions window for the thread (or process) to die there, leaving\nthe futex hung. To protect against this possibility, userspace (glibc)\nalso maintains a simple per-thread 'list_op_pending' field, to allow the\nkernel to clean up if the thread dies after acquiring the lock, but just\nbefore it could have added itself to the list. Glibc sets this\nlist_op_pending field before it tries to acquire the futex, and clears\nit after the list-add (or list-remove) has finished.\n\nThat's all that is needed - all the rest of robust-futex cleanup is done\nin userspace [just like with the previous patches].\n\nUlrich Drepper has implemented the necessary glibc support for this new\nmechanism, which fully enables robust mutexes.\n\nKey differences of this userspace-list based approach, compared to the\nvma based method:\n\n - it's much, much faster: at thread exit time, there's no need to loop\n   over every vma (!), which the VM-based method has to do. Only a very\n   simple 'is the list empty' op is done.\n\n - no VM changes are needed - 'struct address_space' is left alone.\n\n - no registration of individual locks is needed: robust mutexes don't\n   need any extra per-lock syscalls. Robust mutexes thus become a very\n   lightweight primitive - so they don't force the application designer\n   to do a hard choice between performance and robustness - robust\n   mutexes are just as fast.\n\n - no per-lock kernel allocation happens.\n\n - no resource limits are needed.\n\n - no kernel-space recovery call (FUTEX_RECOVER) is needed.\n\n - the implementation and the locking is \"obvious\", and there are no\n   interactions with the VM.\n\nPerformance\n-----------\n\nI have benchmarked the time needed for the kernel to process a list of 1\nmillion (!) held locks, using the new method [on a 2GHz CPU]:\n\n - with FUTEX_WAIT set [contended mutex]: 130 msecs\n - without FUTEX_WAIT set [uncontended mutex]: 30 msecs\n\nI have also measured an approach where glibc does the lock notification\n[which it currently does for !pshared robust mutexes], and that took 256\nmsecs - clearly slower, due to the 1 million FUTEX_WAKE syscalls\nuserspace had to do.\n\n(1 million held locks are unheard of - we expect at most a handful of\nlocks to be held at a time. Nevertheless it's nice to know that this\napproach scales nicely.)\n\nImplementation details\n----------------------\n\nThe patch adds two new syscalls: one to register the userspace list, and\none to query the registered list pointer::\n\n asmlinkage long\n sys_set_robust_list(struct robust_list_head __user *head,\n                     size_t len);\n\n asmlinkage long\n sys_get_robust_list(int pid, struct robust_list_head __user **head_ptr,\n                     size_t __user *len_ptr);\n\nList registration is very fast: the pointer is simply stored in\ncurrent->robust_list. [Note that in the future, if robust futexes become\nwidespread, we could extend sys_clone() to register a robust-list head\nfor new threads, without the need of another syscall.]\n\nSo there is virtually zero overhead for tasks not using robust futexes,\nand even for robust futex users, there is only one extra syscall per\nthread lifetime, and the cleanup operation, if it happens, is fast and\nstraightforward. The kernel doesn't have any internal distinction between\nrobust and normal futexes.\n\nIf a futex is found to be held at exit time, the kernel sets the\nfollowing bit of the futex word::\n\n\t#define FUTEX_OWNER_DIED        0x40000000\n\nand wakes up the next futex waiter (if any). User-space does the rest of\nthe cleanup.\n\nOtherwise, robust futexes are acquired by glibc by putting the TID into\nthe futex field atomically. Waiters set the FUTEX_WAITERS bit::\n\n\t#define FUTEX_WAITERS           0x80000000\n\nand the remaining bits are for the TID.\n\nTesting, architecture support\n-----------------------------\n\nI've tested the new syscalls on x86 and x86_64, and have made sure the\nparsing of the userspace list is robust [ ;-) ] even if the list is\ndeliberately corrupted.\n\ni386 and x86_64 syscalls are wired up at the moment, and Ulrich has\ntested the new glibc code (on x86_64 and i386), and it works for his\nrobust-mutex testcases.\n\nAll other architectures should build just fine too - but they won't have\nthe new syscalls yet.\n\nArchitectures need to implement the new futex_atomic_cmpxchg_inatomic()\ninline function before writing up the syscalls.\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "94b518c77725fd693537a8d5456814432d32fe490e547c9bbf40f66bdfb80901",
+    "scope": "whole-file",
+    "line_count": 221,
+    "authoring_source": "course/file_units/robust_futex_design.py",
+    "sections": [
+      "문서 전체 구성",
+      "일반 futex의 비용 이점과 정보 공백",
+      "Robustness의 목적",
+      "VMA 기반 접근의 문제",
+      "보유 목록 접근",
+      "사용자 입력을 신뢰하지 않기",
+      "Pending으로 중간 상태 보완",
+      "설계 차이와 주장 범위",
+      "성능 절의 역사적 맥락",
+      "ABI와 상태 비트",
+      "테스트와 아키텍처 절",
+      "CS 연결과 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/locking/robust-futexes.rst"
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "id": "file-0e4f8603ef816c43",
+  "path": "kernel/utsname.c",
+  "title": "UTS namespace 구현: 복제·소유권·이름 복사 잠금",
+  "area": "namespace · slab · refcount · rwsem · 오류 포인터 · 자원 회계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "모든 함수와 operation 테이블, slab 초기화 및 실패 경로를 분석합니다.",
+  "guide": [
+    "복제는 기존 값을 일관되게 읽고 새 객체의 회계·식별자·참조를 준비하는 여러 단계로 구성됩니다.",
+    "자원 획득의 역순 정리, read semaphore, 참조를 먼저 얻는 교체 순서를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 cache",
+      "text": "GPL-2.0-only 파일은 export,uts,utsname,err,slab,cred,user namespace,proc namespace,task 헤더를 포함합니다. uts_ns_cache 포인터는 __ro_after_init입니다. create_uts_ns는 cache에서 GFP_KERNEL로 객체를 할당하고 성공 시 ns.count만 1로 설정합니다. 객체 전체를 0으로 만드는 할당이 아닙니다."
+    },
+    {
+      "title": "개수 회계와 복제 시작",
+      "text": "inc_uts_namespaces는 owner user namespace,current_euid(),UCOUNT_UTS_NAMESPACES를 inc_ucount에 전달하고 dec helper는 같은 종류를 감소시킵니다. clone_uts_ns는 회계 획득 실패를 -ENOSPC, 객체 할당 실패를 -ENOMEM으로 처리합니다. 이어 ns_alloc_inum 오류를 그대로 보존합니다. 함수 위 주석의 ENOMEM 설명만 보고 모든 실패가 같은 오류라고 단정하면 안 됩니다."
+    },
+    {
+      "title": "성공 설정과 이름 복사",
+      "text": "inum 준비가 성공하면 ucounts와 ops=&utsns_operations를 지정합니다. down_read(&uts_sem) 아래 old_ns->name 전체를 memcpy하고 owner user_ns를 get_user_ns로 보유한 뒤 up_read합니다. 여기서 전체 new_utsname을 복사하므로 nodename 하나만 복제하는 것이 아닙니다. 이름을 읽는 쪽이므로 read 잠금을 쓰며 이 파일에는 hostname 변경 syscall 본문이 없습니다."
+    },
+    {
+      "title": "실패 자원 회수",
+      "text": "inum 할당 실패는 cache 객체를 해제한 뒤 회계 감소, 객체 할당 실패는 회계 감소만 수행합니다. 회계 획득 실패는 곧바로 ERR_PTR(err)입니다. owner 참조는 실패 가능한 준비 단계가 끝난 후 얻으므로 이 실패 라벨에 put_user_ns가 없습니다. 아직 얻지 않은 자원을 반환하지 않는 순서입니다."
+    },
+    {
+      "title": "공유와 복제의 임시 참조",
+      "text": "copy_utsname은 BUG_ON(!old_ns) 후 먼저 get_uts_ns(old_ns)를 합니다. NEWUTS가 없으면 증가한 참조와 함께 같은 객체를 반환합니다. 있으면 clone_uts_ns를 호출하고 성공·실패 모두 old_ns를 put한 뒤 결과를 반환합니다. clone 실패가 기존 namespace 보유 참조를 임의로 잃게 만드는 구조가 아니라 이 함수에서 추가한 임시 참조를 균형 있게 놓습니다."
+    },
+    {
+      "title": "해제와 공통 객체 변환",
+      "text": "free_uts_ns는 개수 회계 감소, owner put, inode 번호 해제, slab 반환 순서입니다. count 감소 자체는 header의 put helper 책임입니다. to_uts_ns는 container_of로 ns_common에서 바깥 객체를 얻습니다. 공통 객체를 별도 할당하거나 데이터 복사로 변환하지 않습니다."
+    },
+    {
+      "title": "Task에서 참조 얻기",
+      "text": "utsns_get은 task_lock 아래 task->nsproxy를 확인하고 있으면 uts_ns를 선택해 get한 뒤 unlock합니다. 결과는 &ns->ns 또는 NULL입니다. get이 잠금 안에 있어 task의 포인터를 읽는 시점과 객체 수명 획득을 연결합니다. utsns_put은 역변환 후 put_uts_ns에 위임합니다."
+    },
+    {
+      "title": "설치 권한과 교체 순서",
+      "text": "utsns_install은 대상 owner와 nsset->cred->user_ns 양쪽에서 CAP_SYS_ADMIN을 검사하고 하나라도 없으면 -EPERM입니다. 통과하면 새 ns를 먼저 get하고 준비 proxy의 옛 uts_ns를 put한 뒤 포인터를 대입합니다. 같은 객체를 다시 설치하는 경우에도 먼저 얻는 순서가 중요합니다. 이 함수는 nsset의 준비 상태를 바꾸며 current의 전체 proxy를 직접 전환하지 않습니다."
+    },
+    {
+      "title": "Owner와 operation 테이블",
+      "text": "utsns_owner는 owner 포인터를 반환합니다. utsns_operations는 name=uts,type=CLONE_NEWUTS와 get,put,install,owner를 연결합니다. real_ns_name과 get_parent는 명시 초기화하지 않아 NULL입니다. 이 테이블에 parent callback이 있다고 가정하면 nsfs PARENT ioctl 분석도 틀려집니다."
+    },
+    {
+      "title": "Usercopy cache 초기화",
+      "text": "uts_ns_init은 kmem_cache_create_usercopy에 객체 전체 크기, align=0, SLAB_PANIC|SLAB_ACCOUNT를 전달합니다. 사용자 복사 허용 구역은 offsetof(uts_namespace,name)에서 sizeof_field(...,name)만큼이며 마지막 ctor는 NULL입니다. 객체 전체가 사용자 복사 데이터라고 선언하지 않습니다. offsetof를 사용하므로 구조체 배치 randomization 문맥에서도 name의 실제 위치로 구역을 지정합니다."
+    },
+    {
+      "title": "검토 범위",
+      "text": "회계·할당·복제·copy·free·공통 변환·get/put/install/owner·작업 테이블·초기화를 모두 원본과 대조했습니다. 이름 데이터의 동시 접근 잠금과 객체 수명의 refcount, 사용자별 namespace 회계는 별도의 메커니즘입니다. 실제 UTS clone·setns·할당 실패 주입을 실행 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "clone_uts_ns에서 namespace 개수 회계 획득 실패 오류는?",
+      "options": [
+        "-ENOSPC",
+        "항상 -ENOMEM"
+      ],
+      "answer": 0,
+      "explanation": "err는 처음 -ENOSPC이며 회계 획득 뒤에 -ENOMEM으로 바뀝니다. 주석보다 실제 분기와 대입을 확인해야 합니다."
+    },
+    {
+      "prompt": "UTS 복제에서 memcpy 보호에 쓰는 잠금은?",
+      "options": [
+        "uts_sem의 write 잠금",
+        "uts_sem의 read 잠금"
+      ],
+      "answer": 1,
+      "explanation": "이 함수는 기존 이름을 읽어 새 객체로 복사하므로 down_read/up_read를 사용합니다."
+    },
+    {
+      "prompt": "copy_utsname에서 NEWUTS가 없는 경우 반환은?",
+      "options": [
+        "참조를 하나 늘린 기존 객체",
+        "매번 새로 할당한 독립 객체"
+      ],
+      "answer": 0,
+      "explanation": "get_uts_ns는 flag 검사보다 먼저 실행됩니다. 공유 경로는 그 참조를 반환 계약으로 넘깁니다."
+    },
+    {
+      "prompt": "새 namespace를 설치할 때 get과 옛 put의 순서는?",
+      "options": [
+        "옛 참조 해제 후 새 객체를 검사 없이 사용",
+        "새 참조 획득 후 옛 참조 해제"
+      ],
+      "answer": 1,
+      "explanation": "같은 객체를 다시 설치할 가능성도 고려하면 먼저 수명을 보유하는 순서가 중요합니다."
+    },
+    {
+      "prompt": "UTS cache의 usercopy 허용 구역은?",
+      "options": [
+        "name 필드 구역",
+        "user_ns와 ucounts를 포함한 객체 전체"
+      ],
+      "answer": 0,
+      "explanation": "offset과 길이를 name 필드로 지정합니다. 사용자 ABI 데이터와 커널의 소유권 메타데이터를 구분합니다."
+    },
+    {
+      "prompt": "utsns_operations가 get_parent를 제공하는가?",
+      "options": [
+        "그렇다. 항상 init_uts_ns를 반환한다",
+        "아니다. 명시되지 않아 NULL이다"
+      ],
+      "answer": 1,
+      "explanation": "테이블은 get,put,install,owner만 연결합니다. 실제 제공하지 않는 계층 API를 추정해서는 안 됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  Copyright (C) 2004 IBM Corporation\n *\n *  Author: Serge Hallyn <serue@us.ibm.com>\n */\n\n#include <linux/export.h>\n#include <linux/uts.h>\n#include <linux/utsname.h>\n#include <linux/err.h>\n#include <linux/slab.h>\n#include <linux/cred.h>\n#include <linux/user_namespace.h>\n#include <linux/proc_ns.h>\n#include <linux/sched/task.h>\n\nstatic struct kmem_cache *uts_ns_cache __ro_after_init;\n\nstatic struct ucounts *inc_uts_namespaces(struct user_namespace *ns)\n{\n\treturn inc_ucount(ns, current_euid(), UCOUNT_UTS_NAMESPACES);\n}\n\nstatic void dec_uts_namespaces(struct ucounts *ucounts)\n{\n\tdec_ucount(ucounts, UCOUNT_UTS_NAMESPACES);\n}\n\nstatic struct uts_namespace *create_uts_ns(void)\n{\n\tstruct uts_namespace *uts_ns;\n\n\tuts_ns = kmem_cache_alloc(uts_ns_cache, GFP_KERNEL);\n\tif (uts_ns)\n\t\trefcount_set(&uts_ns->ns.count, 1);\n\treturn uts_ns;\n}\n\n/*\n * Clone a new ns copying an original utsname, setting refcount to 1\n * @old_ns: namespace to clone\n * Return ERR_PTR(-ENOMEM) on error (failure to allocate), new ns otherwise\n */\nstatic struct uts_namespace *clone_uts_ns(struct user_namespace *user_ns,\n\t\t\t\t\t  struct uts_namespace *old_ns)\n{\n\tstruct uts_namespace *ns;\n\tstruct ucounts *ucounts;\n\tint err;\n\n\terr = -ENOSPC;\n\tucounts = inc_uts_namespaces(user_ns);\n\tif (!ucounts)\n\t\tgoto fail;\n\n\terr = -ENOMEM;\n\tns = create_uts_ns();\n\tif (!ns)\n\t\tgoto fail_dec;\n\n\terr = ns_alloc_inum(&ns->ns);\n\tif (err)\n\t\tgoto fail_free;\n\n\tns->ucounts = ucounts;\n\tns->ns.ops = &utsns_operations;\n\n\tdown_read(&uts_sem);\n\tmemcpy(&ns->name, &old_ns->name, sizeof(ns->name));\n\tns->user_ns = get_user_ns(user_ns);\n\tup_read(&uts_sem);\n\treturn ns;\n\nfail_free:\n\tkmem_cache_free(uts_ns_cache, ns);\nfail_dec:\n\tdec_uts_namespaces(ucounts);\nfail:\n\treturn ERR_PTR(err);\n}\n\n/*\n * Copy task tsk's utsname namespace, or clone it if flags\n * specifies CLONE_NEWUTS.  In latter case, changes to the\n * utsname of this process won't be seen by parent, and vice\n * versa.\n */\nstruct uts_namespace *copy_utsname(unsigned long flags,\n\tstruct user_namespace *user_ns, struct uts_namespace *old_ns)\n{\n\tstruct uts_namespace *new_ns;\n\n\tBUG_ON(!old_ns);\n\tget_uts_ns(old_ns);\n\n\tif (!(flags & CLONE_NEWUTS))\n\t\treturn old_ns;\n\n\tnew_ns = clone_uts_ns(user_ns, old_ns);\n\n\tput_uts_ns(old_ns);\n\treturn new_ns;\n}\n\nvoid free_uts_ns(struct uts_namespace *ns)\n{\n\tdec_uts_namespaces(ns->ucounts);\n\tput_user_ns(ns->user_ns);\n\tns_free_inum(&ns->ns);\n\tkmem_cache_free(uts_ns_cache, ns);\n}\n\nstatic inline struct uts_namespace *to_uts_ns(struct ns_common *ns)\n{\n\treturn container_of(ns, struct uts_namespace, ns);\n}\n\nstatic struct ns_common *utsns_get(struct task_struct *task)\n{\n\tstruct uts_namespace *ns = NULL;\n\tstruct nsproxy *nsproxy;\n\n\ttask_lock(task);\n\tnsproxy = task->nsproxy;\n\tif (nsproxy) {\n\t\tns = nsproxy->uts_ns;\n\t\tget_uts_ns(ns);\n\t}\n\ttask_unlock(task);\n\n\treturn ns ? &ns->ns : NULL;\n}\n\nstatic void utsns_put(struct ns_common *ns)\n{\n\tput_uts_ns(to_uts_ns(ns));\n}\n\nstatic int utsns_install(struct nsset *nsset, struct ns_common *new)\n{\n\tstruct nsproxy *nsproxy = nsset->nsproxy;\n\tstruct uts_namespace *ns = to_uts_ns(new);\n\n\tif (!ns_capable(ns->user_ns, CAP_SYS_ADMIN) ||\n\t    !ns_capable(nsset->cred->user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\tget_uts_ns(ns);\n\tput_uts_ns(nsproxy->uts_ns);\n\tnsproxy->uts_ns = ns;\n\treturn 0;\n}\n\nstatic struct user_namespace *utsns_owner(struct ns_common *ns)\n{\n\treturn to_uts_ns(ns)->user_ns;\n}\n\nconst struct proc_ns_operations utsns_operations = {\n\t.name\t\t= \"uts\",\n\t.type\t\t= CLONE_NEWUTS,\n\t.get\t\t= utsns_get,\n\t.put\t\t= utsns_put,\n\t.install\t= utsns_install,\n\t.owner\t\t= utsns_owner,\n};\n\nvoid __init uts_ns_init(void)\n{\n\tuts_ns_cache = kmem_cache_create_usercopy(\n\t\t\t\"uts_namespace\", sizeof(struct uts_namespace), 0,\n\t\t\tSLAB_PANIC|SLAB_ACCOUNT,\n\t\t\toffsetof(struct uts_namespace, name),\n\t\t\tsizeof_field(struct uts_namespace, name),\n\t\t\tNULL);\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "436508ed5990edb5f032df8ad5963c537ed74d405c6f41b7375eed1486b921ca",
+    "scope": "whole-file",
+    "line_count": 177,
+    "authoring_source": "course/file_units/uts_namespace.py",
+    "sections": [
+      "전체 구성과 cache",
+      "개수 회계와 복제 시작",
+      "성공 설정과 이름 복사",
+      "실패 자원 회수",
+      "공유와 복제의 임시 참조",
+      "해제와 공통 객체 변환",
+      "Task에서 참조 얻기",
+      "설치 권한과 교체 순서",
+      "Owner와 operation 테이블",
+      "Usercopy cache 초기화",
+      "검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/utsname.c"
+    }
+  ]
+}

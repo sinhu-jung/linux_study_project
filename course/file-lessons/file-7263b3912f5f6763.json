@@ -1,0 +1,91 @@
+{
+  "id": "file-7263b3912f5f6763",
+  "path": "scripts/rustc-version.sh",
+  "title": "Rust 버전 정수화: minor 확장 공간과 실행 실패 처리",
+  "area": "버전 표현 · shell · 도구 probe",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "Rust 버전 출력의 두 번째 토큰과 다른 도구보다 넓은 major 가중치를 분석합니다.",
+  "guide": [
+    "버전 구성요소에 할당한 자리 수는 미래 minor 값의 증가와 비교 결과에 영향을 줍니다.",
+    "수치 인코딩, 조건식 안의 명령 치환, 실패 sentinel을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구조와 목적",
+      "text": "#!/bin/sh, GPL-2.0 파일은 canonical 함수 하나와 compiler 실행의 if/else로 구성됩니다. C compiler 검사 스크립트와 달리 set -e 선언이나 최소 버전 helper 호출이 없습니다. 사용 예는 rustc 명령을 전달하는 것입니다."
+    },
+    {
+      "title": "Major 가중치 차이",
+      "text": "get_canonical_version은 점 구분자로 나눈 세 필드를 100000*major+100*minor+patch로 합칩니다. C 도구의 10000과 달리 major 가중치가 100000입니다. 주석은 minor가 100에 도달할 것을 고려한 추가 자리라고 설명합니다. 이는 원본 작성 당시의 설계 설명이며 현재 release 일정을 검증한 정보로 읽지 않습니다. 1.78.0은 107800,1.100.0은 110000입니다."
+    },
+    {
+      "title": "명령 실행 성공과 파싱",
+      "text": "if output=$(\"$@\" --version 2>/dev/null)은 명령 실행의 종료 상태를 직접 조건으로 사용합니다. 성공하면 set -- $output으로 공백 분리하고 두 번째 토큰을 canonical 함수에 전달합니다. 첫 토큰이 정확히 rustc인지 별도 비교하지 않습니다. 여러 단어의 명령을 인수로 전달할 수 있지만 전체 버전 출력 형식을 검증하는 parser는 아닙니다."
+    },
+    {
+      "title": "실패와 지원 범위",
+      "text": "명령 실패는 stdout에 0을 출력하고 exit 1입니다. 성공했더라도 두 번째 토큰의 세 구성요소가 없거나 수치가 아닌 경우에 대한 명시적 보정이나 prerelease suffix 제거가 없습니다. 반환 숫자만으로 최소 지원 조건 통과를 증명하지 않습니다. 모든 본문을 대조했고 실제 Rust compiler를 실행해 확인한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "Rust 1.100.0의 canonical 값은?",
+      "options": [
+        "110000",
+        "20000"
+      ],
+      "answer": 0,
+      "explanation": "100000×1+100×100=110000입니다. C 도구의 major 가중치와 다릅니다."
+    },
+    {
+      "prompt": "rustc --version 실행이 실패하면?",
+      "options": [
+        "최소 지원 버전을 대신 출력하며 성공한다",
+        "0을 출력하고 상태 1로 종료한다"
+      ],
+      "answer": 1,
+      "explanation": "else 분기의 sentinel과 오류 상태를 함께 확인해야 합니다."
+    },
+    {
+      "prompt": "이 스크립트가 최소 Rust 버전과 비교하는가?",
+      "options": [
+        "아니다. 버전을 추출해 숫자로 출력한다",
+        "그렇다. min-tool-version.sh를 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "최소 버전 비교는 이 파일에 없습니다. 도구 probe와 정책 검사를 분리해서 읽습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n#\n# Usage: $ ./rustc-version.sh rustc\n#\n# Print the Rust compiler version in a 6 or 7-digit form.\n\n# Convert the version string x.y.z to a canonical up-to-7-digits form.\n#\n# Note that this function uses one more digit (compared to other\n# instances in other version scripts) to give a bit more space to\n# `rustc` since it will reach 1.100.0 in late 2026.\nget_canonical_version()\n{\n\tIFS=.\n\tset -- $1\n\techo $((100000 * $1 + 100 * $2 + $3))\n}\n\nif output=$(\"$@\" --version 2>/dev/null); then\n\tset -- $output\n\tget_canonical_version $2\nelse\n\techo 0\n\texit 1\nfi\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ec495ec0fe8a9b53f17d73c9bdd00e3d1d8fca875f3de1cfe19b68dc80e0db3a",
+    "scope": "whole-file",
+    "line_count": 26,
+    "authoring_source": "course/file_units/assembler_rust_versions.py",
+    "sections": [
+      "전체 구조와 목적",
+      "Major 가중치 차이",
+      "명령 실행 성공과 파싱",
+      "실패와 지원 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/rustc-version.sh"
+    }
+  ]
+}

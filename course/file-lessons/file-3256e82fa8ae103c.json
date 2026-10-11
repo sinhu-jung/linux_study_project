@@ -1,0 +1,125 @@
+{
+  "id": "file-3256e82fa8ae103c",
+  "path": "Documentation/admin-guide/mm/idle_page_tracking.rst",
+  "title": "Idle 페이지 측정: 관측 구간과 working set 추정",
+  "area": "비트맵 · working set · 관측 구간 · 계측 간섭 · 메모리 회수",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "idle 비트맵을 설정하고 관찰한 뒤 읽는 절차와 측정 대상·오차 요인을 학습합니다.",
+  "guide": [
+    "idle은 영구적인 페이지 속성이 아니라 표시한 시점 이후의 관측 결과이며 비트 수와 메모리 크기는 다릅니다.",
+    "프로세스와 memory cgroup의 메모리 사용을 분석할 때 측정값을 올바르게 해석합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서 전체와 목적",
+      "text": "Motivation, User API, Implementation Details의 세 부분과 두 교차 참조 anchor로 구성됩니다. CONFIG_IDLE_PAGE_TRACKING=y가 기능을 활성화합니다. working set 추정은 workload 설정, memory cgroup 제한, 클러스터 배치 판단에 활용할 수 있다고 설명하지만 특정 제한값을 자동 계산하는 정책은 제시하지 않습니다."
+    },
+    {
+      "title": "비트맵의 주소 체계",
+      "text": "/sys/kernel/mm/page_idle/bitmap은 8바이트 정수 배열이며 PFN i는 원소 i/64의 비트 i%64에 대응합니다. 바이트 순서는 native입니다. 예를 들어 PFN 130은 세 번째 원소의 비트 2이며 파일의 해당 8바이트 원소 시작 위치는 16입니다. PFN을 프로세스 가상 페이지 번호로 해석해서는 안 됩니다."
+    },
+    {
+      "title": "표시와 0 쓰기의 의미",
+      "text": "비트 1은 페이지가 idle임을 뜻하며 사용자가 1을 써서 측정 시작 상태를 표시합니다. 문서는 쓰기 값을 기존 값에 OR한다고 설명합니다. 따라서 0을 쓴다고 그 페이지의 idle을 지우는 API가 아닙니다. 실제 구현은 선택된 페이지에 대해 기존 PTE 참조 정보를 처리한 다음 idle을 설정하므로 단순 메모리 배열 OR만 하는 함수와는 다릅니다."
+    },
+    {
+      "title": "대상과 huge page",
+      "text": "문서는 프로세스 매핑, page cache와 buffer, swap cache 등 사용자 메모리 페이지를 대상으로 들고 SLAB 등은 표시 시도를 무시한다고 설명합니다. huge page에서는 head에만 idle이 표시되므로 kpageflags로 크기와 유형을 함께 해석해야 합니다. head 비트 하나를 기본 페이지 한 개의 바이트 수로만 환산하면 큰 페이지의 유휴 용량을 과소 계산할 수 있습니다."
+    },
+    {
+      "title": "정렬과 끝 경계",
+      "text": "읽기·쓰기 위치가 8바이트 정렬이 아니거나 길이가 8의 배수가 아니면 EINVAL입니다. 문서는 최대 PFN을 넘는 쓰기에 ENXIO를 설명합니다. 구현을 대조하면 시작 PFN이 max_pfn 이상일 때 ENXIO이고, 시작은 유효하나 요청 끝이 넘는 경우에는 끝을 잘라 처리합니다. 읽기의 시작이 범위 밖이면 0을 반환합니다. 요청 범위의 일부 초과와 시작 위치 초과를 구분합니다."
+    },
+    {
+      "title": "측정의 세 단계",
+      "text": "먼저 workload 페이지를 찾아 해당 비트를 1로 표시하고, workload가 working set에 접근할 관찰 시간을 둔 다음 비트맵을 읽어 남은 1을 셉니다. 프로세스는 /proc/pid/pagemap, cgroup은 /proc/kpagecgroup으로 소속을 확인하고 /proc/kpageflags로 mlocked 등 제외할 유형을 걸러낼 수 있습니다. tools/mm의 page-types가 표시와 후속 관측을 도울 수 있으며 상세 proc 인터페이스는 pagemap.rst를 참조합니다. 이 문서 자체가 모든 권한·도구 옵션을 설명하지는 않습니다."
+    },
+    {
+      "title": "접근의 의미",
+      "text": "프로세스 주소 공간의 PTE Accessed와 커널의 명시적인 accessed 표식을 사용합니다. 문서는 read/write 시스템 호출, 파일시스템 메타데이터 buffer 사용, get_user_pages를 이용한 드라이버 접근을 예로 듭니다. 회수나 dirty 한도 때문에 dirty 페이지를 swap 또는 disk에 쓰는 행위 자체는 referenced로 표시하지 않는다고 구분합니다. 모든 하드웨어 버스 트랜잭션을 세는 기능은 아닙니다."
+    },
+    {
+      "title": "Young로 계측 간섭 완화",
+      "text": "새로운 접근을 감지하려면 기존 PTE Accessed를 지워야 하지만 reclaim도 이 정보를 이용합니다. 관측 과정에서 참조를 지울 때 Young을 보존해 reclaimer가 추가 Accessed 표식처럼 해석하도록 합니다. 구현에서는 실제 참조를 발견한 경우 idle을 지우고 young을 설정합니다. idle 해제는 CPU 접근 순간 즉시 실행되는 trap이라는 뜻이 아니며 비트맵 읽기 때 PTE 참조를 확인하는 경로도 있습니다."
+    },
+    {
+      "title": "측정의 한계와 CS",
+      "text": "LRU에 없는 페이지와 일시적으로 격리된 페이지는 제외될 수 있고 잠긴 페이지의 참조 확인도 건너뛸 수 있습니다. 관측 기간, 대상 변화, huge page 단위, 필터가 결과에 영향을 주므로 비트 수를 절대적인 working set 정답으로 취급하지 않습니다. 비트 압축, 물리 주소 식별, 표본 누락, 관측이 원래 알고리즘에 끼치는 간섭을 연결해 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "PFN 130의 비트맵 원소 시작 바이트 위치와 비트 번호는?",
+      "options": [
+        "16바이트 위치, 비트 2이다",
+        "130바이트 위치, 비트 0이다"
+      ],
+      "answer": 0,
+      "explanation": "130/64=2이므로 0부터 센 원소 번호는 2이고 2*8=16입니다. 나머지 2가 원소 안 비트 번호입니다."
+    },
+    {
+      "prompt": "비트맵에 0을 쓰면 해당 페이지 idle이 해제되는가?",
+      "options": [
+        "그렇다. 기존 비트맵 전체를 덮어쓴다",
+        "아니다. 0인 비트는 표시 대상으로 선택하지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "쓰기 인터페이스는 1로 선택된 페이지를 idle로 표시합니다. 기존 상태 전체를 대입하는 연산이 아닙니다."
+    },
+    {
+      "prompt": "Huge page의 head idle 비트 하나를 기본 페이지 하나로 세면 충분한가?",
+      "options": [
+        "아니다. kpageflags 등을 이용해 큰 페이지 단위를 해석해야 한다",
+        "그렇다. 모든 하위 페이지에 각각 동일한 idle 비트가 반환된다"
+      ],
+      "answer": 0,
+      "explanation": "문서는 head에만 표시한다고 명시합니다. 비트 개수와 유휴 바이트 수를 구분해야 합니다."
+    },
+    {
+      "prompt": "관측 과정에서 Young 표식을 유지하는 이유는?",
+      "options": [
+        "idle 페이지를 절대로 회수할 수 없게 고정하기 위해서다",
+        "PTE 참조 비트를 지워도 reclaim이 참조 정보를 잃지 않도록 하기 위해서다"
+      ],
+      "answer": 1,
+      "explanation": "Young은 회수기의 참조 판단에 쓰이는 보완 정보입니다. pin이나 영구 회수 금지 표시가 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "==================\nIdle Page Tracking\n==================\n\nMotivation\n==========\n\nThe idle page tracking feature allows to track which memory pages are being\naccessed by a workload and which are idle. This information can be useful for\nestimating the workload's working set size, which, in turn, can be taken into\naccount when configuring the workload parameters, setting memory cgroup limits,\nor deciding where to place the workload within a compute cluster.\n\nIt is enabled by CONFIG_IDLE_PAGE_TRACKING=y.\n\n.. _user_api:\n\nUser API\n========\n\nThe idle page tracking API is located at ``/sys/kernel/mm/page_idle``.\nCurrently, it consists of the only read-write file,\n``/sys/kernel/mm/page_idle/bitmap``.\n\nThe file implements a bitmap where each bit corresponds to a memory page. The\nbitmap is represented by an array of 8-byte integers, and the page at PFN #i is\nmapped to bit #i%64 of array element #i/64, byte order is native. When a bit is\nset, the corresponding page is idle.\n\nA page is considered idle if it has not been accessed since it was marked idle\n(for more details on what \"accessed\" actually means see the :ref:`Implementation\nDetails <impl_details>` section).\nTo mark a page idle one has to set the bit corresponding to\nthe page by writing to the file. A value written to the file is OR-ed with the\ncurrent bitmap value.\n\nOnly accesses to user memory pages are tracked. These are pages mapped to a\nprocess address space, page cache and buffer pages, swap cache pages. For other\npage types (e.g. SLAB pages) an attempt to mark a page idle is silently ignored,\nand hence such pages are never reported idle.\n\nFor huge pages the idle flag is set only on the head page, so one has to read\n``/proc/kpageflags`` in order to correctly count idle huge pages.\n\nReading from or writing to ``/sys/kernel/mm/page_idle/bitmap`` will return\n-EINVAL if you are not starting the read/write on an 8-byte boundary, or\nif the size of the read/write is not a multiple of 8 bytes. Writing to\nthis file beyond max PFN will return -ENXIO.\n\nThat said, in order to estimate the amount of pages that are not used by a\nworkload one should:\n\n 1. Mark all the workload's pages as idle by setting corresponding bits in\n    ``/sys/kernel/mm/page_idle/bitmap``. The pages can be found by reading\n    ``/proc/pid/pagemap`` if the workload is represented by a process, or by\n    filtering out alien pages using ``/proc/kpagecgroup`` in case the workload\n    is placed in a memory cgroup.\n\n 2. Wait until the workload accesses its working set.\n\n 3. Read ``/sys/kernel/mm/page_idle/bitmap`` and count the number of bits set.\n    If one wants to ignore certain types of pages, e.g. mlocked pages since they\n    are not reclaimable, he or she can filter them out using\n    ``/proc/kpageflags``.\n\nThe page-types tool in the tools/mm directory can be used to assist in this.\nIf the tool is run initially with the appropriate option, it will mark all the\nqueried pages as idle.  Subsequent runs of the tool can then show which pages have\ntheir idle flag cleared in the interim.\n\nSee Documentation/admin-guide/mm/pagemap.rst for more information about\n``/proc/pid/pagemap``, ``/proc/kpageflags``, and ``/proc/kpagecgroup``.\n\n.. _impl_details:\n\nImplementation Details\n======================\n\nThe kernel internally keeps track of accesses to user memory pages in order to\nreclaim unreferenced pages first on memory shortage conditions. A page is\nconsidered referenced if it has been recently accessed via a process address\nspace, in which case one or more PTEs it is mapped to will have the Accessed bit\nset, or marked accessed explicitly by the kernel (see mark_page_accessed()). The\nlatter happens when:\n\n - a userspace process reads or writes a page using a system call (e.g. read(2)\n   or write(2))\n\n - a page that is used for storing filesystem buffers is read or written,\n   because a process needs filesystem metadata stored in it (e.g. lists a\n   directory tree)\n\n - a page is accessed by a device driver using get_user_pages()\n\nWhen a dirty page is written to swap or disk as a result of memory reclaim or\nexceeding the dirty memory limit, it is not marked referenced.\n\nThe idle memory tracking feature adds a new page flag, the Idle flag. This flag\nis set manually, by writing to ``/sys/kernel/mm/page_idle/bitmap`` (see the\n:ref:`User API <user_api>`\nsection), and cleared automatically whenever a page is referenced as defined\nabove.\n\nWhen a page is marked idle, the Accessed bit must be cleared in all PTEs it is\nmapped to, otherwise we will not be able to detect accesses to the page coming\nfrom a process address space. To avoid interference with the reclaimer, which,\nas noted above, uses the Accessed bit to promote actively referenced pages, one\nmore page flag is introduced, the Young flag. When the PTE Accessed bit is\ncleared as a result of setting or updating a page's Idle flag, the Young flag\nis set on the page. The reclaimer treats the Young flag as an extra PTE\nAccessed bit and therefore will consider such a page as referenced.\n\nSince the idle memory tracking feature is based on the memory reclaimer logic,\nit only works with pages that are on an LRU list, other pages are silently\nignored. That means it will ignore a user memory page if it is isolated, but\nsince there are usually not many of them, it should not affect the overall\nresult noticeably. In order not to stall scanning of the idle page bitmap,\nlocked pages may be skipped too.\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "5e760f66bb1cad0592e31a6d294942211a1949f8aa68cfc422e20b6e47807094",
+    "scope": "whole-file",
+    "line_count": 118,
+    "authoring_source": "course/file_units/idle_tracking.py",
+    "sections": [
+      "문서 전체와 목적",
+      "비트맵의 주소 체계",
+      "표시와 0 쓰기의 의미",
+      "대상과 huge page",
+      "정렬과 끝 경계",
+      "측정의 세 단계",
+      "접근의 의미",
+      "Young로 계측 간섭 완화",
+      "측정의 한계와 CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/admin-guide/mm/idle_page_tracking.rst"
+    }
+  ]
+}

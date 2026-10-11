@@ -1,0 +1,77 @@
+{
+  "id": "file-619d513e524a72f8",
+  "path": "include/linux/const.h",
+  "title": "커널 상수 헤더 전체: vDSO 공통 정의로의 연결",
+  "area": "정수 타입 · 전처리·ABI·고정소수점",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "작은 wrapper 헤더의 역할을 실제 내용 그대로 파악합니다.",
+  "guide": [
+    "_LINUX_CONST_H guard 안에 vdso/const.h를 포함하는 것이 전부입니다.",
+    "linux/const.h를 포함하는 커널 코드는 vDSO 계층을 통해 UAPI의 상수 정의를 사용합니다. 이 파일에 정의가 없다고 전체 포함 결과에도 없다고 판단하면 안 됩니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "원문 전체",
+      "text": "이 고정 버전 파일은 guard,빈 줄,vdso/const.h include,#endif로 이루어집니다. 파일 자체에는 SPDX 줄도 없습니다. 다른 헤더의 내용이나 주석을 이 파일에 존재한다고 옮겨 적지 않습니다."
+    },
+    {
+      "title": "포함 그래프",
+      "text": "include/linux/const.h → include/vdso/const.h → include/uapi/linux/const.h 순으로 이어집니다. UL/ULL 별칭은 중간 계층, _AC 등의 구현은 UAPI 계층에 있습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "간접 포함은 API 재사용과 의존성 추적의 예입니다. 컴파일 오류를 조사할 때 호출 지점만 검색하지 말고 매크로가 정의되는 실제 파일까지 추적합니다. include guard는 이 wrapper의 중복 처리만 제어합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일의 직접 include 대상은?",
+      "options": [
+        "vdso/const.h",
+        "uapi/linux/sysinfo.h"
+      ],
+      "answer": 0,
+      "explanation": "원문은 vdso/const.h 하나를 포함합니다. UAPI const는 그 다음 포함 단계입니다."
+    },
+    {
+      "prompt": "_AC 매크로 본문이 이 파일에 직접 있는가?",
+      "options": [
+        "있다. wrapper가 전부 복제한다",
+        "없다. 포함 계층을 따라 UAPI const에서 찾는다"
+      ],
+      "answer": 1,
+      "explanation": "정의를 복제하지 않고 공통 헤더를 포함하는 구조입니다. 직접 정의 위치와 사용 가능 범위를 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#ifndef _LINUX_CONST_H\n#define _LINUX_CONST_H\n\n#include <vdso/const.h>\n\n#endif /* _LINUX_CONST_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "17aaf8663019f1988881952a031fa12aefa9127af9ea1d546202af632b2f0adf",
+    "scope": "whole-file",
+    "line_count": 6,
+    "authoring_source": "course/file_units/math_contracts.py",
+    "sections": [
+      "원문 전체",
+      "포함 그래프",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/const.h"
+    }
+  ]
+}

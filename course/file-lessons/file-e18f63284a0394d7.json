@@ -1,0 +1,139 @@
+{
+  "id": "file-e18f63284a0394d7",
+  "path": "lib/math/prime_numbers.c",
+  "title": "소수 라이브러리 전체: 확장 비트맵과 RCU 캐시 수명",
+  "area": "소수 체 · 비트맵·RCU·실패 대체 경로",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "에라토스테네스의 체에 동적 할당과 동시 읽기 수명 관리를 결합한 파일입니다.",
+  "guide": [
+    "비트 번호가 정수이고 켜진 비트가 소수를 뜻합니다. 작은 정적 표로 시작해 필요하면 새 비트맵을 만들고 배수를 지웁니다. 새 표를 공개한 뒤 이전 동적 표는 RCU 지연 해제합니다. 확장 실패 시 느린 나눗셈 탐색으로 전환합니다.",
+    "공개 함수는 할당과 mutex를 사용하는 확장 경로에 들어갈 수 있습니다. RCU를 사용한다는 이유만으로 모든 호출이 잠들지 않는 문맥에 안전하다고 판단하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 초기 표",
+      "text": "SPDX,로그 접두어,module/mutex/prime_numbers/slab 헤더 다음 primes 구조체가 있습니다. rcu_head,last,sz와 flexible bitmap 배열을 담습니다.64비트 long이면0..63의 소수18개와last61,32비트이면0..31의 소수11개와last31을 정적으로 저장합니다.0과1의 비트는 꺼져 있습니다. 전역 mutex와 RCU 포인터,선택적 selftest 상한이 이어집니다."
+    },
+    {
+      "title": "느린 두 함수",
+      "text": "slow_is_prime_number는 int_sqrt(x)부터2까지 내려가며 약수를 찾고 최종 y==1인지 반환합니다. x=0에서는거짓,x=1에서는참이라는 내부 경계 동작이 있습니다. 공개 is_prime_number(1)은 초기 비트맵에서거짓이며 이 느린 경로를 호출하지 않습니다. slow_next_prime_number는 x를 먼저 증가시켜 검사하고 ULONG_MAX에서 멈춥니다. 마지막 ULONG_MAX는 소수 보장이 아닌 종료 sentinel입니다."
+    },
+    {
+      "title": "배수 제거 helper",
+      "text": "clear_multiples는2*x에서 시작하되 start보다 작으면 start를 x의 배수로 올립니다. end 미만의 비트를 x 간격으로 지우고 x를 반환합니다. x 자체를 지우지 않으면서 새 구간의 합성수만 제거하는 목적입니다. 루프 산술과 입력 구간이 유효하다는 전제까지 자동 검증하는 함수는 아닙니다."
+    },
+    {
+      "title": "확장 준비와 재확인",
+      "text": "expand_to_next_prime는2*x를 만들고 sz<x이면 실패하며 워드 비트 수로 올림한 뒤 새 저장소를 할당합니다. 할당 실패도거짓입니다. mutex 획득 뒤 현재 표를 다시 읽어 다른 확장이 이미 x보다 큰 last를 마련했다면 새 할당을 버리고 성공 반환합니다. 할당을 잠금 밖에서 수행한 뒤 상태를 다시 확인하는 패턴입니다."
+    },
+    {
+      "title": "체 생성과 게시",
+      "text": "새 비트맵을 모두 켜고 기존 p->sz 비트를 복사합니다.2부터 켜진 비트를 찾아 새 영역의 배수를 지우며 last를 갱신합니다. sz를 설정하고 last>x를 BUG_ON으로 확인한 뒤 rcu_assign_pointer로 게시합니다. 정적 small_primes는 해제하지 않고 이전 동적 표만 kfree_rcu합니다. 버트런 공준은 새 범위를 두 배로 잡는 수학적 배경이며 메모리 할당 성공까지 보장하지 않습니다."
+    },
+    {
+      "title": "두 공개 읽기 경로",
+      "text": "next_prime_number는 x>=last일 때 RCU 읽기 잠금을 풀고 확장하며,실패하면 느린 탐색으로 갑니다. 성공 뒤 다시 RCU에 들어가 현재 포인터를 읽습니다. is_prime_number는 x>=sz일 때 같은 확장 패턴을 쓰고 범위 안이면 test_bit합니다. 주석의 범위 밖 trial division 설명만 읽으면 먼저 확장을 시도하는 실제 동작을 놓칩니다."
+    },
+    {
+      "title": "last 경계의 탐색",
+      "text": "next 함수의 find_next_bit는 크기를 p->last로 전달합니다. 그 앞에 켜진 비트가 없으면 API의 미발견 반환값인 size 자체가 last가 됩니다. last가 소수임을 유지하므로 이 경우에도 다음 소수를 얻습니다. 예컨대초기64비트 표에서59 다음을 찾을 때61은 검색 범위 끝 sentinel과 일치합니다."
+    },
+    {
+      "title": "해제와 진단",
+      "text": "free_primes는 mutex 안에서 포인터를 정적 표로 되돌리고 동적 표를 지연 해제합니다. dump_primes는 PAGE_SIZE 버퍼를 할당하고 RCU 안에서 비트맵과 last/sz 정보를 출력한 뒤 버퍼를 해제합니다. 버퍼 할당이 실패하면 변환은 건너뛰고 로그 경로로 갑니다. 이 코드 읽기는 실제 RCU 유예 기간의 실행 검증이 아닙니다."
+    },
+    {
+      "title": "자체 검사와 모듈",
+      "text": "selftest(max)는0이면즉시성공,아니면2<=x<max에서 느린 판정과 공개 판정을 비교합니다. 소수일 때 next_prime_number(last)도 검사합니다. 실패하면 표를 덤프하고-EINVAL을 반환합니다. init이 설정된 selftest를 실행하고 exit은표를 정리합니다. selftest 모듈 매개변수는0400 권한이며 author/description/license 메타데이터로 끝납니다."
+    },
+    {
+      "title": "CS와 한계",
+      "text": "비트맵의 공간 효율,체의 배수 제거,캐시 확장 경쟁,읽기 수명과 writer mutex의 역할 분리,할당 실패의 대체 계산을 연결합니다.2*x의 한 overflow 검사만으로 뒤의 round_up·할당 크기·모든 극단 입력 산술 안전성까지 증명되지는 않습니다. 공개 경로·내부 helper·테스트 범위를 각각 구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "is_prime_number(1)과 내부 slow_is_prime_number(1)은 같은 결과인가?",
+      "options": [
+        "아니다. 공개 함수는비트맵에서거짓,내부 helper는참이다",
+        "그렇다. 둘 다1을소수로판정한다"
+      ],
+      "answer": 0,
+      "explanation": "초기 표에는1의 비트가 없습니다. 내부 helper는sqrt(1)=1에서루프 없이 y==1을반환합니다. 내부 동작을공개 API 결과로 일반화하면 안 됩니다."
+    },
+    {
+      "prompt": "왜 확장 후 이전 표를 바로 kfree하지 않는가?",
+      "options": [
+        "새 표를 이전 표와 같은 주소로 만들기 위해서다",
+        "기존 RCU 독자가 이전 표를 읽고 있을 수 있기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "포인터 게시와 독자의 이전 포인터 수명은 별개입니다. kfree_rcu는 기존 읽기 구간을 고려한 지연 해제 경로입니다."
+    },
+    {
+      "prompt": "확장 할당이 실패하면 next_prime_number는 무조건 오류를 반환하는가?",
+      "options": [
+        "아니다. 느린 trial division 탐색으로 전환한다",
+        "그렇다. 항상0을반환한다"
+      ],
+      "answer": 0,
+      "explanation": "expand_to_next_prime 실패 분기는 slow_next_prime_number를 호출합니다. 속도와 메모리의 절충입니다."
+    },
+    {
+      "prompt": "ULONG_MAX 반환을 실제 소수라는 보증으로 받아도 되는가?",
+      "options": [
+        "된다. 모든반환값은항상소수다",
+        "안 된다. 마지막 탐색 sentinel로사용된다"
+      ],
+      "answer": 1,
+      "explanation": "느린 탐색은 ULONG_MAX에서멈추며 문서도 최종 sentinel이라고 명시합니다. 반복자는 이 종료조건을 고려해야 합니다."
+    },
+    {
+      "prompt": "selftest는0과1의 내부 helper 경계도 비교하는가?",
+      "options": [
+        "아니다. 반복은2부터시작한다",
+        "그렇다.0부터모든정수를비교한다"
+      ],
+      "answer": 0,
+      "explanation": "원문 for의 초기 x=2이고 x<max까지입니다. 실제 검증 구간 밖 입력을 통과했다고 세지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#define pr_fmt(fmt) \"prime numbers: \" fmt\n\n#include <linux/module.h>\n#include <linux/mutex.h>\n#include <linux/prime_numbers.h>\n#include <linux/slab.h>\n\nstruct primes {\n\tstruct rcu_head rcu;\n\tunsigned long last, sz;\n\tunsigned long primes[];\n};\n\n#if BITS_PER_LONG == 64\nstatic const struct primes small_primes = {\n\t.last = 61,\n\t.sz = 64,\n\t.primes = {\n\t\tBIT(2) |\n\t\tBIT(3) |\n\t\tBIT(5) |\n\t\tBIT(7) |\n\t\tBIT(11) |\n\t\tBIT(13) |\n\t\tBIT(17) |\n\t\tBIT(19) |\n\t\tBIT(23) |\n\t\tBIT(29) |\n\t\tBIT(31) |\n\t\tBIT(37) |\n\t\tBIT(41) |\n\t\tBIT(43) |\n\t\tBIT(47) |\n\t\tBIT(53) |\n\t\tBIT(59) |\n\t\tBIT(61)\n\t}\n};\n#elif BITS_PER_LONG == 32\nstatic const struct primes small_primes = {\n\t.last = 31,\n\t.sz = 32,\n\t.primes = {\n\t\tBIT(2) |\n\t\tBIT(3) |\n\t\tBIT(5) |\n\t\tBIT(7) |\n\t\tBIT(11) |\n\t\tBIT(13) |\n\t\tBIT(17) |\n\t\tBIT(19) |\n\t\tBIT(23) |\n\t\tBIT(29) |\n\t\tBIT(31)\n\t}\n};\n#else\n#error \"unhandled BITS_PER_LONG\"\n#endif\n\nstatic DEFINE_MUTEX(lock);\nstatic const struct primes __rcu *primes = RCU_INITIALIZER(&small_primes);\n\nstatic unsigned long selftest_max;\n\nstatic bool slow_is_prime_number(unsigned long x)\n{\n\tunsigned long y = int_sqrt(x);\n\n\twhile (y > 1) {\n\t\tif ((x % y) == 0)\n\t\t\tbreak;\n\t\ty--;\n\t}\n\n\treturn y == 1;\n}\n\nstatic unsigned long slow_next_prime_number(unsigned long x)\n{\n\twhile (x < ULONG_MAX && !slow_is_prime_number(++x))\n\t\t;\n\n\treturn x;\n}\n\nstatic unsigned long clear_multiples(unsigned long x,\n\t\t\t\t     unsigned long *p,\n\t\t\t\t     unsigned long start,\n\t\t\t\t     unsigned long end)\n{\n\tunsigned long m;\n\n\tm = 2 * x;\n\tif (m < start)\n\t\tm = roundup(start, x);\n\n\twhile (m < end) {\n\t\t__clear_bit(m, p);\n\t\tm += x;\n\t}\n\n\treturn x;\n}\n\nstatic bool expand_to_next_prime(unsigned long x)\n{\n\tconst struct primes *p;\n\tstruct primes *new;\n\tunsigned long sz, y;\n\n\t/* Betrand's Postulate (or Chebyshev's theorem) states that if n > 3,\n\t * there is always at least one prime p between n and 2n - 2.\n\t * Equivalently, if n > 1, then there is always at least one prime p\n\t * such that n < p < 2n.\n\t *\n\t * http://mathworld.wolfram.com/BertrandsPostulate.html\n\t * https://en.wikipedia.org/wiki/Bertrand's_postulate\n\t */\n\tsz = 2 * x;\n\tif (sz < x)\n\t\treturn false;\n\n\tsz = round_up(sz, BITS_PER_LONG);\n\tnew = kmalloc(sizeof(*new) + bitmap_size(sz),\n\t\t      GFP_KERNEL | __GFP_NOWARN);\n\tif (!new)\n\t\treturn false;\n\n\tmutex_lock(&lock);\n\tp = rcu_dereference_protected(primes, lockdep_is_held(&lock));\n\tif (x < p->last) {\n\t\tkfree(new);\n\t\tgoto unlock;\n\t}\n\n\t/* Where memory permits, track the primes using the\n\t * Sieve of Eratosthenes. The sieve is to remove all multiples of known\n\t * primes from the set, what remains in the set is therefore prime.\n\t */\n\tbitmap_fill(new->primes, sz);\n\tbitmap_copy(new->primes, p->primes, p->sz);\n\tfor (y = 2UL; y < sz; y = find_next_bit(new->primes, sz, y + 1))\n\t\tnew->last = clear_multiples(y, new->primes, p->sz, sz);\n\tnew->sz = sz;\n\n\tBUG_ON(new->last <= x);\n\n\trcu_assign_pointer(primes, new);\n\tif (p != &small_primes)\n\t\tkfree_rcu((struct primes *)p, rcu);\n\nunlock:\n\tmutex_unlock(&lock);\n\treturn true;\n}\n\nstatic void free_primes(void)\n{\n\tconst struct primes *p;\n\n\tmutex_lock(&lock);\n\tp = rcu_dereference_protected(primes, lockdep_is_held(&lock));\n\tif (p != &small_primes) {\n\t\trcu_assign_pointer(primes, &small_primes);\n\t\tkfree_rcu((struct primes *)p, rcu);\n\t}\n\tmutex_unlock(&lock);\n}\n\n/**\n * next_prime_number - return the next prime number\n * @x: the starting point for searching to test\n *\n * A prime number is an integer greater than 1 that is only divisible by\n * itself and 1.  The set of prime numbers is computed using the Sieve of\n * Eratoshenes (on finding a prime, all multiples of that prime are removed\n * from the set) enabling a fast lookup of the next prime number larger than\n * @x. If the sieve fails (memory limitation), the search falls back to using\n * slow trial-divison, up to the value of ULONG_MAX (which is reported as the\n * final prime as a sentinel).\n *\n * Returns: the next prime number larger than @x\n */\nunsigned long next_prime_number(unsigned long x)\n{\n\tconst struct primes *p;\n\n\trcu_read_lock();\n\tp = rcu_dereference(primes);\n\twhile (x >= p->last) {\n\t\trcu_read_unlock();\n\n\t\tif (!expand_to_next_prime(x))\n\t\t\treturn slow_next_prime_number(x);\n\n\t\trcu_read_lock();\n\t\tp = rcu_dereference(primes);\n\t}\n\tx = find_next_bit(p->primes, p->last, x + 1);\n\trcu_read_unlock();\n\n\treturn x;\n}\nEXPORT_SYMBOL(next_prime_number);\n\n/**\n * is_prime_number - test whether the given number is prime\n * @x: the number to test\n *\n * A prime number is an integer greater than 1 that is only divisible by\n * itself and 1. Internally a cache of prime numbers is kept (to speed up\n * searching for sequential primes, see next_prime_number()), but if the number\n * falls outside of that cache, its primality is tested using trial-divison.\n *\n * Returns: true if @x is prime, false for composite numbers.\n */\nbool is_prime_number(unsigned long x)\n{\n\tconst struct primes *p;\n\tbool result;\n\n\trcu_read_lock();\n\tp = rcu_dereference(primes);\n\twhile (x >= p->sz) {\n\t\trcu_read_unlock();\n\n\t\tif (!expand_to_next_prime(x))\n\t\t\treturn slow_is_prime_number(x);\n\n\t\trcu_read_lock();\n\t\tp = rcu_dereference(primes);\n\t}\n\tresult = test_bit(x, p->primes);\n\trcu_read_unlock();\n\n\treturn result;\n}\nEXPORT_SYMBOL(is_prime_number);\n\nstatic void dump_primes(void)\n{\n\tconst struct primes *p;\n\tchar *buf;\n\n\tbuf = kmalloc(PAGE_SIZE, GFP_KERNEL);\n\n\trcu_read_lock();\n\tp = rcu_dereference(primes);\n\n\tif (buf)\n\t\tbitmap_print_to_pagebuf(true, buf, p->primes, p->sz);\n\tpr_info(\"primes.{last=%lu, .sz=%lu, .primes[]=...x%lx} = %s\\n\",\n\t\tp->last, p->sz, p->primes[BITS_TO_LONGS(p->sz) - 1], buf);\n\n\trcu_read_unlock();\n\n\tkfree(buf);\n}\n\nstatic int selftest(unsigned long max)\n{\n\tunsigned long x, last;\n\n\tif (!max)\n\t\treturn 0;\n\n\tfor (last = 0, x = 2; x < max; x++) {\n\t\tbool slow = slow_is_prime_number(x);\n\t\tbool fast = is_prime_number(x);\n\n\t\tif (slow != fast) {\n\t\t\tpr_err(\"inconsistent result for is-prime(%lu): slow=%s, fast=%s!\\n\",\n\t\t\t       x, slow ? \"yes\" : \"no\", fast ? \"yes\" : \"no\");\n\t\t\tgoto err;\n\t\t}\n\n\t\tif (!slow)\n\t\t\tcontinue;\n\n\t\tif (next_prime_number(last) != x) {\n\t\t\tpr_err(\"incorrect result for next-prime(%lu): expected %lu, got %lu\\n\",\n\t\t\t       last, x, next_prime_number(last));\n\t\t\tgoto err;\n\t\t}\n\t\tlast = x;\n\t}\n\n\tpr_info(\"%s(%lu) passed, last prime was %lu\\n\", __func__, x, last);\n\treturn 0;\n\nerr:\n\tdump_primes();\n\treturn -EINVAL;\n}\n\nstatic int __init primes_init(void)\n{\n\treturn selftest(selftest_max);\n}\n\nstatic void __exit primes_exit(void)\n{\n\tfree_primes();\n}\n\nmodule_init(primes_init);\nmodule_exit(primes_exit);\n\nmodule_param_named(selftest, selftest_max, ulong, 0400);\n\nMODULE_AUTHOR(\"Intel Corporation\");\nMODULE_DESCRIPTION(\"Prime number library\");\nMODULE_LICENSE(\"GPL\");\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "79e8451dbd1e17f92d3d950e2ca91041388ced69511f26da0437bc1d47e650d2",
+    "scope": "whole-file",
+    "line_count": 315,
+    "authoring_source": "course/file_units/prime_cache.py",
+    "sections": [
+      "전체 구성과 초기 표",
+      "느린 두 함수",
+      "배수 제거 helper",
+      "확장 준비와 재확인",
+      "체 생성과 게시",
+      "두 공개 읽기 경로",
+      "last 경계의 탐색",
+      "해제와 진단",
+      "자체 검사와 모듈",
+      "CS와 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/prime_numbers.c"
+    }
+  ]
+}

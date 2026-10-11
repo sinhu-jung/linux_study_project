@@ -1,0 +1,91 @@
+{
+  "id": "file-f210db6868184a1f",
+  "path": "include/linux/int_log.h",
+  "title": "정수 로그 헤더 전체: 고정소수점 입력을 해석하는 계약",
+  "area": "고정소수점 · 조회표·수치 근사",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "정수 인자 API로 소수 비율의 로그를 계산하는 스케일 보정 방법입니다.",
+  "guide": [
+    "intlog2와 intlog10은 비영 u32를 받아 로그의2^24배인 unsigned int를 반환합니다. 문서 예제는 원래 값을 정수로 스케일한 뒤 로그의 상수항을 빼는 방법을 설명합니다.",
+    "1.5를 함수에 직접 전달하는 대신 intlog2(3)-2^24를 사용합니다. 문서의 intlog2(1.5)는 수학적 설명이며 실제 함수의 인자 타입은 u32입니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "LGPL-2.1-or-later,저작권, __LINUX_INT_LOG_H guard,types.h 포함,두 함수의 상세 주석과 extern 선언,#endif가 전부입니다. 표와 계산 루프는 구현 파일에 있습니다."
+    },
+    {
+      "title": "밑2 보정",
+      "text": "원래 값v를2^x배 하여 정수로 전달했다면 intlog2(v*2^x)-x*2^24로 보정합니다.1.5의 경우3을 전달하고1*2^24를 빼면 약0.585*2^24입니다. 곱한 입력이 u32 범위에 들어가고0으로 절단되지 않는지도 확인해야 합니다."
+    },
+    {
+      "title": "밑10 보정",
+      "text": "intlog10은10^x 스케일에 대해 x*2^24를 뺍니다.2배 스케일의 보정값을 밑10에서도 그대로1*2^24로 쓰면 잘못입니다. 헤더는1000의 결과조차 정확히3<<24가 아닐 수 있다고 명시합니다."
+    },
+    {
+      "title": "음수 로그와 타입",
+      "text": "0<v<1의 로그는 음수지만 함수 반환형은 unsigned입니다. 스케일 보정 뺄셈 전에 충분히 넓은 signed 타입으로 변환하면 unsigned 언더플로를 피할 수 있습니다. 예컨대0.5의 로그를 intlog2(1)-2^24로 표현할 때 C의 통상 산술 변환을 확인해야 합니다. 헤더의 수학식은 모든 C 타입 조합의 안전성 보장이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "intlog2(1.5)를 C 호출로 그대로 쓰면 문서 예제와 같은가?",
+      "options": [
+        "아니다. 인자는 u32라 소수 부분을 직접 표현하지 못한다",
+        "그렇다. 선언이 실수 입력을 자동 지원한다"
+      ],
+      "answer": 0,
+      "explanation": "문서의 수식은 스케일 보정 설명입니다. 실제 예제는 intlog2(3)에서2^24를 빼는 방식으로 구현합니다."
+    },
+    {
+      "prompt": "0.5의 로그를 보정할 때 주의할 점은?",
+      "options": [
+        "unsigned 반환이면 음수도 자동으로 정확히 표현된다",
+        "음수 결과를 담을 signed 계산 타입을 준비해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "함수 반환값 그대로 unsigned 뺄셈하면 순환할 수 있습니다. 먼저 충분히 넓은 signed 타입으로 바꾼 뒤 스케일을 보정합니다."
+    },
+    {
+      "prompt": "intlog10에서10^x로 스케일한 입력의 보정항은?",
+      "options": [
+        "x*2^24",
+        "x*2^31"
+      ],
+      "answer": 0,
+      "explanation": "반환값의 로그 배율은2^24입니다. 구현의 변환 상수 배율2^31과 혼동하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: LGPL-2.1-or-later */\n/*\n * Provides fixed-point logarithm operations.\n *\n * Copyright (C) 2006 Christoph Pfister (christophpfister@gmail.com)\n */\n\n#ifndef __LINUX_INT_LOG_H\n#define __LINUX_INT_LOG_H\n\n#include <linux/types.h>\n\n/**\n * intlog2 - computes log2 of a value; the result is shifted left by 24 bits\n *\n * @value: The value (must be != 0)\n *\n * to use rational values you can use the following method:\n *\n *   intlog2(value) = intlog2(value * 2^x) - x * 2^24\n *\n * Some usecase examples:\n *\n *\tintlog2(8) will give 3 << 24 = 3 * 2^24\n *\n *\tintlog2(9) will give 3 << 24 + ... = 3.16... * 2^24\n *\n *\tintlog2(1.5) = intlog2(3) - 2^24 = 0.584... * 2^24\n *\n *\n * return: log2(value) * 2^24\n */\nextern unsigned int intlog2(u32 value);\n\n/**\n * intlog10 - computes log10 of a value; the result is shifted left by 24 bits\n *\n * @value: The value (must be != 0)\n *\n * to use rational values you can use the following method:\n *\n *   intlog10(value) = intlog10(value * 10^x) - x * 2^24\n *\n * An usecase example:\n *\n *\tintlog10(1000) will give 3 << 24 = 3 * 2^24\n *\n *   due to the implementation intlog10(1000) might be not exactly 3 * 2^24\n *\n * look at intlog2 for similar examples\n *\n * return: log10(value) * 2^24\n */\nextern unsigned int intlog10(u32 value);\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "da4046490b4a904e550ed344784aafb1e5bf794e74326137900c48f51619acc3",
+    "scope": "whole-file",
+    "line_count": 56,
+    "authoring_source": "course/file_units/integer_logarithms.py",
+    "sections": [
+      "파일 전체",
+      "밑2 보정",
+      "밑10 보정",
+      "음수 로그와 타입"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/int_log.h"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "id": "file-b21fc637e7a06726",
+  "path": "include/uapi/linux/kernel.h",
+  "title": "UAPI kernel 헤더 전체: 선언 없이 연결하는 포함 계층",
+  "area": "정수 타입 · 전처리·ABI·고정소수점",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "이름이 넓은 헤더도 실제로는 두 헤더를 연결하는 역할만 할 수 있습니다.",
+  "guide": [
+    "_UAPI_LINUX_KERNEL_H guard 안에서 linux/sysinfo.h와 linux/const.h를 포함합니다.",
+    "사용자 공간에 노출되는 sysinfo 구조체와 공통 상수 매크로의 연결점입니다. 이 파일 자체에 시스템 호출 구현은 없습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 내용",
+      "text": "SPDX GPL-2.0 WITH Linux-syscall-note, include guard, 두 include, #endif가 전부입니다. 함수 본문·별도 데이터·추가 매크로 정의는 없습니다."
+    },
+    {
+      "title": "포함 경로의 의미",
+      "text": "저장소에서 이 파일은 include/uapi 아래에 있지만 include 문자열은 linux/sysinfo.h입니다. 내보낸 UAPI 헤더 집합과 include 검색 경로의 문맥을 고려해야 하며 존재하지 않는 include/linux/sysinfo.h를 임의로 가정하면 안 됩니다."
+    },
+    {
+      "title": "CS와 책임 분리",
+      "text": "구조체 메모리 배치 정의와 실제 시스템 정보 수집은 별개입니다. guard는 같은 번역 단위의 중복 포함을 제어하며 프로세스 간 공유 메모리나 런타임 잠금이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일이 sysinfo 시스템 호출을 구현하는가?",
+      "options": [
+        "아니다. 관련 헤더를 포함하는 연결 파일이다",
+        "그렇다. 시스템 정보를 읽는 함수 본문이 있다"
+      ],
+      "answer": 0,
+      "explanation": "실제 원문에는 두 include만 있고 함수 본문이 없습니다."
+    },
+    {
+      "prompt": "include guard는 런타임 동시 접근 잠금인가?",
+      "options": [
+        "그렇다. 동시에 두 스레드가 접근하지 못하게 한다",
+        "아니다. 전처리 단계의 중복 포함 제어다"
+      ],
+      "answer": 1,
+      "explanation": "guard는 #ifndef/#define으로 처리됩니다. 실행 시 잠금 객체를 생성하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPI_LINUX_KERNEL_H\n#define _UAPI_LINUX_KERNEL_H\n\n#include <linux/sysinfo.h>\n#include <linux/const.h>\n\n#endif /* _UAPI_LINUX_KERNEL_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a569645840e482111fdfb6830bbb8336934bad5c1a7d939c17898d97e108a02f",
+    "scope": "whole-file",
+    "line_count": 8,
+    "authoring_source": "course/file_units/math_contracts.py",
+    "sections": [
+      "전체 내용",
+      "포함 경로의 의미",
+      "CS와 책임 분리"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/kernel.h"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "id": "file-04aac40964c5e27b",
+  "path": "include/vdso/limits.h",
+  "title": "vDSO 정수 한계 전체: long 폭과 포인터 표현의 전제",
+  "area": "정수 표현 · 상한·ABI·이진 크기 단위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "기본 C 정수 타입의 한계를 공통 헤더에서 정의합니다.",
+  "guide": [
+    "short,int,long,long long의 unsigned최대값과signed최대·최소값을비트식으로만듭니다. UINTPTR_MAX는ULONG_MAX로연결합니다.",
+    "고정폭 u32와기본타입unsigned long을혼동하지않습니다. 이헤더의포인터한계별칭은대상커널ABI문맥에서읽어야합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 정의",
+      "text": "SPDX,guard,USHRT_MAX/SHRT_MAX/SHRT_MIN,INT_MAX/INT_MIN/UINT_MAX,LONG_MAX/LONG_MIN/ULONG_MAX,LLONG_MAX/LLONG_MIN/ULLONG_MAX,UINTPTR_MAX,#endif가전부입니다. 다른헤더include나실행코드는없습니다."
+    },
+    {
+      "title": "접미사와 폭",
+      "text": "~0U,~0UL,~0ULL은각각unsigned int,long,long long폭에서모든비트가1인값입니다. signed최대는unsigned값을한비트이동한뒤캐스트하며최소는-MAX-1입니다. 접미사를무시하고모두동일한32비트계산이라고읽으면안됩니다."
+    },
+    {
+      "title": "ABI 전제",
+      "text": "UINTPTR_MAX가ULONG_MAX라는정의는포인터와unsigned long표현관례를연결합니다. 호스트Windows의LLP64처럼long과포인터폭이다른환경에그대로적용한결과를대상LinuxABI검증으로주장하지않습니다. 타입폭의최대값과실제사용가능주소도구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "~0UL과 ~0ULL의 계산 타입은?",
+      "options": [
+        "unsigned long과 unsigned long long이다",
+        "둘 다 무조건 unsigned int다"
+      ],
+      "answer": 0,
+      "explanation": "리터럴접미사가형식을정합니다. 대상ABI에서폭이같더라도C타입순위는구분됩니다."
+    },
+    {
+      "prompt": "이 파일의 UINTPTR_MAX는 무엇에 연결되는가?",
+      "options": [
+        "항상 숫자0xffffffff",
+        "ULONG_MAX"
+      ],
+      "answer": 1,
+      "explanation": "고정숫자가아니라unsigned long최대값의별칭입니다. 대상ABI전제를함께확인해야합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_LIMITS_H\n#define __VDSO_LIMITS_H\n\n#define USHRT_MAX\t((unsigned short)~0U)\n#define SHRT_MAX\t((short)(USHRT_MAX >> 1))\n#define SHRT_MIN\t((short)(-SHRT_MAX - 1))\n#define INT_MAX\t\t((int)(~0U >> 1))\n#define INT_MIN\t\t(-INT_MAX - 1)\n#define UINT_MAX\t(~0U)\n#define LONG_MAX\t((long)(~0UL >> 1))\n#define LONG_MIN\t(-LONG_MAX - 1)\n#define ULONG_MAX\t(~0UL)\n#define LLONG_MAX\t((long long)(~0ULL >> 1))\n#define LLONG_MIN\t(-LLONG_MAX - 1)\n#define ULLONG_MAX\t(~0ULL)\n#define UINTPTR_MAX\tULONG_MAX\n\n#endif /* __VDSO_LIMITS_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "653708a73389bd7a9ef4dd85acf45f19227ac60f2dc133d6285af29cff774544",
+    "scope": "whole-file",
+    "line_count": 19,
+    "authoring_source": "course/file_units/numeric_limits.py",
+    "sections": [
+      "전체 정의",
+      "접미사와 폭",
+      "ABI 전제"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/limits.h"
+    }
+  ]
+}

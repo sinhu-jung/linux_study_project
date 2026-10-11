@@ -1,0 +1,77 @@
+{
+  "id": "file-b8cf2ceacb4451ab",
+  "path": "lib/math/Kconfig",
+  "title": "수학 Kconfig 전체: 보이는 tristate와 숨은 라이브러리 설정",
+  "area": "정수 알고리즘 · 테스트·빌드 구성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "선택 메뉴 문구와 설정 심벌의 존재를 구분합니다.",
+  "guide": [
+    "CORDIC과 PRIME_NUMBERS는 표시 문구가 있는 tristate이고 도움말을 제공합니다. RATIONAL은 표시 문구 없는 tristate 선언만 있습니다.",
+    "세 심벌은 lib/math/Makefile의 해당 객체 선택에 사용됩니다. 이 파일에 없는 의존성·기본값·테스트 설정을 추측해서 덧붙이지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "CORDIC",
+      "text": "CORDIC algorithm이라는 표시 문구와 고정소수점 계산 설명, cordic이라는 모듈 이름 설명이 있습니다. 이 도움말은 알고리즘이 부동소수점 런타임을 사용한다고 말하지 않습니다."
+    },
+    {
+      "title": "PRIME_NUMBERS",
+      "text": "Simple prime number generator for testing이라는 문구와 테스트 모듈용 소수 생성기 설명이 있습니다. If unsure, say N은 사용자 안내이며 별도의 default n 선언 문법은 아닙니다."
+    },
+    {
+      "title": "RATIONAL과 파일 경계",
+      "text": "RATIONAL에는 prompt도 help도 default도 없습니다. 따라서 이 선언만으로 사용자가 메뉴에서 직접 켜는 항목이라고 말할 수 없습니다. 다른 설정의 select 등과 빌드 사용처를 별도로 추적해야 합니다. INT_POW_TEST를 비롯한 테스트 심벌은 이 파일에 선언되어 있지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일의 RATIONAL에 메뉴 표시 문구가 있는가?",
+      "options": [
+        "없다. prompt 없는 tristate 선언이다",
+        "있다. Rational algorithm이라고 적혀 있다"
+      ],
+      "answer": 0,
+      "explanation": "고정 원문은 config RATIONAL 다음 tristate만 있습니다. 없는 문구를 만들어 설명하면 안 됩니다."
+    },
+    {
+      "prompt": "PRIME_NUMBERS 도움말의 If unsure, say N은 default 문법인가?",
+      "options": [
+        "그렇다. Kconfig의 default 선언과 같은 문법이다",
+        "아니다. 도움말에 적힌 사용자 안내다"
+      ],
+      "answer": 1,
+      "explanation": "help 블록의 자연어와 Kconfig 키워드 선언을 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "# SPDX-License-Identifier: GPL-2.0-only\nconfig CORDIC\n\ttristate \"CORDIC algorithm\"\n\thelp\n\t  This option provides an implementation of the CORDIC algorithm;\n\t  calculations are in fixed point. Module will be called cordic.\n\nconfig PRIME_NUMBERS\n\ttristate \"Simple prime number generator for testing\"\n\thelp\n\t  This option provides a simple prime number generator for test\n\t  modules.\n\n\t  If unsure, say N.\n\nconfig RATIONAL\n\ttristate\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "0ad8514484d1770a60943e20d8772bc33dab3dd9d0e4dbd33546d10714cff108",
+    "scope": "whole-file",
+    "line_count": 17,
+    "authoring_source": "course/file_units/integer_power_root.py",
+    "sections": [
+      "CORDIC",
+      "PRIME_NUMBERS",
+      "RATIONAL과 파일 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/Kconfig"
+    }
+  ]
+}

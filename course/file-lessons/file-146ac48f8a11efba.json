@@ -1,0 +1,77 @@
+{
+  "id": "file-146ac48f8a11efba",
+  "path": "arch/riscv/kernel/vdso/sys_hwprobe.S",
+  "title": "RISC-V hwprobe syscall stub: 얇은 전달 계층",
+  "area": "RISC-V syscall ABI · stub · 하드웨어 조회 · CFI",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "하드웨어 정보 조회 syscall 연결 함수의 전체 명령열을 분석합니다.",
+  "guide": [
+    "하드웨어 정보를 조회하는 이름의 함수라도 실제 탐지 알고리즘 대신 커널 호출 연결만 담당할 수 있습니다.",
+    "심볼 이름과 syscall 번호, 결과 전달과 별도 검증의 차이를 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 심볼",
+      "text": "GPL-2.0과 Rivos 저작권 뒤 linux/linkage.h·asm/unistd.h를 포함합니다. .text에서 SYM_FUNC_START(riscv_hwprobe)를 사용합니다. 이 파일의 심볼은 __vdso_hwprobe가 아니라 riscv_hwprobe입니다. 공개 동적 ABI 여부는 링크 규칙과 호출부도 함께 확인해야 합니다."
+    },
+    {
+      "title": "실행 명령과 전달",
+      "text": "활성 .cfi_startproc 안에서 a7에 __NR_riscv_hwprobe를 넣고 ecall, ret를 수행합니다. 입력 인수 레지스터를 재배치하거나 결과를 검사·변환하는 본문이 없습니다. 실제 하드웨어 feature 열거와 사용자 입력 검증은 syscall 처리에 위임합니다."
+    },
+    {
+      "title": "메타데이터와 범위",
+      "text": ".cfi_endproc와 SYM_FUNC_END가 끝을 표시합니다. 별도 오류 문자열·fallback 분기·CPU 명령 feature 검출은 없습니다. 전체 짧은 stub를 분석했으며 이 파일만으로 hwprobe.c의 빠른 처리 알고리즘이나 syscall의 모든 조회 키를 완료 집계하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "sys_hwprobe.S가 정의하는 함수 이름은?",
+      "options": [
+        "riscv_hwprobe이다",
+        "__vdso_hwprobe이다"
+      ],
+      "answer": 0,
+      "explanation": "파일 이름이나 관련 인터페이스 이름으로 추정하지 않고 SYM_FUNC_START의 인수를 확인해야 합니다."
+    },
+    {
+      "prompt": "이 stub가 하드웨어 feature를 직접 순회하여 판단하는가?",
+      "options": [
+        "그렇다. CSR를 전부 읽어 feature 테이블을 만든다",
+        "아니다. syscall 번호를 설정하고 ecall한다"
+      ],
+      "answer": 1,
+      "explanation": "본문은 li, ecall, ret입니다. 정보 조회의 실제 알고리즘과 호출 연결 계층을 구별합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/* Copyright (C) 2023 Rivos, Inc */\n\n#include <linux/linkage.h>\n#include <asm/unistd.h>\n\n.text\nSYM_FUNC_START(riscv_hwprobe)\n\t.cfi_startproc\n\tli a7, __NR_riscv_hwprobe\n\tecall\n\tret\n\n\t.cfi_endproc\nSYM_FUNC_END(riscv_hwprobe)\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "4ae262d05ea080f7ec2837908144bba007cac48ed1add15dd2480f275c0730ae",
+    "scope": "whole-file",
+    "line_count": 15,
+    "authoring_source": "course/file_units/riscv_vdso_syscall_stubs.py",
+    "sections": [
+      "전체 파일과 심볼",
+      "실행 명령과 전달",
+      "메타데이터와 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/sys_hwprobe.S"
+    }
+  ]
+}

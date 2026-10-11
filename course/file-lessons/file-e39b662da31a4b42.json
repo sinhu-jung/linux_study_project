@@ -1,0 +1,91 @@
+{
+  "id": "file-e39b662da31a4b42",
+  "path": "include/linux/bsearch.h",
+  "title": "이진 탐색 루프 전체: 후보 개수 불변식과 중복 키",
+  "area": "알고리즘 · 탐색·정수론·인터페이스",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "base와 num이 나타내는 후보 구간을 매 반복 절반으로 줄이는 구현입니다.",
+  "guide": [
+    "pivot은 base+(num>>1)*size입니다. cmp가 0이면 반환하고 양수이면 base를 pivot 다음으로 옮기며 num을 하나 줄입니다. 마지막 num>>=1이 다음 후보 수를 만듭니다.",
+    "size가 실제 원소 간격과 같고 모든 주소 계산이 유효해야 합니다. GNU C의 void* 산술을 쓰며 표준 C 이식 시 바이트 포인터 변환이 필요합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "include guard, linux/types.h, static __always_inline 구현, 공개 bsearch의 extern 선언으로 구성됩니다. 루프는 num>0일 때만 cmp를 호출합니다. num=0이면 base를 읽거나 cmp를 호출하지 않고 NULL을 반환합니다."
+    },
+    {
+      "title": "짝수·홀수 구간 계산",
+      "text": "num=6이면 pivot index는 3입니다. 왼쪽은 index0..2의 3개로 6>>1이며 오른쪽은 index4..5의 2개로 (6-1)>>1입니다. num=5의 pivot은2이고 양쪽 모두2개입니다. 양수 분기의 num--가 짝수 구간에서 오른쪽 후보 수를 맞춥니다."
+    },
+    {
+      "title": "정렬과 종료 불변식",
+      "text": "정렬 및 comparator의 순서 일관성이 있어야 버린 구간에 답이 없다고 말할 수 있습니다. num은 성공하지 않은 각 반복에서 줄어 0이 됩니다. 반환은 처음 만난 동등 원소이므로 lower_bound처럼 중복의 왼쪽 끝을 찾지 않습니다."
+    },
+    {
+      "title": "CS와 안전 경계",
+      "text": "O(log n)은 비교 횟수입니다. cmp 비용이 문자열 길이 m에 비례하면 최악 비용에 m이 포함됩니다. 반환할 때 const를 제거한 포인터를 주어도 읽기 전용 배열이 쓰기 가능한 메모리로 바뀌지는 않습니다. size·곱셈 오버플로·객체 수명·정렬을 이 함수가 검증하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "후보 6개에서 키가 pivot보다 크면 다음 후보 개수는?",
+      "options": [
+        "2개",
+        "3개"
+      ],
+      "answer": 0,
+      "explanation": "pivot은 index3이고 오른쪽은4,5입니다. num을 먼저5로 줄인 다음 오른쪽 시프트하여2가 됩니다."
+    },
+    {
+      "prompt": "동일한 키가 여러 개이면 항상 첫 번째 것을 반환하는가?",
+      "options": [
+        "그렇다. 같은 키라도 왼쪽 탐색을 계속한다",
+        "아니다. 탐색 도중 먼저 만난 같은 원소를 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "result==0 분기가 즉시 반환하므로 더 작은 인덱스를 찾지 않습니다."
+    },
+    {
+      "prompt": "num=0일 때 cmp 호출 횟수는?",
+      "options": [
+        "0회",
+        "1회"
+      ],
+      "answer": 0,
+      "explanation": "while(num>0)에 들어가지 않습니다. NULL 반환은 비교할 원소가 없다는 결과입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_BSEARCH_H\n#define _LINUX_BSEARCH_H\n\n#include <linux/types.h>\n\nstatic __always_inline\nvoid *__inline_bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp)\n{\n\tconst char *pivot;\n\tint result;\n\n\twhile (num > 0) {\n\t\tpivot = base + (num >> 1) * size;\n\t\tresult = cmp(key, pivot);\n\n\t\tif (result == 0)\n\t\t\treturn (void *)pivot;\n\n\t\tif (result > 0) {\n\t\t\tbase = pivot + size;\n\t\t\tnum--;\n\t\t}\n\t\tnum >>= 1;\n\t}\n\n\treturn NULL;\n}\n\nextern void *bsearch(const void *key, const void *base, size_t num, size_t size, cmp_func_t cmp);\n\n#endif /* _LINUX_BSEARCH_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "3923d8b820f5fa5049739d538b5ec0b651ba178fff0c2a1578c1b5052d74ace4",
+    "scope": "whole-file",
+    "line_count": 32,
+    "authoring_source": "course/file_units/search_and_divisibility.py",
+    "sections": [
+      "파일 전체",
+      "짝수·홀수 구간 계산",
+      "정렬과 종료 불변식",
+      "CS와 안전 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/bsearch.h"
+    }
+  ]
+}

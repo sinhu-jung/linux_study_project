@@ -1,0 +1,144 @@
+{
+  "id": "file-ab4443c8495f38b2",
+  "path": "include/linux/cnt32_to_63.h",
+  "title": "32비트 카운터를 63비트로 확장하는 반주기 동기화",
+  "area": "비트 연산 · 카운터 래핑 · 시간 측정 · 엔디언 · 메모리 순서 · 동시성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "union 배치, 공유 상태, 읽기 순서와 세 가지 호출 조건을 전체 소스에 따라 분석합니다.",
+  "guide": [
+    "하드웨어 최상위 비트와 메모리 상태 비트의 불일치로 반주기 전환을 감지하고 실제 래핑 때만 상위 카운트를 증가시킵니다.",
+    "짧은 하드웨어 시계의 래핑을 추적하되 호출 간격과 선점 제한을 빠뜨리지 않도록 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0-only 표시와 작성자·작성 시점, include guard, compiler/types/byteorder 헤더, union 하나, 긴 계약 주석과 매크로 하나로 구성됩니다. 외부 함수 구현이나 타이머 등록 코드는 없습니다. 주석은 sched_clock처럼 짧은 하드웨어 카운터를 더 긴 값으로 확장하는 용도를 설명합니다."
+    },
+    {
+      "title": "엔디언별 union 배치",
+      "text": "cnt32_to_63 union은 익명 구조체의 u32 lo/hi와 u64 val을 겹쳐 놓습니다. little endian에서는 lo,hi 순서이고 big endian에서는 hi,lo 순서여서 수치상 하위 32비트가 항상 lo입니다. 주석상 목적은 GCC의 코드 생성에 도움을 주는 것입니다. 직렬화된 외부 바이트 형식을 정의하는 구조체가 아닙니다."
+    },
+    {
+      "title": "어디에 상태가 있는가",
+      "text": "GNU C statement expression 안의 static u32 __m_cnt_hi는 0으로 초기화되어 호출 간 유지됩니다. 매크로가 확장된 각 위치에는 별도 상태가 생깁니다. 시스템의 모든 호출 위치가 하나의 전역 상위 카운터를 공유하는 구조는 아닙니다. 한 위치에서 서로 무관한 하드웨어 카운터를 섞어 사용해서도 안 됩니다."
+    },
+    {
+      "title": "반드시 지킬 읽기 순서",
+      "text": "먼저 메모리 상위 상태를 __x.hi로 읽고 smp_rmb를 실행한 뒤 cnt_lo를 평가하여 __x.lo에 넣습니다. 인자를 미리 읽은 지역 변수로 전달하면 하위 값의 관측이 상위 상태보다 앞서므로 이 순서를 깨뜨립니다. 주석은 cnt32_to_63(get_hw_count()) 형태를 올바른 예로, 미리 읽은 partial 전달을 잘못된 예로 명시합니다."
+    },
+    {
+      "title": "불일치 검출",
+      "text": "hi XOR lo를 s32로 해석해 음수인지 확인하면 두 값의 bit31이 다른지 알 수 있습니다. unlikely는 분기 경향 표시이며 검사를 생략하거나 동기화를 제공하지 않습니다. 두 bit31이 같으면 상태를 갱신하지 않고 그대로 결합한 값을 반환합니다."
+    },
+    {
+      "title": "첫 반주기 전환",
+      "text": "hi=0에서 lo가 0x80000000으로 넘어가면 불일치합니다. (hi^0x80000000)+(hi>>31)의 결과는 0x80000000입니다. 상위 상태의 동기화 비트만 켜지고 유효 상위 카운트는 증가하지 않습니다. 반환 u64의 bit63은 켜질 수 있으나 아래 63비트에는 아직 하드웨어 값만 반영됩니다."
+    },
+    {
+      "title": "실제 래핑 전환",
+      "text": "hi=0x80000000 상태에서 lo가 0으로 래핑하면 XOR로 상태 비트를 끄고 이전 hi>>31인 1을 더하여 hi=1이 됩니다. 결합 값은 0x0000000100000000입니다. 다음 중간점에서는 hi=0x80000001, 다음 래핑에서는 hi=2가 되는 식으로 하위 31비트의 상위 카운트를 유지합니다."
+    },
+    {
+      "title": "시간 조건 두 가지",
+      "text": "첫째 매 32비트 카운터 반주기마다 적어도 한 번 호출해야 합니다. 둘째 선점되는 시간은 반주기에서 최장 호출 간격을 뺀 시간보다 길면 안 됩니다. 단순히 평균 호출 빈도만 높다고 충분하지 않습니다. 반주기는 2^31 tick이며 tick 주파수로 나누면 시간입니다. 필요하면 타이머를 마련하라고 주석이 권하지만 이 헤더가 직접 실행 예약을 하지는 않습니다."
+    },
+    {
+      "title": "경쟁이 무해하다는 주장의 전제",
+      "text": "주석은 word store가 원자적이며 같은 전환을 감지한 경쟁자가 같은 새 값을 저장하므로 안전하다고 설명합니다. 이는 앞선 호출 간격, 선점 제한, 전역적으로 증가하는 하드웨어 관측 계약에 의존합니다. 임의로 오래 멈췄다가 오래된 hi를 덮어써도 안전한 범용 atomic increment는 아닙니다. 본문에는 CAS나 잠금 또는 누락된 여러 래핑을 복원하는 장치가 없습니다."
+    },
+    {
+      "title": "유효 비트와 호출자 후처리",
+      "text": "반환값은 __x.val이며 bit63은 동기화용 쓰레기 비트로 취급해야 합니다. 호출자는 이를 명시적으로 지우거나 주석이 설명하는 짝수 배수의 unsigned 모듈러 곱셈처럼 그 비트를 제거하는 후처리를 해야 합니다. 짝수 배수는 bit63의 기여를 64비트 밖으로 밀어내지만 다른 산술 오버플로까지 방지하는 것은 아닙니다. 유효 카운터 자체도 무한 정밀도가 아니라 63비트입니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "이 파일의 모든 선언, 분기와 호출 계약을 읽고 전환 값을 계산한 학습 자료입니다. 실제 하드웨어 접근자의 순서, 긴 선점 상황 또는 SMP 동시 실행을 실행 검증한 결과로 표시하지 않습니다. 시간 예산이 알고리즘 정확성의 전제라는 점이 핵심 CS 연결입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "cnt_lo를 먼저 읽어 지역 변수로 전달하면 왜 계약을 위반하는가?",
+      "options": [
+        "상위 상태를 읽은 뒤 하드웨어 하위 값을 읽어야 하기 때문이다",
+        "매크로 인자는 함수 호출 표현식만 문법적으로 허용되기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "문법 문제가 아니라 관측 순서 문제입니다. 본문의 smp_rmb 전에 이미 하드웨어 값을 읽었다면 매크로 내부 순서를 따르지 않습니다."
+    },
+    {
+      "prompt": "hi=0x80000000이고 lo가 0으로 래핑할 때 새 hi는?",
+      "options": [
+        "0x80000001이다",
+        "1이다"
+      ],
+      "answer": 1,
+      "explanation": "XOR로 bit31을 지우고 이전 hi>>31의 1을 더합니다. 이에 따라 유효 상위 카운트가 하나 증가합니다."
+    },
+    {
+      "prompt": "반주기보다 오랫동안 한 번도 호출하지 않아도 모든 래핑을 복원하는가?",
+      "options": [
+        "아니다. 최소 호출 간격 조건을 충족해야 한다",
+        "그렇다. XOR만으로 지나간 래핑 수를 알 수 있다"
+      ],
+      "answer": 0,
+      "explanation": "한 비트의 위상 정보는 놓친 여러 전환의 개수를 보존하지 않습니다. 주석은 반주기마다 호출하고 선점 지연도 제한하라고 요구합니다."
+    },
+    {
+      "prompt": "반환 u64의 bit63을 그대로 시간의 유효 비트로 사용해도 되는가?",
+      "options": [
+        "그렇다. 하드웨어의 64번째 카운트 비트이다",
+        "아니다. 동기화 상태이므로 제거해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "하드웨어는 하위 32비트이고 메모리의 유효 상위 카운트는 31비트입니다. 맨 위 비트는 반주기 동기화용으로만 쓰입니다."
+    },
+    {
+      "prompt": "서로 다른 두 매크로 확장 위치가 같은 static 상태를 공유하는가?",
+      "options": [
+        "아니다. 각 확장 위치에 독립적인 지역 static 상태가 있다",
+        "그렇다. 변수 이름이 같으면 전역 저장소가 하나가 된다"
+      ],
+      "answer": 0,
+      "explanation": "statement expression의 블록 범위 안에 선언된 static입니다. 저장 기간은 길지만 범위와 확장 위치가 다르면 같은 객체가 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n *  Extend a 32-bit counter to 63 bits\n *\n *  Author:\tNicolas Pitre\n *  Created:\tDecember 3, 2006\n *  Copyright:\tMontaVista Software, Inc.\n */\n\n#ifndef __LINUX_CNT32_TO_63_H__\n#define __LINUX_CNT32_TO_63_H__\n\n#include <linux/compiler.h>\n#include <linux/types.h>\n#include <asm/byteorder.h>\n\n/* this is used only to give gcc a clue about good code generation */\nunion cnt32_to_63 {\n\tstruct {\n#if defined(__LITTLE_ENDIAN)\n\t\tu32 lo, hi;\n#elif defined(__BIG_ENDIAN)\n\t\tu32 hi, lo;\n#endif\n\t};\n\tu64 val;\n};\n\n\n/**\n * cnt32_to_63 - Expand a 32-bit counter to a 63-bit counter\n * @cnt_lo: The low part of the counter\n *\n * Many hardware clock counters are only 32 bits wide and therefore have\n * a relatively short period making wrap-arounds rather frequent.  This\n * is a problem when implementing sched_clock() for example, where a 64-bit\n * non-wrapping monotonic value is expected to be returned.\n *\n * To overcome that limitation, let's extend a 32-bit counter to 63 bits\n * in a completely lock free fashion. Bits 0 to 31 of the clock are provided\n * by the hardware while bits 32 to 62 are stored in memory.  The top bit in\n * memory is used to synchronize with the hardware clock half-period.  When\n * the top bit of both counters (hardware and in memory) differ then the\n * memory is updated with a new value, incrementing it when the hardware\n * counter wraps around.\n *\n * Because a word store in memory is atomic then the incremented value will\n * always be in synch with the top bit indicating to any potential concurrent\n * reader if the value in memory is up to date or not with regards to the\n * needed increment.  And any race in updating the value in memory is harmless\n * as the same value would simply be stored more than once.\n *\n * The restrictions for the algorithm to work properly are:\n *\n * 1) this code must be called at least once per each half period of the\n *    32-bit counter;\n *\n * 2) this code must not be preempted for a duration longer than the\n *    32-bit counter half period minus the longest period between two\n *    calls to this code;\n *\n * Those requirements ensure proper update to the state bit in memory.\n * This is usually not a problem in practice, but if it is then a kernel\n * timer should be scheduled to manage for this code to be executed often\n * enough.\n *\n * And finally:\n *\n * 3) the cnt_lo argument must be seen as a globally incrementing value,\n *    meaning that it should be a direct reference to the counter data which\n *    can be evaluated according to a specific ordering within the macro,\n *    and not the result of a previous evaluation stored in a variable.\n *\n * For example, this is wrong:\n *\n *\tu32 partial = get_hw_count();\n *\tu64 full = cnt32_to_63(partial);\n *\treturn full;\n *\n * This is fine:\n *\n *\tu64 full = cnt32_to_63(get_hw_count());\n *\treturn full;\n *\n * Note that the top bit (bit 63) in the returned value should be considered\n * as garbage.  It is not cleared here because callers are likely to use a\n * multiplier on the returned value which can get rid of the top bit\n * implicitly by making the multiplier even, therefore saving on a runtime\n * clear-bit instruction. Otherwise caller must remember to clear the top\n * bit explicitly.\n */\n#define cnt32_to_63(cnt_lo) \\\n({ \\\n\tstatic u32 __m_cnt_hi; \\\n\tunion cnt32_to_63 __x; \\\n\t__x.hi = __m_cnt_hi; \\\n \tsmp_rmb(); \\\n\t__x.lo = (cnt_lo); \\\n\tif (unlikely((s32)(__x.hi ^ __x.lo) < 0)) \\\n\t\t__m_cnt_hi = __x.hi = (__x.hi ^ 0x80000000) + (__x.hi >> 31); \\\n\t__x.val; \\\n})\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "eedfbe6373263383065e9875a22f4a4be246c10ac9903d13bc177a58435e204c",
+    "scope": "whole-file",
+    "line_count": 104,
+    "authoring_source": "course/file_units/counter_extension.py",
+    "sections": [
+      "전체 구성",
+      "엔디언별 union 배치",
+      "어디에 상태가 있는가",
+      "반드시 지킬 읽기 순서",
+      "불일치 검출",
+      "첫 반주기 전환",
+      "실제 래핑 전환",
+      "시간 조건 두 가지",
+      "경쟁이 무해하다는 주장의 전제",
+      "유효 비트와 호출자 후처리",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/cnt32_to_63.h"
+    }
+  ]
+}

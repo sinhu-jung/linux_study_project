@@ -1,0 +1,115 @@
+{
+  "id": "file-274151654c278613",
+  "path": "scripts/mkcompile_h",
+  "title": "compile.h 생성기: 빌드 사용자·호스트·도구 버전",
+  "area": "빌드 메타데이터 · shell pipeline · 환경 변수 · 문자열 생성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "세 인수, 환경 변수 우선순위, linker 출력 가공과 네 매크로 출력을 모두 분석합니다.",
+  "guide": [
+    "빌드 메타데이터는 명시적 입력과 실행 환경 탐지 결과를 조합하며 문자열 가공의 범위를 정확히 이해해야 합니다.",
+    "shell 변수, pipeline, locale, C 문자열 생성과 재현 가능한 입력을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "인수 계약과 호출부",
+      "text": "#!/bin/sh, GPL-2.0 뒤 UTS_MACHINE=$1, CC_VERSION=\"$2\", LD=$3으로 세 인수를 받습니다. 확인한 최상위 Makefile의 filechk_compile.h는 UTS_MACHINE,CONFIG_CC_VERSION_TEXT,LD를 각각 인수로 전달합니다. 스크립트는 컴파일러 실행 파일에 --version을 호출하지 않고 이미 전달된 compiler 문자열을 사용합니다. 인수 개수 검사도 없습니다."
+    },
+    {
+      "title": "빌드 사용자 선택",
+      "text": "KBUILD_BUILD_USER가 빈 문자열이면 whoami 출력을 sed로 가공하고 아니면 환경 변수 값을 그대로 LINUX_COMPILE_BY로 사용합니다. sed 식은 백슬래시 하나를 두 개로 바꾸며 g flag가 없으므로 각 줄의 첫 일치만 치환합니다. 모든 C 문자열 특수문자나 모든 백슬래시를 완전히 escape하는 일반 인코더는 아닙니다. 사용자 지정 경로에는 이 sed도 적용하지 않습니다."
+    },
+    {
+      "title": "빌드 호스트 선택",
+      "text": "KBUILD_BUILD_HOST가 비면 uname -n 명령 치환으로 LINUX_COMPILE_HOST를 얻고 아니면 제공 값을 사용합니다. 이는 빌드를 실행하는 환경의 호스트 정보이며 만들어진 커널이 부팅될 때의 hostname을 조회하는 코드가 아닙니다. 빈 값은 기본 탐지를 선택하고 비어 있지 않은 값은 우선합니다."
+    },
+    {
+      "title": "Linker 버전 처리",
+      "text": "LD_VERSION은 LC_ALL=C $LD -v의 stdout에서 head -n1로 첫 줄만 고른 뒤 sed를 적용합니다. 첫 번째 compatible with 괄호 구역을 제거하고 줄 끝 공백을 제거합니다. 중간 공백을 모두 정규화하는 식은 아닙니다. $LD는 따옴표 없이 명령 위치에서 확장되므로 단일 경로뿐 아니라 단어 분리의 영향을 받는 입력이며 임의 문자열에 대한 안전한 shell quoting helper라고 설명하지 않습니다."
+    },
+    {
+      "title": "Locale와 pipeline 상태 범위",
+      "text": "LC_ALL=C 지정은 linker 명령 앞에 있으며 이 한 줄의 모든 후속 도구나 전체 빌드에 전역 export하는 문장이 아닙니다. 스크립트에는 set -e나 pipefail 설정이 없고 linker 실패를 별도로 검사하지 않습니다. linker 탐지 실패가 있어도 뒤 heredoc 출력이 진행될 수 있으므로 출력 생성만으로 도구 실행 성공을 인증하지 않습니다."
+    },
+    {
+      "title": "네 C 매크로 출력",
+      "text": "cat의 확장되는 heredoc으로 UTS_MACHINE,LINUX_COMPILE_BY,LINUX_COMPILE_HOST,LINUX_COMPILER 네 #define을 stdout에 출력합니다. COMPILER 문자열은 CC_VERSION, 쉼표와 공백, LD_VERSION을 연결합니다. 스크립트가 compile.h 경로를 직접 열거나 변경 여부를 비교하지는 않습니다. 실제 생성 파일 처리는 Makefile의 filechk 호출 문맥에서 이루어집니다."
+    },
+    {
+      "title": "입력과 검토 범위",
+      "text": "이 스크립트에는 timestamp나 .version 증가 로직이 없습니다. 사용자·호스트를 명시하면 환경 의존 부분을 줄일 수 있지만 모든 빌드 산출물의 재현성을 이 둘만으로 보장하지 않습니다. 세 인수와 두 환경 분기, 버전 pipeline, heredoc 전체를 원본과 대조했으며 현재 호스트의 linker를 실제로 호출한 검증은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "컴파일러 버전 문자열의 출처는?",
+      "options": [
+        "두 번째 인수 CC_VERSION",
+        "스크립트 내부의 gcc --version 호출"
+      ],
+      "answer": 0,
+      "explanation": "스크립트는 compiler 버전을 인수로 받으며 별도로 실행하는 버전 조회는 LD -v입니다."
+    },
+    {
+      "prompt": "KBUILD_BUILD_USER가 비어 있지 않으면 whoami를 쓰는가?",
+      "options": [
+        "그렇다. 지정 값은 항상 무시된다",
+        "아니다. 지정 값을 그대로 사용한다"
+      ],
+      "answer": 1,
+      "explanation": "test -z가 false이면 else에서 환경 변수 값을 선택합니다. 이 경로에는 sed 가공도 없습니다."
+    },
+    {
+      "prompt": "백슬래시 처리 sed가 모든 일치를 치환하는가?",
+      "options": [
+        "아니다. g flag가 없어 줄마다 첫 일치만 처리한다",
+        "그렇다. 모든 C escape를 자동 처리한다"
+      ],
+      "answer": 0,
+      "explanation": "정규식 치환 범위와 문자열 전체의 올바른 C 인코딩은 별개입니다. 이 스크립트의 처리 범위를 과장하면 안 됩니다."
+    },
+    {
+      "prompt": "이 스크립트는 compile.h 파일에 직접 쓰는가?",
+      "options": [
+        "그렇다. 절대 경로 compile.h를 직접 연다",
+        "아니다. 매크로를 stdout으로 출력한다"
+      ],
+      "answer": 1,
+      "explanation": "마지막 명령은 cat heredoc이며 파일 리다이렉션이 없습니다. 호출하는 빌드 규칙이 출력 파일을 관리합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n\nUTS_MACHINE=$1\nCC_VERSION=\"$2\"\nLD=$3\n\nif test -z \"$KBUILD_BUILD_USER\"; then\n\tLINUX_COMPILE_BY=$(whoami | sed 's/\\\\/\\\\\\\\/')\nelse\n\tLINUX_COMPILE_BY=$KBUILD_BUILD_USER\nfi\nif test -z \"$KBUILD_BUILD_HOST\"; then\n\tLINUX_COMPILE_HOST=`uname -n`\nelse\n\tLINUX_COMPILE_HOST=$KBUILD_BUILD_HOST\nfi\n\nLD_VERSION=$(LC_ALL=C $LD -v | head -n1 |\n\t\tsed -e 's/(compatible with [^)]*)//' -e 's/[[:space:]]*$//')\n\ncat <<EOF\n#define UTS_MACHINE\t\t\"${UTS_MACHINE}\"\n#define LINUX_COMPILE_BY\t\"${LINUX_COMPILE_BY}\"\n#define LINUX_COMPILE_HOST\t\"${LINUX_COMPILE_HOST}\"\n#define LINUX_COMPILER\t\t\"${CC_VERSION}, ${LD_VERSION}\"\nEOF\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "90168d5d196c13754ce9ee3ad6abdd258ec4cab3fd2b70993f74b60308bd79fd",
+    "scope": "whole-file",
+    "line_count": 27,
+    "authoring_source": "course/file_units/build_metadata_scripts.py",
+    "sections": [
+      "인수 계약과 호출부",
+      "빌드 사용자 선택",
+      "빌드 호스트 선택",
+      "Linker 버전 처리",
+      "Locale와 pipeline 상태 범위",
+      "네 C 매크로 출력",
+      "입력과 검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/mkcompile_h"
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "id": "file-885cee1e475f747c",
+  "path": "lib/list_sort.c",
+  "title": "연결 리스트 정렬 전체: 안정 병합과 양방향 링크 복원",
+  "area": "연결 리스트 · 안정 병합 정렬·불변식",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "노드의 데이터를 복사하는 대신 next 링크를 다시 연결하여 정렬합니다.",
+  "guide": [
+    "입력 원형 리스트를 NULL 종료 단방향 리스트로 바꿉니다. 원소를 크기1의 정렬 구간으로 넣고 count의 비트에 따라 구간을 병합합니다. 마지막 병합에서 prev와 원형 head 연결을 복원합니다.",
+    "정렬 중에는 정상적인 원형 양방향 구조가 유지되지 않습니다. 호출자는 동시 접근을 제어하고 comparator도 임시 prev나 원형 순회에 의존하지 않아야 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX와 kernel/bug/compiler/export/string/list_sort/list 헤더,내부 merge,merge_final,알고리즘의 상세 주석,공개 list_sort와 export로 구성됩니다. 별도 노드 할당·해제·재귀 호출은 없습니다."
+    },
+    {
+      "title": "merge와 안정성",
+      "text": "merge는 두 NULL 종료 정렬 구간을 합칩니다. cmp(priv,a,b)<=0이면 a를 선택하며 같은 키에서도 앞선 입력 구간을 우선합니다. head 지역 변수와 tail 이중 포인터로 다음 링크를 채우고 한 구간이 끝나면 남은 구간을 연결합니다. 이 단계에서는 prev를 복원하지 않습니다."
+    },
+    {
+      "title": "최종 병합",
+      "text": "merge_final은 비교하며 next와 prev를 함께 설정합니다. 한쪽이 소진되면 남은 b를 이어 붙이고 prev를 끝까지 갱신합니다. 마지막 tail->next=head,head->prev=tail로 원형 구조를 완성합니다. 단순 merge 후 별도 전체 prev 복원 순회를 하지 않도록 코드를 분리한 것입니다."
+    },
+    {
+      "title": "동일 노드 비교 콜백",
+      "text": "최종 남은 구간을 연결할 때 u8 count가256회마다0으로 돌아오면 cmp(priv,b,b)를 호출합니다. 순서 비교 결과는 사용하지 않지만 호출자가 cond_resched 등을 주기적으로 수행할 기회를 줍니다. comparator는 같은 노드 두 개를 받는 경우에도 안전해야 하며 모든 호출이 서로 다른 노드의 순서 결정을 뜻하지 않습니다."
+    },
+    {
+      "title": "공개 함수의 시작",
+      "text": "head->next가 head->prev와 같으면0개 또는1개이므로 그대로 반환합니다. 그 외에는 마지막 노드의 next를NULL로 바꿉니다. 이후 pending은 정렬된 부분 리스트들을 관리하고 각 부분 리스트의 첫 노드 prev를 다음 pending 구간 링크로 재사용합니다."
+    },
+    {
+      "title": "pending 불변식",
+      "text": "부분 리스트 크기는2의 거듭제곱이고 작은 것·새것이 앞에 있습니다. 각 크기에는0..2개의 구간만 유지됩니다. count의 연속된 하위1비트를 건너뛰어 병합 위치를 찾고 필요 시 먼저 병합한 뒤 입력 원소 하나를 새 크기1 구간으로 넣습니다. 항상 같은 크기 두 개가 생기는 즉시 합치는 단순 이진 카운터와는 타이밍이 다릅니다."
+    },
+    {
+      "title": "비트 상태 설명 읽기",
+      "text": "원문은 count의 비트 k,k-1,상위 비트 존재 여부를 사용해6개 상태를 구분합니다. 크기2^k의 구간은2→3과4→5 전이에서 추가되고5→2에서 병합됩니다. 뒤에 충분한 작은 구간이 있을 때 병합하여 마지막 합치기가 심하게 불균형해지지 않도록 합니다. 주석의 캐시·비교 수 주장은 설계 설명이며 여기서 벤치마크를 실행한 결과는 아닙니다."
+    },
+    {
+      "title": "종료와 비교 계약",
+      "text": "입력이 끝나면 작은 pending부터 합치고 마지막 한 번은 merge_final을 사용합니다. comparator는 a가 뒤로 가야 할 때 양수,앞에 두거나 원래 순서를 유지할 때0 이하를 반환합니다. 따라서 -1/0/1뿐 아니라 a.key>b.key의0/1도 가능합니다. 서로 다른 노드의 비교에서 a는 입력상 먼저 있던 구간에서 오며 동등 키의 순서를 보존합니다."
+    },
+    {
+      "title": "복잡도와 메모리",
+      "text": "병합 정렬의 비교 작업은 O(n log n)이며 콜백 자체 비용은 별도입니다. pending 링크를 기존 노드 prev에 저장하고 재귀나 입력 크기만큼의 별도 배열을 만들지 않으므로 추가 알고리즘 저장소는 O(1)입니다. 데이터 객체와 노드 주소는 유지되지만 링크는 바뀝니다. 콜백에서 리스트를 수정하거나 다른 스레드가 동시에 순회하는 안전성을 이 파일이 제공하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "동일한 키일 때 merge는 어느 쪽을 먼저 선택하는가?",
+      "options": [
+        "먼저 입력된 구간 a를 선택한다",
+        "항상 b를 선택해 순서를 뒤집는다"
+      ],
+      "answer": 0,
+      "explanation": "cmp<=0 분기가 a를 선택합니다. 원래 구간의 시간 순서와 이 규칙이 안정성을 유지합니다."
+    },
+    {
+      "prompt": "정렬 도중 prev는 항상 이전 노드를 가리키는가?",
+      "options": [
+        "그렇다. 모든 중간 단계가 정상 원형 양방향 리스트다",
+        "아니다. pending 부분 리스트를 연결하는 용도로 재사용된다"
+      ],
+      "answer": 1,
+      "explanation": "중간 구간은 NULL 종료 단방향이고 prev는 유지되지 않습니다. 마지막 병합에서 복원합니다."
+    },
+    {
+      "prompt": "cmp(priv,b,b)를 호출하는 이유는?",
+      "options": [
+        "긴 잔여 구간 처리 중 호출자에게 주기적인 실행 기회를 주기 위해서다",
+        "같은 노드를 둘로 복제하기 위해서다"
+      ],
+      "answer": 0,
+      "explanation": "u8 카운터가 돌아올 때 호출하며 반환값은 순서 결정에 사용하지 않습니다. 콜백은 같은 인자에도 안전해야 합니다."
+    },
+    {
+      "prompt": "boolean comparator인 a.key>b.key를 쓸 수 있는가?",
+      "options": [
+        "없다. 반드시 음수·0·양수 세 값을 모두 반환해야 한다",
+        "있다. 뒤로 가야 할 때1,그 외0이라는 계약과 맞는다"
+      ],
+      "answer": 1,
+      "explanation": "이 구현은 안정 병합에서 앞선 구간을 우선하므로 a<b와 a==b를 구분하지 않아도 됩니다."
+    },
+    {
+      "prompt": "sort.c의 배열 힙 정렬과 달리 보장하는 성질은?",
+      "options": [
+        "동일한 키의 입력 순서 유지",
+        "모든 중간 단계의 원형 링크 유지"
+      ],
+      "answer": 0,
+      "explanation": "list_sort는 안정 정렬입니다. 중간 링크 구조는 오히려 임시로 변경됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/kernel.h>\n#include <linux/bug.h>\n#include <linux/compiler.h>\n#include <linux/export.h>\n#include <linux/string.h>\n#include <linux/list_sort.h>\n#include <linux/list.h>\n\n/*\n * Returns a list organized in an intermediate format suited\n * to chaining of merge() calls: null-terminated, no reserved or\n * sentinel head node, \"prev\" links not maintained.\n */\n__attribute__((nonnull(2,3,4)))\nstatic struct list_head *merge(void *priv, list_cmp_func_t cmp,\n\t\t\t\tstruct list_head *a, struct list_head *b)\n{\n\tstruct list_head *head, **tail = &head;\n\n\tfor (;;) {\n\t\t/* if equal, take 'a' -- important for sort stability */\n\t\tif (cmp(priv, a, b) <= 0) {\n\t\t\t*tail = a;\n\t\t\ttail = &a->next;\n\t\t\ta = a->next;\n\t\t\tif (!a) {\n\t\t\t\t*tail = b;\n\t\t\t\tbreak;\n\t\t\t}\n\t\t} else {\n\t\t\t*tail = b;\n\t\t\ttail = &b->next;\n\t\t\tb = b->next;\n\t\t\tif (!b) {\n\t\t\t\t*tail = a;\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\t}\n\treturn head;\n}\n\n/*\n * Combine final list merge with restoration of standard doubly-linked\n * list structure.  This approach duplicates code from merge(), but\n * runs faster than the tidier alternatives of either a separate final\n * prev-link restoration pass, or maintaining the prev links\n * throughout.\n */\n__attribute__((nonnull(2,3,4,5)))\nstatic void merge_final(void *priv, list_cmp_func_t cmp, struct list_head *head,\n\t\t\tstruct list_head *a, struct list_head *b)\n{\n\tstruct list_head *tail = head;\n\tu8 count = 0;\n\n\tfor (;;) {\n\t\t/* if equal, take 'a' -- important for sort stability */\n\t\tif (cmp(priv, a, b) <= 0) {\n\t\t\ttail->next = a;\n\t\t\ta->prev = tail;\n\t\t\ttail = a;\n\t\t\ta = a->next;\n\t\t\tif (!a)\n\t\t\t\tbreak;\n\t\t} else {\n\t\t\ttail->next = b;\n\t\t\tb->prev = tail;\n\t\t\ttail = b;\n\t\t\tb = b->next;\n\t\t\tif (!b) {\n\t\t\t\tb = a;\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\t}\n\n\t/* Finish linking remainder of list b on to tail */\n\ttail->next = b;\n\tdo {\n\t\t/*\n\t\t * If the merge is highly unbalanced (e.g. the input is\n\t\t * already sorted), this loop may run many iterations.\n\t\t * Continue callbacks to the client even though no\n\t\t * element comparison is needed, so the client's cmp()\n\t\t * routine can invoke cond_resched() periodically.\n\t\t */\n\t\tif (unlikely(!++count))\n\t\t\tcmp(priv, b, b);\n\t\tb->prev = tail;\n\t\ttail = b;\n\t\tb = b->next;\n\t} while (b);\n\n\t/* And the final links to make a circular doubly-linked list */\n\ttail->next = head;\n\thead->prev = tail;\n}\n\n/**\n * list_sort - sort a list\n * @priv: private data, opaque to list_sort(), passed to @cmp\n * @head: the list to sort\n * @cmp: the elements comparison function\n *\n * The comparison function @cmp must return > 0 if @a should sort after\n * @b (\"@a > @b\" if you want an ascending sort), and <= 0 if @a should\n * sort before @b *or* their original order should be preserved.  It is\n * always called with the element that came first in the input in @a,\n * and list_sort is a stable sort, so it is not necessary to distinguish\n * the @a < @b and @a == @b cases.\n *\n * This is compatible with two styles of @cmp function:\n * - The traditional style which returns <0 / =0 / >0, or\n * - Returning a boolean 0/1.\n * The latter offers a chance to save a few cycles in the comparison\n * (which is used by e.g. plug_ctx_cmp() in block/blk-mq.c).\n *\n * A good way to write a multi-word comparison is::\n *\n *\tif (a->high != b->high)\n *\t\treturn a->high > b->high;\n *\tif (a->middle != b->middle)\n *\t\treturn a->middle > b->middle;\n *\treturn a->low > b->low;\n *\n *\n * This mergesort is as eager as possible while always performing at least\n * 2:1 balanced merges.  Given two pending sublists of size 2^k, they are\n * merged to a size-2^(k+1) list as soon as we have 2^k following elements.\n *\n * Thus, it will avoid cache thrashing as long as 3*2^k elements can\n * fit into the cache.  Not quite as good as a fully-eager bottom-up\n * mergesort, but it does use 0.2*n fewer comparisons, so is faster in\n * the common case that everything fits into L1.\n *\n *\n * The merging is controlled by \"count\", the number of elements in the\n * pending lists.  This is beautifully simple code, but rather subtle.\n *\n * Each time we increment \"count\", we set one bit (bit k) and clear\n * bits k-1 .. 0.  Each time this happens (except the very first time\n * for each bit, when count increments to 2^k), we merge two lists of\n * size 2^k into one list of size 2^(k+1).\n *\n * This merge happens exactly when the count reaches an odd multiple of\n * 2^k, which is when we have 2^k elements pending in smaller lists,\n * so it's safe to merge away two lists of size 2^k.\n *\n * After this happens twice, we have created two lists of size 2^(k+1),\n * which will be merged into a list of size 2^(k+2) before we create\n * a third list of size 2^(k+1), so there are never more than two pending.\n *\n * The number of pending lists of size 2^k is determined by the\n * state of bit k of \"count\" plus two extra pieces of information:\n *\n * - The state of bit k-1 (when k == 0, consider bit -1 always set), and\n * - Whether the higher-order bits are zero or non-zero (i.e.\n *   is count >= 2^(k+1)).\n *\n * There are six states we distinguish.  \"x\" represents some arbitrary\n * bits, and \"y\" represents some arbitrary non-zero bits:\n * 0:  00x: 0 pending of size 2^k;           x pending of sizes < 2^k\n * 1:  01x: 0 pending of size 2^k; 2^(k-1) + x pending of sizes < 2^k\n * 2: x10x: 0 pending of size 2^k; 2^k     + x pending of sizes < 2^k\n * 3: x11x: 1 pending of size 2^k; 2^(k-1) + x pending of sizes < 2^k\n * 4: y00x: 1 pending of size 2^k; 2^k     + x pending of sizes < 2^k\n * 5: y01x: 2 pending of size 2^k; 2^(k-1) + x pending of sizes < 2^k\n * (merge and loop back to state 2)\n *\n * We gain lists of size 2^k in the 2->3 and 4->5 transitions (because\n * bit k-1 is set while the more significant bits are non-zero) and\n * merge them away in the 5->2 transition.  Note in particular that just\n * before the 5->2 transition, all lower-order bits are 11 (state 3),\n * so there is one list of each smaller size.\n *\n * When we reach the end of the input, we merge all the pending\n * lists, from smallest to largest.  If you work through cases 2 to\n * 5 above, you can see that the number of elements we merge with a list\n * of size 2^k varies from 2^(k-1) (cases 3 and 5 when x == 0) to\n * 2^(k+1) - 1 (second merge of case 5 when x == 2^(k-1) - 1).\n */\n__attribute__((nonnull(2,3)))\nvoid list_sort(void *priv, struct list_head *head, list_cmp_func_t cmp)\n{\n\tstruct list_head *list = head->next, *pending = NULL;\n\tsize_t count = 0;\t/* Count of pending */\n\n\tif (list == head->prev)\t/* Zero or one elements */\n\t\treturn;\n\n\t/* Convert to a null-terminated singly-linked list. */\n\thead->prev->next = NULL;\n\n\t/*\n\t * Data structure invariants:\n\t * - All lists are singly linked and null-terminated; prev\n\t *   pointers are not maintained.\n\t * - pending is a prev-linked \"list of lists\" of sorted\n\t *   sublists awaiting further merging.\n\t * - Each of the sorted sublists is power-of-two in size.\n\t * - Sublists are sorted by size and age, smallest & newest at front.\n\t * - There are zero to two sublists of each size.\n\t * - A pair of pending sublists are merged as soon as the number\n\t *   of following pending elements equals their size (i.e.\n\t *   each time count reaches an odd multiple of that size).\n\t *   That ensures each later final merge will be at worst 2:1.\n\t * - Each round consists of:\n\t *   - Merging the two sublists selected by the highest bit\n\t *     which flips when count is incremented, and\n\t *   - Adding an element from the input as a size-1 sublist.\n\t */\n\tdo {\n\t\tsize_t bits;\n\t\tstruct list_head **tail = &pending;\n\n\t\t/* Find the least-significant clear bit in count */\n\t\tfor (bits = count; bits & 1; bits >>= 1)\n\t\t\ttail = &(*tail)->prev;\n\t\t/* Do the indicated merge */\n\t\tif (likely(bits)) {\n\t\t\tstruct list_head *a = *tail, *b = a->prev;\n\n\t\t\ta = merge(priv, cmp, b, a);\n\t\t\t/* Install the merged result in place of the inputs */\n\t\t\ta->prev = b->prev;\n\t\t\t*tail = a;\n\t\t}\n\n\t\t/* Move one element from input list to pending */\n\t\tlist->prev = pending;\n\t\tpending = list;\n\t\tlist = list->next;\n\t\tpending->next = NULL;\n\t\tcount++;\n\t} while (list);\n\n\t/* End of input; merge together all the pending lists. */\n\tlist = pending;\n\tpending = pending->prev;\n\tfor (;;) {\n\t\tstruct list_head *next = pending->prev;\n\n\t\tif (!next)\n\t\t\tbreak;\n\t\tlist = merge(priv, cmp, pending, list);\n\t\tpending = next;\n\t}\n\t/* The final merge, rebuilding prev links */\n\tmerge_final(priv, cmp, head, pending, list);\n}\nEXPORT_SYMBOL(list_sort);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a107e12a448b224ef826c6684593d174e1ed2b0ecaaba3aba66b1550db63a8c5",
+    "scope": "whole-file",
+    "line_count": 253,
+    "authoring_source": "course/file_units/list_mergesort.py",
+    "sections": [
+      "파일 전체",
+      "merge와 안정성",
+      "최종 병합",
+      "동일 노드 비교 콜백",
+      "공개 함수의 시작",
+      "pending 불변식",
+      "비트 상태 설명 읽기",
+      "종료와 비교 계약",
+      "복잡도와 메모리"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/list_sort.c"
+    }
+  ]
+}

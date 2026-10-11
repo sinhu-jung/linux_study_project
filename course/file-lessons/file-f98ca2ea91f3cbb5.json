@@ -1,0 +1,167 @@
+{
+  "id": "file-f98ca2ea91f3cbb5",
+  "path": "drivers/of/of_numa.c",
+  "title": "OF NUMA 파서: 메모리 구간·거리 행렬·조상 노드 검색",
+  "area": "NUMA · 장치 트리 · 입력 검증 · 그래프 · 메모리 구간",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "CPU와 메모리 노드 수집,거리 파싱,런타임 node-to-nid와 초기화 순서를 전체 분석합니다.",
+  "guide": [
+    "순차 파서의 성공 여부는 입력 검사뿐 아니라 누적 상태와 마지막 오류값의 관리에 달려 있습니다.",
+    "비트 집합,반개구간,행렬 입력,선형 순회와 트리 조상 검색을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일과 초기화 범위",
+      "text": "GPL-2.0 파일은 pr_fmt에 OF: NUMA: 접두부를 지정하고 OF,address,nodemask,numa_memblks와 아키텍처 numa 헤더를 포함합니다. DEFAULT_NODE=0 매크로는 정의되지만 본문에서 사용되지 않습니다. CPU·메모리·거리 파서와 초기화 함수는 __init이고 of_node_to_nid는 런타임 함수입니다."
+    },
+    {
+      "title": "CPU 노드의 비트 집합",
+      "text": "CPU 파서는 각 CPU 노드의 numa-node-id u32를 읽고 어떤 읽기 오류든 continue합니다. 성공 ID가 MAX_NUMNODES 이상이면 경고하고,범위 안이면 numa_nodes_parsed에 node_set합니다. 이 단계는 CPU를 domain에 실제 연결하는 것이 아니라 SMP 초기화보다 먼저 존재할 ID를 수집하는 목적입니다."
+    },
+    {
+      "title": "메모리 속성 오류의 구분",
+      "text": "메모리 파서는 r=-EINVAL로 시작해 memory 타입 노드를 순회합니다. 속성 읽기 결과가 -EINVAL이면 부재로 보고 continue합니다. 다른 읽기 오류에서는 즉시 반환하지 않고 nid 범위 검사로 진행합니다. nid는 지역 초기값이 없으므로 실패한 읽기가 값을 제공하지 않는 경우 정상 ID가 있다고 가정할 수 없습니다. CPU 파서의 모든 오류 continue와 다른 구현입니다."
+    },
+    {
+      "title": "메모리 구간 등록",
+      "text": "nid가 범위를 넘으면 경고하고 r=-EINVAL로 둡니다. for는 r=0이고 of_address_to_resource가 성공하는 동안 resource를 읽어 numa_add_memblk(nid,start,end+1)를 호출합니다. resource의 포함 끝점을 반개구간 끝으로 바꾸는 +1입니다. 이 파일에는 end+1의 별도 overflow 검사나 전체 구간 사전 검증 단계가 없습니다."
+    },
+    {
+      "title": "메모리 순회의 반환값",
+      "text": "구간을 하나도 처리하지 않았거나 r이 오류면 현재 np 참조를 put하고 오류를 반환합니다. 주소 변환의 실패 코드는 r에 저장하지 않으므로 앞서 하나 이상의 구간을 성공했다면 뒤 주소 변환 실패가 곧바로 반환 오류가 되지는 않습니다. 마지막 return r도 주의해야 합니다. 앞 노드 성공 후 마지막 노드에 속성이 없어 r=-EINVAL로 continue하면 전체 결과는 -EINVAL일 수 있습니다. 이미 등록한 블록을 여기서 되돌리는 루프는 없습니다."
+    },
+    {
+      "title": "거리 속성의 형식",
+      "text": "거리 v1 파서는 distance-matrix 포인터가 없거나 u32 원소 개수가 0 이하이면 -EINVAL입니다. i+2<entry_count 조건으로 세 cell씩 nodea,nodeb,distance를 읽습니다. 원소 개수가 3의 배수인지 검사하지 않아 남은 1~2개 cell은 처리되지 않습니다. 양수 개수가 1이나 2면 반복 없이 0을 반환할 수도 있습니다."
+    },
+    {
+      "title": "거리 의미 검사와 방향",
+      "text": "자기 자신으로의 거리는 LOCAL_DISTANCE와 같아야 하고 다른 노드의 거리는 그보다 커야 합니다. 위반 시 오류를 반환합니다. 통과하면 nodea만 numa_nodes_parsed에 표시하고 A→B 거리를 설정합니다. nodeb>nodea일 때만 B→A도 같은 값으로 설정합니다. 이는 기본 역방향 값이며 이후 입력 순서에 따라 덮어쓸 수 있으므로 모든 입력을 강제로 대칭화하는 알고리즘이라고 설명하지 않습니다."
+    },
+    {
+      "title": "ID 검증과 부분 반영",
+      "text": "거리 파서에는 nodea와 nodeb를 MAX_NUMNODES와 비교하는 명시적 검사가 없습니다. node_set과 numa_set_distance 호출 전 범위 검증이 있다고 추정하지 않습니다. 뒤 항목에서 오류가 발견되어도 앞서 설정한 비트와 거리를 되돌리는 코드는 없습니다. 하위 함수의 방어와 이 파일의 검사 범위는 별도로 확인해야 합니다."
+    },
+    {
+      "title": "거리 map 탐색",
+      "text": "거리 map wrapper는 numa-distance-map-v1 compatible의 첫 노드를 찾고 있으면 v1 파서를 호출합니다. 없으면 초기 ret=0을 반환합니다. 조회한 np는 성공·실패와 관계없이 put합니다. 거리 map이 없다는 사실을 항상 오류로 취급하지 않습니다."
+    },
+    {
+      "title": "런타임 조상 검색",
+      "text": "of_node_to_nid는 입력 device의 참조를 얻고 numa-node-id를 읽습니다. -EINVAL일 때만 of_get_next_parent로 올라가며 그 helper의 참조 이전 계약을 사용합니다. 성공이나 그 밖의 오류면 중단합니다. 남은 노드에서 오류면 경고하고 np를 put합니다. 가까운 노드의 잘못된 속성을 무시하고 상위의 정상 ID를 계속 찾는 동작은 아닙니다."
+    },
+    {
+      "title": "가능 노드와 최종 반환",
+      "text": "속성을 읽는 데 성공하고 nid<MAX_NUMNODES이며 node_possible(nid)일 때만 ID를 반환합니다. 그 밖에는 NUMA_NO_NODE입니다. numa=off나 결함 있는 트리에서 선언 ID가 가능한 노드 집합과 다를 수 있다는 주석이 있습니다. DEFAULT_NODE 매크로가 있다고 실패 시 무조건 0을 반환하는 것은 아닙니다."
+    },
+    {
+      "title": "전체 실행 순서와 범위",
+      "text": "of_numa_init은 CPU ID 수집,메모리 파싱,거리 map 순서입니다. 메모리 파싱이 오류면 거리는 처리하지 않습니다. 전체 함수·상수·오류 경로를 대조했습니다. CPU 및 메모리 순회는 입력 크기에,런타임 조상 조회는 트리 높이에 비례하는 탐색입니다. 실제 NUMA 부팅이나 결함 DTB 주입 실험을 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "메모리 resource.end에 1을 더하는 이유는?",
+      "options": [
+        "포함 끝점을 반개구간 끝으로 바꾸기 위해서다",
+        "노드 ID를 다음 값으로 바꾸기 위해서다"
+      ],
+      "answer": 0,
+      "explanation": "start,end가 표현하는 구간 규약과 numa_add_memblk의 끝 인수를 연결합니다. 주소와 ID는 다른 값입니다."
+    },
+    {
+      "prompt": "distance-matrix가 양수 2개 cell이면 이 파서는 반드시 실패하는가?",
+      "options": [
+        "그렇다. 3의 배수 여부를 명시적으로 검사한다",
+        "아니다. 세 cell 반복이 실행되지 않고 0을 반환할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "검사는 개수<=0이고 반복 조건은 i+2<count입니다. 나머지 검사는 없습니다."
+    },
+    {
+      "prompt": "거리 파서가 매 항목마다 nodea와 nodeb 둘 다 node_set하는가?",
+      "options": [
+        "아니다. nodea만 명시적으로 표시한다",
+        "그렇다. 두 비트에 반드시 대입한다"
+      ],
+      "answer": 0,
+      "explanation": "비트 집합 표시와 거리 설정은 별도 호출입니다. 실제 쓰기 대상을 추적해야 합니다."
+    },
+    {
+      "prompt": "역방향 거리를 기본 설정하는 조건은?",
+      "options": [
+        "모든 입력에서 무조건",
+        "nodeb>nodea"
+      ],
+      "answer": 1,
+      "explanation": "순서 조건이 명시되어 있고 이후 입력이 덮어쓸 수도 있습니다. 최종 대칭성을 일반적으로 보장하지 않습니다."
+    },
+    {
+      "prompt": "런타임 node-to-nid가 부모로 올라가는 경우는?",
+      "options": [
+        "속성 읽기 결과가 -EINVAL일 때",
+        "모든 오류와 모든 성공 뒤"
+      ],
+      "answer": 0,
+      "explanation": "주석과 본문은 속성 부재만 상위 검색으로 처리합니다. malformed 속성의 다른 오류는 중단합니다."
+    },
+    {
+      "prompt": "속성의 ID가 범위 안이면 무조건 반환하는가?",
+      "options": [
+        "그렇다. possible 집합은 검사하지 않는다",
+        "아니다. node_possible도 만족해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "읽기 성공,범위,가능 노드 조건을 모두 검사하고 아니면 NUMA_NO_NODE입니다."
+    },
+    {
+      "prompt": "메모리 파싱 실패 후 거리 map도 계속 처리하는가?",
+      "options": [
+        "아니다. 초기화 함수가 오류를 반환한다",
+        "그렇다. 모든 단계를 무조건 수행한다"
+      ],
+      "answer": 0,
+      "explanation": "CPU 수집 이후 메모리 반환값을 검사해 조기 반환합니다. 앞서 반영한 상태의 rollback까지 구현한 것은 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * OF NUMA Parsing support.\n *\n * Copyright (C) 2015 - 2016 Cavium Inc.\n */\n\n#define pr_fmt(fmt) \"OF: NUMA: \" fmt\n\n#include <linux/of.h>\n#include <linux/of_address.h>\n#include <linux/nodemask.h>\n#include <linux/numa_memblks.h>\n\n#include <asm/numa.h>\n\n/* define default numa node to 0 */\n#define DEFAULT_NODE 0\n\n/*\n * Even though we connect cpus to numa domains later in SMP\n * init, we need to know the node ids now for all cpus.\n*/\nstatic void __init of_numa_parse_cpu_nodes(void)\n{\n\tu32 nid;\n\tint r;\n\tstruct device_node *np;\n\n\tfor_each_of_cpu_node(np) {\n\t\tr = of_property_read_u32(np, \"numa-node-id\", &nid);\n\t\tif (r)\n\t\t\tcontinue;\n\n\t\tpr_debug(\"CPU on %u\\n\", nid);\n\t\tif (nid >= MAX_NUMNODES)\n\t\t\tpr_warn(\"Node id %u exceeds maximum value\\n\", nid);\n\t\telse\n\t\t\tnode_set(nid, numa_nodes_parsed);\n\t}\n}\n\nstatic int __init of_numa_parse_memory_nodes(void)\n{\n\tstruct device_node *np = NULL;\n\tstruct resource rsrc;\n\tu32 nid;\n\tint i, r = -EINVAL;\n\n\tfor_each_node_by_type(np, \"memory\") {\n\t\tr = of_property_read_u32(np, \"numa-node-id\", &nid);\n\t\tif (r == -EINVAL)\n\t\t\t/*\n\t\t\t * property doesn't exist if -EINVAL, continue\n\t\t\t * looking for more memory nodes with\n\t\t\t * \"numa-node-id\" property\n\t\t\t */\n\t\t\tcontinue;\n\n\t\tif (nid >= MAX_NUMNODES) {\n\t\t\tpr_warn(\"Node id %u exceeds maximum value\\n\", nid);\n\t\t\tr = -EINVAL;\n\t\t}\n\n\t\tfor (i = 0; !r && !of_address_to_resource(np, i, &rsrc); i++)\n\t\t\tr = numa_add_memblk(nid, rsrc.start, rsrc.end + 1);\n\n\t\tif (!i || r) {\n\t\t\tof_node_put(np);\n\t\t\tpr_err(\"bad property in memory node\\n\");\n\t\t\treturn r ? : -EINVAL;\n\t\t}\n\t}\n\n\treturn r;\n}\n\nstatic int __init of_numa_parse_distance_map_v1(struct device_node *map)\n{\n\tconst __be32 *matrix;\n\tint entry_count;\n\tint i;\n\n\tpr_info(\"parsing numa-distance-map-v1\\n\");\n\n\tmatrix = of_get_property(map, \"distance-matrix\", NULL);\n\tif (!matrix) {\n\t\tpr_err(\"No distance-matrix property in distance-map\\n\");\n\t\treturn -EINVAL;\n\t}\n\n\tentry_count = of_property_count_u32_elems(map, \"distance-matrix\");\n\tif (entry_count <= 0) {\n\t\tpr_err(\"Invalid distance-matrix\\n\");\n\t\treturn -EINVAL;\n\t}\n\n\tfor (i = 0; i + 2 < entry_count; i += 3) {\n\t\tu32 nodea, nodeb, distance;\n\n\t\tnodea = of_read_number(matrix, 1);\n\t\tmatrix++;\n\t\tnodeb = of_read_number(matrix, 1);\n\t\tmatrix++;\n\t\tdistance = of_read_number(matrix, 1);\n\t\tmatrix++;\n\n\t\tif ((nodea == nodeb && distance != LOCAL_DISTANCE) ||\n\t\t    (nodea != nodeb && distance <= LOCAL_DISTANCE)) {\n\t\t\tpr_err(\"Invalid distance[node%d -> node%d] = %d\\n\",\n\t\t\t       nodea, nodeb, distance);\n\t\t\treturn -EINVAL;\n\t\t}\n\n\t\tnode_set(nodea, numa_nodes_parsed);\n\n\t\tnuma_set_distance(nodea, nodeb, distance);\n\n\t\t/* Set default distance of node B->A same as A->B */\n\t\tif (nodeb > nodea)\n\t\t\tnuma_set_distance(nodeb, nodea, distance);\n\t}\n\n\treturn 0;\n}\n\nstatic int __init of_numa_parse_distance_map(void)\n{\n\tint ret = 0;\n\tstruct device_node *np;\n\n\tnp = of_find_compatible_node(NULL, NULL,\n\t\t\t\t     \"numa-distance-map-v1\");\n\tif (np)\n\t\tret = of_numa_parse_distance_map_v1(np);\n\n\tof_node_put(np);\n\treturn ret;\n}\n\nint of_node_to_nid(struct device_node *device)\n{\n\tstruct device_node *np;\n\tu32 nid;\n\tint r = -ENODATA;\n\n\tnp = of_node_get(device);\n\n\twhile (np) {\n\t\tr = of_property_read_u32(np, \"numa-node-id\", &nid);\n\t\t/*\n\t\t * -EINVAL indicates the property was not found, and\n\t\t *  we walk up the tree trying to find a parent with a\n\t\t *  \"numa-node-id\".  Any other type of error indicates\n\t\t *  a bad device tree and we give up.\n\t\t */\n\t\tif (r != -EINVAL)\n\t\t\tbreak;\n\n\t\tnp = of_get_next_parent(np);\n\t}\n\tif (np && r)\n\t\tpr_warn(\"Invalid \\\"numa-node-id\\\" property in node %pOFn\\n\",\n\t\t\tnp);\n\tof_node_put(np);\n\n\t/*\n\t * If numa=off passed on command line, or with a defective\n\t * device tree, the nid may not be in the set of possible\n\t * nodes.  Check for this case and return NUMA_NO_NODE.\n\t */\n\tif (!r && nid < MAX_NUMNODES && node_possible(nid))\n\t\treturn nid;\n\n\treturn NUMA_NO_NODE;\n}\n\nint __init of_numa_init(void)\n{\n\tint r;\n\n\tof_numa_parse_cpu_nodes();\n\tr = of_numa_parse_memory_nodes();\n\tif (r)\n\t\treturn r;\n\treturn of_numa_parse_distance_map();\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ab539344faecaae0fa32fb1e1332d48f2b9d004ee70608560fe02d06e780e871",
+    "scope": "whole-file",
+    "line_count": 187,
+    "authoring_source": "course/file_units/of_numa_parsing.py",
+    "sections": [
+      "파일과 초기화 범위",
+      "CPU 노드의 비트 집합",
+      "메모리 속성 오류의 구분",
+      "메모리 구간 등록",
+      "메모리 순회의 반환값",
+      "거리 속성의 형식",
+      "거리 의미 검사와 방향",
+      "ID 검증과 부분 반영",
+      "거리 map 탐색",
+      "런타임 조상 검색",
+      "가능 노드와 최종 반환",
+      "전체 실행 순서와 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/of_numa.c"
+    }
+  ]
+}

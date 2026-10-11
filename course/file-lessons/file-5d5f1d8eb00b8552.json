@@ -1,0 +1,77 @@
+{
+  "id": "file-5d5f1d8eb00b8552",
+  "path": "include/linux/crc4.h",
+  "title": "CRC4 헤더 전체: 선언과 실행 계약의 차이",
+  "area": "CRC · 비트 연산 · 오류 검출",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "짧은 헤더라도 중복 포함 방지, 정수 폭, 외부 함수 선언과 입력 계약을 읽어야 합니다.",
+  "guide": [
+    "_LINUX_CRC4_H 가드는 같은 번역 단위의 중복 포함을 막습니다. linux/types.h를 포함한 뒤 uint8_t crc4(uint8_t c, uint64_t x, int bits)를 외부 함수로 선언합니다. 구현과 표는 lib/crc4.c에 있습니다.",
+    "호출자는 uint64_t 입력이라고 해서 bits=64가 안전하다고 단정하면 안 됩니다. 선언은 매개변수의 형식을 설명하고, 실제 값의 범위와 패딩 동작은 구현을 함께 읽어 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 선언과 링크",
+      "text": "SPDX 표기는 메타데이터이고 #ifndef/#define/#endif가 헤더 전체를 감쌉니다. linux/types.h가 고정 폭 형식을 제공합니다. extern 함수 선언은 다른 파일에 있는 구현을 참조할 수 있게 하지만 기계어 본문을 만들지는 않습니다. 구현이 링크되어야 호출을 해결할 수 있습니다."
+    },
+    {
+      "title": "형식과 값 범위",
+      "text": "c와 반환값은 8비트 형식이지만 의미상 CRC4 상태는 4비트입니다. x의 64비트 폭과 bits 인자의 허용 범위는 다른 개념입니다. bits는 signed int라 음수도 형식상 전달되지만 올바른 호출 계약이 아닙니다. lib/crc4.c의 시프트·표 인덱스를 보고 0<=bits<64, 0<=c<16 전제를 확인합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "정적 형식 검사는 모든 의미 제약을 표현하지 못합니다. 타입이 맞는 호출도 값 범위 계약을 어길 수 있습니다. 공개 API를 읽을 때 선언, 구현, 호출자를 함께 확인하는 이유입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 헤더만 포함하면 crc4의 함수 본문도 생기는가?",
+      "options": [
+        "아니다. 외부 선언이며 구현 링크가 필요하다",
+        "그렇다. extern이 본문을 자동 생성한다"
+      ],
+      "answer": 0,
+      "explanation": "헤더에는 세미콜론으로 끝나는 함수 원형만 있습니다. 링크 단계에서 lib/crc4.c의 정의를 연결해야 합니다."
+    },
+    {
+      "prompt": "uint8_t 반환형이 의미하는 것은?",
+      "options": [
+        "모든 uint8_t 값이 유효한 4비트 CRC 초기값이다",
+        "8비트 값을 반환하며 의미상 유효 CRC4 값의 조건은 별도다"
+      ],
+      "answer": 1,
+      "explanation": "자료형의 256가지 값과 CRC4 상태의 16가지 값은 다릅니다. 구현은 초기 c를 마스크하지 않으므로 호출 계약을 따라야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_CRC4_H\n#define _LINUX_CRC4_H\n\n#include <linux/types.h>\n\nextern uint8_t crc4(uint8_t c, uint64_t x, int bits);\n\n#endif /* _LINUX_CRC4_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "c1c88040086e8a27835c5516d673b5ea21d594152268b6be7ea17b0321732b84",
+    "scope": "whole-file",
+    "line_count": 9,
+    "authoring_source": "course/file_units/crc_fundamentals.py",
+    "sections": [
+      "전체 선언과 링크",
+      "형식과 값 범위",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/crc4.h"
+    }
+  ]
+}

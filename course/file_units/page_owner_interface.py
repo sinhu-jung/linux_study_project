@@ -1,0 +1,27 @@
+"""Complete page owner public kernel wrapper header."""
+ROWS = [dict(
+    path='include/linux/page_owner.h',
+    title='Page owner 인터페이스: 페이지 수명에 따라 진단 이력 연결하기',
+    intro='페이지 소유 이력의 설정·해제·분할·복사·이동 사유·출력 hook과 구성별 동작을 전체 헤더로 학습합니다.',
+    principle='진단 메타데이터를 갱신하는 hook은 실제 페이지 할당이나 이동 연산 자체가 아니며 초기화 상태에 따라 생략됩니다.',
+    use='메모리 할당 이력 추적이 할당기의 여러 경로에 어떻게 연결되는지 이해합니다.',
+    area='수명 추적 · 메타데이터 · static key · 조건부 컴파일 · 인터페이스 계약',
+    sections=[
+        ('파일 전체와 의존성', 'GPL-2.0, guard, jump_label.h 포함 뒤 CONFIG_PAGE_OWNER 활성/비활성 분기가 있습니다. jump_label.h 포함은 구성 분기 밖입니다. 활성 분기는 static key, 확장 operations와 내부 함수 선언, 여섯 wrapper를 제공합니다. 비활성 분기는 여섯 빈 inline입니다. page_owner의 실제 레코드 구조, stack depot 처리, 출력 본문은 이 파일에 없습니다.'),
+        ('빌드와 초기화의 구분', 'page_owner_inited는 extern struct static_key_false이고 page_owner_ops는 extern page_ext_operations입니다. 모든 활성 wrapper는 static_branch_unlikely(&page_owner_inited)가 참일 때만 내부 함수를 호출합니다. CONFIG_PAGE_OWNER로 빌드했다고 곧바로 모든 호출에서 이력 갱신이 실행되는 것은 아닙니다. 앞서 다룬 page_table_check_disabled와 달리 여기의 key는 참이면 실행하는 방향입니다.'),
+        ('설정과 reset의 인자', 'set_page_owner는 struct page 포인터, unsigned short order, gfp_t gfp_mask를 __set_page_owner에 전달합니다. reset_page_owner는 같은 page와 unsigned short order를 __reset_page_owner에 전달합니다. 이 wrapper 안에서 메모리를 할당하거나 free list에 넣는 코드는 없습니다. order와 gfp_mask는 기록을 위한 전달 정보이며 여기서 값의 범위를 검증하지 않습니다.'),
+        ('Reset은 모든 이력을 0으로 지우는가', '관련 __reset_page_owner 본문을 대조하면 해제 시각과 해제 stack, 현재 pid/tgid를 기록하고 기존 할당 stack의 집계를 조정합니다. 따라서 reset이라는 이름만으로 메타데이터 전체를 memset한다고 설명하면 틀립니다. 이 헤더 자체에는 그 구현이 없으며 해당 함수 확인을 mm/page_owner.c 전체 완료로 계산하지 않습니다.'),
+        ('분할 후의 기록', 'split_page_owner는 page와 int old_order, int new_order를 전달합니다. 설정/reset의 unsigned short와 인자 타입이 다릅니다. 관련 구현은 기존 1<<old_order개 확장 레코드의 order를 new_order로 바꿉니다. 이 helper가 실제 물리 페이지나 folio를 분할하는 작업 자체를 수행한다고 혼동하지 않습니다. 헤더의 wrapper에는 음수 order나 크기 관계를 검사하는 조건이 없습니다.'),
+        ('Folio 간 이력 복사', 'folio_copy_owner의 인자 순서는 목적지 newfolio가 먼저, 원래 folio old가 두 번째입니다. 기록 복사는 실제 페이지 내용의 바이트 복사와 다른 작업입니다. 비활성 stub에서는 두 번째 매개변수 이름이 folio이지만 타입과 호출 순서는 같으며 C 함수 인터페이스가 그 지역 이름 때문에 달라지지는 않습니다.'),
+        ('이동 사유와 출력', 'set_page_owner_migrate_reason은 page와 int reason을 내부 함수에 전달하며 관련 구현은 last_migrate_reason에 값을 저장합니다. 이 wrapper가 이동을 시작하거나 reason을 enum 범위로 검사하는 것은 아닙니다. dump_page_owner는 const struct page 포인터를 전달하고 void로 끝납니다. const 입력은 호출자 API의 수정 제한을 표현하지만 진단 출력이라는 부수효과까지 없다는 뜻은 아닙니다.'),
+        ('직접 선언된 혼합 수 출력', 'pagetypeinfo_showmixedcount_print는 seq_file 포인터, pg_data_t 포인터, zone 포인터를 받는 extern 함수입니다. 이 헤더에는 해당 함수용 static key wrapper가 없고 비활성 분기에 같은 이름의 stub도 없습니다. 여섯 일반 wrapper의 형태를 모든 선언에 일괄 적용해서 설명하면 안 됩니다. 집계 알고리즘은 별도 구현에서 확인해야 합니다.'),
+        ('기능이 없는 구성', 'CONFIG_PAGE_OWNER가 없으면 reset, set, split, folio_copy, migrate_reason, dump 함수는 모두 빈 void inline입니다. 기록 기능을 사용하지 않는 빌드에서도 공통 호출 지점의 소스 형태를 유지합니다. 그러나 활성 분기의 내부 __ 함수와 key, operations 선언이 전부 그대로 제공되는 것은 아닙니다. 빈 함수라고 인자 표현식의 C 부수효과까지 반드시 사라진다고 단정하지 않습니다.'),
+        ('CS 연결과 검증 범위', '객체 수명 변화에 맞춘 진단 hook, 정상 데이터와 이력 데이터의 분리, 초기화 전 접근 방지, 비용을 제어하는 static key, 타입과 인자 순서가 만드는 계약을 학습합니다. 이 헤더 전체 대조는 실제 stack 저장 실패나 페이지 migration 동시 실행의 시험을 대신하지 않습니다.')
+    ],
+    questions=[
+        ('page_owner_inited key가 참일 때 활성 wrapper는?', '대응 내부 이력 함수를 호출한다', '이력이 비활성이라고 보고 즉시 반환한다', '조건문 안에 __ 함수 호출이 있습니다. disabled라는 이름의 다른 기능 key와 방향을 혼동하면 안 됩니다.'),
+        ('reset_page_owner는 실제 페이지를 해제하는 함수인가?', '아니다. 해제와 관련된 소유 이력 갱신 hook이다', '그렇다. 직접 buddy free list에 페이지를 넣는다', '헤더 wrapper는 내부 기록 함수만 호출합니다. 관련 구현은 해제 stack과 시각 등을 기록하며 실제 해제 연산과 역할이 다릅니다.'),
+        ('folio_copy_owner의 목적지 인자는 어느 쪽인가?', '첫 번째 newfolio이다', '두 번째 old이다', '시그니처는 newfolio, old 순서입니다. 이력 복사를 페이지 데이터 복사 함수와 혼동하지 않는 것도 중요합니다.'),
+        ('pagetypeinfo_showmixedcount_print도 비활성 구성에서 빈 stub으로 제공되는가?', '아니다. 이 헤더에는 그 stub이 없다', '그렇다. 모든 extern 선언은 자동으로 stub이 생긴다', '비활성 분기는 여섯 wrapper만 정의합니다. 선언별로 실제 분기 범위를 확인해야 합니다.')
+    ]
+)]

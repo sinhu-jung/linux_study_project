@@ -1,0 +1,106 @@
+{
+  "id": "file-7989f3e0d462b348",
+  "path": "include/uapi/linux/time_types.h",
+  "title": "공개 시간 자료형: 새 timespec과 구형·소켓 timeval",
+  "area": "UAPI · 고정 폭 자료형 · ABI 레이아웃 · 단위 · 하위 호환",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "새 시간 ABI와 구형 시간 ABI의 여섯 구조체를 필드 단위로 비교합니다.",
+  "guide": [
+    "구조체의 이름이나 총 크기보다 각 필드의 폭과 단위를 명확하게 정의하는 것이 ABI의 핵심입니다.",
+    "커널 내부 timespec64를 사용자 메모리의 __kernel_timespec과 그대로 같은 것으로 취급하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 라이선스",
+      "text": "GPL-2.0 WITH Linux-syscall-note 표시, guard, linux/types.h include 뒤 여섯 구조체가 정의됩니다. 값 변환이나 유효성 검사 함수는 없습니다. 사용자 공간과 경계에서 사용할 형태를 정의하는 파일입니다."
+    },
+    {
+      "title": "새 timespec과 timer",
+      "text": "__kernel_timespec은 __kernel_time64_t tv_sec와 long long tv_nsec입니다. __kernel_itimerspec은 이 구조체 두 개를 it_interval과 it_value로 가집니다. 내부 timespec64는 tv_nsec가 long이므로 특히 long이 32비트인 환경에서 같은 필드 폭이라고 가정하면 안 됩니다."
+    },
+    {
+      "title": "구형 timeval의 제한",
+      "text": "__kernel_old_timeval은 __kernel_long_t tv_sec와 tv_usec입니다. 주석은 전통적으로 timeval로 기간을 전달하던 구조체에 내장하기 위한 구형 형태이며 새 사용자를 추가하지 말라고 합니다. 초와 마이크로초를 담으며 이름의 old만으로 항상 32비트라고 단정하지 않습니다."
+    },
+    {
+      "title": "매크로를 이용한 대체 지점",
+      "text": "__kernel_old_timeval 구조체 정의는 같은 이름의 매크로가 없을 때만 포함됩니다. 전처리기 ifndef는 기존 struct 태그를 검색하는 기능이 아닙니다. 다른 문맥에서 제공한 매크로 기반 대체를 허용하는 구조이며 일반 C 태그와 매크로 이름 공간을 구분해야 합니다."
+    },
+    {
+      "title": "구형 timespec과 interval timer",
+      "text": "__kernel_old_timespec은 __kernel_old_time_t tv_sec와 long tv_nsec를 가집니다. __kernel_old_itimerval은 __kernel_old_timeval 두 개를 it_interval과 it_value로 가집니다. itimerspec과 itimerval은 필드 이름이 비슷하지만 하위 구조의 단위가 나노초와 마이크로초로 다릅니다."
+    },
+    {
+      "title": "소켓 timeval",
+      "text": "__kernel_sock_timeval은 __s64 tv_sec와 __s64 tv_usec입니다. 고정 signed 64비트 필드를 쓰지만 소수 필드 단위는 여전히 마이크로초입니다. 새 timespec과 비슷한 폭이라고 단위를 나노초로 바꾸어 해석하면 안 됩니다."
+    },
+    {
+      "title": "구조체와 정책의 차이",
+      "text": "이 파일은 소수 필드의 음수나 범위 초과를 막지 않고 패딩 초기화나 사용자 복사도 실행하지 않습니다. 실제 syscall 또는 드라이버가 필요한 유효성·변환 정책을 적용합니다. 구조체 선언 검토를 모든 아키텍처 ABI 크기와 정렬의 실측으로 과장하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "__kernel_timespec의 tv_nsec 자료형은?",
+      "options": [
+        "long long이다",
+        "언제나 커널 내부와 같은 long이다"
+      ],
+      "answer": 0,
+      "explanation": "내부 timespec64와 공개 ABI 구조체는 별개입니다. 특히 32비트 long 환경에서는 필드 폭 차이가 중요합니다."
+    },
+    {
+      "prompt": "__kernel_sock_timeval의 tv_usec 단위는?",
+      "options": [
+        "필드가 64비트이므로 나노초이다",
+        "마이크로초이다"
+      ],
+      "answer": 1,
+      "explanation": "자료형의 폭과 단위는 독립적입니다. 소켓 구조체는 두 __s64 필드를 쓰지만 소수 단위는 usec입니다."
+    },
+    {
+      "prompt": "#ifndef __kernel_old_timeval은 무엇을 검사하는가?",
+      "options": [
+        "같은 이름의 전처리 매크로 정의 여부이다",
+        "C 컴파일러에 해당 구조체 태그가 등록되었는지이다"
+      ],
+      "answer": 0,
+      "explanation": "전처리기는 C 타입 정보를 검색하지 않습니다. 조건부 대체 지점을 이해할 때 두 이름 공간을 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPI_LINUX_TIME_TYPES_H\n#define _UAPI_LINUX_TIME_TYPES_H\n\n#include <linux/types.h>\n\nstruct __kernel_timespec {\n\t__kernel_time64_t       tv_sec;                 /* seconds */\n\tlong long               tv_nsec;                /* nanoseconds */\n};\n\nstruct __kernel_itimerspec {\n\tstruct __kernel_timespec it_interval;    /* timer period */\n\tstruct __kernel_timespec it_value;       /* timer expiration */\n};\n\n/*\n * legacy timeval structure, only embedded in structures that\n * traditionally used 'timeval' to pass time intervals (not absolute\n * times). Do not add new users. If user space fails to compile\n * here, this is probably because it is not y2038 safe and needs to\n * be changed to use another interface.\n */\n#ifndef __kernel_old_timeval\nstruct __kernel_old_timeval {\n\t__kernel_long_t tv_sec;\n\t__kernel_long_t tv_usec;\n};\n#endif\n\nstruct __kernel_old_timespec {\n\t__kernel_old_time_t\ttv_sec;\t\t/* seconds */\n\tlong\t\t\ttv_nsec;\t/* nanoseconds */\n};\n\nstruct __kernel_old_itimerval {\n\tstruct __kernel_old_timeval it_interval;/* timer interval */\n\tstruct __kernel_old_timeval it_value;\t/* current value */\n};\n\nstruct __kernel_sock_timeval {\n\t__s64 tv_sec;\n\t__s64 tv_usec;\n};\n\n#endif /* _UAPI_LINUX_TIME_TYPES_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "92b128baf91fbd346bc881e3e32aaa3f3385867fa6d3deff4850a28b499d29d8",
+    "scope": "whole-file",
+    "line_count": 46,
+    "authoring_source": "course/file_units/time_abi.py",
+    "sections": [
+      "파일 전체와 라이선스",
+      "새 timespec과 timer",
+      "구형 timeval의 제한",
+      "매크로를 이용한 대체 지점",
+      "구형 timespec과 interval timer",
+      "소켓 timeval",
+      "구조체와 정책의 차이"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/time_types.h"
+    }
+  ]
+}

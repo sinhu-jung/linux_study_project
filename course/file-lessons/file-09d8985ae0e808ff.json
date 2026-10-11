@@ -1,0 +1,91 @@
+{
+  "id": "file-09d8985ae0e808ff",
+  "path": "include/uapi/linux/const.h",
+  "title": "UAPI 상수 전체: C·어셈블리 분기와 타입 접미사",
+  "area": "정수 타입 · 전처리·ABI·고정소수점",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "같은 상수를 C와 어셈블리에서 공유하기 위한 전처리 설계입니다.",
+  "guide": [
+    "C에서는 _AC가 토큰 붙이기로 UL/ULL 접미사를 만들고 _AT가 캐스트합니다. __ASSEMBLY__에서는 접미사와 타입 캐스트를 제거하고 값 표현식을 남깁니다.",
+    "비트 번호·정렬 배수·나눗셈 제수는 호출자가 유효 범위로 제공해야 합니다. 이름이 상수 매크로라고 해서 인자가 한 번만 평가되거나 모든 식이 허용되지는 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 타입 생성",
+      "text": "SPDX syscall note, guard, 설명, assembly/C 분기, _UL/_ULL, _BITUL/_BITULL, C 전용 _BIT128, 정렬과 올림 나눗셈 매크로로 끝납니다. 두 단계 _AC→__AC는 접미사를 붙이기 전에 인자 매크로 확장이 가능하도록 합니다. _UL에는 일반 산술식보다 접미사를 붙일 수 있는 리터럴 형태가 필요합니다."
+    },
+    {
+      "title": "비트 상수",
+      "text": "_BITUL(x)는1UL<<x, _BITULL(x)는1ULL<<x입니다. 음수 시프트나 타입 폭 이상 시프트는 유효하지 않습니다. _BIT128은1을 unsigned __int128로 먼저 변환한 다음 시프트하고 어셈블리 분기에는 정의하지 않습니다. 해당 C 확장을 지원하는 컴파일러가 필요합니다."
+    },
+    {
+      "title": "정렬",
+      "text": "__ALIGN_KERNEL(x,a)는 x 타입의 a-1 마스크를 만들어 ((x+mask)&~mask)를 계산합니다. 양의2의 거듭제곱 배수와 표현 가능한 합이 전제입니다. x=13,a=8이면(13+7)&~7=16입니다. mask 표현식은 반복되므로 부수효과를 피해야 합니다."
+    },
+    {
+      "title": "올림 나눗셈",
+      "text": "__KERNEL_DIV_ROUND_UP(n,d)는(n+d-1)/d입니다. 비음수10,d=3이면4입니다. d는 두 번 나타나고0 제수와 덧셈 오버플로를 검사하지 않습니다. 이 파일에 assembly 분기가 있다고 typeof를 쓰는 정렬 매크로까지 모두 어셈블리 문법으로 바뀌는 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "__ASSEMBLY__에서 _AT(T,X)는?",
+      "options": [
+        "X만 남는다",
+        "C 타입 캐스트((T)(X))가 남는다"
+      ],
+      "answer": 0,
+      "explanation": "어셈블러에서 C 타입 문법을 제거하기 위한 분기입니다. C 분기에서만 명시적 캐스트를 만듭니다."
+    },
+    {
+      "prompt": "_BIT128이 어셈블리에서도 정의되는가?",
+      "options": [
+        "그렇다. 모든 비트 매크로가 항상 동일하다",
+        "아니다. !defined(__ASSEMBLY__) 조건 안에 있다"
+      ],
+      "answer": 1,
+      "explanation": "128비트 C 타입 캐스트를 사용하는 별도 조건부 매크로입니다. _BITUL과 정의 범위가 다릅니다."
+    },
+    {
+      "prompt": "__KERNEL_DIV_ROUND_UP에 d++를 전달해도 한 번만 증가하는가?",
+      "options": [
+        "보장되지 않는다. d가 두 번 등장한다",
+        "그렇다. 매크로가 임시 변수에 저장한다"
+      ],
+      "answer": 0,
+      "explanation": "원문(n+d-1)/d에는 임시 변수 저장이 없습니다. 여러 평가 및 순서 문제를 피하려면 부수효과 없는 제수를 사용합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n/* const.h: Macros for dealing with constants.  */\n\n#ifndef _UAPI_LINUX_CONST_H\n#define _UAPI_LINUX_CONST_H\n\n/* Some constant macros are used in both assembler and\n * C code.  Therefore we cannot annotate them always with\n * 'UL' and other type specifiers unilaterally.  We\n * use the following macros to deal with this.\n *\n * Similarly, _AT() will cast an expression with a type in C, but\n * leave it unchanged in asm.\n */\n\n#ifdef __ASSEMBLY__\n#define _AC(X,Y)\tX\n#define _AT(T,X)\tX\n#else\n#define __AC(X,Y)\t(X##Y)\n#define _AC(X,Y)\t__AC(X,Y)\n#define _AT(T,X)\t((T)(X))\n#endif\n\n#define _UL(x)\t\t(_AC(x, UL))\n#define _ULL(x)\t\t(_AC(x, ULL))\n\n#define _BITUL(x)\t(_UL(1) << (x))\n#define _BITULL(x)\t(_ULL(1) << (x))\n\n#if !defined(__ASSEMBLY__)\n/*\n * Missing asm support\n *\n * __BIT128() would not work in the asm code, as it shifts an\n * 'unsigned __init128' data type as direct representation of\n * 128 bit constants is not supported in the gcc compiler, as\n * they get silently truncated.\n *\n * TODO: Please revisit this implementation when gcc compiler\n * starts representing 128 bit constants directly like long\n * and unsigned long etc. Subsequently drop the comment for\n * GENMASK_U128() which would then start supporting asm code.\n */\n#define _BIT128(x)\t((unsigned __int128)(1) << (x))\n#endif\n\n#define __ALIGN_KERNEL(x, a)\t\t__ALIGN_KERNEL_MASK(x, (__typeof__(x))(a) - 1)\n#define __ALIGN_KERNEL_MASK(x, mask)\t(((x) + (mask)) & ~(mask))\n\n#define __KERNEL_DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))\n\n#endif /* _UAPI_LINUX_CONST_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "0828c9a43d421b39c97c72ca7c14cf6f8b02572b006367fb833d2763aa816af0",
+    "scope": "whole-file",
+    "line_count": 53,
+    "authoring_source": "course/file_units/math_contracts.py",
+    "sections": [
+      "파일 전체와 타입 생성",
+      "비트 상수",
+      "정렬",
+      "올림 나눗셈"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/const.h"
+    }
+  ]
+}

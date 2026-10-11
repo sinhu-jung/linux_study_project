@@ -1,0 +1,120 @@
+{
+  "id": "file-24637c1c5ff8dcc5",
+  "path": "include/linux/time32.h",
+  "title": "구형 시간 호환 계층: timer, utime, timex 구조체와 변환 선언",
+  "area": "호환성 · ABI · 2038년 문제 · 사용자 메모리 · 예약 공간",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "2038년 한계를 가진 인터페이스의 전체 자료형과 사용자 메모리 변환 경계를 분석합니다.",
+  "guide": [
+    "호환 ABI는 기존 표현을 유지하고 커널 내부 계산에는 더 넓은 표현으로 옮기는 경계가 필요합니다.",
+    "old_* 구조체가 남아 있는 이유와 새 코드에서 대체 자료형을 선택해야 하는 이유를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일의 의도",
+      "text": "guard와 주석은 32비트 아키텍처의 구형 time_t가 2038년에 넘치는 인터페이스이며 새 코드는 time64_t/timespec64를 써야 한다고 설명합니다. 사용되지 않게 된 구형 인터페이스는 제거하라는 지침도 있습니다. time64.h, timex.h, vdso/time32.h를 포함하며 이 파일에는 실제 변환 함수 본문이 없습니다."
+    },
+    {
+      "title": "구형 timer와 파일 시각",
+      "text": "old_itimerspec32는 old_timespec32 두 개를 it_interval과 it_value로 보관합니다. old_utimbuf32는 old_time32_t actime과 modtime을 가집니다. 후자는 접근 시각과 수정 시각을 초 단위로 담는 형태이며 나노초 필드가 없습니다. 구조체 선언만으로 timer를 실행하거나 파일 시각을 변경하지 않습니다."
+    },
+    {
+      "title": "Old timex의 기본 필드",
+      "text": "old_timex32의 modes만 u32이고 offset, freq, maxerror, esterror, status, constant, precision, tolerance는 s32입니다. time은 old_timeval32로 들어갑니다. 이 폭은 호환 레이아웃의 일부이며 상태나 조정 단위의 모든 정책이 이 파일 안에 정의된 것은 아닙니다. 필드 이름을 근거로 freq를 곧바로 정수 Hz로 단정하지 않습니다."
+    },
+    {
+      "title": "Old timex의 나머지 필드",
+      "text": "time 뒤에는 tick, ppsfreq, jitter, shift, stabil, jitcnt, calcnt, errcnt, stbcnt, tai가 모두 s32로 이어집니다. 끝에는 이름 없는 s32:32 비트필드가 열한 개 있습니다. 이들은 접근 가능한 새 상태 변수 이름이 아니라 레이아웃에 공간을 남기는 선언입니다. 저장 공간이 존재한다고 자동으로 0으로 초기화되는 것은 아닙니다."
+    },
+    {
+      "title": "Timespec과 timer 복사 선언",
+      "text": "get_old_timespec32는 timespec64 출력 포인터와 const void __user 입력을, put_old_timespec32는 const timespec64 입력과 void __user 출력을 받습니다. itimerspec 버전은 old_itimerspec32 __user 포인터와 itimerspec64 포인터를 명시합니다. 반환형은 int입니다. __user는 사용자 주소 공간 경계를 나타내며 단순한 커널 포인터 대입으로 대체할 수 있는 계약이 아닙니다."
+    },
+    {
+      "title": "Timex 변환 선언의 인자 순서",
+      "text": "__kernel_timex를 전방 선언한 뒤 get_old_timex32는 커널 결과 포인터를 먼저, 구형 사용자 입력 포인터를 나중에 받습니다. put_old_timex32는 구형 사용자 출력 포인터를 먼저, const 커널 입력 포인터를 나중에 받습니다. timespec put과 인자 순서가 동일하다고 외우지 말고 각 시그니처를 확인합니다. 구체적인 overflow나 복사 오류 처리는 본문을 별도로 읽어야 합니다."
+    },
+    {
+      "title": "나노초에서 구형 timeval로",
+      "text": "ns_to_kernel_old_timeval은 s64 나노초를 받아 __kernel_old_timeval을 값으로 반환하는 외부 선언입니다. 반환형은 old_timeval32가 아닙니다. 이름에 old가 공통으로 들어가더라도 고정 32비트 구조체와 아키텍처의 구형 커널 long 기반 표현을 같은 타입으로 취급하지 않습니다."
+    },
+    {
+      "title": "학습 경계",
+      "text": "이 파일 전체는 자료형과 함수 선언의 호환 계층입니다. 선언된 함수 구현의 동작까지 작성 완료로 세지 않습니다. CS 핵심은 오래된 ABI 보존, 내부 표현으로의 변환, 타입·단위와 함수 인자 순서, 미래 입력 범위를 고려한 인터페이스 설계입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "새 코드가 구형 time32 인터페이스를 기본 선택으로 사용해야 하는가?",
+      "options": [
+        "아니다. 주석은 time64_t와 timespec64 기반 대체 인터페이스를 지시한다",
+        "그렇다. 호환성이 있으므로 모든 새 코드에 권장한다"
+      ],
+      "answer": 0,
+      "explanation": "호환 구조체가 남아 있는 것과 신규 사용 권장은 다릅니다. 주석은 사용이 사라진 구형 인터페이스의 제거까지 언급합니다."
+    },
+    {
+      "prompt": "old_timex32의 끝에 있는 이름 없는 s32:32 선언은 몇 개인가?",
+      "options": [
+        "한 개이며 32바이트 배열이다",
+        "열한 개이다"
+      ],
+      "answer": 1,
+      "explanation": "원본은 4개, 4개, 3개로 선언합니다. 비트필드 폭과 배열 길이를 혼동하지 않아야 합니다."
+    },
+    {
+      "prompt": "put_old_timex32에서 첫 인자는 무엇인가?",
+      "options": [
+        "구형 사용자 공간 출력 구조체 포인터이다",
+        "const 커널 __kernel_timex 입력 포인터이다"
+      ],
+      "answer": 0,
+      "explanation": "get/put 이름만 보고 다른 변환 함수의 인자 순서를 추정하지 않습니다. 선언은 old_timex32 __user *를 첫 번째로 둡니다."
+    },
+    {
+      "prompt": "ns_to_kernel_old_timeval의 반환형은 old_timeval32인가?",
+      "options": [
+        "그렇다. old라는 이름이 붙은 timeval은 모두 같다",
+        "아니다. __kernel_old_timeval이다"
+      ],
+      "answer": 1,
+      "explanation": "고정 32비트 구조체와 __kernel_long_t 기반 구형 구조체는 별개입니다. 실제 typedef와 ABI를 확인해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#ifndef _LINUX_TIME32_H\n#define _LINUX_TIME32_H\n/*\n * These are all interfaces based on the old time_t definition\n * that overflows in 2038 on 32-bit architectures. New code\n * should use the replacements based on time64_t and timespec64.\n *\n * Any interfaces in here that become unused as we migrate\n * code to time64_t should get removed.\n */\n\n#include <linux/time64.h>\n#include <linux/timex.h>\n\n#include <vdso/time32.h>\n\nstruct old_itimerspec32 {\n\tstruct old_timespec32 it_interval;\n\tstruct old_timespec32 it_value;\n};\n\nstruct old_utimbuf32 {\n\told_time32_t\tactime;\n\told_time32_t\tmodtime;\n};\n\nstruct old_timex32 {\n\tu32 modes;\n\ts32 offset;\n\ts32 freq;\n\ts32 maxerror;\n\ts32 esterror;\n\ts32 status;\n\ts32 constant;\n\ts32 precision;\n\ts32 tolerance;\n\tstruct old_timeval32 time;\n\ts32 tick;\n\ts32 ppsfreq;\n\ts32 jitter;\n\ts32 shift;\n\ts32 stabil;\n\ts32 jitcnt;\n\ts32 calcnt;\n\ts32 errcnt;\n\ts32 stbcnt;\n\ts32 tai;\n\n\ts32:32; s32:32; s32:32; s32:32;\n\ts32:32; s32:32; s32:32; s32:32;\n\ts32:32; s32:32; s32:32;\n};\n\nextern int get_old_timespec32(struct timespec64 *, const void __user *);\nextern int put_old_timespec32(const struct timespec64 *, void __user *);\nextern int get_old_itimerspec32(struct itimerspec64 *its,\n\t\t\tconst struct old_itimerspec32 __user *uits);\nextern int put_old_itimerspec32(const struct itimerspec64 *its,\n\t\t\tstruct old_itimerspec32 __user *uits);\nstruct __kernel_timex;\nint get_old_timex32(struct __kernel_timex *, const struct old_timex32 __user *);\nint put_old_timex32(struct old_timex32 __user *, const struct __kernel_timex *);\n\n/**\n * ns_to_kernel_old_timeval - Convert nanoseconds to timeval\n * @nsec:\tthe nanoseconds value to be converted\n *\n * Returns the timeval representation of the nsec parameter.\n */\nextern struct __kernel_old_timeval ns_to_kernel_old_timeval(s64 nsec);\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "bc152e162f8ca79b088bcdf35584860a8ff4618fe2294158de0f439609eb31d4",
+    "scope": "whole-file",
+    "line_count": 72,
+    "authoring_source": "course/file_units/time_abi.py",
+    "sections": [
+      "전체 파일의 의도",
+      "구형 timer와 파일 시각",
+      "Old timex의 기본 필드",
+      "Old timex의 나머지 필드",
+      "Timespec과 timer 복사 선언",
+      "Timex 변환 선언의 인자 순서",
+      "나노초에서 구형 timeval로",
+      "학습 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/time32.h"
+    }
+  ]
+}

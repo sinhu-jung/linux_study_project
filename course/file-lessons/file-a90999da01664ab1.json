@@ -1,0 +1,77 @@
+{
+  "id": "file-a90999da01664ab1",
+  "path": "include/linux/gcd.h",
+  "title": "GCD 헤더 전체: 값 기반 함수와 컴파일러 속성",
+  "area": "알고리즘 · 탐색·정수론·인터페이스",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "짧은 선언 파일도 구현 파일과 별도로 API의 타입·속성을 읽습니다.",
+  "guide": [
+    "gcd는 unsigned long 두 개를 받고 unsigned long을 반환하며 __attribute_const__가 붙습니다.",
+    "실제 알고리즘은 lib/math/gcd.c에 있습니다. 이 선언은 오류 코드나 출력 포인터를 제공하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "SPDX, _GCD_H include guard, compiler.h 포함, 단일 gcd 선언, #endif가 전부입니다. compiler.h는 함수 속성 매크로를 제공하는 연결점입니다."
+    },
+    {
+      "title": "타입 계약",
+      "text": "unsigned long의 폭은 대상 ABI에 의존합니다. 음수를 그대로 넘기면 unsigned 변환이 일어나므로 signed 정수 절댓값 GCD와 혼동하면 안 됩니다. 헤더에는 임의 정밀도나 u64 전용 타입이 없습니다."
+    },
+    {
+      "title": "const 속성의 의미",
+      "text": "__attribute_const__는 함수 결과가 인자 값에 의존하고 관찰 가능한 부수효과가 없다는 최적화 계약입니다. 반환값을 const 변수로 만든다는 뜻도 컴파일 시 계산을 강제한다는 뜻도 아닙니다. 실제 영 입력 반환과 두 알고리즘 분기는 구현에서 확인합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "__attribute_const__가 반환값 수정을 금지하는가?",
+      "options": [
+        "아니다. 호출 최적화에 쓰이는 함수의 효과·의존성 계약이다",
+        "그렇다. 결과를 받은 변수는 수정할 수 없다"
+      ],
+      "answer": 0,
+      "explanation": "C 타입의 const 한정자가 아니라 함수 속성입니다. 결과를 일반 변수에 저장하여 수정할 수 있습니다."
+    },
+    {
+      "prompt": "헤더만 보고 unsigned long을 항상64비트라고 가정할 수 있는가?",
+      "options": [
+        "있다. Linux 헤더의 long은 언제나64비트다",
+        "없다. 대상 ABI의 타입 폭을 확인해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "함수는 고정 폭 u64가 아니라 unsigned long을 선언합니다. 대상 타입 폭이 표현 가능한 입력 범위를 결정합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _GCD_H\n#define _GCD_H\n\n#include <linux/compiler.h>\n\nunsigned long gcd(unsigned long a, unsigned long b) __attribute_const__;\n\n#endif /* _GCD_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7de1b495ed255eb4faa7abbacfc1b0e4fa1d4e54bdadc3783b3176dc2be639c1",
+    "scope": "whole-file",
+    "line_count": 9,
+    "authoring_source": "course/file_units/search_and_divisibility.py",
+    "sections": [
+      "파일 전체 구성",
+      "타입 계약",
+      "const 속성의 의미"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/gcd.h"
+    }
+  ]
+}

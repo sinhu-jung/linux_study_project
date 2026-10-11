@@ -1,0 +1,101 @@
+{
+  "id": "file-99fd73324ae5abca",
+  "path": "include/linux/interval_tree.h",
+  "title": "일반 구간 트리 헤더 전체: 노드 검색과 영역 분류 API",
+  "area": "구간 합집합 · 반복자 상태 · 경계 계산",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "unsigned long의 닫힌 구간을 저장하고 겹치는 노드 또는 덮인 영역·빈 영역을 순회하는 인터페이스입니다.",
+  "guide": [
+    "노드 순회는 개별 객체를 반환하지만 span 순회는 여러 객체의 합집합을 최대 연속 영역으로 합쳐 반환합니다.",
+    "상태의 is_hole을 보고 해당 union 이름으로 경계를 읽습니다. private 노드 포인터를 직접 바꾸거나 활성 순회 중 트리를 임의 수정하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX·guard·rbtree 포함 뒤에 interval_tree_node, 기본 API 네 선언, span 반복자 문서와 구조체, span API 세 선언, done inline, for_each_span 매크로와 endif가 있습니다. 원본 C 파일의 span 함수는 CONFIG_INTERVAL_TREE_SPAN_ITER 조건부로 빌드된다는 점도 함께 확인합니다."
+    },
+    {
+      "title": "닫힌 구간 노드",
+      "text": "노드는 rb와 unsigned long start,last,__subtree_last를 가집니다. last는 구간에 포함되는 마지막 위치이고 집계 필드는 서브트리의 최대 last입니다. 기본 insert/remove는 cached root를 받으며 iter_first/next는 query의 start,last에 겹치는 실제 노드를 반환합니다."
+    },
+    {
+      "title": "span의 의미",
+      "text": "span 반복자는 노드를 반환하지 않습니다. 어떤 노드에도 덮이지 않는 hole과 노드들의 합집합에 완전히 덮이는 used를 번갈아 내보냅니다. 겹침뿐 아니라 바로 인접한 구간도 합쳐 가능한 가장 큰 연속 영역을 만듭니다. 유효한 요청 범위 전체를 used 또는 hole로 분류합니다."
+    },
+    {
+      "title": "상태 표현",
+      "text": "private 영역은 nodes[2], first_index,last_index입니다. public 영역의 시작값 union은 start_hole/start_used, 끝값 union은 last_hole/last_used 두 이름이 같은 저장 공간을 공유합니다. is_hole은1이면 hole,0이면 used,-1이면 완료입니다. 단순 if(is_hole)만으로 완료 상태를 hole로 오해하지 않도록 done을 먼저 확인합니다."
+    },
+    {
+      "title": "반복 API",
+      "text": "first는 트리와 요청 양끝으로 시작하고 next는 저장된 상태를 진행합니다. advance는 특정 새 시작 위치로 이동할 때 트리도 받습니다. done은 is_hole==-1을 검사하며 for_each_span은 first,done,next를 for 루프에 결합합니다. 이미 완료한 상태에서 public 경계값을 새 결과처럼 사용하지 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "개별 구간과 합집합 영역의 차이, tagged union과 상태 판별, 반복자 캡슐화, 완전한 범위 분할, 선택적 커널 설정과 API 가용성을 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "span 순회는 삽입한 노드를 하나씩 반환하는가?",
+      "options": [
+        "아니다. 합쳐진 used와 hole 영역을 반환한다",
+        "그렇다. 각 노드 주소를 공개 결과로 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "노드 순회 API와 span API는 출력 단위가 다릅니다. 서로 겹치는 여러 노드가 하나의 used로 합쳐질 수 있습니다."
+    },
+    {
+      "prompt": "is_hole==-1은 hole을 뜻하는가?",
+      "options": [
+        "그렇다. 음수도 참이므로 유효한 hole이다",
+        "아니다. 반복 완료 표식이다"
+      ],
+      "answer": 1,
+      "explanation": "done helper는 정확히 -1을 검사합니다. 영역을 처리하기 전에 완료 여부를 확인해야 합니다."
+    },
+    {
+      "prompt": "start_used와 start_hole은 별도 값을 동시에 저장하는가?",
+      "options": [
+        "아니다. 같은 union 저장 공간의 두 이름이다",
+        "그렇다. 모든 상태에서 서로 독립이다"
+      ],
+      "answer": 0,
+      "explanation": "활성 상태 종류에 맞는 이름으로 해석합니다. 구현의 advance도 이 저장 공간 공유를 이용합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_INTERVAL_TREE_H\n#define _LINUX_INTERVAL_TREE_H\n\n#include <linux/rbtree.h>\n\nstruct interval_tree_node {\n\tstruct rb_node rb;\n\tunsigned long start;\t/* Start of interval */\n\tunsigned long last;\t/* Last location _in_ interval */\n\tunsigned long __subtree_last;\n};\n\nextern void\ninterval_tree_insert(struct interval_tree_node *node,\n\t\t     struct rb_root_cached *root);\n\nextern void\ninterval_tree_remove(struct interval_tree_node *node,\n\t\t     struct rb_root_cached *root);\n\nextern struct interval_tree_node *\ninterval_tree_iter_first(struct rb_root_cached *root,\n\t\t\t unsigned long start, unsigned long last);\n\nextern struct interval_tree_node *\ninterval_tree_iter_next(struct interval_tree_node *node,\n\t\t\tunsigned long start, unsigned long last);\n\n/**\n * struct interval_tree_span_iter - Find used and unused spans.\n * @start_hole: Start of an interval for a hole when is_hole == 1\n * @last_hole: Inclusive end of an interval for a hole when is_hole == 1\n * @start_used: Start of a used interval when is_hole == 0\n * @last_used: Inclusive end of a used interval when is_hole == 0\n * @is_hole: 0 == used, 1 == is_hole, -1 == done iteration\n *\n * This iterator travels over spans in an interval tree. It does not return\n * nodes but classifies each span as either a hole, where no nodes intersect, or\n * a used, which is fully covered by nodes. Each iteration step toggles between\n * hole and used until the entire range is covered. The returned spans always\n * fully cover the requested range.\n *\n * The iterator is greedy, it always returns the largest hole or used possible,\n * consolidating all consecutive nodes.\n *\n * Use interval_tree_span_iter_done() to detect end of iteration.\n */\nstruct interval_tree_span_iter {\n\t/* private: not for use by the caller */\n\tstruct interval_tree_node *nodes[2];\n\tunsigned long first_index;\n\tunsigned long last_index;\n\n\t/* public: */\n\tunion {\n\t\tunsigned long start_hole;\n\t\tunsigned long start_used;\n\t};\n\tunion {\n\t\tunsigned long last_hole;\n\t\tunsigned long last_used;\n\t};\n\tint is_hole;\n};\n\nvoid interval_tree_span_iter_first(struct interval_tree_span_iter *state,\n\t\t\t\t   struct rb_root_cached *itree,\n\t\t\t\t   unsigned long first_index,\n\t\t\t\t   unsigned long last_index);\nvoid interval_tree_span_iter_advance(struct interval_tree_span_iter *iter,\n\t\t\t\t     struct rb_root_cached *itree,\n\t\t\t\t     unsigned long new_index);\nvoid interval_tree_span_iter_next(struct interval_tree_span_iter *state);\n\nstatic inline bool\ninterval_tree_span_iter_done(struct interval_tree_span_iter *state)\n{\n\treturn state->is_hole == -1;\n}\n\n#define interval_tree_for_each_span(span, itree, first_index, last_index)      \\\n\tfor (interval_tree_span_iter_first(span, itree,                        \\\n\t\t\t\t\t   first_index, last_index);           \\\n\t     !interval_tree_span_iter_done(span);                              \\\n\t     interval_tree_span_iter_next(span))\n\n#endif\t/* _LINUX_INTERVAL_TREE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "97c4b042b616a25ed6fe09334a7d4e4ef6abdecddea83c9fafbb2f2f06815b85",
+    "scope": "whole-file",
+    "line_count": 88,
+    "authoring_source": "course/file_units/interval_spans.py",
+    "sections": [
+      "전체 파일",
+      "닫힌 구간 노드",
+      "span의 의미",
+      "상태 표현",
+      "반복 API",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/interval_tree.h"
+    }
+  ]
+}

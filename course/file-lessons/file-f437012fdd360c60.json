@@ -1,0 +1,125 @@
+{
+  "id": "file-f437012fdd360c60",
+  "path": "kernel/time/Makefile",
+  "title": "시간 서브시스템 빌드 지도: 공통 객체·stub·조건부 timer",
+  "area": "Kbuild · 조건부 컴파일 · 의존성 · stub · 모듈 · 빌드 구성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "모든 obj-y와 obj-CONFIG 연결, 중첩 ifeq 분기를 소스 파일과 대응시킵니다.",
+  "guide": [
+    "기능 설정은 컴파일할 파일을 선택하며, 비활성 기능에는 별도의 stub 파일이 연결될 수 있습니다.",
+    "수정한 소스가 어떤 설정에서 빌드되는지 확인하고 일부 파일의 테스트 통과를 전체 구성 검증으로 확대하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 공통 객체",
+      "text": "GPL-2.0 표시 뒤 공통 obj-y에 time, timer, hrtimer, timekeeping, ntp, clocksource, jiffies, timer_list, timeconv, timecounter, alarmtimer의 .o가 나열됩니다. 이 디렉터리가 빌드되는 문맥에서 기본 연결되는 객체들입니다. 파일 전체가 함수 구현이 아니라 Kbuild 입력입니다."
+    },
+    {
+      "title": "POSIX timer 대체 경로",
+      "text": "CONFIG_POSIX_TIMERS가 정확히 y이면 posix-timers.o, posix-cpu-timers.o, posix-clock.o, itimer.o를 obj-y에 추가합니다. 아니면 posix-stubs.o를 추가합니다. 설정이 꺼졌다고 모든 관련 인터페이스가 단순히 사라지는 것으로 추측하지 말고 stub 구현을 확인해야 합니다."
+    },
+    {
+      "title": "Clockevents와 broadcast 중첩",
+      "text": "CONFIG_GENERIC_CLOCKEVENTS로 clockevents.o와 tick-common.o를 선택합니다. BROADCAST가 y일 때 tick-broadcast.o를 무조건 obj-y에 추가하고 그 블록 안에서 TICK_ONESHOT에 따라 tick-broadcast-hrtimer.o를 선택합니다. 따라서 후자는 ONESHOT만으로 추가되지 않으며 바깥 BROADCAST 조건도 필요합니다."
+    },
+    {
+      "title": "Sched clock과 tick 모드",
+      "text": "CONFIG_GENERIC_SCHED_CLOCK은 sched_clock.o, TICK_ONESHOT은 tick-oneshot.o와 tick-sched.o, LEGACY_TIMER_TICK은 tick-legacy.o에 연결됩니다. 비슷한 이름이어도 일반 sched_clock과 tick scheduler의 빌드 조건이 다릅니다."
+    },
+    {
+      "title": "SMP timer migration",
+      "text": "CONFIG_SMP가 y인 ifeq 안에서 CONFIG_NO_HZ_COMMON으로 timer_migration.o를 선택합니다. NO_HZ_COMMON만 활성화되고 SMP 조건이 충족되지 않으면 이 줄은 적용되지 않습니다. 중첩 조건은 함께 읽어야 합니다."
+    },
+    {
+      "title": "vDSO·debugfs·namespace",
+      "text": "HAVE_GENERIC_VDSO는 vsyscall.o, DEBUG_FS는 timekeeping_debug.o, TIME_NS는 namespace.o를 선택합니다. GENERIC_TIME_VSYSCALL 같은 다른 설정 이름을 이 Makefile의 실제 조건 이름으로 바꿔 읽지 않습니다. 해당 파일의 내부 #ifdef는 여기 보이는 파일 단위 선택과 별개입니다."
+    },
+    {
+      "title": "테스트 객체 세 개",
+      "text": "TEST_UDELAY는 test_udelay.o, TEST_CLOCKSOURCE_WATCHDOG는 clocksource-wdtest.o, TIME_KUNIT_TEST는 time_test.o를 선택합니다. obj-$(CONFIG_...) 형식은 설정값 y/m에 따라 built-in 또는 모듈 대상으로 연결될 수 있지만 그 설정이 실제로 m을 허용하는지는 해당 Kconfig 타입과 의존성을 함께 확인해야 합니다."
+    },
+    {
+      "title": "파일에 없는 생성 규칙",
+      "text": "같은 디렉터리의 timeconst.bc가 있어도 이 Makefile에는 그 스크립트를 실행하는 recipe가 없습니다. 여기에서 generated/timeconst.h를 만든다고 주장하려면 다른 빌드 규칙을 확인해야 합니다. 파일 목록을 보고 없는 명령을 보충해 추정하지 않습니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "전체 객체 선택 줄과 모든 ifeq/else/endif를 다뤘습니다. 이 자료를 학습 프로그램으로 빌드한 것은 각 커널 설정 조합을 실제 컴파일했다는 뜻이 아닙니다. 빌드 행렬, 대체 구현, 중첩 조건의 AND 관계와 파일 단위·함수 단위 조건의 차이를 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "POSIX_TIMERS가 y가 아닐 때 어떤 파일이 연결되는가?",
+      "options": [
+        "posix-stubs.o이다",
+        "posix-timers.o가 항상 그대로 연결된다"
+      ],
+      "answer": 0,
+      "explanation": "명시적인 ifeq/else가 실제 구현과 stub을 선택합니다. 기능 비활성 경로에도 소스가 존재합니다."
+    },
+    {
+      "prompt": "tick-broadcast-hrtimer.o는 TICK_ONESHOT만 켜면 추가되는가?",
+      "options": [
+        "그렇다. 중첩 ifeq는 obj-CONFIG 줄에 영향을 주지 않는다",
+        "아니다. 바깥 BROADCAST=y 조건도 필요하다"
+      ],
+      "answer": 1,
+      "explanation": "줄 자체가 broadcast ifeq 안에 있습니다. 조건 두 개가 함께 충족되어야 합니다."
+    },
+    {
+      "prompt": "timer_migration.o가 선택되려면 무엇이 필요한가?",
+      "options": [
+        "SMP=y와 NO_HZ_COMMON 선택이 함께 필요하다",
+        "DEBUG_FS만 필요하다"
+      ],
+      "answer": 0,
+      "explanation": "SMP ifeq가 바깥 조건이고 obj-CONFIG_NO_HZ_COMMON이 안쪽 선택입니다."
+    },
+    {
+      "prompt": "이 파일에 timeconst.bc 실행 명령이 있는가?",
+      "options": [
+        "있다. 같은 디렉터리의 .bc는 자동으로 모두 실행된다",
+        "없다. 생성 규칙은 다른 빌드 파일에서 찾아야 한다"
+      ],
+      "answer": 1,
+      "explanation": "Makefile의 실제 본문에는 객체 선택만 있습니다. 디렉터리 위치만으로 생성 명령을 추정하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "# SPDX-License-Identifier: GPL-2.0\nobj-y += time.o timer.o hrtimer.o\nobj-y += timekeeping.o ntp.o clocksource.o jiffies.o timer_list.o\nobj-y += timeconv.o timecounter.o alarmtimer.o\n\nifeq ($(CONFIG_POSIX_TIMERS),y)\n obj-y += posix-timers.o posix-cpu-timers.o posix-clock.o itimer.o\nelse\n obj-y += posix-stubs.o\nendif\n\nobj-$(CONFIG_GENERIC_CLOCKEVENTS)\t\t+= clockevents.o tick-common.o\nifeq ($(CONFIG_GENERIC_CLOCKEVENTS_BROADCAST),y)\n obj-y\t\t\t\t\t\t+= tick-broadcast.o\n obj-$(CONFIG_TICK_ONESHOT)\t\t\t+= tick-broadcast-hrtimer.o\nendif\nobj-$(CONFIG_GENERIC_SCHED_CLOCK)\t\t+= sched_clock.o\nobj-$(CONFIG_TICK_ONESHOT)\t\t\t+= tick-oneshot.o tick-sched.o\nobj-$(CONFIG_LEGACY_TIMER_TICK)\t\t\t+= tick-legacy.o\nifeq ($(CONFIG_SMP),y)\n obj-$(CONFIG_NO_HZ_COMMON)\t\t\t+= timer_migration.o\nendif\nobj-$(CONFIG_HAVE_GENERIC_VDSO)\t\t\t+= vsyscall.o\nobj-$(CONFIG_DEBUG_FS)\t\t\t\t+= timekeeping_debug.o\nobj-$(CONFIG_TEST_UDELAY)\t\t\t+= test_udelay.o\nobj-$(CONFIG_TIME_NS)\t\t\t\t+= namespace.o\nobj-$(CONFIG_TEST_CLOCKSOURCE_WATCHDOG)\t\t+= clocksource-wdtest.o\nobj-$(CONFIG_TIME_KUNIT_TEST)\t\t\t+= time_test.o\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "40a246a6f46f305bb5a63bd9d13dffa5f9779836b4658ff5eef6e6a5554666fb",
+    "scope": "whole-file",
+    "line_count": 28,
+    "authoring_source": "course/file_units/time_build_configuration.py",
+    "sections": [
+      "전체 파일과 공통 객체",
+      "POSIX timer 대체 경로",
+      "Clockevents와 broadcast 중첩",
+      "Sched clock과 tick 모드",
+      "SMP timer migration",
+      "vDSO·debugfs·namespace",
+      "테스트 객체 세 개",
+      "파일에 없는 생성 규칙",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/Makefile"
+    }
+  ]
+}

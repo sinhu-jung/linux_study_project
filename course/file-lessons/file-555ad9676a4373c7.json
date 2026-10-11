@@ -1,0 +1,129 @@
+{
+  "id": "file-555ad9676a4373c7",
+  "path": "include/linux/log2.h",
+  "title": "정수 로그 헤더 전체: 지수·용량·필요 비트 수 구분",
+  "area": "비트 탐색 · 정수 로그·상수식·용량 산정",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "바닥 로그,올림 지수,2의 거듭제곱 값,정수 표현 비트 수를 구분합니다.",
+  "guide": [
+    "상수 입력에는 컴파일 시 계산 가능한 식을,변수 입력에는 비트 탐색 helper를 선택합니다. ilog2는최상위1비트위치,order_base_2는올림지수,bits_per는값표현에필요한비트수를구합니다.",
+    "양의 unsigned 입력과 표현 가능한 출력 범위를 확인합니다.0의동작은함수마다다르며상수분기의우연한결과를모든동적경로의계약으로일반화하지않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX·저작권·guard,types/bitops include,조건부32/64비트helper,거듭제곱판정과올림·내림helper,const_ilog2,ilog2,roundup/down 매크로,order와bits_per의helper·매크로,#endif로구성됩니다. 실수로그나고정소수점로그표는없습니다."
+    },
+    {
+      "title": "아키텍처별 helper",
+      "text": "CONFIG_ARCH_HAS_ILOG2_U32/U64가없을때기본helper를정의합니다. fls(n)-1 또는fls64(n)-1로최상위비트의0기반위치를구합니다. 아키텍처대체가0을처리할필요는없다는주석이있으므로변수0을안전한일반입력으로삼지않습니다."
+    },
+    {
+      "title": "거듭제곱 판정",
+      "text": "is_power_of_2는n!=0이고 n&(n-1)==0인지검사합니다.0은거짓,1은참입니다. 하나의1비트만켜진수라는비트성질을사용하며2의정수배인지검사하는짝수판정과다릅니다."
+    },
+    {
+      "title": "상수 로그와 일반 로그",
+      "text": "const_ilog2는상수인경우63번비트부터2번까지차례로검사하는삼항식이며2미만은0,상수가아니라고판단되면-1입니다. ilog2의상수분기는2미만이면0,그외63-clzll이며변수분기는sizeof(n)<=4인지로32/64helper를고릅니다. 컴파일러가상수로인식하는지와인자의표현폭이선택에영향을줍니다."
+    },
+    {
+      "title": "2의 거듭제곱으로 올림·내림",
+      "text": "roundup_pow_of_two는1특례이외에 n-1의최상위비트다음위치로1을옮깁니다. rounddown은n의최상위비트위치로1을옮깁니다.13에서는각각16과8입니다. 문서가0의결과를정의하지않으며,올림값이unsigned long의폭을넘는경우도유효한시프트가아니므로입력을제한해야합니다."
+    },
+    {
+      "title": "올림 지수",
+      "text": "order_base_2는0과1에서0,그외ilog2(n-1)+1입니다.13에서는4이며이는용량16을표현하는지수입니다. roundup의반환값16과혼동하지않습니다.0을명시적으로처리한다는점도roundup/down과다릅니다."
+    },
+    {
+      "title": "표현 비트 수",
+      "text": "bits_per는0과1에서도최소1을반환하며그외바닥로그+1입니다. 변수helper는2의거듭제곱인지에따라order에1을더할지정합니다.8의order는3이지만8자체의이진표현1000에는4비트가필요합니다.0..7의8개상태번호와값8을표현하는문제를구분합니다."
+    },
+    {
+      "title": "CS와 검증",
+      "text": "상수식에사용가능한설계,컴파일러최적화선택,0기반비트위치,할당용량지수,표현폭을연결합니다. 상수와volatile 변수양쪽에서유효입력결과를비교하면경로차이를확인할수있습니다. 일부0상수의결과가관찰되어도문서에서배제한0입력을사용가능하다고가르치지않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "13의 ilog2,order_base_2,bits_per는?",
+      "options": [
+        "3,4,4",
+        "4,16,13"
+      ],
+      "answer": 0,
+      "explanation": "8<=13<16이므로바닥로그3,올림지수4,이진표현1101은4비트입니다."
+    },
+    {
+      "prompt": "8의 order_base_2와bits_per가다른이유는?",
+      "options": [
+        "같아야하므로구현오류다",
+        "용량8의지수는3이지만값8자체에는4비트가필요하다"
+      ],
+      "answer": 1,
+      "explanation": "0..7의8개상태는3비트지만8은1000입니다. 상태개수와최대값을구분합니다."
+    },
+    {
+      "prompt": "roundup_pow_of_two(0)을유효한API사용으로가정해도되는가?",
+      "options": [
+        "안 된다. 문서가0의결과를정의하지않는다",
+        "된다. order_base_2(0)이0이므로모든매크로도같다"
+      ],
+      "answer": 0,
+      "explanation": "매크로마다0의계약이다릅니다. order와bits_per의명시적특례를roundup으로옮기면안됩니다."
+    },
+    {
+      "prompt": "is_power_of_2(1)은?",
+      "options": [
+        "거짓",
+        "참"
+      ],
+      "answer": 1,
+      "explanation": "1=2^0이고비트가하나만켜져있습니다. n!=0 조건도만족합니다."
+    },
+    {
+      "prompt": "이헤더의ilog2가소수부24비트의근사로그를반환하는가?",
+      "options": [
+        "아니다. 정수최상위비트위치를반환한다",
+        "그렇다. int_log.h와동일한반환배율이다"
+      ],
+      "answer": 0,
+      "explanation": "이파일의ilog2와intlog2는서로다른API입니다. 이름과반환스케일을구분해야합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/* Integer base 2 logarithm calculation\n *\n * Copyright (C) 2006 Red Hat, Inc. All Rights Reserved.\n * Written by David Howells (dhowells@redhat.com)\n */\n\n#ifndef _LINUX_LOG2_H\n#define _LINUX_LOG2_H\n\n#include <linux/types.h>\n#include <linux/bitops.h>\n\n/*\n * non-constant log of base 2 calculators\n * - the arch may override these in asm/bitops.h if they can be implemented\n *   more efficiently than using fls() and fls64()\n * - the arch is not required to handle n==0 if implementing the fallback\n */\n#ifndef CONFIG_ARCH_HAS_ILOG2_U32\nstatic __always_inline __attribute__((const))\nint __ilog2_u32(u32 n)\n{\n\treturn fls(n) - 1;\n}\n#endif\n\n#ifndef CONFIG_ARCH_HAS_ILOG2_U64\nstatic __always_inline __attribute__((const))\nint __ilog2_u64(u64 n)\n{\n\treturn fls64(n) - 1;\n}\n#endif\n\n/**\n * is_power_of_2() - check if a value is a power of two\n * @n: the value to check\n *\n * Determine whether some value is a power of two, where zero is\n * *not* considered a power of two.\n * Return: true if @n is a power of 2, otherwise false.\n */\nstatic inline __attribute__((const))\nbool is_power_of_2(unsigned long n)\n{\n\treturn (n != 0 && ((n & (n - 1)) == 0));\n}\n\n/**\n * __roundup_pow_of_two() - round up to nearest power of two\n * @n: value to round up\n */\nstatic inline __attribute__((const))\nunsigned long __roundup_pow_of_two(unsigned long n)\n{\n\treturn 1UL << fls_long(n - 1);\n}\n\n/**\n * __rounddown_pow_of_two() - round down to nearest power of two\n * @n: value to round down\n */\nstatic inline __attribute__((const))\nunsigned long __rounddown_pow_of_two(unsigned long n)\n{\n\treturn 1UL << (fls_long(n) - 1);\n}\n\n/**\n * const_ilog2 - log base 2 of 32-bit or a 64-bit constant unsigned value\n * @n: parameter\n *\n * Use this where sparse expects a true constant expression, e.g. for array\n * indices.\n */\n#define const_ilog2(n)\t\t\t\t\\\n(\t\t\t\t\t\t\\\n\t__builtin_constant_p(n) ? (\t\t\\\n\t\t(n) < 2 ? 0 :\t\t\t\\\n\t\t(n) & (1ULL << 63) ? 63 :\t\\\n\t\t(n) & (1ULL << 62) ? 62 :\t\\\n\t\t(n) & (1ULL << 61) ? 61 :\t\\\n\t\t(n) & (1ULL << 60) ? 60 :\t\\\n\t\t(n) & (1ULL << 59) ? 59 :\t\\\n\t\t(n) & (1ULL << 58) ? 58 :\t\\\n\t\t(n) & (1ULL << 57) ? 57 :\t\\\n\t\t(n) & (1ULL << 56) ? 56 :\t\\\n\t\t(n) & (1ULL << 55) ? 55 :\t\\\n\t\t(n) & (1ULL << 54) ? 54 :\t\\\n\t\t(n) & (1ULL << 53) ? 53 :\t\\\n\t\t(n) & (1ULL << 52) ? 52 :\t\\\n\t\t(n) & (1ULL << 51) ? 51 :\t\\\n\t\t(n) & (1ULL << 50) ? 50 :\t\\\n\t\t(n) & (1ULL << 49) ? 49 :\t\\\n\t\t(n) & (1ULL << 48) ? 48 :\t\\\n\t\t(n) & (1ULL << 47) ? 47 :\t\\\n\t\t(n) & (1ULL << 46) ? 46 :\t\\\n\t\t(n) & (1ULL << 45) ? 45 :\t\\\n\t\t(n) & (1ULL << 44) ? 44 :\t\\\n\t\t(n) & (1ULL << 43) ? 43 :\t\\\n\t\t(n) & (1ULL << 42) ? 42 :\t\\\n\t\t(n) & (1ULL << 41) ? 41 :\t\\\n\t\t(n) & (1ULL << 40) ? 40 :\t\\\n\t\t(n) & (1ULL << 39) ? 39 :\t\\\n\t\t(n) & (1ULL << 38) ? 38 :\t\\\n\t\t(n) & (1ULL << 37) ? 37 :\t\\\n\t\t(n) & (1ULL << 36) ? 36 :\t\\\n\t\t(n) & (1ULL << 35) ? 35 :\t\\\n\t\t(n) & (1ULL << 34) ? 34 :\t\\\n\t\t(n) & (1ULL << 33) ? 33 :\t\\\n\t\t(n) & (1ULL << 32) ? 32 :\t\\\n\t\t(n) & (1ULL << 31) ? 31 :\t\\\n\t\t(n) & (1ULL << 30) ? 30 :\t\\\n\t\t(n) & (1ULL << 29) ? 29 :\t\\\n\t\t(n) & (1ULL << 28) ? 28 :\t\\\n\t\t(n) & (1ULL << 27) ? 27 :\t\\\n\t\t(n) & (1ULL << 26) ? 26 :\t\\\n\t\t(n) & (1ULL << 25) ? 25 :\t\\\n\t\t(n) & (1ULL << 24) ? 24 :\t\\\n\t\t(n) & (1ULL << 23) ? 23 :\t\\\n\t\t(n) & (1ULL << 22) ? 22 :\t\\\n\t\t(n) & (1ULL << 21) ? 21 :\t\\\n\t\t(n) & (1ULL << 20) ? 20 :\t\\\n\t\t(n) & (1ULL << 19) ? 19 :\t\\\n\t\t(n) & (1ULL << 18) ? 18 :\t\\\n\t\t(n) & (1ULL << 17) ? 17 :\t\\\n\t\t(n) & (1ULL << 16) ? 16 :\t\\\n\t\t(n) & (1ULL << 15) ? 15 :\t\\\n\t\t(n) & (1ULL << 14) ? 14 :\t\\\n\t\t(n) & (1ULL << 13) ? 13 :\t\\\n\t\t(n) & (1ULL << 12) ? 12 :\t\\\n\t\t(n) & (1ULL << 11) ? 11 :\t\\\n\t\t(n) & (1ULL << 10) ? 10 :\t\\\n\t\t(n) & (1ULL <<  9) ?  9 :\t\\\n\t\t(n) & (1ULL <<  8) ?  8 :\t\\\n\t\t(n) & (1ULL <<  7) ?  7 :\t\\\n\t\t(n) & (1ULL <<  6) ?  6 :\t\\\n\t\t(n) & (1ULL <<  5) ?  5 :\t\\\n\t\t(n) & (1ULL <<  4) ?  4 :\t\\\n\t\t(n) & (1ULL <<  3) ?  3 :\t\\\n\t\t(n) & (1ULL <<  2) ?  2 :\t\\\n\t\t1) :\t\t\t\t\\\n\t-1)\n\n/**\n * ilog2 - log base 2 of 32-bit or a 64-bit unsigned value\n * @n: parameter\n *\n * constant-capable log of base 2 calculation\n * - this can be used to initialise global variables from constant data, hence\n * the massive ternary operator construction\n *\n * selects the appropriately-sized optimised version depending on sizeof(n)\n */\n#define ilog2(n) \\\n( \\\n\t__builtin_constant_p(n) ?\t\\\n\t((n) < 2 ? 0 :\t\t\t\\\n\t 63 - __builtin_clzll(n)) :\t\\\n\t(sizeof(n) <= 4) ?\t\t\\\n\t__ilog2_u32(n) :\t\t\\\n\t__ilog2_u64(n)\t\t\t\\\n )\n\n/**\n * roundup_pow_of_two - round the given value up to nearest power of two\n * @n: parameter\n *\n * round the given value up to the nearest power of two\n * - the result is undefined when n == 0\n * - this can be used to initialise global variables from constant data\n */\n#define roundup_pow_of_two(n)\t\t\t\\\n(\t\t\t\t\t\t\\\n\t__builtin_constant_p(n) ? (\t\t\\\n\t\t((n) == 1) ? 1 :\t\t\\\n\t\t(1UL << (ilog2((n) - 1) + 1))\t\\\n\t\t\t\t   ) :\t\t\\\n\t__roundup_pow_of_two(n)\t\t\t\\\n )\n\n/**\n * rounddown_pow_of_two - round the given value down to nearest power of two\n * @n: parameter\n *\n * round the given value down to the nearest power of two\n * - the result is undefined when n == 0\n * - this can be used to initialise global variables from constant data\n */\n#define rounddown_pow_of_two(n)\t\t\t\\\n(\t\t\t\t\t\t\\\n\t__builtin_constant_p(n) ? (\t\t\\\n\t\t(1UL << ilog2(n))) :\t\t\\\n\t__rounddown_pow_of_two(n)\t\t\\\n )\n\nstatic inline __attribute_const__\nint __order_base_2(unsigned long n)\n{\n\treturn n > 1 ? ilog2(n - 1) + 1 : 0;\n}\n\n/**\n * order_base_2 - calculate the (rounded up) base 2 order of the argument\n * @n: parameter\n *\n * The first few values calculated by this routine:\n *  ob2(0) = 0\n *  ob2(1) = 0\n *  ob2(2) = 1\n *  ob2(3) = 2\n *  ob2(4) = 2\n *  ob2(5) = 3\n *  ... and so on.\n */\n#define order_base_2(n)\t\t\t\t\\\n(\t\t\t\t\t\t\\\n\t__builtin_constant_p(n) ? (\t\t\\\n\t\t((n) == 0 || (n) == 1) ? 0 :\t\\\n\t\tilog2((n) - 1) + 1) :\t\t\\\n\t__order_base_2(n)\t\t\t\\\n)\n\nstatic inline __attribute__((const))\nint __bits_per(unsigned long n)\n{\n\tif (n < 2)\n\t\treturn 1;\n\tif (is_power_of_2(n))\n\t\treturn order_base_2(n) + 1;\n\treturn order_base_2(n);\n}\n\n/**\n * bits_per - calculate the number of bits required for the argument\n * @n: parameter\n *\n * This is constant-capable and can be used for compile time\n * initializations, e.g bitfields.\n *\n * The first few values calculated by this routine:\n * bf(0) = 1\n * bf(1) = 1\n * bf(2) = 2\n * bf(3) = 2\n * bf(4) = 3\n * ... and so on.\n */\n#define bits_per(n)\t\t\t\t\\\n(\t\t\t\t\t\t\\\n\t__builtin_constant_p(n) ? (\t\t\\\n\t\t((n) == 0 || (n) == 1)\t\t\\\n\t\t\t? 1 : ilog2(n) + 1\t\\\n\t) :\t\t\t\t\t\\\n\t__bits_per(n)\t\t\t\t\\\n)\n#endif /* _LINUX_LOG2_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7e351b76b0f6067ef10aa01e0fea3e390a4d6a680d1ab9b03aeb9a58c6cbc1da",
+    "scope": "whole-file",
+    "line_count": 258,
+    "authoring_source": "course/file_units/log2_orders.py",
+    "sections": [
+      "파일 전체",
+      "아키텍처별 helper",
+      "거듭제곱 판정",
+      "상수 로그와 일반 로그",
+      "2의 거듭제곱으로 올림·내림",
+      "올림 지수",
+      "표현 비트 수",
+      "CS와 검증"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/log2.h"
+    }
+  ]
+}

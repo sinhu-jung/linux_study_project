@@ -1,0 +1,110 @@
+{
+  "id": "file-b64aa51222a0f36e",
+  "path": "include/linux/utsname.h",
+  "title": "UTS 커널 헤더: namespace 구조·참조 helper·설정별 stub",
+  "area": "객체 수명 · 조건부 컴파일 · namespace · 참조 카운팅",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "UTS 객체의 데이터와 소유권, 현재 namespace 접근, 설정에 따른 API 동작을 모두 분석합니다.",
+  "guide": [
+    "포인터를 얻는 helper와 객체 수명을 보유하는 helper, 데이터 잠금은 서로 다른 책임입니다.",
+    "refcount, 조건부 컴파일, 내부 구조체와 사용자 ABI 구조체의 차이를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "포함과 proc 항목 enum",
+      "text": "GPL-2.0 guard 안에서 sched,nsproxy,ns_common,err,UAPI utsname을 포함합니다. uts_proc enum은 ARCH,OSTYPE,OSRELEASE,VERSION,HOSTNAME,DOMAINNAME 순서로 0부터 시작합니다. 이는 new_utsname의 필드 메모리 순서와 같은 목록이 아니므로 enum 숫자를 구조체 offset처럼 쓰면 안 됩니다."
+    },
+    {
+      "title": "UTS 객체 전체",
+      "text": "uts_namespace는 new_utsname name, owner user_ns, 자원 회계 ucounts, 공통 ns_common ns를 보관하고 __randomize_layout가 붙습니다. init_user_ns와 init_uts_ns는 extern입니다. name만이 사용자 ABI 데이터이며 owner·참조 수까지 사용자 uname 결과로 복사하는 구조가 아닙니다."
+    },
+    {
+      "title": "활성 설정의 수명 API",
+      "text": "CONFIG_UTS_NS일 때 get_uts_ns는 count를 증가시키고 void를 반환합니다. put_uts_ns는 감소 결과가 0이면 free_uts_ns를 호출합니다. copy_utsname,free_uts_ns,uts_ns_init의 구현은 외부 선언입니다. get/put에는 NULL 검사가 없고 refcount가 name 필드의 동시 수정 자체를 잠그는 것은 아닙니다."
+    },
+    {
+      "title": "비활성 설정",
+      "text": "UTS_NS가 없으면 get/put/init은 빈 함수입니다. copy_utsname은 CLONE_NEWUTS가 있으면 ERR_PTR(-EINVAL), 없으면 old_ns를 그대로 반환합니다. 이 경우 참조를 증가시키지 않으며 없는 격리 기능을 성공으로 가장하지 않습니다. 다른 flag가 있다는 이유만으로 여기서 모두 거부하는 코드는 아닙니다."
+    },
+    {
+      "title": "Sysctl 통지 설정",
+      "text": "CONFIG_PROC_SYSCTL이면 uts_proc_notify(enum uts_proc)를 extern 선언하고 아니면 빈 inline을 제공합니다. UTS_NS와 PROC_SYSCTL은 서로 다른 조건부 구역입니다. 통지 함수의 존재와 namespace 복제 지원을 같은 설정으로 혼동하지 않습니다."
+    },
+    {
+      "title": "현재 값과 초기 값 접근",
+      "text": "utsname()은 &current->nsproxy->uts_ns->name, init_utsname()은 &init_uts_ns.name을 반환합니다. 복사본을 할당하거나 get_uts_ns를 호출하지 않고 내부 포인터를 제공합니다. 마지막 uts_sem은 rw_semaphore extern 선언이며 getter 자체가 그 잠금을 잡지는 않습니다. 이름 데이터의 읽기·쓰기 동기화는 실제 호출 문맥에서 확인해야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "UTS_NS가 없을 때 CLONE_NEWUTS를 요청하면?",
+      "options": [
+        "ERR_PTR(-EINVAL)",
+        "항상 init_uts_ns를 새 객체처럼 반환"
+      ],
+      "answer": 0,
+      "explanation": "비활성 stub도 요청 flag를 검사합니다. 지원하지 않는 새 격리를 명시적으로 거부합니다."
+    },
+    {
+      "prompt": "utsname()은 namespace 참조 수를 증가시키는가?",
+      "options": [
+        "그렇다. get_uts_ns를 호출한다",
+        "아니다. 현재 객체의 name 주소를 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "본문에는 주소 계산만 있습니다. 포인터 접근과 수명 획득을 구분합니다."
+    },
+    {
+      "prompt": "UTS_PROC_ARCH=0은 name의 첫 필드가 machine임을 뜻하는가?",
+      "options": [
+        "아니다. enum과 구조체 배치는 별개다",
+        "그렇다. enum은 byte offset이다"
+      ],
+      "answer": 0,
+      "explanation": "UAPI 구조체 첫 필드는 sysname입니다. proc 항목 분류값을 메모리 배치로 해석하면 안 됩니다."
+    },
+    {
+      "prompt": "put_uts_ns에서 마지막 참조를 놓을 때 호출하는 함수는?",
+      "options": [
+        "uts_proc_notify",
+        "free_uts_ns"
+      ],
+      "answer": 1,
+      "explanation": "활성 구현은 refcount_dec_and_test가 true일 때 해제 함수를 호출합니다. sysctl 통지와 수명 관리는 다릅니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_UTSNAME_H\n#define _LINUX_UTSNAME_H\n\n\n#include <linux/sched.h>\n#include <linux/nsproxy.h>\n#include <linux/ns_common.h>\n#include <linux/err.h>\n#include <uapi/linux/utsname.h>\n\nenum uts_proc {\n\tUTS_PROC_ARCH,\n\tUTS_PROC_OSTYPE,\n\tUTS_PROC_OSRELEASE,\n\tUTS_PROC_VERSION,\n\tUTS_PROC_HOSTNAME,\n\tUTS_PROC_DOMAINNAME,\n};\n\nstruct user_namespace;\nextern struct user_namespace init_user_ns;\n\nstruct uts_namespace {\n\tstruct new_utsname name;\n\tstruct user_namespace *user_ns;\n\tstruct ucounts *ucounts;\n\tstruct ns_common ns;\n} __randomize_layout;\nextern struct uts_namespace init_uts_ns;\n\n#ifdef CONFIG_UTS_NS\nstatic inline void get_uts_ns(struct uts_namespace *ns)\n{\n\trefcount_inc(&ns->ns.count);\n}\n\nextern struct uts_namespace *copy_utsname(unsigned long flags,\n\tstruct user_namespace *user_ns, struct uts_namespace *old_ns);\nextern void free_uts_ns(struct uts_namespace *ns);\n\nstatic inline void put_uts_ns(struct uts_namespace *ns)\n{\n\tif (refcount_dec_and_test(&ns->ns.count))\n\t\tfree_uts_ns(ns);\n}\n\nvoid uts_ns_init(void);\n#else\nstatic inline void get_uts_ns(struct uts_namespace *ns)\n{\n}\n\nstatic inline void put_uts_ns(struct uts_namespace *ns)\n{\n}\n\nstatic inline struct uts_namespace *copy_utsname(unsigned long flags,\n\tstruct user_namespace *user_ns, struct uts_namespace *old_ns)\n{\n\tif (flags & CLONE_NEWUTS)\n\t\treturn ERR_PTR(-EINVAL);\n\n\treturn old_ns;\n}\n\nstatic inline void uts_ns_init(void)\n{\n}\n#endif\n\n#ifdef CONFIG_PROC_SYSCTL\nextern void uts_proc_notify(enum uts_proc proc);\n#else\nstatic inline void uts_proc_notify(enum uts_proc proc)\n{\n}\n#endif\n\nstatic inline struct new_utsname *utsname(void)\n{\n\treturn &current->nsproxy->uts_ns->name;\n}\n\nstatic inline struct new_utsname *init_utsname(void)\n{\n\treturn &init_uts_ns.name;\n}\n\nextern struct rw_semaphore uts_sem;\n\n#endif /* _LINUX_UTSNAME_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e57e53371ce2da45a0d667354355c8d88dcaf0816ea25803d7c6d4c26ac1b20b",
+    "scope": "whole-file",
+    "line_count": 92,
+    "authoring_source": "course/file_units/uts_namespace.py",
+    "sections": [
+      "포함과 proc 항목 enum",
+      "UTS 객체 전체",
+      "활성 설정의 수명 API",
+      "비활성 설정",
+      "Sysctl 통지 설정",
+      "현재 값과 초기 값 접근"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/utsname.h"
+    }
+  ]
+}

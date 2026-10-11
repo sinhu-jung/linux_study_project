@@ -1,0 +1,111 @@
+{
+  "id": "file-7141b14b414daa18",
+  "path": "arch/x86/kernel/kprobes/common.h",
+  "title": "Kprobes 공통 레지스터 매크로: 저장 슬롯과 복원 비대칭",
+  "area": "LIFO · 호출 규약 · 레지스터 저장 · 주소 재배치 · 조건부 인터페이스",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "레지스터 저장·복원 문자열과 instruction helper 선언, optprobe 비활성 동작을 전체 헤더로 학습합니다.",
+  "guide": [
+    "스택 공간을 되돌리는 것과 모든 저장 register를 다시 로드하는 것은 같지 않습니다.",
+    "rethook trampoline과 probe 실행 경로가 pt_regs 모양의 저장 영역을 마련하는 방법을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0, guard와 Kprobes/Optprobes 공통 설명 뒤 asm/frame/insn 헤더를 포함합니다. x86 폭별 SAVE_REGS_STRING과 RESTORE_REGS_STRING, instruction 처리 선언, OPTPROBES 기능 분기가 있습니다. 이 헤더는 문자열 조각을 정의하며 독립 실행 함수의 prologue 전체를 자동으로 만드는 것은 아닙니다."
+    },
+    {
+      "title": "64비트 저장 순서",
+      "text": "먼저 rsp에서 24를 빼 cs, ip, orig_ax 세 슬롯을 건너뜁니다. 이후 rdi,rsi,rdx,rcx,rax,r8,r9,r10,r11,rbx,rbp,r12,r13,r14,r15 순으로 pushq하고 ENCODE_FRAME_POINTER를 실행합니다. 저장 매크로 자체의 SP 변화는 24+15*8=144바이트입니다. 건너뛴 슬롯에 유효한 값을 자동으로 써 넣는 코드가 아니며 flags, sp, ss 등의 바깥 준비는 호출 경로에서 확인해야 합니다."
+    },
+    {
+      "title": "64비트 복원",
+      "text": "r15부터 rdi까지 위 저장의 역순으로 15개 register를 popq하고 rsp에 24를 더해 세 슬롯을 건너뜁니다. 매크로 자체의 SP 변화는 +144바이트입니다. 그 세 슬롯을 CS나 IP에 실제 load하는 동작은 없습니다. 저장과 복원 사이에 callback이 저장 영역을 수정했다면 pop되는 값은 그 시점의 값입니다."
+    },
+    {
+      "title": "32비트 저장",
+      "text": "esp에서 16을 빼 cs,ip,orig_ax,gs 슬롯을 마련하고 fs,es,ds,eax,ebp,edi,esi,edx,ecx,ebx 순으로 pushl합니다. 마지막에 frame pointer를 encode합니다. 슬롯 단위의 SP 변화는 16+10*4=56바이트입니다. segment register 슬롯의 모든 상위 비트까지 이 설명만으로 완전히 초기화된다고 보장하지 않습니다."
+    },
+    {
+      "title": "32비트 복원의 차이",
+      "text": "복원은 ebx,ecx,edx,esi,edi,ebp,eax 일곱 개만 popl합니다. 이어 esp에 7*4를 더하여 ds,es,fs,gs,orig_ax,ip,cs 슬롯을 건너뜁니다. 따라서 총 +56바이트로 공간은 회복하지만 저장한 ds/es/fs를 이 매크로에서 다시 pop하지는 않습니다. 정확한 역순 복원이라는 표현을 모든 필드에 일괄 적용하면 틀립니다."
+    },
+    {
+      "title": "Instruction helper 선언",
+      "text": "can_boost는 insn과 원래 주소를 받아 bool을 반환하고, recover_probed_instruction은 opcode 버퍼와 주소를 받아 unsigned long을 반환합니다. __copy_instruction은 dest/src/real과 insn을 받아 int이며 주석은 RIP-relative instruction 복사 시 displacement 조정을 설명합니다. synthesize_reljump와 relcall은 dest/from/to를 받아 void입니다. 구체적인 instruction 길이, boost 판별표, displacement 계산 본문은 여기 없습니다."
+    },
+    {
+      "title": "Optprobe 구성",
+      "text": "CONFIG_OPTPROBES이면 setup_detour_execution과 __recover_optprobed_insn을 외부 선언합니다. 없으면 전자는 항상 0, 후자는 입력 addr를 그대로 반환합니다. 후자의 buf는 stub에서 사용되지 않습니다. 0이라는 결과만으로 실제 detour 실행이 이뤄졌다고 말할 수 없습니다. 일반 recover_probed_instruction까지 같은 stub이 되는 것은 아닙니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "LIFO 저장, 예약 슬롯과 초기화의 차이, 구조체 모양을 맞추는 stack 배치, instruction 이동에 따른 상대 주소 보정 필요성을 학습합니다. ENCODE_FRAME_POINTER는 저장 후 BP를 변경하므로 원래 BP의 보존 순서가 중요합니다. 원본 대조는 실제 probe 재진입이나 CPU register 복원의 실행 시험과 구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "32비트 RESTORE_REGS_STRING은 ds/es/fs를 pop하는가?",
+      "options": [
+        "아니다. 해당 슬롯들을 addl로 건너뛴다",
+        "그렇다. 저장한 모든 항목을 같은 방식으로 pop한다"
+      ],
+      "answer": 0,
+      "explanation": "일곱 일반 register만 pop하고 28바이트를 더합니다. 저장 공간 회복과 register load를 구분해야 합니다."
+    },
+    {
+      "prompt": "64비트 SAVE_REGS_STRING 자체의 SP 변화량은?",
+      "options": [
+        "-120바이트이다",
+        "-144바이트이다"
+      ],
+      "answer": 1,
+      "explanation": "15개 pushq의 120바이트에 예약 슬롯 24바이트를 더합니다. 바깥 trampoline의 push는 이 계산에 포함하지 않습니다."
+    },
+    {
+      "prompt": "OPTPROBES가 없을 때 __recover_optprobed_insn의 반환은?",
+      "options": [
+        "입력 addr 그대로이다",
+        "항상 주소 0이다"
+      ],
+      "answer": 0,
+      "explanation": "stub은 return addr입니다. 기능 없는 경로가 무엇을 보존하고 무엇을 생략하는지 본문으로 확인합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __X86_KERNEL_KPROBES_COMMON_H\n#define __X86_KERNEL_KPROBES_COMMON_H\n\n/* Kprobes and Optprobes common header */\n\n#include <asm/asm.h>\n#include <asm/frame.h>\n#include <asm/insn.h>\n\n#ifdef CONFIG_X86_64\n\n#define SAVE_REGS_STRING\t\t\t\\\n\t/* Skip cs, ip, orig_ax. */\t\t\\\n\t\"\tsubq $24, %rsp\\n\"\t\t\\\n\t\"\tpushq %rdi\\n\"\t\t\t\\\n\t\"\tpushq %rsi\\n\"\t\t\t\\\n\t\"\tpushq %rdx\\n\"\t\t\t\\\n\t\"\tpushq %rcx\\n\"\t\t\t\\\n\t\"\tpushq %rax\\n\"\t\t\t\\\n\t\"\tpushq %r8\\n\"\t\t\t\\\n\t\"\tpushq %r9\\n\"\t\t\t\\\n\t\"\tpushq %r10\\n\"\t\t\t\\\n\t\"\tpushq %r11\\n\"\t\t\t\\\n\t\"\tpushq %rbx\\n\"\t\t\t\\\n\t\"\tpushq %rbp\\n\"\t\t\t\\\n\t\"\tpushq %r12\\n\"\t\t\t\\\n\t\"\tpushq %r13\\n\"\t\t\t\\\n\t\"\tpushq %r14\\n\"\t\t\t\\\n\t\"\tpushq %r15\\n\"\t\t\t\\\n\tENCODE_FRAME_POINTER\n\n#define RESTORE_REGS_STRING\t\t\t\\\n\t\"\tpopq %r15\\n\"\t\t\t\\\n\t\"\tpopq %r14\\n\"\t\t\t\\\n\t\"\tpopq %r13\\n\"\t\t\t\\\n\t\"\tpopq %r12\\n\"\t\t\t\\\n\t\"\tpopq %rbp\\n\"\t\t\t\\\n\t\"\tpopq %rbx\\n\"\t\t\t\\\n\t\"\tpopq %r11\\n\"\t\t\t\\\n\t\"\tpopq %r10\\n\"\t\t\t\\\n\t\"\tpopq %r9\\n\"\t\t\t\\\n\t\"\tpopq %r8\\n\"\t\t\t\\\n\t\"\tpopq %rax\\n\"\t\t\t\\\n\t\"\tpopq %rcx\\n\"\t\t\t\\\n\t\"\tpopq %rdx\\n\"\t\t\t\\\n\t\"\tpopq %rsi\\n\"\t\t\t\\\n\t\"\tpopq %rdi\\n\"\t\t\t\\\n\t/* Skip orig_ax, ip, cs */\t\t\\\n\t\"\taddq $24, %rsp\\n\"\n#else\n\n#define SAVE_REGS_STRING\t\t\t\\\n\t/* Skip cs, ip, orig_ax and gs. */\t\\\n\t\"\tsubl $4*4, %esp\\n\"\t\t\\\n\t\"\tpushl %fs\\n\"\t\t\t\\\n\t\"\tpushl %es\\n\"\t\t\t\\\n\t\"\tpushl %ds\\n\"\t\t\t\\\n\t\"\tpushl %eax\\n\"\t\t\t\\\n\t\"\tpushl %ebp\\n\"\t\t\t\\\n\t\"\tpushl %edi\\n\"\t\t\t\\\n\t\"\tpushl %esi\\n\"\t\t\t\\\n\t\"\tpushl %edx\\n\"\t\t\t\\\n\t\"\tpushl %ecx\\n\"\t\t\t\\\n\t\"\tpushl %ebx\\n\"\t\t\t\\\n\tENCODE_FRAME_POINTER\n\n#define RESTORE_REGS_STRING\t\t\t\\\n\t\"\tpopl %ebx\\n\"\t\t\t\\\n\t\"\tpopl %ecx\\n\"\t\t\t\\\n\t\"\tpopl %edx\\n\"\t\t\t\\\n\t\"\tpopl %esi\\n\"\t\t\t\\\n\t\"\tpopl %edi\\n\"\t\t\t\\\n\t\"\tpopl %ebp\\n\"\t\t\t\\\n\t\"\tpopl %eax\\n\"\t\t\t\\\n\t/* Skip ds, es, fs, gs, orig_ax, ip, and cs. */\\\n\t\"\taddl $7*4, %esp\\n\"\n#endif\n\n/* Ensure if the instruction can be boostable */\nextern bool can_boost(struct insn *insn, void *orig_addr);\n/* Recover instruction if given address is probed */\nextern unsigned long recover_probed_instruction(kprobe_opcode_t *buf,\n\t\t\t\t\t unsigned long addr);\n/*\n * Copy an instruction and adjust the displacement if the instruction\n * uses the %rip-relative addressing mode.\n */\nextern int __copy_instruction(u8 *dest, u8 *src, u8 *real, struct insn *insn);\n\n/* Generate a relative-jump/call instruction */\nextern void synthesize_reljump(void *dest, void *from, void *to);\nextern void synthesize_relcall(void *dest, void *from, void *to);\n\n#ifdef\tCONFIG_OPTPROBES\nextern int setup_detour_execution(struct kprobe *p, struct pt_regs *regs, int reenter);\nextern unsigned long __recover_optprobed_insn(kprobe_opcode_t *buf, unsigned long addr);\n#else\t/* !CONFIG_OPTPROBES */\nstatic inline int setup_detour_execution(struct kprobe *p, struct pt_regs *regs, int reenter)\n{\n\treturn 0;\n}\nstatic inline unsigned long __recover_optprobed_insn(kprobe_opcode_t *buf, unsigned long addr)\n{\n\treturn addr;\n}\n#endif\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7e70a442693ff3cfa5df4d29e852a6759a68fbee4efc0c1e0c470e49fc39a99e",
+    "scope": "whole-file",
+    "line_count": 109,
+    "authoring_source": "course/file_units/x86_probe_frames.py",
+    "sections": [
+      "전체 구성",
+      "64비트 저장 순서",
+      "64비트 복원",
+      "32비트 저장",
+      "32비트 복원의 차이",
+      "Instruction helper 선언",
+      "Optprobe 구성",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/kernel/kprobes/common.h"
+    }
+  ]
+}

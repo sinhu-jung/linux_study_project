@@ -1,0 +1,96 @@
+{
+  "id": "file-cd2fd407d67ba2e5",
+  "path": "include/vdso/clocksource.h",
+  "title": "vDSO clock mode: 아키텍처 확장과 namespace sentinel",
+  "area": "열거형 · 조건부 컴파일 · 플랫폼 확장 · sentinel · 인덱스 범위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "enum의 기본값·조건부 확장·상한·특수값을 전체 소스로 읽습니다.",
+  "guide": [
+    "일반 모드 집합의 끝을 나타내는 값과 별도 처리 경로를 지시하는 sentinel은 같은 종류의 인덱스가 아닙니다.",
+    "공유 vDSO 데이터의 clock_mode를 실제 하드웨어 선택 또는 namespace 처리로 해석하는 기준을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 의존성",
+      "text": "GPL-2.0과 guard, vdso/limits.h include, 조건부 아키텍처 include와 enum vdso_clock_mode가 전부입니다. 하드웨어 counter를 읽는 함수나 mode 유효성을 검사하는 실행 코드는 없습니다. 이 파일에는 __ASSEMBLY__로 C enum을 감싸는 별도 분기도 없습니다."
+    },
+    {
+      "title": "기본값과 아키텍처 확장",
+      "text": "VDSO_CLOCKMODE_NONE은 첫 열거자이므로 0입니다. CONFIG_GENERIC_GETTIMEOFDAY가 정의되면 asm/vdso/clocksource.h를 포함하고 VDSO_ARCH_CLOCKMODES를 enum 안에 삽입합니다. 구체적인 하드웨어 모드 이름과 값은 아키텍처 매크로의 확장에 달려 있으므로 모든 플랫폼에서 같은 목록이라고 가정하지 않습니다."
+    },
+    {
+      "title": "일반 모드 끝과 비활성 구성",
+      "text": "VDSO_CLOCKMODE_MAX는 아키텍처 모드가 있으면 그 뒤에 옵니다. GENERIC_GETTIMEOFDAY가 없으면 NONE 바로 다음이어서 값은 1입니다. 이 enum의 MAX를 유효한 하드웨어 시계를 뜻하는 항목으로 자동 해석하지 않습니다. 모드 개수나 인덱스 검사는 실제 사용 코드를 확인해야 합니다."
+    },
+    {
+      "title": "Namespace 특수값",
+      "text": "VDSO_CLOCKMODE_TIMENS는 INT_MAX로 명시적으로 지정됩니다. 주석은 time namespace VDSO를 나타내는 표시라고 설명합니다. 일반 하드웨어 모드 목록 뒤의 연속 배열 슬롯을 할당하려는 값이 아니므로 이 값까지 배열을 확장하거나 일반 MAX 범위 검사만으로 의미를 모두 설명하면 안 됩니다. 관련 datapage 계약에서는 seq=1과 함께 namespace 처리 경로를 표시합니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "전체 include·조건·열거자를 설명했습니다. 앞서 읽은 limits 헤더의 INT_MAX를 재사용하지만 그 파일을 새로 작성한 것으로 중복 집계하지 않습니다. 각 아키텍처 모드 정의나 사용자 reader의 모든 분기까지 검증한 자료는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "GENERIC_GETTIMEOFDAY가 없을 때 NONE과 MAX의 값은?",
+      "options": [
+        "각각 0과 1이다",
+        "둘 다 INT_MAX이다"
+      ],
+      "answer": 0,
+      "explanation": "조건부 아키텍처 열거자들이 빠지면 첫 값 0 다음의 자동 값이 1입니다. TIMENS만 INT_MAX로 명시합니다."
+    },
+    {
+      "prompt": "VDSO_ARCH_CLOCKMODES의 모든 모드 이름은 이 공통 파일에 직접 나열되어 있는가?",
+      "options": [
+        "그렇다. 모든 아키텍처에서 같은 하드웨어 이름을 고정한다",
+        "아니다. 조건부 아키텍처 헤더의 매크로가 제공한다"
+      ],
+      "answer": 1,
+      "explanation": "전처리 확장으로 플랫폼별 모드 집합을 enum에 삽입합니다. 공통 enum 틀과 구체 구현을 구분합니다."
+    },
+    {
+      "prompt": "TIMENS=INT_MAX를 일반 clock 배열의 마지막 슬롯 번호로 보아도 되는가?",
+      "options": [
+        "아니다. namespace 경로를 나타내는 특수값이다",
+        "그렇다. INT_MAX개 clock을 지원한다는 뜻이다"
+      ],
+      "answer": 0,
+      "explanation": "큰 명시값은 일반 모드 집합과 구분하는 표시입니다. 값의 크기를 지원 개수로 해석하면 안 됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_CLOCKSOURCE_H\n#define __VDSO_CLOCKSOURCE_H\n\n#include <vdso/limits.h>\n\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n#include <asm/vdso/clocksource.h>\n#endif /* CONFIG_GENERIC_GETTIMEOFDAY */\n\nenum vdso_clock_mode {\n\tVDSO_CLOCKMODE_NONE,\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n\tVDSO_ARCH_CLOCKMODES,\n#endif\n\tVDSO_CLOCKMODE_MAX,\n\n\t/* Indicator for time namespace VDSO */\n\tVDSO_CLOCKMODE_TIMENS = INT_MAX\n};\n\n#endif /* __VDSO_CLOCKSOURCE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a1a27950295d26ba91befd38ef642bbe40f8fc4bd251e3684238111b88bd8ef1",
+    "scope": "whole-file",
+    "line_count": 22,
+    "authoring_source": "course/file_units/vdso_clock_modes.py",
+    "sections": [
+      "전체 파일과 의존성",
+      "기본값과 아키텍처 확장",
+      "일반 모드 끝과 비활성 구성",
+      "Namespace 특수값",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/clocksource.h"
+    }
+  ]
+}

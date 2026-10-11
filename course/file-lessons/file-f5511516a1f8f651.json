@@ -1,0 +1,101 @@
+{
+  "id": "file-f5511516a1f8f651",
+  "path": "arch/riscv/include/asm/vdso/processor.h",
+  "title": "RISC-V cpu_relax: 조건부 DIV와 PAUSE·컴파일러 장벽",
+  "area": "RISC-V ISA · busy waiting · 인라인 어셈블리 · 컴파일러 장벽 · 조건부 컴파일",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "대기 힌트 함수의 모든 명령과 컴파일 조건을 분석합니다.",
+  "guide": [
+    "대기 루프의 실행 힌트와 공유 데이터 동기화, 운영체제 수면은 서로 다른 역할입니다.",
+    "툴체인 ISA 매크로와 실제 명령 인코딩, 별도의 barrier를 구별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0-only include guard 안의 !__ASSEMBLY__ 구역에서 asm/barrier.h와 asm/insn-def.h를 포함합니다. static inline void cpu_relax(void) 하나만 정의하며 외부 변수나 syscall wrapper는 없습니다."
+    },
+    {
+      "title": "조건부 나눗셈",
+      "text": "__riscv_muldiv가 정의된 경우 int dummy와 volatile asm의 div %0,%0,zero를 사용합니다. %0는 =r 출력이고 별도 C 입력 피연산자는 없습니다. 주석은 halt 대신 긴 지연의 stall을 유도하려는 목적이라고 설명합니다. 계산 결과 dummy를 반환하거나 이후 조건 판단에 쓰지 않습니다. 이 코드를 C의 0으로 나누는 표현식과 동일한 undefined behavior라고 설명하면 안 됩니다. 어셈블리 ISA 동작의 문맥입니다."
+    },
+    {
+      "title": "조건의 정확한 출처",
+      "text": "분기는 CONFIG_SMP나 runtime CPU 개수 검사가 아니라 컴파일러가 제공하는 __riscv_muldiv 매크로입니다. 조건이 없으면 DIV 부분만 빠지고 뒤의 PAUSE와 barrier는 남습니다. 이 함수 자체가 CPU feature를 동적으로 탐지하는 코드가 아닙니다."
+    },
+    {
+      "title": "PAUSE와 실제 인코딩",
+      "text": "그 다음 __asm__ __volatile__(RISCV_PAUSE)를 실행합니다. 교차 확인한 insn-def.h의 RISCV_PAUSE는 문자열 .4byte 0x100000f로 해당 명령 인코딩을 내보냅니다. 소스에 pause라는 mnemonic이 직접 없어도 명령 바이트를 포함할 수 있습니다. 주석은 instruction retirement를 줄이고 PC가 바뀐다는 전제를 설명합니다. 일정한 지연 시간이나 소비 전력 수치를 보장하는 코드는 아닙니다."
+    },
+    {
+      "title": "마지막 barrier의 역할",
+      "text": "PAUSE 뒤에 barrier()를 따로 호출합니다. 이는 컴파일러 메모리 접근 순서에 관한 장벽이며 이 파일에서 full hardware fence나 atomic lock을 구현하는 것은 아닙니다. 앞 asm에 x86 형태의 memory clobber가 적혀 있다고 가정하지 말고 별도의 barrier 호출을 읽어야 합니다."
+    },
+    {
+      "title": "대기 조건과 범위",
+      "text": "함수에는 공유 플래그 읽기, 반복문, scheduler 호출, timeout이 없습니다. 호출부가 대기 조건과 올바른 동기화 규칙을 관리해야 합니다. 전체 매크로 조건과 함수 본문을 설명했으며 실제 RISC-V CPU의 stall 시간·PAUSE 지원별 성능이나 실행 결과를 측정한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "__riscv_muldiv가 없으면 cpu_relax 전체가 사라지는가?",
+      "options": [
+        "아니다. DIV만 빠지고 PAUSE와 barrier는 남는다",
+        "그렇다. 함수에는 아무 명령도 남지 않는다"
+      ],
+      "answer": 0,
+      "explanation": "전처리 #endif는 PAUSE 앞에 있습니다. 조건의 정확한 범위를 읽어야 합니다."
+    },
+    {
+      "prompt": "DIV 결과 dummy를 함수가 어디에 사용하는가?",
+      "options": [
+        "현재 CPU 번호로 반환한다",
+        "이후 사용하지 않는다. 지연을 유도하는 명령의 출력이다"
+      ],
+      "answer": 1,
+      "explanation": "반환형은 void이고 dummy를 읽는 C 문장이 없습니다. 명령의 목적과 산술 결과 사용을 구분합니다."
+    },
+    {
+      "prompt": "RISCV_PAUSE가 포함 헤더에서 제공되는 형태는?",
+      "options": [
+        "고정 명령 인코딩을 내보내는 .4byte 문자열이다",
+        "getcpu 시스템 호출 함수 주소이다"
+      ],
+      "answer": 0,
+      "explanation": "확인한 정의는 .4byte 0x100000f입니다. 어셈블러 mnemonic 대신 바이트 인코딩을 사용할 수 있습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/barrier.h>\n#include <asm/insn-def.h>\n\nstatic inline void cpu_relax(void)\n{\n#ifdef __riscv_muldiv\n\tint dummy;\n\t/* In lieu of a halt instruction, induce a long-latency stall. */\n\t__asm__ __volatile__ (\"div %0, %0, zero\" : \"=r\" (dummy));\n#endif\n\n\t/*\n\t * Reduce instruction retirement.\n\t * This assumes the PC changes.\n\t */\n\t__asm__ __volatile__ (RISCV_PAUSE);\n\tbarrier();\n}\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d80234368a8267bb14632a6a2ac19ece36f9e0b99c4db7e6378145ad3d06f89c",
+    "scope": "whole-file",
+    "line_count": 28,
+    "authoring_source": "course/file_units/riscv_processor_hints.py",
+    "sections": [
+      "전체 구성",
+      "조건부 나눗셈",
+      "조건의 정확한 출처",
+      "PAUSE와 실제 인코딩",
+      "마지막 barrier의 역할",
+      "대기 조건과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/vdso/processor.h"
+    }
+  ]
+}

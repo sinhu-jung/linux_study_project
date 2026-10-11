@@ -1,0 +1,120 @@
+{
+  "id": "file-b51c38d07a782363",
+  "path": "kernel/time/timekeeping_internal.h",
+  "title": "Timekeeping 내부 helper: cycle 차이 검증과 디버그 stub",
+  "area": "모듈러 산술 · 비트 마스크 · 반주기 · 조건부 컴파일 · 매크로 평가",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "debugfs 조건부 선언, 두 cycle delta 구현, 공유 잠금 선언을 전체 범위로 읽습니다.",
+  "guide": [
+    "순환 카운터의 차이는 마스크로 계산하되 반주기 이상의 변화는 방향 판정에 추가 가정이 필요합니다.",
+    "timekeeping이 뒤로 흐르는 것처럼 보이는 cycle을 걸러내는 조건과 기능 비활성 매크로의 의미를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "GPL-2.0과 guard, clocksource/spinlock/time include 뒤 debug 선언 분기, clocksource_delta 분기, timekeeper_lock extern 선언이 있습니다. 공유 timekeeper 객체나 clocksource 읽기 callback 자체를 구현하지 않습니다."
+    },
+    {
+      "title": "Debugfs가 활성일 때",
+      "text": "CONFIG_DEBUG_FS이면 tk_debug_account_sleep_time(const timespec64*)를 외부 함수로 선언합니다. 구현은 timekeeping_debug.c에 있습니다. 이 헤더 자체가 debugfs 파일을 만들거나 통계를 갱신하지 않습니다."
+    },
+    {
+      "title": "비활성 stub의 평가",
+      "text": "DEBUG_FS가 꺼지면 tk_debug_account_sleep_time(x)는 빈 매크로입니다. 따라서 인자 표현식도 평가되지 않습니다. 외부 함수처럼 포인터를 계산한 뒤 아무것도 하지 않는 것과 다릅니다. 이 매크로의 인자에 꼭 필요한 부작용을 넣으면 설정에 따라 프로그램 동작이 달라질 수 있습니다."
+    },
+    {
+      "title": "검증 없는 순환 차이",
+      "text": "CLOCKSOURCE_VALIDATE_LAST_CYCLE이 없으면 clocksource_delta는 (now-last)&mask를 반환합니다. 예를 들어 8비트 mask=255, last=250, now=5이면 11입니다. 한 회전 이상 놓쳤거나 실제로 뒤로 움직였는지 자체적으로 구분하지는 않습니다."
+    },
+    {
+      "title": "검증 분기의 비트 조건",
+      "text": "해당 설정이 있으면 같은 ret을 구한 뒤 ret&~(mask>>1)이 0이 아니면 0을 반환합니다. 정상적인 하위 비트 연속 mask에서 ret은 이미 mask 범위 안이므로 이 식은 그 mask의 최상위 유효 비트가 켜졌는지를 검사합니다. 임의의 불연속 비트 mask에서도 같은 의미라고 일반화하지 않습니다."
+    },
+    {
+      "title": "반주기 경계 예제",
+      "text": "mask=255이면 0..127의 차이는 유지하고 128..255는 0이 됩니다. last=10, now=9의 차이 255도 0이며 정확히 반주기 128 역시 0입니다. 이는 이전 cycle보다 역행해 보이는 큰 차이를 배제하는 정책으로, 실제로 200tick이 흘렀다는 별도 증거를 복원하지는 않습니다. 검증이 꺼진 분기에서는 같은 입력이 원래 모듈러 차이를 반환합니다."
+    },
+    {
+      "title": "공유 잠금의 선언",
+      "text": "마지막 extern raw_spinlock_t timekeeper_lock은 주석상 non-timekeeper VDSO 갱신의 직렬화를 위해 일부 외부 코드에도 공개됩니다. 이 파일은 잠금 객체를 정의하거나 clocksource_delta에서 이를 획득하지 않습니다. 선언이 보인다는 것과 함수 호출이 자동으로 직렬화된다는 것은 별개입니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "모든 ifdef 분기와 식을 설명했습니다. 전체 timekeeping 호출 간격과 하드웨어 카운터 정책까지 보장하는 자료는 아닙니다. 순환 거리, 반주기 방향 가정, 매크로 인자 미평가와 선언·정의의 차이를 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "mask=255이고 검증이 켜진 경우 ret=128은 어떻게 되는가?",
+      "options": [
+        "0으로 반환된다",
+        "128 그대로 반환된다"
+      ],
+      "answer": 0,
+      "explanation": "mask>>1은 127이며 ret의 bit7이 ~127과 겹칩니다. 정확히 반주기도 필터링됩니다."
+    },
+    {
+      "prompt": "mask=255, last=250, now=5의 차이는 검증이 켜져도?",
+      "options": [
+        "무조건 0이다. now가 작기 때문이다",
+        "11이다"
+      ],
+      "answer": 1,
+      "explanation": "raw 대소관계 대신 모듈러 차이를 사용합니다. 11은 최상위 유효 비트가 꺼져 있으므로 정상 래핑으로 유지됩니다."
+    },
+    {
+      "prompt": "DEBUG_FS가 꺼진 빈 매크로에 f()를 인자로 쓰면 f가 실행되는가?",
+      "options": [
+        "아니다. 인자까지 매크로 확장에서 사라진다",
+        "그렇다. 모든 매크로 인자는 먼저 평가된다"
+      ],
+      "answer": 0,
+      "explanation": "함수 호출과 매크로 치환은 다릅니다. 필수 부작용을 디버그 전용 인자에 넣으면 안 됩니다."
+    },
+    {
+      "prompt": "timekeeper_lock extern 선언이 delta 계산을 자동으로 잠그는가?",
+      "options": [
+        "그렇다. 같은 헤더의 함수는 모두 그 lock을 공유한다",
+        "아니다. delta 함수에는 lock 호출이 없다"
+      ],
+      "answer": 1,
+      "explanation": "공유 객체 선언과 실제 획득·해제 코드는 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _TIMEKEEPING_INTERNAL_H\n#define _TIMEKEEPING_INTERNAL_H\n\n#include <linux/clocksource.h>\n#include <linux/spinlock.h>\n#include <linux/time.h>\n\n/*\n * timekeeping debug functions\n */\n#ifdef CONFIG_DEBUG_FS\nextern void tk_debug_account_sleep_time(const struct timespec64 *t);\n#else\n#define tk_debug_account_sleep_time(x)\n#endif\n\n#ifdef CONFIG_CLOCKSOURCE_VALIDATE_LAST_CYCLE\nstatic inline u64 clocksource_delta(u64 now, u64 last, u64 mask)\n{\n\tu64 ret = (now - last) & mask;\n\n\t/*\n\t * Prevent time going backwards by checking the MSB of mask in\n\t * the result. If set, return 0.\n\t */\n\treturn ret & ~(mask >> 1) ? 0 : ret;\n}\n#else\nstatic inline u64 clocksource_delta(u64 now, u64 last, u64 mask)\n{\n\treturn (now - last) & mask;\n}\n#endif\n\n/* Semi public for serialization of non timekeeper VDSO updates. */\nextern raw_spinlock_t timekeeper_lock;\n\n#endif /* _TIMEKEEPING_INTERNAL_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d376c5d022f85e74486ecf588d73fcdbe45057f7187f103daf02234659da6148",
+    "scope": "whole-file",
+    "line_count": 39,
+    "authoring_source": "course/file_units/timekeeping_debug.py",
+    "sections": [
+      "전체 파일",
+      "Debugfs가 활성일 때",
+      "비활성 stub의 평가",
+      "검증 없는 순환 차이",
+      "검증 분기의 비트 조건",
+      "반주기 경계 예제",
+      "공유 잠금의 선언",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timekeeping_internal.h"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "id": "file-16397ee5ce72a823",
+  "path": "kernel/time/posix-timers.h",
+  "title": "POSIX clock 연산표: namespace와 timer 재시도 계약",
+  "area": "함수 포인터 · 다형성 · namespace · 수명 관리 · 재시도 · 동기화",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "k_clock의 모든 callback과 외부 연산표·공통 helper 선언을 읽습니다.",
+  "guide": [
+    "서로 다른 clock 구현을 같은 인터페이스로 호출하되 시각 좌표계와 실행 중 timer의 수명은 별도로 처리해야 합니다.",
+    "함수 포인터를 통한 clock별 동작 선택, 현재 namespace 시각과 host 시각의 차이, 재시도 중 재조회 필요성을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 포함 전제",
+      "text": "GPL-2.0 표시 뒤 TIMER_RETRY 상수, k_clock 구조체, 다섯 const 연산표 extern과 다섯 공통 함수 선언이 있습니다. 이 파일에는 include guard나 자체 include가 없습니다. clockid_t, timespec64, ktime_t 및 관련 타입을 준비한 내부 문맥에서 포함해야 하며 반복 include를 자동 방지한다고 가정하지 않습니다."
+    },
+    {
+      "title": "재시도 상수",
+      "text": "TIMER_RETRY는 1입니다. 일반적인 음수 errno와 다른 내부 제어 결과입니다. 관련 posix-timers.c 일부에서 실행 중 timer를 try_to_cancel하지 못하면 set/delete가 이를 반환하고 호출 측은 대기·재조회를 거쳐 재시도합니다. 사용자에게 그대로 성공값 1을 돌려주기 위한 정의라고 해석하면 안 됩니다."
+    },
+    {
+      "title": "해상도·설정·조정 callback",
+      "text": "clock_getres는 clockid와 timespec64 출력 포인터를 받고 int를 반환합니다. clock_set은 const timespec64 입력, clock_adj는 __kernel_timex 입출력 포인터를 받으며 둘 다 int입니다. 이 연산표는 인터페이스를 정의하지만 모든 clock이 모든 callback을 채우거나 같은 권한·오류 정책을 쓰도록 강제하지 않습니다."
+    },
+    {
+      "title": "두 시각 읽기의 좌표계",
+      "text": "clock_get_timespec은 int 결과와 timespec64 출력으로 현재 time namespace의 시각을 제공합니다. clock_get_ktime은 ktime_t를 직접 반환하며 주석상 root time namespace의 시각입니다. 반환 형식만 다른 동일한 좌표계 함수라고 바꿔 쓰면 namespace offset이 중복되거나 빠질 수 있습니다."
+    },
+    {
+      "title": "생성과 수면",
+      "text": "timer_create는 k_itimer 포인터를 받고 int를 반환합니다. nsleep은 clockid, flags, const timespec64 요청 포인터를 받고 int를 반환합니다. 이 시그니처에는 사용자 공간 출력 포인터나 timer ID 인자가 직접 들어 있지 않습니다. syscall 사용자 복사와 clock별 내부 연산의 층을 구분합니다."
+    },
+    {
+      "title": "설정·삭제·조회",
+      "text": "timer_set은 timer, flags, new_setting과 old_setting 두 itimerspec64 포인터를 받고 int를 반환합니다. timer_del도 int지만 timer_get은 현재 설정을 채우는 void callback입니다. new_setting도 이 시그니처에서는 const가 아니며 이름만 보고 타입 한정자를 추가해 읽지 않습니다. 반환값과 포인터를 통한 출력은 다른 경로입니다."
+    },
+    {
+      "title": "주기 진행과 남은 시간",
+      "text": "timer_rearm은 timer만 받는 void, timer_forward는 timer와 ktime_t now를 받고 s64, timer_remaining은 같은 인자 형태로 ktime_t를 반환합니다. 재무장, 주기 진행의 결과, 남은 시간 조회를 하나의 callback으로 합치지 않고 나눕니다. 정확한 반환 수치 정책은 각 구현을 더 읽어야 합니다."
+    },
+    {
+      "title": "취소·예약·실행 완료 대기",
+      "text": "timer_try_to_cancel은 int, timer_arm은 expires와 bool absolute/sigev_none을 받는 void, timer_wait_running은 timer만 받는 void입니다. 취소 시도와 실행 중 callback의 완료 대기는 다른 연산이며, arm은 절대 여부와 알림 없음 여부를 별도 bool로 전달합니다. 모든 callback에서 잠금을 내부적으로 알아서 획득한다는 보장은 이 헤더에 없습니다."
+    },
+    {
+      "title": "재시도와 수명에 대한 구현 대조",
+      "text": "관련 구현의 timer_wait_running helper는 kclock과 timer ID를 먼저 읽고 RCU 보호 뒤 timer lock을 풉니다. callback이 RCU lock을 놓을 수도 있으므로 반환 뒤 원래 timer 포인터를 다시 만지지 말라는 주석이 있으며 ID로 다시 lock_timer합니다. 따라서 재시도 시 timer가 삭제되어 조회되지 않을 가능성을 처리해야 합니다. 구현 일부 대조를 posix-timers.c 전체 학습 완료로 세지 않습니다."
+    },
+    {
+      "title": "외부 clock 연산표 다섯 개",
+      "text": "clock_posix_cpu, clock_posix_dynamic, clock_process, clock_thread, alarm_clock를 extern const struct k_clock로 선언합니다. 여기에서 실제 callback 주소를 채우거나 clock ID 배열을 생성하지 않습니다. const는 이 인터페이스에서 연산표를 수정하지 않음을 나타내지만 callback이 다루는 timer 상태까지 불변이라는 뜻은 아닙니다."
+    },
+    {
+      "title": "공통 helper 다섯 개",
+      "text": "posix_timer_queue_signal은 timer를 받아 int입니다. common_timer_get은 timer와 현재 설정 출력의 void, common_timer_set은 timer·flags·새 설정·이전 설정을 받아 int입니다. posix_timer_set_common은 timer와 새 설정의 void이고 common_timer_del은 timer를 받아 int입니다. common_timer_set과 posix_timer_set_common은 이름이 비슷하지만 인자와 반환형이 달라 같은 함수의 별칭이 아닙니다."
+    },
+    {
+      "title": "CS와 검증 범위",
+      "text": "전체 callback과 선언을 설명했습니다. 함수 포인터 연산표를 통한 구현 교체, 좌표계가 다른 시간 조회, 대기 중 객체 삭제와 재조회, 내부 제어 코드와 errno의 차이가 핵심입니다. 전체 POSIX timer 구현이나 실제 namespace·signal·취소 경쟁을 실행 검증한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "clock_get_timespec과 clock_get_ktime은 표현 형식만 다른가?",
+      "options": [
+        "아니다. 주석상 현재 namespace와 root namespace라는 차이도 있다",
+        "그렇다. 모든 경우 동일한 기준 시각이다"
+      ],
+      "answer": 0,
+      "explanation": "헤더가 각각의 좌표계를 명시합니다. 타입 변환만으로 대체하면 namespace offset 처리를 잘못할 수 있습니다."
+    },
+    {
+      "prompt": "TIMER_RETRY의 값과 용도는?",
+      "options": [
+        "-EINVAL과 같은 오류 코드이다",
+        "1이며 내부 재시도 제어 결과이다"
+      ],
+      "answer": 1,
+      "explanation": "매크로 값은 양수 1입니다. 관련 set/delete 호출 측에서 이를 보고 실행 중 callback을 기다린 뒤 재시도합니다."
+    },
+    {
+      "prompt": "실행 중 timer를 기다린 뒤 원래 포인터를 무조건 계속 써도 되는가?",
+      "options": [
+        "아니다. 관련 구현은 timer ID로 다시 조회하고 잠근다",
+        "그렇다. 기다림은 객체 수명을 항상 영구 보장한다"
+      ],
+      "answer": 0,
+      "explanation": "대기 과정에 lock과 RCU 보호가 달라질 수 있습니다. timer 삭제 가능성과 재조회 실패를 고려해야 합니다."
+    },
+    {
+      "prompt": "timer_get callback의 반환형은?",
+      "options": [
+        "ktime_t이며 남은 시간만 직접 반환한다",
+        "void이며 cur_setting 포인터로 값을 채운다"
+      ],
+      "answer": 1,
+      "explanation": "timer_remaining과 다른 인터페이스입니다. 구조체 전체 조회와 단일 남은 시간 값 반환을 구분합니다."
+    },
+    {
+      "prompt": "이 헤더는 include guard로 반복 포함을 막는가?",
+      "options": [
+        "아니다. 원본에는 guard가 없다",
+        "그렇다. 모든 커널 헤더에는 자동으로 guard가 생긴다"
+      ],
+      "answer": 0,
+      "explanation": "실제 파일은 SPDX 뒤 바로 매크로와 구조체가 시작합니다. 일반적인 관례와 현재 소스의 사실을 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#define TIMER_RETRY 1\n\nstruct k_clock {\n\tint\t(*clock_getres)(const clockid_t which_clock,\n\t\t\t\tstruct timespec64 *tp);\n\tint\t(*clock_set)(const clockid_t which_clock,\n\t\t\t     const struct timespec64 *tp);\n\t/* Returns the clock value in the current time namespace. */\n\tint\t(*clock_get_timespec)(const clockid_t which_clock,\n\t\t\t\t      struct timespec64 *tp);\n\t/* Returns the clock value in the root time namespace. */\n\tktime_t\t(*clock_get_ktime)(const clockid_t which_clock);\n\tint\t(*clock_adj)(const clockid_t which_clock, struct __kernel_timex *tx);\n\tint\t(*timer_create)(struct k_itimer *timer);\n\tint\t(*nsleep)(const clockid_t which_clock, int flags,\n\t\t\t  const struct timespec64 *);\n\tint\t(*timer_set)(struct k_itimer *timr, int flags,\n\t\t\t     struct itimerspec64 *new_setting,\n\t\t\t     struct itimerspec64 *old_setting);\n\tint\t(*timer_del)(struct k_itimer *timr);\n\tvoid\t(*timer_get)(struct k_itimer *timr,\n\t\t\t     struct itimerspec64 *cur_setting);\n\tvoid\t(*timer_rearm)(struct k_itimer *timr);\n\ts64\t(*timer_forward)(struct k_itimer *timr, ktime_t now);\n\tktime_t\t(*timer_remaining)(struct k_itimer *timr, ktime_t now);\n\tint\t(*timer_try_to_cancel)(struct k_itimer *timr);\n\tvoid\t(*timer_arm)(struct k_itimer *timr, ktime_t expires,\n\t\t\t     bool absolute, bool sigev_none);\n\tvoid\t(*timer_wait_running)(struct k_itimer *timr);\n};\n\nextern const struct k_clock clock_posix_cpu;\nextern const struct k_clock clock_posix_dynamic;\nextern const struct k_clock clock_process;\nextern const struct k_clock clock_thread;\nextern const struct k_clock alarm_clock;\n\nint posix_timer_queue_signal(struct k_itimer *timr);\n\nvoid common_timer_get(struct k_itimer *timr, struct itimerspec64 *cur_setting);\nint common_timer_set(struct k_itimer *timr, int flags,\n\t\t     struct itimerspec64 *new_setting,\n\t\t     struct itimerspec64 *old_setting);\nvoid posix_timer_set_common(struct k_itimer *timer, struct itimerspec64 *new_setting);\nint common_timer_del(struct k_itimer *timer);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "8aa180a49e53389a9b011cfb88b8263bf26cacfe00ad423cb2ca4b53a7c876d7",
+    "scope": "whole-file",
+    "line_count": 46,
+    "authoring_source": "course/file_units/posix_clock_operations.py",
+    "sections": [
+      "파일 전체와 포함 전제",
+      "재시도 상수",
+      "해상도·설정·조정 callback",
+      "두 시각 읽기의 좌표계",
+      "생성과 수면",
+      "설정·삭제·조회",
+      "주기 진행과 남은 시간",
+      "취소·예약·실행 완료 대기",
+      "재시도와 수명에 대한 구현 대조",
+      "외부 clock 연산표 다섯 개",
+      "공통 helper 다섯 개",
+      "CS와 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/posix-timers.h"
+    }
+  ]
+}

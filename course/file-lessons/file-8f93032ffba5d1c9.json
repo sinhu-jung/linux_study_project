@@ -1,0 +1,77 @@
+{
+  "id": "file-8f93032ffba5d1c9",
+  "path": "lib/bust_spinlocks.c",
+  "title": "Oops 출력 보조 전체: 잠금 해제라는 이름 뒤의 카운터",
+  "area": "커널 공통 도구 · 상태·수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "오류 보고 중 콘솔 출력이 막히지 않게 하는 일반 구현입니다. 역사적 이름보다 현재 함수 본문이 실제로 무엇을 바꾸는지 읽습니다.",
+  "guide": [
+    "yes가 0이 아니면 oops_in_progress를 증가시킵니다. yes가 0이면 먼저 console_unblank()를 호출하고 카운터를 감소시켜 0이 된 경우만 wake_up_klogd()를 호출합니다.",
+    "진입·종료는 올바르게 짝지어야 합니다. 이 함수는 임의의 spinlock 주소를 받아 모두 unlock하는 함수가 아니며 카운터를 자동으로 0 이상으로 제한하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 의존성",
+      "text": "SPDX와 일반 fallback 역할의 주석 뒤에 kernel/printk/spinlock/tty/wait/vt_kern/console 헤더를 포함합니다. 이 파일의 유일한 함수는 bust_spinlocks입니다. 실제 본문은 오류 진행 카운터와 콘솔·로그 작업을 제어하며 직접 spin_unlock 호출은 없습니다."
+    },
+    {
+      "title": "중첩 진입 추적",
+      "text": "처음 카운터 0에서 yes=1 두 번이면 2입니다. 종료 첫 호출은 console_unblank 후 1이 되어 wake_up_klogd를 부르지 않습니다. 두 번째 종료는 다시 unblank 후 0이 되어 로그 작업을 깨웁니다. 즉 화면 복구 호출과 로그 깨움 조건은 서로 다릅니다."
+    },
+    {
+      "title": "CS 연결과 잘못된 호출",
+      "text": "참조 카운터와 비슷한 중첩 상태 표현이지만 이 파일은 원자 참조 카운터 API를 사용하지 않습니다. 모든 호출 문맥의 동시성 보장을 이 짧은 본문만으로 단정하지 않습니다. 0에서 종료를 호출하면 -1이 될 수 있으며 ==0 조건을 통과하지 않습니다. 균형 계약이 필요한 이유입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "카운터 2에서 종료 경로를 한 번 호출하면 로그 작업을 깨우는가?",
+      "options": [
+        "아니다. 카운터 1이고 console_unblank만 먼저 호출된다",
+        "그렇다. yes=0이면 무조건 깨운다"
+      ],
+      "answer": 0,
+      "explanation": "wake_up_klogd는 --oops_in_progress == 0 조건 안에 있습니다. console_unblank는 그 조건 밖이라 종료 경로마다 실행됩니다."
+    },
+    {
+      "prompt": "이 함수가 시스템의 모든 spinlock을 직접 해제하는가?",
+      "options": [
+        "그렇다. 이름에 bust_spinlocks가 있으므로 모든 잠금을 푼다",
+        "아니다. 현재 본문은 카운터와 콘솔·로그 처리를 한다"
+      ],
+      "answer": 1,
+      "explanation": "본문에는 잠금 주소 순회나 spin_unlock 호출이 없습니다. 함수 이름·주석의 목적과 실제 수행 연산을 구별해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * lib/bust_spinlocks.c\n *\n * Provides a minimal bust_spinlocks for architectures which don't\n * have one of their own.\n *\n * bust_spinlocks() clears any spinlocks which would prevent oops, die(), BUG()\n * and panic() information from reaching the user.\n */\n\n#include <linux/kernel.h>\n#include <linux/printk.h>\n#include <linux/spinlock.h>\n#include <linux/tty.h>\n#include <linux/wait.h>\n#include <linux/vt_kern.h>\n#include <linux/console.h>\n\nvoid bust_spinlocks(int yes)\n{\n\tif (yes) {\n\t\t++oops_in_progress;\n\t} else {\n\t\tconsole_unblank();\n\t\tif (--oops_in_progress == 0)\n\t\t\twake_up_klogd();\n\t}\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "8ed0cf3670237beafe48e0a637bdebeed343d4cec3989e2a675c5fabe513a7b8",
+    "scope": "whole-file",
+    "line_count": 29,
+    "authoring_source": "course/file_units/core_utilities.py",
+    "sections": [
+      "전체 파일과 의존성",
+      "중첩 진입 추적",
+      "CS 연결과 잘못된 호출"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/bust_spinlocks.c"
+    }
+  ]
+}

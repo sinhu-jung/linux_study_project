@@ -1,0 +1,96 @@
+{
+  "id": "file-60f3568368112138",
+  "path": "lib/memweight.c",
+  "title": "메모리 비트 수 전체: 정렬 전·워드 구간·마지막 바이트",
+  "area": "비트 알고리즘 · 병렬 합산·정렬",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "메모리 영역의 1비트 수를 셀 때 정렬과 바이트 순서를 고려해 처리 구간을 나눕니다.",
+  "guide": [
+    "memweight는 먼저 unsigned long 크기 정렬에 도달할 때까지 바이트별 hweight8을 합칩니다. 남은 완전한 워드 수 longs를 구해 bitmap_weight로 한 번 처리한 뒤, 나머지 바이트를 다시 hweight8로 합칩니다.",
+    "입력 ptr은 bytes만큼 읽을 수 있어야 하고 읽는 동안 안정적이어야 합니다. 중간 비트맵 처리량에는 INT_MAX/BITS_PER_LONG 조건을 검사하는 BUG_ON이 있어 임의로 큰 크기를 무조건 안전 처리한다고 가정하면 안 됩니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX, export/bug/bitmap 헤더, 함수 하나와 EXPORT_SYMBOL이 전체입니다. ret 누적값·longs·바이트 포인터의 지역 상태만 사용하고 별도 메모리 할당은 없습니다. 시작 포인터의 주소를 sizeof(long)으로 나눈 나머지가 첫 루프의 정렬 조건입니다."
+    },
+    {
+      "title": "세 구간 추적",
+      "text": "sizeof(long)=8이고 시작 주소 오프셋이 3이며 길이 19라면 정렬까지 앞 5바이트를 처리합니다. 남은 14바이트 중 8바이트 한 워드를 bitmap_weight로 처리하고 꼬리 6바이트를 다시 처리합니다. 5+8+6=19이며 빠진 바이트나 중복 처리되는 바이트가 없어야 합니다."
+    },
+    {
+      "title": "왜 꼬리는 따로 읽는가",
+      "text": "원문은 big-endian 시스템에서 sizeof(long)보다 짧은 마지막 영역의 1비트를 올바르게 세기 위해 루프를 분리했다고 설명합니다. 완전한 워드와 달리 부분 바이트 영역을 워드 비트 번호 규칙에 그대로 넣으면 의미가 어긋날 수 있습니다. 바이트별 처리로 실제 남은 메모리 범위를 정확히 읽습니다."
+    },
+    {
+      "title": "길이와 오류 계약",
+      "text": "bytes=0이면 어느 루프도 메모리를 읽지 않고 0을 반환합니다. 완전 워드가 있으면 longs>=INT_MAX/BITS_PER_LONG을 BUG_ON으로 검사합니다. 이는 정상 오류 코드 반환이 아니며 nbits 인자로 전달할 곱의 범위를 지키려는 제한입니다. 호출자는 유효 메모리와 크기를 보장해야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "정렬을 맞춰 큰 단위로 처리하고 앞뒤 경계를 작은 단위로 처리하는 peel/bulk/tail 패턴입니다. 전체 bytes에 선형인 작업이며 카운트를 구해도 입력의 동시 수정이 없는 스냅샷을 자동 보장하지 않습니다. ret가 size_t라는 것과 내부 bitmap_weight의 비트 수 인자 범위가 같다는 것도 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "8바이트 워드, 시작 오프셋 3, 길이 19의 세 구간 길이는?",
+      "options": [
+        "앞 5 + 중간 8 + 꼬리 6",
+        "앞 3 + 중간 16 + 꼬리 0"
+      ],
+      "answer": 0,
+      "explanation": "다음 정렬까지는 8-3=5바이트입니다. 남은 14에서 완전 워드 8을 처리하고 6바이트가 남습니다."
+    },
+    {
+      "prompt": "마지막 바이트 루프를 별도로 두는 원문 이유는?",
+      "options": [
+        "마지막 바이트는 모두 0이라고 가정하려고",
+        "big-endian에서도 부분 워드 영역의 실제 바이트를 올바르게 세려고"
+      ],
+      "answer": 1,
+      "explanation": "꼬리는 sizeof(long)보다 작으므로 메모리 범위와 워드 비트 번호 해석을 혼동하지 않도록 바이트 단위로 계산합니다."
+    },
+    {
+      "prompt": "bytes=0에서 반환값은?",
+      "options": [
+        "0이며 입력 바이트를 읽지 않는다",
+        "반드시 한 바이트를 읽어 비트 수를 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "앞·뒤 루프 조건은 bytes>0이고 longs도 0입니다. 누적 ret 초기값 0을 그대로 반환합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/export.h>\n#include <linux/bug.h>\n#include <linux/bitmap.h>\n\n/**\n * memweight - count the total number of bits set in memory area\n * @ptr: pointer to the start of the area\n * @bytes: the size of the area\n */\nsize_t memweight(const void *ptr, size_t bytes)\n{\n\tsize_t ret = 0;\n\tsize_t longs;\n\tconst unsigned char *bitmap = ptr;\n\n\tfor (; bytes > 0 && ((unsigned long)bitmap) % sizeof(long);\n\t\t\tbytes--, bitmap++)\n\t\tret += hweight8(*bitmap);\n\n\tlongs = bytes / sizeof(long);\n\tif (longs) {\n\t\tBUG_ON(longs >= INT_MAX / BITS_PER_LONG);\n\t\tret += bitmap_weight((unsigned long *)bitmap,\n\t\t\t\tlongs * BITS_PER_LONG);\n\t\tbytes -= longs * sizeof(long);\n\t\tbitmap += longs * sizeof(long);\n\t}\n\t/*\n\t * The reason that this last loop is distinct from the preceding\n\t * bitmap_weight() call is to compute 1-bits in the last region smaller\n\t * than sizeof(long) properly on big-endian systems.\n\t */\n\tfor (; bytes > 0; bytes--, bitmap++)\n\t\tret += hweight8(*bitmap);\n\n\treturn ret;\n}\nEXPORT_SYMBOL(memweight);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e1f85ee3c91386a05d853a56c695c11f400ac8a45d60456aaf327304fca0f083",
+    "scope": "whole-file",
+    "line_count": 39,
+    "authoring_source": "course/file_units/bit_counting.py",
+    "sections": [
+      "파일 전체",
+      "세 구간 추적",
+      "왜 꼬리는 따로 읽는가",
+      "길이와 오류 계약",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/memweight.c"
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "id": "file-161356e7a4d6a250",
+  "path": "lib/math/int_sqrt.c",
+  "title": "정수 제곱근 전체: 4의 거듭제곱 단위로 답을 구성하기",
+  "area": "정수 알고리즘 · 테스트·빌드 구성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "부동소수점 없이 floor(sqrt(x))를 구하는 shift-and-subtract 알고리즘입니다.",
+  "guide": [
+    "x<=1을 먼저 반환하고 x 이하 최대4의 거듭제곱 m을 선택합니다. 매 반복 b=y+m을 만든 뒤 y를 반으로 줄입니다. x>=b이면 x에서 b를 빼고 y에 m을 더합니다. m은 두 비트씩 줄어듭니다.",
+    "반환값 r은 원래 입력 X에 대해 r²<=X<(r+1)²를 만족하는 정수입니다. x 변수는 계산 중 잔여량으로 바뀌므로 원래 입력과 혼동하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 폭별 구현",
+      "text": "SPDX·유래 주석, export/bitops/limits/math 포함, int_sqrt와 export, BITS_PER_LONG<64 조건부 int_sqrt64와 export로 구성됩니다. 64비트 long에서는 이 C 파일에 int_sqrt64 본문이 없고 math.h의 인라인 경로가 int_sqrt를 호출합니다."
+    },
+    {
+      "title": "초기 비트 선택",
+      "text": "__fls(x)는 가장 높은1비트의0기반 위치입니다. &~1UL은 그 위치를 짝수로 내리고 1UL을 그만큼 옮겨4^k를 만듭니다. x<=1 분기를 먼저 통과하므로 __fls(0)을 호출하지 않습니다. fls64는1기반이므로 넓은 경로에서는1을 뺀 다음 같은 처리를 합니다."
+    },
+    {
+      "title": "입력10의 모든 반복",
+      "text": "초기 x=10,y=0,m=4입니다. b=4를 만들고 y=0, x>=4이므로 x=6,y=4,m=1이 됩니다. 다음 b=5,y=2이고 x>=5이므로 x=1,y=3,m=0입니다. 최종3은9<=10<16을 만족합니다."
+    },
+    {
+      "title": "32비트 long에서64비트 입력",
+      "text": "int_sqrt64는 x<=ULONG_MAX이면 int_sqrt로 위임합니다. 더 크면 u64 b,m,y를 사용하여 같은 알고리즘을 실행하고 u32를 반환합니다. 최대 u64의 정수 제곱근은2^32-1이므로 결과 타입에 들어갑니다."
+    },
+    {
+      "title": "검증과 복잡도",
+      "text": "한 반복마다 m을2비트 줄여 비트 폭에 비례하는 시간, O(1) 공간을 씁니다. 검증에서 (r+1)*(r+1)을 같은 좁은 타입으로 계산하면 최대값 부근에서 검증식 자체가 넘칠 수 있습니다. 독립 이진 탐색 참조에서는 mid<=X/mid처럼 나눗셈 비교를 사용하면 곱 오버플로를 피할 수 있습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "입력10의 반환값은?",
+      "options": [
+        "3",
+        "4"
+      ],
+      "answer": 0,
+      "explanation": "반올림이 아니라 내림 제곱근입니다.3²=9<=10이고4²=16>10입니다."
+    },
+    {
+      "prompt": "m을 매 반복 두 비트 줄이는 이유는?",
+      "options": [
+        "입력 x를 무조건4로 나누기 때문이다",
+        "4의 거듭제곱 단계를 하나 내려가기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "m>>=2는 후보 자리의 축소입니다. x는 조건에 따라 b를 빼는 잔여량이며 매번4로 나누지 않습니다."
+    },
+    {
+      "prompt": "최대 u64의 int_sqrt64 결과가 u32에 들어가는가?",
+      "options": [
+        "들어간다. 결과는2^32-1이다",
+        "들어가지 않는다. 결과도64비트가 필요하다"
+      ],
+      "answer": 0,
+      "explanation": "(2^32)²은2^64로 입력 최대값보다 큽니다. 따라서 내림 제곱근의 최대값은2^32-1입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Copyright (C) 2013 Davidlohr Bueso <davidlohr.bueso@hp.com>\n *\n *  Based on the shift-and-subtract algorithm for computing integer\n *  square root from Guy L. Steele.\n */\n\n#include <linux/export.h>\n#include <linux/bitops.h>\n#include <linux/limits.h>\n#include <linux/math.h>\n\n/**\n * int_sqrt - computes the integer square root\n * @x: integer of which to calculate the sqrt\n *\n * Computes: floor(sqrt(x))\n */\nunsigned long int_sqrt(unsigned long x)\n{\n\tunsigned long b, m, y = 0;\n\n\tif (x <= 1)\n\t\treturn x;\n\n\tm = 1UL << (__fls(x) & ~1UL);\n\twhile (m != 0) {\n\t\tb = y + m;\n\t\ty >>= 1;\n\n\t\tif (x >= b) {\n\t\t\tx -= b;\n\t\t\ty += m;\n\t\t}\n\t\tm >>= 2;\n\t}\n\n\treturn y;\n}\nEXPORT_SYMBOL(int_sqrt);\n\n#if BITS_PER_LONG < 64\n/**\n * int_sqrt64 - strongly typed int_sqrt function when minimum 64 bit input\n * is expected.\n * @x: 64bit integer of which to calculate the sqrt\n */\nu32 int_sqrt64(u64 x)\n{\n\tu64 b, m, y = 0;\n\n\tif (x <= ULONG_MAX)\n\t\treturn int_sqrt((unsigned long) x);\n\n\tm = 1ULL << ((fls64(x) - 1) & ~1ULL);\n\twhile (m != 0) {\n\t\tb = y + m;\n\t\ty >>= 1;\n\n\t\tif (x >= b) {\n\t\t\tx -= b;\n\t\t\ty += m;\n\t\t}\n\t\tm >>= 2;\n\t}\n\n\treturn y;\n}\nEXPORT_SYMBOL(int_sqrt64);\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a51e271e78ec485015762a62838c2919a050b1fceb9cf6d0e306558ab97ff846",
+    "scope": "whole-file",
+    "line_count": 71,
+    "authoring_source": "course/file_units/integer_power_root.py",
+    "sections": [
+      "파일 전체와 폭별 구현",
+      "초기 비트 선택",
+      "입력10의 모든 반복",
+      "32비트 long에서64비트 입력",
+      "검증과 복잡도"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/int_sqrt.c"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "id": "file-bbaa7310edec0f99",
+  "path": "include/uapi/linux/nsfs.h",
+  "title": "nsfs 사용자 ABI: namespace ioctl과 mount 정보 구조체",
+  "area": "UAPI · ioctl · 정수 폭 · ABI 버전 · namespace",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "전체 ioctl 번호와 반환 방식, 고정 폭 구조체와 버전 크기 계약을 구현과 연결해 분석합니다.",
+  "guide": [
+    "ioctl의 인코딩 방향·크기 정보와 실제 인수·반환 계약을 함께 확인해야 합니다.",
+    "UAPI 상수, 정수와 사용자 포인터 인수, 확장 가능한 구조체를 구별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 정의",
+      "text": "GPL-2.0 WITH Linux-syscall-note guard 안에서 ioctl.h와 types.h를 포함합니다. NSIO는 0xb7이며 모든 명령이 이 ioctl type을 사용합니다. 함수 구현이나 syscall wrapper는 없고 명령 매크로 열두 개와 mnt_ns_info 구조체, 초기 공개 크기 상수가 있습니다. _IO·_IOR는 호출이 아니라 명령값을 구성하는 매크로입니다."
+    },
+    {
+      "title": "처음 네 명령",
+      "text": "번호 1 USERNS와 2 PARENT는 관련 namespace의 새 FD를 반환합니다. 번호 3 NSTYPE은 CLONE_NEW 계열 타입 값을 반환합니다. 번호 4 OWNER_UID는 user namespace의 owner UID를 호출자의 user namespace 기준으로 얻습니다. 넷 모두 _IO로 정의되지만 확인한 구현에서 OWNER_UID는 arg를 uid_t 사용자 포인터로 받아 put_user로 저장합니다. _IO라고 모든 명령이 인수나 출력 메모리를 사용하지 않는 것은 아닙니다."
+    },
+    {
+      "title": "Mount ID와 PID 변환",
+      "text": "번호 5 MNTNS_ID는 _IOR(...,__u64)로 mount namespace ID를 얻습니다. 번호 6 PID_FROM,7 TGID_FROM,8 PID_IN,9 TGID_IN은 _IOR(...,int)입니다. FROM은 파일이 나타내는 대상 PID namespace에서 호출자 쪽으로, IN은 호출자 쪽에서 대상 namespace로 변환합니다. TGID 계열은 찾은 task의 thread-group leader ID를 구합니다. 구현은 네 변환 명령의 arg를 숫자 PID로 사용하고 결과도 ioctl 반환값으로 전달하므로 int * 출력 버퍼라고 오해하지 않습니다."
+    },
+    {
+      "title": "Mount 정보 구조체",
+      "text": "mnt_ns_info는 __u32 size, __u32 nr_mounts, __u64 mnt_ns_id 순서입니다. 초기 공개 구조체 크기는 MNT_NS_INFO_SIZE_VER0=16입니다. size는 커널이 알려주는 정보 크기이며 구현에서 허용하는 사용자 크기는 ioctl 명령의 _IOC_SIZE에서 읽습니다. nr_mounts는 구현이 root mount를 제외해 보고하는 값이고 mnt_ns_id는 namespace seq입니다. 프로세스 PID나 ns_common.inum과 동일한 필드가 아닙니다."
+    },
+    {
+      "title": "확장 가능한 세 명령",
+      "text": "NS_MNT_GET_INFO·NEXT·PREV는 각각 십진 번호 10·11·12와 struct mnt_ns_info를 사용하는 _IOR입니다. 구현에서 INFO는 사용자 정보 포인터가 필요하고 NEXT/PREV는 NULL 정보 포인터로도 FD만 받을 수 있습니다. NEXT/PREV의 성공 반환은 다음·이전 namespace를 연 새 FD입니다. 헤더 자체에는 순회 권한이나 조회 순서를 정하는 코드가 없으며 lookup 구현 계약을 함께 확인해야 합니다."
+    },
+    {
+      "title": "검토 범위",
+      "text": "모든 명령 번호, 인코딩 자료형, 구조체 필드와 크기 상수를 확인했습니다. 고정된 ioctl 숫자를 호스트의 다른 ABI에서 임의 계산해 Linux의 모든 아키텍처 값이라고 주장하지 않습니다. 실제 동작은 fs/nsfs.c의 dispatch와 copy·FD 반환 경로를 별도 학습 항목으로 연결합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "NS_GET_OWNER_UID는 _IO이므로 사용자 출력 포인터를 전혀 쓰지 않는가?",
+      "options": [
+        "아니다. 구현은 arg를 UID 포인터로 보고 값을 저장한다",
+        "그렇다. 항상 UID를 FD 형태로 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "명령 인코딩만으로 실제 전달 계약을 결정해서는 안 됩니다. OWNER_UID 구현은 put_user를 사용합니다."
+    },
+    {
+      "prompt": "PID_FROM_PIDNS와 PID_IN_PIDNS의 방향 차이는?",
+      "options": [
+        "둘 다 항상 현재 task 자신의 PID를 반환한다",
+        "FROM은 대상에서 호출자로, IN은 호출자에서 대상으로 변환한다"
+      ],
+      "answer": 1,
+      "explanation": "arg로 주어진 PID의 해석 공간과 반환 ID의 공간이 서로 바뀝니다. 다른 task의 ID도 조회 대상이 될 수 있습니다."
+    },
+    {
+      "prompt": "mnt_ns_info의 최초 공개 크기와 필드 구성은?",
+      "options": [
+        "16바이트, u32 두 개와 u64 하나",
+        "12바이트, u32 세 개"
+      ],
+      "answer": 0,
+      "explanation": "size·nr_mounts는 32비트, mnt_ns_id는 64비트이며 헤더에 VER0 크기 16을 명시합니다."
+    },
+    {
+      "prompt": "NS_MNT_GET_NEXT에서 정보 버퍼 없이 성공하면 얻는 것은?",
+      "options": [
+        "항상 0 하나",
+        "관련 namespace를 연 파일 디스크립터"
+      ],
+      "answer": 1,
+      "explanation": "구현은 NULL uinfo이면 정보 복사만 생략하고 열린 FD를 반환합니다. INFO 명령과 NULL 인수 계약이 다릅니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef __LINUX_NSFS_H\n#define __LINUX_NSFS_H\n\n#include <linux/ioctl.h>\n#include <linux/types.h>\n\n#define NSIO\t0xb7\n\n/* Returns a file descriptor that refers to an owning user namespace */\n#define NS_GET_USERNS\t\t_IO(NSIO, 0x1)\n/* Returns a file descriptor that refers to a parent namespace */\n#define NS_GET_PARENT\t\t_IO(NSIO, 0x2)\n/* Returns the type of namespace (CLONE_NEW* value) referred to by\n   file descriptor */\n#define NS_GET_NSTYPE\t\t_IO(NSIO, 0x3)\n/* Get owner UID (in the caller's user namespace) for a user namespace */\n#define NS_GET_OWNER_UID\t_IO(NSIO, 0x4)\n/* Get the id for a mount namespace */\n#define NS_GET_MNTNS_ID\t\t_IOR(NSIO, 0x5, __u64)\n/* Translate pid from target pid namespace into the caller's pid namespace. */\n#define NS_GET_PID_FROM_PIDNS\t_IOR(NSIO, 0x6, int)\n/* Return thread-group leader id of pid in the callers pid namespace. */\n#define NS_GET_TGID_FROM_PIDNS\t_IOR(NSIO, 0x7, int)\n/* Translate pid from caller's pid namespace into a target pid namespace. */\n#define NS_GET_PID_IN_PIDNS\t_IOR(NSIO, 0x8, int)\n/* Return thread-group leader id of pid in the target pid namespace. */\n#define NS_GET_TGID_IN_PIDNS\t_IOR(NSIO, 0x9, int)\n\nstruct mnt_ns_info {\n\t__u32 size;\n\t__u32 nr_mounts;\n\t__u64 mnt_ns_id;\n};\n\n#define MNT_NS_INFO_SIZE_VER0 16 /* size of first published struct */\n\n/* Get information about namespace. */\n#define NS_MNT_GET_INFO\t\t_IOR(NSIO, 10, struct mnt_ns_info)\n/* Get next namespace. */\n#define NS_MNT_GET_NEXT\t\t_IOR(NSIO, 11, struct mnt_ns_info)\n/* Get previous namespace. */\n#define NS_MNT_GET_PREV\t\t_IOR(NSIO, 12, struct mnt_ns_info)\n\n#endif /* __LINUX_NSFS_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d6bcc5f490e33130c45858988d60a14fe2d50a2195c45b750084ee7c5ce0ff25",
+    "scope": "whole-file",
+    "line_count": 45,
+    "authoring_source": "course/file_units/namespace_filesystem.py",
+    "sections": [
+      "전체 정의",
+      "처음 네 명령",
+      "Mount ID와 PID 변환",
+      "Mount 정보 구조체",
+      "확장 가능한 세 명령",
+      "검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/nsfs.h"
+    }
+  ]
+}

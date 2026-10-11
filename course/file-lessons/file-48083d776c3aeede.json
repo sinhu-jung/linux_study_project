@@ -1,0 +1,77 @@
+{
+  "id": "file-48083d776c3aeede",
+  "path": "lib/kunit/device-impl.h",
+  "title": "KUnit 내부 bus 인터페이스: 초기화와 종료의 경계",
+  "area": "C 인터페이스 · 초기화 · 모듈 수명",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "짧은 내부 헤더의 두 선언과 사용 범위를 모두 확인합니다.",
+  "guide": [
+    "공개 테스트 helper와 subsystem 자체의 생명주기 API는 구분할 수 있습니다.",
+    "헤더 guard,반환 계약과 내부 인터페이스의 범위를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일과 guard",
+      "text": "GPL-2.0 헤더는 KUnit 내부 driver/bus 관리용이라는 주석과 _KUNIT_DEVICE_IMPL_H guard를 가집니다. 별도 include나 구조체 정의는 없습니다. 기본 C 타입으로 표현 가능한 선언 두 개만 제공하기 때문입니다."
+    },
+    {
+      "title": "초기화 선언",
+      "text": "int kunit_bus_init(void)는 인수 없이 bus를 등록하는 내부 API입니다. int 반환은 구현의 성공 또는 오류를 호출자가 확인할 수 있게 합니다. 이 헤더는 함수 본문이나 오류 코드 목록,자동 호출 매크로를 제공하지 않습니다."
+    },
+    {
+      "title": "종료 선언과 범위",
+      "text": "void kunit_bus_shutdown(void)는 인수·반환값 없는 내부 종료 API입니다. 개별 장치를 등록하는 공개 함수와 역할이 다릅니다. 헤더를 include한다고 bus가 초기화되거나 종료되는 것은 아닙니다. 두 선언·주석·guard 전체를 대조했습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 헤더를 include하면 kunit_bus가 바로 등록되는가?",
+      "options": [
+        "아니다. 함수 선언만 제공한다",
+        "그렇다. include가 등록 함수를 실행한다"
+      ],
+      "answer": 0,
+      "explanation": "선언과 실행을 구분합니다. 실제 호출과 구현은 다른 파일에 있습니다."
+    },
+    {
+      "prompt": "두 함수의 반환 타입 차이는?",
+      "options": [
+        "둘 다 장치 포인터를 반환한다",
+        "init은 int,shutdown은 void다"
+      ],
+      "answer": 1,
+      "explanation": "초기화 결과 전달과 종료 동작의 인터페이스가 다릅니다. 장치 생성 API와 혼동하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * KUnit internal header for device helpers\n *\n * Header for KUnit-internal driver / bus management.\n *\n * Copyright (C) 2023, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n\n#ifndef _KUNIT_DEVICE_IMPL_H\n#define _KUNIT_DEVICE_IMPL_H\n\n// For internal use only -- registers the kunit_bus.\nint kunit_bus_init(void);\n// For internal use only -- unregisters the kunit_bus.\nvoid kunit_bus_shutdown(void);\n\n#endif //_KUNIT_DEVICE_IMPL_H\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "388d7fadbba9d5f48bcf9923ebeb389a72c0dbb0dd69e8d71736269aea3ebb8b",
+    "scope": "whole-file",
+    "line_count": 19,
+    "authoring_source": "course/file_units/kunit_devices.py",
+    "sections": [
+      "파일과 guard",
+      "초기화 선언",
+      "종료 선언과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/device-impl.h"
+    }
+  ]
+}

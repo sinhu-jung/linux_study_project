@@ -1,0 +1,33 @@
+"""Whole register polling header, including timeout edge semantics."""
+ROWS = [dict(
+    path='include/linux/iopoll.h',
+    title='I/O polling 전체: 마지막 관찰과 timeout의 의미',
+    intro='시간 기반·예산 기반 반복 읽기와 폭별 wrapper의 성공·실패 경계를 해설합니다.',
+    principle='시간 제한을 넘었다는 관찰과 최종 실패 판정은 다릅니다. 이 구현은 마지막 값을 한 번 더 읽고 조건을 다시 평가합니다.',
+    use='앞서 읽은 I/O accessor를 이용해 장치 완료 비트를 기다리는 과정의 실행 문맥과 종료 조건을 추적합니다.',
+    area='Polling · 시간 제한 · busy wait · sleep · 매크로 평가 · I/O 부작용',
+    sections=[
+        ('전체 구성', 'GPL-2.0-only·저작권·guard 뒤 kernel/types/ktime/delay/errno/io 헤더를 포함합니다. 두 기반 매크로, 주소 하나를 받는 readx wrapper 두 개,8/16/32/64비트와 relaxed 여부 및 atomic 여부를 조합한16개 wrapper로 끝납니다. 별도의 worker나 인터럽트 등록 코드는 없습니다.'),
+        ('일반 polling 입력', 'read_poll_timeout은 op(args) 결과를 호출자가 제공한 val에 저장하고 cond를 평가합니다. timeout과 sleep 값을 지역 변수에 담고 ktime_get 기준 deadline을 계산합니다. timeout_us=0은 즉시 실패가 아니라 timeout을 사용하지 않는다는 뜻입니다. cond나 accessor가 끝내 성공하지 않으면 무한 대기할 수 있습니다.'),
+        ('Sleep과 실행 문맥', 'sleep이0이 아니면 might_sleep_if를 호출합니다. sleep_before_read가 참이면 첫 읽기 전에 usleep_range((sleep_us>>2)+1,sleep_us)를 수행합니다. deadline은 이 사전 sleep보다 먼저 계산됩니다. 주석은 usleep_range를 쓰므로 sleep을 대략20ms보다 작게 사용하고 sleep 또는 timeout을 사용하는 일반 버전을 atomic 문맥에서 호출하지 말라고 합니다. 검사 본문이 sleep만 확인한다고 주석의 호출 계약을 축소하면 안 됩니다.'),
+        ('읽기 우선 종료', '일반 루프는 먼저 읽고 cond가 참이면 즉시 break합니다. 거짓인 경우에만 timeout이 활성화됐고 현재 시각이 deadline보다 엄격하게 큰지 검사합니다. 같은 시각인 >= 비교가 아닙니다. 따라서 deadline 이후라도 해당 읽기가 cond를 만족하면 성공할 수 있습니다.'),
+        ('Timeout 직후 재읽기', '시각 초과 분기에서는 op(args)를 한 번 더 실행해 val을 갱신한 뒤 break합니다. 루프 밖에서 cond를 다시 평가해0 또는 -ETIMEDOUT을 반환합니다. 마지막 재읽기가 성공 값을 관찰하면 deadline 초과 분기에 진입했어도 반환은0입니다. 실패 시에도 마지막 관찰값이 val에 남습니다.'),
+        ('반복 사이 동작', '일반 루프에서 아직 끝나지 않으면 sleep이 있을 때 같은 usleep_range를 호출하고 cpu_relax를 수행합니다. sleep_us는 매회 정확히 그 시간만큼 지연한다는 보장이 아니라 요청 범위의 상한입니다. 각 op 호출의 비용과 스케줄링까지 고려하면 실제 반환 시각을 엄격한 마이크로초 경계로 보장하는 구현이 아닙니다.'),
+        ('Atomic의 시간 예산', 'read_poll_timeout_atomic은 ktime_get을 사용하지 않습니다. timeout_us*NSEC_PER_USEC를 signed __left_ns에 넣고 delay_us를 ns 단위로도 보관합니다. 주석은 timekeeping이 정지된 때도 사용할 수 있지만 wall clock을 과소 산정하는 대가가 있다고 설명합니다. 이것은 실제 하드웨어 타이머를 읽어 남은 시간을 갱신하는 방식이 아닙니다.'),
+        ('Atomic 사전 지연', 'delay_before_read와 delay_us가 모두 참이면 udelay 후 timeout이 활성화된 경우 예산에서 delay_ns를 뺍니다. 예산이 이미 음수라도 루프는 읽기와 성공 조건을 먼저 검사합니다. 성공 조건이 거짓이고 __left_ns<0일 때만 마지막 재읽기 후 종료합니다. 예산이 정확히0인 상태는 아직 이 만료 조건을 만족하지 않습니다.'),
+        ('Atomic 반복 예산 감소', '실패했지만 아직 만료되지 않으면 udelay가 있는 경우 지연하고 활성 timeout 예산에서 delay_ns를 뺍니다. cpu_relax 뒤에는 활성 예산을 추가로1 줄입니다. delay0에서도 반복마다1ns 명목 비용을 빼 유한 횟수 후 만료할 수 있지만 실제 한 반복이1ns라는 측정값은 아닙니다. accessor 비용을 측정하여 차감하지 않습니다.'),
+        ('Atomic의 의미와 제한', 'atomic 버전은 sleep 대신 busy delay와 명목 예산을 사용하며 주석은 delay를 대략10us보다 작게 권고합니다. 이름이 레지스터의 원자 접근·다른 CPU와의 상호 배제·인터럽트 차단을 의미하지 않습니다. op 자체가 현재 문맥에서 안전해야 하며 큰 값의 단위 곱셈에 대한 별도 overflow 검사는 본문에 없습니다.'),
+        ('주소 하나를 받는 readx', 'readx_poll_timeout과 atomic 대응은 op에 addr 하나를 전달하고 사전 sleep/delay 플래그를 false로 고정합니다. 따라서 일반 wrapper 사용은 첫 읽기 전에 이 매크로가 명시적 지연을 넣지 않습니다. 여러 인자를 받는 accessor는 기반 read_poll_timeout의 args 형식을 통해 사용합니다.'),
+        ('폭별·relaxed wrapper', 'readb/readw/readl/readq 각각에 일반 및 atomic wrapper가 있습니다. readb_relaxed/readw_relaxed/readl_relaxed/readq_relaxed도 같은 두 종류를 제공합니다. wrapper의 delay_us 인자는 일반 버전에서는 sleep_us 자리에 전달됩니다. relaxed accessor를 선택했다고 자동으로 atomic 대기가 되는 것이 아니며 접근 순서와 대기 방식은 다른 선택입니다.'),
+        ('반복 평가와 부작용', 'cond는 읽기 직후뿐 아니라 최종 반환식에서도 평가합니다. 정상 성공 break 뒤에도 재평가되므로 증가 연산처럼 결과를 바꾸는 조건식은 피해야 합니다. args는 반복 읽기와 마지막 추가 읽기에 전달됩니다. read-to-clear 같은 레지스터는 추가 관찰의 부작용까지 장치 계약과 맞춰야 하며 반복해도 안전한 읽기라는 전제가 필요합니다.'),
+        ('CS 연결과 범위', '상태 polling과 인터럽트 대기의 차이, deadline과 명목 예산, off-by-one 비교, 최종 관찰값, macro wrapper와 재평가, CPU 점유와 수면의 차이를 학습합니다. 원본·구조 검사는 실제 장치의 완료 보장이나 모든 스케줄링 상황의 timeout 정확성을 증명하지 않습니다.')
+    ],
+    questions=[
+        ('timeout_us=0이면 어떻게 되는가?', 'timeout을 사용하지 않는다', '첫 읽기도 하지 않고 즉시 실패한다', '두 기반 매크로 모두 timeout 관련 분기를 __timeout_us가 참일 때만 실행합니다. 조건이 끝내 만족되지 않으면 계속 반복할 수 있습니다.'),
+        ('deadline 초과 분기의 마지막 재읽기에서 cond가 참이면?', '최종 반환은0이다', '항상 -ETIMEDOUT이다', '반환식은 최종 cond를 평가합니다. 초과 분기로 들어갔다는 사실만으로 실패를 고정하지 않습니다.'),
+        ('atomic 버전이 매회 ktime_get으로 실제 시간을 확인하는가?', '아니다. 지연량과 반복당 명목 비용을 예산에서 뺀다', '그렇다. 일반 버전과 같은 시계 검사를 한다', 'timekeeping에 의존하지 않도록 __left_ns를 감소시킵니다. 반복의 실제 실행 비용을 정확히 측정하는 방식은 아닙니다.'),
+        ('atomic 버전에서 __left_ns가 정확히0이면 만료 분기에 들어가는가?', '아니다. 조건은0보다 작을 때이다', '그렇다.0 이하를 검사한다', '본문은 __left_ns<0입니다. 그리고 그 검사보다 읽기와 성공 조건 검사가 앞에 있습니다.'),
+        ('readl_relaxed_poll_timeout의 delay_us는 busy udelay인가?', '아니다. 일반 polling의 sleep_us 인자로 전달된다', '그렇다. relaxed라는 이름이 atomic 대기를 뜻한다', '이 wrapper는 readx_poll_timeout에 연결됩니다. atomic 접미사가 붙은 별도 wrapper가 busy delay 기반 경로입니다.'),
+        ('조건이 참이 되어 루프를 나간 뒤 cond를 다시 평가하는가?', '그렇다. 최종 반환식에서도 평가한다', '아니다. 항상 이전 bool 결과만 저장해 반환한다', '(cond)?0:-ETIMEDOUT 식이 루프 뒤에 있습니다. 조건식에 부작용을 넣으면 예상과 다른 결과가 생길 수 있습니다.')
+    ]
+)]

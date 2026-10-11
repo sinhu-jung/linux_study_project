@@ -1,0 +1,154 @@
+{
+  "id": "file-7c3d5e7f700afdcf",
+  "path": "Documentation/locking/pi-futex.rst",
+  "title": "PI futex 문서 전체: 사용자 공간 빠른 경로와 커널 상속 상태",
+  "area": "사용자·커널 경계 · futex · 우선순위 역전 · 원자 연산",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "가벼운 PI futex의 동기와 사용자 공간 원자 연산·커널 RT mutex 연결을 설명하는 개요입니다.",
+  "guide": [
+    "무경합 획득·해제는 사용자 공간에서 처리하고, 경합하면 소유자 TID를 바탕으로 커널 PI 상태를 연결합니다. 우선순위 상속과 소유자 사망 복구는 별개의 기능입니다.",
+    "PI futex의 설계 의도를 이해하는 수업입니다. 문서는 성공 중심의 개요이며 현재 syscall의 모든 오류·취소·robust 상태와 ABI를 완전히 열거하는 사양은 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서 전체 구성",
+      "text": "가벼움의 세 이유, PI의 필요성을 짧고 길게 설명하는 두 절, Implementation의 획득·해제 경로, 사전 등록 불필요와 robustness 독립성, RT mutex 문서 참조로 구성됩니다. 문서 내 사례와 과거 비율 표현을 현재 시스템에서 측정한 사실로 재사용하지 않습니다."
+    },
+    {
+      "title": "가벼움의 세 기준",
+      "text": "무경합 사용자 공간 경로에 커널 호출·PI 등록이 없고, 느린 경로도 일반 futex와 비슷한 시스템 호출·스케줄링 패턴을 가지며, 커널 PI는 단일 소유자 mutex 제약에 집중한다는 설명입니다. 단일 소유자·소유자 해제·비재귀 조건으로 읽기쓰기 잠금까지 자동 지원하지 않는다고 명시합니다."
+    },
+    {
+      "title": "우선순위 역전 예제",
+      "text": "높은 H와 낮은 L이 잠금을 공유하고 L이 보유한 상태에서 H가 기다린다고 합시다. 중간 M이 L을 계속 선점하면 임계구역 자체가 짧아도 H의 대기는 길어질 수 있습니다. PI는 L에게 H의 유효 우선순위를 전달해 진행 기회를 주려는 기법입니다. 임계구역 길이만 제한하면 전체 대기 시간이 자동으로 제한된다는 주장을 반박하는 사례입니다."
+    },
+    {
+      "title": "사용자 공간에서 스핀만으로 부족한 이유",
+      "text": "문서는 사용자 공간이 커널처럼 IRQ를 끄거나 임계구역 동안 태스크를 비선점 상태로 만들 수 없다는 점을 듭니다. 따라서 단순 사용자 공간 spinlock도 낮은 우선순위 소유자의 선점 문제를 그대로 가질 수 있습니다. PI가 모든 설계에서 유일한 해법이라고 확대하기보다 이 문서가 다루는 잠금·스케줄링 조건에 한정해 이해합니다."
+    },
+    {
+      "title": "사례와 설계 주장 범위",
+      "text": "오디오 재생·데이터 구성·화면 표시 등 서로 다른 우선순위 작업이 짧은 잠금을 공유하는 예를 듭니다. lockless 구현의 복잡성과 리뷰 어려움, 물리 자원 제약도 동기로 설명합니다. 문서의1:10~1:100 비율이나 최선·최악 지연 개선 문구는 이 수업의 최신 벤치마크나 모든 프로그램에 대한 수학적 지연 보증이 아닙니다."
+    },
+    {
+      "title": "사용자 공간 상태와 빠른 획득",
+      "text": "기본 개요에서0은 비잠금, TID는 소유자입니다. 사용자 공간 원자 연산이0→자기 TID 전환에 성공하면 커널 진입 없이 획득합니다. 경합 경로에는 FUTEX_WAITERS 같은 플래그가 결합되므로 모든 futex 값을 무조건 순수 TID로 읽으면 안 됩니다. 여기서 TID는 소유 스레드를 식별하는 값입니다."
+    },
+    {
+      "title": "느린 획득과 PI 상태",
+      "text": "빠른 획득 실패 시 FUTEX_LOCK_PI를 호출합니다. 문서는 필요할 때 해당 futex의 큐에 pi_state를 붙이고 저장된 TID로 소유 태스크를 찾아 RT mutex의 대리 소유자로 설정하는 흐름을 설명합니다. FUTEX_WAITERS를 원자적으로 설정하고 요청 태스크는 RT mutex 획득을 기다립니다. PI 전파를 사용자 공간의 바쁜 루프가 직접 수행하는 구조가 아닙니다."
+    },
+    {
+      "title": "획득 성공과 오류의 구분",
+      "text": "문서의 성공 흐름은 커널이 새 소유자의 TID와 WAITERS 표식을 사용자 공간 값에 반영해 반환한다고 설명합니다. 모든 syscall 반환이 성공이라는 뜻은 아닙니다. 앞서 읽은 proxy API처럼 중단·시간 제한·정리 경쟁이 있으므로 실제 사용자는 syscall 결과와 전체 프로토콜을 따라야 합니다. 이 문서에는 전체 오류 표가 없습니다."
+    },
+    {
+      "title": "빠른 해제",
+      "text": "사용자 공간이 자기 TID→0의 원자 전환에 성공하면 커널 작업 없이 끝납니다. 단순히 포인터 부분을 지우는 일반 저장과 다르며 기대값 비교로 경합 표식을 확인합니다. WAITERS가 결합된 값을 순수 TID와 같다고 간주해 무조건0으로 덮으면 커널 대기자를 누락할 수 있습니다."
+    },
+    {
+      "title": "느린 해제",
+      "text": "WAITERS 때문에 빠른 해제가 실패하면 FUTEX_UNLOCK_PI로 들어가 커널이 사용자 공간을 대신해 futex와 연결된 RT mutex의 해제를 처리하고 대기자를 깨우는 흐름입니다. 사용자 공간이 임의로 커널 잠금 소유자를 변경하는 API가 아니며 소유자만 해제한다는 처음의 계약을 유지합니다."
+    },
+    {
+      "title": "사전 등록 없는 설계",
+      "text": "문서는 PI futex를 사용 전에 별도 커널 등록하지 않아도 된다는 점을 강조합니다. 경합 시 필요한 PI 상태를 연결하는 방식이므로 사용자 공간 mutex 자체의 초기화나 메모리 수명 요구까지 없어지는 것은 아닙니다. 모든 호출에서 커널 자원이 전혀 필요 없다는 의미도 아닙니다."
+    },
+    {
+      "title": "Robust와 PI의 독립성",
+      "text": "문서는 일반 futex, robust futex, PI futex, robust+PI futex 네 조합이 가능하다고 설명합니다. PI는 우선순위 역전 문제이고 robust는 소유자 사망 등의 복구 프로토콜과 관련됩니다. 우선순위를 상속한다고 소유자 사망을 자동으로 완전 복구하는 것은 아닙니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "원자 비교 교환, fastpath와 syscall 경계, 사용자 메모리와 커널 상태의 일관성, 소유 스레드 식별, 우선순위 의존 체인, 직교적인 기능 조합을 학습합니다. 참조된 RT mutex 문서와 구현은 별도 수업이며 이 개요만으로 futex 구현 전체를 완료 처리하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "PI mutex의 무경합 빠른 획득은 반드시 syscall을 호출하는가?",
+      "options": [
+        "아니다. 사용자 공간의0→TID 원자 전환으로 가능하다",
+        "그렇다. 모든 획득마다 커널에 등록해야 한다"
+      ],
+      "answer": 0,
+      "explanation": "문서가 가벼움의 첫 이유로 든 특성입니다. 경합 실패 때 커널 PI 처리로 전환하는 것과 구분합니다."
+    },
+    {
+      "prompt": "낮은 우선순위 소유자의 임계구역이 짧으면 높은 대기자의 지연도 항상 짧은가?",
+      "options": [
+        "그렇다. 임계구역 명령 수만이 대기 시간의 유일한 요소다",
+        "아니다. 중간 우선순위 작업이 소유자를 선점할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "우선순위 역전은 소유자가 실행될 기회를 잃는 문제를 포함합니다. PI는 그 실행 우선순위를 조정해 진행을 돕습니다."
+    },
+    {
+      "prompt": "FUTEX_WAITERS가 있는 값을 일반 저장으로0으로 만들면 충분한가?",
+      "options": [
+        "아니다. 커널 대기·인계 절차가 필요할 수 있다",
+        "그렇다. 어떤 비트가 있든0이면 모든 대기자가 자동으로 깨어난다"
+      ],
+      "answer": 0,
+      "explanation": "문서는 WAITERS로 빠른 비교 교환이 실패하면 FUTEX_UNLOCK_PI로 가도록 설명합니다. 사용자 공간 저장만으로 커널의 잠든 태스크가 자동 깨워지지 않습니다."
+    },
+    {
+      "prompt": "PI가 켜져 있으면 robust 기능도 자동으로 켜진 것인가?",
+      "options": [
+        "그렇다. 두 용어는 같은 소유자 사망 복구 기능이다",
+        "아니다. 문서는 두 기능이 독립적이라고 설명한다"
+      ],
+      "answer": 1,
+      "explanation": "일반·robust·PI·robust+PI 네 조합을 구분합니다. 우선순위 상속과 소유자 사망 처리의 목적은 다릅니다."
+    },
+    {
+      "prompt": "느린 획득에서 커널 RT mutex 소유자로 처음 연결하는 대상은?",
+      "options": [
+        "사용자 공간 futex 값의 TID가 가리키는 기존 소유자",
+        "언제나 획득을 요청한 대기자 자신"
+      ],
+      "answer": 0,
+      "explanation": "현재 소유자에게 우선순위를 전달해야 하므로 커널 PI 상태는 실제 기존 소유 관계를 반영합니다. 대기자는 이후 획득 성공을 기다립니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "======================\nLightweight PI-futexes\n======================\n\nWe are calling them lightweight for 3 reasons:\n\n - in the user-space fastpath a PI-enabled futex involves no kernel work\n   (or any other PI complexity) at all. No registration, no extra kernel\n   calls - just pure fast atomic ops in userspace.\n\n - even in the slowpath, the system call and scheduling pattern is very\n   similar to normal futexes.\n\n - the in-kernel PI implementation is streamlined around the mutex\n   abstraction, with strict rules that keep the implementation\n   relatively simple: only a single owner may own a lock (i.e. no\n   read-write lock support), only the owner may unlock a lock, no\n   recursive locking, etc.\n\nPriority Inheritance - why?\n---------------------------\n\nThe short reply: user-space PI helps achieving/improving determinism for\nuser-space applications. In the best-case, it can help achieve\ndeterminism and well-bound latencies. Even in the worst-case, PI will\nimprove the statistical distribution of locking related application\ndelays.\n\nThe longer reply\n----------------\n\nFirstly, sharing locks between multiple tasks is a common programming\ntechnique that often cannot be replaced with lockless algorithms. As we\ncan see it in the kernel [which is a quite complex program in itself],\nlockless structures are rather the exception than the norm - the current\nratio of lockless vs. locky code for shared data structures is somewhere\nbetween 1:10 and 1:100. Lockless is hard, and the complexity of lockless\nalgorithms often endangers to ability to do robust reviews of said code.\nI.e. critical RT apps often choose lock structures to protect critical\ndata structures, instead of lockless algorithms. Furthermore, there are\ncases (like shared hardware, or other resource limits) where lockless\naccess is mathematically impossible.\n\nMedia players (such as Jack) are an example of reasonable application\ndesign with multiple tasks (with multiple priority levels) sharing\nshort-held locks: for example, a highprio audio playback thread is\ncombined with medium-prio construct-audio-data threads and low-prio\ndisplay-colory-stuff threads. Add video and decoding to the mix and\nwe've got even more priority levels.\n\nSo once we accept that synchronization objects (locks) are an\nunavoidable fact of life, and once we accept that multi-task userspace\napps have a very fair expectation of being able to use locks, we've got\nto think about how to offer the option of a deterministic locking\nimplementation to user-space.\n\nMost of the technical counter-arguments against doing priority\ninheritance only apply to kernel-space locks. But user-space locks are\ndifferent, there we cannot disable interrupts or make the task\nnon-preemptible in a critical section, so the 'use spinlocks' argument\ndoes not apply (user-space spinlocks have the same priority inversion\nproblems as other user-space locking constructs). Fact is, pretty much\nthe only technique that currently enables good determinism for userspace\nlocks (such as futex-based pthread mutexes) is priority inheritance:\n\nCurrently (without PI), if a high-prio and a low-prio task shares a lock\n[this is a quite common scenario for most non-trivial RT applications],\neven if all critical sections are coded carefully to be deterministic\n(i.e. all critical sections are short in duration and only execute a\nlimited number of instructions), the kernel cannot guarantee any\ndeterministic execution of the high-prio task: any medium-priority task\ncould preempt the low-prio task while it holds the shared lock and\nexecutes the critical section, and could delay it indefinitely.\n\nImplementation\n--------------\n\nAs mentioned before, the userspace fastpath of PI-enabled pthread\nmutexes involves no kernel work at all - they behave quite similarly to\nnormal futex-based locks: a 0 value means unlocked, and a value==TID\nmeans locked. (This is the same method as used by list-based robust\nfutexes.) Userspace uses atomic ops to lock/unlock these mutexes without\nentering the kernel.\n\nTo handle the slowpath, we have added two new futex ops:\n\n  - FUTEX_LOCK_PI\n  - FUTEX_UNLOCK_PI\n\nIf the lock-acquire fastpath fails, [i.e. an atomic transition from 0 to\nTID fails], then FUTEX_LOCK_PI is called. The kernel does all the\nremaining work: if there is no futex-queue attached to the futex address\nyet then the code looks up the task that owns the futex [it has put its\nown TID into the futex value], and attaches a 'PI state' structure to\nthe futex-queue. The pi_state includes an rt-mutex, which is a PI-aware,\nkernel-based synchronization object. The 'other' task is made the owner\nof the rt-mutex, and the FUTEX_WAITERS bit is atomically set in the\nfutex value. Then this task tries to lock the rt-mutex, on which it\nblocks. Once it returns, it has the mutex acquired, and it sets the\nfutex value to its own TID and returns. Userspace has no other work to\nperform - it now owns the lock, and futex value contains\nFUTEX_WAITERS|TID.\n\nIf the unlock side fastpath succeeds, [i.e. userspace manages to do a\nTID -> 0 atomic transition of the futex value], then no kernel work is\ntriggered.\n\nIf the unlock fastpath fails (because the FUTEX_WAITERS bit is set),\nthen FUTEX_UNLOCK_PI is called, and the kernel unlocks the futex on the\nbehalf of userspace - and it also unlocks the attached\npi_state->rt_mutex and thus wakes up any potential waiters.\n\nNote that under this approach, contrary to previous PI-futex approaches,\nthere is no prior 'registration' of a PI-futex. [which is not quite\npossible anyway, due to existing ABI properties of pthread mutexes.]\n\nAlso, under this scheme, 'robustness' and 'PI' are two orthogonal\nproperties of futexes, and all four combinations are possible: futex,\nrobust-futex, PI-futex, robust+PI-futex.\n\nMore details about priority inheritance can be found in\nDocumentation/locking/rt-mutex.rst.\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "f965ce4c316a39f37cccbcaaf4f3e183c8b9b35eb0dc81ec2eca1e7181666268",
+    "scope": "whole-file",
+    "line_count": 122,
+    "authoring_source": "course/file_units/pi_futex_document.py",
+    "sections": [
+      "문서 전체 구성",
+      "가벼움의 세 기준",
+      "우선순위 역전 예제",
+      "사용자 공간에서 스핀만으로 부족한 이유",
+      "사례와 설계 주장 범위",
+      "사용자 공간 상태와 빠른 획득",
+      "느린 획득과 PI 상태",
+      "획득 성공과 오류의 구분",
+      "빠른 해제",
+      "느린 해제",
+      "사전 등록 없는 설계",
+      "Robust와 PI의 독립성",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/locking/pi-futex.rst"
+    }
+  ]
+}

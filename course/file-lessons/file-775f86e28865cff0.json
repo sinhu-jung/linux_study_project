@@ -1,0 +1,120 @@
+{
+  "id": "file-775f86e28865cff0",
+  "path": "include/linux/build_bug.h",
+  "title": "빌드 검사 전체: 상수 불변식을 컴파일 오류로 만들기",
+  "area": "컴파일 시 검증 · 상수식·구조체 ABI",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "실행 중 잘못된 상태를 발견하기 전에 타입·배치·상수의 전제를 검사합니다.",
+  "guide": [
+    "BUILD_BUG_ON 계열은 참이면 실패하는 조건을,static_assert는 참이어야 하는 조건을 표현합니다. 값0을 만드는 검사,표현식 유효성만 확인하는 검사,구조체 오프셋 검사도 제공합니다.",
+    "런타임 입력 검증이나 복구 코드를 대체하지 않습니다. 각 매크로가 요구하는 상수식·컴파일러 분석 조건을 구분하고 기대한 실패가 실제로 컴파일에서 발생하는지 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX,guard,compiler.h 포함 후 BUILD_BUG_ON_ZERO,2의 거듭제곱 검사2종,INVALID,MSG,ON,무조건 BUILD_BUG,static_assert wrapper,ASSERT_STRUCT_OFFSET을 정의합니다. 함수 본문이나 가변 전역 상태는 없습니다."
+    },
+    {
+      "title": "값을 갖는 검사",
+      "text": "일반 BUILD_BUG_ON_ZERO(e)는 익명 구조체 비트필드의 폭을 -!!e로 만듭니다. e가참이면 음수 폭으로 컴파일 오류가 나고 거짓이면 이 GNU C 표현에서 int형0을 얻어 초기화 식 등에 더할 수 있습니다. __CHECKER__에서는 별도 분기로 단순0을 정의하므로 같은 강제 검사 경로가 아닙니다."
+    },
+    {
+      "title": "2의 거듭제곱과0",
+      "text": "n&(n-1)은 양의2의 거듭제곱에서0이 됩니다. 공개 BUILD_BUG_ON_NOT_POWER_OF_2는 n==0도 검사하지만 내부 __BUILD_BUG_ON_NOT_POWER_OF_2는 비트식만 검사하므로0을 배제하지 않습니다. 내부 helper와 공개 전제를 구분합니다."
+    },
+    {
+      "title": "평가하지 않는 표현식 검사",
+      "text": "BUILD_BUG_ON_INVALID(e)는 sizeof((__force long)e)를 void로 버립니다. 표현식의 형식이 유효한지는 컴파일러가 확인하지만 이 고정 long 타입 sizeof의 피연산자는 실행되지 않습니다. x++를 넣어도 x 증가를 실행하는 런타임 검사가 아닙니다."
+    },
+    {
+      "title": "조건과 진단 메시지",
+      "text": "BUILD_BUG_ON_MSG(cond,msg)는 compiletime_assert(!cond,msg)에 위임합니다. BUILD_BUG_ON은 조건을 문자열로 포함한 기본 메시지를 붙이고 BUILD_BUG는 조건1을 전달합니다. BUILD_BUG는 컴파일러가 제거해야 하는 경로가 남는지 확인하는 용도도 있어 단순 실행 시 panic 함수와 다릅니다."
+    },
+    {
+      "title": "static_assert",
+      "text": "C11 _Static_assert wrapper이며 메시지를 생략하면 조건의 문자열을 사용합니다. 전역 영역에서도 사용할 수 있지만 정수 상수식이 필요합니다. __builtin_constant_p가 참으로 보는 식이라고 모두 정수 상수식인 것은 아닙니다. BUILD_BUG_ON과 실패 조건의 방향이 반대입니다."
+    },
+    {
+      "title": "구조체 오프셋",
+      "text": "ASSERT_STRUCT_OFFSET은 offsetof(type,field)가 예상 오프셋과 다른지 BUILD_BUG_ON_MSG로 검사합니다. 필드가 같은 이름이어도 패딩·순서·타입 변화로 ABI 위치가 달라지는 것을 감지할 수 있습니다. 예상값은 검증하려는 대상 ABI에서 정해야 합니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "정상 식의 컴파일 성공만 보는 것으로 충분하지 않습니다. 거짓 static_assert,참 BUILD_BUG_ON_ZERO,0과3의 거듭제곱 검사 등 실패해야 하는 사례의 컴파일 거부도 확인합니다. 의존성 compiletime_assert를 대체한 사용자 공간 검사는 실제 커널 컴파일러 전체 동작 검증과 구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "BUILD_BUG_ON과 static_assert의 실패 조건은?",
+      "options": [
+        "각각 조건이 참일 때와 거짓일 때다",
+        "둘 다 조건이 참이면 실패한다"
+      ],
+      "answer": 0,
+      "explanation": "BUILD_BUG_ON은 금지 상태를,static_assert는 유지할 불변식을 표현합니다. 조건의 방향을 반대로 쓰면 정상 코드를 거부합니다."
+    },
+    {
+      "prompt": "내부 __BUILD_BUG_ON_NOT_POWER_OF_2는0을 배제하는가?",
+      "options": [
+        "그렇다. 비트식 하나로0도 반드시 거부한다",
+        "아니다. 공개 버전에 별도 n==0 검사가 있다"
+      ],
+      "answer": 1,
+      "explanation": "0&(0-1)은0이어서 비트식만으로는0이 통과합니다. 공개 매크로가 추가 조건을 둡니다."
+    },
+    {
+      "prompt": "BUILD_BUG_ON_INVALID(x++)가 x를 증가시키는가?",
+      "options": [
+        "아니다. 형식만 검사하고 sizeof 안의 식을 실행하지 않는다",
+        "그렇다. 매크로 호출마다 증가한다"
+      ],
+      "answer": 0,
+      "explanation": "long으로 변환한 표현식의 sizeof는 런타임 부수효과를 수행하지 않습니다."
+    },
+    {
+      "prompt": "ASSERT_STRUCT_OFFSET은 무엇을 확인하는가?",
+      "options": [
+        "구조체가 힙에 할당되었는지",
+        "지정 필드가 예상 바이트 오프셋에 있는지"
+      ],
+      "answer": 1,
+      "explanation": "offsetof와 상수 예상 위치를 비교합니다. 할당이나 객체 수명 상태는 검사하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_BUILD_BUG_H\n#define _LINUX_BUILD_BUG_H\n\n#include <linux/compiler.h>\n\n#ifdef __CHECKER__\n#define BUILD_BUG_ON_ZERO(e) (0)\n#else /* __CHECKER__ */\n/*\n * Force a compilation error if condition is true, but also produce a\n * result (of value 0 and type int), so the expression can be used\n * e.g. in a structure initializer (or where-ever else comma expressions\n * aren't permitted).\n */\n#define BUILD_BUG_ON_ZERO(e) ((int)(sizeof(struct { int:(-!!(e)); })))\n#endif /* __CHECKER__ */\n\n/* Force a compilation error if a constant expression is not a power of 2 */\n#define __BUILD_BUG_ON_NOT_POWER_OF_2(n)\t\\\n\tBUILD_BUG_ON(((n) & ((n) - 1)) != 0)\n#define BUILD_BUG_ON_NOT_POWER_OF_2(n)\t\t\t\\\n\tBUILD_BUG_ON((n) == 0 || (((n) & ((n) - 1)) != 0))\n\n/*\n * BUILD_BUG_ON_INVALID() permits the compiler to check the validity of the\n * expression but avoids the generation of any code, even if that expression\n * has side-effects.\n */\n#define BUILD_BUG_ON_INVALID(e) ((void)(sizeof((__force long)(e))))\n\n/**\n * BUILD_BUG_ON_MSG - break compile if a condition is true & emit supplied\n *\t\t      error message.\n * @condition: the condition which the compiler should know is false.\n *\n * See BUILD_BUG_ON for description.\n */\n#define BUILD_BUG_ON_MSG(cond, msg) compiletime_assert(!(cond), msg)\n\n/**\n * BUILD_BUG_ON - break compile if a condition is true.\n * @condition: the condition which the compiler should know is false.\n *\n * If you have some code which relies on certain constants being equal, or\n * some other compile-time-evaluated condition, you should use BUILD_BUG_ON to\n * detect if someone changes it.\n */\n#define BUILD_BUG_ON(condition) \\\n\tBUILD_BUG_ON_MSG(condition, \"BUILD_BUG_ON failed: \" #condition)\n\n/**\n * BUILD_BUG - break compile if used.\n *\n * If you have some code that you expect the compiler to eliminate at\n * build time, you should use BUILD_BUG to detect if it is\n * unexpectedly used.\n */\n#define BUILD_BUG() BUILD_BUG_ON_MSG(1, \"BUILD_BUG failed\")\n\n/**\n * static_assert - check integer constant expression at build time\n *\n * static_assert() is a wrapper for the C11 _Static_assert, with a\n * little macro magic to make the message optional (defaulting to the\n * stringification of the tested expression).\n *\n * Contrary to BUILD_BUG_ON(), static_assert() can be used at global\n * scope, but requires the expression to be an integer constant\n * expression (i.e., it is not enough that __builtin_constant_p() is\n * true for expr).\n *\n * Also note that BUILD_BUG_ON() fails the build if the condition is\n * true, while static_assert() fails the build if the expression is\n * false.\n */\n#define static_assert(expr, ...) __static_assert(expr, ##__VA_ARGS__, #expr)\n#define __static_assert(expr, msg, ...) _Static_assert(expr, msg)\n\n\n/*\n * Compile time check that field has an expected offset\n */\n#define ASSERT_STRUCT_OFFSET(type, field, expected_offset)\t\\\n\tBUILD_BUG_ON_MSG(offsetof(type, field) != (expected_offset),\t\\\n\t\t\"Offset of \" #field \" in \" #type \" has changed.\")\n\n\n#endif\t/* _LINUX_BUILD_BUG_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7e1bb281707aceca0c2c481d96c713f89eb26c17b6e984b8680ac407e7b89e22",
+    "scope": "whole-file",
+    "line_count": 89,
+    "authoring_source": "course/file_units/build_assertions.py",
+    "sections": [
+      "파일 전체",
+      "값을 갖는 검사",
+      "2의 거듭제곱과0",
+      "평가하지 않는 표현식 검사",
+      "조건과 진단 메시지",
+      "static_assert",
+      "구조체 오프셋",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/build_bug.h"
+    }
+  ]
+}

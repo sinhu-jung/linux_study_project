@@ -1,0 +1,82 @@
+{
+  "id": "file-871ac47999974dd9",
+  "path": "include/kunit/platform_device.h",
+  "title": "KUnit 플랫폼 장치 선언: 할당·등록·대기의 분리",
+  "area": "C 타입 · 인터페이스 · 자원 수명 · 동기화",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "네 공개 함수 선언과 헤더의 타입 의존성을 전체 확인합니다.",
+  "guide": [
+    "할당,등록,완료 알림 준비는 반환 타입과 인수가 서로 다른 단계입니다.",
+    "전방 선언,prototype scope와 호출자의 동기화 책임을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "구성과 전방 선언",
+      "text": "GPL-2.0 헤더의 guard 이름은 파일명 device와 달리 _KUNIT_PLATFORM_DRIVER_H입니다. kunit,platform_device,platform_driver를 전방 선언하고 include는 없습니다. 포인터 인수와 반환 선언에는 해당 구조체의 전체 정의가 필요하지 않습니다."
+    },
+    {
+      "title": "네 단계의 선언",
+      "text": "alloc은 test,name,id로 platform_device *를 반환합니다. add는 test,pdev로 int를 반환합니다. prepare_wait_for_probe는 test,pdev,completion *x를 받고 int를 반환합니다. driver_register는 test,platform_driver *로 int를 반환합니다. 대기 함수 자체나 timeout 인수는 이 헤더에 선언되지 않습니다."
+    },
+    {
+      "title": "Completion 타입 의존성",
+      "text": "struct completion을 별도로 전방 선언하거나 그 정의 헤더를 포함하지 않은 채 함수 인수에서 사용합니다. 이전에 해당 태그가 보이지 않는 포함 순서에서는 prototype scope의 태그 선언 문제가 생길 수 있으므로 완전히 자급적인 헤더라고 단정하지 않습니다. 구현 파일은 completion.h를 먼저 포함합니다. 이 파일에는 CONFIG 분기나 비활성 no-op stub도 없습니다."
+    },
+    {
+      "title": "검토 범위",
+      "text": "SPDX,guard,세 전방 선언,네 함수 선언과 끝 guard를 모두 대조했습니다. 반환 실패가 NULL인지 errno인지 등 구체적 동작은 구현 문서와 함께 확인해야 하며 이 선언만으로 객체 소유권 이전이나 cleanup 실행을 증명할 수 없습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "prepare_wait_for_probe 선언에 timeout 인수가 있는가?",
+      "options": [
+        "없다. completion 포인터만 전달한다",
+        "있다. 항상 3*HZ를 강제한다"
+      ],
+      "answer": 0,
+      "explanation": "3*HZ는 구현 문서의 별도 wait 예제에 등장합니다. 준비 API와 실제 대기를 구분합니다."
+    },
+    {
+      "prompt": "이 헤더가 struct completion을 파일 범위에서 별도로 전방 선언하는가?",
+      "options": [
+        "그렇다. 세 번째 선언이 completion이다",
+        "아니다. 앞의 전방 선언 목록에는 없다"
+      ],
+      "answer": 1,
+      "explanation": "전방 선언된 것은 kunit,platform_device,platform_driver입니다. 다른 태그가 앞서 보이는지 포함 순서를 살펴야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _KUNIT_PLATFORM_DRIVER_H\n#define _KUNIT_PLATFORM_DRIVER_H\n\nstruct kunit;\nstruct platform_device;\nstruct platform_driver;\n\nstruct platform_device *\nkunit_platform_device_alloc(struct kunit *test, const char *name, int id);\nint kunit_platform_device_add(struct kunit *test, struct platform_device *pdev);\n\nint kunit_platform_device_prepare_wait_for_probe(struct kunit *test,\n\t\t\t\t\t\t struct platform_device *pdev,\n\t\t\t\t\t\t struct completion *x);\n\nint kunit_platform_driver_register(struct kunit *test,\n\t\t\t\t   struct platform_driver *drv);\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a9b1046cc03a1832c4b4e43919154f428150e2bb97061be2897b2039f9f3e9dd",
+    "scope": "whole-file",
+    "line_count": 20,
+    "authoring_source": "course/file_units/kunit_platform_devices.py",
+    "sections": [
+      "구성과 전방 선언",
+      "네 단계의 선언",
+      "Completion 타입 의존성",
+      "검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/platform_device.h"
+    }
+  ]
+}

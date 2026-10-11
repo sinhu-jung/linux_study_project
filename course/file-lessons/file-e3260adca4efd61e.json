@@ -1,0 +1,101 @@
+{
+  "id": "file-e3260adca4efd61e",
+  "path": "arch/x86/entry/vdso/vgetcpu.c",
+  "title": "X86 vDSO getcpu: CPU·NUMA 조회와 무시되는 cache 인수",
+  "area": "CPU affinity · NUMA · vDSO · ABI 호환성 · bit packing · weak alias",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "공개 진입점과 weak alias를 전체 분석하고 실제 조회 helper의 역할을 연결합니다.",
+  "guide": [
+    "공개 ABI에 남은 인수가 현재 구현에서 사용되지 않을 수 있으며, CPU 위치 조회는 실행 위치를 고정하는 연산이 아닙니다.",
+    "NULL 출력 처리, packed CPU·node 값 분리, 캐시 인수의 실제 사용 여부를 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "GPL-2.0-only와 fast user context getcpu 주석 뒤 linux/kernel.h, linux/getcpu.h, asm/segment.h, vdso/processor.h를 포함합니다. __vdso_getcpu 본문 하나와 getcpu 별칭 선언으로 구성됩니다. 이 파일 자체에 syscall fallback이나 CPU feature 검사 본문은 없습니다."
+    },
+    {
+      "title": "공개 함수와 반환",
+      "text": "notrace long __vdso_getcpu(unsigned *cpu,unsigned *node,struct getcpu_cache *unused)는 vdso_read_cpunode(cpu,node)를 호출하고 0을 반환합니다. notrace는 추적 계측을 피하려는 함수 표식이며 메모리 접근 안전성을 보증하지 않습니다. 사용하지 않는 세 번째 인수는 이름도 unused이고 본문에서 읽거나 쓰지 않습니다."
+    },
+    {
+      "title": "조회 helper와 명령 선택",
+      "text": "교차 확인한 asm/segment.h의 vdso_read_cpunode는 기본 LSL 명령으로 CPU·node 인코딩 값을 얻고 RDPID 기능이 있으면 대체 명령을 사용합니다. helper가 값을 마스크와 shift로 나누어 출력합니다. 이 부분은 호출 관계를 설명하기 위한 확인이며 큰 segment.h 전체를 함께 완료 처리하지 않습니다."
+    },
+    {
+      "title": "출력 포인터와 조회의 한계",
+      "text": "helper는 cpu가 NULL이 아니면 CPU 부분을, node가 NULL이 아니면 node 부분을 기록합니다. 둘 다 NULL이어도 wrapper에는 별도 오류 반환 경로가 없습니다. NULL이 아닌 잘못된 주소까지 안전하게 처리한다는 보장은 아니며 이 사용자 공간 코드의 쓰기가 fault를 낼 수 있습니다. 조회 후 scheduler가 task를 이동시키지 못하게 하는 affinity 설정이나 잠금도 없습니다."
+    },
+    {
+      "title": "캐시 ABI와 별칭",
+      "text": "getcpu는 같은 세 인수·long 반환형의 weak alias로 __vdso_getcpu에 연결됩니다. tcache라는 인수 이름이 붙어도 별도 캐시 관리 본문이 생기지 않습니다. getcpu_cache 헤더의 역사적 캐시 설명을 현재 wrapper가 실제 수행한다고 가정하면 안 됩니다. NULL cache가 CPU 위치를 영구히 고정하는 보장도 아닙니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "전체 함수·속성·include·별칭을 대조했습니다. 인터페이스 호환성, 메모리 포인터와 optional 출력, CPU 조회와 실행 위치 고정의 차이가 핵심입니다. 실제 x86 CPU feature별 실행이나 task migration 재현 시험은 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "세 번째 getcpu_cache 인수는 현재 이 wrapper에서 어떻게 사용하는가?",
+      "options": [
+        "사용하지 않는다",
+        "매 호출마다 캐시를 업데이트하고 CPU 번호를 저장한다"
+      ],
+      "answer": 0,
+      "explanation": "본문은 cpu와 node만 helper에 넘깁니다. 선언에 cache 자료형이 남아 있다는 사실과 실제 동작은 구분해야 합니다."
+    },
+    {
+      "prompt": "node만 필요할 때 cpu=NULL이면 helper는 어떻게 하는가?",
+      "options": [
+        "반드시 두 포인터가 모두 있어야 하므로 wrapper가 -EINVAL을 반환한다",
+        "CPU 출력 쓰기를 생략하고 NULL이 아닌 node에 기록한다"
+      ],
+      "answer": 1,
+      "explanation": "확인한 helper는 각 포인터를 별도로 검사합니다. wrapper의 정상 반환은 0이며 잘못된 non-NULL 주소의 안전성까지 보장하는 것은 아닙니다."
+    },
+    {
+      "prompt": "getcpu 호출 뒤 같은 CPU에서 계속 실행됨이 보장되는가?",
+      "options": [
+        "아니다. 조회는 affinity 고정이나 migration 금지가 아니다",
+        "그렇다. 성공 반환이 CPU 잠금을 획득한다"
+      ],
+      "answer": 0,
+      "explanation": "값을 읽는 것과 scheduler의 이후 배치를 제한하는 것은 다른 작업입니다. 이 파일에는 CPU 고정 동작이 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright 2006 Andi Kleen, SUSE Labs.\n *\n * Fast user context implementation of getcpu()\n */\n\n#include <linux/kernel.h>\n#include <linux/getcpu.h>\n#include <asm/segment.h>\n#include <vdso/processor.h>\n\nnotrace long\n__vdso_getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *unused)\n{\n\tvdso_read_cpunode(cpu, node);\n\n\treturn 0;\n}\n\nlong getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache)\n\t__attribute__((weak, alias(\"__vdso_getcpu\")));\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "16472218890ce1e5bb5ad9f2c02eba86c43a9f3bf74bc4d4f234e8da3b71f410",
+    "scope": "whole-file",
+    "line_count": 22,
+    "authoring_source": "course/file_units/vdso_cpu_entry.py",
+    "sections": [
+      "파일 전체",
+      "공개 함수와 반환",
+      "조회 helper와 명령 선택",
+      "출력 포인터와 조회의 한계",
+      "캐시 ABI와 별칭",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/entry/vdso/vgetcpu.c"
+    }
+  ]
+}

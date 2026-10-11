@@ -1,0 +1,129 @@
+{
+  "id": "file-08ebcd2712bd0516",
+  "path": "include/linux/err.h",
+  "title": "오류 포인터 전체: 정상 주소·NULL·음수 오류의 구분",
+  "area": "오류 처리 · 포인터 표현·타입·주소 공간",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "포인터 반환 함수가 같은 반환값 공간으로 오류도 전달하는 커널 관례입니다.",
+  "guide": [
+    "MAX_ERRNO는4095입니다. 음수 오류를 포인터로 인코딩하고 unsigned long으로 해석한 값이 -4095 이상의 높은 구간인지 검사합니다. 오류 포인터는 객체 주소처럼 역참조하지 않습니다.",
+    "호출한 API가 NULL 실패인지 ERR_PTR 실패인지 계약을 먼저 확인합니다. IS_ERR와 IS_ERR_OR_NULL은 다르며 변환 함수 자체가 잘못된 입력을 검증해 주지는 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX,guard,compiler/types와 asm/errno 포함,설계 주석,MAX_ERRNO 정의가 먼저 있습니다. __ASSEMBLY__가 아닐 때만 오류 검사·변환 함수와 percpu 매크로를 제공합니다. 동적 할당이나 오류 객체 구조체는 없습니다."
+    },
+    {
+      "title": "표현과 범위",
+      "text": "IS_ERR_VALUE는 포인터를 unsigned long으로 해석하여 (unsigned long)-4095와 비교합니다. 커널의 주소 표현 관례에서 -4095..-1에 대응하는 값이 오류 구간입니다. 이 값들은 일반적인 객체를 만들지 않습니다. 임의 사용자 공간 ABI에 그대로 복사할 수 있는 보편적인 C 포인터 규칙으로 이해하면 안 됩니다."
+    },
+    {
+      "title": "인코딩과 디코딩",
+      "text": "ERR_PTR(long error)는 (void*)error를 반환하고 PTR_ERR는 (long)ptr를 반환합니다. ERR_PTR(-12)를 PTR_ERR로 읽으면 해당 커널 표현에서 -12가 됩니다. ERR_PTR는 양수나 범위 밖 값을 거부하지 않으므로 음수 오류 코드라는 입력 계약을 호출자가 지켜야 합니다. PTR_ERR도 정상 포인터인지 먼저 검사하지 않습니다."
+    },
+    {
+      "title": "NULL의 별도 의미",
+      "text": "IS_ERR(NULL)은 거짓이고 IS_ERR_OR_NULL(NULL)은 참입니다. ERR_PTR(0)은 NULL 표현에 해당하며 정상 오류 인코딩으로 사용하지 않습니다. PTR_ERR_OR_ZERO(NULL)은0이므로 NULL 실패를 보고하는 API에 이를 무조건 적용하면 실패를 성공으로 바꿀 수 있습니다."
+    },
+    {
+      "title": "percpu와 형식 검사",
+      "text": "ERR_PTR_PCPU,PTR_ERR_PCPU,IS_ERR_PCPU는 percpu 주소 공간 포인터용 명시적 변환을 제공합니다. __percpu와 __force는 커널의 주소 공간·정적 분석 관례와 연결됩니다. 매크로가 CPU별 저장소를 할당하거나 오류를 해당 CPU에 기록하는 것은 아닙니다."
+    },
+    {
+      "title": "ERR_CAST와 반환값 검사",
+      "text": "ERR_CAST는 오류 포인터를 다른 포인터 타입으로 전달하려는 의도를 드러내며 const를 제거한 void*를 반환합니다. 오류 값을 수정하거나 복구하지 않습니다. __must_check가 붙은 함수는 결과를 버리지 않도록 컴파일러 진단을 돕습니다. IS_ERR_VALUE에는 이 반환값 검사 속성이 없다는 차이가 주석에 있습니다."
+    },
+    {
+      "title": "오류 전파",
+      "text": "PTR_ERR_OR_ZERO는 IS_ERR이면 오류 번호를 int로 반환하고 그 외에는0입니다. 포인터 성공/오류 API의 결과를 정수 오류 반환 함수에 연결할 때 유용합니다. 다만 포인터가 객체를 소유하는지,성공 후 누가 해제하는지는 이 helper가 결정하지 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "서로 다른 결과 종류를 하나의 기계 값에 인코딩하는 방식,태그에 해당하는 예약 범위,정적 타입과 런타임 검사,주소 공간별 변환,오류 전파를 연결합니다. 실제 포인터·long 폭이 다른 호스트에서 억지로 실행하는 대신 대상 ABI 조건을 확인해야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "IS_ERR(NULL)과 IS_ERR_OR_NULL(NULL)은?",
+      "options": [
+        "각각 거짓과 참이다",
+        "둘 다 참이다"
+      ],
+      "answer": 0,
+      "explanation": "NULL은 오류 포인터 예약 범위와 별개입니다. OR_NULL 버전은 !ptr 조건을 추가합니다."
+    },
+    {
+      "prompt": "PTR_ERR_OR_ZERO(NULL)을 NULL 실패 API에 무조건 써도 되는가?",
+      "options": [
+        "된다. NULL을 자동으로 -ENOMEM으로 변환한다",
+        "안 된다. NULL에서0을 반환해 실패를 숨길 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "함수는 IS_ERR가 거짓이면0을 반환합니다. NULL에 별도 오류 의미를 부여하는 것은 호출한 API의 계약입니다."
+    },
+    {
+      "prompt": "ERR_PTR가 음수 오류 코드의 유효 범위를 검사하는가?",
+      "options": [
+        "아니다. 단순 타입 변환이다",
+        "그렇다. 범위를 벗어나면 예외를 던진다"
+      ],
+      "answer": 0,
+      "explanation": "본문은 (void*)error 반환뿐입니다. 입력 전제와 오류 범위를 호출자가 지켜야 합니다."
+    },
+    {
+      "prompt": "ERR_CAST가 오류 객체를 새로 할당하는가?",
+      "options": [
+        "그렇다. 대상 타입 크기의 객체를 만든다",
+        "아니다. 같은 오류 포인터 값을 명시적으로 변환한다"
+      ],
+      "answer": 1,
+      "explanation": "본문에는 캐스트만 있고 할당이나 복사가 없습니다. 반환값도 역참조할 정상 객체가 아닙니다."
+    },
+    {
+      "prompt": "ERR_PTR_PCPU는 CPU별 오류 저장소를 생성하는가?",
+      "options": [
+        "아니다. 주소 공간 타입의 변환을 표현한다",
+        "그렇다. CPU마다 오류 객체를 할당한다"
+      ],
+      "answer": 0,
+      "explanation": "매크로는 ERR_PTR 결과를 percpu 포인터 형식으로 바꿉니다. 메모리 할당이나 CPU 선택 연산은 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_ERR_H\n#define _LINUX_ERR_H\n\n#include <linux/compiler.h>\n#include <linux/types.h>\n\n#include <asm/errno.h>\n\n/*\n * Kernel pointers have redundant information, so we can use a\n * scheme where we can return either an error code or a normal\n * pointer with the same return value.\n *\n * This should be a per-architecture thing, to allow different\n * error and pointer decisions.\n */\n#define MAX_ERRNO\t4095\n\n#ifndef __ASSEMBLY__\n\n/**\n * IS_ERR_VALUE - Detect an error pointer.\n * @x: The pointer to check.\n *\n * Like IS_ERR(), but does not generate a compiler warning if result is unused.\n */\n#define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)\n\n/**\n * ERR_PTR - Create an error pointer.\n * @error: A negative error code.\n *\n * Encodes @error into a pointer value. Users should consider the result\n * opaque and not assume anything about how the error is encoded.\n *\n * Return: A pointer with @error encoded within its value.\n */\nstatic inline void * __must_check ERR_PTR(long error)\n{\n\treturn (void *) error;\n}\n\n/* Return the pointer in the percpu address space. */\n#define ERR_PTR_PCPU(error) ((void __percpu *)(unsigned long)ERR_PTR(error))\n\n/**\n * PTR_ERR - Extract the error code from an error pointer.\n * @ptr: An error pointer.\n * Return: The error code within @ptr.\n */\nstatic inline long __must_check PTR_ERR(__force const void *ptr)\n{\n\treturn (long) ptr;\n}\n\n/* Read an error pointer from the percpu address space. */\n#define PTR_ERR_PCPU(ptr) (PTR_ERR((const void *)(__force const unsigned long)(ptr)))\n\n/**\n * IS_ERR - Detect an error pointer.\n * @ptr: The pointer to check.\n * Return: true if @ptr is an error pointer, false otherwise.\n */\nstatic inline bool __must_check IS_ERR(__force const void *ptr)\n{\n\treturn IS_ERR_VALUE((unsigned long)ptr);\n}\n\n/* Read an error pointer from the percpu address space. */\n#define IS_ERR_PCPU(ptr) (IS_ERR((const void *)(__force const unsigned long)(ptr)))\n\n/**\n * IS_ERR_OR_NULL - Detect an error pointer or a null pointer.\n * @ptr: The pointer to check.\n *\n * Like IS_ERR(), but also returns true for a null pointer.\n */\nstatic inline bool __must_check IS_ERR_OR_NULL(__force const void *ptr)\n{\n\treturn unlikely(!ptr) || IS_ERR_VALUE((unsigned long)ptr);\n}\n\n/**\n * ERR_CAST - Explicitly cast an error-valued pointer to another pointer type\n * @ptr: The pointer to cast.\n *\n * Explicitly cast an error-valued pointer to another pointer type in such a\n * way as to make it clear that's what's going on.\n */\nstatic inline void * __must_check ERR_CAST(__force const void *ptr)\n{\n\t/* cast away the const */\n\treturn (void *) ptr;\n}\n\n/**\n * PTR_ERR_OR_ZERO - Extract the error code from a pointer if it has one.\n * @ptr: A potential error pointer.\n *\n * Convenience function that can be used inside a function that returns\n * an error code to propagate errors received as error pointers.\n * For example, ``return PTR_ERR_OR_ZERO(ptr);`` replaces:\n *\n * .. code-block:: c\n *\n *\tif (IS_ERR(ptr))\n *\t\treturn PTR_ERR(ptr);\n *\telse\n *\t\treturn 0;\n *\n * Return: The error code within @ptr if it is an error pointer; 0 otherwise.\n */\nstatic inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)\n{\n\tif (IS_ERR(ptr))\n\t\treturn PTR_ERR(ptr);\n\telse\n\t\treturn 0;\n}\n\n#endif\n\n#endif /* _LINUX_ERR_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "0ee06ca0a14aad70cbe82e76a7221427bbfac3141e48a006492c8a30239c6262",
+    "scope": "whole-file",
+    "line_count": 124,
+    "authoring_source": "course/file_units/error_pointers.py",
+    "sections": [
+      "파일 전체",
+      "표현과 범위",
+      "인코딩과 디코딩",
+      "NULL의 별도 의미",
+      "percpu와 형식 검사",
+      "ERR_CAST와 반환값 검사",
+      "오류 전파",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/err.h"
+    }
+  ]
+}

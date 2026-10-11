@@ -1,0 +1,125 @@
+{
+  "id": "file-3f298ccaaffddc0e",
+  "path": "include/asm-generic/mmiowb.h",
+  "title": "MMIOWB 추적 전체: 잠금 중 쓰기 표시와 해제 장벽",
+  "area": "Spinlock · MMIO 순서 · CPU별 상태 · 중첩 카운터 · 조건부 장벽",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "잠금 보호 영역의 장치 쓰기 순서를 이어 주는 상태 추적과 구성별 no-op을 해설합니다.",
+  "guide": [
+    "CPU 사이의 잠금 전달 순서와 장치가 관찰하는 쓰기 순서를 연결하기 위해 필요한 장벽만 해제 시 실행합니다.",
+    "RISC-V writel의 mmiowb_set_pending 호출이 이후 잠금 hook과 어떻게 이어지는지 추적합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "목적과 통합 계약",
+      "text": "GPL-2.0·guard와 주석은 서로 다른 CPU의 spinlocked 구역에서 나온 장치 쓰기가 lock handover 순서로 관찰되지 않는 아키텍처를 대상으로 합니다. mmiowb 구현,필요하면 상태 hook,쓰기 accessor의 pending 호출,ARCH_HAS_MMIOWB 선택과 헤더 통합이 필요하다고 설명합니다. 이 헤더 포함만으로 모든 쓰기 함수를 자동 계측하지 않습니다."
+    },
+    {
+      "title": "구성 분기",
+      "text": "실제 inline 추적은 CONFIG_MMIOWB 안에 있습니다. 그렇지 않으면 set_pending,spin_lock,spin_unlock 세 매크로가 빈 do-while입니다. 아키텍처가 기능을 선택하는 이름 ARCH_HAS_MMIOWB와 이 파일의 활성 분기 CONFIG_MMIOWB를 동일한 토큰으로 읽지 않습니다."
+    },
+    {
+      "title": "상태를 얻는 방법",
+      "text": "arch_mmiowb_state 매크로가 없으면 percpu·smp 헤더를 포함하고 __mmiowb_state라는 per-CPU 구조체를 선언합니다. 함수형 __mmiowb_state() 매크로는 raw_cpu_ptr로 현재 CPU 상태를 얻습니다. 아키텍처 hook이 있으면 그 함수형 매크로를 사용합니다. 여기의 DECLARE_PER_CPU는 저장 공간 정의가 아닙니다."
+    },
+    {
+      "title": "Pending 기록",
+      "text": "mmiowb_set_pending은 nesting_count가0이 아닐 때 pending에 현재 깊이를 대입합니다. 단순히 항상1로 설정하는 본문은 아니며 깊이0에서는 아무것도 하지 않습니다. 이 호출 자체는 mmiowb 장벽을 실행하지 않습니다."
+    },
+    {
+      "title": "잠금 진입 hook",
+      "text": "mmiowb_spin_lock은 nesting_count를1 증가시킵니다. 실제 spinlock을 획득하는 명령이나 락 주소 인자는 없습니다. 따라서 이 helper만 호출해서 공유 자원이 보호되는 것은 아니며 실제 잠금 동작과 올바르게 연결돼야 합니다."
+    },
+    {
+      "title": "해제 hook의 순서",
+      "text": "mmiowb_spin_unlock은 pending이0이 아니면 먼저0으로 지우고 mmiowb를 호출합니다. 그 다음 nesting_count를1 줄입니다. pending에 저장된 깊이와 현재 깊이를 비교하거나 최외곽 깊이에서만 장벽을 실행하는 조건은 없습니다. 숫자로 깊이를 저장하더라도 소비 조건은 비0 여부입니다."
+    },
+    {
+      "title": "중첩 예제",
+      "text": "초기 count0,pending0에서 두 lock hook 뒤 count2가 됩니다. 쓰기 pending은2로 기록되고 첫 unlock hook은 pending을0으로 지우며 장벽 후 count1로 만듭니다. 추가 쓰기가 없으면 두 번째 unlock은 장벽 없이 count0입니다. 첫 unlock 뒤 바깥 구역에서 다시 쓰면 pending1이 되어 마지막 unlock에도 장벽을 실행합니다."
+    },
+    {
+      "title": "사용 전제와 한계",
+      "text": "상태는 잠금 객체별 테이블이 아니라 CPU별 상태 또는 아키텍처 제공 상태입니다. 현재 CPU 상태를 안전하게 사용하는 문맥과 균형 잡힌 진입·해제가 필요합니다. 카운터 underflow/overflow 검사나 잠금 종류 검증은 본문에 없고 likely/unlikely도 조건의 의미를 바꾸지 않습니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "지연된 동기화,pending 상태 기계,중첩 깊이와 bool 소비 조건의 차이,per-CPU 자료구조,아키텍처 hook과 공통 코드의 분업을 학습합니다. 장벽을 호출하는 것은 모든 장치 동작 완료나 범용 memory ownership을 자동 보증하는 것으로 확대하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "count2에서 pending이 기록된 뒤 첫 unlock은 장벽을 실행하는가?",
+      "options": [
+        "그렇다. pending 비0이면 즉시 실행한다",
+        "아니다. 반드시 count0까지 기다린다"
+      ],
+      "answer": 0,
+      "explanation": "unlock 조건에는 깊이 비교가 없습니다. pending0으로 초기화하고 장벽을 실행한 뒤 count를 줄입니다."
+    },
+    {
+      "prompt": "count0에서 mmiowb_set_pending을 호출하면?",
+      "options": [
+        "항상 pending1과 full barrier를 만든다",
+        "pending을 새로 설정하지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "if(nesting_count) 안에서만 대입합니다. 이 함수에는 mmiowb 호출도 없습니다."
+    },
+    {
+      "prompt": "mmiowb_spin_lock 자체가 실제 spinlock을 획득하는가?",
+      "options": [
+        "아니다. 상태의 중첩 카운터만 올린다",
+        "그렇다. 모든 장치 접근을 잠근다"
+      ],
+      "answer": 0,
+      "explanation": "락 주소도 받지 않습니다. 실제 잠금의 부가 추적 hook이라는 역할을 구분해야 합니다."
+    },
+    {
+      "prompt": "CONFIG_MMIOWB가 없으면 세 추적 API는?",
+      "options": [
+        "항상 per-CPU 상태를 갱신한다",
+        "빈 do-while 매크로이다"
+      ],
+      "answer": 1,
+      "explanation": "전체 inline 구현은 CONFIG_MMIOWB 분기 안에 있습니다. 비활성 분기에는 상태 접근이 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_MMIOWB_H\n#define __ASM_GENERIC_MMIOWB_H\n\n/*\n * Generic implementation of mmiowb() tracking for spinlocks.\n *\n * If your architecture doesn't ensure that writes to an I/O peripheral\n * within two spinlocked sections on two different CPUs are seen by the\n * peripheral in the order corresponding to the lock handover, then you\n * need to follow these FIVE easy steps:\n *\n * \t1. Implement mmiowb() (and arch_mmiowb_state() if you're fancy)\n *\t   in asm/mmiowb.h, then #include this file\n *\t2. Ensure your I/O write accessors call mmiowb_set_pending()\n *\t3. Select ARCH_HAS_MMIOWB\n *\t4. Untangle the resulting mess of header files\n *\t5. Complain to your architects\n */\n#ifdef CONFIG_MMIOWB\n\n#include <linux/compiler.h>\n#include <asm-generic/mmiowb_types.h>\n\n#ifndef arch_mmiowb_state\n#include <asm/percpu.h>\n#include <asm/smp.h>\n\nDECLARE_PER_CPU(struct mmiowb_state, __mmiowb_state);\n#define __mmiowb_state()\traw_cpu_ptr(&__mmiowb_state)\n#else\n#define __mmiowb_state()\tarch_mmiowb_state()\n#endif\t/* arch_mmiowb_state */\n\nstatic inline void mmiowb_set_pending(void)\n{\n\tstruct mmiowb_state *ms = __mmiowb_state();\n\n\tif (likely(ms->nesting_count))\n\t\tms->mmiowb_pending = ms->nesting_count;\n}\n\nstatic inline void mmiowb_spin_lock(void)\n{\n\tstruct mmiowb_state *ms = __mmiowb_state();\n\tms->nesting_count++;\n}\n\nstatic inline void mmiowb_spin_unlock(void)\n{\n\tstruct mmiowb_state *ms = __mmiowb_state();\n\n\tif (unlikely(ms->mmiowb_pending)) {\n\t\tms->mmiowb_pending = 0;\n\t\tmmiowb();\n\t}\n\n\tms->nesting_count--;\n}\n#else\n#define mmiowb_set_pending()\t\tdo { } while (0)\n#define mmiowb_spin_lock()\t\tdo { } while (0)\n#define mmiowb_spin_unlock()\t\tdo { } while (0)\n#endif\t/* CONFIG_MMIOWB */\n#endif\t/* __ASM_GENERIC_MMIOWB_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a3c29901be50ed7aef6c26ce8505e0a881189728913a4b02c8829b8f78aa793b",
+    "scope": "whole-file",
+    "line_count": 65,
+    "authoring_source": "course/file_units/mmiowb_tracking.py",
+    "sections": [
+      "목적과 통합 계약",
+      "구성 분기",
+      "상태를 얻는 방법",
+      "Pending 기록",
+      "잠금 진입 hook",
+      "해제 hook의 순서",
+      "중첩 예제",
+      "사용 전제와 한계",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/mmiowb.h"
+    }
+  ]
+}

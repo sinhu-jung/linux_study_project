@@ -1,0 +1,125 @@
+{
+  "id": "file-e11ba4f69e88f452",
+  "path": "kernel/time/timekeeping_debug.c",
+  "title": "Suspend 시간 히스토그램: 로그 구간과 계수의 한계",
+  "area": "히스토그램 · 비트 탐색 · 로그 구간 · debugfs · 정밀도 · 동시성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "수면 시간 집계, 비어 있지 않은 구간 출력, debugfs 등록 전체를 분석합니다.",
+  "guide": [
+    "로그 크기 구간은 넓은 값 범위를 적은 공간에 요약하지만 개별 표본과 정확한 총시간을 보존하지 않습니다.",
+    "sleep_time 통계의 초 단위 구간과 count를 해석하고 출력 범위 밖의 입력 전제를 식별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "GPL-2.0+와 suspend 시간 추적 설명, include 뒤 NUM_BINS=32와 unsigned int 배열 sleep_time_bin[32]를 0으로 초기화합니다. show, DEFINE_SHOW_ATTRIBUTE, late init, tk_debug_account_sleep_time 네 부분으로 구성됩니다. 표본별 목록이나 총 수면 시간 누적값은 없습니다."
+    },
+    {
+      "title": "구간 선택 알고리즘",
+      "text": "account는 fls(t->tv_sec)와 NUM_BINS-1 중 작은 값을 bin으로 삼습니다. 일반적인 비음수 32비트 값에서 fls(0)=0이고 양수는 가장 높은 1비트의 위치를 1부터 셉니다. 따라서 정수 초 0은 bin0, 1은 bin1, 2..3은 bin2, 4..7은 bin3입니다. 32개 구간으로 지수적으로 늘어나는 시간 범위를 요약합니다."
+    },
+    {
+      "title": "나노초와 초 경계",
+      "text": "구간 선택은 tv_nsec를 읽지 않습니다. 정상화된 비음수 입력이라면 0.999초는 bin0, 1.000초는 bin1, 2.000초는 bin2입니다. show의 1 - 2 표시는 일반 입력에서 1초 이상 2초 미만 구간으로 해석해야 하며 양 끝을 모두 포함하면 중복 집계가 됩니다."
+    },
+    {
+      "title": "상한 구간과 입력 폭",
+      "text": "min으로 인덱스를 31에 제한하므로 fls 결과가 32인 값도 마지막 bin에 합쳐집니다. 마지막 출력은 2^30부터 2^31로 보이지만 합쳐진 상위 값까지 정확히 표시하는 라벨은 아닙니다. 또한 호출은 fls이지 fls64가 아니므로 tv_sec가 time64_t라는 사실만으로 임의의 64비트 초 전체를 정확히 분류하지 않습니다. 음수나 매우 큰 입력에 대한 검증도 없습니다."
+    },
+    {
+      "title": "계수 갱신",
+      "text": "선택된 sleep_time_bin[bin]을 하나 증가합니다. 배열 원소는 unsigned int이며 포화·overflow 검사나 이 파일 안의 lock/atomic 연산은 없습니다. 함수가 두 CPU의 임의 동시 호출에서도 정확한 총계를 보장한다고 일반화하면 안 됩니다. 읽기 중 배열 전체를 원자적인 스냅샷으로 만드는 코드도 show에 없습니다."
+    },
+    {
+      "title": "시간 디버그 로그",
+      "text": "계수 증가 뒤 pm_deferred_pr_dbg에 초와 tv_nsec/NSEC_PER_MSEC를 전달합니다. 소수 부분은 세 자리 밀리초 표현이며 나머지 나노초는 버립니다. 계수는 호출마다 증가하지만 debug 메시지가 언제나 무조건 화면에 출력된다는 정책은 이 호출문 하나에서 보장되지 않습니다."
+    },
+    {
+      "title": "Show의 출력",
+      "text": "show는 time (secs), count 머리말과 구분선을 쓴 뒤 bin=0..31을 순회합니다. count=0이면 건너뛰며 하한은 bin0에서 0, 나머지에서 1<<(bin-1), 상한은 1<<bin으로 표시합니다. 계수와 구간 경계는 %u 형식입니다. 출력이 생략된 빈 구간을 존재하지 않는 시간 범위라고 해석하면 안 됩니다."
+    },
+    {
+      "title": "파일 등록과 수명",
+      "text": "DEFINE_SHOW_ATTRIBUTE가 show에 연결할 file operations를 생성합니다. init은 루트 debugfs에 sleep_time을 0444, private data NULL로 만들고 생성 결과를 확인하지 않은 채 0을 반환합니다. late_initcall로 등록하며 이 파일에는 쓰기·초기화·삭제 명령이나 module_exit가 없습니다."
+    },
+    {
+      "title": "CS와 검증 범위",
+      "text": "한 표본을 한 bin으로 압축하면 원래 분포의 세부 정보가 사라집니다. count를 각 구간의 대표값과 곱해 얻은 값은 정확한 총 수면 시간이 아닙니다. 전체 파일을 설명했지만 실제 suspend를 실행하거나 통계의 동시 호출 문맥 전체를 검증한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "정상 입력 3.5초는 어느 구간에 집계되는가?",
+      "options": [
+        "bin2, 즉 2초 이상 4초 미만 구간이다",
+        "bin3, 즉 4초 이상 8초 미만 구간이다"
+      ],
+      "answer": 0,
+      "explanation": "tv_sec=3의 fls는 2입니다. tv_nsec=500000000은 구간 선택에 사용하지 않습니다."
+    },
+    {
+      "prompt": "count가 0인 구간도 항상 출력되는가?",
+      "options": [
+        "그렇다. 32줄을 언제나 모두 출력한다",
+        "아니다. show가 건너뛴다"
+      ],
+      "answer": 1,
+      "explanation": "루프는 모든 bin을 방문하지만 0 계수에서 continue합니다. 출력 줄 수와 구간 개수는 다릅니다."
+    },
+    {
+      "prompt": "히스토그램만으로 정확한 총 suspend 시간을 복원할 수 있는가?",
+      "options": [
+        "아니다. 구간 내 개별 시간은 저장하지 않는다",
+        "그렇다. count를 상한과 곱하면 정확하다"
+      ],
+      "answer": 0,
+      "explanation": "같은 bin에 서로 다른 길이의 표본이 합쳐집니다. 경계와 계수는 요약 통계이며 정확한 합계가 아닙니다."
+    },
+    {
+      "prompt": "tv_sec가 64비트이면 이 코드의 구간 선택도 자동으로 64비트인가?",
+      "options": [
+        "그렇다. 함수 이름과 인자 변환은 중요하지 않다",
+        "아니다. 실제 호출은 fls이며 fls64가 아니다"
+      ],
+      "answer": 1,
+      "explanation": "표현식의 원래 타입과 호출된 비트 탐색 API의 폭을 구분해야 합니다. min은 배열 인덱스 상한만 제한합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * debugfs file to track time spent in suspend\n *\n * Copyright (c) 2011, Google, Inc.\n */\n\n#include <linux/debugfs.h>\n#include <linux/err.h>\n#include <linux/init.h>\n#include <linux/kernel.h>\n#include <linux/seq_file.h>\n#include <linux/suspend.h>\n#include <linux/time.h>\n\n#include \"timekeeping_internal.h\"\n\n#define NUM_BINS 32\n\nstatic unsigned int sleep_time_bin[NUM_BINS] = {0};\n\nstatic int tk_debug_sleep_time_show(struct seq_file *s, void *data)\n{\n\tunsigned int bin;\n\tseq_puts(s, \"      time (secs)        count\\n\");\n\tseq_puts(s, \"------------------------------\\n\");\n\tfor (bin = 0; bin < 32; bin++) {\n\t\tif (sleep_time_bin[bin] == 0)\n\t\t\tcontinue;\n\t\tseq_printf(s, \"%10u - %-10u %4u\\n\",\n\t\t\tbin ? 1 << (bin - 1) : 0, 1 << bin,\n\t\t\t\tsleep_time_bin[bin]);\n\t}\n\treturn 0;\n}\nDEFINE_SHOW_ATTRIBUTE(tk_debug_sleep_time);\n\nstatic int __init tk_debug_sleep_time_init(void)\n{\n\tdebugfs_create_file(\"sleep_time\", 0444, NULL, NULL,\n\t\t\t    &tk_debug_sleep_time_fops);\n\treturn 0;\n}\nlate_initcall(tk_debug_sleep_time_init);\n\nvoid tk_debug_account_sleep_time(const struct timespec64 *t)\n{\n\t/* Cap bin index so we don't overflow the array */\n\tint bin = min(fls(t->tv_sec), NUM_BINS-1);\n\n\tsleep_time_bin[bin]++;\n\tpm_deferred_pr_dbg(\"Timekeeping suspended for %lld.%03lu seconds\\n\",\n\t\t\t   (s64)t->tv_sec, t->tv_nsec / NSEC_PER_MSEC);\n}\n\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "9de50fbeece851778d7ed61d6e08a2ea87d3ce61998dc1c7f9b0145990964e9c",
+    "scope": "whole-file",
+    "line_count": 55,
+    "authoring_source": "course/file_units/timekeeping_debug.py",
+    "sections": [
+      "파일 전체",
+      "구간 선택 알고리즘",
+      "나노초와 초 경계",
+      "상한 구간과 입력 폭",
+      "계수 갱신",
+      "시간 디버그 로그",
+      "Show의 출력",
+      "파일 등록과 수명",
+      "CS와 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timekeeping_debug.c"
+    }
+  ]
+}

@@ -1,0 +1,267 @@
+{
+  "id": "file-514afa2248c27348",
+  "path": "kernel/time/namespace.c",
+  "title": "시간 네임스페이스 구현: 복제·동결·VVAR·offset 검증",
+  "area": "시간 네임스페이스 · 객체 수명 · 참조 카운팅 · mutex · VVAR · 권한 검사 · 오류 처리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "생성부터 해제까지의 객체 수명, 자식용 namespace, 시간 보정의 입력 검사와 공유 데이터 초기화를 추적합니다.",
+  "guide": [
+    "격리된 시간 보기는 offset만 더하는 기능이 아니라 객체 소유권, 참여 시점, 매핑 교체와 변경 정책을 함께 관리하는 기능입니다.",
+    "자원 획득의 역순 회수, 참조 카운팅, 이중 검사와 mutex, 다중 입력의 사전 검증을 실제 커널 코드로 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0 파일은 time namespace, user namespace, task·signal, clocksource, seq_file, proc namespace, time·slab·cred·err·mm와 vDSO datapage 인터페이스를 포함합니다. 정적인 작은 helper와 외부 호출 함수, 두 proc_ns_operations 테이블, init_time_ns 객체를 정의합니다. 사용자 입력 문자열의 파싱이나 아키텍처별 VMA 설치는 이 파일의 본문 밖에 있습니다."
+    },
+    {
+      "title": "Namespace 시간에서 host 시간으로",
+      "text": "do_timens_ktime_to_host는 MONOTONIC이면 monotonic offset, BOOTTIME 또는 BOOTTIME_ALARM이면 boottime offset을 timespec64_to_ktime으로 변환합니다. 다른 clockid는 tim을 그대로 반환합니다. 선택된 경우 tim<offset이면 이미 만료된 절대시각으로 보아 0, 아니면 ktime_sub(tim,offset) 후 tim>KTIME_MAX 검사를 통해 상한을 처리합니다. 예를 들어 같은 단위에서 offset=20,tim=12이면 0이고 tim=35이면 15입니다. 이 분기를 모든 signed 산술에 범용 포화 연산을 제공하는 API라고 확대하지 않습니다."
+    },
+    {
+      "title": "Namespace 개수 회계",
+      "text": "inc_time_namespaces는 전달된 user namespace와 current_euid(), UCOUNT_TIME_NAMESPACES로 inc_ucount를 호출합니다. dec_time_namespaces는 같은 종류의 count를 감소시킵니다. 이 회계는 ns_common의 객체 참조 수와 별개입니다. 사용자별 namespace 자원 소비와 하나의 namespace 객체에 대한 여러 참조를 구분해야 합니다."
+    },
+    {
+      "title": "복제의 자원 획득 순서",
+      "text": "clone_time_ns는 먼저 회계를 증가시키며 실패의 기본 오류는 -ENOSPC입니다. 그 다음 GFP_KERNEL_ACCOUNT로 객체를 kmalloc하고 참조 수를 1로 설정한 뒤 GFP_KERNEL_ACCOUNT|__GFP_ZERO로 VVAR 페이지를 할당합니다. 객체·페이지 할당 실패는 -ENOMEM입니다. 이어 ns_alloc_inum을 호출하고 그 반환 오류를 보존합니다. kmalloc 객체 전체가 자동으로 0이 된다고 가정하면 안 되지만 VVAR 페이지는 명시적으로 0으로 할당합니다."
+    },
+    {
+      "title": "복제 성공과 역순 회수",
+      "text": "성공 시 ucounts, ops=&timens_operations, get_user_ns로 보유한 owner, old_ns->offsets 복사, frozen_offsets=false를 설정합니다. 기존 namespace의 frozen 상태를 복제하지 않습니다. inum 할당 실패는 페이지 해제→객체 해제→회계 감소, 페이지 실패는 객체 해제→회계 감소, 객체 실패는 회계 감소만 수행합니다. 마지막은 ERR_PTR(err)입니다. owner 참조는 실패 가능 단계들이 끝난 뒤 얻으므로 앞 실패 라벨에서 put_user_ns를 호출하지 않습니다."
+    },
+    {
+      "title": "복사 또는 공유",
+      "text": "copy_time_ns는 CLONE_NEWTIME이 없으면 get_time_ns(old_ns)로 기존 객체의 참조를 하나 늘려 반환합니다. 있으면 clone_time_ns를 호출합니다. 함수 문서가 설명하는 대상은 timens_for_children입니다. 이 함수 하나가 current->nsproxy->time_ns 포인터를 바꾸거나 현재 task의 시간을 즉시 이동시키지는 않습니다."
+    },
+    {
+      "title": "Offset 표현과 VVAR 슬롯 채우기",
+      "text": "offset_from_ts는 timespec64의 tv_sec·tv_nsec를 timens_offset의 sec·nsec로 복사합니다. timens_setup_vdso_data는 seq=1, clock_mode=TIMENS를 기록하고 MONOTONIC·MONOTONIC_RAW·MONOTONIC_COARSE에 같은 monotonic offset, BOOTTIME·BOOTTIME_ALARM에 boottime offset을 씁니다. REALTIME과 TAI 등 나머지 배열 항목을 여기서 대입하지 않으며 새 VVAR 페이지의 초기 0 상태가 중요합니다. RAW 조회라고 해서 namespace offset이 항상 0인 것은 아닙니다."
+    },
+    {
+      "title": "홀수 seq의 의도와 페이지 배치 주석",
+      "text": "seq=1은 writer가 계속 갱신 중이라는 뜻으로만 쓰이지 않습니다. TIMENS 모드와 함께 공통 vDSO reader가 namespace 경로로 전환하도록 하는 표식입니다. 파일 주석은 VVAR·PVCLOCK·HVCLOCK·TIMENS 순서의 교체 예를 들지만 이 C 파일이 모든 아키텍처에 그 네 페이지를 설치하는 것은 아닙니다. 실제 페이지 개수와 매핑 배치는 아키텍처 구현에서 확인해야 합니다."
+    },
+    {
+      "title": "현재 mm의 VVAR 조회",
+      "text": "find_timens_vvar_page는 vma->vm_mm==current->mm이면 current->nsproxy->time_ns->vvar_page를 반환합니다. 아니라면 WARN을 출력하고 NULL을 반환합니다. 원격 task의 nsproxy를 임의로 찾아 반환하지 않습니다. 주석은 PFNMAP·IO 플래그와 special mapping의 access callback 부재가 원격 접근 인터페이스를 제한하는 배경을 설명합니다. 이 함수가 모든 원격 접근 방식을 자체적으로 차단하는 범용 권한 검사인 것은 아닙니다."
+    },
+    {
+      "title": "첫 참여의 VVAR 초기화",
+      "text": "offset_lock은 여러 offset writer와 namespace 참여 작업의 경합을 막는 전역 mutex입니다. timens_set_vvar_page는 init_time_ns이면 즉시 반환하고 frozen_offsets가 이미 true여도 빠르게 반환합니다. 아니면 mutex를 얻고 frozen 여부를 다시 검사합니다. 처음 초기화할 때 true로 바꾼 뒤 page_address(vvar_page)를 arch_get_vdso_data에 넘겨 CS_BASES개의 데이터 슬롯을 모두 설정합니다. task 인수는 이 함수 본문에서 사용하지 않습니다. 초기화가 끝났는지의 상태와 mutex 규칙을 읽어야 하며 bool 자체를 원자적 lock으로 설명하지 않습니다."
+    },
+    {
+      "title": "해제와 포함 구조체 역변환",
+      "text": "free_time_ns는 회계 감소, owner 참조 해제, namespace inode 번호 해제, VVAR 페이지 해제, 객체 kfree를 순서대로 수행합니다. refcount를 직접 감소시키지는 않으며 header의 put_time_ns가 마지막 참조에서 호출하는 구조입니다. to_time_ns는 container_of(ns,struct time_namespace,ns)로 내장 ns_common에서 바깥 객체를 얻습니다. 복사하거나 새 객체를 만드는 함수가 아닙니다."
+    },
+    {
+      "title": "현재 namespace와 자식용 namespace의 get",
+      "text": "timens_get과 timens_for_children_get은 task_lock 아래 task->nsproxy를 읽습니다. nsproxy가 있으면 각각 time_ns 또는 time_ns_for_children을 고르고 get_time_ns로 참조를 얻은 뒤 task_unlock합니다. 반환은 내장 &ns->ns 또는 NULL입니다. 잠금을 풀기 전에 참조를 획득하는 순서가 객체 수명과 연결됩니다. timens_put은 역변환 후 put_time_ns를 호출하며 timens_owner는 owner 포인터를 반환합니다."
+    },
+    {
+      "title": "Commit의 두 단계",
+      "text": "timens_commit은 먼저 timens_set_vvar_page로 초기화·동결을 처리하고 이어 vdso_join_timens로 매핑 전환을 요청합니다. void 함수이며 vdso_join_timens의 int 반환을 여기서 검사하거나 반환하지 않습니다. namespace 객체의 페이지 데이터를 준비하는 단계와 기존 사용자 VVAR 매핑을 교체하게 하는 단계가 분리되어 있습니다."
+    },
+    {
+      "title": "Namespace 설치 조건과 두 참조",
+      "text": "timens_install은 current_is_single_threaded가 false이면 -EUSERS입니다. 이어 대상 ns->user_ns와 nsset->cred->user_ns 두 곳 모두에서 CAP_SYS_ADMIN이 있어야 하며 아니면 -EPERM입니다. 성공 경로는 대상 참조를 얻고 기존 time_ns 참조를 놓은 뒤 대입하고, 같은 절차로 time_ns_for_children도 대입합니다. 같은 객체를 두 필드가 보유하므로 get도 두 번입니다. 이 함수 안에서 timens_commit을 직접 호출하지는 않습니다."
+    },
+    {
+      "title": "Fork에서 자식용 상태 적용",
+      "text": "timens_on_fork는 time_ns_for_children에서 대상 객체를 얻습니다. time_ns와 같으면 주석대로 기존 namespace 생성 과정이 이미 참조를 늘렸으므로 즉시 반환합니다. 다르면 대상 참조를 얻고 기존 time_ns를 put한 뒤 포인터를 교체하며 timens_commit(tsk,ns)을 호출합니다. 자식용 필드를 다시 복제하는 것이 아니라 준비된 namespace를 현재 필드에 적용합니다."
+    },
+    {
+      "title": "Proc 출력의 대상과 형식",
+      "text": "show_offset은 BOOTTIME→boottime, MONOTONIC→monotonic, 그 외→unknown 문자열을 고르고 이름·초·나노초를 정해진 폭으로 출력합니다. proc_timens_show_offsets는 timens_for_children_get(p)를 사용하므로 현재 time_ns와 다른 자식용 값이 보일 수 있습니다. 객체가 없으면 출력 없이 반환하며 있으면 monotonic,boottime 순서로 출력 후 참조를 놓습니다. 여기에는 offset_lock을 얻는 코드가 없습니다."
+    },
+    {
+      "title": "입력 설정의 대상과 권한",
+      "text": "proc_timens_set_offset도 자식용 namespace를 참조합니다. 찾지 못하면 -ESRCH, file_ns_capable(file,owner,CAP_SYS_TIME)이 false이면 참조를 놓고 -EPERM입니다. namespace 설치의 CAP_SYS_ADMIN 검사와 offset 설정의 CAP_SYS_TIME 검사는 서로 다릅니다. file을 받는 권한 helper를 임의로 current에 대한 단순 조건으로 바꿔 해석하지 않습니다."
+    },
+    {
+      "title": "전체 입력의 사전 검증",
+      "text": "첫 for 루프는 MONOTONIC이면 ktime_get_ts64, BOOTTIME이면 ktime_get_boottime_ts64로 host 현재 시각을 얻으며 나머지 clockid는 -EINVAL입니다. offset.tv_sec가 ±KTIME_SEC_MAX를 벗어나면 -ERANGE입니다. 현재 시간과 offset을 더한 뒤 tp.tv_sec가 음수이거나 KTIME_SEC_MAX/2를 넘으면 역시 -ERANGE입니다. 경계와 같은 값은 이 비교만으로 거절되지 않습니다. 각 입력마다 시간을 새로 읽으므로 하나의 공통 시점 스냅샷은 아닙니다."
+    },
+    {
+      "title": "입력 파싱과 함수 계약 구분",
+      "text": "이 함수 자체에는 텍스트 파싱, noffsets의 최대값 검사, tv_nsec가 0 이상 NSEC_PER_SEC 미만인지의 직접 검사가 없습니다. 교차 확인한 fs/proc/base.c의 호출부는 텍스트를 sec·nsec로 읽고 나노초 범위를 검사한 뒤 이 API에 전달합니다. 따라서 이 함수만으로 임의 내부 입력을 모두 검증한다고 말할 수 없습니다. 호출부 일부를 확인한 것을 fs/proc/base.c 파일 전체 학습 완료로 세지 않습니다."
+    },
+    {
+      "title": "동결 검사와 일괄 반영",
+      "text": "모든 입력의 첫 검사 루프가 통과한 다음 offset_lock을 얻습니다. frozen_offsets이면 -EACCES이고 저장하지 않습니다. 아니면 err=0으로 둔 뒤 두 번째 루프에서 시계별 대상 필드에 off->val을 대입합니다. 이후 오류를 보고하지 않는다는 주석이 있습니다. 앞 항목이 유효해도 뒤 항목이 잘못되면 사전 검사에서 끝나므로 앞 항목만 반영되는 오류 경로는 없습니다. 다만 잠금 없는 모든 reader에 다중 필드 원자적 스냅샷까지 제공한다고 확대해서는 안 됩니다."
+    },
+    {
+      "title": "중복 항목·복잡도·종료 경로",
+      "text": "두 번째 루프에는 중복 clockid 거절이 없으므로 같은 clock이 여러 번 들어오면 순서상 마지막 대입 값이 남습니다. 두 루프는 입력 개수 n에 대해 O(n), 추가 로컬 공간은 O(1)입니다. 잠금을 획득한 경로는 out_unlock에서 해제하고 공통 out에서 namespace 참조를 놓은 뒤 err를 반환합니다. 첫 검증 단계에서 얻지 않은 mutex를 unlock하지 않도록 라벨이 나뉩니다."
+    },
+    {
+      "title": "두 proc namespace operation 테이블",
+      "text": "timens_operations는 name=time, type=CLONE_NEWTIME, get=timens_get을 연결합니다. timens_for_children_operations는 name=time_for_children, real_ns_name=time, 같은 type, get=timens_for_children_get입니다. put·install·owner는 동일한 callback을 공유합니다. 표시 이름과 조회하는 필드는 다르지만 별개의 CLONE flag를 쓰는 것은 아닙니다."
+    },
+    {
+      "title": "초기 namespace와 검토 범위",
+      "text": "init_time_ns는 REFCOUNT_INIT(3), owner=&init_user_ns, 고정 PROC_TIME_INIT_INO, ops=&timens_operations, frozen_offsets=true로 초기화합니다. 지정하지 않은 static 저장 객체 필드는 0이므로 초기 offsets는 0이고 vvar_page는 NULL입니다. refcount 초기값 3을 모든 새 clone의 초기값 1과 혼동하지 않습니다. 전체 함수·테이블·오류 경로를 원본과 대조했으며 namespace 생성·setns·원격 메모리 접근을 실제 커널에서 실행 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "do_timens_ktime_to_host에서 BOOTTIME_ALARM은 어느 offset을 쓰는가?",
+      "options": [
+        "boottime offset",
+        "monotonic offset"
+      ],
+      "answer": 0,
+      "explanation": "switch가 BOOTTIME과 BOOTTIME_ALARM을 같은 분기로 묶습니다. 반면 나머지 지원하지 않는 clock은 tim을 그대로 반환합니다."
+    },
+    {
+      "prompt": "copy_time_ns에서 CLONE_NEWTIME이 없으면?",
+      "options": [
+        "항상 독립적인 VVAR 페이지를 새로 할당한다",
+        "기존 객체 참조를 증가시키고 같은 객체를 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "새 페이지 할당은 clone_time_ns 경로에서만 수행합니다. 공유와 복제의 자원 비용 및 수명 계약이 다릅니다."
+    },
+    {
+      "prompt": "clone에서 ns_alloc_inum이 실패했을 때 회수 순서는?",
+      "options": [
+        "VVAR 페이지, 객체 메모리, namespace 개수 회계",
+        "owner 참조만 해제하고 나머지는 그대로 둔다"
+      ],
+      "answer": 0,
+      "explanation": "fail_free_page→fail_free→fail_dec로 내려갑니다. owner 참조는 성공 후반부에서만 얻으므로 이 실패 시 아직 얻지 않았습니다."
+    },
+    {
+      "prompt": "복제 원본의 offsets가 frozen이어도 새 namespace는?",
+      "options": [
+        "frozen 상태까지 그대로 복제한다",
+        "offset 값은 복사하지만 frozen_offsets는 false로 시작한다"
+      ],
+      "answer": 1,
+      "explanation": "ns->offsets=old_ns->offsets 뒤 frozen_offsets=false를 명시합니다. 값 상속과 수정 가능 상태 상속은 별개입니다."
+    },
+    {
+      "prompt": "MONOTONIC_RAW의 namespace VVAR offset은?",
+      "options": [
+        "monotonic offset과 같다",
+        "항상 0으로 강제된다"
+      ],
+      "answer": 0,
+      "explanation": "timens_setup_vdso_data가 MONOTONIC, RAW, COARSE 세 항목에 같은 monotonic 값을 대입합니다. raw라는 이름만으로 namespace 보정이 없다고 가정하면 안 됩니다."
+    },
+    {
+      "prompt": "frozen_offsets를 잠금 획득 후 다시 확인하는 이유는?",
+      "options": [
+        "mutex를 얻으면 bool 값이 자동으로 false가 되기 때문이다",
+        "기다리는 동안 다른 task가 초기화했을 수 있기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "잠금 전 빠른 검사는 중복 작업을 줄이고 잠금 안의 검사는 동시 초기화 경쟁을 처리합니다. mutex는 데이터 값을 자동 변경하지 않습니다."
+    },
+    {
+      "prompt": "현재 시간 namespace와 자식용 namespace가 다를 때 proc 출력은?",
+      "options": [
+        "자식용 namespace의 offsets를 출력한다",
+        "두 namespace 값을 합해 출력한다"
+      ],
+      "answer": 0,
+      "explanation": "proc_timens_show_offsets는 timens_for_children_get을 호출합니다. 현재 task에 적용된 시간과 자식용 설정이 다를 수 있습니다."
+    },
+    {
+      "prompt": "timens_install의 성공 경로에서 같은 대상에 get_time_ns를 두 번 하는 이유는?",
+      "options": [
+        "refcount가 홀수여야 VVAR 조회가 가능하기 때문이다",
+        "time_ns와 time_ns_for_children 두 필드가 각각 참조를 보유하기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "namespace 참조 수와 VVAR seq는 서로 다른 상태입니다. 각 포인터 교체 전에 새 참조를 얻고 옛 참조를 놓습니다."
+    },
+    {
+      "prompt": "두 offset 중 첫째는 유효하고 둘째 clockid가 잘못되면?",
+      "options": [
+        "사전 검증에서 -EINVAL이므로 첫째도 저장하지 않는다",
+        "첫째를 저장한 뒤 둘째 오류를 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "대입 루프는 전체 입력 검증이 끝난 뒤에 있습니다. 오류 검증 단계와 실제 갱신 단계를 나눈 이유를 보여 줍니다."
+    },
+    {
+      "prompt": "권한은 있지만 이미 frozen인 namespace의 유효 offset 변경은?",
+      "options": [
+        "-EPERM",
+        "-EACCES"
+      ],
+      "answer": 1,
+      "explanation": "권한 부족은 앞 단계의 -EPERM입니다. 입력 검증을 통과한 뒤 mutex 안에서 frozen 상태를 만나면 -EACCES를 반환합니다."
+    },
+    {
+      "prompt": "동일한 clockid를 두 번 전달한 경우 이 함수의 저장 결과는?",
+      "options": [
+        "두 항목이 모두 유효하면 마지막 항목의 값이 남는다",
+        "중복을 검사해 반드시 -EEXIST를 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "별도 중복 검사 없이 배열 순서대로 같은 필드에 대입합니다. 호출 입력의 검사 범위를 실제 코드에서 확인해야 합니다."
+    },
+    {
+      "prompt": "init_time_ns와 새 clone의 초기 참조 수는?",
+      "options": [
+        "각각 1과 3",
+        "각각 3과 1"
+      ],
+      "answer": 1,
+      "explanation": "정적 초기 객체는 REFCOUNT_INIT(3), clone은 refcount_set(...,1)입니다. 초기 namespace의 특별한 수명을 일반 복제 객체와 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Author: Andrei Vagin <avagin@openvz.org>\n * Author: Dmitry Safonov <dima@arista.com>\n */\n\n#include <linux/time_namespace.h>\n#include <linux/user_namespace.h>\n#include <linux/sched/signal.h>\n#include <linux/sched/task.h>\n#include <linux/clocksource.h>\n#include <linux/seq_file.h>\n#include <linux/proc_ns.h>\n#include <linux/export.h>\n#include <linux/time.h>\n#include <linux/slab.h>\n#include <linux/cred.h>\n#include <linux/err.h>\n#include <linux/mm.h>\n\n#include <vdso/datapage.h>\n\nktime_t do_timens_ktime_to_host(clockid_t clockid, ktime_t tim,\n\t\t\t\tstruct timens_offsets *ns_offsets)\n{\n\tktime_t offset;\n\n\tswitch (clockid) {\n\tcase CLOCK_MONOTONIC:\n\t\toffset = timespec64_to_ktime(ns_offsets->monotonic);\n\t\tbreak;\n\tcase CLOCK_BOOTTIME:\n\tcase CLOCK_BOOTTIME_ALARM:\n\t\toffset = timespec64_to_ktime(ns_offsets->boottime);\n\t\tbreak;\n\tdefault:\n\t\treturn tim;\n\t}\n\n\t/*\n\t * Check that @tim value is in [offset, KTIME_MAX + offset]\n\t * and subtract offset.\n\t */\n\tif (tim < offset) {\n\t\t/*\n\t\t * User can specify @tim *absolute* value - if it's lesser than\n\t\t * the time namespace's offset - it's already expired.\n\t\t */\n\t\ttim = 0;\n\t} else {\n\t\ttim = ktime_sub(tim, offset);\n\t\tif (unlikely(tim > KTIME_MAX))\n\t\t\ttim = KTIME_MAX;\n\t}\n\n\treturn tim;\n}\n\nstatic struct ucounts *inc_time_namespaces(struct user_namespace *ns)\n{\n\treturn inc_ucount(ns, current_euid(), UCOUNT_TIME_NAMESPACES);\n}\n\nstatic void dec_time_namespaces(struct ucounts *ucounts)\n{\n\tdec_ucount(ucounts, UCOUNT_TIME_NAMESPACES);\n}\n\n/**\n * clone_time_ns - Clone a time namespace\n * @user_ns:\tUser namespace which owns a new namespace.\n * @old_ns:\tNamespace to clone\n *\n * Clone @old_ns and set the clone refcount to 1\n *\n * Return: The new namespace or ERR_PTR.\n */\nstatic struct time_namespace *clone_time_ns(struct user_namespace *user_ns,\n\t\t\t\t\t  struct time_namespace *old_ns)\n{\n\tstruct time_namespace *ns;\n\tstruct ucounts *ucounts;\n\tint err;\n\n\terr = -ENOSPC;\n\tucounts = inc_time_namespaces(user_ns);\n\tif (!ucounts)\n\t\tgoto fail;\n\n\terr = -ENOMEM;\n\tns = kmalloc(sizeof(*ns), GFP_KERNEL_ACCOUNT);\n\tif (!ns)\n\t\tgoto fail_dec;\n\n\trefcount_set(&ns->ns.count, 1);\n\n\tns->vvar_page = alloc_page(GFP_KERNEL_ACCOUNT | __GFP_ZERO);\n\tif (!ns->vvar_page)\n\t\tgoto fail_free;\n\n\terr = ns_alloc_inum(&ns->ns);\n\tif (err)\n\t\tgoto fail_free_page;\n\n\tns->ucounts = ucounts;\n\tns->ns.ops = &timens_operations;\n\tns->user_ns = get_user_ns(user_ns);\n\tns->offsets = old_ns->offsets;\n\tns->frozen_offsets = false;\n\treturn ns;\n\nfail_free_page:\n\t__free_page(ns->vvar_page);\nfail_free:\n\tkfree(ns);\nfail_dec:\n\tdec_time_namespaces(ucounts);\nfail:\n\treturn ERR_PTR(err);\n}\n\n/**\n * copy_time_ns - Create timens_for_children from @old_ns\n * @flags:\tCloning flags\n * @user_ns:\tUser namespace which owns a new namespace.\n * @old_ns:\tNamespace to clone\n *\n * If CLONE_NEWTIME specified in @flags, creates a new timens_for_children;\n * adds a refcounter to @old_ns otherwise.\n *\n * Return: timens_for_children namespace or ERR_PTR.\n */\nstruct time_namespace *copy_time_ns(unsigned long flags,\n\tstruct user_namespace *user_ns, struct time_namespace *old_ns)\n{\n\tif (!(flags & CLONE_NEWTIME))\n\t\treturn get_time_ns(old_ns);\n\n\treturn clone_time_ns(user_ns, old_ns);\n}\n\nstatic struct timens_offset offset_from_ts(struct timespec64 off)\n{\n\tstruct timens_offset ret;\n\n\tret.sec = off.tv_sec;\n\tret.nsec = off.tv_nsec;\n\n\treturn ret;\n}\n\n/*\n * A time namespace VVAR page has the same layout as the VVAR page which\n * contains the system wide VDSO data.\n *\n * For a normal task the VVAR pages are installed in the normal ordering:\n *     VVAR\n *     PVCLOCK\n *     HVCLOCK\n *     TIMENS   <- Not really required\n *\n * Now for a timens task the pages are installed in the following order:\n *     TIMENS\n *     PVCLOCK\n *     HVCLOCK\n *     VVAR\n *\n * The check for vdso_data->clock_mode is in the unlikely path of\n * the seq begin magic. So for the non-timens case most of the time\n * 'seq' is even, so the branch is not taken.\n *\n * If 'seq' is odd, i.e. a concurrent update is in progress, the extra check\n * for vdso_data->clock_mode is a non-issue. The task is spin waiting for the\n * update to finish and for 'seq' to become even anyway.\n *\n * Timens page has vdso_data->clock_mode set to VDSO_CLOCKMODE_TIMENS which\n * enforces the time namespace handling path.\n */\nstatic void timens_setup_vdso_data(struct vdso_data *vdata,\n\t\t\t\t   struct time_namespace *ns)\n{\n\tstruct timens_offset *offset = vdata->offset;\n\tstruct timens_offset monotonic = offset_from_ts(ns->offsets.monotonic);\n\tstruct timens_offset boottime = offset_from_ts(ns->offsets.boottime);\n\n\tvdata->seq\t\t\t= 1;\n\tvdata->clock_mode\t\t= VDSO_CLOCKMODE_TIMENS;\n\toffset[CLOCK_MONOTONIC]\t\t= monotonic;\n\toffset[CLOCK_MONOTONIC_RAW]\t= monotonic;\n\toffset[CLOCK_MONOTONIC_COARSE]\t= monotonic;\n\toffset[CLOCK_BOOTTIME]\t\t= boottime;\n\toffset[CLOCK_BOOTTIME_ALARM]\t= boottime;\n}\n\nstruct page *find_timens_vvar_page(struct vm_area_struct *vma)\n{\n\tif (likely(vma->vm_mm == current->mm))\n\t\treturn current->nsproxy->time_ns->vvar_page;\n\n\t/*\n\t * VM_PFNMAP | VM_IO protect .fault() handler from being called\n\t * through interfaces like /proc/$pid/mem or\n\t * process_vm_{readv,writev}() as long as there's no .access()\n\t * in special_mapping_vmops().\n\t * For more details check_vma_flags() and __access_remote_vm()\n\t */\n\n\tWARN(1, \"vvar_page accessed remotely\");\n\n\treturn NULL;\n}\n\n/*\n * Protects possibly multiple offsets writers racing each other\n * and tasks entering the namespace.\n */\nstatic DEFINE_MUTEX(offset_lock);\n\nstatic void timens_set_vvar_page(struct task_struct *task,\n\t\t\t\tstruct time_namespace *ns)\n{\n\tstruct vdso_data *vdata;\n\tunsigned int i;\n\n\tif (ns == &init_time_ns)\n\t\treturn;\n\n\t/* Fast-path, taken by every task in namespace except the first. */\n\tif (likely(ns->frozen_offsets))\n\t\treturn;\n\n\tmutex_lock(&offset_lock);\n\t/* Nothing to-do: vvar_page has been already initialized. */\n\tif (ns->frozen_offsets)\n\t\tgoto out;\n\n\tns->frozen_offsets = true;\n\tvdata = arch_get_vdso_data(page_address(ns->vvar_page));\n\n\tfor (i = 0; i < CS_BASES; i++)\n\t\ttimens_setup_vdso_data(&vdata[i], ns);\n\nout:\n\tmutex_unlock(&offset_lock);\n}\n\nvoid free_time_ns(struct time_namespace *ns)\n{\n\tdec_time_namespaces(ns->ucounts);\n\tput_user_ns(ns->user_ns);\n\tns_free_inum(&ns->ns);\n\t__free_page(ns->vvar_page);\n\tkfree(ns);\n}\n\nstatic struct time_namespace *to_time_ns(struct ns_common *ns)\n{\n\treturn container_of(ns, struct time_namespace, ns);\n}\n\nstatic struct ns_common *timens_get(struct task_struct *task)\n{\n\tstruct time_namespace *ns = NULL;\n\tstruct nsproxy *nsproxy;\n\n\ttask_lock(task);\n\tnsproxy = task->nsproxy;\n\tif (nsproxy) {\n\t\tns = nsproxy->time_ns;\n\t\tget_time_ns(ns);\n\t}\n\ttask_unlock(task);\n\n\treturn ns ? &ns->ns : NULL;\n}\n\nstatic struct ns_common *timens_for_children_get(struct task_struct *task)\n{\n\tstruct time_namespace *ns = NULL;\n\tstruct nsproxy *nsproxy;\n\n\ttask_lock(task);\n\tnsproxy = task->nsproxy;\n\tif (nsproxy) {\n\t\tns = nsproxy->time_ns_for_children;\n\t\tget_time_ns(ns);\n\t}\n\ttask_unlock(task);\n\n\treturn ns ? &ns->ns : NULL;\n}\n\nstatic void timens_put(struct ns_common *ns)\n{\n\tput_time_ns(to_time_ns(ns));\n}\n\nvoid timens_commit(struct task_struct *tsk, struct time_namespace *ns)\n{\n\ttimens_set_vvar_page(tsk, ns);\n\tvdso_join_timens(tsk, ns);\n}\n\nstatic int timens_install(struct nsset *nsset, struct ns_common *new)\n{\n\tstruct nsproxy *nsproxy = nsset->nsproxy;\n\tstruct time_namespace *ns = to_time_ns(new);\n\n\tif (!current_is_single_threaded())\n\t\treturn -EUSERS;\n\n\tif (!ns_capable(ns->user_ns, CAP_SYS_ADMIN) ||\n\t    !ns_capable(nsset->cred->user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\tget_time_ns(ns);\n\tput_time_ns(nsproxy->time_ns);\n\tnsproxy->time_ns = ns;\n\n\tget_time_ns(ns);\n\tput_time_ns(nsproxy->time_ns_for_children);\n\tnsproxy->time_ns_for_children = ns;\n\treturn 0;\n}\n\nvoid timens_on_fork(struct nsproxy *nsproxy, struct task_struct *tsk)\n{\n\tstruct ns_common *nsc = &nsproxy->time_ns_for_children->ns;\n\tstruct time_namespace *ns = to_time_ns(nsc);\n\n\t/* create_new_namespaces() already incremented the ref counter */\n\tif (nsproxy->time_ns == nsproxy->time_ns_for_children)\n\t\treturn;\n\n\tget_time_ns(ns);\n\tput_time_ns(nsproxy->time_ns);\n\tnsproxy->time_ns = ns;\n\n\ttimens_commit(tsk, ns);\n}\n\nstatic struct user_namespace *timens_owner(struct ns_common *ns)\n{\n\treturn to_time_ns(ns)->user_ns;\n}\n\nstatic void show_offset(struct seq_file *m, int clockid, struct timespec64 *ts)\n{\n\tchar *clock;\n\n\tswitch (clockid) {\n\tcase CLOCK_BOOTTIME:\n\t\tclock = \"boottime\";\n\t\tbreak;\n\tcase CLOCK_MONOTONIC:\n\t\tclock = \"monotonic\";\n\t\tbreak;\n\tdefault:\n\t\tclock = \"unknown\";\n\t\tbreak;\n\t}\n\tseq_printf(m, \"%-10s %10lld %9ld\\n\", clock, ts->tv_sec, ts->tv_nsec);\n}\n\nvoid proc_timens_show_offsets(struct task_struct *p, struct seq_file *m)\n{\n\tstruct ns_common *ns;\n\tstruct time_namespace *time_ns;\n\n\tns = timens_for_children_get(p);\n\tif (!ns)\n\t\treturn;\n\ttime_ns = to_time_ns(ns);\n\n\tshow_offset(m, CLOCK_MONOTONIC, &time_ns->offsets.monotonic);\n\tshow_offset(m, CLOCK_BOOTTIME, &time_ns->offsets.boottime);\n\tput_time_ns(time_ns);\n}\n\nint proc_timens_set_offset(struct file *file, struct task_struct *p,\n\t\t\t   struct proc_timens_offset *offsets, int noffsets)\n{\n\tstruct ns_common *ns;\n\tstruct time_namespace *time_ns;\n\tstruct timespec64 tp;\n\tint i, err;\n\n\tns = timens_for_children_get(p);\n\tif (!ns)\n\t\treturn -ESRCH;\n\ttime_ns = to_time_ns(ns);\n\n\tif (!file_ns_capable(file, time_ns->user_ns, CAP_SYS_TIME)) {\n\t\tput_time_ns(time_ns);\n\t\treturn -EPERM;\n\t}\n\n\tfor (i = 0; i < noffsets; i++) {\n\t\tstruct proc_timens_offset *off = &offsets[i];\n\n\t\tswitch (off->clockid) {\n\t\tcase CLOCK_MONOTONIC:\n\t\t\tktime_get_ts64(&tp);\n\t\t\tbreak;\n\t\tcase CLOCK_BOOTTIME:\n\t\t\tktime_get_boottime_ts64(&tp);\n\t\t\tbreak;\n\t\tdefault:\n\t\t\terr = -EINVAL;\n\t\t\tgoto out;\n\t\t}\n\n\t\terr = -ERANGE;\n\n\t\tif (off->val.tv_sec > KTIME_SEC_MAX ||\n\t\t    off->val.tv_sec < -KTIME_SEC_MAX)\n\t\t\tgoto out;\n\n\t\ttp = timespec64_add(tp, off->val);\n\t\t/*\n\t\t * KTIME_SEC_MAX is divided by 2 to be sure that KTIME_MAX is\n\t\t * still unreachable.\n\t\t */\n\t\tif (tp.tv_sec < 0 || tp.tv_sec > KTIME_SEC_MAX / 2)\n\t\t\tgoto out;\n\t}\n\n\tmutex_lock(&offset_lock);\n\tif (time_ns->frozen_offsets) {\n\t\terr = -EACCES;\n\t\tgoto out_unlock;\n\t}\n\n\terr = 0;\n\t/* Don't report errors after this line */\n\tfor (i = 0; i < noffsets; i++) {\n\t\tstruct proc_timens_offset *off = &offsets[i];\n\t\tstruct timespec64 *offset = NULL;\n\n\t\tswitch (off->clockid) {\n\t\tcase CLOCK_MONOTONIC:\n\t\t\toffset = &time_ns->offsets.monotonic;\n\t\t\tbreak;\n\t\tcase CLOCK_BOOTTIME:\n\t\t\toffset = &time_ns->offsets.boottime;\n\t\t\tbreak;\n\t\t}\n\n\t\t*offset = off->val;\n\t}\n\nout_unlock:\n\tmutex_unlock(&offset_lock);\nout:\n\tput_time_ns(time_ns);\n\n\treturn err;\n}\n\nconst struct proc_ns_operations timens_operations = {\n\t.name\t\t= \"time\",\n\t.type\t\t= CLONE_NEWTIME,\n\t.get\t\t= timens_get,\n\t.put\t\t= timens_put,\n\t.install\t= timens_install,\n\t.owner\t\t= timens_owner,\n};\n\nconst struct proc_ns_operations timens_for_children_operations = {\n\t.name\t\t= \"time_for_children\",\n\t.real_ns_name\t= \"time\",\n\t.type\t\t= CLONE_NEWTIME,\n\t.get\t\t= timens_for_children_get,\n\t.put\t\t= timens_put,\n\t.install\t= timens_install,\n\t.owner\t\t= timens_owner,\n};\n\nstruct time_namespace init_time_ns = {\n\t.ns.count\t= REFCOUNT_INIT(3),\n\t.user_ns\t= &init_user_ns,\n\t.ns.inum\t= PROC_TIME_INIT_INO,\n\t.ns.ops\t\t= &timens_operations,\n\t.frozen_offsets\t= true,\n};\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "031af678ed780aa2125e5b7cc490362f9013756e37c2a79227dfb73ffd654d4b",
+    "scope": "whole-file",
+    "line_count": 485,
+    "authoring_source": "course/file_units/time_namespace_implementation.py",
+    "sections": [
+      "전체 구성",
+      "Namespace 시간에서 host 시간으로",
+      "Namespace 개수 회계",
+      "복제의 자원 획득 순서",
+      "복제 성공과 역순 회수",
+      "복사 또는 공유",
+      "Offset 표현과 VVAR 슬롯 채우기",
+      "홀수 seq의 의도와 페이지 배치 주석",
+      "현재 mm의 VVAR 조회",
+      "첫 참여의 VVAR 초기화",
+      "해제와 포함 구조체 역변환",
+      "현재 namespace와 자식용 namespace의 get",
+      "Commit의 두 단계",
+      "Namespace 설치 조건과 두 참조",
+      "Fork에서 자식용 상태 적용",
+      "Proc 출력의 대상과 형식",
+      "입력 설정의 대상과 권한",
+      "전체 입력의 사전 검증",
+      "입력 파싱과 함수 계약 구분",
+      "동결 검사와 일괄 반영",
+      "중복 항목·복잡도·종료 경로",
+      "두 proc namespace operation 테이블",
+      "초기 namespace와 검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/namespace.c"
+    }
+  ]
+}

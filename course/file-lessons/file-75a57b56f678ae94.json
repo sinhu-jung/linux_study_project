@@ -1,0 +1,100 @@
+{
+  "id": "file-75a57b56f678ae94",
+  "path": "lib/iommu-helper.c",
+  "title": "IOMMU 빈 구간 할당 전체: 비트맵·정렬·경계 제한",
+  "area": "커널 공통 도구 · 상태·수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "연속 빈 비트를 찾는 것만으로 장치의 주소 경계 조건이 만족되지는 않습니다.",
+  "guide": [
+    "iommu_area_alloc은 size를 1 줄여 마지막 비트를 제외하고 bitmap_find_next_zero_area로 nr개 연속 빈 비트를 찾습니다. 후보가 장치 경계를 넘으면 다음 경계로 start를 옮겨 다시 찾습니다. 유효한 후보는 bitmap_set으로 예약하고 인덱스를 반환합니다.",
+    "size는 마지막 슬롯을 제외하는 계약을 고려한 유효 양수여야 하며 nr도 양수이고 boundary_size 이하라는 전제가 필요합니다. boundary_size는 2의 거듭제곱, align_mask와 shift는 주소 단위와 정렬 규칙에 맞춰야 합니다. 비트맵 검색·예약 전체의 외부 동기화도 필요합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일 구성과 반환값",
+      "text": "SPDX·설명, bitmap.h와 iommu-helper.h 포함, 함수 하나가 전부입니다. 실패는 unsigned long 반환형에서 -1, 즉 ULONG_MAX로 나타납니다. 부호 없는 값을 index<0으로 검사해서는 실패를 찾을 수 없습니다. 성공 때만 bitmap_set을 호출합니다."
+    },
+    {
+      "title": "검색·경계·재시도",
+      "text": "bitmap_find_next_zero_area는 연속 0과 align_mask를 고려합니다. 추가 helper는 (shift+index)&(boundary_size-1)에 nr을 더해 boundary_size를 초과하는지 검사합니다. 예를 들어 boundary=8,shift=0,index=6,nr=3이면 6+3>8이라 start를 8로 올립니다. index=5,nr=3이면 끝이 정확히 8이므로 경계를 넘지 않습니다."
+    },
+    {
+      "title": "입력 전제와 진행성",
+      "text": "size=0이면 unsigned 감소가 큰 값으로 감겨 실제 비트맵보다 큰 검색 범위를 만들 수 있습니다. nr>boundary_size이면 경계에 정렬된 index에서도 span이 참이고 ALIGN이 같은 시작을 반환할 수 있어 재시도가 진전하지 않을 수 있습니다. 이 wrapper는 이 입력들을 먼저 검사해 오류로 반환하는 구조가 아닙니다. 유효한 caller 계약을 요구한다는 점이 핵심입니다."
+    },
+    {
+      "title": "CS 연결과 경쟁",
+      "text": "첫 적합 빈 영역 탐색, 정렬 제약, 경계 제약을 결합한 자원 할당입니다. 한 번의 검색만으로 끝나지 않을 수 있으므로 항상 O(1)이라고 설명할 수 없습니다. 검색과 bitmap_set 사이를 다른 호출과 동시에 실행하면 같은 영역을 선택할 수 있으므로 이 함수 자체에 잠금이 없다는 사실도 읽어야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "boundary=8,shift=0,index=6,nr=3 후보는?",
+      "options": [
+        "경계를 넘으므로 다음 경계 start=8에서 다시 찾는다",
+        "빈 비트 세 개면 경계와 무관하게 예약한다"
+      ],
+      "answer": 0,
+      "explanation": "경계 내부 오프셋 6에 길이 3을 더하면 9>8입니다. 연속 비트 조건을 만족해도 장치 경계 조건이 실패합니다."
+    },
+    {
+      "prompt": "이 함수의 unsigned long 실패값을 index<0으로 검사해도 되는가?",
+      "options": [
+        "그렇다. -1은 모든 자료형에서 음수다",
+        "아니다. -1이 unsigned 최댓값으로 변환된다"
+      ],
+      "answer": 1,
+      "explanation": "C의 unsigned 변환으로 -1은 ULONG_MAX입니다. 반환형에 맞는 실패 sentinel 비교를 해야 합니다."
+    },
+    {
+      "prompt": "nr>boundary_size인 호출에 대해 항상 정상 종료를 보장하는가?",
+      "options": [
+        "아니다. 유효한 범위 계약을 지키지 않으면 재시도가 진전하지 않을 수 있다",
+        "그렇다. 함수가 nr을 자동으로 경계 크기로 줄인다"
+      ],
+      "answer": 0,
+      "explanation": "코드는 nr을 줄이지 않습니다. 경계에 정렬된 후보가 여전히 경계를 넘는다면 start 계산이 같은 위치를 내놓을 수 있습니다."
+    },
+    {
+      "prompt": "서로 다른 CPU의 검색·예약을 이 함수가 자체 잠금으로 직렬화하는가?",
+      "options": [
+        "그렇다. bitmap_set이라는 이름이 트랜잭션을 뜻한다",
+        "아니다. 호출 경로의 동기화가 필요하다"
+      ],
+      "answer": 1,
+      "explanation": "본문에 잠금이 없고 검색과 예약은 별도 호출입니다. 개별 비트 연산의 구현과 여러 단계 할당 작업의 원자성을 혼동하면 안 됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * IOMMU helper functions for the free area management\n */\n\n#include <linux/bitmap.h>\n#include <linux/iommu-helper.h>\n\nunsigned long iommu_area_alloc(unsigned long *map, unsigned long size,\n\t\t\t       unsigned long start, unsigned int nr,\n\t\t\t       unsigned long shift, unsigned long boundary_size,\n\t\t\t       unsigned long align_mask)\n{\n\tunsigned long index;\n\n\t/* We don't want the last of the limit */\n\tsize -= 1;\nagain:\n\tindex = bitmap_find_next_zero_area(map, size, start, nr, align_mask);\n\tif (index < size) {\n\t\tif (iommu_is_span_boundary(index, nr, shift, boundary_size)) {\n\t\t\tstart = ALIGN(shift + index, boundary_size) - shift;\n\t\t\tgoto again;\n\t\t}\n\t\tbitmap_set(map, index, nr);\n\t\treturn index;\n\t}\n\treturn -1;\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ab860c7c2ca6d9a3951063e301e202ec6a5e8b53ff5dd87ace710757dcc02002",
+    "scope": "whole-file",
+    "line_count": 29,
+    "authoring_source": "course/file_units/core_utilities.py",
+    "sections": [
+      "전체 파일 구성과 반환값",
+      "검색·경계·재시도",
+      "입력 전제와 진행성",
+      "CS 연결과 경쟁"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/iommu-helper.c"
+    }
+  ]
+}

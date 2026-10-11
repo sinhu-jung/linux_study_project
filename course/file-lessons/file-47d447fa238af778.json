@@ -1,0 +1,91 @@
+{
+  "id": "file-47d447fa238af778",
+  "path": "lib/math/tests/int_pow_kunit.c",
+  "title": "거듭제곱 KUnit 파일 전체: 표 기반 검증과 커버리지 한계",
+  "area": "정수 알고리즘 · 테스트·빌드 구성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "테스트의 존재와 모든 경계 조건의 검증을 구분합니다.",
+  "guide": [
+    "입력 base·exponent·expected_result·name을 구조체 배열로 정의하고 KUNIT_ARRAY_PARAM으로 파라미터 생성기를 만듭니다. 각 실행은 param_value의 기대값과 int_pow 결과를 비교합니다.",
+    "9개 명시적 사례는 지수0/1, 밑0/1,2²,2³,5⁵,최대 밑의1승,2^63입니다. 이 목록만으로 모든64비트 입력을 증명하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "데이터와 설명 생성",
+      "text": "SPDX, kunit/test.h와 linux/math.h, test_case_params 정의, const params[9]가 있습니다. get_desc는 이름을 KUNIT_PARAM_DESC_SIZE 제한으로 strscpy하여 각 파라미터 실행의 설명을 제공합니다. 이름은 계산 결과가 아니라 출력 식별용입니다."
+    },
+    {
+      "title": "실행 경로",
+      "text": "KUNIT_ARRAY_PARAM(int_pow,params,get_desc)가 생성한 int_pow_gen_params를 KUNIT_CASE_PARAM에 연결합니다. int_pow_test는 test->param_value를 해당 구조체 포인터로 해석하고 KUNIT_EXPECT_EQ로 기대값과 실제 반환값을 비교합니다."
+    },
+    {
+      "title": "등록과 종료 표식",
+      "text": "kunit_case 배열의 빈 {}가 종료 표식입니다. math-int_pow라는 suite는 그 배열을 참조하고 kunit_test_suites로 등록됩니다. 마지막 MODULE_DESCRIPTION과 GPL MODULE_LICENSE는 모듈 메타데이터입니다."
+    },
+    {
+      "title": "빠진 경계도 학습하기",
+      "text": "표에는0^0,2^64의 순환 결과, 여러 비트가 켜진 큰 지수의 폭넓은 조합이 없습니다. U64_MAX의1승 사례는 반환 최대값을 확인하지만 모든 오버플로 처리를 검증하지 않습니다. 실행한 테스트 수와 입력 공간 커버리지는 별개입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일의 명시적 입력 사례 개수는?",
+      "options": [
+        "9개",
+        "64개"
+      ],
+      "answer": 0,
+      "explanation": "params 배열의9개 행이 각각 base/exponent/expected/name을 담습니다. 지수64라는 값이 테스트 수64라는 뜻은 아닙니다."
+    },
+    {
+      "prompt": "2^63 통과만으로2^64 동작도 검증했다고 할 수 있는가?",
+      "options": [
+        "있다. 가까운 입력이면 모든 경계가 같다",
+        "없다. 표현 범위를 넘는 별도 경계 사례다"
+      ],
+      "answer": 1,
+      "explanation": "2^63은 u64에 들어가지만2^64는 순환합니다. 실제 표에 없는 사례까지 통과했다고 주장할 수 없습니다."
+    },
+    {
+      "prompt": "get_desc가 거듭제곱 기대값을 계산하는가?",
+      "options": [
+        "아니다. 사례의 이름을 설명 버퍼에 복사한다",
+        "그렇다. 독립적인 거듭제곱 참조 구현이다"
+      ],
+      "answer": 0,
+      "explanation": "기대값은 params에 직접 저장되어 있고 get_desc는 strscpy만 호출합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n\n#include <kunit/test.h>\n#include <linux/math.h>\n\nstruct test_case_params {\n\tu64 base;\n\tunsigned int exponent;\n\tu64 expected_result;\n\tconst char *name;\n};\n\nstatic const struct test_case_params params[] = {\n\t{ 64, 0, 1, \"Power of zero\" },\n\t{ 64, 1, 64, \"Power of one\"},\n\t{ 0, 5, 0, \"Base zero\" },\n\t{ 1, 64, 1, \"Base one\" },\n\t{ 2, 2, 4, \"Two squared\"},\n\t{ 2, 3, 8, \"Two cubed\"},\n\t{ 5, 5, 3125, \"Five raised to the fifth power\" },\n\t{ U64_MAX, 1, U64_MAX, \"Max base\" },\n\t{ 2, 63, 9223372036854775808ULL, \"Large result\"},\n};\n\nstatic void get_desc(const struct test_case_params *tc, char *desc)\n{\n\tstrscpy(desc, tc->name, KUNIT_PARAM_DESC_SIZE);\n}\n\nKUNIT_ARRAY_PARAM(int_pow, params, get_desc);\n\nstatic void int_pow_test(struct kunit *test)\n{\n\tconst struct test_case_params *tc = (const struct test_case_params *)test->param_value;\n\n\tKUNIT_EXPECT_EQ(test, tc->expected_result, int_pow(tc->base, tc->exponent));\n}\n\nstatic struct kunit_case math_int_pow_test_cases[] = {\n\tKUNIT_CASE_PARAM(int_pow_test, int_pow_gen_params),\n\t{}\n};\n\nstatic struct kunit_suite int_pow_test_suite = {\n\t.name = \"math-int_pow\",\n\t.test_cases = math_int_pow_test_cases,\n};\n\nkunit_test_suites(&int_pow_test_suite);\n\nMODULE_DESCRIPTION(\"math.int_pow KUnit test suite\");\nMODULE_LICENSE(\"GPL\");\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "67fc92a2ef84b8ac979b57415472e62e4187d04e80d41c057cb62566bf8ec8fc",
+    "scope": "whole-file",
+    "line_count": 52,
+    "authoring_source": "course/file_units/integer_power_root.py",
+    "sections": [
+      "데이터와 설명 생성",
+      "실행 경로",
+      "등록과 종료 표식",
+      "빠진 경계도 학습하기"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/tests/int_pow_kunit.c"
+    }
+  ]
+}

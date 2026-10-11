@@ -1,0 +1,96 @@
+{
+  "id": "file-d2b40dd54db4f64d",
+  "path": "include/asm-generic/timex.h",
+  "title": "공통 timex 전체: 카운터 부재를 나타내는 기본값",
+  "area": "아키텍처 fallback · 전처리기 · 시간 카운터 · 부팅 보정",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "실제 counter가 없는 기본 구현과 보정 기능 표시의 차이를 읽습니다.",
+  "guide": [
+    "인터페이스가 존재하는 것과 유효하게 증가하는 시간 값을 제공하는 것은 다릅니다.",
+    "실제 TIME/CLINT를 읽는 RISC-V timex 구현과 대비합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "GPL-2.0·guard 뒤 cycles_t typedef,조건부 get_cycles 기본 함수,보정 관련 주석과 기능 매크로 해제가 전부입니다. 헤더 자체에 하드웨어 접근이나 주기적인 값 증가,타이머 초기화 코드는 없습니다."
+    },
+    {
+      "title": "타입과 상수 반환",
+      "text": "cycles_t는 unsigned long입니다. get_cycles 매크로가 없으면 같은 이름의 inline 함수를 정의해 항상0을 반환합니다. 이0은 boot 이후 시간이0이라는 측정 결과도 아니고 errno 형식의 오류 반환도 아닙니다. 실제 counter를 제공하지 않는 fallback 본문입니다."
+    },
+    {
+      "title": "전처리 검사의 범위",
+      "text": "#ifndef get_cycles는 매크로 정의 여부를 검사합니다. C 함수 선언의 존재를 compiler처럼 검색하는 검사가 아닙니다. 다른 아키텍처 헤더의 자기참조 get_cycles 매크로가 이런 방식의 override 탐지에 쓰일 수 있습니다. typedef 자체는 get_cycles 조건 밖에 있습니다."
+    },
+    {
+      "title": "현재 timer 기능 해제",
+      "text": "ARCH_HAS_READ_CURRENT_TIMER를 조건 없이 #undef합니다. 주석은 아키텍처가 read_current_timer와 기능 표시를 구현하면 부팅 중 비싼 delay loop 보정을 피할 수 있다고 권장합니다. 하지만 이 공통 파일은 해당 함수를 구현하거나 그 기능을 켜지 않습니다. 포함 순서에 따라 기존 매크로도 해제된다는 본문을 그대로 읽어야 합니다."
+    },
+    {
+      "title": "CS 연결과 사용 범위",
+      "text": "fallback 의미,정수 타입과 실제 시간원,전처리 선언 탐지,선택적 capability,부팅 비용을 학습합니다. 상수0을 증가하는 counter로 가정해 양수 차이를 기다리면 진행할 수 없으므로 호출자는 인터페이스 존재만으로 시간원 가용성을 가정하면 안 됩니다. 이 파일만으로 모든 호출자의 방어 처리를 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "기본 get_cycles는 호출마다 증가하는가?",
+      "options": [
+        "아니다. 항상0이다",
+        "그렇다. unsigned long 값이 자동 증가한다"
+      ],
+      "answer": 0,
+      "explanation": "본문은 return 0뿐입니다. 타입과 함수 이름이 실제 counter를 생성하지 않습니다."
+    },
+    {
+      "prompt": "#ifndef get_cycles가 검사하는 것은?",
+      "options": [
+        "모든 C 함수 선언의 존재 여부이다",
+        "전처리 매크로 정의 여부이다"
+      ],
+      "answer": 1,
+      "explanation": "전처리기는 C 심벌 테이블을 조회하지 않습니다. 자기참조 매크로로 구현 존재를 표시하는 패턴과 연결됩니다."
+    },
+    {
+      "prompt": "이 파일은 ARCH_HAS_READ_CURRENT_TIMER를 어떻게 하는가?",
+      "options": [
+        "해제한다",
+        "항상 활성화한다"
+      ],
+      "answer": 0,
+      "explanation": "주석의 구현 권장과 실제 #undef를 구분해야 합니다. 공통 fallback은 timer 기반 보정 기능을 제공하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_TIMEX_H\n#define __ASM_GENERIC_TIMEX_H\n\n/*\n * If you have a cycle counter, return the value here.\n */\ntypedef unsigned long cycles_t;\n#ifndef get_cycles\nstatic inline cycles_t get_cycles(void)\n{\n\treturn 0;\n}\n#endif\n\n/*\n * Architectures are encouraged to implement read_current_timer\n * and define this in order to avoid the expensive delay loop\n * calibration during boot.\n */\n#undef ARCH_HAS_READ_CURRENT_TIMER\n\n#endif /* __ASM_GENERIC_TIMEX_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "cdfde1b6711a9cb40993e63a272acd8c0e9180d89e1efe40f0f6c8905257e4bd",
+    "scope": "whole-file",
+    "line_count": 23,
+    "authoring_source": "course/file_units/timer_fallback_contracts.py",
+    "sections": [
+      "파일 전체 구성",
+      "타입과 상수 반환",
+      "전처리 검사의 범위",
+      "현재 timer 기능 해제",
+      "CS 연결과 사용 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/timex.h"
+    }
+  ]
+}

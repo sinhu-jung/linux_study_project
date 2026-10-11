@@ -1,0 +1,134 @@
+{
+  "id": "file-1cf471f0fb1f643c",
+  "path": "lib/sort.c",
+  "title": "배열 정렬 전체: 비재귀 힙과 원소 교환 전략",
+  "area": "힙 정렬 · 콜백·정렬 계약·메모리 정렬",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "최대 힙을 구성하고 큰 원소를 배열 뒤로 보내 오름차순 정렬합니다.",
+  "guide": [
+    "sort_r는 바이트 오프셋으로 힙을 관리합니다. 잎까지 내려간 뒤 목표 원소의 위치를 역추적하는 bottom-up sift를 사용하며 추출 단계에서는 큰 원소 두 개를 처리합니다. sort는 문맥 없는 콜백을 wrapper로 연결합니다.",
+    "유효한 배열 크기와 일관된 비교 함수를 제공해야 합니다. 기본 교환은 원소의 바이트를 옮기고,별도 참조나 보조 자료 갱신이 필요하면 사용자 교환 콜백을 사용할 수 있습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "SPDX,비교 횟수와 설계 배경 주석,types/export/sort 헤더 다음 정렬 가능성 검사,32/64비트·바이트 교환,콜백 dispatch,부모 오프셋 계산,sort_r와 sort 및 각 export가 있습니다. 동적 할당·재귀·전역 가변 상태는 없습니다."
+    },
+    {
+      "title": "기본 교환 선택",
+      "text": "is_aligned는 원소 크기가4 또는8의 배수인지 확인합니다. 효율적인 비정렬 접근 설정이 없으면 base 주소의 하위 비트도 검사합니다.8바이트 가능하면64비트 교환,그 다음4바이트,그 외 바이트 교환을 선택합니다. CONFIG_64BIT가 없을 때64비트 교환 helper는 두 번의32비트 전송으로 구현됩니다."
+    },
+    {
+      "title": "교환 helper와 표식",
+      "text": "세 helper는 뒤쪽부터 do-while로 교환하며0 크기를 직접 처리하는 일반 API가 아닙니다. SWAP_WORDS_64/32/BYTES/WRAPPER는 작은 정수를 함수 포인터 타입으로 표시한 내부 태그입니다. do_swap이 먼저 태그를 판별하므로 이 숫자를 실제 코드 주소로 호출하지 않습니다. 사용자 콜백에는 크기를 int로 변환해 전달하므로 크기 계약도 중요합니다."
+    },
+    {
+      "title": "콜백 wrapper",
+      "text": "wrapper는 일반 cmp와 swap을 보관합니다. do_cmp는 내부 NULL 태그이면 wrapper의 일반 comparator를 호출하고 그 외에는 priv를 전달합니다. do_swap도 wrapper와 일반 문맥 콜백을 구분합니다. sort가 만든 지역 wrapper는 동기 호출이 끝날 때까지 유효하며 비동기 저장 용도가 아닙니다."
+    },
+    {
+      "title": "부모 오프셋과 초기 경계",
+      "text": "인덱스 j>0의 부모는(j-1)/2입니다. parent는 size&-size의 최하위 비트를 사용해 바이트 오프셋에서도 같은 부모 위치를 계산합니다. sort_r는 n=num*size,a=(num/2)*size를 준비하고 a==0이면 반환합니다. 정상적으로 표현 가능한 크기에서 num<2 또는 size==0을 처리하지만 이 조건이 곱셈 오버플로 검사인 것은 아닙니다."
+    },
+    {
+      "title": "힙 구성과 두 원소 추출",
+      "text": "a가 남아 있으면 힙 구성 위치를 앞으로 옮깁니다. 힙 구성 후 n>3*size이면 루트를 뒤로 보내고 두 자식 중 큰 쪽도 다음 뒤쪽 위치로 보냅니다. shift는 선택한 자식과 후속 처리 위치를 연결합니다. [a,n)은 자식보다 크거나 같은 힙 구간,[n,num*size)은 정렬 완료 구간이라는 불변식을 주석이 제시합니다."
+    },
+    {
+      "title": "bottom-up sift와 마무리",
+      "text": "큰 자식을 따라 잎까지 내려가고,목표 원소와 비교하며 parent로 돌아와 삽입 위치를 찾습니다. 이후 경로를 따라 교환합니다. 마지막2개 또는3개 구간에서는 루트 교환과 필요 시 앞쪽 두 원소 비교로 끝냅니다. 이를 단순한 재귀 heapify 코드라고 설명하면 실제 비교 절약 방식을 놓칩니다."
+    },
+    {
+      "title": "복잡도와 안정성",
+      "text": "평균·최악 비교 횟수는 O(n log n)이고 재귀 스택이나 크기 n의 임시 배열이 없어 알고리즘 보조 공간은 O(1)입니다. 비교·교환의 자체 비용은 별도입니다. 동등 키의 원래 순서를 유지하는 안정 정렬은 보장하지 않습니다. comparator에서 a-b를 무조건 반환하면 signed overflow로 순서가 깨질 수 있어 부호 비교 방식이 안전한 경우가 많습니다."
+    },
+    {
+      "title": "실행 전제",
+      "text": "배열 저장소,원소 크기,포인터 산술,일관된 순서 관계는 호출자의 계약입니다. 함수가 입력 배열에 쓰므로 읽기 전용 메모리를 전달하면 안 됩니다. 이 파일은 동시 수정 잠금도 제공하지 않습니다. GNU void* 산술과 커널 컴파일 관례를 사용하므로 사용자 공간 검증은 의존성 대체와 컴파일 조건을 명시합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 정렬이 입력 크기만큼 재귀 스택을 사용하는가?",
+      "options": [
+        "아니다. 비재귀 루프와 고정 개수 지역 변수를 사용한다",
+        "그렇다. 각 원소마다 재귀 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "원문에 재귀 호출이나 동적 임시 배열이 없습니다. 힙 위치를 바이트 오프셋으로 추적합니다."
+    },
+    {
+      "prompt": "같은 키의 입력 순서가 반드시 보존되는가?",
+      "options": [
+        "그렇다. 모든 힙 정렬은 안정적이다",
+        "아니다. 안정 정렬을 보장하지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "멀리 떨어진 원소를 교환하며 동등 키의 원래 위치를 추적하는 장치가 없습니다."
+    },
+    {
+      "prompt": "원소 크기가8의 배수이면 모든 환경에서64비트 교환을 선택하는가?",
+      "options": [
+        "아니다. 설정에 따라 base 주소 정렬도 확인한다",
+        "그렇다. 주소 정렬은 절대 보지 않는다"
+      ],
+      "answer": 0,
+      "explanation": "CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS가 없으면 크기와 주소의 하위 비트를 함께 검사합니다."
+    },
+    {
+      "prompt": "sort_r의 a==0 검사가 num*size의 모든 오버플로를 방지하는가?",
+      "options": [
+        "그렇다. 크기 산술이 넘으면 항상 안전하게 복구한다",
+        "아니다. 사전 크기 유효성 검사가 필요하다"
+      ],
+      "answer": 1,
+      "explanation": "a와n은 이미 곱셈으로 계산됩니다. 정상 크기의 조기 반환 조건과 overflow 검증은 다릅니다."
+    },
+    {
+      "prompt": "bottom-up sift가 먼저 하는 일은?",
+      "options": [
+        "큰 자식을 따라 잎까지 내려가 후보 경로를 찾는다",
+        "배열 전체를 매번 다시 정렬한다"
+      ],
+      "answer": 0,
+      "explanation": "잎에서 부모로 되돌아가 적절한 위치를 찾는 방식으로 비교 횟수를 줄입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * A fast, small, non-recursive O(n log n) sort for the Linux kernel\n *\n * This performs n*log2(n) + 0.37*n + o(n) comparisons on average,\n * and 1.5*n*log2(n) + O(n) in the (very contrived) worst case.\n *\n * Quicksort manages n*log2(n) - 1.26*n for random inputs (1.63*n\n * better) at the expense of stack usage and much larger code to avoid\n * quicksort's O(n^2) worst case.\n */\n\n#include <linux/types.h>\n#include <linux/export.h>\n#include <linux/sort.h>\n\n/**\n * is_aligned - is this pointer & size okay for word-wide copying?\n * @base: pointer to data\n * @size: size of each element\n * @align: required alignment (typically 4 or 8)\n *\n * Returns true if elements can be copied using word loads and stores.\n * The size must be a multiple of the alignment, and the base address must\n * be if we do not have CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS.\n *\n * For some reason, gcc doesn't know to optimize \"if (a & mask || b & mask)\"\n * to \"if ((a | b) & mask)\", so we do that by hand.\n */\n__attribute_const__ __always_inline\nstatic bool is_aligned(const void *base, size_t size, unsigned char align)\n{\n\tunsigned char lsbits = (unsigned char)size;\n\n\t(void)base;\n#ifndef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS\n\tlsbits |= (unsigned char)(uintptr_t)base;\n#endif\n\treturn (lsbits & (align - 1)) == 0;\n}\n\n/**\n * swap_words_32 - swap two elements in 32-bit chunks\n * @a: pointer to the first element to swap\n * @b: pointer to the second element to swap\n * @n: element size (must be a multiple of 4)\n *\n * Exchange the two objects in memory.  This exploits base+index addressing,\n * which basically all CPUs have, to minimize loop overhead computations.\n *\n * For some reason, on x86 gcc 7.3.0 adds a redundant test of n at the\n * bottom of the loop, even though the zero flag is still valid from the\n * subtract (since the intervening mov instructions don't alter the flags).\n * Gcc 8.1.0 doesn't have that problem.\n */\nstatic void swap_words_32(void *a, void *b, size_t n)\n{\n\tdo {\n\t\tu32 t = *(u32 *)(a + (n -= 4));\n\t\t*(u32 *)(a + n) = *(u32 *)(b + n);\n\t\t*(u32 *)(b + n) = t;\n\t} while (n);\n}\n\n/**\n * swap_words_64 - swap two elements in 64-bit chunks\n * @a: pointer to the first element to swap\n * @b: pointer to the second element to swap\n * @n: element size (must be a multiple of 8)\n *\n * Exchange the two objects in memory.  This exploits base+index\n * addressing, which basically all CPUs have, to minimize loop overhead\n * computations.\n *\n * We'd like to use 64-bit loads if possible.  If they're not, emulating\n * one requires base+index+4 addressing which x86 has but most other\n * processors do not.  If CONFIG_64BIT, we definitely have 64-bit loads,\n * but it's possible to have 64-bit loads without 64-bit pointers (e.g.\n * x32 ABI).  Are there any cases the kernel needs to worry about?\n */\nstatic void swap_words_64(void *a, void *b, size_t n)\n{\n\tdo {\n#ifdef CONFIG_64BIT\n\t\tu64 t = *(u64 *)(a + (n -= 8));\n\t\t*(u64 *)(a + n) = *(u64 *)(b + n);\n\t\t*(u64 *)(b + n) = t;\n#else\n\t\t/* Use two 32-bit transfers to avoid base+index+4 addressing */\n\t\tu32 t = *(u32 *)(a + (n -= 4));\n\t\t*(u32 *)(a + n) = *(u32 *)(b + n);\n\t\t*(u32 *)(b + n) = t;\n\n\t\tt = *(u32 *)(a + (n -= 4));\n\t\t*(u32 *)(a + n) = *(u32 *)(b + n);\n\t\t*(u32 *)(b + n) = t;\n#endif\n\t} while (n);\n}\n\n/**\n * swap_bytes - swap two elements a byte at a time\n * @a: pointer to the first element to swap\n * @b: pointer to the second element to swap\n * @n: element size\n *\n * This is the fallback if alignment doesn't allow using larger chunks.\n */\nstatic void swap_bytes(void *a, void *b, size_t n)\n{\n\tdo {\n\t\tchar t = ((char *)a)[--n];\n\t\t((char *)a)[n] = ((char *)b)[n];\n\t\t((char *)b)[n] = t;\n\t} while (n);\n}\n\n/*\n * The values are arbitrary as long as they can't be confused with\n * a pointer, but small integers make for the smallest compare\n * instructions.\n */\n#define SWAP_WORDS_64 (swap_r_func_t)0\n#define SWAP_WORDS_32 (swap_r_func_t)1\n#define SWAP_BYTES    (swap_r_func_t)2\n#define SWAP_WRAPPER  (swap_r_func_t)3\n\nstruct wrapper {\n\tcmp_func_t cmp;\n\tswap_func_t swap;\n};\n\n/*\n * The function pointer is last to make tail calls most efficient if the\n * compiler decides not to inline this function.\n */\nstatic void do_swap(void *a, void *b, size_t size, swap_r_func_t swap_func, const void *priv)\n{\n\tif (swap_func == SWAP_WRAPPER) {\n\t\t((const struct wrapper *)priv)->swap(a, b, (int)size);\n\t\treturn;\n\t}\n\n\tif (swap_func == SWAP_WORDS_64)\n\t\tswap_words_64(a, b, size);\n\telse if (swap_func == SWAP_WORDS_32)\n\t\tswap_words_32(a, b, size);\n\telse if (swap_func == SWAP_BYTES)\n\t\tswap_bytes(a, b, size);\n\telse\n\t\tswap_func(a, b, (int)size, priv);\n}\n\n#define _CMP_WRAPPER ((cmp_r_func_t)0L)\n\nstatic int do_cmp(const void *a, const void *b, cmp_r_func_t cmp, const void *priv)\n{\n\tif (cmp == _CMP_WRAPPER)\n\t\treturn ((const struct wrapper *)priv)->cmp(a, b);\n\treturn cmp(a, b, priv);\n}\n\n/**\n * parent - given the offset of the child, find the offset of the parent.\n * @i: the offset of the heap element whose parent is sought.  Non-zero.\n * @lsbit: a precomputed 1-bit mask, equal to \"size & -size\"\n * @size: size of each element\n *\n * In terms of array indexes, the parent of element j = @i/@size is simply\n * (j-1)/2.  But when working in byte offsets, we can't use implicit\n * truncation of integer divides.\n *\n * Fortunately, we only need one bit of the quotient, not the full divide.\n * @size has a least significant bit.  That bit will be clear if @i is\n * an even multiple of @size, and set if it's an odd multiple.\n *\n * Logically, we're doing \"if (i & lsbit) i -= size;\", but since the\n * branch is unpredictable, it's done with a bit of clever branch-free\n * code instead.\n */\n__attribute_const__ __always_inline\nstatic size_t parent(size_t i, unsigned int lsbit, size_t size)\n{\n\ti -= size;\n\ti -= size & -(i & lsbit);\n\treturn i / 2;\n}\n\n/**\n * sort_r - sort an array of elements\n * @base: pointer to data to sort\n * @num: number of elements\n * @size: size of each element\n * @cmp_func: pointer to comparison function\n * @swap_func: pointer to swap function or NULL\n * @priv: third argument passed to comparison function\n *\n * This function does a heapsort on the given array.  You may provide\n * a swap_func function if you need to do something more than a memory\n * copy (e.g. fix up pointers or auxiliary data), but the built-in swap\n * avoids a slow retpoline and so is significantly faster.\n *\n * Sorting time is O(n log n) both on average and worst-case. While\n * quicksort is slightly faster on average, it suffers from exploitable\n * O(n*n) worst-case behavior and extra memory requirements that make\n * it less suitable for kernel use.\n */\nvoid sort_r(void *base, size_t num, size_t size,\n\t    cmp_r_func_t cmp_func,\n\t    swap_r_func_t swap_func,\n\t    const void *priv)\n{\n\t/* pre-scale counters for performance */\n\tsize_t n = num * size, a = (num/2) * size;\n\tconst unsigned int lsbit = size & -size;  /* Used to find parent */\n\tsize_t shift = 0;\n\n\tif (!a)\t\t/* num < 2 || size == 0 */\n\t\treturn;\n\n\t/* called from 'sort' without swap function, let's pick the default */\n\tif (swap_func == SWAP_WRAPPER && !((struct wrapper *)priv)->swap)\n\t\tswap_func = NULL;\n\n\tif (!swap_func) {\n\t\tif (is_aligned(base, size, 8))\n\t\t\tswap_func = SWAP_WORDS_64;\n\t\telse if (is_aligned(base, size, 4))\n\t\t\tswap_func = SWAP_WORDS_32;\n\t\telse\n\t\t\tswap_func = SWAP_BYTES;\n\t}\n\n\t/*\n\t * Loop invariants:\n\t * 1. elements [a,n) satisfy the heap property (compare greater than\n\t *    all of their children),\n\t * 2. elements [n,num*size) are sorted, and\n\t * 3. a <= b <= c <= d <= n (whenever they are valid).\n\t */\n\tfor (;;) {\n\t\tsize_t b, c, d;\n\n\t\tif (a)\t\t\t/* Building heap: sift down a */\n\t\t\ta -= size << shift;\n\t\telse if (n > 3 * size) { /* Sorting: Extract two largest elements */\n\t\t\tn -= size;\n\t\t\tdo_swap(base, base + n, size, swap_func, priv);\n\t\t\tshift = do_cmp(base + size, base + 2 * size, cmp_func, priv) <= 0;\n\t\t\ta = size << shift;\n\t\t\tn -= size;\n\t\t\tdo_swap(base + a, base + n, size, swap_func, priv);\n\t\t} else {\t\t/* Sort complete */\n\t\t\tbreak;\n\t\t}\n\n\t\t/*\n\t\t * Sift element at \"a\" down into heap.  This is the\n\t\t * \"bottom-up\" variant, which significantly reduces\n\t\t * calls to cmp_func(): we find the sift-down path all\n\t\t * the way to the leaves (one compare per level), then\n\t\t * backtrack to find where to insert the target element.\n\t\t *\n\t\t * Because elements tend to sift down close to the leaves,\n\t\t * this uses fewer compares than doing two per level\n\t\t * on the way down.  (A bit more than half as many on\n\t\t * average, 3/4 worst-case.)\n\t\t */\n\t\tfor (b = a; c = 2*b + size, (d = c + size) < n;)\n\t\t\tb = do_cmp(base + c, base + d, cmp_func, priv) > 0 ? c : d;\n\t\tif (d == n)\t/* Special case last leaf with no sibling */\n\t\t\tb = c;\n\n\t\t/* Now backtrack from \"b\" to the correct location for \"a\" */\n\t\twhile (b != a && do_cmp(base + a, base + b, cmp_func, priv) >= 0)\n\t\t\tb = parent(b, lsbit, size);\n\t\tc = b;\t\t\t/* Where \"a\" belongs */\n\t\twhile (b != a) {\t/* Shift it into place */\n\t\t\tb = parent(b, lsbit, size);\n\t\t\tdo_swap(base + b, base + c, size, swap_func, priv);\n\t\t}\n\t}\n\n\tn -= size;\n\tdo_swap(base, base + n, size, swap_func, priv);\n\tif (n == size * 2 && do_cmp(base, base + size, cmp_func, priv) > 0)\n\t\tdo_swap(base, base + size, size, swap_func, priv);\n}\nEXPORT_SYMBOL(sort_r);\n\nvoid sort(void *base, size_t num, size_t size,\n\t  cmp_func_t cmp_func,\n\t  swap_func_t swap_func)\n{\n\tstruct wrapper w = {\n\t\t.cmp  = cmp_func,\n\t\t.swap = swap_func,\n\t};\n\n\treturn sort_r(base, num, size, _CMP_WRAPPER, SWAP_WRAPPER, &w);\n}\nEXPORT_SYMBOL(sort);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "01c84ad84dc93b07617b8e5dd64071e9a3564a1e686e451e87f13ec0ad3240a5",
+    "scope": "whole-file",
+    "line_count": 302,
+    "authoring_source": "course/file_units/heap_sort.py",
+    "sections": [
+      "파일 전체 구성",
+      "기본 교환 선택",
+      "교환 helper와 표식",
+      "콜백 wrapper",
+      "부모 오프셋과 초기 경계",
+      "힙 구성과 두 원소 추출",
+      "bottom-up sift와 마무리",
+      "복잡도와 안정성",
+      "실행 전제"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/sort.c"
+    }
+  ]
+}

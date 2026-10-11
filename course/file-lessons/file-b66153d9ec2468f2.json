@@ -1,0 +1,173 @@
+{
+  "id": "file-b66153d9ec2468f2",
+  "path": "Documentation/core-api/rbtree.rst",
+  "title": "레드블랙 트리 문서 전체: 기본 사용부터 구간 트리 확장까지",
+  "area": "공식 문서 읽기 · 균형 트리 · 구간 검색 · 확장 집계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "Linux 레드블랙 트리의 사용법, 예제, 최소값 캐시, 구간 트리 확장을 설명하는 공식 문서입니다.",
+  "guide": [
+    "키 비교·객체 수명은 사용자 코드가 맡고 균형 유지 API를 결합합니다. 확장 트리는 각 서브트리의 집계값을 유지해 검색할 필요가 없는 영역을 건너뜁니다.",
+    "문서의 오래된 사례와 현재 고정 버전의 실제 선언을 함께 대조합니다. 예제는 사용 흐름을 설명하는 조각이며 그대로 완성된 프로그램은 아닙니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서 전체 구성",
+      "text": "제목·2007년 날짜·작성자 뒤에 개념과 용도, Linux 구현, 생성·검색·삽입·삭제·교체·정렬 순회, 캐시 트리, 확장 트리, 구간 트리 예제가 있습니다. 끝까지 포함된 예제는 첫 겹침 검색, 집계 계산, 세 콜백, 구간 삽입과 삭제입니다. 외부 기사·교과서 링크는 추가 읽기 안내이며 그 자료 전체를 검토한 것으로 세지 않습니다."
+    },
+    {
+      "title": "정렬 자료구조와 비용",
+      "text": "문서는 레드블랙 트리를 정렬 가능한 키에 쓰는 자가 균형 이진 검색 트리로 소개하고 radix tree·해시 테이블과 목적을 비교합니다. 삽입 최대2회·삭제 최대3회 회전이라는 설명이 있어도 연산 전체가 상수 시간이라는 뜻은 아닙니다. 위치 검색·조상 방문 등은 트리 높이에 의존하며 조회는 O(log n)입니다. AVL보다 빠르다는 문장을 모든 환경의 측정 결과로 일반화하지 않습니다."
+    },
+    {
+      "title": "역사적 활용 사례",
+      "text": "서두의 I/O 스케줄러·파일시스템·VMA 사례는 인용 당시 설명입니다. 고정 v6.12의 모든 해당 기능이 지금도 같은 구조라는 증거가 아닙니다. 예를 들어 include/linux/mm_types.h의 mm_mt는 maple_tree입니다. 자료구조의 역사적 용도와 현재 사용처를 구분하는 문서 읽기를 연습합니다."
+    },
+    {
+      "title": "침입형 노드와 잠금",
+      "text": "mytype 예제는 rb_node와 keystring을 같은 객체에 둡니다. container_of/rb_entry로 포함 객체를 얻고 rb_root를 RB_ROOT로 초기화합니다. 별도 데이터 객체를 찾는 간접 접근을 줄일 수 있으며 잠금은 사용자 책임입니다. 문서의 콜백 회피 설명과 달리 현재 rbtree.h에는 콜백 기반 helper도 존재하므로 문서 서두만으로 API 전체를 판단하지 않습니다."
+    },
+    {
+      "title": "문자열 검색 예제",
+      "text": "my_search는 루트에서 strcmp(query,node_key)를 계산하고 음수면 왼쪽, 양수면 오른쪽,0이면 객체를 반환합니다. NULL까지 내려가면 미발견입니다. strcmp의 비용은 키 길이에 영향을 받으므로 노드 방문 O(log n)과 실제 바이트 비교 비용을 구분합니다."
+    },
+    {
+      "title": "포인터의 포인터로 삽입",
+      "text": "my_insert의 new는 rb_node **로 새 노드를 연결할 빈 자식 포인터의 주소를 추적합니다. parent도 별도로 기록합니다. 동등 키면 예제는 거부하고 빈 곳을 찾으면 rb_link_node 후 rb_insert_color를 부릅니다. TRUE/FALSE 표현과 삭제 예제의 mysearch/my_search 이름 차이는 설명용 코드의 문맥을 보완해야 하는 부분입니다."
+    },
+    {
+      "title": "삭제·교체·객체 수명",
+      "text": "삭제 예제는 찾은 객체의 rb_erase 뒤에 myfree를 호출하여 트리 분리와 객체 해제를 구분합니다. 동시 독자가 있다면 이 예제만으로 즉시 free가 안전하다는 뜻은 아닙니다. rb_replace_node는 재정렬하지 않으므로 같은 키의 객체로 교체해야 하며 키를 바꿔 교체하면 검색 순서를 깨뜨릴 수 있습니다."
+    },
+    {
+      "title": "정렬 순회",
+      "text": "first/last로 시작하고 next/prev로 진행해 NULL에서 끝납니다. 반환은 rb_node 포인터이므로 객체로 변환해야 합니다. 문서 예제는 rb_first에서 rb_next로 진행하며 keystring을 출력합니다. 순회 자체는 제거·동기화 정책을 포함하지 않습니다."
+    },
+    {
+      "title": "최소값 캐시와 선언 대조",
+      "text": "rb_root_cached는 왼쪽 끝을 저장하여 최소값 조회를 O(log n) 탐색에서 O(1) 포인터 읽기로 바꿉니다. 추가 메모리와 유지 작업이 필요하고 cached 삽입·삭제 및 augmented cached API를 함께 사용합니다. 문서에는 rb_erase_cached를 void로 적었지만 고정 버전 헤더의 반환형은 struct rb_node *입니다. 실제 호출 계약은 현재 선언과 구현을 기준으로 확인합니다."
+    },
+    {
+      "title": "확장 트리의 집계 조건",
+      "text": "추가 정보는 노드 자신을 포함한 서브트리 내용으로 계산할 수 있어야 합니다. 삽입 경로의 집계값을 갱신하고 연결한 뒤 확장 삽입을 호출합니다. 문서 본문의 rb_augment_inserted라는 이름과 달리 현재 rbtree_augmented.h와 문서 뒤의 실제 예제는 rb_insert_augmented를 사용합니다. 이 이름 차이를 버전 대조 문제로 읽습니다."
+    },
+    {
+      "title": "세 콜백과 코드 크기",
+      "text": "propagate는 지정 노드부터 stop 이전까지 조상 집계를 갱신합니다. copy는 대체된 서브트리 루트로 집계값을 복사합니다. rotate는 새 루트에 기존 전체 집계를 복사하고 예전 루트의 줄어든 서브트리 집계를 재계산합니다. 문서는 삭제 콜백 인라인으로 코드가 커질 수 있어 사용처마다 삭제 호출 위치를 하나로 모으라고 안내합니다. 구현 세부 헤더를 외부 헤더에 노출하지 말라는 권고도 다룹니다."
+    },
+    {
+      "title": "구간 겹침의 두 조건",
+      "text": "닫힌 구간 [node.start,node.last]와 [start,last]는 node.start<=last와 node.last>=start를 모두 만족해야 겹칩니다. 각 노드에 __subtree_last라는 서브트리 최대 끝값을 저장하면 최대값<start인 서브트리는 전부 제외할 수 있습니다. 예를 들어 [10,20]과 [20,30]은 끝점20을 공유하므로 겹칩니다. 반열린 구간의 엄격 부등식과 혼동하지 않습니다."
+    },
+    {
+      "title": "첫 겹침 검색의 가지치기",
+      "text": "예제는 왼쪽 자식의 최대 끝값이 query 시작 이상이면 왼쪽부터 내려가 가장 낮은 시작의 일치를 찾습니다. 왼쪽이 불가능하면 현재 노드의 두 조건을 검사하고 필요할 때 오른쪽으로 갑니다. 현재 시작이 query 끝보다 크면 오른쪽의 시작도 더 작지 않으므로 종료할 수 있습니다. 집계값과 BST 순서가 모두 맞아야 이 가지치기가 안전합니다."
+    },
+    {
+      "title": "집계 유지 예제 전체",
+      "text": "compute_subtree_last는 자기 last와 두 자식의 집계를 최대로 합칩니다. propagate는 새 값과 기존 값이 같으면 위쪽도 바뀔 필요가 없어 중단합니다. copy는 old 값을 new에 대입하고 rotate는 new에 old 값을 복사한 뒤 old를 재계산합니다. insert는 경로에서 더 큰 last를 반영하고 새 노드의 집계를 자기 last로 초기화한 뒤 연결·확장 삽입합니다. remove는 rb_erase_augmented로 변경된 경로를 복구합니다."
+    },
+    {
+      "title": "CS 연결과 학습 범위",
+      "text": "정렬 순서와 균형, 객체 수명, 포인터의 포인터, subtree aggregate, 가지치기, 회전 후 메타데이터 복구, 공식 문서와 실제 API의 버전 차이를 학습합니다. 이 수업은 문서 전체와 필요한 선언의 대조이며 문서 예제 전체를 커널에서 실행한 검증은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "삽입 예제가 rb_node **를 유지하는 이유는?",
+      "options": [
+        "새 노드를 넣을 루트 또는 자식 포인터 위치를 갱신하기 위해서다",
+        "노드 내용을 두 번 복사하기 위해서다"
+      ],
+      "answer": 0,
+      "explanation": "탐색 중 new는 왼쪽/오른쪽 링크의 주소로 바뀝니다. 끝에서 rb_link_node가 그 빈 링크에 새 노드를 연결합니다."
+    },
+    {
+      "prompt": "같은 위치에 다른 키의 노드를 replace해도 정렬이 자동 복구되는가?",
+      "options": [
+        "그렇다. replace가 전체 트리를 다시 정렬한다",
+        "아니다. 문서는 같은 키의 교체를 요구한다"
+      ],
+      "answer": 1,
+      "explanation": "교체는 제거·삽입의 균형 작업을 피하는 API이며 새 키에 맞는 위치를 다시 탐색하지 않습니다."
+    },
+    {
+      "prompt": "구간 [10,20]과 [20,30]은 이 문서 예제에서 겹치는가?",
+      "options": [
+        "그렇다. 닫힌 구간의 끝점20을 공유한다",
+        "아니다. 끝점은 항상 제외한다"
+      ],
+      "answer": 0,
+      "explanation": "비교는 <=와 >=입니다. 반열린 구간의 비교 규칙을 그대로 적용하면 경계 결과가 바뀝니다."
+    },
+    {
+      "prompt": "서브트리 최대 끝값이 query 시작보다 작다면?",
+      "options": [
+        "최대값 노드 하나만 제외하고 모두 검사해야 한다",
+        "그 서브트리에는 겹치는 구간이 없어 제외할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "모든 끝값이 query 시작보다 작으므로 겹침 조건 node.last>=start를 어떤 노드도 만족할 수 없습니다."
+    },
+    {
+      "prompt": "회전 콜백은 왜 예전 루트의 집계를 재계산하는가?",
+      "options": [
+        "회전 후 그 노드가 담당하는 서브트리가 바뀌기 때문이다",
+        "회전하면 모든 키의 숫자값이 변하기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "전체 원소 집합은 새 루트 아래에 유지되지만 예전 루트의 자식 범위는 달라집니다. 새 루트는 기존 전체 집계를 받고 예전 루트는 새 자식으로 계산합니다."
+    },
+    {
+      "prompt": "문서 본문의 rb_augment_inserted 이름을 그대로 호출하면 되는가?",
+      "options": [
+        "된다. 문서의 모든 이름이 현재 선언과 일치한다",
+        "고정 버전 선언과 대조해 rb_insert_augmented를 사용해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "같은 문서 뒤 예제와 현재 augmented 헤더는 rb_insert_augmented를 사용합니다. 공식 문서에도 과거 표현이 남을 수 있습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "=================================\nRed-black Trees (rbtree) in Linux\n=================================\n\n\n:Date: January 18, 2007\n:Author: Rob Landley <rob@landley.net>\n\nWhat are red-black trees, and what are they for?\n------------------------------------------------\n\nRed-black trees are a type of self-balancing binary search tree, used for\nstoring sortable key/value data pairs.  This differs from radix trees (which\nare used to efficiently store sparse arrays and thus use long integer indexes\nto insert/access/delete nodes) and hash tables (which are not kept sorted to\nbe easily traversed in order, and must be tuned for a specific size and\nhash function where rbtrees scale gracefully storing arbitrary keys).\n\nRed-black trees are similar to AVL trees, but provide faster real-time bounded\nworst case performance for insertion and deletion (at most two rotations and\nthree rotations, respectively, to balance the tree), with slightly slower\n(but still O(log n)) lookup time.\n\nTo quote Linux Weekly News:\n\n    There are a number of red-black trees in use in the kernel.\n    The deadline and CFQ I/O schedulers employ rbtrees to\n    track requests; the packet CD/DVD driver does the same.\n    The high-resolution timer code uses an rbtree to organize outstanding\n    timer requests.  The ext3 filesystem tracks directory entries in a\n    red-black tree.  Virtual memory areas (VMAs) are tracked with red-black\n    trees, as are epoll file descriptors, cryptographic keys, and network\n    packets in the \"hierarchical token bucket\" scheduler.\n\nThis document covers use of the Linux rbtree implementation.  For more\ninformation on the nature and implementation of Red Black Trees,  see:\n\n  Linux Weekly News article on red-black trees\n    https://lwn.net/Articles/184495/\n\n  Wikipedia entry on red-black trees\n    https://en.wikipedia.org/wiki/Red-black_tree\n\nLinux implementation of red-black trees\n---------------------------------------\n\nLinux's rbtree implementation lives in the file \"lib/rbtree.c\".  To use it,\n\"#include <linux/rbtree.h>\".\n\nThe Linux rbtree implementation is optimized for speed, and thus has one\nless layer of indirection (and better cache locality) than more traditional\ntree implementations.  Instead of using pointers to separate rb_node and data\nstructures, each instance of struct rb_node is embedded in the data structure\nit organizes.  And instead of using a comparison callback function pointer,\nusers are expected to write their own tree search and insert functions\nwhich call the provided rbtree functions.  Locking is also left up to the\nuser of the rbtree code.\n\nCreating a new rbtree\n---------------------\n\nData nodes in an rbtree tree are structures containing a struct rb_node member::\n\n  struct mytype {\n  \tstruct rb_node node;\n  \tchar *keystring;\n  };\n\nWhen dealing with a pointer to the embedded struct rb_node, the containing data\nstructure may be accessed with the standard container_of() macro.  In addition,\nindividual members may be accessed directly via rb_entry(node, type, member).\n\nAt the root of each rbtree is an rb_root structure, which is initialized to be\nempty via:\n\n  struct rb_root mytree = RB_ROOT;\n\nSearching for a value in an rbtree\n----------------------------------\n\nWriting a search function for your tree is fairly straightforward: start at the\nroot, compare each value, and follow the left or right branch as necessary.\n\nExample::\n\n  struct mytype *my_search(struct rb_root *root, char *string)\n  {\n  \tstruct rb_node *node = root->rb_node;\n\n  \twhile (node) {\n  \t\tstruct mytype *data = container_of(node, struct mytype, node);\n\t\tint result;\n\n\t\tresult = strcmp(string, data->keystring);\n\n\t\tif (result < 0)\n  \t\t\tnode = node->rb_left;\n\t\telse if (result > 0)\n  \t\t\tnode = node->rb_right;\n\t\telse\n  \t\t\treturn data;\n\t}\n\treturn NULL;\n  }\n\nInserting data into an rbtree\n-----------------------------\n\nInserting data in the tree involves first searching for the place to insert the\nnew node, then inserting the node and rebalancing (\"recoloring\") the tree.\n\nThe search for insertion differs from the previous search by finding the\nlocation of the pointer on which to graft the new node.  The new node also\nneeds a link to its parent node for rebalancing purposes.\n\nExample::\n\n  int my_insert(struct rb_root *root, struct mytype *data)\n  {\n  \tstruct rb_node **new = &(root->rb_node), *parent = NULL;\n\n  \t/* Figure out where to put new node */\n  \twhile (*new) {\n  \t\tstruct mytype *this = container_of(*new, struct mytype, node);\n  \t\tint result = strcmp(data->keystring, this->keystring);\n\n\t\tparent = *new;\n  \t\tif (result < 0)\n  \t\t\tnew = &((*new)->rb_left);\n  \t\telse if (result > 0)\n  \t\t\tnew = &((*new)->rb_right);\n  \t\telse\n  \t\t\treturn FALSE;\n  \t}\n\n  \t/* Add new node and rebalance tree. */\n  \trb_link_node(&data->node, parent, new);\n  \trb_insert_color(&data->node, root);\n\n\treturn TRUE;\n  }\n\nRemoving or replacing existing data in an rbtree\n------------------------------------------------\n\nTo remove an existing node from a tree, call::\n\n  void rb_erase(struct rb_node *victim, struct rb_root *tree);\n\nExample::\n\n  struct mytype *data = mysearch(&mytree, \"walrus\");\n\n  if (data) {\n  \trb_erase(&data->node, &mytree);\n  \tmyfree(data);\n  }\n\nTo replace an existing node in a tree with a new one with the same key, call::\n\n  void rb_replace_node(struct rb_node *old, struct rb_node *new,\n  \t\t\tstruct rb_root *tree);\n\nReplacing a node this way does not re-sort the tree: If the new node doesn't\nhave the same key as the old node, the rbtree will probably become corrupted.\n\nIterating through the elements stored in an rbtree (in sort order)\n------------------------------------------------------------------\n\nFour functions are provided for iterating through an rbtree's contents in\nsorted order.  These work on arbitrary trees, and should not need to be\nmodified or wrapped (except for locking purposes)::\n\n  struct rb_node *rb_first(struct rb_root *tree);\n  struct rb_node *rb_last(struct rb_root *tree);\n  struct rb_node *rb_next(struct rb_node *node);\n  struct rb_node *rb_prev(struct rb_node *node);\n\nTo start iterating, call rb_first() or rb_last() with a pointer to the root\nof the tree, which will return a pointer to the node structure contained in\nthe first or last element in the tree.  To continue, fetch the next or previous\nnode by calling rb_next() or rb_prev() on the current node.  This will return\nNULL when there are no more nodes left.\n\nThe iterator functions return a pointer to the embedded struct rb_node, from\nwhich the containing data structure may be accessed with the container_of()\nmacro, and individual members may be accessed directly via\nrb_entry(node, type, member).\n\nExample::\n\n  struct rb_node *node;\n  for (node = rb_first(&mytree); node; node = rb_next(node))\n\tprintk(\"key=%s\\n\", rb_entry(node, struct mytype, node)->keystring);\n\nCached rbtrees\n--------------\n\nComputing the leftmost (smallest) node is quite a common task for binary\nsearch trees, such as for traversals or users relying on a the particular\norder for their own logic. To this end, users can use 'struct rb_root_cached'\nto optimize O(logN) rb_first() calls to a simple pointer fetch avoiding\npotentially expensive tree iterations. This is done at negligible runtime\noverhead for maintenance; albeit larger memory footprint.\n\nSimilar to the rb_root structure, cached rbtrees are initialized to be\nempty via::\n\n  struct rb_root_cached mytree = RB_ROOT_CACHED;\n\nCached rbtree is simply a regular rb_root with an extra pointer to cache the\nleftmost node. This allows rb_root_cached to exist wherever rb_root does,\nwhich permits augmented trees to be supported as well as only a few extra\ninterfaces::\n\n  struct rb_node *rb_first_cached(struct rb_root_cached *tree);\n  void rb_insert_color_cached(struct rb_node *, struct rb_root_cached *, bool);\n  void rb_erase_cached(struct rb_node *node, struct rb_root_cached *);\n\nBoth insert and erase calls have their respective counterpart of augmented\ntrees::\n\n  void rb_insert_augmented_cached(struct rb_node *node, struct rb_root_cached *,\n\t\t\t\t  bool, struct rb_augment_callbacks *);\n  void rb_erase_augmented_cached(struct rb_node *, struct rb_root_cached *,\n\t\t\t\t struct rb_augment_callbacks *);\n\n\nSupport for Augmented rbtrees\n-----------------------------\n\nAugmented rbtree is an rbtree with \"some\" additional data stored in\neach node, where the additional data for node N must be a function of\nthe contents of all nodes in the subtree rooted at N. This data can\nbe used to augment some new functionality to rbtree. Augmented rbtree\nis an optional feature built on top of basic rbtree infrastructure.\nAn rbtree user who wants this feature will have to call the augmentation\nfunctions with the user provided augmentation callback when inserting\nand erasing nodes.\n\nC files implementing augmented rbtree manipulation must include\n<linux/rbtree_augmented.h> instead of <linux/rbtree.h>. Note that\nlinux/rbtree_augmented.h exposes some rbtree implementations details\nyou are not expected to rely on; please stick to the documented APIs\nthere and do not include <linux/rbtree_augmented.h> from header files\neither so as to minimize chances of your users accidentally relying on\nsuch implementation details.\n\nOn insertion, the user must update the augmented information on the path\nleading to the inserted node, then call rb_link_node() as usual and\nrb_augment_inserted() instead of the usual rb_insert_color() call.\nIf rb_augment_inserted() rebalances the rbtree, it will callback into\na user provided function to update the augmented information on the\naffected subtrees.\n\nWhen erasing a node, the user must call rb_erase_augmented() instead of\nrb_erase(). rb_erase_augmented() calls back into user provided functions\nto updated the augmented information on affected subtrees.\n\nIn both cases, the callbacks are provided through struct rb_augment_callbacks.\n3 callbacks must be defined:\n\n- A propagation callback, which updates the augmented value for a given\n  node and its ancestors, up to a given stop point (or NULL to update\n  all the way to the root).\n\n- A copy callback, which copies the augmented value for a given subtree\n  to a newly assigned subtree root.\n\n- A tree rotation callback, which copies the augmented value for a given\n  subtree to a newly assigned subtree root AND recomputes the augmented\n  information for the former subtree root.\n\nThe compiled code for rb_erase_augmented() may inline the propagation and\ncopy callbacks, which results in a large function, so each augmented rbtree\nuser should have a single rb_erase_augmented() call site in order to limit\ncompiled code size.\n\n\nSample usage\n^^^^^^^^^^^^\n\nInterval tree is an example of augmented rb tree. Reference -\n\"Introduction to Algorithms\" by Cormen, Leiserson, Rivest and Stein.\nMore details about interval trees:\n\nClassical rbtree has a single key and it cannot be directly used to store\ninterval ranges like [lo:hi] and do a quick lookup for any overlap with a new\nlo:hi or to find whether there is an exact match for a new lo:hi.\n\nHowever, rbtree can be augmented to store such interval ranges in a structured\nway making it possible to do efficient lookup and exact match.\n\nThis \"extra information\" stored in each node is the maximum hi\n(max_hi) value among all the nodes that are its descendants. This\ninformation can be maintained at each node just be looking at the node\nand its immediate children. And this will be used in O(log n) lookup\nfor lowest match (lowest start address among all possible matches)\nwith something like::\n\n  struct interval_tree_node *\n  interval_tree_first_match(struct rb_root *root,\n\t\t\t    unsigned long start, unsigned long last)\n  {\n\tstruct interval_tree_node *node;\n\n\tif (!root->rb_node)\n\t\treturn NULL;\n\tnode = rb_entry(root->rb_node, struct interval_tree_node, rb);\n\n\twhile (true) {\n\t\tif (node->rb.rb_left) {\n\t\t\tstruct interval_tree_node *left =\n\t\t\t\trb_entry(node->rb.rb_left,\n\t\t\t\t\t struct interval_tree_node, rb);\n\t\t\tif (left->__subtree_last >= start) {\n\t\t\t\t/*\n\t\t\t\t * Some nodes in left subtree satisfy Cond2.\n\t\t\t\t * Iterate to find the leftmost such node N.\n\t\t\t\t * If it also satisfies Cond1, that's the match\n\t\t\t\t * we are looking for. Otherwise, there is no\n\t\t\t\t * matching interval as nodes to the right of N\n\t\t\t\t * can't satisfy Cond1 either.\n\t\t\t\t */\n\t\t\t\tnode = left;\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t}\n\t\tif (node->start <= last) {\t\t/* Cond1 */\n\t\t\tif (node->last >= start)\t/* Cond2 */\n\t\t\t\treturn node;\t/* node is leftmost match */\n\t\t\tif (node->rb.rb_right) {\n\t\t\t\tnode = rb_entry(node->rb.rb_right,\n\t\t\t\t\tstruct interval_tree_node, rb);\n\t\t\t\tif (node->__subtree_last >= start)\n\t\t\t\t\tcontinue;\n\t\t\t}\n\t\t}\n\t\treturn NULL;\t/* No match */\n\t}\n  }\n\nInsertion/removal are defined using the following augmented callbacks::\n\n  static inline unsigned long\n  compute_subtree_last(struct interval_tree_node *node)\n  {\n\tunsigned long max = node->last, subtree_last;\n\tif (node->rb.rb_left) {\n\t\tsubtree_last = rb_entry(node->rb.rb_left,\n\t\t\tstruct interval_tree_node, rb)->__subtree_last;\n\t\tif (max < subtree_last)\n\t\t\tmax = subtree_last;\n\t}\n\tif (node->rb.rb_right) {\n\t\tsubtree_last = rb_entry(node->rb.rb_right,\n\t\t\tstruct interval_tree_node, rb)->__subtree_last;\n\t\tif (max < subtree_last)\n\t\t\tmax = subtree_last;\n\t}\n\treturn max;\n  }\n\n  static void augment_propagate(struct rb_node *rb, struct rb_node *stop)\n  {\n\twhile (rb != stop) {\n\t\tstruct interval_tree_node *node =\n\t\t\trb_entry(rb, struct interval_tree_node, rb);\n\t\tunsigned long subtree_last = compute_subtree_last(node);\n\t\tif (node->__subtree_last == subtree_last)\n\t\t\tbreak;\n\t\tnode->__subtree_last = subtree_last;\n\t\trb = rb_parent(&node->rb);\n\t}\n  }\n\n  static void augment_copy(struct rb_node *rb_old, struct rb_node *rb_new)\n  {\n\tstruct interval_tree_node *old =\n\t\trb_entry(rb_old, struct interval_tree_node, rb);\n\tstruct interval_tree_node *new =\n\t\trb_entry(rb_new, struct interval_tree_node, rb);\n\n\tnew->__subtree_last = old->__subtree_last;\n  }\n\n  static void augment_rotate(struct rb_node *rb_old, struct rb_node *rb_new)\n  {\n\tstruct interval_tree_node *old =\n\t\trb_entry(rb_old, struct interval_tree_node, rb);\n\tstruct interval_tree_node *new =\n\t\trb_entry(rb_new, struct interval_tree_node, rb);\n\n\tnew->__subtree_last = old->__subtree_last;\n\told->__subtree_last = compute_subtree_last(old);\n  }\n\n  static const struct rb_augment_callbacks augment_callbacks = {\n\taugment_propagate, augment_copy, augment_rotate\n  };\n\n  void interval_tree_insert(struct interval_tree_node *node,\n\t\t\t    struct rb_root *root)\n  {\n\tstruct rb_node **link = &root->rb_node, *rb_parent = NULL;\n\tunsigned long start = node->start, last = node->last;\n\tstruct interval_tree_node *parent;\n\n\twhile (*link) {\n\t\trb_parent = *link;\n\t\tparent = rb_entry(rb_parent, struct interval_tree_node, rb);\n\t\tif (parent->__subtree_last < last)\n\t\t\tparent->__subtree_last = last;\n\t\tif (start < parent->start)\n\t\t\tlink = &parent->rb.rb_left;\n\t\telse\n\t\t\tlink = &parent->rb.rb_right;\n\t}\n\n\tnode->__subtree_last = last;\n\trb_link_node(&node->rb, rb_parent, link);\n\trb_insert_augmented(&node->rb, root, &augment_callbacks);\n  }\n\n  void interval_tree_remove(struct interval_tree_node *node,\n\t\t\t    struct rb_root *root)\n  {\n\trb_erase_augmented(&node->rb, root, &augment_callbacks);\n  }\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "6662447ad777d9d0f2ed843058b18f53182ebb886062c539facd15479a2569a8",
+    "scope": "whole-file",
+    "line_count": 429,
+    "authoring_source": "course/file_units/rbtree_documentation.py",
+    "sections": [
+      "문서 전체 구성",
+      "정렬 자료구조와 비용",
+      "역사적 활용 사례",
+      "침입형 노드와 잠금",
+      "문자열 검색 예제",
+      "포인터의 포인터로 삽입",
+      "삭제·교체·객체 수명",
+      "정렬 순회",
+      "최소값 캐시와 선언 대조",
+      "확장 트리의 집계 조건",
+      "세 콜백과 코드 크기",
+      "구간 겹침의 두 조건",
+      "첫 겹침 검색의 가지치기",
+      "집계 유지 예제 전체",
+      "CS 연결과 학습 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/core-api/rbtree.rst"
+    }
+  ]
+}

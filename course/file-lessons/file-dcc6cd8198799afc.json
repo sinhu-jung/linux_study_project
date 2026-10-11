@@ -1,0 +1,82 @@
+{
+  "id": "file-dcc6cd8198799afc",
+  "path": "arch/x86/include/asm/hyperv_timer.h",
+  "title": "X86 Hyper-V raw timer 연결: rdtsc_ordered 매크로",
+  "area": "아키텍처 추상화 · C 매크로 · TSC · 인터페이스 분리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "공통 Hyper-V 시계 코드가 x86의 TSC를 읽도록 연결하는 작은 헤더 전체를 분석합니다.",
+  "guide": [
+    "공통 알고리즘의 하드웨어 의존 동작을 아키텍처 헤더의 인터페이스로 분리할 수 있습니다.",
+    "원시 카운터 읽기와 시간 단위 환산을 구별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "GPL-2.0 표기, _ASM_X86_HYPERV_TIMER_H include guard, asm/msr.h 포함, 매크로 하나로 구성됩니다. 별도 구조체·전역 변수·설정별 stub·함수 본문은 없습니다. rdtsc_ordered 선언과 구현 문맥은 포함된 msr 헤더에 의존합니다."
+    },
+    {
+      "title": "호출 형태의 매크로",
+      "text": "#define hv_get_raw_timer() rdtsc_ordered()는 인수가 없는 함수형 매크로입니다. 이를 호출하는 공통 코드에서는 x86의 ordered TSC 읽기로 치환됩니다. 이 선언으로 hv_get_raw_timer라는 별도 함수 심볼이 생성되는 것은 아닙니다. 단순 매크로 연결 자체가 부팅 때 하드웨어를 등록하는 코드도 아닙니다."
+    },
+    {
+      "title": "카운터와 환산의 경계",
+      "text": "매크로는 raw TSC 값을 읽으며 Hyper-V 페이지의 scale·offset이나 sequence를 검사하지 않습니다. 공통 include/clocksource/hyperv_timer.h가 페이지를 확인하고 raw timer를 읽은 뒤 넓은 곱과 offset으로 참조 시간을 계산합니다. 따라서 여기의 반환값을 그대로 초나 나노초라고 부르지 않습니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "공통 코드는 hv_get_raw_timer라는 인터페이스에 의존하고 아키텍처 헤더가 실제 읽기를 선택합니다. 작은 파일도 빌드 시 의존성 연결에 역할이 있습니다. 전체 텍스트를 대조했으며 rdtsc_ordered의 구체 명령 선택이나 모든 x86 CPU의 실행 결과까지 이 파일의 검증으로 간주하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 파일의 hv_get_raw_timer()는 어떤 값으로 직접 연결되는가?",
+      "options": [
+        "rdtsc_ordered()의 원시 TSC 값이다",
+        "이미 나노초로 환산한 Hyper-V wall clock이다"
+      ],
+      "answer": 0,
+      "explanation": "매크로에는 scale·offset 계산이 없습니다. raw 카운터를 시간으로 바꾸는 연산은 공통 시계 코드에서 수행합니다."
+    },
+    {
+      "prompt": "이 매크로 정의만으로 별도 hv_get_raw_timer 함수 심볼이 생성되는가?",
+      "options": [
+        "그렇다. 모든 함수형 매크로는 독립 ELF 함수가 된다",
+        "아니다. 호출 텍스트를 rdtsc_ordered()로 치환한다"
+      ],
+      "answer": 1,
+      "explanation": "전처리 매크로와 컴파일된 함수 정의는 다릅니다. 이 헤더에는 hv_get_raw_timer의 C 함수 본문이 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_HYPERV_TIMER_H\n#define _ASM_X86_HYPERV_TIMER_H\n\n#include <asm/msr.h>\n\n#define hv_get_raw_timer() rdtsc_ordered()\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "860b99c2a977889c391322ab957da05d45b09c5842956d67905ef6ebf556627c",
+    "scope": "whole-file",
+    "line_count": 9,
+    "authoring_source": "course/file_units/arch_clocksource_glue.py",
+    "sections": [
+      "파일 전체",
+      "호출 형태의 매크로",
+      "카운터와 환산의 경계",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/hyperv_timer.h"
+    }
+  ]
+}

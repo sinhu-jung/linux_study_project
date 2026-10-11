@@ -1,0 +1,101 @@
+{
+  "id": "file-91506ac57b78aa08",
+  "path": "arch/riscv/kernel/vdso/vdso.S",
+  "title": "RISC-V vDSO 이미지 포함: incbin과 페이지 정렬 경계",
+  "area": "어셈블러 · incbin · 페이지 정렬 · 링크 심볼 · 빌드 산출물",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "이미지 경로 선택과 시작·끝 심볼, 바이너리 포함 지시문 전체를 분석합니다.",
+  "guide": [
+    "이미 만들어진 실행 파일을 커널 데이터로 포함하는 단계는 그 파일의 소스를 컴파일하는 단계와 다릅니다.",
+    "페이지 정렬 padding과 원래 ELF 길이의 차이를 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 의존성",
+      "text": "GPL-2.0-only와 저작권 뒤 linux/init.h, linux/linkage.h, asm/page.h를 포함합니다. 실행 함수 본문은 없고 데이터 섹션 선택·심볼 정의·이미지 포함을 수행하는 어셈블러 지시문으로 구성됩니다."
+    },
+    {
+      "title": "경로 기본값과 재정의",
+      "text": "__VDSO_PATH가 정의되어 있지 않으면 문자열 arch/riscv/kernel/vdso/vdso.so로 정의합니다. 이미 빌드 문맥에서 제공되었다면 그 값을 유지합니다. 이것은 전처리 시 선택이며 실행 중 파일 시스템에서 경로를 검색하는 코드가 아닙니다."
+    },
+    {
+      "title": "섹션과 시작 경계",
+      "text": "__PAGE_ALIGNED_DATA 매크로를 사용하고 .globl로 vdso_start와 vdso_end를 공개합니다. .balign PAGE_SIZE 뒤 vdso_start 라벨을 놓아 포함 이미지의 시작을 페이지 경계에 맞춥니다. 여기서 .globl의 공개는 링크 심볼 범위이며 사용자 vDSO의 동적 함수 export 목록과 다릅니다."
+    },
+    {
+      "title": "바이너리 포함",
+      "text": ".incbin __VDSO_PATH는 지정한 파일의 바이너리 바이트를 현재 출력에 포함합니다. ELF 소스를 다시 C로 컴파일하거나 include한 내용의 명령을 실행하는 것이 아닙니다. 입력 파일 생성 의존성은 Makefile이 관리해야 하며 이 파일 자체가 vdso.so를 링크하지 않습니다."
+    },
+    {
+      "title": "끝 정렬과 크기",
+      "text": "incbin 뒤 .balign PAGE_SIZE를 한 번 더 수행한 다음 vdso_end 라벨을 둡니다. 따라서 vdso_end-vdso_start는 원본 파일 크기에 끝 padding을 더한 페이지 배수일 수 있습니다. 예를 들어 PAGE_SIZE=4096이고 입력이 5000바이트이면 영역은 8192바이트가 됩니다. 원본 ELF 파일 길이와 정렬된 포함 영역 길이를 구분해야 합니다."
+    },
+    {
+      "title": "섹션 복구와 범위",
+      "text": "마지막 .previous는 이전 섹션 문맥으로 돌아갑니다. 전체 매크로·조건·라벨·지시문을 설명했습니다. 페이지를 사용자 공간에 실제 매핑하거나 권한을 설정하는 코드는 이 파일에 없습니다. 실제 RISC-V 이미지 빌드와 포함 바이트 비교를 실행한 검증 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "PAGE_SIZE=4096, 입력 ELF=5000바이트라면 정렬된 시작·끝 심볼 간 거리는?",
+      "options": [
+        "8192바이트이다",
+        "항상 원본과 같은 5000바이트이다"
+      ],
+      "answer": 0,
+      "explanation": "끝 라벨이 두 번째 페이지 정렬 뒤에 있습니다. 다음 페이지 경계까지 padding이 포함됩니다."
+    },
+    {
+      "prompt": ".incbin은 무엇을 하는가?",
+      "options": [
+        "실행 중 해당 파일을 열어 난수를 읽는다",
+        "이미 생성된 파일의 바이트를 출력에 포함한다"
+      ],
+      "answer": 1,
+      "explanation": "어셈블 단계의 데이터 포함 지시문입니다. runtime 파일 입출력이나 C 소스 컴파일과 다릅니다."
+    },
+    {
+      "prompt": "__VDSO_PATH를 빌드 문맥에서 미리 정의하면 기본 경로가 덮어쓰는가?",
+      "options": [
+        "아니다. #ifndef이므로 기존 값을 유지한다",
+        "그렇다. 항상 기본 경로로 강제한다"
+      ],
+      "answer": 0,
+      "explanation": "전처리 조건이 사용자 제공 경로와 기본값을 구분합니다. 함수 실행 중의 조건 분기가 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2014 Regents of the University of California\n */\n\n#include <linux/init.h>\n#include <linux/linkage.h>\n#include <asm/page.h>\n\n#ifndef __VDSO_PATH\n#define __VDSO_PATH \"arch/riscv/kernel/vdso/vdso.so\"\n#endif\n\n\t__PAGE_ALIGNED_DATA\n\n\t.globl vdso_start, vdso_end\n\t.balign PAGE_SIZE\nvdso_start:\n\t.incbin __VDSO_PATH\n\t.balign PAGE_SIZE\nvdso_end:\n\n\t.previous\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "a9242daf3adedca30e90d372cce48eb7374bcc5567b24537dea61f67f05fdfdf",
+    "scope": "whole-file",
+    "line_count": 23,
+    "authoring_source": "course/file_units/riscv_vdso_image_notes.py",
+    "sections": [
+      "전체 의존성",
+      "경로 기본값과 재정의",
+      "섹션과 시작 경계",
+      "바이너리 포함",
+      "끝 정렬과 크기",
+      "섹션 복구와 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/vdso.S"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "id": "file-e469f23841194a24",
+  "path": "lib/debug_locks.c",
+  "title": "잠금 디버깅 상태 전체: 첫 오류와 원자적 끄기",
+  "area": "커널 공통 도구 · 상태·수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "첫 잠금 오류 뒤에 파생 오류 로그가 쏟아지는 것을 줄이기 위한 공통 상태입니다.",
+  "guide": [
+    "debug_locks는 1로 시작하고 debug_locks_silent는 정적 초기값 0입니다. debug_locks_off는 debug_locks가 켜져 있고 __debug_locks_off가 이전 비영 값을 반환한 경우에만 안쪽으로 갑니다. silent가 아니면 console_verbose를 호출하고 1을 반환합니다.",
+    "__debug_locks_off의 실제 연산은 헤더의 xchg(&debug_locks,0)입니다. 반환값 0이 반드시 아무 상태 변화도 없었다는 뜻은 아닙니다. silent가 켜져 있으면 디버깅 상태를 껐어도 0을 반환합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일 구성",
+      "text": "SPDX·저작권·목적 주석과 rwsem/mutex/export/spinlock/debug_locks 헤더, __read_mostly 전역 두 개, GPL export 세 개, 함수 하나가 전체입니다. __read_mostly는 배치·접근 특성 힌트이며 값을 상수로 만들거나 동기화하는 키워드가 아닙니다."
+    },
+    {
+      "title": "첫 호출과 후속 호출",
+      "text": "debug_locks=1,silent=0이면 원자 교환이 1을 돌려주고 상태는 0이 됩니다. console_verbose 후 1을 반환합니다. 뒤 호출은 꺼진 상태를 보거나 xchg에서 이전 0을 받아 0을 반환합니다. 바깥의 읽기 검사만을 원자적 승자 결정으로 해석하지 말고 xchg의 이전값을 확인합니다."
+    },
+    {
+      "title": "silent 분기",
+      "text": "debug_locks=1,silent=1에서도 xchg는 실행되어 debug_locks=0으로 바뀝니다. 하지만 console_verbose와 return 1은 생략되어 최종 0입니다. 실제 잠금의 소유권이나 locked 상태를 해제하는 동작이 아니라 디버그 보고 상태를 제어하는 것입니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "공유 플래그를 원자적으로 바꾸면서 이전 상태를 받아 한 실행 흐름만 특정 후속 작업을 맡기는 패턴입니다. 함수 반환값을 API 의미대로 읽어야 하며 bool처럼 보이는 int 값이 모든 부수 효과 유무를 표현한다고 단정하면 안 됩니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "debug_locks=1,silent=1에서 debug_locks_off 후 상태·반환값은?",
+      "options": [
+        "상태 0, 반환 0",
+        "상태 1, 반환 0"
+      ],
+      "answer": 0,
+      "explanation": "silent 검사는 xchg 뒤에 있습니다. 출력은 조용해도 전역 디버그 상태는 이미 꺼집니다."
+    },
+    {
+      "prompt": "이전 상태를 얻으며 debug_locks를 0으로 만드는 연산은?",
+      "options": [
+        "__read_mostly 지정자",
+        "헤더 helper의 xchg"
+      ],
+      "answer": 1,
+      "explanation": "__read_mostly는 원자 연산이 아닙니다. __debug_locks_off가 xchg(&debug_locks,0)를 호출해 이전값과 교환을 결합합니다."
+    },
+    {
+      "prompt": "이 함수가 실제 mutex나 spinlock을 unlock하는가?",
+      "options": [
+        "아니다. 잠금 디버깅 보고 상태를 끈다",
+        "그렇다. 모든 잠금 소유권을 제거한다"
+      ],
+      "answer": 0,
+      "explanation": "인자로 잠금 객체를 받지 않고 전역 디버그 플래그만 갱신합니다. 오류 보고 장치와 실제 동기화 상태를 구별해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * lib/debug_locks.c\n *\n * Generic place for common debugging facilities for various locks:\n * spinlocks, rwlocks, mutexes and rwsems.\n *\n * Started by Ingo Molnar:\n *\n *  Copyright (C) 2006 Red Hat, Inc., Ingo Molnar <mingo@redhat.com>\n */\n#include <linux/rwsem.h>\n#include <linux/mutex.h>\n#include <linux/export.h>\n#include <linux/spinlock.h>\n#include <linux/debug_locks.h>\n\n/*\n * We want to turn all lock-debugging facilities on/off at once,\n * via a global flag. The reason is that once a single bug has been\n * detected and reported, there might be cascade of followup bugs\n * that would just muddy the log. So we report the first one and\n * shut up after that.\n */\nint debug_locks __read_mostly = 1;\nEXPORT_SYMBOL_GPL(debug_locks);\n\n/*\n * The locking-testsuite uses <debug_locks_silent> to get a\n * 'silent failure': nothing is printed to the console when\n * a locking bug is detected.\n */\nint debug_locks_silent __read_mostly;\nEXPORT_SYMBOL_GPL(debug_locks_silent);\n\n/*\n * Generic 'turn off all lock debugging' function:\n */\nint debug_locks_off(void)\n{\n\tif (debug_locks && __debug_locks_off()) {\n\t\tif (!debug_locks_silent) {\n\t\t\tconsole_verbose();\n\t\t\treturn 1;\n\t\t}\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(debug_locks_off);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "4f5d8e04f78a5a64fa96d96d08cdecaa5e86d4a46025ff3d0cff66d72ae900ad",
+    "scope": "whole-file",
+    "line_count": 49,
+    "authoring_source": "course/file_units/core_utilities.py",
+    "sections": [
+      "전체 파일 구성",
+      "첫 호출과 후속 호출",
+      "silent 분기",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/debug_locks.c"
+    }
+  ]
+}

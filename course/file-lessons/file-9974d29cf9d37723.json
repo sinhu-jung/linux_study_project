@@ -1,0 +1,77 @@
+{
+  "id": "file-9974d29cf9d37723",
+  "path": "arch/loongarch/kernel/rethook.h",
+  "title": "LoongArch rethook 로컬 선언: callback 반환형과 준비 인자",
+  "area": "함수 선언 · 타입 계약 · 헤더 의존성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 함수 선언으로 구성된 로컬 헤더 전체를 해설합니다.",
+  "guide": [
+    "헤더는 타입 계약을 제공하며 구조체 정의나 실행 동작을 자동으로 제공하지 않습니다.",
+    "C 구현과 assembly 호출 사이의 이름·타입 연결을 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 내용",
+      "text": "GPL-2.0, __LOONGARCH_RETHOOK_H guard와 callback 및 prepare 선언만 있습니다. include나 구조체 본문, 변수, inline 실행 코드는 없습니다."
+    },
+    {
+      "title": "두 시그니처",
+      "text": "callback은 pt_regs 포인터를 받고 unsigned long을 반환합니다. prepare는 rethook_node 포인터, pt_regs 포인터, bool mcount를 받아 void로 끝납니다. 같은 후킹 계열 함수라도 반환형과 역할이 다릅니다."
+    },
+    {
+      "title": "포함 문맥과 CS",
+      "text": "bool과 구조체 타입의 준비는 앞서 포함한 Linux 헤더 등 문맥에 의존합니다. 이 선언만으로 pt_regs 필드 배치나 register별 ABI를 알 수는 없습니다. guard의 중복 포함 방지와 실제 구현 존재 여부도 별개입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "이 헤더 자체가 레지스터를 저장하는가?",
+      "options": [
+        "아니다. 함수 선언만 제공한다",
+        "그렇다. pt_regs 인자가 있으면 자동 저장된다"
+      ],
+      "answer": 0,
+      "explanation": "실제 저장 instruction은 trampoline assembly에 있고 이 파일에는 실행 본문이 없습니다."
+    },
+    {
+      "prompt": "callback의 반환형은 무엇인가?",
+      "options": [
+        "void이다",
+        "unsigned long이다"
+      ],
+      "answer": 1,
+      "explanation": "callback 결과를 assembly가 복귀 주소로 사용하므로 준비 함수의 void 반환과 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LOONGARCH_RETHOOK_H\n#define __LOONGARCH_RETHOOK_H\n\nunsigned long arch_rethook_trampoline_callback(struct pt_regs *regs);\nvoid arch_rethook_prepare(struct rethook_node *rhn, struct pt_regs *regs, bool mcount);\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "8790a42a758a716f7cb109e8a8178280db3f86867a4764108dfa89ef07201a9f",
+    "scope": "whole-file",
+    "line_count": 8,
+    "authoring_source": "course/file_units/loongarch_rethook.py",
+    "sections": [
+      "전체 내용",
+      "두 시그니처",
+      "포함 문맥과 CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/loongarch/kernel/rethook.h"
+    }
+  ]
+}

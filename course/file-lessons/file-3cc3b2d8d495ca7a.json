@@ -1,0 +1,91 @@
+{
+  "id": "file-3cc3b2d8d495ca7a",
+  "path": "lib/net_utils.c",
+  "title": "MAC 문자열 변환 전체: 검증 후 쓰기와 접미사 허용",
+  "area": "커널 공통 도구 · 상태·수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "검증을 끝내기 전 출력 버퍼를 바꾸지 않는 파서입니다. 그러나 문자열 전체 길이 검증과 접두부 파싱은 다릅니다.",
+  "guide": [
+    "mac_pton은 3*ETH_ALEN-1=17바이트의 최소 접두부 길이를 확인합니다. 첫 루프에서 여섯 바이트의 두 16진 문자와 다섯 콜론을 검증하고, 두 번째 루프에서 상위 nibble<<4와 하위 nibble을 OR해 출력합니다.",
+    "입력은 필요한 길이만큼 안전하게 읽을 수 있어야 하고 출력 mac에는 ETH_ALEN 바이트 공간이 필요합니다. 함수는 s[17]이 NUL인지 검사하지 않으므로 유효한 MAC 접두부 뒤에 문자가 더 있어도 성공할 수 있습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체와 helper",
+      "text": "SPDX, string/if_ether/ctype/export/hex 헤더, 함수 하나와 export가 전부입니다. ETH_ALEN이 주소 길이 6을 정하고 strnlen은 최대 17바이트만 셉니다. isxdigit는 문자를 검증하며 hex_to_bin이 각 nibble을 값으로 바꿉니다."
+    },
+    {
+      "title": "출력 보존과 단계 분리",
+      "text": "길이가 짧거나 16진 문자가 아니거나 중간 콜론이 틀리면 첫 루프에서 false로 반환합니다. mac에 쓰는 대입은 검증 루프가 모두 끝난 뒤라 이러한 실패는 기존 출력 값을 보존합니다. 이 보장은 입력이 실행 도중 외부에서 변경되지 않는 정상 계약 아래 해석합니다."
+    },
+    {
+      "title": "길이와 계산 예제",
+      "text": "문자 A와 f는 각각 10과 15이므로 (10<<4)|15=0xAF입니다. aa:bb:cc:dd:ee:ffXYZ는 처음 17문자가 올바르고 종료 문자 검사가 없어 접두부 파싱이 성공합니다. 문자열 전체가 정확히 MAC 형식이어야 하는 호출자는 별도로 끝을 확인해야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "validate-then-commit은 부분 출력 손상을 피하는 패턴입니다. 하지만 TOCTOU 관점에서 입력이 검증과 변환 사이 바뀌지 않는다는 전제도 있습니다. 고정 6바이트 파싱이므로 유효 입력의 시간·출력 공간은 상수입니다. 형식 검증이 MAC 주소의 실제 장치 소유권이나 네트워크 도달 가능성을 증명하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "aa:bb:cc:dd:ee:ffXYZ는 이 함수에서 반드시 실패하는가?",
+      "options": [
+        "아니다. 앞 17문자가 유효하면 뒤 문자를 검사하지 않는다",
+        "그렇다. strnlen이 전체 문자열 길이를 비교한다"
+      ],
+      "answer": 0,
+      "explanation": "strnlen(s,17)은 길이가 17 이상이면 17을 반환합니다. 이후 검사도 16번 인덱스까지이며 s[17]의 NUL 여부는 보지 않습니다."
+    },
+    {
+      "prompt": "다섯 번째 주소 바이트에 잘못된 문자가 있으면 앞 네 바이트 출력은?",
+      "options": [
+        "앞 네 바이트만 새 값으로 덮인 채 반환한다",
+        "검증 루프에서 실패하므로 출력은 쓰기 전 상태를 유지한다"
+      ],
+      "answer": 1,
+      "explanation": "검증과 출력 변환이 별도 루프입니다. 모든 형식 검사를 통과하기 전에는 mac[i] 대입이 실행되지 않습니다."
+    },
+    {
+      "prompt": "문자 Af의 출력 바이트는?",
+      "options": [
+        "0xAF",
+        "0x19"
+      ],
+      "answer": 0,
+      "explanation": "A의 nibble 10을 네 비트 옮겨 0xA0으로 만들고 f의 15인 0x0F와 OR해 0xAF를 얻습니다. 두 nibble을 일반 덧셈 10+15만 하는 계산은 틀립니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/string.h>\n#include <linux/if_ether.h>\n#include <linux/ctype.h>\n#include <linux/export.h>\n#include <linux/hex.h>\n\nbool mac_pton(const char *s, u8 *mac)\n{\n\tsize_t maxlen = 3 * ETH_ALEN - 1;\n\tint i;\n\n\t/* XX:XX:XX:XX:XX:XX */\n\tif (strnlen(s, maxlen) < maxlen)\n\t\treturn false;\n\n\t/* Don't dirty result unless string is valid MAC. */\n\tfor (i = 0; i < ETH_ALEN; i++) {\n\t\tif (!isxdigit(s[i * 3]) || !isxdigit(s[i * 3 + 1]))\n\t\t\treturn false;\n\t\tif (i != ETH_ALEN - 1 && s[i * 3 + 2] != ':')\n\t\t\treturn false;\n\t}\n\tfor (i = 0; i < ETH_ALEN; i++) {\n\t\tmac[i] = (hex_to_bin(s[i * 3]) << 4) | hex_to_bin(s[i * 3 + 1]);\n\t}\n\treturn true;\n}\nEXPORT_SYMBOL(mac_pton);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ca004adb988365718ba2a4cf20234f70200a3bc627a443b974ffbc42739eb079",
+    "scope": "whole-file",
+    "line_count": 29,
+    "authoring_source": "course/file_units/core_utilities.py",
+    "sections": [
+      "파일 전체와 helper",
+      "출력 보존과 단계 분리",
+      "길이와 계산 예제",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/net_utils.c"
+    }
+  ]
+}

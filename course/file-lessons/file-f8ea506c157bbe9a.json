@@ -1,0 +1,148 @@
+{
+  "id": "file-f8ea506c157bbe9a",
+  "path": "lib/kunit/resource.c",
+  "title": "KUnit 자원과 cleanup action: 등록·제거·마지막 참조",
+  "area": "자원 수명 · 참조 카운팅 · 연결 리스트 · spinlock · cleanup action",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "자원 목록 관리와 action 등록·취소·실행 함수 전체를 분석합니다.",
+  "guide": [
+    "목록에서 제거하는 것과 객체의 마지막 참조를 해제하는 것은 서로 다른 수명 단계입니다.",
+    "kref, irqsave spinlock, callback 식별과 실패 시 보상 동작을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 등록 초기화",
+      "text": "GPL-2.0 파일은 resource,test,kref 헤더를 포함합니다. __kunit_add_resource는 free callback을 저장하고 kref_init으로 목록이 보유할 첫 참조를 만듭니다. init이 있으면 init(res,data)를 호출해 오류를 즉시 반환하고, 없으면 res->data=data로 둡니다. should_kfree는 초기화하지 않는다는 주석이 있으므로 호출자 책임입니다."
+    },
+    {
+      "title": "Init와 목록 잠금의 범위",
+      "text": "init callback은 목록 spinlock을 잡기 전에 실행합니다. 성공 후 spin_lock_irqsave 아래 list_add_tail로 등록하고 irqrestore합니다. init 오류일 때 이 helper가 free callback이나 kfree를 직접 호출하지 않습니다. 완성되지 않은 객체의 회수는 호출자 계약을 확인해야 합니다. 이 함수는 GPL export됩니다."
+    },
+    {
+      "title": "목록 제거와 put",
+      "text": "kunit_remove_resource는 잠금 아래 node가 비어 있었는지를 was_linked로 저장하고 list_del_init으로 제거·자기 연결 초기화를 합니다. 잠금을 푼 뒤 실제로 연결되어 있었을 때만 kunit_put_resource를 호출합니다. 이미 분리된 유효 자원에 중복 호출했을 때 목록 참조를 다시 감소시키지 않으려는 구조입니다. 이미 해제된 포인터까지 안전하게 재사용할 수 있다는 보장은 아닙니다."
+    },
+    {
+      "title": "Destroy의 추가 참조",
+      "text": "kunit_destroy_resource는 match와 data로 찾아 없으면 -ENOENT입니다. 있으면 remove로 목록 참조를 놓고 이어 put으로 find에서 얻은 참조를 놓은 뒤 0을 반환합니다. 다른 참조가 남아 있으면 객체의 실제 최종 해제는 늦어질 수 있습니다. 교차 확인한 header의 find는 역방향 리스트 탐색 중 일치 자원을 get하므로 조회가 단순 borrowed pointer 반환이 아닙니다."
+    },
+    {
+      "title": "Action wrapper와 해제 callback",
+      "text": "kunit_action_ctx는 첫 멤버 kunit_resource res, action 함수 포인터 func,void *ctx를 보관합니다. __kunit_action_free는 container_of로 바깥 객체를 얻고 func(ctx)를 호출합니다. 여기서 wrapper를 직접 kfree하지 않습니다. 확인한 resource release helper가 should_kfree일 때 res를 kfree하며, 첫 멤버 배치 때문에 할당된 wrapper 시작 주소와 연결됩니다."
+    },
+    {
+      "title": "Action 등록",
+      "text": "kunit_add_action은 action이 NULL이 아닌지 assertion하고 kzalloc으로 wrapper를 할당합니다. 할당 실패는 -ENOMEM입니다. func·ctx를 저장하고 res.should_kfree=true로 설정한 뒤 init=NULL인 __kunit_add_resource를 호출합니다. 주석대로 이 등록 경로는 init callback 실패가 없습니다. 등록 시 action 자체를 즉시 실행하지 않고 자원 free callback으로 연결합니다."
+    },
+    {
+      "title": "등록 실패 시 reset",
+      "text": "kunit_add_action_or_reset은 add의 반환이 nonzero이면 action(ctx)를 즉시 실행하고 같은 오류값을 반환합니다. cleanup 등록을 못한 경우 이미 준비된 자원을 보상 처리하는 용도입니다. 성공했을 때도 action을 즉시 실행하는 함수가 아닙니다. NULL action assertion으로 비정상 중단되는 경우까지 정상적인 반환 오류처럼 설명하지 않습니다."
+    },
+    {
+      "title": "Action 매칭",
+      "text": "__kunit_action_match는 res->free가 action free callback인지 먼저 확인한 뒤 func와 ctx 포인터가 모두 같은지 비교합니다. context가 가리키는 객체의 내용 비교나 함수 이름 문자열 비교가 아닙니다. test 인수는 본문에서 사용하지 않습니다. 같은 함수라도 다른 context는 별도 action입니다."
+    },
+    {
+      "title": "Remove와 release의 차이",
+      "text": "kunit_remove_action은 찾은 res->free를 NULL로 바꾼 뒤 remove와 put을 하므로 등록 action을 실행하지 않고 취소합니다. kunit_release_action은 free를 유지한 채 remove와 put을 하므로 마지막 참조 해제에서 action이 실행됩니다. 다른 참조가 보유되어 있다면 실행 시점은 그 참조 해제까지 늦어질 수 있습니다. 두 함수 모두 찾지 못하면 아무 작업도 하지 않고 void로 끝납니다."
+    },
+    {
+      "title": "탐색 순서와 검토 범위",
+      "text": "add는 tail에 추가하고 header의 find는 역순으로 탐색하므로 같은 func·ctx가 여러 번 등록되면 가장 최근의 일치 항목부터 찾습니다. 이 파일은 조회 helper를 호출하며 직접 별도 hash table을 구현하지 않습니다. 모든 등록·제거·destroy·action callback·reset·match·remove·release와 GPL export를 대조했습니다. header 전체를 이 파일 완료에 포함하지 않으며 실제 할당 실패·동시 접근 테스트를 실행한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "__kunit_add_resource가 should_kfree도 초기화하는가?",
+      "options": [
+        "아니다. 호출자가 정한다",
+        "그렇다. 언제나 true로 바꾼다"
+      ],
+      "answer": 0,
+      "explanation": "주석이 명시적으로 초기화하지 않는다고 설명합니다. action wrapper는 호출 전에 true를 설정합니다."
+    },
+    {
+      "prompt": "kunit_remove_resource의 put은 어느 잠금 구간에서 실행되는가?",
+      "options": [
+        "반드시 irqsave 잠금을 잡은 채",
+        "목록 spinlock을 푼 뒤"
+      ],
+      "answer": 1,
+      "explanation": "삭제는 임계 구역 안에서, 참조 반환은 밖에서 수행합니다. 마지막 free callback의 실행 범위와 관련됩니다."
+    },
+    {
+      "prompt": "Destroy가 remove 뒤 다시 put하는 이유는?",
+      "options": [
+        "find가 얻은 추가 참조를 놓기 위해서다",
+        "같은 목록 참조를 실수로 두 번 감소시키기 위해서다"
+      ],
+      "answer": 0,
+      "explanation": "목록의 참조와 조회자의 참조는 별개입니다. 두 소유권을 각각 반환합니다."
+    },
+    {
+      "prompt": "add_action_or_reset이 action을 즉시 부르는 경우는?",
+      "options": [
+        "항상 등록 직후",
+        "등록 함수가 오류를 반환했을 때"
+      ],
+      "answer": 1,
+      "explanation": "res가 nonzero일 때만 보상 동작을 실행합니다. 성공 경로는 후속 자원 해제에 맡깁니다."
+    },
+    {
+      "prompt": "remove_action과 release_action의 핵심 차이는?",
+      "options": [
+        "remove는 free callback을 지워 실행을 취소하고 release는 유지한다",
+        "둘 다 반드시 action을 두 번 실행한다"
+      ],
+      "answer": 0,
+      "explanation": "동일한 remove·put 흐름 앞에서 callback을 NULL로 만드는지 여부가 다릅니다."
+    },
+    {
+      "prompt": "같은 action 함수에 다른 ctx 포인터를 주면 동일 등록으로 매칭되는가?",
+      "options": [
+        "그렇다. 함수 이름만 비교한다",
+        "아니다. 함수와 context가 둘 다 같아야 한다"
+      ],
+      "answer": 1,
+      "explanation": "match는 두 포인터의 동등성을 AND로 검사합니다. 객체 내용 비교도 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * KUnit resource API for test managed resources (allocations, etc.).\n *\n * Copyright (C) 2022, Google LLC.\n * Author: Daniel Latypov <dlatypov@google.com>\n */\n\n#include <kunit/resource.h>\n#include <kunit/test.h>\n#include <linux/kref.h>\n\n/*\n * Used for static resources and when a kunit_resource * has been created by\n * kunit_alloc_resource().  When an init function is supplied, @data is passed\n * into the init function; otherwise, we simply set the resource data field to\n * the data value passed in. Doesn't initialize res->should_kfree.\n */\nint __kunit_add_resource(struct kunit *test,\n\t\t\t kunit_resource_init_t init,\n\t\t\t kunit_resource_free_t free,\n\t\t\t struct kunit_resource *res,\n\t\t\t void *data)\n{\n\tint ret = 0;\n\tunsigned long flags;\n\n\tres->free = free;\n\tkref_init(&res->refcount);\n\n\tif (init) {\n\t\tret = init(res, data);\n\t\tif (ret)\n\t\t\treturn ret;\n\t} else {\n\t\tres->data = data;\n\t}\n\n\tspin_lock_irqsave(&test->lock, flags);\n\tlist_add_tail(&res->node, &test->resources);\n\t/* refcount for list is established by kref_init() */\n\tspin_unlock_irqrestore(&test->lock, flags);\n\n\treturn ret;\n}\nEXPORT_SYMBOL_GPL(__kunit_add_resource);\n\nvoid kunit_remove_resource(struct kunit *test, struct kunit_resource *res)\n{\n\tunsigned long flags;\n\tbool was_linked;\n\n\tspin_lock_irqsave(&test->lock, flags);\n\twas_linked = !list_empty(&res->node);\n\tlist_del_init(&res->node);\n\tspin_unlock_irqrestore(&test->lock, flags);\n\n\tif (was_linked)\n\t\tkunit_put_resource(res);\n}\nEXPORT_SYMBOL_GPL(kunit_remove_resource);\n\nint kunit_destroy_resource(struct kunit *test, kunit_resource_match_t match,\n\t\t\t   void *match_data)\n{\n\tstruct kunit_resource *res = kunit_find_resource(test, match,\n\t\t\t\t\t\t\t match_data);\n\n\tif (!res)\n\t\treturn -ENOENT;\n\n\tkunit_remove_resource(test, res);\n\n\t/* We have a reference also via _find(); drop it. */\n\tkunit_put_resource(res);\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(kunit_destroy_resource);\n\nstruct kunit_action_ctx {\n\tstruct kunit_resource res;\n\tkunit_action_t *func;\n\tvoid *ctx;\n};\n\nstatic void __kunit_action_free(struct kunit_resource *res)\n{\n\tstruct kunit_action_ctx *action_ctx = container_of(res, struct kunit_action_ctx, res);\n\n\taction_ctx->func(action_ctx->ctx);\n}\n\n\nint kunit_add_action(struct kunit *test, void (*action)(void *), void *ctx)\n{\n\tstruct kunit_action_ctx *action_ctx;\n\n\tKUNIT_ASSERT_NOT_NULL_MSG(test, action, \"Tried to action a NULL function!\");\n\n\taction_ctx = kzalloc(sizeof(*action_ctx), GFP_KERNEL);\n\tif (!action_ctx)\n\t\treturn -ENOMEM;\n\n\taction_ctx->func = action;\n\taction_ctx->ctx = ctx;\n\n\taction_ctx->res.should_kfree = true;\n\t/* As init is NULL, this cannot fail. */\n\t__kunit_add_resource(test, NULL, __kunit_action_free, &action_ctx->res, action_ctx);\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(kunit_add_action);\n\nint kunit_add_action_or_reset(struct kunit *test, void (*action)(void *),\n\t\t\t      void *ctx)\n{\n\tint res = kunit_add_action(test, action, ctx);\n\n\tif (res)\n\t\taction(ctx);\n\treturn res;\n}\nEXPORT_SYMBOL_GPL(kunit_add_action_or_reset);\n\nstatic bool __kunit_action_match(struct kunit *test,\n\t\t\t\tstruct kunit_resource *res, void *match_data)\n{\n\tstruct kunit_action_ctx *match_ctx = (struct kunit_action_ctx *)match_data;\n\tstruct kunit_action_ctx *res_ctx = container_of(res, struct kunit_action_ctx, res);\n\n\t/* Make sure this is a free function. */\n\tif (res->free != __kunit_action_free)\n\t\treturn false;\n\n\t/* Both the function and context data should match. */\n\treturn (match_ctx->func == res_ctx->func) && (match_ctx->ctx == res_ctx->ctx);\n}\n\nvoid kunit_remove_action(struct kunit *test,\n\t\t\tkunit_action_t *action,\n\t\t\tvoid *ctx)\n{\n\tstruct kunit_action_ctx match_ctx;\n\tstruct kunit_resource *res;\n\n\tmatch_ctx.func = action;\n\tmatch_ctx.ctx = ctx;\n\n\tres = kunit_find_resource(test, __kunit_action_match, &match_ctx);\n\tif (res) {\n\t\t/* Remove the free function so we don't run the action. */\n\t\tres->free = NULL;\n\t\tkunit_remove_resource(test, res);\n\t\tkunit_put_resource(res);\n\t}\n}\nEXPORT_SYMBOL_GPL(kunit_remove_action);\n\nvoid kunit_release_action(struct kunit *test,\n\t\t\t kunit_action_t *action,\n\t\t\t void *ctx)\n{\n\tstruct kunit_action_ctx match_ctx;\n\tstruct kunit_resource *res;\n\n\tmatch_ctx.func = action;\n\tmatch_ctx.ctx = ctx;\n\n\tres = kunit_find_resource(test, __kunit_action_match, &match_ctx);\n\tif (res) {\n\t\tkunit_remove_resource(test, res);\n\t\t/* We have to put() this here, else free won't be called. */\n\t\tkunit_put_resource(res);\n\t}\n}\nEXPORT_SYMBOL_GPL(kunit_release_action);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "b55f8aac593f502ba79977b9d8110adbcc18cd23d35f1a2a04006338a9a755bc",
+    "scope": "whole-file",
+    "line_count": 178,
+    "authoring_source": "course/file_units/kunit_resource_actions.py",
+    "sections": [
+      "전체 구성과 등록 초기화",
+      "Init와 목록 잠금의 범위",
+      "목록 제거와 put",
+      "Destroy의 추가 참조",
+      "Action wrapper와 해제 callback",
+      "Action 등록",
+      "등록 실패 시 reset",
+      "Action 매칭",
+      "Remove와 release의 차이",
+      "탐색 순서와 검토 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/resource.c"
+    }
+  ]
+}

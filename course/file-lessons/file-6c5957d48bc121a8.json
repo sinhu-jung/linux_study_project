@@ -1,0 +1,101 @@
+{
+  "id": "file-6c5957d48bc121a8",
+  "path": "arch/riscv/include/asm/fence.h",
+  "title": "RISC-V FENCE 헤더 전체: 명령 문자열과 컴파일러 계약",
+  "area": "전처리기 · 인라인 어셈블리 · 메모리 순서 · 구성 조건",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 입력 집합을 명령 문자열로 만드는 매크로와 SMP 조건부 asm 조각을 읽습니다.",
+  "guide": [
+    "CPU 순서 명령과 컴파일러 memory clobber는 서로 다른 계층의 제약입니다.",
+    "barrier.h의 RISCV_FENCE 호출이 실제로 무엇으로 확장되는지 연결합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 범위",
+      "text": "GPL-2.0-only와 guard, 두 FENCE 생성 매크로, CONFIG_SMP에 따른 세 문자열 매크로, guard 종료가 전부입니다. 함수나 전역 상태를 정의하지 않습니다."
+    },
+    {
+      "title": "명령 문자열 생성",
+      "text": "RISCV_FENCE_ASM(p,s)는 탭, fence, 문자열화한 p, 쉼표, 문자열화한 s, 개행을 결합합니다. RISCV_FENCE_ASM(r,rw)는 fence r,rw 명령 문자열입니다. 그 자체는 C에서 실행되는 문장이 아니라 asm 안에 넣을 문자열 조각입니다."
+    },
+    {
+      "title": "실행 래퍼",
+      "text": "RISCV_FENCE는 GNU statement expression 안에서 volatile inline asm을 사용합니다. 출력·입력 피연산자는 없고 memory clobber를 선언합니다. 실제 fence는 CPU 순서를, clobber는 컴파일러가 메모리 접근을 다루는 제약을 표현합니다. 이 매크로가 특정 변수 값을 반환하거나 메모리를 새 값으로 수정하는 것은 아닙니다."
+    },
+    {
+      "title": "SMP 조각",
+      "text": "CONFIG_SMP일 때 RISCV_ACQUIRE_BARRIER는 r,rw, RELEASE는 rw,w, FULL은 rw,rw 문자열입니다. 이 조각에는 독립적인 C asm 문이나 clobber 목록이 없으므로 이를 담는 asm의 계약까지 읽어야 합니다."
+    },
+    {
+      "title": "비SMP 분기",
+      "text": "비SMP에서는 세 BARRIER 조각을 빈 매크로로 정의합니다. 반면 위의 RISCV_FENCE와 RISCV_FENCE_ASM은 이 조건 밖에 있으므로 사라지지 않습니다. 비SMP에서는 파일의 모든 fence가 제거된다고 일반화하면 틀립니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "전처리 문자열화, 문자열 리터럴 결합, 조건부 컴파일, compiler와 CPU 순서의 구분을 학습합니다. 여기의 SMP FULL 조각은 rw,rw로 장치 i/o를 명시하지 않으며 이름만 보고 I/O full fence로 해석하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "비SMP 구성에서 RISCV_FENCE 자체도 빈 매크로인가?",
+      "options": [
+        "아니다. 세 BARRIER 조각만 비워진다",
+        "그렇다. 헤더 전체가 빈 매크로다"
+      ],
+      "answer": 0,
+      "explanation": "CONFIG_SMP 분기는 ACQUIRE/RELEASE/FULL_BARRIER에만 걸려 있습니다. 실행 래퍼는 조건 밖에 정의됩니다."
+    },
+    {
+      "prompt": "RISCV_FENCE_ASM(r,rw)만 C 문장처럼 쓰면 장벽이 실행되는가?",
+      "options": [
+        "그렇다. 문자열화가 CPU를 실행한다",
+        "아니다. asm에 삽입할 명령 문자열이다"
+      ],
+      "answer": 1,
+      "explanation": "실행 래퍼 RISCV_FENCE가 volatile asm에 문자열을 넣습니다. 문자열 생성과 명령 실행을 구분해야 합니다."
+    },
+    {
+      "prompt": "memory clobber와 fence 명령은 같은 계층인가?",
+      "options": [
+        "아니다. 각각 컴파일러와 CPU 순서에 관여한다",
+        "그렇다. 둘 다 변수에0을 저장한다"
+      ],
+      "answer": 0,
+      "explanation": "clobber는 컴파일러에 메모리 영향을 알리고 fence는 하드웨어 접근 순서를 제약합니다. 어느 것도 여기서 특정 변수에0을 쓰는 연산이 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef _ASM_RISCV_FENCE_H\n#define _ASM_RISCV_FENCE_H\n\n#define RISCV_FENCE_ASM(p, s)\t\t\"\\tfence \" #p \",\" #s \"\\n\"\n#define RISCV_FENCE(p, s) \\\n\t({ __asm__ __volatile__ (RISCV_FENCE_ASM(p, s) : : : \"memory\"); })\n\n#ifdef CONFIG_SMP\n#define RISCV_ACQUIRE_BARRIER\t\tRISCV_FENCE_ASM(r, rw)\n#define RISCV_RELEASE_BARRIER\t\tRISCV_FENCE_ASM(rw, w)\n#define RISCV_FULL_BARRIER\t\tRISCV_FENCE_ASM(rw, rw)\n#else\n#define RISCV_ACQUIRE_BARRIER\n#define RISCV_RELEASE_BARRIER\n#define RISCV_FULL_BARRIER\n#endif\n\n#endif\t/* _ASM_RISCV_FENCE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "03dd99bfeb0440c474ec18d6a5c686f432ff3e0d475f86db6e71f63c0e4a1e06",
+    "scope": "whole-file",
+    "line_count": 19,
+    "authoring_source": "course/file_units/riscv_barriers.py",
+    "sections": [
+      "전체 범위",
+      "명령 문자열 생성",
+      "실행 래퍼",
+      "SMP 조각",
+      "비SMP 분기",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/fence.h"
+    }
+  ]
+}

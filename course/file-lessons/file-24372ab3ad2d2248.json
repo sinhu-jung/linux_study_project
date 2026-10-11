@@ -1,0 +1,82 @@
+{
+  "id": "file-24372ab3ad2d2248",
+  "path": "arch/riscv/include/asm/hwprobe.h",
+  "title": "RISC-V hwprobe 비교: 범위 검사와 방향 있는 부분집합",
+  "area": "범위 검사 · 비트 집합 · 부분집합 · 비교 predicate",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "최대 key와 세 inline helper를 전체 분석합니다.",
+  "guide": [
+    "기능 비트의 요구 조건은 동등 비교보다 포함 관계로 표현하는 것이 적절할 수 있으며 비교 방향이 중요합니다.",
+    "범위 검사와 bitmask 분류, 비대칭 pair 비교를 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체와 유효 key",
+      "text": "GPL-2.0 WITH Linux-syscall-note guard 아래 uapi/asm/hwprobe.h를 포함하고 RISCV_HWPROBE_MAX_KEY=9를 정의합니다. riscv_hwprobe_key_is_valid(__s64 key)는 key>=0 && key<=9를 반환합니다. 음수와 10 이상은 제외하며 여기서는 범위 안의 모든 정수를 유효하게 봅니다."
+    },
+    {
+      "title": "Bitmask key 분류",
+      "text": "hwprobe_key_is_bitmask는 BASE_BEHAVIOR, IMA_EXT_0, CPUPERF_0 세 key만 true로 반환하고 나머지는 false입니다. key가 유효한지 먼저 검사하는 함수는 아니며 분류만 합니다. 값이 정수라는 이유만으로 모든 key를 bitmask로 비교하지 않습니다."
+    },
+    {
+      "title": "비교의 방향",
+      "text": "riscv_hwprobe_pair_cmp는 먼저 key가 다르면 false입니다. bitmask key이면 (pair->value & other_pair->value)==other_pair->value로 첫 pair가 두 번째의 모든 요구 비트를 포함하는지 봅니다. 그 외에는 value가 같은지 검사합니다. 첫 값 0b111, 요구 0b101이면 true지만 둘을 바꾸면 false이므로 일반적인 대칭 동등 비교가 아닙니다."
+    },
+    {
+      "title": "범위와 계약",
+      "text": "세 helper는 입력 구조체를 수정하지 않습니다. pair_cmp 자체는 NULL 포인터나 key 유효 범위를 검사하지 않으므로 호출부가 필요 조건을 관리해야 합니다. 전체 정의를 설명했으며 UAPI의 모든 feature key 의미나 실제 CPU 지원 여부를 이 헤더만으로 검증하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "Bitmask key에서 첫 value=7, 두 번째 value=5이면 비교 결과는?",
+      "options": [
+        "true이다. 7이 5의 모든 비트를 포함한다",
+        "false이다. 두 숫자가 같지 않다"
+      ],
+      "answer": 0,
+      "explanation": "7&5=5이므로 요구 비트 포함 조건을 만족합니다. 같은 key라는 전제가 필요합니다."
+    },
+    {
+      "prompt": "pair_cmp 자체가 key 0~9 범위 검사도 수행하는가?",
+      "options": [
+        "그렇다. 모든 비교 함수가 자동으로 같은 검사를 수행한다",
+        "아니다. 별도의 key_is_valid helper와 구분된다"
+      ],
+      "answer": 1,
+      "explanation": "pair_cmp의 첫 검사는 두 key가 같은지입니다. 범위 검사 helper를 호출하는 코드는 없으므로 호출부 검증을 생략할 근거가 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n/*\n * Copyright 2023 Rivos, Inc\n */\n\n#ifndef _ASM_HWPROBE_H\n#define _ASM_HWPROBE_H\n\n#include <uapi/asm/hwprobe.h>\n\n#define RISCV_HWPROBE_MAX_KEY 9\n\nstatic inline bool riscv_hwprobe_key_is_valid(__s64 key)\n{\n\treturn key >= 0 && key <= RISCV_HWPROBE_MAX_KEY;\n}\n\nstatic inline bool hwprobe_key_is_bitmask(__s64 key)\n{\n\tswitch (key) {\n\tcase RISCV_HWPROBE_KEY_BASE_BEHAVIOR:\n\tcase RISCV_HWPROBE_KEY_IMA_EXT_0:\n\tcase RISCV_HWPROBE_KEY_CPUPERF_0:\n\t\treturn true;\n\t}\n\n\treturn false;\n}\n\nstatic inline bool riscv_hwprobe_pair_cmp(struct riscv_hwprobe *pair,\n\t\t\t\t\t  struct riscv_hwprobe *other_pair)\n{\n\tif (pair->key != other_pair->key)\n\t\treturn false;\n\n\tif (hwprobe_key_is_bitmask(pair->key))\n\t\treturn (pair->value & other_pair->value) == other_pair->value;\n\n\treturn pair->value == other_pair->value;\n}\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "56b6233b1391b927cf9536fa439ed4df95a7c010c67d3448ee7d25ab407faa30",
+    "scope": "whole-file",
+    "line_count": 42,
+    "authoring_source": "course/file_units/riscv_hwprobe_cache.py",
+    "sections": [
+      "전체와 유효 key",
+      "Bitmask key 분류",
+      "비교의 방향",
+      "범위와 계약"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/hwprobe.h"
+    }
+  ]
+}

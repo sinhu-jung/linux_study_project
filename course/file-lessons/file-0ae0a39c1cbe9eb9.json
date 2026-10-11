@@ -1,0 +1,138 @@
+{
+  "id": "file-0ae0a39c1cbe9eb9",
+  "path": "lib/cmdline.c",
+  "title": "명령줄 파서 전체: 정수·범위·단위·옵션·인자 분리",
+  "area": "문자열·파서 · 메모리 수명·경계",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "비슷해 보이는 파싱 API도 반환값과 입력 수정 여부가 다릅니다. 이 파일의 여섯 함수를 역할별로 구분합니다.",
+  "guide": [
+    "get_option은 정수와 뒤의 구분자를, get_range/get_options는 정수 목록과 범위를, memparse는 K..E 단위를, parse_option_str은 쉼표 구분 토큰 일치를, next_arg는 따옴표 상태를 고려한 param/value 분리를 담당합니다.",
+    "각 함수의 종료 포인터와 출력 계약을 확인합니다. 이들은 모두 엄격한 입력 검증·산술 overflow 검사를 제공하는 범용 보안 파서가 아니며 호출자가 허용 문법·범위·남은 문자열을 확인해야 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 구성",
+      "text": "SPDX·설명·출처·과거 포맷 옵션 주석, export/kernel/string/ctype 헤더, static get_range와 다섯 외부 함수가 전부입니다. get_option,get_options,memparse,next_arg에는 EXPORT_SYMBOL이 있고 parse_option_str에는 이 파일의 export 매크로가 없습니다. 문자열 포인터를 이동시키는 함수와 문자열 바이트 자체를 고치는 next_arg를 구분합니다."
+    },
+    {
+      "title": "get_option의 반환 규약",
+      "text": "문자열 포인터가 없거나 빈 문자열이면 0입니다. 부호 -는 별도 처리하고 simple_strtoull로 숫자를 읽어 int에 넣습니다. 숫자 없음 0, 숫자만 1, 쉼표까지 소비 2, 범위를 나타내는 하이픈 앞에서 3입니다. pint가 NULL이어도 파싱할 수 있습니다. 숫자 없는 단독 -는 소비될 수 있고 변환 값을 출력한 뒤 숫자 유무를 확인하므로 실패가 출력 불변을 보장하지는 않습니다."
+    },
+    {
+      "title": "get_range와 정상 목록",
+      "text": "범위 하이픈을 넘긴 뒤 상한을 읽고 하한 이상 상한 미만 값을 배열에 채웁니다. 상한 숫자를 가리키는 str은 남겨 다음 get_option이 처리하게 합니다. 1-3,5는 1,2,3,5가 됩니다. ints[0]은 개수 저장에 사용하므로 nints=5일 때 일반 출력 원소 공간은 네 칸입니다. nints=0 검증 모드에서도 ints[0]을 쓰므로 유효한 최소 한 칸이 필요합니다."
+    },
+    {
+      "title": "범위와 용량 경계",
+      "text": "get_range의 쓰기 루프는 n으로 제한되지만 반환은 실제 쓴 수가 아니라 upper-lower입니다. 따라서 범위가 남은 공간보다 길면 ints[0]이 실제 저장한 원소 수보다 커질 수 있습니다. 예를 들어 nints=3에서 1-5는 데이터 칸에 1,2만 저장하고 계산된 count는 4가 됩니다. 반환 포인터도 상한 5를 가리킬 수 있습니다. 호출자가 count만 믿고 배열을 넘겨 읽으면 안 됩니다. 큰 signed 범위 차이의 overflow를 일반적으로 검출하는 코드도 없습니다."
+    },
+    {
+      "title": "memparse 단위와 남은 문자",
+      "text": "base=0 숫자를 읽고 E/P/T/G/M/K의 대소문자를 받아 10비트 이동을 fallthrough로 누적합니다. K는 2^10, M은 2^20입니다. 2M은 2097152이고 1KB는 K 하나만 소비하므로 retptr이 B를 가리킵니다. unsigned long long 이동·변환의 범위 초과를 명시 오류로 돌려주는 인터페이스가 아닙니다."
+    },
+    {
+      "title": "parse_option_str의 토큰 일치",
+      "text": "각 쉼표 구분 위치에서 option 길이만큼 비교하고 그 뒤가 NUL 또는 쉼표인 경우만 true입니다. option=foo는 foobar에 일치하지 않습니다. 공백 trim이나 a=b에서 이름 a만 추출하는 별도 처리는 없으므로 option에 어떤 전체 토큰을 전달하는지 확인합니다."
+    },
+    {
+      "title": "next_arg의 파괴적 분리",
+      "text": "따옴표 밖 공백에서 멈추고 첫 유효한 = 위치로 param과 val을 나눕니다. 값의 처음·끝 따옴표를 제거하고 구분 위치를 NUL로 바꾼 뒤 skip_spaces로 다음 인자 위치를 반환합니다. =가 없으면 val=NULL입니다. 역슬래시로 따옴표를 escape하는 문법은 지원하지 않고 따옴표가 닫히지 않았다는 별도 오류 코드도 없습니다. 이름의 -/_ 동등성에 대한 주석이 있지만 이 함수 본문은 해당 문자를 정규화하지 않습니다. 그런 비교는 이후 소비 경로에서 별도로 봐야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "상태 머신·cursor 파싱·sentinel 출력·부분 성공·용량 제한과 보고 개수의 차이를 연결합니다. 단순히 숫자를 얻었다는 사실과 전체 입력을 유효하게 소비했다는 사실은 다릅니다. 함수별 후행 문자 검사와 범위 검증이 API 조합의 핵심입니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "get_option이 숫자 뒤 쉼표까지 소비했을 때 반환값은?",
+      "options": [
+        "2",
+        "3"
+      ],
+      "answer": 0,
+      "explanation": "2는 정수와 쉼표를 함께 읽은 경우이고 3은 범위용 하이픈을 발견한 경우입니다. 두 상황의 다음 포인터 위치가 다릅니다."
+    },
+    {
+      "prompt": "nints=0 검증 모드에서는 ints=NULL이 허용되는가?",
+      "options": [
+        "그렇다. 모든 출력 접근이 생략된다",
+        "아니다. 최소 한 칸에 결과 개수를 저장한다"
+      ],
+      "answer": 1,
+      "explanation": "validate 모드에서도 pint로 ints를 사용하고 마지막에 ints[0]=i-1을 수행합니다. 저장 공간이 전혀 필요 없는 모드가 아닙니다."
+    },
+    {
+      "prompt": "memparse(\"1KB\", &end)의 값과 남은 문자열은?",
+      "options": [
+        "1024, end는 B를 가리킨다",
+        "1000, 전체 KB를 모두 소비한다"
+      ],
+      "answer": 0,
+      "explanation": "K는 10비트 왼쪽 이동이고 endptr++는 한 글자만 소비합니다. 뒤 B는 파서가 처리하지 않았으므로 호출자가 검사해야 합니다."
+    },
+    {
+      "prompt": "옵션 foo가 목록 foobar,baz에 존재한다고 판단하는가?",
+      "options": [
+        "그렇다. 접두부 세 글자가 일치하면 끝이다",
+        "아니다. 일치 뒤 토큰 경계를 확인한다"
+      ],
+      "answer": 1,
+      "explanation": "strncmp 뒤 문자가 NUL 또는 쉼표여야 true입니다. foobar의 다음 b는 경계가 아니므로 거절합니다."
+    },
+    {
+      "prompt": "next_arg는 원본 문자열을 수정하는가?",
+      "options": [
+        "예. =와 구분 공백·일부 따옴표 위치를 NUL로 바꾼다",
+        "아니요. const 입력을 읽기만 한다"
+      ],
+      "answer": 0,
+      "explanation": "매개변수는 char*이고 args[equals],args[i] 등에 직접 대입합니다. 읽기 전용 문자열 리터럴을 수정 가능한 버퍼처럼 전달하면 안 됩니다."
+    },
+    {
+      "prompt": "nints=3에 범위 1-5를 넣을 때 ints[0]만 믿고 네 데이터 원소를 읽어도 되는가?",
+      "options": [
+        "그렇다. 함수가 호출자 배열을 자동 확장한다",
+        "아니다. 실제 저장 공간 두 칸보다 보고된 범위 개수가 커질 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "get_range는 저장을 n으로 제한하지만 upper-lower를 반환해 i를 갱신합니다. 할당이나 배열 확장은 없으므로 저장 용량과 종료 포인터를 함께 확인해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * linux/lib/cmdline.c\n * Helper functions generally used for parsing kernel command line\n * and module options.\n *\n * Code and copyrights come from init/main.c and arch/i386/kernel/setup.c.\n *\n * GNU Indent formatting options for this file: -kr -i8 -npsl -pcs\n */\n\n#include <linux/export.h>\n#include <linux/kernel.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n\n/*\n *\tIf a hyphen was found in get_option, this will handle the\n *\trange of numbers, M-N.  This will expand the range and insert\n *\tthe values[M, M+1, ..., N] into the ints array in get_options.\n */\n\nstatic int get_range(char **str, int *pint, int n)\n{\n\tint x, inc_counter, upper_range;\n\n\t(*str)++;\n\tupper_range = simple_strtol((*str), NULL, 0);\n\tinc_counter = upper_range - *pint;\n\tfor (x = *pint; n && x < upper_range; x++, n--)\n\t\t*pint++ = x;\n\treturn inc_counter;\n}\n\n/**\n *\tget_option - Parse integer from an option string\n *\t@str: option string\n *\t@pint: (optional output) integer value parsed from @str\n *\n *\tRead an int from an option string; if available accept a subsequent\n *\tcomma as well.\n *\n *\tWhen @pint is NULL the function can be used as a validator of\n *\tthe current option in the string.\n *\n *\tReturn values:\n *\t0 - no int in string\n *\t1 - int found, no subsequent comma\n *\t2 - int found including a subsequent comma\n *\t3 - hyphen found to denote a range\n *\n *\tLeading hyphen without integer is no integer case, but we consume it\n *\tfor the sake of simplification.\n */\n\nint get_option(char **str, int *pint)\n{\n\tchar *cur = *str;\n\tint value;\n\n\tif (!cur || !(*cur))\n\t\treturn 0;\n\tif (*cur == '-')\n\t\tvalue = -simple_strtoull(++cur, str, 0);\n\telse\n\t\tvalue = simple_strtoull(cur, str, 0);\n\tif (pint)\n\t\t*pint = value;\n\tif (cur == *str)\n\t\treturn 0;\n\tif (**str == ',') {\n\t\t(*str)++;\n\t\treturn 2;\n\t}\n\tif (**str == '-')\n\t\treturn 3;\n\n\treturn 1;\n}\nEXPORT_SYMBOL(get_option);\n\n/**\n *\tget_options - Parse a string into a list of integers\n *\t@str: String to be parsed\n *\t@nints: size of integer array\n *\t@ints: integer array (must have room for at least one element)\n *\n *\tThis function parses a string containing a comma-separated\n *\tlist of integers, a hyphen-separated range of _positive_ integers,\n *\tor a combination of both.  The parse halts when the array is\n *\tfull, or when no more numbers can be retrieved from the\n *\tstring.\n *\n *\tWhen @nints is 0, the function just validates the given @str and\n *\treturns the amount of parseable integers as described below.\n *\n *\tReturns:\n *\n *\tThe first element is filled by the number of collected integers\n *\tin the range. The rest is what was parsed from the @str.\n *\n *\tReturn value is the character in the string which caused\n *\tthe parse to end (typically a null terminator, if @str is\n *\tcompletely parseable).\n */\n\nchar *get_options(const char *str, int nints, int *ints)\n{\n\tbool validate = (nints == 0);\n\tint res, i = 1;\n\n\twhile (i < nints || validate) {\n\t\tint *pint = validate ? ints : ints + i;\n\n\t\tres = get_option((char **)&str, pint);\n\t\tif (res == 0)\n\t\t\tbreak;\n\t\tif (res == 3) {\n\t\t\tint n = validate ? 0 : nints - i;\n\t\t\tint range_nums;\n\n\t\t\trange_nums = get_range((char **)&str, pint, n);\n\t\t\tif (range_nums < 0)\n\t\t\t\tbreak;\n\t\t\t/*\n\t\t\t * Decrement the result by one to leave out the\n\t\t\t * last number in the range.  The next iteration\n\t\t\t * will handle the upper number in the range\n\t\t\t */\n\t\t\ti += (range_nums - 1);\n\t\t}\n\t\ti++;\n\t\tif (res == 1)\n\t\t\tbreak;\n\t}\n\tints[0] = i - 1;\n\treturn (char *)str;\n}\nEXPORT_SYMBOL(get_options);\n\n/**\n *\tmemparse - parse a string with mem suffixes into a number\n *\t@ptr: Where parse begins\n *\t@retptr: (output) Optional pointer to next char after parse completes\n *\n *\tParses a string into a number.  The number stored at @ptr is\n *\tpotentially suffixed with K, M, G, T, P, E.\n */\n\nunsigned long long memparse(const char *ptr, char **retptr)\n{\n\tchar *endptr;\t/* local pointer to end of parsed string */\n\n\tunsigned long long ret = simple_strtoull(ptr, &endptr, 0);\n\n\tswitch (*endptr) {\n\tcase 'E':\n\tcase 'e':\n\t\tret <<= 10;\n\t\tfallthrough;\n\tcase 'P':\n\tcase 'p':\n\t\tret <<= 10;\n\t\tfallthrough;\n\tcase 'T':\n\tcase 't':\n\t\tret <<= 10;\n\t\tfallthrough;\n\tcase 'G':\n\tcase 'g':\n\t\tret <<= 10;\n\t\tfallthrough;\n\tcase 'M':\n\tcase 'm':\n\t\tret <<= 10;\n\t\tfallthrough;\n\tcase 'K':\n\tcase 'k':\n\t\tret <<= 10;\n\t\tendptr++;\n\t\tfallthrough;\n\tdefault:\n\t\tbreak;\n\t}\n\n\tif (retptr)\n\t\t*retptr = endptr;\n\n\treturn ret;\n}\nEXPORT_SYMBOL(memparse);\n\n/**\n *\tparse_option_str - Parse a string and check an option is set or not\n *\t@str: String to be parsed\n *\t@option: option name\n *\n *\tThis function parses a string containing a comma-separated list of\n *\tstrings like a=b,c.\n *\n *\tReturn true if there's such option in the string, or return false.\n */\nbool parse_option_str(const char *str, const char *option)\n{\n\twhile (*str) {\n\t\tif (!strncmp(str, option, strlen(option))) {\n\t\t\tstr += strlen(option);\n\t\t\tif (!*str || *str == ',')\n\t\t\t\treturn true;\n\t\t}\n\n\t\twhile (*str && *str != ',')\n\t\t\tstr++;\n\n\t\tif (*str == ',')\n\t\t\tstr++;\n\t}\n\n\treturn false;\n}\n\n/*\n * Parse a string to get a param value pair.\n * You can use \" around spaces, but can't escape \".\n * Hyphens and underscores equivalent in parameter names.\n */\nchar *next_arg(char *args, char **param, char **val)\n{\n\tunsigned int i, equals = 0;\n\tint in_quote = 0, quoted = 0;\n\n\tif (*args == '\"') {\n\t\targs++;\n\t\tin_quote = 1;\n\t\tquoted = 1;\n\t}\n\n\tfor (i = 0; args[i]; i++) {\n\t\tif (isspace(args[i]) && !in_quote)\n\t\t\tbreak;\n\t\tif (equals == 0) {\n\t\t\tif (args[i] == '=')\n\t\t\t\tequals = i;\n\t\t}\n\t\tif (args[i] == '\"')\n\t\t\tin_quote = !in_quote;\n\t}\n\n\t*param = args;\n\tif (!equals)\n\t\t*val = NULL;\n\telse {\n\t\targs[equals] = '\\0';\n\t\t*val = args + equals + 1;\n\n\t\t/* Don't include quotes in value. */\n\t\tif (**val == '\"') {\n\t\t\t(*val)++;\n\t\t\tif (args[i-1] == '\"')\n\t\t\t\targs[i-1] = '\\0';\n\t\t}\n\t}\n\tif (quoted && i > 0 && args[i-1] == '\"')\n\t\targs[i-1] = '\\0';\n\n\tif (args[i]) {\n\t\targs[i] = '\\0';\n\t\targs += i + 1;\n\t} else\n\t\targs += i;\n\n\t/* Chew up trailing spaces. */\n\treturn skip_spaces(args);\n}\nEXPORT_SYMBOL(next_arg);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "18d94acd858d0cfbdbe4b4a6b06d14402c8ef12065fa9eda8a69aef581d58c8a",
+    "scope": "whole-file",
+    "line_count": 275,
+    "authoring_source": "course/file_units/string_boundaries.py",
+    "sections": [
+      "파일 전체 구성",
+      "get_option의 반환 규약",
+      "get_range와 정상 목록",
+      "범위와 용량 경계",
+      "memparse 단위와 남은 문자",
+      "parse_option_str의 토큰 일치",
+      "next_arg의 파괴적 분리",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/cmdline.c"
+    }
+  ]
+}

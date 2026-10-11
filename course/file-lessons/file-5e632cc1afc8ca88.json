@@ -1,0 +1,82 @@
+{
+  "id": "file-5e632cc1afc8ca88",
+  "path": "arch/riscv/kernel/probes/rethook.c",
+  "title": "RISC-V rethook C 경로: RA 교체와 S0 frame 식별",
+  "area": "호출 규약 · 반환 주소 register · 콜백 · 아키텍처 어댑터",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "두 함수가 공통 반환 후킹 계층과 RISC-V register 상태를 연결하는 방식을 해설합니다.",
+  "guide": [
+    "아키텍처의 반환 주소 register를 바꾸고 원래 주소는 node에 따로 보관합니다.",
+    "x86의 stack 슬롯 교체와 RISC-V의 RA 교체를 비교합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "GPL-2.0-only, generic return hook 설명과 kprobes/rethook 및 로컬 헤더 include 뒤 callback과 prepare 두 함수가 있습니다. 두 함수 모두 NOKPROBE_SYMBOL로 표시됩니다. node pool 관리, handler 등록과 해제, 리스트 순회는 공통 계층에 있고 이 파일에는 없습니다."
+    },
+    {
+      "title": "Callback의 반환값",
+      "text": "__used callback은 pt_regs를 받아 rethook_trampoline_handler(regs,regs->s0)의 반환값을 그대로 unsigned long으로 돌려줍니다. 프레임 식별 인자는 regs->sp가 아닌 s0입니다. assembly는 callback 결과를 새 RA로 사용하므로 이 반환값은 실행 복귀 경로에 실제로 사용됩니다."
+    },
+    {
+      "title": "Prepare의 순서",
+      "text": "prepare는 regs->ra를 rhn->ret_addr에, regs->s0를 rhn->frame에 먼저 저장합니다. 이후 regs->ra를 arch_rethook_trampoline 주소로 교체합니다. mcount 인자는 이 구현에서 읽지 않습니다. stack[0]을 직접 역참조하여 고치는 x86 경로와 같다고 설명하면 틀립니다."
+    },
+    {
+      "title": "전제와 CS",
+      "text": "제공된 regs와 node가 유효하다는 전제를 가지며 NULL·주소 범위 검사나 새 메모리 할당은 없습니다. 원래 값 보존 후 제어 흐름 변경, register snapshot과 실제 CPU 복원의 분리, 작은 어댑터를 통한 공통 알고리즘 재사용을 학습합니다. 전체 소스 대조는 실제 RISC-V CPU에서 후킹을 실행 시험한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "원래 반환 주소와 frame 값은 각각 어디에서 읽는가?",
+      "options": [
+        "regs->ra와 regs->s0이다",
+        "stack[0]과 regs->sp이다"
+      ],
+      "answer": 0,
+      "explanation": "prepare의 두 대입문이 직접 보여 줍니다. 아키텍처별 호출 규약을 확인해야 합니다."
+    },
+    {
+      "prompt": "callback의 반환값은 C 함수에서 버려지는가?",
+      "options": [
+        "그렇다. 반환형은 void이다",
+        "아니다. 공통 handler 결과를 반환하여 assembly가 RA로 사용한다"
+      ],
+      "answer": 1,
+      "explanation": "함수는 unsigned long을 반환합니다. 이어지는 trampoline의 move ra,a0가 복귀점을 설정합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Generic return hook for riscv.\n */\n\n#include <linux/kprobes.h>\n#include <linux/rethook.h>\n#include \"rethook.h\"\n\n/* This is called from arch_rethook_trampoline() */\nunsigned long __used arch_rethook_trampoline_callback(struct pt_regs *regs)\n{\n\treturn rethook_trampoline_handler(regs, regs->s0);\n}\n\nNOKPROBE_SYMBOL(arch_rethook_trampoline_callback);\n\nvoid arch_rethook_prepare(struct rethook_node *rhn, struct pt_regs *regs, bool mcount)\n{\n\trhn->ret_addr = regs->ra;\n\trhn->frame = regs->s0;\n\n\t/* replace return addr with trampoline */\n\tregs->ra = (unsigned long)arch_rethook_trampoline;\n}\n\nNOKPROBE_SYMBOL(arch_rethook_prepare);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "abac8fb4ceccdaed83f3af7ffa3e49de5e388caa34efaeda94666d58aa19748a",
+    "scope": "whole-file",
+    "line_count": 27,
+    "authoring_source": "course/file_units/riscv_rethook.py",
+    "sections": [
+      "전체 파일",
+      "Callback의 반환값",
+      "Prepare의 순서",
+      "전제와 CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/probes/rethook.c"
+    }
+  ]
+}

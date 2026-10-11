@@ -1,0 +1,149 @@
+{
+  "id": "file-1fef936fb34a99d0",
+  "path": "include/linux/pfn_t.h",
+  "title": "PFN 플래그 전체: 페이지 존재와 장치 매핑의 구분",
+  "area": "태그된 정수 · 비트 마스크 · 장치 메모리 · 페이지 테이블 · 구성별 기능",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "pfn_t의 상위 비트 플래그,페이지 변환과 구성별 devmap·special 판별을 해설합니다.",
+  "guide": [
+    "플래그로 표현한 의미,물리 PFN 유효성,페이지 테이블 엔트리 생성은 서로 다른 검사와 동작입니다.",
+    "pfn.h의 u64 wrapper에 실제 플래그와 변환 helper를 연결합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0·guard와 mm.h 포함 뒤 플래그 및 trace 이름,PFN/주소/page 변환,유효성 판별,구성별 PTE/PMD/PUD 생성,devmap·special 조건으로 끝납니다. 실제 메모리 할당이나 페이지 테이블에 엔트리를 설치하는 본문은 없습니다."
+    },
+    {
+      "title": "상위 비트 배치",
+      "text": "PFN_FLAGS_MASK는 PAGE_MASK의 낮은 비트 보수를 u64로 바꿔 BITS_PER_LONG_LONG-PAGE_SHIFT만큼 이동합니다. 보통64비트 값에서 SG_CHAIN,SG_LAST,DEV,MAP,SPECIAL은 각각63~59번 비트입니다.4KiB 페이지에서는 mask가 상위12비트를 덮으므로 다섯 이름 붙은 플래그만 OR한 것과는 다릅니다."
+    },
+    {
+      "title": "플래그의 설명",
+      "text": "주석은 SG_CHAIN을 다음 scatterlist 항목 포인터,SG_LAST를 마지막 페이지 항목,DEV를 기본 system memmap 비포함,MAP을 드라이버가 동적으로 page mapping을 마련함으로 설명합니다. SPECIAL은 FS_DAX_LIMITED에서 XIP를 허용하되 get_user_pages는 허용하지 않는 용도입니다. 설명은 사용 문맥이며 이 헤더가 scatterlist나 DAX 동작 전체를 구현하지는 않습니다."
+    },
+    {
+      "title": "Trace와 생성",
+      "text": "PFN_FLAGS_TRACE는 SPECIAL,SG_CHAIN,SG_LAST,DEV,MAP에 대응하는 출력 이름 목록입니다. __pfn_to_pfn_t는 pfn과 flags&PFN_FLAGS_MASK를 OR합니다. flags는 mask로 제한하지만 입력 pfn의 상위 비트를 별도로 제거하거나 충돌 검사하지 않습니다. 유효한 PFN 범위를 호출자가 제공해야 합니다."
+    },
+    {
+      "title": "기본 변환의 전제",
+      "text": "pfn_to_pfn_t는 flags0으로 내부 생성 함수를 호출합니다. 주석은 pfn_valid한 입력을 가정한다고 명시하며 실제 pfn_valid 호출은 이 경로에 없습니다. phys_to_pfn_t는 addr를 PAGE_SHIFT만큼 내려 PFN을 만들고 flags와 조합합니다. 페이지 내부 offset은 사라집니다."
+    },
+    {
+      "title": "Page가 있다는 판별",
+      "text": "pfn_t_has_page는 MAP 비트가 있거나 DEV 비트가 없으면 참입니다. DEV만 있으면 거짓,DEV|MAP이면 참,플래그0도 참입니다. 모든 플래그를 검사하는 전역 유효성 함수가 아니며 실제 pfn_valid 확인과 구분해야 합니다."
+    },
+    {
+      "title": "플래그 제거와 page 반환",
+      "text": "pfn_t_to_pfn은 val&~PFN_FLAGS_MASK를 unsigned long으로 반환합니다. pfn_t_to_page는 has_page가 참이면 이 PFN으로 pfn_to_page를 호출하고 아니면NULL입니다. 이 함수가 별도로pfn_valid를 호출하지는 않습니다. 플래그 의미와 입력의 유효성 전제가 모두 맞아야 합니다."
+    },
+    {
+      "title": "주소·page 역변환과 valid",
+      "text": "pfn_t_to_phys는 플래그를 제거한 PFN에 PFN_PHYS를 적용합니다. page_to_pfn_t는 page_to_pfn 결과를 기본 flags0 변환에 넘깁니다. pfn_t_valid는 플래그 제거 후pfn_valid를 호출하며 has_page를 먼저 검사하지 않습니다. 따라서 두 함수의 질문과 조건식을 같다고 외우면 틀립니다."
+    },
+    {
+      "title": "엔트리 생성 조건",
+      "text": "CONFIG_MMU이면 pfn_t_pte가 pfn_pte에 PFN과pgprot를 전달합니다. THP이면 pfn_t_pmd,그 안에서 HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD까지 있으면 pfn_t_pud를 제공합니다. 모두 플래그를 제거하고 대응 엔트리 값을 구성하는 wrapper입니다. DEV 플래그만으로 자동 pte_mkdevmap 호출을 추가하지 않습니다."
+    },
+    {
+      "title": "Devmap 판별",
+      "text": "ARCH_HAS_PTE_DEVMAP이면 DEV|MAP 두 비트가 모두 있어야pfn_t_devmap이 참입니다. 해당 구성이 없으면 항상false입니다. 후자 분기에는pte_mkdevmap,pmd_mkdevmap 선언과 THP/PUD 조건부pud_mkdevmap 선언이 있지만 본문은 없습니다. 선언의 존재를 작동하는 devmap 구현으로 해석하지 않습니다."
+    },
+    {
+      "title": "Special 판별",
+      "text": "ARCH_HAS_PTE_SPECIAL이면 SPECIAL 비트를 검사하고 없으면false입니다. 값에 비트가 들어 있다는 사실만으로 모든 구성에서pfn_t_special이 참인 것은 아닙니다. 해석 가능한 아키텍처 기능과 저장된 태그를 구분합니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "값과 metadata의 비트 분할,타입 폭과 단위 변환,전제 기반 helper와 명시적 검증,구성별 기능 판별,엔트리 생성과설치의분리를 학습합니다. 원본대응·구조 검사는 장치 메모리의 수명이나 모든 페이지 테이블 동작을 실행 검증한 것이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "DEV만 있고MAP은 없을 때 pfn_t_has_page는?",
+      "options": [
+        "거짓이다",
+        "DEV가 있으므로 반드시 참이다"
+      ],
+      "answer": 0,
+      "explanation": "조건은 MAP이 있거나DEV가 없는 경우입니다. DEV|MAP이면 참이지만 DEV만 있으면 둘 다 만족하지 않습니다."
+    },
+    {
+      "prompt": "pfn_to_pfn_t가 pfn_valid를 실제 호출하는가?",
+      "options": [
+        "그렇다.실패하면NULL을 반환한다",
+        "아니다.주석이 유효한 입력을 전제로 한다"
+      ],
+      "answer": 1,
+      "explanation": "본문은flags0의 내부 생성 호출입니다. 반환형도pfn_t이며 검증 실패 분기가 없습니다."
+    },
+    {
+      "prompt": "4KiB 페이지의 PFN_FLAGS_MASK는 다섯 플래그 비트만 덮는가?",
+      "options": [
+        "아니다.상위12비트를 덮는다",
+        "그렇다.다섯 비트를 OR한 식이다"
+      ],
+      "answer": 0,
+      "explanation": "PAGE_SIZE-1의12비트를64-12만큼 옮기는 식입니다. 이름 붙은 플래그 집합과 보존 영역 mask의 폭은 다릅니다."
+    },
+    {
+      "prompt": "ARCH_HAS_PTE_DEVMAP이 없으면 DEV|MAP 값의 pfn_t_devmap 결과는?",
+      "options": [
+        "항상true이다",
+        "false이다"
+      ],
+      "answer": 1,
+      "explanation": "구성 없는 분기는 인자와 무관하게false를 반환합니다. 저장된 플래그와 기능 지원 판별을 구분합니다."
+    },
+    {
+      "prompt": "pfn_t_pte가 DEV 플래그를 보고 자동 devmap 표시까지 하는가?",
+      "options": [
+        "아니다.플래그를 제거한 PFN으로 pfn_pte를 호출한다",
+        "그렇다.항상pte_mkdevmap을추가 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "본문에는 pfn_pte(pfn_t_to_pfn(pfn),pgprot)만 있습니다. 별도의 속성 설정을 추측해 추가하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_PFN_T_H_\n#define _LINUX_PFN_T_H_\n#include <linux/mm.h>\n\n/*\n * PFN_FLAGS_MASK - mask of all the possible valid pfn_t flags\n * PFN_SG_CHAIN - pfn is a pointer to the next scatterlist entry\n * PFN_SG_LAST - pfn references a page and is the last scatterlist entry\n * PFN_DEV - pfn is not covered by system memmap by default\n * PFN_MAP - pfn has a dynamic page mapping established by a device driver\n * PFN_SPECIAL - for CONFIG_FS_DAX_LIMITED builds to allow XIP, but not\n *\t\t get_user_pages\n */\n#define PFN_FLAGS_MASK (((u64) (~PAGE_MASK)) << (BITS_PER_LONG_LONG - PAGE_SHIFT))\n#define PFN_SG_CHAIN (1ULL << (BITS_PER_LONG_LONG - 1))\n#define PFN_SG_LAST (1ULL << (BITS_PER_LONG_LONG - 2))\n#define PFN_DEV (1ULL << (BITS_PER_LONG_LONG - 3))\n#define PFN_MAP (1ULL << (BITS_PER_LONG_LONG - 4))\n#define PFN_SPECIAL (1ULL << (BITS_PER_LONG_LONG - 5))\n\n#define PFN_FLAGS_TRACE \\\n\t{ PFN_SPECIAL,\t\"SPECIAL\" }, \\\n\t{ PFN_SG_CHAIN,\t\"SG_CHAIN\" }, \\\n\t{ PFN_SG_LAST,\t\"SG_LAST\" }, \\\n\t{ PFN_DEV,\t\"DEV\" }, \\\n\t{ PFN_MAP,\t\"MAP\" }\n\nstatic inline pfn_t __pfn_to_pfn_t(unsigned long pfn, u64 flags)\n{\n\tpfn_t pfn_t = { .val = pfn | (flags & PFN_FLAGS_MASK), };\n\n\treturn pfn_t;\n}\n\n/* a default pfn to pfn_t conversion assumes that @pfn is pfn_valid() */\nstatic inline pfn_t pfn_to_pfn_t(unsigned long pfn)\n{\n\treturn __pfn_to_pfn_t(pfn, 0);\n}\n\nstatic inline pfn_t phys_to_pfn_t(phys_addr_t addr, u64 flags)\n{\n\treturn __pfn_to_pfn_t(addr >> PAGE_SHIFT, flags);\n}\n\nstatic inline bool pfn_t_has_page(pfn_t pfn)\n{\n\treturn (pfn.val & PFN_MAP) == PFN_MAP || (pfn.val & PFN_DEV) == 0;\n}\n\nstatic inline unsigned long pfn_t_to_pfn(pfn_t pfn)\n{\n\treturn pfn.val & ~PFN_FLAGS_MASK;\n}\n\nstatic inline struct page *pfn_t_to_page(pfn_t pfn)\n{\n\tif (pfn_t_has_page(pfn))\n\t\treturn pfn_to_page(pfn_t_to_pfn(pfn));\n\treturn NULL;\n}\n\nstatic inline phys_addr_t pfn_t_to_phys(pfn_t pfn)\n{\n\treturn PFN_PHYS(pfn_t_to_pfn(pfn));\n}\n\nstatic inline pfn_t page_to_pfn_t(struct page *page)\n{\n\treturn pfn_to_pfn_t(page_to_pfn(page));\n}\n\nstatic inline int pfn_t_valid(pfn_t pfn)\n{\n\treturn pfn_valid(pfn_t_to_pfn(pfn));\n}\n\n#ifdef CONFIG_MMU\nstatic inline pte_t pfn_t_pte(pfn_t pfn, pgprot_t pgprot)\n{\n\treturn pfn_pte(pfn_t_to_pfn(pfn), pgprot);\n}\n#endif\n\n#ifdef CONFIG_TRANSPARENT_HUGEPAGE\nstatic inline pmd_t pfn_t_pmd(pfn_t pfn, pgprot_t pgprot)\n{\n\treturn pfn_pmd(pfn_t_to_pfn(pfn), pgprot);\n}\n\n#ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD\nstatic inline pud_t pfn_t_pud(pfn_t pfn, pgprot_t pgprot)\n{\n\treturn pfn_pud(pfn_t_to_pfn(pfn), pgprot);\n}\n#endif\n#endif\n\n#ifdef CONFIG_ARCH_HAS_PTE_DEVMAP\nstatic inline bool pfn_t_devmap(pfn_t pfn)\n{\n\tconst u64 flags = PFN_DEV|PFN_MAP;\n\n\treturn (pfn.val & flags) == flags;\n}\n#else\nstatic inline bool pfn_t_devmap(pfn_t pfn)\n{\n\treturn false;\n}\npte_t pte_mkdevmap(pte_t pte);\npmd_t pmd_mkdevmap(pmd_t pmd);\n#if defined(CONFIG_TRANSPARENT_HUGEPAGE) && \\\n\tdefined(CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD)\npud_t pud_mkdevmap(pud_t pud);\n#endif\n#endif /* CONFIG_ARCH_HAS_PTE_DEVMAP */\n\n#ifdef CONFIG_ARCH_HAS_PTE_SPECIAL\nstatic inline bool pfn_t_special(pfn_t pfn)\n{\n\treturn (pfn.val & PFN_SPECIAL) == PFN_SPECIAL;\n}\n#else\nstatic inline bool pfn_t_special(pfn_t pfn)\n{\n\treturn false;\n}\n#endif /* CONFIG_ARCH_HAS_PTE_SPECIAL */\n#endif /* _LINUX_PFN_T_H_ */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "3f6ddd09ef326c86ab3352955e55a9277cb963b7377054090dfd97c323d6f0a8",
+    "scope": "whole-file",
+    "line_count": 131,
+    "authoring_source": "course/file_units/pfn_flags.py",
+    "sections": [
+      "전체 구성",
+      "상위 비트 배치",
+      "플래그의 설명",
+      "Trace와 생성",
+      "기본 변환의 전제",
+      "Page가 있다는 판별",
+      "플래그 제거와 page 반환",
+      "주소·page 역변환과 valid",
+      "엔트리 생성 조건",
+      "Devmap 판별",
+      "Special 판별",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/pfn_t.h"
+    }
+  ]
+}

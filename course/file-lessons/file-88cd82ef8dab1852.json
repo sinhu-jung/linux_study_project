@@ -1,0 +1,96 @@
+{
+  "id": "file-88cd82ef8dab1852",
+  "path": "include/uapi/linux/stddef.h",
+  "title": "UAPI stddef 전체: 구조체 그룹과 C·C++ 가변 배열 차이",
+  "area": "구조체 배치 · union·가변 길이 배열·언어 확장",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "구조체 배치를 표현하는 공통 매크로와 지원되지 않는 속성의 대체 정의입니다.",
+  "guide": [
+    "__struct_group은 익명·명명 구조체를 union에 겹칩니다. __DECLARE_FLEX_ARRAY는 C와 C++에 서로 다른 확장 문법을 사용하고 counted_by 계열은 미정의인 경우 빈 매크로로 둡니다.",
+    "언어 확장과 컴파일러 기능에 의존하므로 모든 ISO C/C++ 컴파일러에 보편적으로 이식되는 자료구조 선언으로 해석하지 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "SPDX syscall note,guard,compiler_types include,__always_inline fallback,__struct_group,C++/C 유연 배열 분기,__counted_by/__counted_by_le/__counted_by_be fallback,#endif입니다. 런타임 함수는 없습니다."
+    },
+    {
+      "title": "그룹 매크로 전개",
+      "text": "MEMBERS를 가진 익명 구조체와 TAG 및 NAME이 있는 구조체를 같은 union 안에 선언합니다. ATTRS는 두 구조체와 바깥 union 모두에 붙습니다. 멤버 선언을 두 번 쓰지만 저장 공간은 union의 겹침 규칙을 따릅니다."
+    },
+    {
+      "title": "C와 C++ 분기",
+      "text": "C 경로는 이름 있는 빈 구조체 멤버 __empty_NAME과 TYPE NAME[]를 가진 익명 구조체로 감쌉니다. C++에서는 빈 구조체의 크기가1이므로 이 경로를 쓰지 않고 T member[0]을 사용합니다.0길이 배열도 구현 확장 문법이며 실제 배열 원소 저장소를 제공하지 않습니다."
+    },
+    {
+      "title": "fallback 속성",
+      "text": "__always_inline이 없으면 inline만 정의합니다. 강제 인라인 속성을 새로 만들어 붙이는 것이 아닙니다. counted_by,le,be도 이미 정의되어 있으면 보존하고 없을 때만 빈 매크로를 제공합니다. 빈 대체 정의는 런타임 길이 검사나 엔디언 변환을 수행하지 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "전처리 기능 탐지,언어별 객체 크기 차이,익명 union의 공유 배치,속성 지원과 실제 검사의 차이를 학습합니다. 소스가 컴파일된다는 사실만으로 길이 추적 기능이 활성화되었다고 주장하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "C++ 경로에서 C의 빈 구조체 포장을 그대로 쓰지 않는 이유는?",
+      "options": [
+        "빈 구조체 크기가1이어서 같은 배치를 만들지 못하기 때문이다",
+        "C++에는 어떤 구조체도 없기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "원문 주석이 sizeof(struct{})의 차이를 설명하고0길이 배열 경로를 따로 둡니다."
+    },
+    {
+      "prompt": "빈 __counted_by fallback이 배열 길이를 런타임에 검사하는가?",
+      "options": [
+        "그렇다. 모든 접근마다 검사 함수를 호출한다",
+        "아니다. 지원되지 않을 때 문법을 수용하는 빈 정의다"
+      ],
+      "answer": 1,
+      "explanation": "매크로 본문이 비어 있습니다. 실제 속성 지원 여부와 선언의 존재를 구분해야 합니다."
+    },
+    {
+      "prompt": "이미 __always_inline이 정의되어 있으면 덮어쓰는가?",
+      "options": [
+        "아니다. #ifndef로 기존 정의를 보존한다",
+        "그렇다. 반드시 단순 inline으로 바꾼다"
+      ],
+      "answer": 0,
+      "explanation": "fallback은 정의가 없는 경우에만 적용됩니다. 다른 계층이 제공한 속성을 유지합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPI_LINUX_STDDEF_H\n#define _UAPI_LINUX_STDDEF_H\n\n#include <linux/compiler_types.h>\n\n#ifndef __always_inline\n#define __always_inline inline\n#endif\n\n/**\n * __struct_group() - Create a mirrored named and anonyomous struct\n *\n * @TAG: The tag name for the named sub-struct (usually empty)\n * @NAME: The identifier name of the mirrored sub-struct\n * @ATTRS: Any struct attributes (usually empty)\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical layout\n * and size: one anonymous and one named. The former's members can be used\n * normally without sub-struct naming, and the latter can be used to\n * reason about the start, end, and size of the group of struct members.\n * The named struct can also be explicitly tagged for layer reuse, as well\n * as both having struct attributes appended.\n */\n#define __struct_group(TAG, NAME, ATTRS, MEMBERS...) \\\n\tunion { \\\n\t\tstruct { MEMBERS } ATTRS; \\\n\t\tstruct TAG { MEMBERS } ATTRS NAME; \\\n\t} ATTRS\n\n#ifdef __cplusplus\n/* sizeof(struct{}) is 1 in C++, not 0, can't use C version of the macro. */\n#define __DECLARE_FLEX_ARRAY(T, member)\t\\\n\tT member[0]\n#else\n/**\n * __DECLARE_FLEX_ARRAY() - Declare a flexible array usable in a union\n *\n * @TYPE: The type of each flexible array element\n * @NAME: The name of the flexible array member\n *\n * In order to have a flexible array member in a union or alone in a\n * struct, it needs to be wrapped in an anonymous struct with at least 1\n * named member, but that member can be empty.\n */\n#define __DECLARE_FLEX_ARRAY(TYPE, NAME)\t\\\n\tstruct { \\\n\t\tstruct { } __empty_ ## NAME; \\\n\t\tTYPE NAME[]; \\\n\t}\n#endif\n\n#ifndef __counted_by\n#define __counted_by(m)\n#endif\n\n#ifndef __counted_by_le\n#define __counted_by_le(m)\n#endif\n\n#ifndef __counted_by_be\n#define __counted_by_be(m)\n#endif\n\n#endif /* _UAPI_LINUX_STDDEF_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "c398fab40ff99f811d1e2f7e894a5e3ef961434bfc1d8c8919639295ac77fd2a",
+    "scope": "whole-file",
+    "line_count": 66,
+    "authoring_source": "course/file_units/structure_groups.py",
+    "sections": [
+      "전체 구성",
+      "그룹 매크로 전개",
+      "C와 C++ 분기",
+      "fallback 속성",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/stddef.h"
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "id": "file-8b74dcb189c60160",
+  "path": "arch/loongarch/include/asm/barrier.h",
+  "title": "LoongArch 장벽 전체: DBAR 힌트와 크기별 저장 순서",
+  "area": "메모리 모델 · DBAR · acquire/release · 비트 마스크 · 원자 저장",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "완료·순서 장벽, acquire/release, 저장 후 장벽과 투기 인덱스 마스크를 정의합니다.",
+  "guide": [
+    "장벽의 앞뒤 접근 종류를 비트로 표현하고 필요한 순서만 선택합니다. 컴파일러 장벽, CPU 장벽, 안전한 인덱스 마스크는 서로 다른 기능입니다.",
+    "앞서 futex에서 본 dbar0x700을 일반 full barrier와 구분해 읽습니다. 실제 LoongArch 실행 시험이 아닌 원본 기반 해설입니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0·저작권·guard, 힌트 인코딩 주석, DBAR와 여덟 상수, completion/ordering alias, SMP·LLSC·atomic 주변 장벽, nospec mask, acquire/release/store_mb와 generic barrier 포함으로 끝납니다. 뒤의 generic 헤더가 제공하는 전체 API를 이 파일 하나의 구현으로 세지 않습니다."
+    },
+    {
+      "title": "힌트 비트",
+      "text": "bit4는0이면 completion,1이면 ordering입니다. bit3/2는 앞선 read/write, bit1/0은 뒤따르는 read/write에 대한 적용 여부이며0이 참,1이 제외입니다. 일반적인 enable bit와 반대라 비트를 세우면 더 많은 접근을 막는다고 단순 추측하면 틀립니다."
+    },
+    {
+      "title": "상수와 DBAR",
+      "text": "crwrw=00000, cr_r_=00101, c_w_w=01010이며 ordering 대응은10000,10101,11010입니다. acquire용 or_rw는10100, release용 orw_w는10010입니다. DBAR는 즉시값 I 제약의 dbar와 memory clobber를 사용해 CPU 명령과 컴파일러 순서 계약을 연결합니다."
+    },
+    {
+      "title": "공개 별칭의 차이",
+      "text": "mb/rmb/wmb는 c_sync/c_rsync/c_wsync의 completion 계열이고 iob/wbflush도 c_sync입니다. __smp_mb/rmb/wmb는 o_sync/o_rsync/o_wsync ordering 계열입니다. 이 이름들을 모두 같은 비트패턴의 장벽으로 설명하지 않습니다."
+    },
+    {
+      "title": "LLSC 전용 힌트",
+      "text": "__WEAK_LLSC_MB는 SMP에서 dbar0x700 문자열, 비SMP에서는 빈 줄입니다. 주석은0x700을 같은 주소의 read-after-read 장벽으로 설명합니다. futex의 이 매크로를 모든 앞뒤 읽기·쓰기의 일반 full barrier로 과장하지 않습니다."
+    },
+    {
+      "title": "원자 연산 주변",
+      "text": "__smp_mb__before_atomic과 after_atomic은 barrier()로 정의됩니다. 본문상 컴파일러 장벽이며 여기서 추가 DBAR를 발행하지 않습니다. 이것만 보고 원자 연산 자체의 하드웨어 순서가 없다고 결론 내리지 않고 관련 원자 구현과 함께 판단해야 합니다."
+    },
+    {
+      "title": "인덱스 마스크",
+      "text": "array_index_mask_nospec는 unsigned sltu로 index<size의0/1을 만들고 long이4바이트면 sub.w,8바이트면 sub.d로0에서 빼 마스크를 만듭니다. 조건 참이면 모든 비트1,거짓이면0입니다. 이 함수는 배열을 읽거나 예외를 발생시키는 것이 아니라 호출자가 인덱스와 결합할 마스크를 반환합니다."
+    },
+    {
+      "title": "Acquire와 release 위치",
+      "text": "__smp_load_acquire는 READ_ONCE로 값을 읽고 atomic type 정적 검사와 ldacq_mb 뒤 저장해 둔 값을 반환합니다. __smp_store_release는 타입 검사, strel_mb, WRITE_ONCE 순서입니다. acquire 장벽은 읽기 뒤, release 장벽은 쓰기 앞이라는 위치가 각 방향의 순서 요구와 연결됩니다."
+    },
+    {
+      "title": "Store_mb 입력 표현",
+      "text": "__smp_store_mb의 p는 저장 대상 lvalue입니다. typeof(p) 값을 union에 담고 char 표현을 통해 크기별 값을 얻습니다. switch(sizeof(p))를 사용하므로 p를 포인터 인자라고 오인하면 안 됩니다. 여기서는 전달값을 대상 타입으로 변환해 한 번 저장할 준비를 합니다."
+    },
+    {
+      "title": "크기별 저장 경로",
+      "text": "1·2바이트는 volatile 정수 저장 뒤 __smp_mb입니다.4·8바이트는 각각 amswap_db.w/d로 교환하고 이전 값은 tmp에 받아 버립니다. 매크로에는 그 밖의 크기에 대한 default 저장이나 런타임 오류 분기가 없으므로 임의 크기 구조체를 지원한다고 주장하면 안 됩니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "비트 인코딩의 역논리, completion과 ordering, acquire/release 방향성, branchless mask, 타입 폭별 구현 선택, compiler와 CPU 계약을 학습합니다. 이 코드만으로 모든 장치 메모리나 투기 공격 시나리오에 대한 안전성을 증명한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "힌트의 앞선 read 적용 bit3이0이면?",
+      "options": [
+        "그 read에 장벽을 적용한다",
+        "그 read를 제외한다"
+      ],
+      "answer": 0,
+      "explanation": "주석은0:true,1:false라고 명시합니다. bit4의 종류 선택과 나머지 접근 제외 비트의 의미를 구분해야 합니다."
+    },
+    {
+      "prompt": "index가 size와 같으면 nospec mask는?",
+      "options": [
+        "모든 비트1이다",
+        "0이다"
+      ],
+      "answer": 1,
+      "explanation": "sltu는 엄격한 unsigned less-than입니다. 같을 때0이고0에서0을 빼므로0 마스크입니다."
+    },
+    {
+      "prompt": "__smp_load_acquire의 ldacq_mb는 읽기 전후 중 어디인가?",
+      "options": [
+        "READ_ONCE 뒤이다",
+        "READ_ONCE 전에만 있다"
+      ],
+      "answer": 0,
+      "explanation": "읽은 값을 지역 변수에 담고 타입 검사·장벽을 수행한 후 반환합니다. release 저장은 반대로 장벽을 저장 전에 둡니다."
+    },
+    {
+      "prompt": "1바이트 store_mb도 amswap_db.d를 쓰는가?",
+      "options": [
+        "그렇다. 모든 크기를8바이트 교환으로 바꾼다",
+        "아니다. volatile1바이트 저장 뒤 SMP 장벽이다"
+      ],
+      "answer": 1,
+      "explanation": "switch에서1·2는 저장+장벽,4·8은 대응 폭 amswap_db 명령입니다. 인접 바이트까지 교환하는 일반화는 원문과 다릅니다."
+    },
+    {
+      "prompt": "dbar0x700은 이 문서 주석상 무엇을 위한가?",
+      "options": [
+        "같은 주소의 read-after-read 순서이다",
+        "모든 I/O를 영구히 중단하는 명령이다"
+      ],
+      "answer": 0,
+      "explanation": "LLSC 전용 힌트 설명을 일반 c_sync나 o_sync의 전체 의미와 혼동하지 않아야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2020-2022 Loongson Technology Corporation Limited\n */\n#ifndef __ASM_BARRIER_H\n#define __ASM_BARRIER_H\n\n/*\n * Hint encoding:\n *\n * Bit4: ordering or completion (0: completion, 1: ordering)\n * Bit3: barrier for previous read (0: true, 1: false)\n * Bit2: barrier for previous write (0: true, 1: false)\n * Bit1: barrier for succeeding read (0: true, 1: false)\n * Bit0: barrier for succeeding write (0: true, 1: false)\n *\n * Hint 0x700: barrier for \"read after read\" from the same address\n */\n\n#define DBAR(hint) __asm__ __volatile__(\"dbar %0 \" : : \"I\"(hint) : \"memory\")\n\n#define crwrw\t\t0b00000\n#define cr_r_\t\t0b00101\n#define c_w_w\t\t0b01010\n\n#define orwrw\t\t0b10000\n#define or_r_\t\t0b10101\n#define o_w_w\t\t0b11010\n\n#define orw_w\t\t0b10010\n#define or_rw\t\t0b10100\n\n#define c_sync()\tDBAR(crwrw)\n#define c_rsync()\tDBAR(cr_r_)\n#define c_wsync()\tDBAR(c_w_w)\n\n#define o_sync()\tDBAR(orwrw)\n#define o_rsync()\tDBAR(or_r_)\n#define o_wsync()\tDBAR(o_w_w)\n\n#define ldacq_mb()\tDBAR(or_rw)\n#define strel_mb()\tDBAR(orw_w)\n\n#define mb()\t\tc_sync()\n#define rmb()\t\tc_rsync()\n#define wmb()\t\tc_wsync()\n#define iob()\t\tc_sync()\n#define wbflush()\tc_sync()\n\n#define __smp_mb()\to_sync()\n#define __smp_rmb()\to_rsync()\n#define __smp_wmb()\to_wsync()\n\n#ifdef CONFIG_SMP\n#define __WEAK_LLSC_MB\t\t\"\tdbar 0x700\t\\n\"\n#else\n#define __WEAK_LLSC_MB\t\t\"\t\t\t\\n\"\n#endif\n\n#define __smp_mb__before_atomic()\tbarrier()\n#define __smp_mb__after_atomic()\tbarrier()\n\n/**\n * array_index_mask_nospec() - generate a ~0 mask when index < size, 0 otherwise\n * @index: array element index\n * @size: number of elements in array\n *\n * Returns:\n *     0 - (@index < @size)\n */\n#define array_index_mask_nospec array_index_mask_nospec\nstatic inline unsigned long array_index_mask_nospec(unsigned long index,\n\t\t\t\t\t\t    unsigned long size)\n{\n\tunsigned long mask;\n\n\t__asm__ __volatile__(\n\t\t\"sltu\t%0, %1, %2\\n\\t\"\n#if (__SIZEOF_LONG__ == 4)\n\t\t\"sub.w\t%0, $zero, %0\\n\\t\"\n#elif (__SIZEOF_LONG__ == 8)\n\t\t\"sub.d\t%0, $zero, %0\\n\\t\"\n#endif\n\t\t: \"=r\" (mask)\n\t\t: \"r\" (index), \"r\" (size)\n\t\t:);\n\n\treturn mask;\n}\n\n#define __smp_load_acquire(p)\t\t\t\t\\\n({\t\t\t\t\t\t\t\\\n\ttypeof(*p) ___p1 = READ_ONCE(*p);\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\\\n\tldacq_mb();\t\t\t\t\t\\\n\t___p1;\t\t\t\t\t\t\\\n})\n\n#define __smp_store_release(p, v)\t\t\t\\\ndo {\t\t\t\t\t\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\\\n\tstrel_mb();\t\t\t\t\t\\\n\tWRITE_ONCE(*p, v);\t\t\t\t\\\n} while (0)\n\n#define __smp_store_mb(p, v)\t\t\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\t\\\n\tunion { typeof(p) __val; char __c[1]; } __u =\t\t\t\t\\\n\t\t{ .__val = (__force typeof(p)) (v) };\t\t\t\t\\\n\tunsigned long __tmp;\t\t\t\t\t\t\t\\\n\tswitch (sizeof(p)) {\t\t\t\t\t\t\t\\\n\tcase 1:\t\t\t\t\t\t\t\t\t\\\n\t\t*(volatile __u8 *)&p = *(__u8 *)__u.__c;\t\t\t\\\n\t\t__smp_mb();\t\t\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\t\\\n\tcase 2:\t\t\t\t\t\t\t\t\t\\\n\t\t*(volatile __u16 *)&p = *(__u16 *)__u.__c;\t\t\t\\\n\t\t__smp_mb();\t\t\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\t\\\n\tcase 4:\t\t\t\t\t\t\t\t\t\\\n\t\t__asm__ __volatile__(\t\t\t\t\t\t\\\n\t\t\"amswap_db.w %[tmp], %[val], %[mem]\t\\n\"\t\t\t\\\n\t\t: [mem] \"+ZB\" (*(u32 *)&p), [tmp] \"=&r\" (__tmp)\t\t\t\\\n\t\t: [val] \"r\" (*(__u32 *)__u.__c)\t\t\t\t\t\\\n\t\t: );\t\t\t\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\t\\\n\tcase 8:\t\t\t\t\t\t\t\t\t\\\n\t\t__asm__ __volatile__(\t\t\t\t\t\t\\\n\t\t\"amswap_db.d %[tmp], %[val], %[mem]\t\\n\"\t\t\t\\\n\t\t: [mem] \"+ZB\" (*(u64 *)&p), [tmp] \"=&r\" (__tmp)\t\t\t\\\n\t\t: [val] \"r\" (*(__u64 *)__u.__c)\t\t\t\t\t\\\n\t\t: );\t\t\t\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\t\\\n\t}\t\t\t\t\t\t\t\t\t\\\n} while (0)\n\n#include <asm-generic/barrier.h>\n\n#endif /* __ASM_BARRIER_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "8a509de398ed8e085ed1156e1b6094eccaa62c7ccd5d73f2e385e9a9d4c2d020",
+    "scope": "whole-file",
+    "line_count": 139,
+    "authoring_source": "course/file_units/loongarch_barriers.py",
+    "sections": [
+      "전체 구성",
+      "힌트 비트",
+      "상수와 DBAR",
+      "공개 별칭의 차이",
+      "LLSC 전용 힌트",
+      "원자 연산 주변",
+      "인덱스 마스크",
+      "Acquire와 release 위치",
+      "Store_mb 입력 표현",
+      "크기별 저장 경로",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/loongarch/include/asm/barrier.h"
+    }
+  ]
+}

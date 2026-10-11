@@ -1,0 +1,82 @@
+{
+  "id": "file-2735e72a5a2028c1",
+  "path": "include/linux/timerqueue_types.h",
+  "title": "Timerqueue 타입 전체: 만료값과 캐시된 트리 루트",
+  "area": "시간순 큐 · 레드블랙 트리 · 최소값 캐시",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "만료 순서로 정렬할 객체와 큐 헤드의 데이터 표현입니다.",
+  "guide": [
+    "각 객체는 rb_node와 ktime_t expires를 가지며 헤드는 rb_root_cached를 보유합니다.",
+    "이 자료형만으로 타이머가 실행되거나 만료 콜백이 등록되지는 않습니다. 시간값 설정과 실제 실행 정책은 사용자가 관리합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 내용",
+      "text": "GPL SPDX와 guard, rbtree_types/types 포함, timerqueue_node와 timerqueue_head 정의, endif로 끝납니다. 외부 함수나 정렬 코드는 없습니다."
+    },
+    {
+      "title": "침입형 노드",
+      "text": "timerqueue_node의 node는 레드블랙 트리 연결을 객체 안에 포함합니다. expires가 비교 키입니다. 노드가 연결된 상태에서 expires만 바꾸면 기존 트리 위치와 정렬 관계가 어긋날 수 있으므로 제거 후 수정·재삽입 같은 절차가 필요합니다."
+    },
+    {
+      "title": "최소값 캐시",
+      "text": "head의 rb_root_cached는 일반 루트와 가장 왼쪽 노드 캐시를 함께 표현하는 자료형입니다. 큐는 반복되는 가장 이른 만료 조회를 빠르게 하기 위해 이를 사용합니다. 캐시 일관성을 유지하는 삽입·삭제 API와 함께 사용해야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "객체 내 연결 정보, 정렬 키의 불변성, 우선순위 큐와 실행 스케줄러의 역할 차이, 자주 조회하는 최소값 캐시를 학습합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "expires가 있으면 이 구조체가 자동으로 콜백을 실행하는가?",
+      "options": [
+        "아니다. 시간순 정렬용 데이터다",
+        "그렇다. expires에 도달하면 구조체가 실행한다"
+      ],
+      "answer": 0,
+      "explanation": "타입에 함수 포인터나 실행 코드가 없습니다. 실제 만료 처리 정책은 상위 사용자 코드가 담당합니다."
+    },
+    {
+      "prompt": "연결된 노드의 expires만 바꿔도 순서가 자동 복구되는가?",
+      "options": [
+        "그렇다. 필드 대입이 트리 재정렬을 호출한다",
+        "아니다. 트리 위치를 다시 관리해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "평범한 필드 대입에는 재삽입이나 회전이 없습니다. 정렬 키 변경은 자료구조 연산과 함께 관리합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_TIMERQUEUE_TYPES_H\n#define _LINUX_TIMERQUEUE_TYPES_H\n\n#include <linux/rbtree_types.h>\n#include <linux/types.h>\n\nstruct timerqueue_node {\n\tstruct rb_node node;\n\tktime_t expires;\n};\n\nstruct timerqueue_head {\n\tstruct rb_root_cached rb_root;\n};\n\n#endif /* _LINUX_TIMERQUEUE_TYPES_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "c3427ebec62a97fe0040d0a520ae680d74a440cc4b1abb92e1a5be1f51e5b88b",
+    "scope": "whole-file",
+    "line_count": 17,
+    "authoring_source": "course/file_units/timer_queues.py",
+    "sections": [
+      "전체 내용",
+      "침입형 노드",
+      "최소값 캐시",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/timerqueue_types.h"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "id": "file-4cdc1fc2c26648cf",
+  "path": "include/vdso/getrandom.h",
+  "title": "vDSO 난수 상태: 출력 배치와 다음 키의 union",
+  "area": "union · 메모리 배치 · 버퍼링 · 재진입 · 암호 상태 · 함수 계약",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "상태 구조체의 모든 필드와 stackless ChaCha 함수·공개 함수 선언을 분석합니다.",
+  "guide": [
+    "비밀 상태와 출력 버퍼를 하나의 저장 영역에 배치하더라도 노출 범위와 동시 접근 계약은 별도로 관리해야 합니다.",
+    "배치 크기를 계산하고 generation·pos·in_use가 담당하는 서로 다른 역할을 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 상수와 의존성",
+      "text": "GPL-2.0 include guard 아래 linux/types.h를 포함하고 CHACHA_KEY_SIZE=32, CHACHA_BLOCK_SIZE=64를 정의합니다. 단위는 뒤 배열과 주석상 바이트입니다. 이 파일에는 실제 ChaCha round 구현이나 syscall 본문이 없습니다."
+    },
+    {
+      "title": "Batch와 key의 연속 배치",
+      "text": "vgetrandom_state의 anonymous union 안 anonymous struct는 u8 batch[64*3/2]와 u32 key[32/sizeof(u32)]를 가집니다. 따라서 batch는 96바이트, key는 8개 u32로 32바이트입니다. 주석상 batch는 출력으로 소비할 1.5블록이고 key는 다음 배치 생성에 사용할 키입니다. 두 블록의 출력 전체 128바이트를 전부 사용자 난수로 반환하는 구조라고 해석하면 안 됩니다."
+    },
+    {
+      "title": "Union 전체 보기",
+      "text": "다른 union 멤버는 u8 batch_key[64*2]로 128바이트입니다. 동일 저장 공간을 배치와 키로 나누어 보거나 한 번에 두 블록으로 채울 수 있습니다. 96+32+128바이트를 각각 따로 할당하는 구조가 아닙니다. union 내부 표현과 이후 상태 필드를 포함한 전체 sizeof는 구분해야 합니다."
+    },
+    {
+      "title": "Generation과 소비 위치",
+      "text": "u64 generation은 키 생성 당시 vDSO RNG 데이터의 generation 스냅샷입니다. u8 pos는 batch에서 다음 사용 가능한 바이트의 offset입니다. generation은 소비한 바이트 수가 아니고 pos는 다음 키의 generation 번호가 아닙니다. 어떤 조건에서 다시 seed를 받고 배치를 채우는지는 공통 구현의 책임입니다."
+    },
+    {
+      "title": "재진입 표시의 범위",
+      "text": "bool in_use는 주석상 같은 스레드의 signal handler가 상태를 재사용할 때의 reentrancy guard입니다. 구조체 필드 선언 자체가 atomic lock을 구현하지 않습니다. 이를 여러 스레드가 동시에 같은 상태를 써도 안전하다는 보장으로 해석하지 않습니다. 전체 구조체 크기는 ABI 정렬과 끝 padding에 영향을 받으므로 128바이트라고 고정하면 안 됩니다."
+    },
+    {
+      "title": "Stackless ChaCha 선언",
+      "text": "__arch_chacha20_blocks_nostack(u8 *dst_bytes, const u32 *key, u32 *counter, size_t nblocks)는 void 외부 함수입니다. 계약은 양수 블록 수에 대해 nonce=0 ChaCha20 출력을 생성하고 dst에 nblocks*64바이트를 기록하며 32바이트 키를 읽고 8바이트 counter를 입력으로 읽어 반환 시 갱신하는 것입니다. 주석은 stack 및 전달된 매개변수 영역 밖에 쓰지 않아 fork된 자식으로 stack 데이터가 새는 위험을 줄이려는 목적을 명시합니다. 선언만으로 구현이 이 계약을 지켰다고 검증한 것은 아닙니다."
+    },
+    {
+      "title": "공개 getrandom 원형",
+      "text": "__vdso_getrandom은 buffer,len,flags,opaque_state,opaque_len 다섯 인수와 ssize_t 반환형을 선언합니다. 주석은 __cvdso_getrandom으로 위임하는 기본 모델을 설명합니다. 아키텍처에 따라 공개 이름과 추가 기능 분기가 다를 수 있으며 확인한 ARM64 진입점은 __kernel_getrandom 이름과 FPSIMD 조건을 사용합니다. 이 원형 하나가 모든 아키텍처에 같은 심볼을 자동 생성하는 것은 아닙니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "전체 상수·구조체·필드·함수 선언과 계약을 설명했습니다. union에 의한 공간 공유, 출력 버퍼와 비밀키의 경계, 상태 버전과 재진입의 차이를 학습합니다. 실제 난수 품질·암호 구현·다중 스레드 실행·stackless 어셈블리 준수 검증은 이 파일 분석 범위가 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "batch와 key의 크기는 각각 얼마인가?",
+      "options": [
+        "96바이트와 32바이트이다",
+        "128바이트와 64바이트이다"
+      ],
+      "answer": 0,
+      "explanation": "블록 64바이트의 1.5배가 batch이고 키 상수는 32바이트입니다. 두 영역을 합친 128바이트를 batch_key로 함께 볼 수 있습니다."
+    },
+    {
+      "prompt": "batch_key가 추가로 별도 128바이트를 할당하는가?",
+      "options": [
+        "그렇다. 상태마다 같은 출력이 별도 복사본으로 두 번 저장된다",
+        "아니다. batch와 key를 담은 struct와 union 저장 공간을 공유한다"
+      ],
+      "answer": 1,
+      "explanation": "union은 같은 위치를 다른 멤버 표현으로 보는 구조입니다. 멤버 크기를 모두 더해서 메모리 사용량을 계산하지 않습니다."
+    },
+    {
+      "prompt": "in_use 필드가 있다는 것만으로 여러 스레드의 공유 상태 접근이 안전한가?",
+      "options": [
+        "아니다. 주석은 같은 스레드의 signal 재진입 용도를 설명한다",
+        "그렇다. 모든 bool 필드는 자동 mutex이다"
+      ],
+      "answer": 0,
+      "explanation": "bool 선언은 잠금 구현이 아닙니다. 스레드 간 동시 접근 계약은 구현과 외부 동기화를 별도로 확인해야 합니다."
+    },
+    {
+      "prompt": "stackless ChaCha helper가 갱신하는 counter의 크기는?",
+      "options": [
+        "키와 같으므로 32바이트이다",
+        "8바이트이다"
+      ],
+      "answer": 1,
+      "explanation": "원형의 counter는 u32 포인터이지만 주석 계약은 8바이트 counter입니다. 포인터가 가리키는 단일 원소 폭과 전체 입력·출력 영역 크기를 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2022-2024 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n */\n\n#ifndef _VDSO_GETRANDOM_H\n#define _VDSO_GETRANDOM_H\n\n#include <linux/types.h>\n\n#define CHACHA_KEY_SIZE         32\n#define CHACHA_BLOCK_SIZE       64\n\n/**\n * struct vgetrandom_state - State used by vDSO getrandom().\n *\n * @batch:\tOne and a half ChaCha20 blocks of buffered RNG output.\n *\n * @key:\tKey to be used for generating next batch.\n *\n * @batch_key:\tUnion of the prior two members, which is exactly two full\n * \t\tChaCha20 blocks in size, so that @batch and @key can be filled\n * \t\ttogether.\n *\n * @generation:\tSnapshot of @rng_info->generation in the vDSO data page at\n *\t\tthe time @key was generated.\n *\n * @pos:\tOffset into @batch of the next available random byte.\n *\n * @in_use:\tReentrancy guard for reusing a state within the same thread\n *\t\tdue to signal handlers.\n */\nstruct vgetrandom_state {\n\tunion {\n\t\tstruct {\n\t\t\tu8\tbatch[CHACHA_BLOCK_SIZE * 3 / 2];\n\t\t\tu32\tkey[CHACHA_KEY_SIZE / sizeof(u32)];\n\t\t};\n\t\tu8\t\tbatch_key[CHACHA_BLOCK_SIZE * 2];\n\t};\n\tu64\t\t\tgeneration;\n\tu8\t\t\tpos;\n\tbool \t\t\tin_use;\n};\n\n/**\n * __arch_chacha20_blocks_nostack - Generate ChaCha20 stream without using the stack.\n * @dst_bytes:\tDestination buffer to hold @nblocks * 64 bytes of output.\n * @key:\t32-byte input key.\n * @counter:\t8-byte counter, read on input and updated on return.\n * @nblocks:\tNumber of blocks to generate.\n *\n * Generates a given positive number of blocks of ChaCha20 output with nonce=0, and does not write\n * to any stack or memory outside of the parameters passed to it, in order to mitigate stack data\n * leaking into forked child processes.\n */\nextern void __arch_chacha20_blocks_nostack(u8 *dst_bytes, const u32 *key, u32 *counter, size_t nblocks);\n\n/**\n * __vdso_getrandom - Architecture-specific vDSO implementation of getrandom() syscall.\n * @buffer:\t\tPassed to __cvdso_getrandom().\n * @len:\t\tPassed to __cvdso_getrandom().\n * @flags:\t\tPassed to __cvdso_getrandom().\n * @opaque_state:\tPassed to __cvdso_getrandom().\n * @opaque_len:\t\tPassed to __cvdso_getrandom();\n *\n * This function is implemented by making a single call to to __cvdso_getrandom(), whose\n * documentation may be consulted for more information.\n *\n * Returns:\tThe return value of __cvdso_getrandom().\n */\nextern ssize_t __vdso_getrandom(void *buffer, size_t len, unsigned int flags, void *opaque_state, size_t opaque_len);\n\n#endif /* _VDSO_GETRANDOM_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ee5e891aac99463bd53dd57b30f8a4320598f6ee1162a169216d7f75184c3498",
+    "scope": "whole-file",
+    "line_count": 74,
+    "authoring_source": "course/file_units/random_state_abi.py",
+    "sections": [
+      "전체 상수와 의존성",
+      "Batch와 key의 연속 배치",
+      "Union 전체 보기",
+      "Generation과 소비 위치",
+      "재진입 표시의 범위",
+      "Stackless ChaCha 선언",
+      "공개 getrandom 원형",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/getrandom.h"
+    }
+  ]
+}

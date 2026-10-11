@@ -1,0 +1,144 @@
+{
+  "id": "file-327e20cc5d2c327e",
+  "path": "include/linux/nospec.h",
+  "title": "NOSPEC 인덱스 전체: 범위 검사 뒤 마스크와 타입 경계",
+  "area": "투기 실행 · 비트 마스크 · unsigned 산술 · 타입 검사 · 선언과 구현",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "투기 실행 중 인덱스 사용을 제한하는 공통 마스크와 아키텍처별 재정의 지점을 읽습니다.",
+  "guide": [
+    "분기에서 검사한 인덱스와 실제 접근에 사용하는 인덱스 사이에 데이터 의존성을 만듭니다. 정상적인 범위 검사와 객체 수명 관리는 계속 필요합니다.",
+    "x86의 cmp/sbb 마스크와 이 공통 산술 마스크를 비교하고 결과값을 실제 배열 접근에 적용하는 위치를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 구성",
+      "text": "GPL-2.0, 저작권, guard 뒤 compiler.h와 asm/barrier.h를 포함하고 task_struct를 전방 선언합니다. 기본 투기 장벽, 마스크 함수, 인덱스 정제 매크로, prctl과 seccomp 관련 세 함수 선언으로 끝납니다. 제어 정책의 실제 구현은 이 파일에 없습니다."
+    },
+    {
+      "title": "아키텍처 우선",
+      "text": "barrier_nospec가 없을 때만 빈 do-while 기본값을 둡니다. array_index_mask_nospec 역시 아키텍처가 정의하지 않았을 때만 공통 함수를 제공합니다. 따라서 x86의 asm/barrier.h가 제공한 cmp/sbb 구현이 있으면 아래 산술 함수로 덮어쓰지 않습니다. 빈 기본 장벽을 모든 플랫폼의 투기 차단 명령이라고 설명하면 틀립니다."
+    },
+    {
+      "title": "Compiler의 가정 감추기",
+      "text": "공통 함수는 unsigned long index,size를 받고 OPTIMIZER_HIDE_VAR(index)를 호출합니다. 주석은 compiler가 정상 실행의 bounds check로 마스크가 불필요하다고 생각해도 투기 실행의 값을 고려하지 않으므로 마스크를 계산·생성하게 해야 한다고 설명합니다. 이것은 범위 검사의 결과를 변경하는 API가 아닙니다."
+    },
+    {
+      "title": "산술 식의 단계",
+      "text": "반환 식은 ~(long)(index | (size - 1UL - index)) >> (BITS_PER_LONG - 1)입니다. 먼저 unsigned long 산술로 남은 범위 길이 size-1-index를 만들고 index와 OR합니다. long으로 변환한 값을 반전한 뒤 커널이 사용하는 signed 산술 우측 시프트로 최상위 비트를 펼칩니다. 둘 중 최상위 비트가 켜지면 최종 mask는0이며 둘 다 꺼지면 모든 비트1입니다."
+    },
+    {
+      "title": "작은 수 예제",
+      "text": "size=8,index=3이면 size-1-index=4이고 OR 결과7의 부호 비트가0이라 mask는 모든 비트1입니다. index=8이면 차이가 unsigned 최대값으로 wrap되어 mask0입니다. index=0,size=0 역시 size-1이 unsigned 최대값이므로 mask0입니다. 유효 인덱스는 유지되고 범위 밖 값은 AND 결과0이 됩니다."
+    },
+    {
+      "title": "전체 unsigned 범위에 대한 주의",
+      "text": "공통 산술 식은 index 자체의 최상위 비트도 검사합니다. 따라서 주석의 index<size 설명을 모든 unsigned long 조합에 대한 정확한 비교 함수로 일반화하면 안 됩니다. 예를 들어 index의 최상위 비트가1이면 size가 더 커도 mask0입니다. index=0,size=ULONG_MAX도 차이의 최상위 비트 때문에0입니다. 통상적인 객체 인덱스 범위에서 사용하는 보수적인 마스킹과 임의 정수 비교를 구별하고 아키텍처 재정의의 차이도 확인합니다."
+    },
+    {
+      "title": "매크로의 평가와 타입",
+      "text": "array_index_nospec는 typeof(index)의 _i와 typeof(size)의 _s를 각각 전달값으로 초기화하고 mask를 계산합니다. BUILD_BUG_ON은 두 타입이 long보다 크면 빌드를 막습니다. 마지막으로 _i & _mask를 원래 인덱스 타입으로 변환해 반환합니다. 크기 검사는 signed 음수나 배열 객체의 유효성을 런타임에 검사하지 않습니다."
+    },
+    {
+      "title": "호출 위치와 반환값 사용",
+      "text": "주석 예제는 if(index<size) 안에서 index=array_index_nospec(index,size)로 대입한 뒤 array[index]를 읽습니다. 정제 함수를 호출만 하고 반환값을 버리면 뒤의 원래 인덱스 접근에 마스크가 반영되지 않습니다. out-of-bounds 값을 마지막 원소 size-1로 포화시키는 clamp가 아니라 AND로0을 만드는 방식입니다."
+    },
+    {
+      "title": "빈 배열과 별도 안전 조건",
+      "text": "size=0에서 반환 인덱스가0이어도 유효한 원소는 없습니다. 정상 실행의 bounds check를 없애고 무조건 array[0]에 접근해도 된다는 뜻이 아닙니다. 객체 생존 기간, 접근 권한, signed 입력의 하한 검사, 다른 투기 유출 경로도 이 매크로 하나가 해결하지 않습니다."
+    },
+    {
+      "title": "제어 API 선언",
+      "text": "arch_prctl_spec_ctrl_get은 task와 which를 받아 int를 반환하고 set은 ctrl 인자를 추가로 받습니다. arch_seccomp_spec_mitigate는 task를 받아 void를 반환합니다. 주석상 각각 prctl 투기 제어와 seccomp 강제 완화 관련 인터페이스입니다. 이 헤더에는 지원 값·오류 코드·완화 정책의 본문이 없으므로 선언만으로 정책이 활성화된다고 주장하지 않습니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "모듈러 산술, signed/unsigned 변환, 부호 비트 확장, bitwise AND, 타입 폭 검사, compiler 최적화의 실행 모델과 CPU 투기의 차이를 학습합니다. 이 해설은 특정 CPU에서 모든 공격 시나리오를 검증한 보안 증명이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "size=8,index=8의 공통 산술 마스크와 정제 인덱스는?",
+      "options": [
+        "mask0, 인덱스0이다",
+        "mask 전부1, 인덱스8이다"
+      ],
+      "answer": 0,
+      "explanation": "size-1-index가 unsigned 최대값으로 wrap되어 OR의 최상위 비트가 켜집니다. 반전·산술 우측 시프트 결과0이며8&0은0입니다."
+    },
+    {
+      "prompt": "size=0에서 정제 인덱스0을 얻으면 array[0] 접근이 유효한가?",
+      "options": [
+        "그렇다.0은 모든 배열에 존재한다",
+        "아니다. 빈 배열에는 유효한 원소가 없다"
+      ],
+      "answer": 1,
+      "explanation": "마스킹은 객체를 생성하거나 크기를 늘리지 않습니다. 정상 bounds check를 유지해야 하며0 반환을 접근 허가로 해석하면 안 됩니다."
+    },
+    {
+      "prompt": "x86이 array_index_mask_nospec를 정의했으면 공통 함수도 추가 정의되는가?",
+      "options": [
+        "아니다. #ifndef로 제외된다",
+        "그렇다. 두 함수를 순서대로 호출한다"
+      ],
+      "answer": 0,
+      "explanation": "asm/barrier.h를 먼저 포함한 뒤 정의 존재를 검사합니다. 아키텍처 구현과 공통 fallback을 연속 실행하는 구조가 아닙니다."
+    },
+    {
+      "prompt": "공통 함수는 최상위 비트가1인 index<size인 경우에도 항상 전부1 mask를 주는가?",
+      "options": [
+        "그렇다. 임의 unsigned 비교와 완전히 같다",
+        "아니다. index의 최상위 비트 때문에0일 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "OR에 index 자체가 포함됩니다. 이 산술 fallback은 전체 unsigned 범위에 대한 일반 비교 함수로 쓰면 안 됩니다. 아키텍처 재정의와도 차이가 있습니다."
+    },
+    {
+      "prompt": "array_index_nospec(index,size)를 호출하고 결과를 버리면 원래 index가 수정되는가?",
+      "options": [
+        "아니다. 반환값을 접근에 사용해야 한다",
+        "그렇다. 매크로가 호출자 변수를 무조건 덮어쓴다"
+      ],
+      "answer": 0,
+      "explanation": "_i는 매크로의 지역 변수이고 마지막 식이 정제 값을 반환합니다. 원문의 예제처럼 대입하거나 반환값을 배열 인덱스로 사용해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n// Copyright(c) 2018 Linus Torvalds. All rights reserved.\n// Copyright(c) 2018 Alexei Starovoitov. All rights reserved.\n// Copyright(c) 2018 Intel Corporation. All rights reserved.\n\n#ifndef _LINUX_NOSPEC_H\n#define _LINUX_NOSPEC_H\n\n#include <linux/compiler.h>\n#include <asm/barrier.h>\n\nstruct task_struct;\n\n#ifndef barrier_nospec\n# define barrier_nospec() do { } while (0)\n#endif\n\n/**\n * array_index_mask_nospec() - generate a ~0 mask when index < size, 0 otherwise\n * @index: array element index\n * @size: number of elements in array\n *\n * When @index is out of bounds (@index >= @size), the sign bit will be\n * set.  Extend the sign bit to all bits and invert, giving a result of\n * zero for an out of bounds index, or ~0 if within bounds [0, @size).\n */\n#ifndef array_index_mask_nospec\nstatic inline unsigned long array_index_mask_nospec(unsigned long index,\n\t\t\t\t\t\t    unsigned long size)\n{\n\t/*\n\t * Always calculate and emit the mask even if the compiler\n\t * thinks the mask is not needed. The compiler does not take\n\t * into account the value of @index under speculation.\n\t */\n\tOPTIMIZER_HIDE_VAR(index);\n\treturn ~(long)(index | (size - 1UL - index)) >> (BITS_PER_LONG - 1);\n}\n#endif\n\n/*\n * array_index_nospec - sanitize an array index after a bounds check\n *\n * For a code sequence like:\n *\n *     if (index < size) {\n *         index = array_index_nospec(index, size);\n *         val = array[index];\n *     }\n *\n * ...if the CPU speculates past the bounds check then\n * array_index_nospec() will clamp the index within the range of [0,\n * size).\n */\n#define array_index_nospec(index, size)\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\ttypeof(index) _i = (index);\t\t\t\t\t\\\n\ttypeof(size) _s = (size);\t\t\t\t\t\\\n\tunsigned long _mask = array_index_mask_nospec(_i, _s);\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tBUILD_BUG_ON(sizeof(_i) > sizeof(long));\t\t\t\\\n\tBUILD_BUG_ON(sizeof(_s) > sizeof(long));\t\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\t(typeof(_i)) (_i & _mask);\t\t\t\t\t\\\n})\n\n/* Speculation control prctl */\nint arch_prctl_spec_ctrl_get(struct task_struct *task, unsigned long which);\nint arch_prctl_spec_ctrl_set(struct task_struct *task, unsigned long which,\n\t\t\t     unsigned long ctrl);\n/* Speculation control for seccomp enforced mitigation */\nvoid arch_seccomp_spec_mitigate(struct task_struct *task);\n\n#endif /* _LINUX_NOSPEC_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "4b1c3e8df068c08e39270af094be697d8d7471ca7f7ebbcf94ce7f2d281b1c8d",
+    "scope": "whole-file",
+    "line_count": 74,
+    "authoring_source": "course/file_units/nospec_indices.py",
+    "sections": [
+      "파일 구성",
+      "아키텍처 우선",
+      "Compiler의 가정 감추기",
+      "산술 식의 단계",
+      "작은 수 예제",
+      "전체 unsigned 범위에 대한 주의",
+      "매크로의 평가와 타입",
+      "호출 위치와 반환값 사용",
+      "빈 배열과 별도 안전 조건",
+      "제어 API 선언",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/nospec.h"
+    }
+  ]
+}

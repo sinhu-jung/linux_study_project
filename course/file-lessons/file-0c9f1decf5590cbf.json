@@ -1,0 +1,115 @@
+{
+  "id": "file-0c9f1decf5590cbf",
+  "path": "include/linux/ctype.h",
+  "title": "문자 분류 헤더 전체: 바이트 변환과 EOF의 차이",
+  "area": "문자 분류 · 비트 집합·정수 변환·인코딩",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "표조회,직접범위검사,대소문자변환의서로다른입력처리를구분합니다.",
+  "guide": [
+    "__ismask는입력을unsigned char로변환해256개표를조회합니다. 분류매크로는속성조합을검사하고isdigit/isodigit은숫자범위를판정합니다. 대소문자변환은표분류후ASCII대소문자차이를더하거나뺍니다.",
+    "주석은표준C라이브러리처럼EOF를처리하지않는다고명시합니다. 바이트값과음수sentinel을구분하고범위밖정수를통일된문자계약으로가정하지않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX,guard,compiler include,EOF주의,8개속성상수,_ctype선언,__ismask,분류매크로10개,isascii/toascii,조건부isdigit,변환helper와매크로,_tolower,isodigit,#endif입니다. Unicode디코더나locale선택은없습니다."
+    },
+    {
+      "title": "분류 조합",
+      "text": "isalnum은_U|_L|_D,isalpha는_U|_L,isgraph는_P|_U|_L|_D,isprint는여기에_SP를더합니다. iscntrl/islower/ispunct/isspace/isupper는해당속성을검사하고isxdigit은_D|_X입니다. 공백32는print에는참이지만graph에는거짓입니다."
+    },
+    {
+      "title": "unsigned char 변환",
+      "text": "__ismask와isascii/toascii는unsigned char로입력을좁힙니다. 따라서정수256은이들에서바이트0처럼다뤄질수있습니다. EOF=-1을표준라이브러리와같은별도상태로처리하지않습니다. 원래값의범위를검증하는함수라고해석하면안됩니다."
+    },
+    {
+      "title": "숫자와8진수",
+      "text": "isdigit은컴파일러가builtin을제공하면그것을사용하고아니면int c에대해0문자부터9문자까지직접비교합니다. isodigit은char입력에서0..7범위입니다. 표기반매크로와숫자함수의범위밖정수처리가같다고가정하지않습니다."
+    },
+    {
+      "title": "대소문자 변환",
+      "text": "__tolower와__toupper는unsigned char를받아표속성을검사하고32차이를적용합니다. ASCII A↔a에는맞지만비ASCII바이트의언어학적변환까지보장하지않습니다. 예컨대표가소문자로분류한223을toupper하면191이됩니다. tolower/toupper매크로는이helper에위임합니다."
+    },
+    {
+      "title": "내부 빠른 변환",
+      "text": "_tolower는조건없이 c|0x20을반환하며주석이일반코드에서쓰지말라고경고합니다. A는a가되지만 @도백틱으로바뀝니다. 이름이tolower와비슷해도비문자보존계약이다릅니다."
+    },
+    {
+      "title": "CS와 확인 범위",
+      "text": "정수축소변환,비트마스크,분류와변환의분리,컴파일러builtin경로를연결합니다. 바이트256개에대한표와helper검사를독립적인구간기대값으로작성할수있지만그결과를Unicode문자전체에대한검증으로주장하지않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "공백32에 isprint와isgraph를 적용하면?",
+      "options": [
+        "각각참과거짓이다",
+        "둘다거짓이다"
+      ],
+      "answer": 0,
+      "explanation": "_SP는isprint마스크에만포함됩니다. 화면공간을차지하는공백과보이는도형문자의분류가다릅니다."
+    },
+    {
+      "prompt": "이헤더의isascii(256)이 원래정수의ASCII범위를검증하는가?",
+      "options": [
+        "그렇다.256은항상거짓으로거부한다",
+        "아니다. unsigned char로좁힌뒤검사한다"
+      ],
+      "answer": 1,
+      "explanation": "매크로는((unsigned char)c)<=0x7f입니다.8비트바이트문맥에서256은0으로변환됩니다."
+    },
+    {
+      "prompt": "_tolower가 @를그대로보존하는가?",
+      "options": [
+        "아니다.0x20을OR하여백틱으로바꾼다",
+        "그렇다.문자여부를먼저검사한다"
+      ],
+      "answer": 0,
+      "explanation": "내부빠른버전은조건없는비트OR입니다. 일반tolower와같은계약으로쓰면안됩니다."
+    },
+    {
+      "prompt": "EOF를표준C라이브러리와동일하게다뤄도되는가?",
+      "options": [
+        "된다.이름이같으면모든입력계약도같다",
+        "안 된다. 헤더가지원하지않는다고명시한다"
+      ],
+      "answer": 1,
+      "explanation": "커널전용인터페이스의주석과타입변환을확인해야합니다. 이름만으로libc계약을옮기지않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_CTYPE_H\n#define _LINUX_CTYPE_H\n\n#include <linux/compiler.h>\n\n/*\n * NOTE! This ctype does not handle EOF like the standard C\n * library is required to.\n */\n\n#define _U\t0x01\t/* upper */\n#define _L\t0x02\t/* lower */\n#define _D\t0x04\t/* digit */\n#define _C\t0x08\t/* cntrl */\n#define _P\t0x10\t/* punct */\n#define _S\t0x20\t/* white space (space/lf/tab) */\n#define _X\t0x40\t/* hex digit */\n#define _SP\t0x80\t/* hard space (0x20) */\n\nextern const unsigned char _ctype[];\n\n#define __ismask(x) (_ctype[(int)(unsigned char)(x)])\n\n#define isalnum(c)\t((__ismask(c)&(_U|_L|_D)) != 0)\n#define isalpha(c)\t((__ismask(c)&(_U|_L)) != 0)\n#define iscntrl(c)\t((__ismask(c)&(_C)) != 0)\n#define isgraph(c)\t((__ismask(c)&(_P|_U|_L|_D)) != 0)\n#define islower(c)\t((__ismask(c)&(_L)) != 0)\n#define isprint(c)\t((__ismask(c)&(_P|_U|_L|_D|_SP)) != 0)\n#define ispunct(c)\t((__ismask(c)&(_P)) != 0)\n/* Note: isspace() must return false for %NUL-terminator */\n#define isspace(c)\t((__ismask(c)&(_S)) != 0)\n#define isupper(c)\t((__ismask(c)&(_U)) != 0)\n#define isxdigit(c)\t((__ismask(c)&(_D|_X)) != 0)\n\n#define isascii(c) (((unsigned char)(c))<=0x7f)\n#define toascii(c) (((unsigned char)(c))&0x7f)\n\n#if __has_builtin(__builtin_isdigit)\n#define  isdigit(c) __builtin_isdigit(c)\n#else\nstatic inline int isdigit(int c)\n{\n\treturn '0' <= c && c <= '9';\n}\n#endif\n\nstatic inline unsigned char __tolower(unsigned char c)\n{\n\tif (isupper(c))\n\t\tc -= 'A'-'a';\n\treturn c;\n}\n\nstatic inline unsigned char __toupper(unsigned char c)\n{\n\tif (islower(c))\n\t\tc -= 'a'-'A';\n\treturn c;\n}\n\n#define tolower(c) __tolower(c)\n#define toupper(c) __toupper(c)\n\n/*\n * Fast implementation of tolower() for internal usage. Do not use in your\n * code.\n */\nstatic inline char _tolower(const char c)\n{\n\treturn c | 0x20;\n}\n\n/* Fast check for octal digit */\nstatic inline int isodigit(const char c)\n{\n\treturn c >= '0' && c <= '7';\n}\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "eb8af725f1e42866009e36ed110bc03d0b6e3eb522b475573e7226530f803d50",
+    "scope": "whole-file",
+    "line_count": 81,
+    "authoring_source": "course/file_units/character_classes.py",
+    "sections": [
+      "파일 전체",
+      "분류 조합",
+      "unsigned char 변환",
+      "숫자와8진수",
+      "대소문자 변환",
+      "내부 빠른 변환",
+      "CS와 확인 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/ctype.h"
+    }
+  ]
+}

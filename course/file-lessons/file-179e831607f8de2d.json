@@ -1,0 +1,120 @@
+{
+  "id": "file-179e831607f8de2d",
+  "path": "include/linux/kref.h",
+  "title": "Kref 전체: 객체에 참조 수와 해제 콜백 연결하기",
+  "area": "객체 수명 · 참조 계수 · 잠금 · 원자 연산",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "refcount_t를 감싼 작은 객체 수명 관리 인터페이스입니다. 마지막 참조를 놓는 호출자가 release 콜백을 실행합니다.",
+  "guide": [
+    "소유한 참조와 단순히 관측한 포인터를 구별하고, 마지막 감소와 객체 정리를 연결합니다. 잠금 결합 버전에서는 콜백의 잠금 해제 책임도 함께 설계해야 합니다.",
+    "kref_get 전에 객체가 살아 있다는 보장이 필요합니다. get_unless_zero도 이미 해제된 메모리를 읽을 권한을 만들어주지는 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0-only·저작권·guard, spinlock.h와 refcount.h 포함, kref 구조체, KREF_INIT, init/read/get/put/put_mutex/put_lock/get_unless_zero와 endif로 구성됩니다. 구조체에는 refcount_t 하나만 있고 객체 크기나 destructor 포인터는 저장하지 않습니다. release는 put 호출마다 인자로 받습니다."
+    },
+    {
+      "title": "초기화와 관측",
+      "text": "KREF_INIT(n)은 REFCOUNT_INIT(n)을 담는 구조체 초기화식입니다. kref_init은 refcount_set으로1을 저장합니다. kref_read는 refcount_read 결과를 반환할 뿐 참조를 획득하지 않습니다. 읽은 값이 양수여도 다른 CPU의 마지막 put을 막지 않으므로 read 다음 get을 별도 보호 없이 조합하면 안 됩니다."
+    },
+    {
+      "title": "일반 획득",
+      "text": "kref_get은 refcount_inc를 호출하고 반환값이 없습니다. 이미 유효한 소유권이나 적절한 외부 보호를 바탕으로 참조를 추가하는 용도입니다. 0에서 객체를 되살리는 초기화 함수로 사용하지 않습니다. 포화와 오류 경고 같은 세부 동작은 기반 refcount 구현에서 제공됩니다."
+    },
+    {
+      "title": "일반 put과 콜백",
+      "text": "kref_put은 refcount_dec_and_test가 참이면 release(kref)를 호출하고1, 아니면0을 반환합니다. 콜백은 필수이며 문서는 kfree를 직접 전달하면 안 된다고 명시합니다. 일반적인 콜백은 container_of로 포함 객체를 찾고 자원 정리 후 할당을 해제합니다. kref가 객체 시작 주소라는 보장도 없고 콜백 인자 형식도 따라야 합니다."
+    },
+    {
+      "title": "반환값과 이후 접근",
+      "text": "put 반환1은 이번 호출이 마지막 감소에 따라 release를 실행했다는 뜻입니다. 반환0도 객체가 이후 계속 존재한다는 증거가 아닙니다. 다른 소유자가 곧 마지막 참조를 놓을 수 있고 이번 호출자는 자신의 참조를 이미 반납했습니다. 콜백이 메모리 해제를 지연하도록 구현될 수 있으므로 반환1만으로 물리적 해제가 반드시 끝났다고 단정하지 않습니다."
+    },
+    {
+      "title": "잠금 결합 put",
+      "text": "put_mutex는 refcount_dec_and_mutex_lock, put_lock은 refcount_dec_and_lock 성공 시 release를 호출하고1을 반환합니다. 기반 함수는 성공 시 잠금을 보유한 채 돌아오며 kref wrapper에는 unlock이 없습니다. 따라서 콜백과 주변 정리 절차가 잠금 해제를 책임져야 합니다. 실패 경로의 기반 함수는 잡았던 잠금을 해제하고 돌아오거나 처음부터 잡지 않습니다."
+    },
+    {
+      "title": "조건부 획득과 검색 구조",
+      "text": "get_unless_zero는 refcount_inc_not_zero 결과를 int로 반환하고 __must_check를 붙입니다. 원문은 검색 구조에서 찾은 객체가 destructor에서 제거되는 경우를 설명합니다. 조회 중 메모리를 안정적으로 유지하고 이 반환값을 검사하면 put 쪽 잠금을 실제 제거 시점으로 미룰 수 있습니다. 0이면 객체 사용을 진행하지 않아야 하며 이 helper 자체가 RCU 읽기 구역을 열거나 목록을 잠그지는 않습니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "임베디드 구조체와 container_of, 소유권 이전, 마지막 참조와 destructor, 원자적 조건부 획득, 관측과 예약의 차이, 잠금 소유권 계약을 학습합니다. 이 파일에 없는 객체별 destructor나 검색 구조의 안전성까지 자동 보장되는 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "kref_put이0을 반환하면 직후 객체 필드를 읽어도 되는가?",
+      "options": [
+        "그 반환값만으로는 안 된다. 별도의 유효한 참조나 보호가 필요하다",
+        "된다.0은 객체가 계속 살아 있음을 보장한다"
+      ],
+      "answer": 0,
+      "explanation": "이번 호출은 참조를 반납했습니다. 다른 CPU가 마지막 참조를 놓을 수 있으므로 put의0은 이번 호출이 release를 실행하지 않았다는 사실만 알려줍니다."
+    },
+    {
+      "prompt": "kref_put_lock의 마지막 참조 release는 어떤 잠금 상태로 실행되는가?",
+      "options": [
+        "wrapper가 spinlock을 해제한 뒤 실행한다",
+        "spinlock을 보유한 상태이며 wrapper에는 unlock이 없다"
+      ],
+      "answer": 1,
+      "explanation": "refcount_dec_and_lock은 성공 시 잠금을 잡은 상태입니다. kref_put_lock은 곧바로 release를 호출하므로 콜백 측 정리 계약에 잠금 해제를 포함해야 합니다."
+    },
+    {
+      "prompt": "kref_read가1이면 보호 없이 kref_get을 호출해도 되는가?",
+      "options": [
+        "아니다. 관측과 획득 사이에 마지막 put이 발생할 수 있다",
+        "그렇다. read가 마지막 참조를 예약한다"
+      ],
+      "answer": 0,
+      "explanation": "read는 계수 조회일 뿐 참조 증가가 아닙니다. 객체 메모리 안정성과 획득 절차를 외부 동기화나 적절한 조건부 획득으로 보장해야 합니다."
+    },
+    {
+      "prompt": "get_unless_zero가0을 반환했는데 포인터가 NULL이 아니라면 사용할 수 있는가?",
+      "options": [
+        "그렇다. 비NULL 포인터이면 획득 결과는 무시해도 된다",
+        "아니다. 참조 획득에 실패했으므로 그 결과를 처리해야 한다"
+      ],
+      "answer": 1,
+      "explanation": "이 함수의 __must_check와 주석은 반환값 검사를 요구합니다. 포인터가 검색되었다는 사실과 사용 가능한 참조를 획득했다는 사실은 다릅니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * kref.h - library routines for handling generic reference counted objects\n *\n * Copyright (C) 2004 Greg Kroah-Hartman <greg@kroah.com>\n * Copyright (C) 2004 IBM Corp.\n *\n * based on kobject.h which was:\n * Copyright (C) 2002-2003 Patrick Mochel <mochel@osdl.org>\n * Copyright (C) 2002-2003 Open Source Development Labs\n */\n\n#ifndef _KREF_H_\n#define _KREF_H_\n\n#include <linux/spinlock.h>\n#include <linux/refcount.h>\n\nstruct kref {\n\trefcount_t refcount;\n};\n\n#define KREF_INIT(n)\t{ .refcount = REFCOUNT_INIT(n), }\n\n/**\n * kref_init - initialize object.\n * @kref: object in question.\n */\nstatic inline void kref_init(struct kref *kref)\n{\n\trefcount_set(&kref->refcount, 1);\n}\n\nstatic inline unsigned int kref_read(const struct kref *kref)\n{\n\treturn refcount_read(&kref->refcount);\n}\n\n/**\n * kref_get - increment refcount for object.\n * @kref: object.\n */\nstatic inline void kref_get(struct kref *kref)\n{\n\trefcount_inc(&kref->refcount);\n}\n\n/**\n * kref_put - decrement refcount for object.\n * @kref: object.\n * @release: pointer to the function that will clean up the object when the\n *\t     last reference to the object is released.\n *\t     This pointer is required, and it is not acceptable to pass kfree\n *\t     in as this function.\n *\n * Decrement the refcount, and if 0, call release().\n * Return 1 if the object was removed, otherwise return 0.  Beware, if this\n * function returns 0, you still can not count on the kref from remaining in\n * memory.  Only use the return value if you want to see if the kref is now\n * gone, not present.\n */\nstatic inline int kref_put(struct kref *kref, void (*release)(struct kref *kref))\n{\n\tif (refcount_dec_and_test(&kref->refcount)) {\n\t\trelease(kref);\n\t\treturn 1;\n\t}\n\treturn 0;\n}\n\nstatic inline int kref_put_mutex(struct kref *kref,\n\t\t\t\t void (*release)(struct kref *kref),\n\t\t\t\t struct mutex *lock)\n{\n\tif (refcount_dec_and_mutex_lock(&kref->refcount, lock)) {\n\t\trelease(kref);\n\t\treturn 1;\n\t}\n\treturn 0;\n}\n\nstatic inline int kref_put_lock(struct kref *kref,\n\t\t\t\tvoid (*release)(struct kref *kref),\n\t\t\t\tspinlock_t *lock)\n{\n\tif (refcount_dec_and_lock(&kref->refcount, lock)) {\n\t\trelease(kref);\n\t\treturn 1;\n\t}\n\treturn 0;\n}\n\n/**\n * kref_get_unless_zero - Increment refcount for object unless it is zero.\n * @kref: object.\n *\n * Return non-zero if the increment succeeded. Otherwise return 0.\n *\n * This function is intended to simplify locking around refcounting for\n * objects that can be looked up from a lookup structure, and which are\n * removed from that lookup structure in the object destructor.\n * Operations on such objects require at least a read lock around\n * lookup + kref_get, and a write lock around kref_put + remove from lookup\n * structure. Furthermore, RCU implementations become extremely tricky.\n * With a lookup followed by a kref_get_unless_zero *with return value check*\n * locking in the kref_put path can be deferred to the actual removal from\n * the lookup structure and RCU lookups become trivial.\n */\nstatic inline int __must_check kref_get_unless_zero(struct kref *kref)\n{\n\treturn refcount_inc_not_zero(&kref->refcount);\n}\n#endif /* _KREF_H_ */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "2b61168bda14afedf4a56f7688ddc29eff393ceb42001b0d21461e12600035e7",
+    "scope": "whole-file",
+    "line_count": 113,
+    "authoring_source": "course/file_units/kref_and_refcount.py",
+    "sections": [
+      "전체 구성",
+      "초기화와 관측",
+      "일반 획득",
+      "일반 put과 콜백",
+      "반환값과 이후 접근",
+      "잠금 결합 put",
+      "조건부 획득과 검색 구조",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/kref.h"
+    }
+  ]
+}

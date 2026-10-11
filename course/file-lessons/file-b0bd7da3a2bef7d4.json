@@ -1,0 +1,110 @@
+{
+  "id": "file-b0bd7da3a2bef7d4",
+  "path": "include/kunit/skbuff.h",
+  "title": "KUnit SKB 관리: padding과 논리적 길이, 오류 시 소유권",
+  "area": "네트워크 버퍼 · 메모리 소유권 · callback · API 계약",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "해제 action,zero allocation helper와 조기 해제 helper 전체를 분석합니다.",
+  "guide": [
+    "버퍼 용량과 유효 데이터 길이는 다르며,실패한 하위 함수가 이미 객체를 해제할 수 있습니다.",
+    "short circuit,오류 보상,미사용 인수와 패킷 버퍼 수명을 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "구성과 action",
+      "text": "GPL-2.0 guard 안에서 KUnit resource와 linux/skbuff.h를 포함합니다. static kunit_action_kfree_skb는 void *를 sk_buff *로 변환하여 kfree_skb를 호출합니다. 테스트 cleanup API와 패킷 버퍼 해제 함수의 인수 타입을 연결하는 adapter입니다."
+    },
+    {
+      "title": "실제 할당 flags",
+      "text": "kunit_zalloc_skb는 test,int len,gfp_t gfp를 받지만 alloc_skb(len,GFP_KERNEL)을 호출합니다. gfp 인수는 본문에서 사용하지 않으며 문서도 GFP_KERNEL 할당이라고 설명합니다. 따라서 GFP_ATOMIC을 인수로 전달했다고 비수면 할당이 보장되지 않습니다. len의 음수를 별도로 검사하는 코드도 없습니다."
+    },
+    {
+      "title": "Padding과 길이",
+      "text": "할당 후 skb_pad(res,len)을 호출해 padding 영역을 0으로 채웁니다. 교차 확인한 __skb_pad는 data+skb->len에서 memset하고 논리적 len을 늘리는 skb_put을 호출하지 않습니다. 따라서 이 helper를 len바이트 payload를 추가하는 함수라고 설명하면 안 됩니다. 용량 확보·영역 초기화와 유효 데이터 길이 갱신을 구분합니다."
+    },
+    {
+      "title": "두 실패 경로의 소유권",
+      "text": "!res || skb_pad(res,len)은 단락 평가이므로 할당 실패 시 padding을 호출하지 않습니다. skb_pad 실패는 NULL을 반환하는데 하위 helper가 free_on_error=true로 SKB를 해제하므로 여기서 다시 kfree_skb를 하지 않습니다. 이어 add_action_or_reset 실패는 action이 즉시 해제하고 NULL을 반환합니다. 성공 시에만 관리되는 res를 반환합니다."
+    },
+    {
+      "title": "조기 해제",
+      "text": "kunit_kfree_skb는 skb=NULL이면 바로 반환하고 그 밖에는 동일 action과 skb 포인터로 kunit_release_action을 호출합니다. 직접 kfree_skb만 호출하는 방식과 달리 예약된 action을 소비하여 테스트 종료 때 같은 등록이 다시 실행되지 않게 합니다. 이 API는 해당 test에서 관리하는 SKB에 사용해야 하며 일반 미등록 SKB까지 무조건 해제한다고 가정하면 안 됩니다."
+    },
+    {
+      "title": "범위와 한계",
+      "text": "SPDX,guard,include,action,두 inline helper와 문서를 모두 대조했습니다. padding의 오류 해제와 길이 동작을 다른 소스에서 교차 확인했지만 그 파일 전체를 완료로 세지 않습니다. 실제 네트워크 송신이나 할당 실패 주입을 실행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "gfp=GFP_ATOMIC을 넘기면 실제 alloc_skb도 그 값을 쓰는가?",
+      "options": [
+        "아니다. 본문은 GFP_KERNEL을 고정 사용한다",
+        "그렇다. 모든 gfp 인수가 자동 전달된다"
+      ],
+      "answer": 0,
+      "explanation": "인수 이름과 실제 호출 인수를 따로 확인해야 합니다. 이 버전에서 gfp는 미사용입니다."
+    },
+    {
+      "prompt": "skb_pad 실패 뒤 helper가 다시 kfree_skb하지 않는 이유는?",
+      "options": [
+        "실패한 SKB를 영구적으로 보관하기 때문이다",
+        "skb_pad가 오류 시 이미 SKB를 해제하기 때문이다"
+      ],
+      "answer": 1,
+      "explanation": "skb_pad는 __skb_pad의 free_on_error를 true로 지정합니다. 소유권을 잃은 포인터를 다시 해제하면 안 됩니다."
+    },
+    {
+      "prompt": "Zero padding을 하면 논리적 payload 길이도 len만큼 늘어나는가?",
+      "options": [
+        "아니다. padding과 skb_put에 의한 길이 증가는 다르다",
+        "그렇다. 모든 memset이 skb->len을 자동 변경한다"
+      ],
+      "answer": 0,
+      "explanation": "하위 구현은 data+현재 길이에 0을 쓰며 길이 증가 명령이 없습니다."
+    },
+    {
+      "prompt": "관리 SKB의 조기 해제에 release_action을 쓰는 이유는?",
+      "options": [
+        "패킷을 네트워크로 즉시 전송하기 위해서다",
+        "예약된 cleanup을 실행하고 해당 등록의 재실행을 막기 위해서다"
+      ],
+      "answer": 1,
+      "explanation": "직접 해제만 하면 남은 cleanup 등록과 충돌할 수 있습니다. 이 helper는 자원 관리 계층을 통해 정리합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * KUnit resource management helpers for SKBs (skbuff).\n *\n * Copyright (C) 2023 Intel Corporation\n */\n\n#ifndef _KUNIT_SKBUFF_H\n#define _KUNIT_SKBUFF_H\n\n#include <kunit/resource.h>\n#include <linux/skbuff.h>\n\nstatic void kunit_action_kfree_skb(void *p)\n{\n\tkfree_skb((struct sk_buff *)p);\n}\n\n/**\n * kunit_zalloc_skb() - Allocate and initialize a resource managed skb.\n * @test: The test case to which the skb belongs\n * @len: size to allocate\n *\n * Allocate a new struct sk_buff with GFP_KERNEL, zero fill the give length\n * and add it as a resource to the kunit test for automatic cleanup.\n *\n * Returns: newly allocated SKB, or %NULL on error\n */\nstatic inline struct sk_buff *kunit_zalloc_skb(struct kunit *test, int len,\n\t\t\t\t\t       gfp_t gfp)\n{\n\tstruct sk_buff *res = alloc_skb(len, GFP_KERNEL);\n\n\tif (!res || skb_pad(res, len))\n\t\treturn NULL;\n\n\tif (kunit_add_action_or_reset(test, kunit_action_kfree_skb, res))\n\t\treturn NULL;\n\n\treturn res;\n}\n\n/**\n * kunit_kfree_skb() - Like kfree_skb except for allocations managed by KUnit.\n * @test: The test case to which the resource belongs.\n * @skb: The SKB to free.\n */\nstatic inline void kunit_kfree_skb(struct kunit *test, struct sk_buff *skb)\n{\n\tif (!skb)\n\t\treturn;\n\n\tkunit_release_action(test, kunit_action_kfree_skb, (void *)skb);\n}\n\n#endif /* _KUNIT_SKBUFF_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "fa050d74af2914ceb25c0018d29eb6452d6cd0ea2e4b0ae0bb26400040172793",
+    "scope": "whole-file",
+    "line_count": 56,
+    "authoring_source": "course/file_units/kunit_clock_skb.py",
+    "sections": [
+      "구성과 action",
+      "실제 할당 flags",
+      "Padding과 길이",
+      "두 실패 경로의 소유권",
+      "조기 해제",
+      "범위와 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/skbuff.h"
+    }
+  ]
+}

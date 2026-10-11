@@ -1,0 +1,105 @@
+{
+  "id": "file-ed60380ba400b0f1",
+  "path": "scripts/build-version",
+  "title": "빌드 회차 스크립트: .version 증가·fallback·출력",
+  "area": "POSIX shell · 종료 상태 · 파일 지속성 · 경쟁 조건",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "짧은 shell 스크립트 전체의 명령 연결과 파일 쓰기 오류 범위를 분석합니다.",
+  "guide": [
+    "shell의 논리 연결은 계산값뿐 아니라 각 명령의 종료 상태에 따라 분기합니다.",
+    "명령 치환, &&와 ||, expr의 종료 상태, 지속 파일과 stdout을 구별합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 작업 디렉터리",
+      "text": "#!/bin/sh와 GPL-2.0-only 뒤 세 명령 묶음이 있습니다. .version은 스크립트 파일의 디렉터리가 아니라 실행하는 현재 작업 디렉터리의 상대 경로입니다. 인수나 KBUILD_BUILD_VERSION을 이 스크립트에서 직접 읽지 않습니다. 호출하는 init/Makefile이 사용자 지정 값과 자동 생성 값의 우선순위를 정합니다."
+    },
+    {
+      "title": "이전 값 읽기와 단락 평가",
+      "text": "prev_ver=$(cat .version 2>/dev/null)가 성공해야 && 뒤 expr를 실행합니다. cat의 진단은 버리지만 stdout은 변수로 받습니다. 파일이 없거나 읽지 못하면 || 뒤 ver=1로 갑니다. 명령 치환은 끝의 newline을 제거하며 유효한 숫자인지는 다음 expr가 판단합니다."
+    },
+    {
+      "title": "숫자 증가와 expr 상태",
+      "text": "ver=$(expr ${prev_ver} + 1 2>/dev/null)의 종료 상태가 성공이면 계산값을 사용하고 실패면 ver=1로 덮습니다. 예를 들어 기존 7은 8, 숫자가 아닌 값은 보통 fallback 1입니다. expr는 결과 0도 실패 상태로 반환하므로 기존 -1에서 산술 결과가 0이어도 최종 ver는 1입니다. 단순히 모든 정수를 수학적으로 1씩 증가시키는 계약이 아닙니다. prev_ver 확장은 따옴표가 없고 숫자용 내부 파일이라는 전제에 의존합니다."
+    },
+    {
+      "title": "파일 갱신과 stdout은 별도",
+      "text": "echo ${ver} > .version으로 기존 파일을 덮고 다음 echo ${ver}로 stdout에 출력합니다. 임시 파일 후 rename, file lock, fsync는 없습니다. 동시 호출이 같은 이전 값을 읽으면 동일한 다음 번호를 만들 수 있으므로 다중 프로세스에 대한 원자적 counter라고 할 수 없습니다."
+    },
+    {
+      "title": "쓰기 실패와 최종 상태",
+      "text": "스크립트에는 set -e나 파일 쓰기 뒤의 명시적 오류 분기가 없습니다. .version 쓰기가 실패해도 마지막 stdout echo가 실행될 수 있고 그 성공 상태로 끝날 수 있습니다. 따라서 번호를 출력했다는 사실만으로 파일 갱신 성공을 증명하지 않습니다. 전체 제어 흐름을 검토했으며 프로젝트의 실제 .version을 변경하며 실행한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": ".version 파일이 없으면 생성하려는 번호는?",
+      "options": [
+        "1",
+        "0"
+      ],
+      "answer": 0,
+      "explanation": "cat 실패로 증가 명령을 건너뛰고 || ver=1이 실행됩니다. 이어 파일과 stdout으로 값을 내보냅니다."
+    },
+    {
+      "prompt": "이전 값이 -1이면 최종 출력값은?",
+      "options": [
+        "0",
+        "1"
+      ],
+      "answer": 1,
+      "explanation": "expr의 계산 결과 0은 실패 종료 상태이므로 ||의 fallback이 ver를 1로 바꿉니다. 산술 결과와 shell 종료 상태를 함께 읽어야 합니다."
+    },
+    {
+      "prompt": "동시에 두 번 실행하면 반드시 서로 다른 번호가 나오는가?",
+      "options": [
+        "아니다. 읽기와 쓰기 사이를 보호하는 lock이 없다",
+        "그렇다. echo 리다이렉션이 전체 절차를 원자화한다"
+      ],
+      "answer": 0,
+      "explanation": "각 실행이 같은 이전 값을 읽고 같은 다음 값을 쓸 수 있습니다. 파일 쓰기 한 번과 read-modify-write 전체의 원자성은 다릅니다."
+    },
+    {
+      "prompt": "번호 stdout 출력이 성공하면 .version 갱신도 증명되는가?",
+      "options": [
+        "그렇다. 파일 쓰기와 출력이 하나의 명령이다",
+        "아니다. 쓰기 실패 뒤에도 마지막 echo가 성공할 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "두 echo는 독립된 줄입니다. set -e와 명시적 상태 검사도 없어 최종 성공만으로 지속 상태를 보장하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0-only\n\nprev_ver=$(cat .version 2>/dev/null) &&\nver=$(expr ${prev_ver} + 1 2>/dev/null) ||\nver=1\n\necho ${ver} > .version\n\necho ${ver}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d2767030433067e1e62dabf857a8055a45f5c56ee0856229d269755bf4e76171",
+    "scope": "whole-file",
+    "line_count": 10,
+    "authoring_source": "course/file_units/build_metadata_scripts.py",
+    "sections": [
+      "전체 구성과 작업 디렉터리",
+      "이전 값 읽기와 단락 평가",
+      "숫자 증가와 expr 상태",
+      "파일 갱신과 stdout은 별도",
+      "쓰기 실패와 최종 상태"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/build-version"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "id": "file-8b804ca9ac51d3b1",
+  "path": "include/linux/plist.h",
+  "title": "Plist 공개 헤더 전체: 숫자 순서와 동일 우선순위 FIFO",
+  "area": "우선순위 큐 · 이중 연결 리스트 · 불변식",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "우선순위 정렬과 같은 우선순위의 FIFO 순서를 유지하는 리스트 API입니다.",
+  "guide": [
+    "숫자가 작을수록 높은 우선순위입니다. 서로 다른 우선순위 대표만 탐색해 삽입 위치를 찾고 전체 객체 순서는 node_list에 유지합니다.",
+    "호출자가 잠금과 객체 수명을 관리합니다. 연결된 노드의 prio만 직접 바꾸면 정렬 관계가 깨질 수 있으므로 제거·변경·재삽입 절차가 필요합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "문서와 전체 구성",
+      "text": "SPDX, 저작권과 계보, 두 계층 ASCII 그림, 우선순위·복잡도·잠금 계약 뒤에 guard와 의존 헤더가 있습니다. 정적/동적 초기화, add/del/requeue 선언, 여섯 순회 매크로, 빈 상태 확인, first/last 포함 객체 매크로, next/prev, 첫·끝 노드 함수로 끝납니다."
+    },
+    {
+      "title": "우선순위 방향",
+      "text": "INT_MIN이 가장 높고 INT_MAX가 가장 낮습니다. node_list에서는 숫자 오름차순이며 의미상 높은 우선순위부터 나옵니다. 같은 숫자는 기본 삽입 순서 FIFO입니다. 문서의 descending-priority 표현을 정수 내림차순이라고 읽으면 반대가 됩니다."
+    },
+    {
+      "title": "두 계층과 비용",
+      "text": "prio_list에는 우선순위마다 대표 하나, node_list에는 모든 객체가 연결됩니다. 문서는 추가 O(K), 삭제 O(1), 우선순위 변경 O(K)를 설명합니다. K는 실제로 탐색할 서로 다른 우선순위 수에 연결됩니다. RT 우선순위 수준1..99 설명이 있어도 prio 필드 자체를 그 범위로 검사하거나 제한하는 코드는 아닙니다."
+    },
+    {
+      "title": "초기화",
+      "text": "PLIST_HEAD_INIT/HEAD는 node_list를 자기참조로 초기화합니다. PLIST_NODE_INIT은 prio와 두 링크를 설정합니다. 동적 head_init/node_init도 같은 역할입니다. prio_list가 자기참조라고 해서 객체가 전체 목록에서 빠졌다고 볼 수는 없습니다. node_empty는 node_list를 검사합니다."
+    },
+    {
+      "title": "순회 종류",
+      "text": "plist_for_each와 continue, safe는 plist_node 단위로 node_list를 순회합니다. entry/entry_continue/entry_safe는 포함 객체의 멤버.node_list를 사용합니다. continue는 현재 항목 다음부터, safe는 다음 위치를 임시 저장하여 현재 항목 제거를 돕습니다. 임의의 동시 삭제를 안전하게 만드는 잠금 기능은 아닙니다."
+    },
+    {
+      "title": "첫·끝 접근의 전제",
+      "text": "plist_first/last는 비어 있지 않은 헤드에서 가장 높은/낮은 우선순위 노드를 반환합니다. first_entry/last_entry는 포함 객체로 바꿉니다. CONFIG_DEBUG_PLIST면 빈 헤드 경고가 추가되지만 경고 후 유효한 객체가 자동 생성되지는 않습니다. next/prev는 sentinel 경계에서 사용자 객체가 존재하는지 자동 판정하지 않으므로 순회 경계를 지켜야 합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "안정된 동순위 순서, 우선순위 대표 압축, sentinel과 빈 상태, 정적/동적 초기화, 순회 중 제거의 안전 조건을 학습합니다. 내장 잠금이 없다는 원문 계약에 따라 호출 문맥의 동기화를 별도로 읽어야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "prio값 -5와 20 중 먼저 나오는 것은?",
+      "options": [
+        "-5다",
+        "20이다"
+      ],
+      "answer": 0,
+      "explanation": "작은 숫자가 높은 우선순위입니다. 정렬된 node_list는 숫자 오름차순으로 순회합니다."
+    },
+    {
+      "prompt": "prio_list가 자기참조이면 노드가 반드시 미등록인가?",
+      "options": [
+        "그렇다. 두 링크는 항상 함께 비어 있다",
+        "아니다. 등록 여부는 node_list로 확인한다"
+      ],
+      "answer": 1,
+      "explanation": "동순위 비대표 노드와 대표가 하나뿐인 링에서도 prio_list는 자기참조일 수 있습니다. plist_node_empty는 node_list를 검사합니다."
+    },
+    {
+      "prompt": "DEBUG_PLIST의 빈 헤드 경고가 first 접근을 안전한 NULL 반환으로 바꾸는가?",
+      "options": [
+        "아니다. 비어 있지 않다는 호출 전제가 필요하다",
+        "그렇다. 자동으로 NULL을 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "디버그 매크로는 WARN_ON 뒤에 원래 객체 변환을 수행합니다. 빈 입력을 허용하는 별도 반환 분기는 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n * Descending-priority-sorted double-linked list\n *\n * (C) 2002-2003 Intel Corp\n * Inaky Perez-Gonzalez <inaky.perez-gonzalez@intel.com>.\n *\n * 2001-2005 (c) MontaVista Software, Inc.\n * Daniel Walker <dwalker@mvista.com>\n *\n * (C) 2005 Thomas Gleixner <tglx@linutronix.de>\n *\n * Simplifications of the original code by\n * Oleg Nesterov <oleg@tv-sign.ru>\n *\n * Based on simple lists (include/linux/list.h).\n *\n * This is a priority-sorted list of nodes; each node has a\n * priority from INT_MIN (highest) to INT_MAX (lowest).\n *\n * Addition is O(K), removal is O(1), change of priority of a node is\n * O(K) and K is the number of RT priority levels used in the system.\n * (1 <= K <= 99)\n *\n * This list is really a list of lists:\n *\n *  - The tier 1 list is the prio_list, different priority nodes.\n *\n *  - The tier 2 list is the node_list, serialized nodes.\n *\n * Simple ASCII art explanation:\n *\n * pl:prio_list (only for plist_node)\n * nl:node_list\n *   HEAD|             NODE(S)\n *       |\n *       ||------------------------------------|\n *       ||->|pl|<->|pl|<--------------->|pl|<-|\n *       |   |10|   |21|   |21|   |21|   |40|   (prio)\n *       |   |  |   |  |   |  |   |  |   |  |\n *       |   |  |   |  |   |  |   |  |   |  |\n * |->|nl|<->|nl|<->|nl|<->|nl|<->|nl|<->|nl|<-|\n * |-------------------------------------------|\n *\n * The nodes on the prio_list list are sorted by priority to simplify\n * the insertion of new nodes. There are no nodes with duplicate\n * priorites on the list.\n *\n * The nodes on the node_list are ordered by priority and can contain\n * entries which have the same priority. Those entries are ordered\n * FIFO\n *\n * Addition means: look for the prio_list node in the prio_list\n * for the priority of the node and insert it before the node_list\n * entry of the next prio_list node. If it is the first node of\n * that priority, add it to the prio_list in the right position and\n * insert it into the serialized node_list list\n *\n * Removal means remove it from the node_list and remove it from\n * the prio_list if the node_list list_head is non empty. In case\n * of removal from the prio_list it must be checked whether other\n * entries of the same priority are on the list or not. If there\n * is another entry of the same priority then this entry has to\n * replace the removed entry on the prio_list. If the entry which\n * is removed is the only entry of this priority then a simple\n * remove from both list is sufficient.\n *\n * INT_MIN is the highest priority, 0 is the medium highest, INT_MAX\n * is lowest priority.\n *\n * No locking is done, up to the caller.\n */\n#ifndef _LINUX_PLIST_H_\n#define _LINUX_PLIST_H_\n\n#include <linux/container_of.h>\n#include <linux/list.h>\n#include <linux/plist_types.h>\n\n#include <asm/bug.h>\n\n/**\n * PLIST_HEAD_INIT - static struct plist_head initializer\n * @head:\tstruct plist_head variable name\n */\n#define PLIST_HEAD_INIT(head)\t\t\t\t\\\n{\t\t\t\t\t\t\t\\\n\t.node_list = LIST_HEAD_INIT((head).node_list)\t\\\n}\n\n/**\n * PLIST_HEAD - declare and init plist_head\n * @head:\tname for struct plist_head variable\n */\n#define PLIST_HEAD(head) \\\n\tstruct plist_head head = PLIST_HEAD_INIT(head)\n\n/**\n * PLIST_NODE_INIT - static struct plist_node initializer\n * @node:\tstruct plist_node variable name\n * @__prio:\tinitial node priority\n */\n#define PLIST_NODE_INIT(node, __prio)\t\t\t\\\n{\t\t\t\t\t\t\t\\\n\t.prio  = (__prio),\t\t\t\t\\\n\t.prio_list = LIST_HEAD_INIT((node).prio_list),\t\\\n\t.node_list = LIST_HEAD_INIT((node).node_list),\t\\\n}\n\n/**\n * plist_head_init - dynamic struct plist_head initializer\n * @head:\t&struct plist_head pointer\n */\nstatic inline void\nplist_head_init(struct plist_head *head)\n{\n\tINIT_LIST_HEAD(&head->node_list);\n}\n\n/**\n * plist_node_init - Dynamic struct plist_node initializer\n * @node:\t&struct plist_node pointer\n * @prio:\tinitial node priority\n */\nstatic inline void plist_node_init(struct plist_node *node, int prio)\n{\n\tnode->prio = prio;\n\tINIT_LIST_HEAD(&node->prio_list);\n\tINIT_LIST_HEAD(&node->node_list);\n}\n\nextern void plist_add(struct plist_node *node, struct plist_head *head);\nextern void plist_del(struct plist_node *node, struct plist_head *head);\n\nextern void plist_requeue(struct plist_node *node, struct plist_head *head);\n\n/**\n * plist_for_each - iterate over the plist\n * @pos:\tthe type * to use as a loop counter\n * @head:\tthe head for your list\n */\n#define plist_for_each(pos, head)\t\\\n\t list_for_each_entry(pos, &(head)->node_list, node_list)\n\n/**\n * plist_for_each_continue - continue iteration over the plist\n * @pos:\tthe type * to use as a loop cursor\n * @head:\tthe head for your list\n *\n * Continue to iterate over plist, continuing after the current position.\n */\n#define plist_for_each_continue(pos, head)\t\\\n\t list_for_each_entry_continue(pos, &(head)->node_list, node_list)\n\n/**\n * plist_for_each_safe - iterate safely over a plist of given type\n * @pos:\tthe type * to use as a loop counter\n * @n:\tanother type * to use as temporary storage\n * @head:\tthe head for your list\n *\n * Iterate over a plist of given type, safe against removal of list entry.\n */\n#define plist_for_each_safe(pos, n, head)\t\\\n\t list_for_each_entry_safe(pos, n, &(head)->node_list, node_list)\n\n/**\n * plist_for_each_entry\t- iterate over list of given type\n * @pos:\tthe type * to use as a loop counter\n * @head:\tthe head for your list\n * @mem:\tthe name of the list_head within the struct\n */\n#define plist_for_each_entry(pos, head, mem)\t\\\n\t list_for_each_entry(pos, &(head)->node_list, mem.node_list)\n\n/**\n * plist_for_each_entry_continue - continue iteration over list of given type\n * @pos:\tthe type * to use as a loop cursor\n * @head:\tthe head for your list\n * @m:\t\tthe name of the list_head within the struct\n *\n * Continue to iterate over list of given type, continuing after\n * the current position.\n */\n#define plist_for_each_entry_continue(pos, head, m)\t\\\n\tlist_for_each_entry_continue(pos, &(head)->node_list, m.node_list)\n\n/**\n * plist_for_each_entry_safe - iterate safely over list of given type\n * @pos:\tthe type * to use as a loop counter\n * @n:\t\tanother type * to use as temporary storage\n * @head:\tthe head for your list\n * @m:\t\tthe name of the list_head within the struct\n *\n * Iterate over list of given type, safe against removal of list entry.\n */\n#define plist_for_each_entry_safe(pos, n, head, m)\t\\\n\tlist_for_each_entry_safe(pos, n, &(head)->node_list, m.node_list)\n\n/**\n * plist_head_empty - return !0 if a plist_head is empty\n * @head:\t&struct plist_head pointer\n */\nstatic inline int plist_head_empty(const struct plist_head *head)\n{\n\treturn list_empty(&head->node_list);\n}\n\n/**\n * plist_node_empty - return !0 if plist_node is not on a list\n * @node:\t&struct plist_node pointer\n */\nstatic inline int plist_node_empty(const struct plist_node *node)\n{\n\treturn list_empty(&node->node_list);\n}\n\n/* All functions below assume the plist_head is not empty. */\n\n/**\n * plist_first_entry - get the struct for the first entry\n * @head:\tthe &struct plist_head pointer\n * @type:\tthe type of the struct this is embedded in\n * @member:\tthe name of the list_head within the struct\n */\n#ifdef CONFIG_DEBUG_PLIST\n# define plist_first_entry(head, type, member)\t\\\n({ \\\n\tWARN_ON(plist_head_empty(head)); \\\n\tcontainer_of(plist_first(head), type, member); \\\n})\n#else\n# define plist_first_entry(head, type, member)\t\\\n\tcontainer_of(plist_first(head), type, member)\n#endif\n\n/**\n * plist_last_entry - get the struct for the last entry\n * @head:\tthe &struct plist_head pointer\n * @type:\tthe type of the struct this is embedded in\n * @member:\tthe name of the list_head within the struct\n */\n#ifdef CONFIG_DEBUG_PLIST\n# define plist_last_entry(head, type, member)\t\\\n({ \\\n\tWARN_ON(plist_head_empty(head)); \\\n\tcontainer_of(plist_last(head), type, member); \\\n})\n#else\n# define plist_last_entry(head, type, member)\t\\\n\tcontainer_of(plist_last(head), type, member)\n#endif\n\n/**\n * plist_next - get the next entry in list\n * @pos:\tthe type * to cursor\n */\n#define plist_next(pos) \\\n\tlist_next_entry(pos, node_list)\n\n/**\n * plist_prev - get the prev entry in list\n * @pos:\tthe type * to cursor\n */\n#define plist_prev(pos) \\\n\tlist_prev_entry(pos, node_list)\n\n/**\n * plist_first - return the first node (and thus, highest priority)\n * @head:\tthe &struct plist_head pointer\n *\n * Assumes the plist is _not_ empty.\n */\nstatic inline struct plist_node *plist_first(const struct plist_head *head)\n{\n\treturn list_entry(head->node_list.next,\n\t\t\t  struct plist_node, node_list);\n}\n\n/**\n * plist_last - return the last node (and thus, lowest priority)\n * @head:\tthe &struct plist_head pointer\n *\n * Assumes the plist is _not_ empty.\n */\nstatic inline struct plist_node *plist_last(const struct plist_head *head)\n{\n\treturn list_entry(head->node_list.prev,\n\t\t\t  struct plist_node, node_list);\n}\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "3c38e94e90f5a804a5339a203f4159e507de6f5044ab12311050703a78c1214b",
+    "scope": "whole-file",
+    "line_count": 291,
+    "authoring_source": "course/file_units/priority_lists.py",
+    "sections": [
+      "문서와 전체 구성",
+      "우선순위 방향",
+      "두 계층과 비용",
+      "초기화",
+      "순회 종류",
+      "첫·끝 접근의 전제",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/plist.h"
+    }
+  ]
+}

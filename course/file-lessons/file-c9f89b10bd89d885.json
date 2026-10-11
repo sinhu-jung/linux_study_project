@@ -1,0 +1,125 @@
+{
+  "id": "file-c9f89b10bd89d885",
+  "path": "arch/riscv/kernel/vdso/hwprobe.c",
+  "title": "RISC-V hwprobe 캐시: 값 조회와 CPU 집합 필터링",
+  "area": "캐싱 · 동질성 · 집합 필터 · 비트마스크 · 선형 순회 · syscall fallback",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "공유된 전체 CPU 결과를 사용하는 두 빠른 경로와 syscall 전환을 분석합니다.",
+  "guide": [
+    "모든 CPU가 같은 값을 가진다는 전제가 있으면 집합별 질의를 재사용할 수 있지만, 이질적인 집합은 별도 계산이 필요합니다.",
+    "값 조회와 조건에 맞는 CPU 선택의 차이, bitmask 포함 비교와 실패 시 출력 수정을 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "GPL-2.0 뒤 string·types·vDSO datapage·helpers를 포함합니다. 외부 riscv_hwprobe syscall 연결 함수를 선언하고 static 값 조회·CPU 선택 helper, 공개 __vdso_riscv_hwprobe 원형과 본문을 둡니다. 공개 원형을 따로 둔 주석의 목적은 -Wmissing-prototypes 방지입니다."
+    },
+    {
+      "title": "값 조회의 캐시 조건",
+      "text": "riscv_vdso_get_values는 __arch_get_vdso_data의 arch_data를 사용하고 all_cpus를 !cpusetsize && !cpus로 계산합니다. flags가 0이 아니거나, 전체 CPU 요청이 아닌데 homogeneous_cpus가 거짓이면 원래 다섯 인수로 syscall을 호출합니다. 전체 CPU의 정적 답만 저장하지만 CPU들이 동질적이면 다른 mask 요청에도 그 값을 재사용한다는 주석입니다."
+    },
+    {
+      "title": "Pair 배열의 값 채우기",
+      "text": "빠른 경로에서는 pairs부터 pairs+pair_count까지 순회합니다. 유효 key이면 all_cpu_hwprobe_values[key]를 value에 복사하고, 무효 key이면 key=-1과 value=0으로 바꿉니다. 일부 key가 무효라고 함수 전체를 -EINVAL로 끝내지 않고 나머지 pair도 처리하여 0을 반환합니다. 이 helper에는 CPU mask 내용을 직접 스캔하는 코드가 없습니다."
+    },
+    {
+      "title": "CPU 선택의 기본 검사",
+      "text": "riscv_vdso_get_cpus는 cpusetsize가 0이거나 cpus가 NULL이면 -EINVAL을 반환합니다. unsigned char *c로 mask를 바이트 단위 순회하여 하나라도 0이 아닌지 확인합니다. empty_cpus, flags가 정확히 RISCV_HWPROBE_WHICH_CPUS가 아님, CPU 비동질성 중 하나면 syscall로 갑니다. 빈 mask를 단순히 성공한 빈 결과로 즉시 반환하지 않습니다."
+    },
+    {
+      "title": "동질적인 CPU의 조건 비교",
+      "text": "유효 pair마다 같은 key와 캐시 value의 임시 t를 만들고 riscv_hwprobe_pair_cmp(&t,p)로 비교합니다. 불일치가 하나라도 있으면 clear_all=true입니다. 무효 key도 clear_all을 설정하고 해당 pair를 -1·0으로 고칩니다. clear_all 이후에도 모든 pair를 끝까지 처리하므로 첫 오류 뒤의 무효 pair도 표시할 수 있습니다."
+    },
+    {
+      "title": "Mask 결과는 유지 또는 전체 제거",
+      "text": "clear_all이면 cpusetsize 바이트를 전부 0으로 만들고 아니면 입력 mask를 그대로 보존합니다. 동질적인 CPU 전제에서 특정 pair 조건이 맞으면 선택된 CPU들이 함께 맞고, 하나라도 맞지 않으면 모두 제외하는 빠른 경로입니다. mask에 새로운 CPU 비트를 추가하는 코드나 온라인 CPU 여부를 하나씩 검사하는 코드는 없습니다. 그 밖의 입력 검증까지 이 파일이 보장한다고 확대하지 않습니다."
+    },
+    {
+      "title": "공개 dispatch의 bit 검사",
+      "text": "__vdso_riscv_hwprobe는 flags & WHICH_CPUS가 참이면 CPU 선택 helper로, 아니면 값 조회 helper로 갑니다. dispatch는 bit 포함 검사지만 CPU helper의 빠른 경로는 flags가 정확히 WHICH_CPUS여야 합니다. 따라서 그 비트와 미지의 추가 비트를 함께 주면 CPU 경로로 들어가더라도 syscall로 전환합니다."
+    },
+    {
+      "title": "복잡도와 동기화 범위",
+      "text": "값 조회는 pair_count에 비례하고 CPU 경로는 mask 바이트 수와 pair_count에 비례합니다. 각 pair마다 모든 CPU를 중첩 순회하지 않는 것이 캐시와 동질성 전제의 이점입니다. 이 파일에는 공유 정적 답을 읽는 seq 재시도 루프나 사용자 포인터 접근 fault 처리 본문이 없습니다. helpers 헤더 포함만으로 시간 조회와 같은 재시도를 한다고 가정하지 않습니다."
+    },
+    {
+      "title": "검증 범위",
+      "text": "모든 선언·helper·루프·fallback·출력 변경을 설명했습니다. 실제 heterogeneous 시스템의 hwprobe syscall과 결과를 비교한 실행 시험은 수행하지 않았습니다. 입력 포인터·크기와 캐시 초기화의 전체 계약은 호출부와 커널 구현을 추가로 확인해야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "값 조회에서 all_cpus가 참이 되는 입력은?",
+      "options": [
+        "cpusetsize=0이고 cpus=NULL인 경우이다",
+        "둘 중 하나만 0이면 된다"
+      ],
+      "answer": 0,
+      "explanation": "코드는 두 부정 조건의 AND입니다. OR로 읽으면 syscall 전환 조건을 잘못 이해하게 됩니다."
+    },
+    {
+      "prompt": "동질 CPU 선택 경로에서 조건 하나가 불일치하면 mask는?",
+      "options": [
+        "임의 CPU 하나만 제외한다",
+        "전체 바이트를 0으로 만든다"
+      ],
+      "answer": 1,
+      "explanation": "모든 CPU가 같은 정적 값을 갖는 전제이므로 선택된 CPU들이 조건에 함께 실패합니다. clear_all로 표시한 뒤 전체 mask를 지웁니다."
+    },
+    {
+      "prompt": "무효 key를 만나면 첫 pair에서 바로 함수가 끝나는가?",
+      "options": [
+        "아니다. key=-1,value=0으로 표시하고 계속 순회한다",
+        "그렇다. 언제나 즉시 -EINVAL을 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "두 helper 모두 pair 루프를 계속합니다. CPU 선택 경로에서는 추가로 clear_all을 설정합니다."
+    },
+    {
+      "prompt": "WHICH_CPUS 외의 추가 flag도 있으면 빠른 CPU 필터가 처리하는가?",
+      "options": [
+        "그렇다. dispatch에서 bit 하나가 맞으면 추가 flag는 무조건 무시한다",
+        "아니다. dispatch 후 helper의 정확한 flags 검사에서 syscall로 간다"
+      ],
+      "answer": 1,
+      "explanation": "진입점을 선택하는 bit 검사와 빠른 처리의 허용 조건은 별개입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Copyright 2023 Rivos, Inc\n */\n\n#include <linux/string.h>\n#include <linux/types.h>\n#include <vdso/datapage.h>\n#include <vdso/helpers.h>\n\nextern int riscv_hwprobe(struct riscv_hwprobe *pairs, size_t pair_count,\n\t\t\t size_t cpusetsize, unsigned long *cpus,\n\t\t\t unsigned int flags);\n\nstatic int riscv_vdso_get_values(struct riscv_hwprobe *pairs, size_t pair_count,\n\t\t\t\t size_t cpusetsize, unsigned long *cpus,\n\t\t\t\t unsigned int flags)\n{\n\tconst struct vdso_data *vd = __arch_get_vdso_data();\n\tconst struct arch_vdso_data *avd = &vd->arch_data;\n\tbool all_cpus = !cpusetsize && !cpus;\n\tstruct riscv_hwprobe *p = pairs;\n\tstruct riscv_hwprobe *end = pairs + pair_count;\n\n\t/*\n\t * Defer to the syscall for exotic requests. The vdso has answers\n\t * stashed away only for the \"all cpus\" case. If all CPUs are\n\t * homogeneous, then this function can handle requests for arbitrary\n\t * masks.\n\t */\n\tif ((flags != 0) || (!all_cpus && !avd->homogeneous_cpus))\n\t\treturn riscv_hwprobe(pairs, pair_count, cpusetsize, cpus, flags);\n\n\t/* This is something we can handle, fill out the pairs. */\n\twhile (p < end) {\n\t\tif (riscv_hwprobe_key_is_valid(p->key)) {\n\t\t\tp->value = avd->all_cpu_hwprobe_values[p->key];\n\n\t\t} else {\n\t\t\tp->key = -1;\n\t\t\tp->value = 0;\n\t\t}\n\n\t\tp++;\n\t}\n\n\treturn 0;\n}\n\nstatic int riscv_vdso_get_cpus(struct riscv_hwprobe *pairs, size_t pair_count,\n\t\t\t       size_t cpusetsize, unsigned long *cpus,\n\t\t\t       unsigned int flags)\n{\n\tconst struct vdso_data *vd = __arch_get_vdso_data();\n\tconst struct arch_vdso_data *avd = &vd->arch_data;\n\tstruct riscv_hwprobe *p = pairs;\n\tstruct riscv_hwprobe *end = pairs + pair_count;\n\tunsigned char *c = (unsigned char *)cpus;\n\tbool empty_cpus = true;\n\tbool clear_all = false;\n\tint i;\n\n\tif (!cpusetsize || !cpus)\n\t\treturn -EINVAL;\n\n\tfor (i = 0; i < cpusetsize; i++) {\n\t\tif (c[i]) {\n\t\t\tempty_cpus = false;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (empty_cpus || flags != RISCV_HWPROBE_WHICH_CPUS || !avd->homogeneous_cpus)\n\t\treturn riscv_hwprobe(pairs, pair_count, cpusetsize, cpus, flags);\n\n\twhile (p < end) {\n\t\tif (riscv_hwprobe_key_is_valid(p->key)) {\n\t\t\tstruct riscv_hwprobe t = {\n\t\t\t\t.key = p->key,\n\t\t\t\t.value = avd->all_cpu_hwprobe_values[p->key],\n\t\t\t};\n\n\t\t\tif (!riscv_hwprobe_pair_cmp(&t, p))\n\t\t\t\tclear_all = true;\n\t\t} else {\n\t\t\tclear_all = true;\n\t\t\tp->key = -1;\n\t\t\tp->value = 0;\n\t\t}\n\t\tp++;\n\t}\n\n\tif (clear_all) {\n\t\tfor (i = 0; i < cpusetsize; i++)\n\t\t\tc[i] = 0;\n\t}\n\n\treturn 0;\n}\n\n/* Add a prototype to avoid -Wmissing-prototypes warning. */\nint __vdso_riscv_hwprobe(struct riscv_hwprobe *pairs, size_t pair_count,\n\t\t\t size_t cpusetsize, unsigned long *cpus,\n\t\t\t unsigned int flags);\n\nint __vdso_riscv_hwprobe(struct riscv_hwprobe *pairs, size_t pair_count,\n\t\t\t size_t cpusetsize, unsigned long *cpus,\n\t\t\t unsigned int flags)\n{\n\tif (flags & RISCV_HWPROBE_WHICH_CPUS)\n\t\treturn riscv_vdso_get_cpus(pairs, pair_count, cpusetsize,\n\t\t\t\t\t   cpus, flags);\n\n\treturn riscv_vdso_get_values(pairs, pair_count, cpusetsize,\n\t\t\t\t     cpus, flags);\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "f55ed7c0043eb388d8016373150e2eac0947f59111fe38d05ab4e0b1eca29c5b",
+    "scope": "whole-file",
+    "line_count": 116,
+    "authoring_source": "course/file_units/riscv_hwprobe_cache.py",
+    "sections": [
+      "전체 구성",
+      "값 조회의 캐시 조건",
+      "Pair 배열의 값 채우기",
+      "CPU 선택의 기본 검사",
+      "동질적인 CPU의 조건 비교",
+      "Mask 결과는 유지 또는 전체 제거",
+      "공개 dispatch의 bit 검사",
+      "복잡도와 동기화 범위",
+      "검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/hwprobe.c"
+    }
+  ]
+}

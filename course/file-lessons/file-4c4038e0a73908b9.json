@@ -1,0 +1,115 @@
+{
+  "id": "file-4c4038e0a73908b9",
+  "path": "arch/x86/include/asm/pvclock-abi.h",
+  "title": "Pvclock 공유 ABI: 고정 배치와 버전 기반 일관성",
+  "area": "ABI · packed 구조체 · 공유 메모리 · 버전 카운터 · 시간 표현",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "Xen·KVM과 guest가 공유하는 두 구조체의 모든 필드와 상태 비트를 분석합니다.",
+  "guide": [
+    "서로 독립적으로 만들어지는 소프트웨어가 메모리를 공유하려면 자료형 크기, 바이트 배치, 갱신 프로토콜을 함께 고정해야 합니다.",
+    "공유 시계의 필드 배치를 계산하고 갱신 중인 값과 일관된 스냅샷을 구분합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 범위와 ABI 계약",
+      "text": "GPL-2.0 표기와 include guard 안에서 !__ASSEMBLY__일 때 두 구조체와 세 비트 매크로를 제공합니다. 별도 include는 없으므로 u32/u64 등의 자료형은 포함 문맥에 의존합니다. 주석은 Xen과 KVM이 사용하는 hypervisor·guest ABI이므로 구조체를 바꾸면 안 된다고 명시합니다. C 안의 사적인 자료구조처럼 필드를 재배치할 수 없습니다."
+    },
+    {
+      "title": "VCPU 정보의 정확한 배치",
+      "text": "packed pvclock_vcpu_time_info는 version u32(오프셋 0), pad0 u32(4), tsc_timestamp u64(8), system_time u64(16), tsc_to_system_mul u32(24), tsc_shift s8(28), flags u8(29), pad[2](30)를 갖습니다. 크기는 주석과 필드 합계 모두 32바이트입니다. packed라고 pad0나 pad가 사라지는 것이 아니라 명시적인 ABI 바이트로 남습니다."
+    },
+    {
+      "title": "기준값과 보간 계수",
+      "text": "tsc_timestamp와 system_time은 마지막 갱신의 TSC와 시스템 시간 기준값입니다. guest는 이후 TSC 차이에 tsc_shift와 tsc_to_system_mul을 적용해 더 세밀한 시스템 시간을 계산할 수 있습니다. tsc_shift는 s8이므로 양수뿐 아니라 음수 이동량도 표현합니다. 구조체는 계산에 필요한 값을 담고 있으며 실제 곱셈이나 shift를 여기서 실행하지 않습니다."
+    },
+    {
+      "title": "Wall clock 기준점",
+      "text": "packed pvclock_wall_clock은 version, sec, nsec의 u32 세 개로 12바이트입니다. 주석상 system time이 0인 시점, 일반적으로 부팅 시점의 wall clock을 나타냅니다. 현재 wall clock을 얻으려면 시스템 시간을 더해야 합니다. 이 구조체의 sec를 현재 시각이나 s64 초로 그대로 해석하지 않습니다. 두 구조체의 version은 각각 자신의 갱신 프로토콜에 참여합니다."
+    },
+    {
+      "title": "홀수·짝수 버전 프로토콜",
+      "text": "Hypervisor는 필드를 쓰기 전에 version을 증가시켜 홀수로 만들고 쓰기를 마친 뒤 다시 증가시켜 짝수로 만듭니다. Guest는 읽기 전후 버전을 확인해 갱신과 겹친 스냅샷을 버릴 수 있습니다. 단지 두 번 읽은 값이 같다는 것만으로 충분하지 않고 갱신 중인 홀수 상태도 배제해야 합니다. 실제 접근 순서 장벽과 재시도 helper는 다른 파일에 있습니다."
+    },
+    {
+      "title": "세 플래그와 폐기된 의미",
+      "text": "PVCLOCK_TSC_STABLE_BIT는 1<<0, PVCLOCK_GUEST_STOPPED는 1<<1, PVCLOCK_COUNTS_FROM_ZERO는 1<<2입니다. 이 헤더는 앞의 두 비트의 동작을 실행하지 않고 이름과 숫자를 제공합니다. 마지막 비트는 ABI를 깨뜨렸고 더 이상 사용할 수 없다고 주석에 명시되어 있습니다. 매크로가 남아 있다는 이유로 새 기능 협상에 사용하면 안 됩니다."
+    },
+    {
+      "title": "CS 연결과 검증 한계",
+      "text": "명시적 padding과 고정 크기는 바이너리 프로토콜을 유지하고 버전은 여러 필드를 하나의 스냅샷으로 읽는 데 쓰입니다. packed는 레이아웃 속성이지 락·원자적 읽기·메모리 장벽을 제공하는 속성이 아닙니다. 전체 선언과 주석을 대조했으며 실제 hypervisor와의 상호 운용 시험을 수행한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "pvclock_vcpu_time_info에서 flags의 바이트 오프셋은?",
+      "options": [
+        "29이다",
+        "28이다"
+      ],
+      "answer": 0,
+      "explanation": "24~27은 u32 곱셈 계수이고 28은 s8 tsc_shift입니다. flags는 다음 29번 바이트이며 마지막 두 바이트는 명시적 pad입니다."
+    },
+    {
+      "prompt": "version을 읽기 전후 모두 7로 관찰하면 그 자체로 안정된 스냅샷인가?",
+      "options": [
+        "그렇다. 전후 숫자가 같으면 홀수 여부는 무관하다",
+        "아니다. 7은 홀수이므로 갱신 중일 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "쓰기 시작 시 홀수, 완료 시 짝수로 바뀝니다. 중간에 writer가 멈춰 있으면 두 번 모두 같은 홀수를 볼 수 있으므로 읽기 프로토콜이 이를 거부해야 합니다."
+    },
+    {
+      "prompt": "pvclock_wall_clock의 sec와 nsec만으로 현재 wall clock을 얻는가?",
+      "options": [
+        "아니다. system time이 0인 기준 시각이므로 현재 system time을 더해야 한다",
+        "그렇다. hypervisor가 항상 현재 wall clock을 그 필드에 직접 기록한다"
+      ],
+      "answer": 0,
+      "explanation": "헤더 주석은 기준점의 의미를 명시합니다. 기준 시각과 이후 경과 시간의 합으로 현재 시각을 구성하는 모델입니다."
+    },
+    {
+      "prompt": "PVCLOCK_COUNTS_FROM_ZERO를 새 코드에서 유효 기능 비트로 사용해도 되는가?",
+      "options": [
+        "된다. 매크로가 정의되어 있으면 지원이 보장된다",
+        "안 된다. ABI를 깨뜨려 더 이상 사용할 수 없다는 주석이 있다"
+      ],
+      "answer": 1,
+      "explanation": "식별자 존재와 사용 가능한 계약은 다릅니다. 호환성 이력을 읽고 폐기된 의미를 다시 활성화하지 않아야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_PVCLOCK_ABI_H\n#define _ASM_X86_PVCLOCK_ABI_H\n#ifndef __ASSEMBLY__\n\n/*\n * These structs MUST NOT be changed.\n * They are the ABI between hypervisor and guest OS.\n * Both Xen and KVM are using this.\n *\n * pvclock_vcpu_time_info holds the system time and the tsc timestamp\n * of the last update. So the guest can use the tsc delta to get a\n * more precise system time.  There is one per virtual cpu.\n *\n * pvclock_wall_clock references the point in time when the system\n * time was zero (usually boot time), thus the guest calculates the\n * current wall clock by adding the system time.\n *\n * Protocol for the \"version\" fields is: hypervisor raises it (making\n * it uneven) before it starts updating the fields and raises it again\n * (making it even) when it is done.  Thus the guest can make sure the\n * time values it got are consistent by checking the version before\n * and after reading them.\n */\n\nstruct pvclock_vcpu_time_info {\n\tu32   version;\n\tu32   pad0;\n\tu64   tsc_timestamp;\n\tu64   system_time;\n\tu32   tsc_to_system_mul;\n\ts8    tsc_shift;\n\tu8    flags;\n\tu8    pad[2];\n} __attribute__((__packed__)); /* 32 bytes */\n\nstruct pvclock_wall_clock {\n\tu32   version;\n\tu32   sec;\n\tu32   nsec;\n} __attribute__((__packed__));\n\n#define PVCLOCK_TSC_STABLE_BIT\t(1 << 0)\n#define PVCLOCK_GUEST_STOPPED\t(1 << 1)\n/* PVCLOCK_COUNTS_FROM_ZERO broke ABI and can't be used anymore. */\n#define PVCLOCK_COUNTS_FROM_ZERO (1 << 2)\n#endif /* __ASSEMBLY__ */\n#endif /* _ASM_X86_PVCLOCK_ABI_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "51fef82919dd981eaaaca747597c4b44a3ce1138d264ecec9ce1f5bc2f388e8e",
+    "scope": "whole-file",
+    "line_count": 48,
+    "authoring_source": "course/file_units/pvclock_interfaces.py",
+    "sections": [
+      "파일 범위와 ABI 계약",
+      "VCPU 정보의 정확한 배치",
+      "기준값과 보간 계수",
+      "Wall clock 기준점",
+      "홀수·짝수 버전 프로토콜",
+      "세 플래그와 폐기된 의미",
+      "CS 연결과 검증 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/pvclock-abi.h"
+    }
+  ]
+}

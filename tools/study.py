@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 from course import Course
 from knowledge import Knowledge
+from build_learning import build as build_learning
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO = ROOT / 'linux'
@@ -41,6 +42,7 @@ def initialize():
         db.execute('CREATE TABLE IF NOT EXISTS progress(path TEXT PRIMARY KEY, status TEXT NOT NULL, note TEXT NOT NULL, updated TEXT DEFAULT CURRENT_TIMESTAMP)')
     COURSE = Course(ROOT, connection, git, LOCK)
     KNOWLEDGE = Knowledge(ROOT, SHA)
+    build_learning(ROOT)
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -59,6 +61,21 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         try:
+            learning_assets = {
+                '/learning': ('tools/learning.html', 'text/html'),
+                '/learning.js': ('tools/learning.js', 'text/javascript'),
+                '/data/learning-bank.js': ('data/learning-bank.js', 'text/javascript'),
+            }
+            if url.path in learning_assets:
+                path, mime = learning_assets[url.path]
+                body = (ROOT / path).read_bytes()
+                self.send_response(200)
+                self.send_header('Content-Type', mime + '; charset=utf-8')
+                self.send_header('Content-Length', str(len(body)))
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if url.path == '/api/knowledge':
                 return self.send(KNOWLEDGE.handle(q))
             if url.path.startswith('/api/course'):

@@ -1,0 +1,154 @@
+{
+  "id": "file-83e9d9e40f380c8b",
+  "path": "include/linux/page_ext.h",
+  "title": "페이지 확장 인터페이스: 가변 레코드와 RCU 접근 수명",
+  "area": "확장 레코드 · 콜백 · 간접 주소 지정 · RCU · 구성별 인터페이스",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "페이지별 부가 정보를 위한 client 계약, 공유 플래그, 메모리 모델별 초기화와 포인터 계산을 해설합니다.",
+  "guide": [
+    "C 구조체의 정적 크기와 실제 레코드 간격을 구분하고, get/put의 이름 대신 구현으로 수명 보호 방식을 확인합니다.",
+    "page idle·page owner 등 여러 기능이 페이지 확장 공간을 함께 사용하는 구조를 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일의 전체 경계",
+      "text": "GPL-2.0, guard, types.h와 stacktrace.h 포함 및 pglist_data 전방 선언 뒤에 PAGE_EXTENSION 활성/비활성 분기가 있습니다. 활성 분기는 client 구조, 플래그, page_ext 구조, 외부 변수와 함수, 주소 계산 helper를 제공합니다. 실제 메모리 할당·hotplug 처리·조회 알고리즘 본문은 mm/page_ext.c에 있습니다."
+    },
+    {
+      "title": "Client 등록 계약",
+      "text": "page_ext_operations의 offset과 size는 size_t이며 각각 레코드 내부 client 데이터 위치와 크기입니다. need는 bool을 반환하는 인자 없는 함수 포인터이고 init은 void를 반환하는 선택적 함수 포인터입니다. need_shared_flags는 공용 flags 사용 여부입니다. 주석은 각 client가 page_ext_ops 배열에 operations를 등록하고 초기화 과정에서 offset을 돌려받는다고 설명합니다. 이 구조체 자체가 client 목록이나 동적 등록 함수를 구현하지는 않습니다."
+    },
+    {
+      "title": "공유 플래그의 인덱스",
+      "text": "page_ext_flags는 OWNER=0, OWNER_ALLOCATED=1을 정의합니다. PAGE_IDLE_FLAG && !64BIT일 때 YOUNG=2, IDLE=3이 이어집니다. 값들은 비트 마스크가 아니라 비트 인덱스입니다. 주석은 이 플래그를 사용하는 client가 need_shared_flags=true로 설정해야 한다고 요구합니다. idle 기능이 꺼져도 두 owner 인덱스는 PAGE_EXTENSION 활성 분기에서 정의됩니다."
+    },
+    {
+      "title": "구조체 크기와 실제 레코드",
+      "text": "struct page_ext의 명시적 멤버는 unsigned long flags 하나입니다. 그러나 전체 레코드의 간격은 외부 변수 page_ext_size이며 sizeof(struct page_ext)와 항상 같지 않습니다. 관련 구현의 invoke_need_callbacks를 대조하면 필요한 client 중 공유 플래그 사용자가 있을 때 기본 flags 공간을 확보하고, 필요한 client마다 offset을 현재 크기로 정한 뒤 size를 누적합니다. 따라서 모든 구성에서 flags 공간이 무조건 첫머리에 존재한다고 가정해서는 안 됩니다. 이 함수 대조는 page_ext.c 전체 완료가 아닙니다."
+    },
+    {
+      "title": "할당 주석과 접근 가능성",
+      "text": "주석은 확장 mem_map 관점으로 설명하고 부팅이나 memory hotplug에서 각 page descriptor에 대응하는 공간을 할당한다고 합니다. 그렇다고 임의 페이지에 대한 get이 언제나 성공하는 것은 아닙니다. 관련 구현의 계약은 해당 페이지에 page_ext가 없으면 NULL을 반환한다고 명시합니다. 구성, 초기화와 수명 경계를 고려하여 호출자는 NULL을 처리해야 합니다."
+    },
+    {
+      "title": "Early 설정과 pgdat",
+      "text": "early_page_ext는 extern bool, page_ext_size는 extern unsigned long입니다. early_page_ext_enabled는 활성 구성에서 변수를 그대로 반환합니다. pgdat_page_ext_init은 pglist_data 포인터를 받는 외부 초기화 함수입니다. 이 헤더에는 early 설정을 결정하는 명령행 파서나 pgdat 초기화 본문이 없습니다. 이름만 보고 이 함수를 일반 런타임 상태 전환 API로 해석하지 않습니다."
+    },
+    {
+      "title": "Sparse와 flat 초기화 경로",
+      "text": "SPARSEMEM이면 page_ext_init이 외부 함수이고 page_ext_init_flatmem 및 flatmem_late는 빈 inline입니다. 비 sparse이면 반대로 두 flatmem 함수가 외부 선언이고 page_ext_init은 빈 inline입니다. 이름이 여러 개여도 모든 메모리 모델에서 세 초기화가 모두 실제 동작하는 것은 아닙니다. 분기가 공통 호출 지점에 맞는 인터페이스를 제공합니다."
+    },
+    {
+      "title": "Get과 put의 실제 의미",
+      "text": "헤더는 const struct page 포인터를 받는 page_ext_get과 page_ext 포인터를 받는 put을 선언합니다. page_ext.c의 해당 본문을 확인하면 get은 rcu_read_lock 후 lookup하며 실패하면 즉시 unlock하고 NULL을 반환합니다. 성공한 경우에는 put이 RCU 읽기 구간을 끝냅니다. put(NULL)은 아무 동작도 하지 않습니다. get/put이라는 이름만으로 참조 카운터 증가·감소나 새 메모리 할당이라고 설명하면 틀립니다."
+    },
+    {
+      "title": "접근 수명의 제한",
+      "text": "구현 주석은 성공한 get에서 put까지 page_ext의 유효성을 보호하며 그 사이 호출자가 잠들면 안 된다고 명시합니다. put 이후에는 확장 정보가 유효하지 않을 수 있습니다. RCU 수명 보호가 같은 flags나 client 데이터에 대한 모든 동시 쓰기를 직렬화하는 mutex라는 의미는 아닙니다. 데이터 갱신의 동시성 규칙은 각 client와 비트 연산을 별도로 확인해야 합니다."
+    },
+    {
+      "title": "Client 데이터 주소",
+      "text": "page_ext_data는 page_ext를 void 포인터로 변환한 후 ops->offset을 더해 반환합니다. 커널에서 사용하는 GNU C의 void 포인터 산술로 바이트 단위 이동을 표현합니다. NULL 확인, size 범위 확인, 정렬 보정은 본문에 없습니다. 올바른 operations와 초기화된 offset 및 유효한 레코드를 전달해야 하며 반환형이 void 포인터라고 데이터 타입을 런타임에 검증해 주지는 않습니다."
+    },
+    {
+      "title": "다음 레코드의 주소",
+      "text": "page_ext_next는 curr를 void 포인터 next에 담아 page_ext_size만큼 더하고 struct page_ext 포인터로 반환합니다. curr+1이면 구조체의 정적 크기만 이동하므로 확장 payload가 있는 레코드에서 다릅니다. 예를 들어 구조체 크기가 8바이트, 실제 간격이 40바이트면 다음 주소는 현재+40입니다. 이 helper에는 마지막 레코드 판별, 범위 검사, 새로운 RCU 구간 획득이 없습니다."
+    },
+    {
+      "title": "기능이 없는 구성",
+      "text": "PAGE_EXTENSION이 없으면 struct page_ext는 불완전 타입으로만 선언됩니다. early 조회는 false, pgdat와 세 초기화 함수 및 put은 빈 함수, get은 NULL입니다. 활성 분기의 operations 구조, 플래그 enum, page_ext_size와 주소 계산 helper가 이 분기에 다시 제공되는 것은 아닙니다. 공통 API가 stub으로 존재한다는 사실을 전체 자료형과 기능이 모두 사용 가능하다는 뜻으로 넓히지 않습니다."
+    },
+    {
+      "title": "CS 학습 연결",
+      "text": "가변 payload를 가진 고정 간격 레코드 배열, client별 offset을 통한 데이터 분할, 선택적 콜백과 기능 제거, RCU 읽기 수명과 데이터 동기화의 구분을 학습합니다. 포인터 helper의 짧은 본문은 호출자 전제에 많은 책임을 맡깁니다. 원본 대응·학습 데이터 검사는 hotplug 경쟁이나 모든 커널 구성의 실행 검증이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "page_ext_next(curr)를 curr+1로 바꾸어도 항상 같은가?",
+      "options": [
+        "아니다. 실제 레코드 간격은 page_ext_size이다",
+        "그렇다. struct page_ext의 크기가 모든 client 데이터를 포함한다"
+      ],
+      "answer": 0,
+      "explanation": "구조체에는 flags만 명시되어 있고 client 공간은 별도로 누적됩니다. helper는 정적 sizeof 대신 실제 레코드 간격을 사용합니다."
+    },
+    {
+      "prompt": "page_ext_get과 put은 참조 카운터 증가·감소인가?",
+      "options": [
+        "항상 page_ext 안의 참조 카운터를 증가·감소한다",
+        "해당 구현은 RCU 읽기 구간 획득·해제이다"
+      ],
+      "answer": 1,
+      "explanation": "get은 rcu_read_lock 후 조회하고 실패하면 해제합니다. 성공한 포인터의 put에서 rcu_read_unlock합니다. 함수 이름만으로 보호 기법을 추측하면 안 됩니다."
+    },
+    {
+      "prompt": "PAGE_EXT_YOUNG가 2인 구성에서 이 값은 비트 마스크 2인가?",
+      "options": [
+        "아니다. 2번 비트의 인덱스이다",
+        "그렇다. 1번 비트를 뜻하는 마스크이다"
+      ],
+      "answer": 0,
+      "explanation": "enum은 bitops에 넘길 인덱스를 정의합니다. 해당 인덱스의 마스크를 만든다면 1UL<<2, 즉 4입니다."
+    },
+    {
+      "prompt": "SPARSEMEM일 때 page_ext_init_flatmem은 확장 공간을 실제 초기화하는가?",
+      "options": [
+        "그렇다. 세 초기화 함수가 모두 같은 일을 한다",
+        "아니다. 빈 inline이며 page_ext_init이 외부 함수이다"
+      ],
+      "answer": 1,
+      "explanation": "헤더는 메모리 모델에 맞춰 실제 선언과 빈 helper를 교차 배치합니다. 함수 이름의 존재와 실제 동작을 구분해야 합니다."
+    },
+    {
+      "prompt": "page_ext_data가 ops->offset의 범위와 포인터 유효성을 검사하는가?",
+      "options": [
+        "아니다. 바이트 offset을 더해서 반환한다",
+        "그렇다. 범위를 벗어나면 NULL을 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "본문에는 산술과 반환만 있습니다. 유효한 레코드, 초기화된 operations, 데이터의 적절한 정렬과 범위는 호출 경로에서 보장해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_PAGE_EXT_H\n#define __LINUX_PAGE_EXT_H\n\n#include <linux/types.h>\n#include <linux/stacktrace.h>\n\nstruct pglist_data;\n\n#ifdef CONFIG_PAGE_EXTENSION\n/**\n * struct page_ext_operations - per page_ext client operations\n * @offset: Offset to the client's data within page_ext. Offset is returned to\n *          the client by page_ext_init.\n * @size: The size of the client data within page_ext.\n * @need: Function that returns true if client requires page_ext.\n * @init: (optional) Called to initialize client once page_exts are allocated.\n * @need_shared_flags: True when client is using shared page_ext->flags\n *                     field.\n *\n * Each Page Extension client must define page_ext_operations in\n * page_ext_ops array.\n */\nstruct page_ext_operations {\n\tsize_t offset;\n\tsize_t size;\n\tbool (*need)(void);\n\tvoid (*init)(void);\n\tbool need_shared_flags;\n};\n\n/*\n * The page_ext_flags users must set need_shared_flags to true.\n */\nenum page_ext_flags {\n\tPAGE_EXT_OWNER,\n\tPAGE_EXT_OWNER_ALLOCATED,\n#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)\n\tPAGE_EXT_YOUNG,\n\tPAGE_EXT_IDLE,\n#endif\n};\n\n/*\n * Page Extension can be considered as an extended mem_map.\n * A page_ext page is associated with every page descriptor. The\n * page_ext helps us add more information about the page.\n * All page_ext are allocated at boot or memory hotplug event,\n * then the page_ext for pfn always exists.\n */\nstruct page_ext {\n\tunsigned long flags;\n};\n\nextern bool early_page_ext;\nextern unsigned long page_ext_size;\nextern void pgdat_page_ext_init(struct pglist_data *pgdat);\n\nstatic inline bool early_page_ext_enabled(void)\n{\n\treturn early_page_ext;\n}\n\n#ifdef CONFIG_SPARSEMEM\nstatic inline void page_ext_init_flatmem(void)\n{\n}\nextern void page_ext_init(void);\nstatic inline void page_ext_init_flatmem_late(void)\n{\n}\n#else\nextern void page_ext_init_flatmem(void);\nextern void page_ext_init_flatmem_late(void);\nstatic inline void page_ext_init(void)\n{\n}\n#endif\n\nextern struct page_ext *page_ext_get(const struct page *page);\nextern void page_ext_put(struct page_ext *page_ext);\n\nstatic inline void *page_ext_data(struct page_ext *page_ext,\n\t\t\t\t  struct page_ext_operations *ops)\n{\n\treturn (void *)(page_ext) + ops->offset;\n}\n\nstatic inline struct page_ext *page_ext_next(struct page_ext *curr)\n{\n\tvoid *next = curr;\n\tnext += page_ext_size;\n\treturn next;\n}\n\n#else /* !CONFIG_PAGE_EXTENSION */\nstruct page_ext;\n\nstatic inline bool early_page_ext_enabled(void)\n{\n\treturn false;\n}\n\nstatic inline void pgdat_page_ext_init(struct pglist_data *pgdat)\n{\n}\n\nstatic inline void page_ext_init(void)\n{\n}\n\nstatic inline void page_ext_init_flatmem_late(void)\n{\n}\n\nstatic inline void page_ext_init_flatmem(void)\n{\n}\n\nstatic inline struct page_ext *page_ext_get(const struct page *page)\n{\n\treturn NULL;\n}\n\nstatic inline void page_ext_put(struct page_ext *page_ext)\n{\n}\n#endif /* CONFIG_PAGE_EXTENSION */\n#endif /* __LINUX_PAGE_EXT_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e8060dcd60f34ee52575de94c55d880c38116534d84139807c45f1e015a8ea2a",
+    "scope": "whole-file",
+    "line_count": 129,
+    "authoring_source": "course/file_units/page_extension_interface.py",
+    "sections": [
+      "파일의 전체 경계",
+      "Client 등록 계약",
+      "공유 플래그의 인덱스",
+      "구조체 크기와 실제 레코드",
+      "할당 주석과 접근 가능성",
+      "Early 설정과 pgdat",
+      "Sparse와 flat 초기화 경로",
+      "Get과 put의 실제 의미",
+      "접근 수명의 제한",
+      "Client 데이터 주소",
+      "다음 레코드의 주소",
+      "기능이 없는 구성",
+      "CS 학습 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/page_ext.h"
+    }
+  ]
+}

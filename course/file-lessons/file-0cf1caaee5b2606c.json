@@ -1,0 +1,120 @@
+{
+  "id": "file-0cf1caaee5b2606c",
+  "path": "arch/arm/include/asm/fixmap.h",
+  "title": "ARM fixmap 전체: 슬롯 배치와 부팅 단계별 재사용",
+  "area": "주소 공간 배치 · 열거형 · 수명에 따른 재사용 · PTE 보호 · MMU",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "고정 매핑 영역의 인덱스, kmap과 early_ioremap의 공유, 페이지 보호 속성을 읽습니다.",
+  "guide": [
+    "같은 주소 자원을 동시에 쓰지 않는 수명 구간에 재사용하며 인덱스 경계와 실제 페이지 보호 속성을 따로 관리합니다.",
+    "highmem.h가 포함하는 fixed mapping 인터페이스와 초기 부팅의 임시 I/O 매핑을 연결합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "영역과 포함 관계",
+      "text": "GPL-2.0과 guard 뒤 FIXADDR_START=0xffc80000, END=0xfff00000, TOP=END-PAGE_SIZE를 정의합니다. linux/pgtable.h와 asm/kmap_size.h를 포함합니다. TOP은 END 자체가 아니라 마지막 페이지의 시작 주소이며 페이지 크기에 의존합니다."
+    },
+    {
+      "title": "상시 슬롯과 kmap",
+      "text": "fixed_addresses의 첫 값 FIX_EARLYCON_MEM_BASE는0이고 다음 영구 영역 끝 경계는1입니다. FIX_KMAP_BEGIN은 그 경계, END는 BEGIN+KM_MAX_IDX*NR_CPUS-1로 양끝 포함 범위를 정의합니다. 슬롯 수는 CPU 수와 CPU별 최대 매핑 인덱스 수의 곱입니다. 경계 이름을 별도의 사용 슬롯으로 더 세면 off-by-one이 됩니다."
+    },
+    {
+      "title": "텍스트 수정 슬롯",
+      "text": "KMAP_END 뒤에 FIX_TEXT_POKE0와1, 그리고 __end_of_fixmap_region이 이어집니다. 주석은 kprobes·jump labels 등이 읽기 전용 커널 텍스트를 쓰기 위해 사용한다고 설명합니다. enum 선언 자체가 커널 텍스트를 수정하거나 잠금을 잡지는 않습니다."
+    },
+    {
+      "title": "초기 I/O 매핑 공간",
+      "text": "NR_FIX_BTMAPS=32, FIX_BTMAPS_SLOTS=7이므로 TOTAL은224입니다. FIX_BTMAP_END는 영구 영역 끝과 같고 BEGIN은 END+224-1입니다. 초기 영역 끝 경계는 그 다음 값입니다. BEGIN/END라는 단어의 숫자 대소를 kmap 구간과 같게 추측하면 안 됩니다. 여기서는 BEGIN의 인덱스 값이 더 큽니다."
+    },
+    {
+      "title": "겹치는 주소의 수명",
+      "text": "주석은 early_ioremap은 paging_init 이전, kmap은 이후에만 사용할 수 있어 kmap 영역을 공유해도 충돌하지 않는다고 설명합니다. 실제 자원 재사용의 근거는 잠금으로 동시 접근을 직렬화하는 것이 아니라 사용 시기의 분리입니다. __end_of_fixed_addresses는 두 영역 끝의 합이 아니라 큰 값을 선택합니다."
+    },
+    {
+      "title": "페이지 속성 조합",
+      "text": "FIXMAP_PAGE_COMMON은 YOUNG|PRESENT|XN|DIRTY입니다. NORMAL은 pgprot_kernel|XN, RO는 NORMAL|RDONLY입니다. IO는 COMMON에 MT_DEV_SHARED와 SHARED를 더하며 NOCACHE도 IO와 같습니다. 이 파일에서 nocache 이름은 일반 RAM의 모든 캐시 정책을 포괄하는 독립 모드가 아니라 장치 매핑용 별칭입니다."
+    },
+    {
+      "title": "MMU 구성과 초기화",
+      "text": "__early_set_fixmap은 __set_fixmap의 별칭입니다. CONFIG_MMU이면 idx·phys·prot를 받는 __set_fixmap과 __init early_fixmap_init을 선언하고 asm-generic/fixmap.h를 포함합니다. 비MMU 분기에서는 빈 early_fixmap_init만 정의합니다. 이 파일의 선언만으로 PTE 쓰기나 TLB 무효화의 구체적 구현을 설명할 수는 없습니다."
+    },
+    {
+      "title": "CS 연결과 범위",
+      "text": "닫힌 인덱스 범위와 끝 경계, 배열 크기의 곱, 서로 다른 수명에 따른 저장 공간 공유, bitwise 보호 속성 조합, 선언과 구현의 분리를 학습합니다. 주소 상수만으로 모든 구성의 영역 적합성이나 MMU 동작을 실행 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "초기 boot mapping의 TOTAL_FIX_BTMAPS는?",
+      "options": [
+        "224이다",
+        "39이다"
+      ],
+      "answer": 0,
+      "explanation": "32개와7슬롯의 곱32*7=224입니다. 두 상수의 합을 사용하는 식이 아닙니다."
+    },
+    {
+      "prompt": "__end_of_fixed_addresses는 두 영역 끝을 어떻게 결합하는가?",
+      "options": [
+        "두 값을 더한다",
+        "둘 중 큰 값을 선택한다"
+      ],
+      "answer": 1,
+      "explanation": "동일 주소 공간을 시간에 따라 재사용하므로 조건식으로 최대 경계를 선택합니다. 별도 연속 영역처럼 합산하지 않습니다."
+    },
+    {
+      "prompt": "early_ioremap과 kmap 영역 공유의 주석상 근거는?",
+      "options": [
+        "paging_init을 기준으로 사용 시기가 나뉜다",
+        "이 enum이 항상 전역 잠금을 획득한다"
+      ],
+      "answer": 0,
+      "explanation": "early_ioremap은 이전, kmap은 이후라는 수명 조건입니다. enum에는 잠금 실행이 없습니다."
+    },
+    {
+      "prompt": "FIXMAP_PAGE_NOCACHE는 이 파일에서 무엇인가?",
+      "options": [
+        "읽기 전용 NORMAL과 완전히 같다",
+        "FIXMAP_PAGE_IO의 별칭이다"
+      ],
+      "answer": 1,
+      "explanation": "주석은 set_fixmap_io와 nocache가 모두 장치 매핑 목적이라고 설명하며 매크로도 IO로 정의합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_FIXMAP_H\n#define _ASM_FIXMAP_H\n\n#define FIXADDR_START\t\t0xffc80000UL\n#define FIXADDR_END\t\t0xfff00000UL\n#define FIXADDR_TOP\t\t(FIXADDR_END - PAGE_SIZE)\n\n#include <linux/pgtable.h>\n#include <asm/kmap_size.h>\n\nenum fixed_addresses {\n\tFIX_EARLYCON_MEM_BASE,\n\t__end_of_permanent_fixed_addresses,\n\n\tFIX_KMAP_BEGIN = __end_of_permanent_fixed_addresses,\n\tFIX_KMAP_END = FIX_KMAP_BEGIN + (KM_MAX_IDX * NR_CPUS) - 1,\n\n\t/* Support writing RO kernel text via kprobes, jump labels, etc. */\n\tFIX_TEXT_POKE0,\n\tFIX_TEXT_POKE1,\n\n\t__end_of_fixmap_region,\n\n\t/*\n\t * Share the kmap() region with early_ioremap(): this is guaranteed\n\t * not to clash since early_ioremap() is only available before\n\t * paging_init(), and kmap() only after.\n\t */\n#define NR_FIX_BTMAPS\t\t32\n#define FIX_BTMAPS_SLOTS\t7\n#define TOTAL_FIX_BTMAPS\t(NR_FIX_BTMAPS * FIX_BTMAPS_SLOTS)\n\n\tFIX_BTMAP_END = __end_of_permanent_fixed_addresses,\n\tFIX_BTMAP_BEGIN = FIX_BTMAP_END + TOTAL_FIX_BTMAPS - 1,\n\t__end_of_early_ioremap_region\n};\n\nstatic const enum fixed_addresses __end_of_fixed_addresses =\n\t__end_of_fixmap_region > __end_of_early_ioremap_region ?\n\t__end_of_fixmap_region : __end_of_early_ioremap_region;\n\n#define FIXMAP_PAGE_COMMON\t(L_PTE_YOUNG | L_PTE_PRESENT | L_PTE_XN | L_PTE_DIRTY)\n\n#define FIXMAP_PAGE_NORMAL\t(pgprot_kernel | L_PTE_XN)\n#define FIXMAP_PAGE_RO\t\t(FIXMAP_PAGE_NORMAL | L_PTE_RDONLY)\n\n/* Used by set_fixmap_(io|nocache), both meant for mapping a device */\n#define FIXMAP_PAGE_IO\t\t(FIXMAP_PAGE_COMMON | L_PTE_MT_DEV_SHARED | L_PTE_SHARED)\n#define FIXMAP_PAGE_NOCACHE\tFIXMAP_PAGE_IO\n\n#define __early_set_fixmap\t__set_fixmap\n\n#ifdef CONFIG_MMU\n\nvoid __set_fixmap(enum fixed_addresses idx, phys_addr_t phys, pgprot_t prot);\nvoid __init early_fixmap_init(void);\n\n#include <asm-generic/fixmap.h>\n\n#else\n\nstatic inline void early_fixmap_init(void) { }\n\n#endif\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d5dc33b4095f6144ba4e1e9316f5d057892d34272b2812297a14ebabefa0d49f",
+    "scope": "whole-file",
+    "line_count": 66,
+    "authoring_source": "course/file_units/arm_highmem_fixmap.py",
+    "sections": [
+      "영역과 포함 관계",
+      "상시 슬롯과 kmap",
+      "텍스트 수정 슬롯",
+      "초기 I/O 매핑 공간",
+      "겹치는 주소의 수명",
+      "페이지 속성 조합",
+      "MMU 구성과 초기화",
+      "CS 연결과 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/fixmap.h"
+    }
+  ]
+}

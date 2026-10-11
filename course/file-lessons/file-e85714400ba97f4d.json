@@ -1,0 +1,106 @@
+{
+  "id": "file-e85714400ba97f4d",
+  "path": "arch/x86/include/asm/clocksource.h",
+  "title": "X86 vclock 사용 이력: 비트맵과 비원자적 갱신",
+  "area": "비트맵 · READ_ONCE · WRITE_ONCE · 경쟁 조건 · lost update · 외부 변수",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "vclocks_used 외부 변수와 두 inline helper를 전체 분석합니다.",
+  "guide": [
+    "한 번의 읽기·쓰기를 보존하는 접근 매크로와 여러 연산을 하나로 묶는 원자적 갱신은 다릅니다.",
+    "비트마스크의 사용 이력을 해석하고 경쟁 갱신에서 lost update가 생기는 조건을 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 인터페이스",
+      "text": "GPL-2.0 include guard 안에서 asm/vdso/clocksource.h를 포함하고 extern unsigned int vclocks_used를 선언합니다. 저장 공간을 정의하거나 0으로 초기화하는 파일은 아닙니다. 뒤에는 vclock_was_used와 vclocks_set_used 두 static inline helper만 있습니다. 자료형 bool과 접근 매크로는 포함 문맥에 의존합니다."
+    },
+    {
+      "title": "특정 시계의 사용 여부",
+      "text": "vclock_was_used(int vclock)는 READ_ONCE(vclocks_used) & (1U << vclock)를 bool로 반환합니다. 비트가 있으면 true, 없으면 false이며 비트마스크의 정수 크기를 그대로 외부에 반환하지 않습니다. 예를 들어 bitmap=0b1010이면 인덱스 1과 3은 true, 2는 false입니다. clock 모드 값이 비트의 인덱스 역할을 합니다."
+    },
+    {
+      "title": "사용 이력 기록",
+      "text": "vclocks_set_used(unsigned int which)는 READ_ONCE로 읽은 값에 (1 << which)를 OR하고 WRITE_ONCE로 기록합니다. 기존 비트를 지우는 대입이 아니라 지정 비트를 추가하는 동작입니다. 이 파일에 이력을 지우는 helper는 없습니다. 질의는 1U, 갱신은 1을 사용하는 원본 표현의 차이도 유지해 읽어야 합니다."
+    },
+    {
+      "title": "입력 범위는 검사하지 않는다",
+      "text": "두 helper 모두 shift 인덱스를 검증하지 않습니다. 음수나 자료형 폭 이상의 이동량을 임의로 넘겨도 안전한 범용 비트셋 API가 아닙니다. 지정된 vclock 모드 인덱스 범위에서 사용해야 하며, 큰 정수 sentinel을 무조건 시계 인덱스로 넣으면 안 됩니다. 코드가 비트를 저장한다는 사실만으로 모든 int 입력을 지원한다고 추정하지 않습니다."
+    },
+    {
+      "title": "원자적 OR가 아닌 이유",
+      "text": "WRITE_ONCE의 값 인수는 별도 READ_ONCE와 OR로 계산됩니다. CPU A와 B가 모두 0을 읽고 각각 비트 1과 2를 설정하면 A가 2를 쓴 뒤 B가 4를 써 최종값이 6이 아닌 4가 될 수 있습니다. 이 helper 본문에는 atomic_fetch_or·CAS 반복·락이 없습니다. 호출 문맥의 직렬화 등 별도 조건을 확인해야 하며 이 예시만으로 실제 호출부에 버그가 있다고 단정하지 않습니다."
+    },
+    {
+      "title": "사용 여부와 활성 여부",
+      "text": "was_used라는 인터페이스와 OR 누적은 과거 사용 이력을 질의하는 형태입니다. true가 현재 선택된 clocksource라는 뜻은 아닙니다. 실제 pvclock 주소 setter는 이 질의를 경고 조건에 사용합니다. 이 파일은 현재 clocksource를 선택하거나 하드웨어를 활성화하지 않습니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "전체 변수 선언과 두 함수의 연산을 다뤘습니다. 집합의 비트 표현, bool 변환, 단일 접근과 read-modify-write 원자성의 차이가 학습 핵심입니다. 예시 경쟁은 코드 구조에 따른 분석이며 실제 커널 호출부의 동시 실행 조건까지 검증한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "vclocks_used=0b1010에서 vclock_was_used(3)의 반환은?",
+      "options": [
+        "true이다",
+        "정수 8을 그대로 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "AND의 중간 결과는 8이지만 함수 반환형은 bool입니다. 0이 아닌 값이 true로 변환됩니다."
+    },
+    {
+      "prompt": "두 CPU가 vclocks_set_used를 동시에 호출해도 WRITE_ONCE만으로 서로의 비트가 보존되는가?",
+      "options": [
+        "그렇다. WRITE_ONCE는 앞선 READ_ONCE와 자동으로 트랜잭션을 만든다",
+        "아니다. 읽기와 OR와 쓰기가 하나의 원자적 갱신은 아니다"
+      ],
+      "answer": 1,
+      "explanation": "둘이 같은 이전 값을 읽으면 늦은 쓰기가 먼저 설정한 다른 비트를 잃게 할 수 있습니다. 동시 호출의 허용 여부는 호출부의 직렬화 계약을 확인해야 합니다."
+    },
+    {
+      "prompt": "vclock_was_used가 true이면 해당 시계가 지금 활성 시계인가?",
+      "options": [
+        "그렇게 단정할 수 없다. 이 helper는 사용 이력 비트를 조회한다",
+        "그렇다. true를 반환할 때마다 하드웨어 시계를 활성화한다"
+      ],
+      "answer": 0,
+      "explanation": "질의 함수에는 선택이나 하드웨어 활성화 동작이 없습니다. 이력과 현재 상태를 구분해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/* x86-specific clocksource additions */\n\n#ifndef _ASM_X86_CLOCKSOURCE_H\n#define _ASM_X86_CLOCKSOURCE_H\n\n#include <asm/vdso/clocksource.h>\n\nextern unsigned int vclocks_used;\n\nstatic inline bool vclock_was_used(int vclock)\n{\n\treturn READ_ONCE(vclocks_used) & (1U << vclock);\n}\n\nstatic inline void vclocks_set_used(unsigned int which)\n{\n\tWRITE_ONCE(vclocks_used, READ_ONCE(vclocks_used) | (1 << which));\n}\n\n#endif /* _ASM_X86_CLOCKSOURCE_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "261bc7735aab0262c83a14caed2f8e3bb4b58887edb40ea947d79e49cc787fc1",
+    "scope": "whole-file",
+    "line_count": 21,
+    "authoring_source": "course/file_units/arch_clocksource_glue.py",
+    "sections": [
+      "전체 인터페이스",
+      "특정 시계의 사용 여부",
+      "사용 이력 기록",
+      "입력 범위는 검사하지 않는다",
+      "원자적 OR가 아닌 이유",
+      "사용 여부와 활성 여부",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/clocksource.h"
+    }
+  ]
+}

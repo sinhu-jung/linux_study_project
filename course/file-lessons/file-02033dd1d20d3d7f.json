@@ -1,0 +1,314 @@
+{
+  "id": "file-02033dd1d20d3d7f",
+  "path": "kernel/time/time.c",
+  "title": "시간 공통 구현 전체: 시스템 호출·정규화·jiffies·호환 복사",
+  "area": "시스템 호출 · 사용자 메모리 · 호환 ABI · 고정 소수점 · 래핑 · 달력 · 정규화",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "설정별 시스템 호출부터 모든 단위 변환과 사용자 구조체 복사 helper까지 파일 전체를 분석합니다.",
+  "guide": [
+    "시간 API의 입력 표현, 권한 검사, 산술 범위, 반올림 정책과 사용자 복사는 각각 별도의 책임입니다.",
+    "시간 헤더의 선언이 실제로 어떤 값을 변경하고 어떤 오류를 반환하는지 본문으로 확인합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체 지도",
+      "text": "GPL-2.0, 수정 이력과 include 뒤 sys_tz, time/stime와 32비트 변형, get/settimeofday와 compat 변형, adjtimex와 구형 timex 변환이 이어집니다. 나머지는 jiffies·달력·나노초 변환, 안전한 timespec 덧셈, 새·구형 사용자 시간 구조체 복사입니다. generated/timeconst.h와 timekeeping.h 등의 다른 파일이 제공하는 상수·기능에 의존하지만 그것들을 이 파일의 직접 구현으로 세지 않습니다."
+    },
+    {
+      "title": "전역 timezone",
+      "text": "sys_tz는 전역 timezone 구조체이며 일반 EXPORT_SYMBOL로 공개됩니다. 정적 저장 기간에 따라 초기값은 0입니다. gettimeofday의 선택적 timezone 출력과 시각 설정 경로가 이 객체를 사용합니다. 지역별 서머타임 데이터베이스를 이 파일이 관리하는 것은 아닙니다."
+    },
+    {
+      "title": "구형 time 시스템 호출",
+      "text": "__ARCH_WANT_SYS_TIME일 때 time은 ktime_get_real_seconds를 __kernel_old_time_t로 변환합니다. tloc이 NULL이 아니면 put_user하고 실패 시 EFAULT입니다. force_successful_syscall_return을 호출한 뒤 초 값을 반환합니다. 오래된 타입으로의 축소에 대해 별도 범위 오류를 검사하지 않습니다."
+    },
+    {
+      "title": "Stime의 실제 오류 처리",
+      "text": "같은 설정의 stime은 사용자 초를 읽고 나노초를 0으로 둡니다. 사용자 읽기 실패는 EFAULT, security_settime64 실패는 해당 오류를 반환합니다. 그러나 do_settimeofday64의 반환값은 사용하지 않고 0을 반환합니다. 모든 내부 설정 오류가 syscall 결과로 전달된다고 설명하면 원본과 다릅니다."
+    },
+    {
+      "title": "Time32와 stime32 설정",
+      "text": "CONFIG_COMPAT_32BIT_TIME과 __ARCH_WANT_SYS_TIME32가 모두 필요한 블록입니다. time32는 old_time32_t로 초를 줄이고 선택적 사용자 쓰기와 성공 반환 처리를 합니다. stime32는 구형 초 입력, 나노초 0, 보안 검사 뒤 설정 함수를 호출하고 역시 반환값을 버립니다. 일반 COMPAT gettimeofday 블록과 조건이 같지 않습니다."
+    },
+    {
+      "title": "Gettimeofday의 두 선택 출력",
+      "text": "tv가 있으면 ktime_get_real_ts64로 읽어 초와 tv_nsec/1000인 마이크로초를 각각 put_user합니다. tz가 있으면 sys_tz를 copy_to_user합니다. 각 실패는 EFAULT이며 둘 다 NULL이면 0입니다. 앞 필드나 tv 복사가 성공한 뒤 다음 복사가 실패할 수 있으므로 실패 시 사용자 버퍼 전체가 원래대로 유지된다고 보장하지 않습니다."
+    },
+    {
+      "title": "공통 시각 설정의 선행 검사",
+      "text": "do_sys_settimeofday64는 tv가 있으면 timespec64_valid_settod로 검사하고 실패 시 EINVAL입니다. 다음에 tv/tz를 security_settime64에 넘겨 오류를 전달합니다. tz가 있으면 tz_minuteswest가 -900..900분 안인지 확인합니다. 이 파일에서는 tz_dsttime 범위를 별도로 검사하지 않습니다."
+    },
+    {
+      "title": "첫 timezone 설정과 clock warp",
+      "text": "유효한 tz를 받으면 sys_tz를 대입하고 update_vsyscall_tz를 호출합니다. static firsttime은 첫 tz 처리에서만 0으로 바뀌며 그 호출에 tv가 없으면 timekeeping_warp_clock을 호출합니다. tv만 설정하는 호출은 firsttime을 소모하지 않습니다. 첫 tz와 tv를 함께 주면 warp하지 않지만 firsttime은 소모됩니다."
+    },
+    {
+      "title": "설정의 부분 효과",
+      "text": "tz 처리 뒤 tv가 있으면 do_settimeofday64의 결과를 반환합니다. 따라서 timezone 대입과 vsyscall 갱신이 먼저 일어나며 뒤쪽 시간 설정 실패에 대한 rollback은 여기 없습니다. 이 공통 helper는 stime과 달리 do_settimeofday64 오류를 반환합니다. 사용자 관점의 하나의 요청이 모든 상태에 대해 원자적인 트랜잭션이라는 가정은 피합니다."
+    },
+    {
+      "title": "Settimeofday의 단위 검사",
+      "text": "일반 settimeofday는 선택적인 사용자 timeval에서 초와 마이크로초를 읽고 microsecond 값이 0 미만 또는 USEC_PER_SEC보다 크면 거부합니다. 조건이 >이므로 정확히 1000000은 이 단계만 통과하지만 1000배 뒤 1000000000ns가 되어 공통 helper의 검사에서 거부됩니다. 따라서 정확히 백만 마이크로초를 허용하는 API라는 결론은 틀립니다. tz는 지역 복사 뒤 두 선택 포인터를 공통 helper에 넘깁니다."
+    },
+    {
+      "title": "Compat get/settimeofday",
+      "text": "CONFIG_COMPAT 블록은 old_timeval32로 같은 읽기·쓰기 흐름을 구현합니다. get은 초와 마이크로초를 각 필드에 저장하고, set은 사용자 값을 읽어 나노초로 바꾼 뒤 같은 공통 helper를 사용합니다. get 출력 축소에 대한 별도 2038년 범위 오류는 이 본문에 없습니다. 타입 폭과 오류 처리의 범위를 함께 읽습니다."
+    },
+    {
+      "title": "64비트 adjtimex",
+      "text": "CONFIG_64BIT이면 __kernel_timex 전체를 copy_from_user한 뒤 do_adjtimex를 호출하고 결과 구조체를 다시 사용자에게 복사합니다. 입력 복사 실패는 EFAULT입니다. 출력 복사는 do_adjtimex 결과가 무엇이든 시도하며 실패하면 그 결과보다 EFAULT가 우선합니다. 이 함수 안에서 실제 NTP 알고리즘을 구현하지는 않습니다."
+    },
+    {
+      "title": "구형 timex 입력 변환",
+      "text": "CONFIG_COMPAT_32BIT_TIME의 get_old_timex32는 목적 __kernel_timex를 먼저 memset으로 0으로 만들고 사용자 old_timex32 전체를 복사합니다. modes, offset, freq, maxerror, esterror, status, constant, precision, tolerance, time의 두 필드, tick, ppsfreq, jitter, shift, stabil, jitcnt, calcnt, errcnt, stbcnt를 명시적으로 옮깁니다. old 구조체의 tai는 입력에서 옮기지 않아 목적 tai가 0으로 남습니다."
+    },
+    {
+      "title": "구형 timex 출력과 syscall",
+      "text": "put_old_timex32는 지역 old 구조체 전체를 0으로 만들고 같은 필드들뿐 아니라 tai도 옮겨 사용자에게 복사합니다. 예약 공간은 초기화된 채 출력되며 좁은 필드 대입에 별도 범위 검사는 없습니다. adjtimex_time32는 get, do_adjtimex, put 순서이고 get 실패면 중단, put 실패면 do_adjtimex의 결과 대신 복사 오류를 반환합니다. 입력·출력의 tai 처리는 대칭이 아닙니다."
+    },
+    {
+      "title": "Jiffies에서 밀리초로",
+      "text": "jiffies_to_msecs는 HZ가 1000 이하이고 1000을 나누어떨어뜨리면 상수 곱셈입니다. HZ가 1000보다 크고 1000의 배수이면 (j+비율-1)/비율로 올림합니다. 일반 경우 32비트 long에서는 생성된 multiplier/shift에 올림 항을, 64비트에서는 DIV_ROUND_UP을 사용합니다. 반환형 unsigned int와 중간 계산 폭을 고려해야 하며 모든 입력에서 포화하는 함수는 아닙니다."
+    },
+    {
+      "title": "Jiffies에서 마이크로초로",
+      "text": "jiffies_to_usecs는 HZ>USEC_PER_SEC를 BUILD_BUG_ON으로 막습니다. 1000000이 HZ로 나누어떨어지면 상수 곱, 아니면 32비트에서는 생성된 곱·shift, 64비트에서는 분자 곱 후 분모 나눗셈입니다. msecs 경로의 올림 보정 항을 이 함수에도 있다고 추정하면 안 됩니다. 반환형은 unsigned int입니다."
+    },
+    {
+      "title": "Mktime의 달력 입력",
+      "text": "mktime64는 일반 연도, 1..12 월, 1 기반 일과 시·분·초를 unsigned int로 받습니다. struct tm의 0 기반 월·1900 기준 연도와 다릅니다. 월에서 2를 빼 1·2월을 전년도 끝으로 옮기고 year/4-year/100+year/400, 월·일 항, year*365와 기준값 719499로 일수를 계산한 뒤 시간 단위를 차례로 곱해 초로 바꿉니다."
+    },
+    {
+      "title": "Mktime의 허용 표현과 범위",
+      "text": "주석은 sec=60을 다음 초와 같은 값으로, 24:00:00을 다음 날 자정으로 처리한다고 설명합니다. Unix 초에 별도 윤초 식별자를 추가하지 않습니다. 일반 날짜 유효성 검사나 모든 unsigned 입력의 산술 보호가 없고 year와 mon의 중간 계산도 unsigned이므로 임의 입력에 대한 완전한 달력 검증기로 쓰면 안 됩니다. 주석의 역사·유래 설명을 외부 자료 검증 결과로 확대하지 않습니다."
+    },
+    {
+      "title": "나노초에서 구형 timeval",
+      "text": "ns_to_kernel_old_timeval은 ns_to_timespec64를 먼저 호출하고 초를 그대로 대입하며 양의 정상화된 나노초 부분을 1000으로 나누어 마이크로초로 둡니다. 예를 들어 -1ns는 (-1초,999999999ns)에서 (-1초,999999us)로 바뀌어 -1us가 됩니다. 음수에서 단순히 전체 값을 0 방향으로 나눈 결과와는 다르며 하위 정밀도는 잃습니다."
+    },
+    {
+      "title": "Timespec 정규화",
+      "text": "set_normalized_timespec64는 nsec가 10^9 이상인 동안 이를 빼고 sec를 증가시키며, 음수인 동안 10^9를 더하고 sec를 감소시킵니다. 두 루프의 빈 asm은 modulo로 바꾸는 최적화를 막으려는 것이며 메모리 장벽은 아닙니다. 결과 나노초는 0 이상 1초 미만입니다. 반복 비용은 초로 옮기는 양에 비례하고 sec overflow를 여기서 별도 검사하지 않습니다."
+    },
+    {
+      "title": "S64 나노초의 분해",
+      "text": "ns_to_timespec64는 처음 {0,0}입니다. 양수는 div_u64_rem으로 몫과 나머지를 구하고, 음수는 -nsec-1을 나눈 뒤 초를 -몫-1, 나노초를 NSEC_PER_SEC-rem-1로 만듭니다. 0은 그대로 반환합니다. -1ns는 {-1,999999999}, -1000000000ns는 {-1,0}입니다. 최솟값 경계를 포함한 커널 정수 계산 맥락을 일반 사용자 C의 무조건 안전한 단항 부정 공식으로 옮기지 않습니다."
+    },
+    {
+      "title": "밀리초·마이크로초 timeout 변환",
+      "text": "__msecs_to_jiffies는 unsigned m을 int로 보아 음수이면 MAX_JIFFY_OFFSET, 아니면 _msecs_to_jiffies에 위임합니다. 상수 여부에 따른 선택은 이 함수 본문에서 하지 않으므로 긴 주석을 실제 코드와 구분합니다. __usecs_to_jiffies는 u가 jiffies_to_usecs(MAX_JIFFY_OFFSET)보다 큰지 검사한 뒤 _usecs_to_jiffies에 위임합니다. 주석의 @u 설명에 milliseconds라고 적혀 있어도 함수의 단위는 microseconds입니다."
+    },
+    {
+      "title": "Timespec과 jiffies 왕복",
+      "text": "timespec64_to_jiffies는 초를 u64에 담고 nsec에 TICK_NSEC-1을 더해 올림을 준비합니다. 초가 MAX_SEC_IN_JIFFIES 이상이면 그 상한으로 제한하고 nsec를 0으로 둡니다. 생성된 SEC/NSEC_CONVERSION과 shift를 조합합니다. 음수 초도 u64 변환 후 큰 값이 되므로 음수 기간을 자연스럽게 보존하는 변환이 아닙니다. 반대 함수는 (u64)jiffies*TICK_NSEC를 한 번 나눠 초와 나머지를 얻으며 곱셈 overflow를 별도로 검사하지 않습니다."
+    },
+    {
+      "title": "Jiffies와 사용자 clock_t",
+      "text": "jiffies_to_clock_t는 TICK_NSEC와 NSEC_PER_SEC/USER_HZ의 정수 관계가 맞으면 HZ와 USER_HZ 비율로 곱하거나 나누고, 아니면 u64 나노초 중간값을 나눕니다. clock_t_to_jiffies는 HZ가 USER_HZ의 배수인 경우 ~0UL/비율 이상을 ~0UL로 제한하고 곱합니다. 일반 경우에는 ~0UL/HZ*USER_HZ 상한 검사 뒤 (u64)x*HZ를 USER_HZ로 나눕니다. USER_HZ와 커널 HZ를 같은 상수라고 가정하지 않습니다."
+    },
+    {
+      "title": "64비트 jiffies에서 clock 단위",
+      "text": "jiffies_64_to_clock_t는 같은 tick 정수 관계에서 HZ<USER_HZ이면 x*USER_HZ를 HZ로 나누고, HZ>USER_HZ이면 비율로 나누며, 같으면 그대로 둡니다. 일반 경로는 x*TICK_NSEC를 사용자 tick 길이로 나눕니다. 주석은 큰 기간의 중간 곱 overflow 가능성을 인정합니다. 일반 jiffies 함수와 동일한 코드 또는 포화 정책이 아닙니다."
+    },
+    {
+      "title": "나노초에서 clock 단위",
+      "text": "nsec_to_clock_t는 10^9가 USER_HZ로 나누어떨어지면 단순 나눗셈, USER_HZ가 512의 배수이면 x*USER_HZ/512를 10^9/512로 나눕니다. 나머지는 x*9와 반올림된 (9*10^9+USER_HZ/2)/USER_HZ 분모를 사용합니다. 주석의 상대 오차와 overflow 기간은 해당 일반 공식의 조건부 설명이며 모든 설정과 입력에 대한 무오차 보장이 아닙니다."
+    },
+    {
+      "title": "64비트 jiffies에서 나노초·밀리초",
+      "text": "jiffies64_to_nsecs는 10^9가 HZ로 나누어떨어지면 상수 곱, 아니면 HZ_TO_NSEC_NUM/DEN의 유리수 변환입니다. jiffies64_to_msecs는 HZ<=1000이고 나누어떨어지면 상수 곱, 아니면 HZ_TO_MSEC_NUM/DEN으로 나눕니다. 일반 jiffies_to_msecs와 달리 여기 일반 경로에는 DIV_ROUND_UP이 없습니다. 결과 폭만 다른 같은 반올림 함수라고 설명하지 않습니다."
+    },
+    {
+      "title": "스케줄러용 나노초 변환",
+      "text": "nsecs_to_jiffies64는 10^9%HZ가 0이면 나눗셈, HZ%512가 0이면 n*HZ/512를 10^9/512로 나누고, 나머지는 n*9와 반올림된 분모를 사용합니다. 주석은 scheduler용이며 장치 timeout 계산처럼 MAX_JIFFY_OFFSET을 반환하지 않는다고 명시합니다. nsecs_to_jiffies는 이 결과를 unsigned long으로 줄입니다. 32비트에서 큰 결과가 잘릴 수 있으며 별도 포화가 없습니다."
+    },
+    {
+      "title": "안전한 timespec 덧셈",
+      "text": "timespec64_add_safe는 두 입력이 비음수이고 정상화되었다고 가정합니다. lhs 초를 timeu64_t로 변환해 초를 더하고 나노초 합과 함께 정규화합니다. 결과 초가 어느 입력 초보다 작으면 overflow로 보고 {TIME64_MAX,0}으로 바꿉니다. 앞서 헤더의 TIME64_MAX 반환이라는 요약은 실제로 이 두 필드 값을 뜻합니다. 임의의 음수·비정규 입력까지 보호하는 함수는 아닙니다."
+    },
+    {
+      "title": "새 timespec 입력 복사",
+      "text": "get_timespec64는 __kernel_timespec 전체를 지역 객체로 복사하고 실패하면 EFAULT입니다. 초를 대입한 뒤 in_compat_syscall이면 나노초의 상위 32비트를 마스크로 지워 패딩을 제거합니다. 32비트 모드에서는 long 대입이 높은 비트를 버립니다. 복사 성공만 확인하며 tv_nsec<10^9 같은 시간 값의 유효성을 여기서 검사하지 않습니다."
+    },
+    {
+      "title": "새 timespec 출력 복사",
+      "text": "put_timespec64는 두 필드를 지정한 __kernel_timespec 지역 객체를 만들고 전체를 copy_to_user합니다. 복사 실패는 EFAULT, 성공은 0입니다. 입력 값 정규화나 사용 가능한 시각 범위 검사가 없으므로 호출자가 별도 정책을 적용해야 합니다. 새 구조체의 명시적 변환과 단순한 내부 구조체 바이트 복사를 구분합니다."
+    },
+    {
+      "title": "구형 timespec의 내부 helper",
+      "text": "__get_old_timespec32는 사용자 old_timespec32를 지역 복사한 뒤 두 s32 필드를 timespec64에 대입합니다. __put_old_timespec32는 좁은 필드로 지역 구조체를 만들어 사용자에게 복사합니다. 두 방향 모두 유효성 검사나 축소 overflow 오류를 내지 않으며 복사 실패만 EFAULT입니다."
+    },
+    {
+      "title": "X32 예외를 가진 공개 wrapper",
+      "text": "get_old_timespec32/put_old_timespec32는 COMPAT_USE_64BIT_TIME이면 내부 timespec64 크기 전체를 직접 copy_from/to_user합니다. 아니면 앞의 고정 32비트 helper를 호출합니다. 그래서 공개 인자는 void __user 포인터입니다. 이름에 32가 있다고 모든 경로에서 old_timespec32의 두 필드만 읽는 것은 아닙니다."
+    },
+    {
+      "title": "새 interval timer 복사",
+      "text": "get_itimerspec64/put_itimerspec64는 interval을 먼저 새 timespec helper로 처리하고 성공하면 value를 처리합니다. 앞 작업이 성공한 뒤 뒤 작업이 실패하면 앞부분을 되돌리지 않습니다. 같은 구조체의 두 시간 값 복사가 전체적으로 원자적이라고 가정하지 않습니다."
+    },
+    {
+      "title": "구형 interval timer 복사",
+      "text": "get_old_itimerspec32/put_old_itimerspec32는 공개 old timespec wrapper가 아니라 __get/__put_old_timespec32를 직접 두 번 호출합니다. OR 단락 평가로 interval이 실패하면 value는 건너뛰고 EFAULT입니다. COMPAT_USE_64BIT_TIME 분기가 여기 자동 적용된다고 추측하면 안 됩니다. 성공 시 0이며 역시 값 검증이나 rollback은 없습니다."
+    },
+    {
+      "title": "심볼 공개와 검증 범위",
+      "text": "sys_tz와 여러 전통 시간 변환은 일반 EXPORT_SYMBOL입니다. nsecs_to_jiffies와 새·구형 timespec/itimerspec 공개 복사 helper들은 EXPORT_SYMBOL_GPL입니다. nsec_to_clock_t와 timespec64_add_safe에는 이 파일에서 export 표기가 없습니다. 전체 본문과 설정별 경로를 해설했지만 실제 시스템 시계를 변경하는 실험, 모든 HZ 조합의 실행, 모든 ABI 테스트까지 통과했다고 주장하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "첫 timezone 설정에 tv도 함께 주면 clock warp가 실행되는가?",
+      "options": [
+        "아니다. firsttime은 소모하지만 warp는 tv가 없을 때만 실행한다",
+        "그렇다. 첫 tz 입력이면 항상 warp한다"
+      ],
+      "answer": 0,
+      "explanation": "tz 블록에서 firsttime을 0으로 만든 뒤 !tv 조건을 검사합니다. tv만 설정하는 요청은 firsttime을 바꾸지 않습니다."
+    },
+    {
+      "prompt": "settimeofday에 tv_usec=1000000을 전달하면 허용되는가?",
+      "options": [
+        "그렇다. 첫 검사에 >만 있으므로 전체 호출도 성공한다",
+        "아니다. 나노초 변환 뒤 공통 유효성 검사에서 거부된다"
+      ],
+      "answer": 1,
+      "explanation": "첫 검사는 통과해도 1000000000ns는 timespec64_valid_settod에서 유효하지 않습니다. 여러 단계의 검사를 끝까지 따라가야 합니다."
+    },
+    {
+      "prompt": "stime은 do_settimeofday64 오류를 그대로 반환하는가?",
+      "options": [
+        "아니다. 그 반환값을 버리고 0을 반환한다",
+        "그렇다. 다른 설정 helper와 완전히 같다"
+      ],
+      "answer": 0,
+      "explanation": "사용자 읽기와 보안 오류는 반환하지만 마지막 호출은 결과를 저장하지 않습니다. 일반 공통 설정 helper와 차이가 있습니다."
+    },
+    {
+      "prompt": "구형 timex의 tai는 입력과 출력에서 모두 복사되는가?",
+      "options": [
+        "그렇다. 두 함수가 완전히 대칭이다",
+        "아니다. 입력은 0으로 남고 출력은 복사된다"
+      ],
+      "answer": 1,
+      "explanation": "get은 목적을 memset한 뒤 tai 대입을 하지 않습니다. put은 tai를 명시적으로 대입합니다."
+    },
+    {
+      "prompt": "-1ns를 ns_to_timespec64로 변환하면?",
+      "options": [
+        "tv_sec=-1, tv_nsec=999999999이다",
+        "tv_sec=0, tv_nsec=-1이다"
+      ],
+      "answer": 0,
+      "explanation": "음수 전체 값은 더 이른 정수 초와 그 뒤의 비음수 나노초로 표현합니다. 정규화된 소수 필드는 음수가 아닙니다."
+    },
+    {
+      "prompt": "timespec64_add_safe의 overflow 결과는?",
+      "options": [
+        "초 TIME64_MAX, 나노초 999999999이다",
+        "초 TIME64_MAX, 나노초 0이다"
+      ],
+      "answer": 1,
+      "explanation": "본문은 초와 나노초를 각각 이 값으로 설정합니다. 헤더의 짧은 주석만 보고 최대 소수 부분을 추정하면 안 됩니다."
+    },
+    {
+      "prompt": "nsecs_to_jiffies64는 큰 입력을 MAX_JIFFY_OFFSET으로 제한하는 timeout 변환인가?",
+      "options": [
+        "아니다. 스케줄러용이며 그 포화 규칙을 적용하지 않는다",
+        "그렇다. 모든 jiffies 변환이 같은 제한을 사용한다"
+      ],
+      "answer": 0,
+      "explanation": "주석이 msecs/usecs timeout 인터페이스와 차이를 명시합니다. 단위가 같아도 목적과 경계 정책이 다릅니다."
+    },
+    {
+      "prompt": "get_timespec64가 0을 반환하면 시간 값의 유효성도 확인된 것인가?",
+      "options": [
+        "그렇다. 나노초 범위와 음수 초를 모두 검사한다",
+        "아니다. 복사와 표현 변환의 성공일 뿐이다"
+      ],
+      "answer": 1,
+      "explanation": "본문에는 timespec64_valid 호출이 없습니다. 복사 helper와 API 입력 검증의 책임을 구분해야 합니다."
+    },
+    {
+      "prompt": "구형 itimerspec 복사는 COMPAT_USE_64BIT_TIME 공개 wrapper를 사용하는가?",
+      "options": [
+        "아니다. 고정 32비트 내부 helper를 직접 사용한다",
+        "그렇다. 두 경로가 자동으로 같은 크기를 복사한다"
+      ],
+      "answer": 0,
+      "explanation": "함수 호출 대상이 __get/__put_old_timespec32입니다. 비슷한 함수 이름의 wrapper를 거치는 것으로 읽으면 ABI 해석이 틀립니다."
+    },
+    {
+      "prompt": "일반 jiffies_to_msecs와 jiffies64_to_msecs의 일반 경로 반올림은 같은가?",
+      "options": [
+        "그렇다. 반환 비트 수만 다를 뿐 모든 식이 동일하다",
+        "아니다. 전자는 올림 보정이 있고 후자는 유리수 나눗셈이다"
+      ],
+      "answer": 1,
+      "explanation": "전자는 DIV_ROUND_UP 또는 shift 앞 보정 항을 쓰며 후자는 div_u64를 사용합니다. 변환 방향·폭뿐 아니라 실제 반올림 식을 확인합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n *  Copyright (C) 1991, 1992  Linus Torvalds\n *\n *  This file contains the interface functions for the various time related\n *  system calls: time, stime, gettimeofday, settimeofday, adjtime\n *\n * Modification history:\n *\n * 1993-09-02    Philip Gladstone\n *      Created file with time related functions from sched/core.c and adjtimex()\n * 1993-10-08    Torsten Duwe\n *      adjtime interface update and CMOS clock write code\n * 1995-08-13    Torsten Duwe\n *      kernel PLL updated to 1994-12-13 specs (rfc-1589)\n * 1999-01-16    Ulrich Windl\n *\tIntroduced error checking for many cases in adjtimex().\n *\tUpdated NTP code according to technical memorandum Jan '96\n *\t\"A Kernel Model for Precision Timekeeping\" by Dave Mills\n *\tAllow time_constant larger than MAXTC(6) for NTP v4 (MAXTC == 10)\n *\t(Even though the technical memorandum forbids it)\n * 2004-07-14\t Christoph Lameter\n *\tAdded getnstimeofday to allow the posix timer functions to return\n *\twith nanosecond accuracy\n */\n\n#include <linux/export.h>\n#include <linux/kernel.h>\n#include <linux/timex.h>\n#include <linux/capability.h>\n#include <linux/timekeeper_internal.h>\n#include <linux/errno.h>\n#include <linux/syscalls.h>\n#include <linux/security.h>\n#include <linux/fs.h>\n#include <linux/math64.h>\n#include <linux/ptrace.h>\n\n#include <linux/uaccess.h>\n#include <linux/compat.h>\n#include <asm/unistd.h>\n\n#include <generated/timeconst.h>\n#include \"timekeeping.h\"\n\n/*\n * The timezone where the local system is located.  Used as a default by some\n * programs who obtain this value by using gettimeofday.\n */\nstruct timezone sys_tz;\n\nEXPORT_SYMBOL(sys_tz);\n\n#ifdef __ARCH_WANT_SYS_TIME\n\n/*\n * sys_time() can be implemented in user-level using\n * sys_gettimeofday().  Is this for backwards compatibility?  If so,\n * why not move it into the appropriate arch directory (for those\n * architectures that need it).\n */\nSYSCALL_DEFINE1(time, __kernel_old_time_t __user *, tloc)\n{\n\t__kernel_old_time_t i = (__kernel_old_time_t)ktime_get_real_seconds();\n\n\tif (tloc) {\n\t\tif (put_user(i,tloc))\n\t\t\treturn -EFAULT;\n\t}\n\tforce_successful_syscall_return();\n\treturn i;\n}\n\n/*\n * sys_stime() can be implemented in user-level using\n * sys_settimeofday().  Is this for backwards compatibility?  If so,\n * why not move it into the appropriate arch directory (for those\n * architectures that need it).\n */\n\nSYSCALL_DEFINE1(stime, __kernel_old_time_t __user *, tptr)\n{\n\tstruct timespec64 tv;\n\tint err;\n\n\tif (get_user(tv.tv_sec, tptr))\n\t\treturn -EFAULT;\n\n\ttv.tv_nsec = 0;\n\n\terr = security_settime64(&tv, NULL);\n\tif (err)\n\t\treturn err;\n\n\tdo_settimeofday64(&tv);\n\treturn 0;\n}\n\n#endif /* __ARCH_WANT_SYS_TIME */\n\n#ifdef CONFIG_COMPAT_32BIT_TIME\n#ifdef __ARCH_WANT_SYS_TIME32\n\n/* old_time32_t is a 32 bit \"long\" and needs to get converted. */\nSYSCALL_DEFINE1(time32, old_time32_t __user *, tloc)\n{\n\told_time32_t i;\n\n\ti = (old_time32_t)ktime_get_real_seconds();\n\n\tif (tloc) {\n\t\tif (put_user(i,tloc))\n\t\t\treturn -EFAULT;\n\t}\n\tforce_successful_syscall_return();\n\treturn i;\n}\n\nSYSCALL_DEFINE1(stime32, old_time32_t __user *, tptr)\n{\n\tstruct timespec64 tv;\n\tint err;\n\n\tif (get_user(tv.tv_sec, tptr))\n\t\treturn -EFAULT;\n\n\ttv.tv_nsec = 0;\n\n\terr = security_settime64(&tv, NULL);\n\tif (err)\n\t\treturn err;\n\n\tdo_settimeofday64(&tv);\n\treturn 0;\n}\n\n#endif /* __ARCH_WANT_SYS_TIME32 */\n#endif\n\nSYSCALL_DEFINE2(gettimeofday, struct __kernel_old_timeval __user *, tv,\n\t\tstruct timezone __user *, tz)\n{\n\tif (likely(tv != NULL)) {\n\t\tstruct timespec64 ts;\n\n\t\tktime_get_real_ts64(&ts);\n\t\tif (put_user(ts.tv_sec, &tv->tv_sec) ||\n\t\t    put_user(ts.tv_nsec / 1000, &tv->tv_usec))\n\t\t\treturn -EFAULT;\n\t}\n\tif (unlikely(tz != NULL)) {\n\t\tif (copy_to_user(tz, &sys_tz, sizeof(sys_tz)))\n\t\t\treturn -EFAULT;\n\t}\n\treturn 0;\n}\n\n/*\n * In case for some reason the CMOS clock has not already been running\n * in UTC, but in some local time: The first time we set the timezone,\n * we will warp the clock so that it is ticking UTC time instead of\n * local time. Presumably, if someone is setting the timezone then we\n * are running in an environment where the programs understand about\n * timezones. This should be done at boot time in the /etc/rc script,\n * as soon as possible, so that the clock can be set right. Otherwise,\n * various programs will get confused when the clock gets warped.\n */\n\nint do_sys_settimeofday64(const struct timespec64 *tv, const struct timezone *tz)\n{\n\tstatic int firsttime = 1;\n\tint error = 0;\n\n\tif (tv && !timespec64_valid_settod(tv))\n\t\treturn -EINVAL;\n\n\terror = security_settime64(tv, tz);\n\tif (error)\n\t\treturn error;\n\n\tif (tz) {\n\t\t/* Verify we're within the +-15 hrs range */\n\t\tif (tz->tz_minuteswest > 15*60 || tz->tz_minuteswest < -15*60)\n\t\t\treturn -EINVAL;\n\n\t\tsys_tz = *tz;\n\t\tupdate_vsyscall_tz();\n\t\tif (firsttime) {\n\t\t\tfirsttime = 0;\n\t\t\tif (!tv)\n\t\t\t\ttimekeeping_warp_clock();\n\t\t}\n\t}\n\tif (tv)\n\t\treturn do_settimeofday64(tv);\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(settimeofday, struct __kernel_old_timeval __user *, tv,\n\t\tstruct timezone __user *, tz)\n{\n\tstruct timespec64 new_ts;\n\tstruct timezone new_tz;\n\n\tif (tv) {\n\t\tif (get_user(new_ts.tv_sec, &tv->tv_sec) ||\n\t\t    get_user(new_ts.tv_nsec, &tv->tv_usec))\n\t\t\treturn -EFAULT;\n\n\t\tif (new_ts.tv_nsec > USEC_PER_SEC || new_ts.tv_nsec < 0)\n\t\t\treturn -EINVAL;\n\n\t\tnew_ts.tv_nsec *= NSEC_PER_USEC;\n\t}\n\tif (tz) {\n\t\tif (copy_from_user(&new_tz, tz, sizeof(*tz)))\n\t\t\treturn -EFAULT;\n\t}\n\n\treturn do_sys_settimeofday64(tv ? &new_ts : NULL, tz ? &new_tz : NULL);\n}\n\n#ifdef CONFIG_COMPAT\nCOMPAT_SYSCALL_DEFINE2(gettimeofday, struct old_timeval32 __user *, tv,\n\t\t       struct timezone __user *, tz)\n{\n\tif (tv) {\n\t\tstruct timespec64 ts;\n\n\t\tktime_get_real_ts64(&ts);\n\t\tif (put_user(ts.tv_sec, &tv->tv_sec) ||\n\t\t    put_user(ts.tv_nsec / 1000, &tv->tv_usec))\n\t\t\treturn -EFAULT;\n\t}\n\tif (tz) {\n\t\tif (copy_to_user(tz, &sys_tz, sizeof(sys_tz)))\n\t\t\treturn -EFAULT;\n\t}\n\n\treturn 0;\n}\n\nCOMPAT_SYSCALL_DEFINE2(settimeofday, struct old_timeval32 __user *, tv,\n\t\t       struct timezone __user *, tz)\n{\n\tstruct timespec64 new_ts;\n\tstruct timezone new_tz;\n\n\tif (tv) {\n\t\tif (get_user(new_ts.tv_sec, &tv->tv_sec) ||\n\t\t    get_user(new_ts.tv_nsec, &tv->tv_usec))\n\t\t\treturn -EFAULT;\n\n\t\tif (new_ts.tv_nsec > USEC_PER_SEC || new_ts.tv_nsec < 0)\n\t\t\treturn -EINVAL;\n\n\t\tnew_ts.tv_nsec *= NSEC_PER_USEC;\n\t}\n\tif (tz) {\n\t\tif (copy_from_user(&new_tz, tz, sizeof(*tz)))\n\t\t\treturn -EFAULT;\n\t}\n\n\treturn do_sys_settimeofday64(tv ? &new_ts : NULL, tz ? &new_tz : NULL);\n}\n#endif\n\n#ifdef CONFIG_64BIT\nSYSCALL_DEFINE1(adjtimex, struct __kernel_timex __user *, txc_p)\n{\n\tstruct __kernel_timex txc;\t\t/* Local copy of parameter */\n\tint ret;\n\n\t/* Copy the user data space into the kernel copy\n\t * structure. But bear in mind that the structures\n\t * may change\n\t */\n\tif (copy_from_user(&txc, txc_p, sizeof(struct __kernel_timex)))\n\t\treturn -EFAULT;\n\tret = do_adjtimex(&txc);\n\treturn copy_to_user(txc_p, &txc, sizeof(struct __kernel_timex)) ? -EFAULT : ret;\n}\n#endif\n\n#ifdef CONFIG_COMPAT_32BIT_TIME\nint get_old_timex32(struct __kernel_timex *txc, const struct old_timex32 __user *utp)\n{\n\tstruct old_timex32 tx32;\n\n\tmemset(txc, 0, sizeof(struct __kernel_timex));\n\tif (copy_from_user(&tx32, utp, sizeof(struct old_timex32)))\n\t\treturn -EFAULT;\n\n\ttxc->modes = tx32.modes;\n\ttxc->offset = tx32.offset;\n\ttxc->freq = tx32.freq;\n\ttxc->maxerror = tx32.maxerror;\n\ttxc->esterror = tx32.esterror;\n\ttxc->status = tx32.status;\n\ttxc->constant = tx32.constant;\n\ttxc->precision = tx32.precision;\n\ttxc->tolerance = tx32.tolerance;\n\ttxc->time.tv_sec = tx32.time.tv_sec;\n\ttxc->time.tv_usec = tx32.time.tv_usec;\n\ttxc->tick = tx32.tick;\n\ttxc->ppsfreq = tx32.ppsfreq;\n\ttxc->jitter = tx32.jitter;\n\ttxc->shift = tx32.shift;\n\ttxc->stabil = tx32.stabil;\n\ttxc->jitcnt = tx32.jitcnt;\n\ttxc->calcnt = tx32.calcnt;\n\ttxc->errcnt = tx32.errcnt;\n\ttxc->stbcnt = tx32.stbcnt;\n\n\treturn 0;\n}\n\nint put_old_timex32(struct old_timex32 __user *utp, const struct __kernel_timex *txc)\n{\n\tstruct old_timex32 tx32;\n\n\tmemset(&tx32, 0, sizeof(struct old_timex32));\n\ttx32.modes = txc->modes;\n\ttx32.offset = txc->offset;\n\ttx32.freq = txc->freq;\n\ttx32.maxerror = txc->maxerror;\n\ttx32.esterror = txc->esterror;\n\ttx32.status = txc->status;\n\ttx32.constant = txc->constant;\n\ttx32.precision = txc->precision;\n\ttx32.tolerance = txc->tolerance;\n\ttx32.time.tv_sec = txc->time.tv_sec;\n\ttx32.time.tv_usec = txc->time.tv_usec;\n\ttx32.tick = txc->tick;\n\ttx32.ppsfreq = txc->ppsfreq;\n\ttx32.jitter = txc->jitter;\n\ttx32.shift = txc->shift;\n\ttx32.stabil = txc->stabil;\n\ttx32.jitcnt = txc->jitcnt;\n\ttx32.calcnt = txc->calcnt;\n\ttx32.errcnt = txc->errcnt;\n\ttx32.stbcnt = txc->stbcnt;\n\ttx32.tai = txc->tai;\n\tif (copy_to_user(utp, &tx32, sizeof(struct old_timex32)))\n\t\treturn -EFAULT;\n\treturn 0;\n}\n\nSYSCALL_DEFINE1(adjtimex_time32, struct old_timex32 __user *, utp)\n{\n\tstruct __kernel_timex txc;\n\tint err, ret;\n\n\terr = get_old_timex32(&txc, utp);\n\tif (err)\n\t\treturn err;\n\n\tret = do_adjtimex(&txc);\n\n\terr = put_old_timex32(utp, &txc);\n\tif (err)\n\t\treturn err;\n\n\treturn ret;\n}\n#endif\n\n/**\n * jiffies_to_msecs - Convert jiffies to milliseconds\n * @j: jiffies value\n *\n * Avoid unnecessary multiplications/divisions in the\n * two most common HZ cases.\n *\n * Return: milliseconds value\n */\nunsigned int jiffies_to_msecs(const unsigned long j)\n{\n#if HZ <= MSEC_PER_SEC && !(MSEC_PER_SEC % HZ)\n\treturn (MSEC_PER_SEC / HZ) * j;\n#elif HZ > MSEC_PER_SEC && !(HZ % MSEC_PER_SEC)\n\treturn (j + (HZ / MSEC_PER_SEC) - 1)/(HZ / MSEC_PER_SEC);\n#else\n# if BITS_PER_LONG == 32\n\treturn (HZ_TO_MSEC_MUL32 * j + (1ULL << HZ_TO_MSEC_SHR32) - 1) >>\n\t       HZ_TO_MSEC_SHR32;\n# else\n\treturn DIV_ROUND_UP(j * HZ_TO_MSEC_NUM, HZ_TO_MSEC_DEN);\n# endif\n#endif\n}\nEXPORT_SYMBOL(jiffies_to_msecs);\n\n/**\n * jiffies_to_usecs - Convert jiffies to microseconds\n * @j: jiffies value\n *\n * Return: microseconds value\n */\nunsigned int jiffies_to_usecs(const unsigned long j)\n{\n\t/*\n\t * Hz usually doesn't go much further MSEC_PER_SEC.\n\t * jiffies_to_usecs() and usecs_to_jiffies() depend on that.\n\t */\n\tBUILD_BUG_ON(HZ > USEC_PER_SEC);\n\n#if !(USEC_PER_SEC % HZ)\n\treturn (USEC_PER_SEC / HZ) * j;\n#else\n# if BITS_PER_LONG == 32\n\treturn (HZ_TO_USEC_MUL32 * j) >> HZ_TO_USEC_SHR32;\n# else\n\treturn (j * HZ_TO_USEC_NUM) / HZ_TO_USEC_DEN;\n# endif\n#endif\n}\nEXPORT_SYMBOL(jiffies_to_usecs);\n\n/**\n * mktime64 - Converts date to seconds.\n * @year0: year to convert\n * @mon0: month to convert\n * @day: day to convert\n * @hour: hour to convert\n * @min: minute to convert\n * @sec: second to convert\n *\n * Converts Gregorian date to seconds since 1970-01-01 00:00:00.\n * Assumes input in normal date format, i.e. 1980-12-31 23:59:59\n * => year=1980, mon=12, day=31, hour=23, min=59, sec=59.\n *\n * [For the Julian calendar (which was used in Russia before 1917,\n * Britain & colonies before 1752, anywhere else before 1582,\n * and is still in use by some communities) leave out the\n * -year/100+year/400 terms, and add 10.]\n *\n * This algorithm was first published by Gauss (I think).\n *\n * A leap second can be indicated by calling this function with sec as\n * 60 (allowable under ISO 8601).  The leap second is treated the same\n * as the following second since they don't exist in UNIX time.\n *\n * An encoding of midnight at the end of the day as 24:00:00 - ie. midnight\n * tomorrow - (allowable under ISO 8601) is supported.\n *\n * Return: seconds since the epoch time for the given input date\n */\ntime64_t mktime64(const unsigned int year0, const unsigned int mon0,\n\t\tconst unsigned int day, const unsigned int hour,\n\t\tconst unsigned int min, const unsigned int sec)\n{\n\tunsigned int mon = mon0, year = year0;\n\n\t/* 1..12 -> 11,12,1..10 */\n\tif (0 >= (int) (mon -= 2)) {\n\t\tmon += 12;\t/* Puts Feb last since it has leap day */\n\t\tyear -= 1;\n\t}\n\n\treturn ((((time64_t)\n\t\t  (year/4 - year/100 + year/400 + 367*mon/12 + day) +\n\t\t  year*365 - 719499\n\t    )*24 + hour /* now have hours - midnight tomorrow handled here */\n\t  )*60 + min /* now have minutes */\n\t)*60 + sec; /* finally seconds */\n}\nEXPORT_SYMBOL(mktime64);\n\nstruct __kernel_old_timeval ns_to_kernel_old_timeval(s64 nsec)\n{\n\tstruct timespec64 ts = ns_to_timespec64(nsec);\n\tstruct __kernel_old_timeval tv;\n\n\ttv.tv_sec = ts.tv_sec;\n\ttv.tv_usec = (suseconds_t)ts.tv_nsec / 1000;\n\n\treturn tv;\n}\nEXPORT_SYMBOL(ns_to_kernel_old_timeval);\n\n/**\n * set_normalized_timespec64 - set timespec sec and nsec parts and normalize\n *\n * @ts:\t\tpointer to timespec variable to be set\n * @sec:\tseconds to set\n * @nsec:\tnanoseconds to set\n *\n * Set seconds and nanoseconds field of a timespec variable and\n * normalize to the timespec storage format\n *\n * Note: The tv_nsec part is always in the range of 0 <= tv_nsec < NSEC_PER_SEC.\n * For negative values only the tv_sec field is negative !\n */\nvoid set_normalized_timespec64(struct timespec64 *ts, time64_t sec, s64 nsec)\n{\n\twhile (nsec >= NSEC_PER_SEC) {\n\t\t/*\n\t\t * The following asm() prevents the compiler from\n\t\t * optimising this loop into a modulo operation. See\n\t\t * also __iter_div_u64_rem() in include/linux/time.h\n\t\t */\n\t\tasm(\"\" : \"+rm\"(nsec));\n\t\tnsec -= NSEC_PER_SEC;\n\t\t++sec;\n\t}\n\twhile (nsec < 0) {\n\t\tasm(\"\" : \"+rm\"(nsec));\n\t\tnsec += NSEC_PER_SEC;\n\t\t--sec;\n\t}\n\tts->tv_sec = sec;\n\tts->tv_nsec = nsec;\n}\nEXPORT_SYMBOL(set_normalized_timespec64);\n\n/**\n * ns_to_timespec64 - Convert nanoseconds to timespec64\n * @nsec:       the nanoseconds value to be converted\n *\n * Return: the timespec64 representation of the nsec parameter.\n */\nstruct timespec64 ns_to_timespec64(s64 nsec)\n{\n\tstruct timespec64 ts = { 0, 0 };\n\ts32 rem;\n\n\tif (likely(nsec > 0)) {\n\t\tts.tv_sec = div_u64_rem(nsec, NSEC_PER_SEC, &rem);\n\t\tts.tv_nsec = rem;\n\t} else if (nsec < 0) {\n\t\t/*\n\t\t * With negative times, tv_sec points to the earlier\n\t\t * second, and tv_nsec counts the nanoseconds since\n\t\t * then, so tv_nsec is always a positive number.\n\t\t */\n\t\tts.tv_sec = -div_u64_rem(-nsec - 1, NSEC_PER_SEC, &rem) - 1;\n\t\tts.tv_nsec = NSEC_PER_SEC - rem - 1;\n\t}\n\n\treturn ts;\n}\nEXPORT_SYMBOL(ns_to_timespec64);\n\n/**\n * __msecs_to_jiffies: - convert milliseconds to jiffies\n * @m:\ttime in milliseconds\n *\n * conversion is done as follows:\n *\n * - negative values mean 'infinite timeout' (MAX_JIFFY_OFFSET)\n *\n * - 'too large' values [that would result in larger than\n *   MAX_JIFFY_OFFSET values] mean 'infinite timeout' too.\n *\n * - all other values are converted to jiffies by either multiplying\n *   the input value by a factor or dividing it with a factor and\n *   handling any 32-bit overflows.\n *   for the details see __msecs_to_jiffies()\n *\n * __msecs_to_jiffies() checks for the passed in value being a constant\n * via __builtin_constant_p() allowing gcc to eliminate most of the\n * code, __msecs_to_jiffies() is called if the value passed does not\n * allow constant folding and the actual conversion must be done at\n * runtime.\n * The _msecs_to_jiffies helpers are the HZ dependent conversion\n * routines found in include/linux/jiffies.h\n *\n * Return: jiffies value\n */\nunsigned long __msecs_to_jiffies(const unsigned int m)\n{\n\t/*\n\t * Negative value, means infinite timeout:\n\t */\n\tif ((int)m < 0)\n\t\treturn MAX_JIFFY_OFFSET;\n\treturn _msecs_to_jiffies(m);\n}\nEXPORT_SYMBOL(__msecs_to_jiffies);\n\n/**\n * __usecs_to_jiffies: - convert microseconds to jiffies\n * @u:\ttime in milliseconds\n *\n * Return: jiffies value\n */\nunsigned long __usecs_to_jiffies(const unsigned int u)\n{\n\tif (u > jiffies_to_usecs(MAX_JIFFY_OFFSET))\n\t\treturn MAX_JIFFY_OFFSET;\n\treturn _usecs_to_jiffies(u);\n}\nEXPORT_SYMBOL(__usecs_to_jiffies);\n\n/**\n * timespec64_to_jiffies - convert a timespec64 value to jiffies\n * @value: pointer to &struct timespec64\n *\n * The TICK_NSEC - 1 rounds up the value to the next resolution.  Note\n * that a remainder subtract here would not do the right thing as the\n * resolution values don't fall on second boundaries.  I.e. the line:\n * nsec -= nsec % TICK_NSEC; is NOT a correct resolution rounding.\n * Note that due to the small error in the multiplier here, this\n * rounding is incorrect for sufficiently large values of tv_nsec, but\n * well formed timespecs should have tv_nsec < NSEC_PER_SEC, so we're\n * OK.\n *\n * Rather, we just shift the bits off the right.\n *\n * The >> (NSEC_JIFFIE_SC - SEC_JIFFIE_SC) converts the scaled nsec\n * value to a scaled second value.\n *\n * Return: jiffies value\n */\nunsigned long\ntimespec64_to_jiffies(const struct timespec64 *value)\n{\n\tu64 sec = value->tv_sec;\n\tlong nsec = value->tv_nsec + TICK_NSEC - 1;\n\n\tif (sec >= MAX_SEC_IN_JIFFIES){\n\t\tsec = MAX_SEC_IN_JIFFIES;\n\t\tnsec = 0;\n\t}\n\treturn ((sec * SEC_CONVERSION) +\n\t\t(((u64)nsec * NSEC_CONVERSION) >>\n\t\t (NSEC_JIFFIE_SC - SEC_JIFFIE_SC))) >> SEC_JIFFIE_SC;\n\n}\nEXPORT_SYMBOL(timespec64_to_jiffies);\n\n/**\n * jiffies_to_timespec64 - convert jiffies value to &struct timespec64\n * @jiffies: jiffies value\n * @value: pointer to &struct timespec64\n */\nvoid\njiffies_to_timespec64(const unsigned long jiffies, struct timespec64 *value)\n{\n\t/*\n\t * Convert jiffies to nanoseconds and separate with\n\t * one divide.\n\t */\n\tu32 rem;\n\tvalue->tv_sec = div_u64_rem((u64)jiffies * TICK_NSEC,\n\t\t\t\t    NSEC_PER_SEC, &rem);\n\tvalue->tv_nsec = rem;\n}\nEXPORT_SYMBOL(jiffies_to_timespec64);\n\n/*\n * Convert jiffies/jiffies_64 to clock_t and back.\n */\n\n/**\n * jiffies_to_clock_t - Convert jiffies to clock_t\n * @x: jiffies value\n *\n * Return: jiffies converted to clock_t (CLOCKS_PER_SEC)\n */\nclock_t jiffies_to_clock_t(unsigned long x)\n{\n#if (TICK_NSEC % (NSEC_PER_SEC / USER_HZ)) == 0\n# if HZ < USER_HZ\n\treturn x * (USER_HZ / HZ);\n# else\n\treturn x / (HZ / USER_HZ);\n# endif\n#else\n\treturn div_u64((u64)x * TICK_NSEC, NSEC_PER_SEC / USER_HZ);\n#endif\n}\nEXPORT_SYMBOL(jiffies_to_clock_t);\n\n/**\n * clock_t_to_jiffies - Convert clock_t to jiffies\n * @x: clock_t value\n *\n * Return: clock_t value converted to jiffies\n */\nunsigned long clock_t_to_jiffies(unsigned long x)\n{\n#if (HZ % USER_HZ)==0\n\tif (x >= ~0UL / (HZ / USER_HZ))\n\t\treturn ~0UL;\n\treturn x * (HZ / USER_HZ);\n#else\n\t/* Don't worry about loss of precision here .. */\n\tif (x >= ~0UL / HZ * USER_HZ)\n\t\treturn ~0UL;\n\n\t/* .. but do try to contain it here */\n\treturn div_u64((u64)x * HZ, USER_HZ);\n#endif\n}\nEXPORT_SYMBOL(clock_t_to_jiffies);\n\n/**\n * jiffies_64_to_clock_t - Convert jiffies_64 to clock_t\n * @x: jiffies_64 value\n *\n * Return: jiffies_64 value converted to 64-bit \"clock_t\" (CLOCKS_PER_SEC)\n */\nu64 jiffies_64_to_clock_t(u64 x)\n{\n#if (TICK_NSEC % (NSEC_PER_SEC / USER_HZ)) == 0\n# if HZ < USER_HZ\n\tx = div_u64(x * USER_HZ, HZ);\n# elif HZ > USER_HZ\n\tx = div_u64(x, HZ / USER_HZ);\n# else\n\t/* Nothing to do */\n# endif\n#else\n\t/*\n\t * There are better ways that don't overflow early,\n\t * but even this doesn't overflow in hundreds of years\n\t * in 64 bits, so..\n\t */\n\tx = div_u64(x * TICK_NSEC, (NSEC_PER_SEC / USER_HZ));\n#endif\n\treturn x;\n}\nEXPORT_SYMBOL(jiffies_64_to_clock_t);\n\n/**\n * nsec_to_clock_t - Convert nsec value to clock_t\n * @x: nsec value\n *\n * Return: nsec value converted to 64-bit \"clock_t\" (CLOCKS_PER_SEC)\n */\nu64 nsec_to_clock_t(u64 x)\n{\n#if (NSEC_PER_SEC % USER_HZ) == 0\n\treturn div_u64(x, NSEC_PER_SEC / USER_HZ);\n#elif (USER_HZ % 512) == 0\n\treturn div_u64(x * USER_HZ / 512, NSEC_PER_SEC / 512);\n#else\n\t/*\n         * max relative error 5.7e-8 (1.8s per year) for USER_HZ <= 1024,\n         * overflow after 64.99 years.\n         * exact for HZ=60, 72, 90, 120, 144, 180, 300, 600, 900, ...\n         */\n\treturn div_u64(x * 9, (9ull * NSEC_PER_SEC + (USER_HZ / 2)) / USER_HZ);\n#endif\n}\n\n/**\n * jiffies64_to_nsecs - Convert jiffies64 to nanoseconds\n * @j: jiffies64 value\n *\n * Return: nanoseconds value\n */\nu64 jiffies64_to_nsecs(u64 j)\n{\n#if !(NSEC_PER_SEC % HZ)\n\treturn (NSEC_PER_SEC / HZ) * j;\n# else\n\treturn div_u64(j * HZ_TO_NSEC_NUM, HZ_TO_NSEC_DEN);\n#endif\n}\nEXPORT_SYMBOL(jiffies64_to_nsecs);\n\n/**\n * jiffies64_to_msecs - Convert jiffies64 to milliseconds\n * @j: jiffies64 value\n *\n * Return: milliseconds value\n */\nu64 jiffies64_to_msecs(const u64 j)\n{\n#if HZ <= MSEC_PER_SEC && !(MSEC_PER_SEC % HZ)\n\treturn (MSEC_PER_SEC / HZ) * j;\n#else\n\treturn div_u64(j * HZ_TO_MSEC_NUM, HZ_TO_MSEC_DEN);\n#endif\n}\nEXPORT_SYMBOL(jiffies64_to_msecs);\n\n/**\n * nsecs_to_jiffies64 - Convert nsecs in u64 to jiffies64\n *\n * @n:\tnsecs in u64\n *\n * Unlike {m,u}secs_to_jiffies, type of input is not unsigned int but u64.\n * And this doesn't return MAX_JIFFY_OFFSET since this function is designed\n * for scheduler, not for use in device drivers to calculate timeout value.\n *\n * note:\n *   NSEC_PER_SEC = 10^9 = (5^9 * 2^9) = (1953125 * 512)\n *   ULLONG_MAX ns = 18446744073.709551615 secs = about 584 years\n *\n * Return: nsecs converted to jiffies64 value\n */\nu64 nsecs_to_jiffies64(u64 n)\n{\n#if (NSEC_PER_SEC % HZ) == 0\n\t/* Common case, HZ = 100, 128, 200, 250, 256, 500, 512, 1000 etc. */\n\treturn div_u64(n, NSEC_PER_SEC / HZ);\n#elif (HZ % 512) == 0\n\t/* overflow after 292 years if HZ = 1024 */\n\treturn div_u64(n * HZ / 512, NSEC_PER_SEC / 512);\n#else\n\t/*\n\t * Generic case - optimized for cases where HZ is a multiple of 3.\n\t * overflow after 64.99 years, exact for HZ = 60, 72, 90, 120 etc.\n\t */\n\treturn div_u64(n * 9, (9ull * NSEC_PER_SEC + HZ / 2) / HZ);\n#endif\n}\nEXPORT_SYMBOL(nsecs_to_jiffies64);\n\n/**\n * nsecs_to_jiffies - Convert nsecs in u64 to jiffies\n *\n * @n:\tnsecs in u64\n *\n * Unlike {m,u}secs_to_jiffies, type of input is not unsigned int but u64.\n * And this doesn't return MAX_JIFFY_OFFSET since this function is designed\n * for scheduler, not for use in device drivers to calculate timeout value.\n *\n * note:\n *   NSEC_PER_SEC = 10^9 = (5^9 * 2^9) = (1953125 * 512)\n *   ULLONG_MAX ns = 18446744073.709551615 secs = about 584 years\n *\n * Return: nsecs converted to jiffies value\n */\nunsigned long nsecs_to_jiffies(u64 n)\n{\n\treturn (unsigned long)nsecs_to_jiffies64(n);\n}\nEXPORT_SYMBOL_GPL(nsecs_to_jiffies);\n\n/**\n * timespec64_add_safe - Add two timespec64 values and do a safety check\n * for overflow.\n * @lhs: first (left) timespec64 to add\n * @rhs: second (right) timespec64 to add\n *\n * It's assumed that both values are valid (>= 0).\n * And, each timespec64 is in normalized form.\n *\n * Return: sum of @lhs + @rhs\n */\nstruct timespec64 timespec64_add_safe(const struct timespec64 lhs,\n\t\t\t\tconst struct timespec64 rhs)\n{\n\tstruct timespec64 res;\n\n\tset_normalized_timespec64(&res, (timeu64_t) lhs.tv_sec + rhs.tv_sec,\n\t\t\tlhs.tv_nsec + rhs.tv_nsec);\n\n\tif (unlikely(res.tv_sec < lhs.tv_sec || res.tv_sec < rhs.tv_sec)) {\n\t\tres.tv_sec = TIME64_MAX;\n\t\tres.tv_nsec = 0;\n\t}\n\n\treturn res;\n}\n\n/**\n * get_timespec64 - get user's time value into kernel space\n * @ts: destination &struct timespec64\n * @uts: user's time value as &struct __kernel_timespec\n *\n * Handles compat or 32-bit modes.\n *\n * Return: %0 on success or negative errno on error\n */\nint get_timespec64(struct timespec64 *ts,\n\t\t   const struct __kernel_timespec __user *uts)\n{\n\tstruct __kernel_timespec kts;\n\tint ret;\n\n\tret = copy_from_user(&kts, uts, sizeof(kts));\n\tif (ret)\n\t\treturn -EFAULT;\n\n\tts->tv_sec = kts.tv_sec;\n\n\t/* Zero out the padding in compat mode */\n\tif (in_compat_syscall())\n\t\tkts.tv_nsec &= 0xFFFFFFFFUL;\n\n\t/* In 32-bit mode, this drops the padding */\n\tts->tv_nsec = kts.tv_nsec;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(get_timespec64);\n\n/**\n * put_timespec64 - convert timespec64 value to __kernel_timespec format and\n * \t\t    copy the latter to userspace\n * @ts: input &struct timespec64\n * @uts: user's &struct __kernel_timespec\n *\n * Return: %0 on success or negative errno on error\n */\nint put_timespec64(const struct timespec64 *ts,\n\t\t   struct __kernel_timespec __user *uts)\n{\n\tstruct __kernel_timespec kts = {\n\t\t.tv_sec = ts->tv_sec,\n\t\t.tv_nsec = ts->tv_nsec\n\t};\n\n\treturn copy_to_user(uts, &kts, sizeof(kts)) ? -EFAULT : 0;\n}\nEXPORT_SYMBOL_GPL(put_timespec64);\n\nstatic int __get_old_timespec32(struct timespec64 *ts64,\n\t\t\t\t   const struct old_timespec32 __user *cts)\n{\n\tstruct old_timespec32 ts;\n\tint ret;\n\n\tret = copy_from_user(&ts, cts, sizeof(ts));\n\tif (ret)\n\t\treturn -EFAULT;\n\n\tts64->tv_sec = ts.tv_sec;\n\tts64->tv_nsec = ts.tv_nsec;\n\n\treturn 0;\n}\n\nstatic int __put_old_timespec32(const struct timespec64 *ts64,\n\t\t\t\t   struct old_timespec32 __user *cts)\n{\n\tstruct old_timespec32 ts = {\n\t\t.tv_sec = ts64->tv_sec,\n\t\t.tv_nsec = ts64->tv_nsec\n\t};\n\treturn copy_to_user(cts, &ts, sizeof(ts)) ? -EFAULT : 0;\n}\n\n/**\n * get_old_timespec32 - get user's old-format time value into kernel space\n * @ts: destination &struct timespec64\n * @uts: user's old-format time value (&struct old_timespec32)\n *\n * Handles X86_X32_ABI compatibility conversion.\n *\n * Return: %0 on success or negative errno on error\n */\nint get_old_timespec32(struct timespec64 *ts, const void __user *uts)\n{\n\tif (COMPAT_USE_64BIT_TIME)\n\t\treturn copy_from_user(ts, uts, sizeof(*ts)) ? -EFAULT : 0;\n\telse\n\t\treturn __get_old_timespec32(ts, uts);\n}\nEXPORT_SYMBOL_GPL(get_old_timespec32);\n\n/**\n * put_old_timespec32 - convert timespec64 value to &struct old_timespec32 and\n * \t\t\tcopy the latter to userspace\n * @ts: input &struct timespec64\n * @uts: user's &struct old_timespec32\n *\n * Handles X86_X32_ABI compatibility conversion.\n *\n * Return: %0 on success or negative errno on error\n */\nint put_old_timespec32(const struct timespec64 *ts, void __user *uts)\n{\n\tif (COMPAT_USE_64BIT_TIME)\n\t\treturn copy_to_user(uts, ts, sizeof(*ts)) ? -EFAULT : 0;\n\telse\n\t\treturn __put_old_timespec32(ts, uts);\n}\nEXPORT_SYMBOL_GPL(put_old_timespec32);\n\n/**\n * get_itimerspec64 - get user's &struct __kernel_itimerspec into kernel space\n * @it: destination &struct itimerspec64\n * @uit: user's &struct __kernel_itimerspec\n *\n * Return: %0 on success or negative errno on error\n */\nint get_itimerspec64(struct itimerspec64 *it,\n\t\t\tconst struct __kernel_itimerspec __user *uit)\n{\n\tint ret;\n\n\tret = get_timespec64(&it->it_interval, &uit->it_interval);\n\tif (ret)\n\t\treturn ret;\n\n\tret = get_timespec64(&it->it_value, &uit->it_value);\n\n\treturn ret;\n}\nEXPORT_SYMBOL_GPL(get_itimerspec64);\n\n/**\n * put_itimerspec64 - convert &struct itimerspec64 to __kernel_itimerspec format\n * \t\t      and copy the latter to userspace\n * @it: input &struct itimerspec64\n * @uit: user's &struct __kernel_itimerspec\n *\n * Return: %0 on success or negative errno on error\n */\nint put_itimerspec64(const struct itimerspec64 *it,\n\t\t\tstruct __kernel_itimerspec __user *uit)\n{\n\tint ret;\n\n\tret = put_timespec64(&it->it_interval, &uit->it_interval);\n\tif (ret)\n\t\treturn ret;\n\n\tret = put_timespec64(&it->it_value, &uit->it_value);\n\n\treturn ret;\n}\nEXPORT_SYMBOL_GPL(put_itimerspec64);\n\n/**\n * get_old_itimerspec32 - get user's &struct old_itimerspec32 into kernel space\n * @its: destination &struct itimerspec64\n * @uits: user's &struct old_itimerspec32\n *\n * Return: %0 on success or negative errno on error\n */\nint get_old_itimerspec32(struct itimerspec64 *its,\n\t\t\tconst struct old_itimerspec32 __user *uits)\n{\n\n\tif (__get_old_timespec32(&its->it_interval, &uits->it_interval) ||\n\t    __get_old_timespec32(&its->it_value, &uits->it_value))\n\t\treturn -EFAULT;\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(get_old_itimerspec32);\n\n/**\n * put_old_itimerspec32 - convert &struct itimerspec64 to &struct\n *\t\t\t  old_itimerspec32 and copy the latter to userspace\n * @its: input &struct itimerspec64\n * @uits: user's &struct old_itimerspec32\n *\n * Return: %0 on success or negative errno on error\n */\nint put_old_itimerspec32(const struct itimerspec64 *its,\n\t\t\tstruct old_itimerspec32 __user *uits)\n{\n\tif (__put_old_timespec32(&its->it_interval, &uits->it_interval) ||\n\t    __put_old_timespec32(&its->it_value, &uits->it_value))\n\t\treturn -EFAULT;\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(put_old_itimerspec32);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "4f1c94a536228586869abdb56cd1c2cdb87ae27afa07d68141e2317932df96dc",
+    "scope": "whole-file",
+    "line_count": 1056,
+    "authoring_source": "course/file_units/time_implementation.py",
+    "sections": [
+      "파일 전체 지도",
+      "전역 timezone",
+      "구형 time 시스템 호출",
+      "Stime의 실제 오류 처리",
+      "Time32와 stime32 설정",
+      "Gettimeofday의 두 선택 출력",
+      "공통 시각 설정의 선행 검사",
+      "첫 timezone 설정과 clock warp",
+      "설정의 부분 효과",
+      "Settimeofday의 단위 검사",
+      "Compat get/settimeofday",
+      "64비트 adjtimex",
+      "구형 timex 입력 변환",
+      "구형 timex 출력과 syscall",
+      "Jiffies에서 밀리초로",
+      "Jiffies에서 마이크로초로",
+      "Mktime의 달력 입력",
+      "Mktime의 허용 표현과 범위",
+      "나노초에서 구형 timeval",
+      "Timespec 정규화",
+      "S64 나노초의 분해",
+      "밀리초·마이크로초 timeout 변환",
+      "Timespec과 jiffies 왕복",
+      "Jiffies와 사용자 clock_t",
+      "64비트 jiffies에서 clock 단위",
+      "나노초에서 clock 단위",
+      "64비트 jiffies에서 나노초·밀리초",
+      "스케줄러용 나노초 변환",
+      "안전한 timespec 덧셈",
+      "새 timespec 입력 복사",
+      "새 timespec 출력 복사",
+      "구형 timespec의 내부 helper",
+      "X32 예외를 가진 공개 wrapper",
+      "새 interval timer 복사",
+      "구형 interval timer 복사",
+      "심볼 공개와 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/time.c"
+    }
+  ]
+}

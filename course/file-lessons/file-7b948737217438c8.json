@@ -1,0 +1,96 @@
+{
+  "id": "file-7b948737217438c8",
+  "path": "include/asm-generic/vdso/vsyscall.h",
+  "title": "vDSO 기본 hook: NULL getter와 빈 update·sync",
+  "area": "조건부 컴파일 · fallback · NULL 계약 · 인터페이스 · 선언 문맥",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "세 개의 독립적인 매크로 조건과 기본 inline 동작을 전체 범위로 읽습니다.",
+  "guide": [
+    "기본 hook이 존재한다는 사실과 모든 사용 문맥에서 유효한 기능을 제공한다는 것은 다릅니다.",
+    "플랫폼 override가 필요한 함수와 선택적인 빈 hook을 구분합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일과 문맥",
+      "text": "GPL-2.0과 guard, __ASSEMBLY__ 제외 조건 안에 세 #ifndef와 static inline 기본 함수가 있습니다. 자체 include는 없으므로 타입과 NULL, __always_inline을 포함 문맥이 제공해야 합니다. 세 함수의 대체 여부를 각각 독립적으로 검사합니다."
+    },
+    {
+      "title": "기본 데이터 getter",
+      "text": "__arch_get_k_vdso_data 매크로가 없으면 같은 이름의 함수가 NULL을 반환합니다. 공유 데이터 저장소를 자동 할당하는 fallback이 아닙니다. 반환 포인터를 곧바로 역참조하는 공통 구현과 연결하려면 실제 아키텍처 데이터 제공 및 구성 조건이 맞아야 합니다."
+    },
+    {
+      "title": "빈 추가 갱신",
+      "text": "__arch_update_vsyscall 매크로가 없으면 vdso_data *와 timekeeper *를 받는 빈 void inline을 제공합니다. 추가 플랫폼 작업이 없는 경우의 기본 동작입니다. 포인터 인자를 받는다고 반드시 필드를 복사하거나 NULL 검사를 하는 것은 아닙니다."
+    },
+    {
+      "title": "빈 데이터 동기화",
+      "text": "__arch_sync_vdso_data 매크로가 없으면 vdso_data *를 받는 빈 void inline을 제공합니다. 여기에는 CPU memory barrier나 cache flush가 없습니다. 필요한 플랫폼별 동기화는 override와 상위 게시 규약에서 확인해야 합니다."
+    },
+    {
+      "title": "매크로 검사와 포함 순서",
+      "text": "#ifndef는 C 함수 정의를 검색하지 않습니다. 아키텍처가 구현을 제공하면 generic 포함 전에 대응 매크로도 준비하여 기본 함수를 생략시키는 규약입니다. 이 파일은 RNG 데이터 getter나 vdso_update_begin/end를 정의하지 않으므로 비슷한 이름의 다른 헤더 범위와 혼동하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "기본 __arch_get_k_vdso_data는 무엇을 반환하는가?",
+      "options": [
+        "NULL이다",
+        "자동 할당된 데이터 페이지 주소이다"
+      ],
+      "answer": 0,
+      "explanation": "실제 본문은 return NULL입니다. fallback 존재가 데이터 준비 완료를 뜻하지 않습니다."
+    },
+    {
+      "prompt": "기본 __arch_sync_vdso_data에 메모리 장벽이 있는가?",
+      "options": [
+        "있다. sync라는 이름이 장벽 명령을 자동 생성한다",
+        "없다. 빈 함수이다"
+      ],
+      "answer": 1,
+      "explanation": "함수 이름과 실제 구현을 구분해야 합니다. 플랫폼 요구는 override를 확인합니다."
+    },
+    {
+      "prompt": "아키텍처 getter만 override하면 update와 sync의 기본 정의도 모두 사라지는가?",
+      "options": [
+        "아니다. 각각 별도 #ifndef로 선택된다",
+        "그렇다. 하나의 override가 전체 기본 구현을 비활성화한다"
+      ],
+      "answer": 0,
+      "explanation": "세 독립 조건문이 있으므로 필요한 hook만 대체하고 다른 기본값은 유지할 수 있습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_VSYSCALL_H\n#define __ASM_GENERIC_VSYSCALL_H\n\n#ifndef __ASSEMBLY__\n\n#ifndef __arch_get_k_vdso_data\nstatic __always_inline struct vdso_data *__arch_get_k_vdso_data(void)\n{\n\treturn NULL;\n}\n#endif /* __arch_get_k_vdso_data */\n\n#ifndef __arch_update_vsyscall\nstatic __always_inline void __arch_update_vsyscall(struct vdso_data *vdata,\n\t\t\t\t\t\t   struct timekeeper *tk)\n{\n}\n#endif /* __arch_update_vsyscall */\n\n#ifndef __arch_sync_vdso_data\nstatic __always_inline void __arch_sync_vdso_data(struct vdso_data *vdata)\n{\n}\n#endif /* __arch_sync_vdso_data */\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_GENERIC_VSYSCALL_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "1632c1d6270f433c09f72a34d3516ef56480b6d10c33bc288c19f08ae273fdbe",
+    "scope": "whole-file",
+    "line_count": 29,
+    "authoring_source": "course/file_units/x86_vdso_hooks.py",
+    "sections": [
+      "전체 파일과 문맥",
+      "기본 데이터 getter",
+      "빈 추가 갱신",
+      "빈 데이터 동기화",
+      "매크로 검사와 포함 순서"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/vdso/vsyscall.h"
+    }
+  ]
+}

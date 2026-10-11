@@ -1,0 +1,149 @@
+{
+  "id": "file-95f1d242541e8b54",
+  "path": "lib/interval_tree_test.c",
+  "title": "구간 트리 테스트 전체: 검색 부하·측정 단위·난수 경계",
+  "area": "성능 실험 · 입력 생성 · 나머지 연산 · 검증 범위",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "구간 트리의 삽입·삭제와 점 질의 또는 전체 범위 질의를 반복 측정하는 모듈입니다.",
+  "guide": [
+    "고정 시드로 노드와 질의를 생성하고 사이클 차이를 반복 수로 나눕니다. 검색 결과 수를 출력하지만 독립 정답과 비교하는 검증은 별도로 없습니다.",
+    "파일 이름의 test와 실제 검사 범위를 구분합니다. 모듈 파라미터와 난수로 만든 나눗셈 분모가 유효한지도 확인해야 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "SPDX와 module/moduleparam/interval_tree/random/slab/timex 포함 뒤에 파라미터 매크로와 여섯 파라미터, 전역 루트·노드·질의 배열·난수 상태가 있습니다. search, 입력 init, 모듈 init/exit와 GPL·작성자·설명 메타데이터가 끝까지의 구성입니다."
+    },
+    {
+      "title": "설정과 기본 부하",
+      "text": "nnodes100, perf_loops1000, nsearches100, search_loops1000, search_all=false, max_endpoint=~0인 uint가 기본입니다. __param은 static 변수·0444 module_param·설명문을 생성합니다. 값의 양수 여부를 명시적으로 검사하지 않으므로 반복 수0이나 범위0을 안전한 정상 설정으로 가정하면 안 됩니다."
+    },
+    {
+      "title": "두 단계 할당과 실패 정리",
+      "text": "nodes는 nnodes개의 interval_tree_node를 kmalloc_array로 할당하고 실패하면 -ENOMEM입니다. queries는 nsearches*sizeof(int)를 할당해 u32 포인터로 사용합니다. 이 커널의 int/u32 크기 전제를 읽어야 하며 독립적인 임의 C ABI용 예제라고 가정하지 않습니다. 두 번째 할당 실패는 nodes를 먼저 해제하고 오류를 반환합니다."
+    },
+    {
+      "title": "구간 생성과 분모0 위험",
+      "text": "init은 난수>>4를 max_endpoint로 나눈 나머지를 b로 삼고 다음 난수>>4를 b로 나눈 나머지를 a로 삼습니다. b>0인 정상 계산에서는0<=a<b입니다. 하지만 b가0이 되지 않도록 보정하는 코드가 없으므로 max_endpoint가 양수여도 b0에 의한 나머지0 나눗셈 위험이 있습니다. max_endpoint0 자체도 첫 나머지 연산에서 문제입니다. 입력 생성기의 이름이나 고정 시드만으로 모든 설정의 안전성을 보장하지 않습니다."
+    },
+    {
+      "title": "난수 범위와 질의",
+      "text": "u32 난수를4비트 오른쪽으로 이동하므로 나머지 연산 전 값은28비트입니다. max_endpoint보다 작은 나머지를 사용해 질의를 노드 생성과 같은 범위로 제한하지만 기본 max_endpoint가 크다고 전체 unsigned 범위를 고르게 채우는 것은 아닙니다. 코드 주석은 범위를 맞추지 않으면 의미 없는 빈 검색만 측정할 수 있다고 설명합니다."
+    },
+    {
+      "title": "search helper의 반환",
+      "text": "search는 iter_first와 iter_next로 겹치는 노드를 모두 순회하며 unsigned long results를 증가시킵니다. 반환은 겹친 객체 수이지 합쳐진 길이, used span 개수, 첫 일치 위치가 아닙니다. 같은 점을 여러 노드가 덮으면 그 수만큼 셉니다."
+    },
+    {
+      "title": "삽입·삭제 측정",
+      "text": "모듈 init은 PRNG를3141592653589793238ULL로 시드하고 입력을 한 번 생성합니다. perf_loops 동안 모든 노드를 넣고 같은 배열 순서로 모두 지우며 get_cycles 차이를 perf_loops로 나눕니다. 출력은 nnodes개 전체를 넣고 빼는 한 반복당 사이클입니다. 노드당 시간이나 절대 나노초가 아닙니다."
+    },
+    {
+      "title": "점 검색과 전체 검색",
+      "text": "검색 전에 노드를 다시 모두 넣습니다. search_all=false면 query[j]를 start와 last 모두에 써 닫힌 한 점 질의를 만듭니다. true면 매번[0,max_endpoint]를 검색하므로 정상 생성한 모든 구간이 후보이며 nsearches만큼 같은 전체 검색을 반복합니다. 이 경우 서로 다른 nsearches개의 범위를 시험하는 것은 아닙니다."
+    },
+    {
+      "title": "측정값의 분모",
+      "text": "총 검색 시간과 결과 수는 search_loops로만 나눕니다. 따라서 출력은 nsearches개 질의 묶음당 시간과 총 결과 수입니다. 질의 한 번당 평균을 구하려면 추가 분모를 고려해야 합니다. 누적 results는 unsigned long이므로 부하를 임의로 크게 하면 합계 wrap도 고려해야 합니다."
+    },
+    {
+      "title": "정확성 검증의 부재",
+      "text": "별도 선형 스캔 정답, 예상 결과 수 assert, 정렬·집계 불변식 검사는 없습니다. 결과 수가 출력된다는 사실만으로 빠진 노드나 중복 반환을 검출하지 않습니다. 구간 끝점 경계·빈 트리·span iterator의 정확성을 전부 검사하는 파일도 아닙니다."
+    },
+    {
+      "title": "종료와 메모리",
+      "text": "마지막에는 queries와 nodes를 kfree하고 -EAGAIN으로 모듈 init을 의도적으로 실패시켜 남지 않게 합니다. 마지막 검색용 트리에서 노드를 하나씩 제거하지는 않으며 해제 후 더 순회하는 경로도 없습니다. 이 일회성 모듈 종료 순서를 일반적인 살아 있는 트리의 객체 해제 예제로 복사하면 안 됩니다. exit는 로그만 출력합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "실험 분모와 측정 단위, 분포가 제한된 난수, 분모0 경계, 객체 수와 구간 합집합 길이의 차이, 벤치마크와 독립 정답 검사의 차이를 학습합니다. 이 수업은 원본 전체 검토이며 현재 호스트에서 커널 모듈을 로드한 실행 결과가 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "max_endpoint가 양수이면 구간 생성의 나머지 연산은 항상 안전한가?",
+      "options": [
+        "아니다. 생성된 b가0일 수 있다",
+        "그렇다. 첫 분모만 양수이면 충분하다"
+      ],
+      "answer": 0,
+      "explanation": "두 번째 계산의 분모는 max_endpoint가 아니라 b입니다. b0을 거부하거나1 이상으로 보정하는 분기가 없습니다."
+    },
+    {
+      "prompt": "search가 반환하는 것은?",
+      "options": [
+        "덮인 영역의 총 길이다",
+        "겹치는 노드 개수다"
+      ],
+      "answer": 1,
+      "explanation": "iter_first/next로 반환된 노드마다 results를 하나씩 더합니다. 합집합 길이나 span 병합은 계산하지 않습니다."
+    },
+    {
+      "prompt": "검색 시간 출력은 질의 하나당 평균인가?",
+      "options": [
+        "아니다. nsearches개 질의 묶음당 값이다",
+        "그렇다. 두 반복 수를 모두 나눈다"
+      ],
+      "answer": 0,
+      "explanation": "코드는 search_loops로만 나누며 nsearches는 분모에 없습니다."
+    },
+    {
+      "prompt": "search_all=true이면 매번 다른 질의를 검색하는가?",
+      "options": [
+        "그렇다. queries 배열 값을 계속 사용한다",
+        "아니다. 같은 전체 범위를 반복 검색한다"
+      ],
+      "answer": 1,
+      "explanation": "삼항 연산이 start0과 last=max_endpoint를 선택하여 queries[j]를 사용하지 않습니다."
+    },
+    {
+      "prompt": "출력된 결과 수만으로 누락 없는 정확성을 검증하는가?",
+      "options": [
+        "아니다. 독립 예상값과 비교하는 코드가 없다",
+        "그렇다. 값 출력 자체가 assert다"
+      ],
+      "answer": 0,
+      "explanation": "결과를 누적·평균해 출력할 뿐 올바른 개수와 대조하지 않습니다. 정확성 검사와 부하 측정은 별도입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#include <linux/module.h>\n#include <linux/moduleparam.h>\n#include <linux/interval_tree.h>\n#include <linux/random.h>\n#include <linux/slab.h>\n#include <asm/timex.h>\n\n#define __param(type, name, init, msg)\t\t\\\n\tstatic type name = init;\t\t\\\n\tmodule_param(name, type, 0444);\t\t\\\n\tMODULE_PARM_DESC(name, msg);\n\n__param(int, nnodes, 100, \"Number of nodes in the interval tree\");\n__param(int, perf_loops, 1000, \"Number of iterations modifying the tree\");\n\n__param(int, nsearches, 100, \"Number of searches to the interval tree\");\n__param(int, search_loops, 1000, \"Number of iterations searching the tree\");\n__param(bool, search_all, false, \"Searches will iterate all nodes in the tree\");\n\n__param(uint, max_endpoint, ~0, \"Largest value for the interval's endpoint\");\n\nstatic struct rb_root_cached root = RB_ROOT_CACHED;\nstatic struct interval_tree_node *nodes = NULL;\nstatic u32 *queries = NULL;\n\nstatic struct rnd_state rnd;\n\nstatic inline unsigned long\nsearch(struct rb_root_cached *root, unsigned long start, unsigned long last)\n{\n\tstruct interval_tree_node *node;\n\tunsigned long results = 0;\n\n\tfor (node = interval_tree_iter_first(root, start, last); node;\n\t     node = interval_tree_iter_next(node, start, last))\n\t\tresults++;\n\treturn results;\n}\n\nstatic void init(void)\n{\n\tint i;\n\n\tfor (i = 0; i < nnodes; i++) {\n\t\tu32 b = (prandom_u32_state(&rnd) >> 4) % max_endpoint;\n\t\tu32 a = (prandom_u32_state(&rnd) >> 4) % b;\n\n\t\tnodes[i].start = a;\n\t\tnodes[i].last = b;\n\t}\n\n\t/*\n\t * Limit the search scope to what the user defined.\n\t * Otherwise we are merely measuring empty walks,\n\t * which is pointless.\n\t */\n\tfor (i = 0; i < nsearches; i++)\n\t\tqueries[i] = (prandom_u32_state(&rnd) >> 4) % max_endpoint;\n}\n\nstatic int interval_tree_test_init(void)\n{\n\tint i, j;\n\tunsigned long results;\n\tcycles_t time1, time2, time;\n\n\tnodes = kmalloc_array(nnodes, sizeof(struct interval_tree_node),\n\t\t\t      GFP_KERNEL);\n\tif (!nodes)\n\t\treturn -ENOMEM;\n\n\tqueries = kmalloc_array(nsearches, sizeof(int), GFP_KERNEL);\n\tif (!queries) {\n\t\tkfree(nodes);\n\t\treturn -ENOMEM;\n\t}\n\n\tprintk(KERN_ALERT \"interval tree insert/remove\");\n\n\tprandom_seed_state(&rnd, 3141592653589793238ULL);\n\tinit();\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinterval_tree_insert(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinterval_tree_remove(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> %llu cycles\\n\", (unsigned long long)time);\n\n\tprintk(KERN_ALERT \"interval tree search\");\n\n\tfor (j = 0; j < nnodes; j++)\n\t\tinterval_tree_insert(nodes + j, &root);\n\n\ttime1 = get_cycles();\n\n\tresults = 0;\n\tfor (i = 0; i < search_loops; i++)\n\t\tfor (j = 0; j < nsearches; j++) {\n\t\t\tunsigned long start = search_all ? 0 : queries[j];\n\t\t\tunsigned long last = search_all ? max_endpoint : queries[j];\n\n\t\t\tresults += search(&root, start, last);\n\t\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, search_loops);\n\tresults = div_u64(results, search_loops);\n\tprintk(\" -> %llu cycles (%lu results)\\n\",\n\t       (unsigned long long)time, results);\n\n\tkfree(queries);\n\tkfree(nodes);\n\n\treturn -EAGAIN; /* Fail will directly unload the module */\n}\n\nstatic void interval_tree_test_exit(void)\n{\n\tprintk(KERN_ALERT \"test exit\\n\");\n}\n\nmodule_init(interval_tree_test_init)\nmodule_exit(interval_tree_test_exit)\n\nMODULE_LICENSE(\"GPL\");\nMODULE_AUTHOR(\"Michel Lespinasse\");\nMODULE_DESCRIPTION(\"Interval Tree test\");\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7021093cb2a6bda9615a77bd60acbbbab9dadcfa003400560fa3bb4e5f46a3fe",
+    "scope": "whole-file",
+    "line_count": 139,
+    "authoring_source": "course/file_units/interval_test_lesson.py",
+    "sections": [
+      "전체 구성",
+      "설정과 기본 부하",
+      "두 단계 할당과 실패 정리",
+      "구간 생성과 분모0 위험",
+      "난수 범위와 질의",
+      "search helper의 반환",
+      "삽입·삭제 측정",
+      "점 검색과 전체 검색",
+      "측정값의 분모",
+      "정확성 검증의 부재",
+      "종료와 메모리",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/interval_tree_test.c"
+    }
+  ]
+}

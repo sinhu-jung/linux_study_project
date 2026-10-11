@@ -1,0 +1,96 @@
+{
+  "id": "file-ad5a77f6462473dc",
+  "path": "lib/bcd.c",
+  "title": "BCD 변환 구현 전체: 두 니블에 십진 숫자 저장하기",
+  "area": "BCD · 숫자 표현·상수 최적화·입력 검증",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "한 바이트의 위·아래 4비트에 십진 자릿수를 각각 저장하는 packed BCD를 변환합니다.",
+  "guide": [
+    "_bcd2bin은 아래 니블에 위 니블의 10배를 더합니다. _bin2bcd는 곱셈과 시프트로 십의 자리를 구하고 두 니블을 조립합니다.",
+    "정상적인 두 자리 BCD와 정수 0..99를 대상으로 사용합니다. 변환 함수에는 입력 검증이나 오류 반환이 없으므로 유효성 검사를 별도로 수행합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "SPDX, bcd/export 헤더, _bcd2bin과 _bin2bcd 및 각 EXPORT_SYMBOL이 전부입니다. 동적 할당, 상태, 배열, 반복문은 없습니다."
+    },
+    {
+      "title": "BCD에서 정수로",
+      "text": "0x42는 정수 리터럴로는 66이지만 BCD 표현에서는 십의 자리4와 일의 자리2입니다. (0x42&15)+(0x42>>4)*10=42가 됩니다. 함수 인자는 unsigned char이고 결과는 unsigned입니다."
+    },
+    {
+      "title": "정수에서 BCD로",
+      "text": "t=(val*103)>>10으로 십의 자리를 계산합니다. 정상 범위 0..99에서는 floor(val/10)과 같습니다. 42에서는 t=4,나머지2라 (4<<4)|2=0x42입니다. 반환형은 unsigned char입니다. 일반적인 모든 unsigned 나눗셈을 대체하는 식으로 확대하면 안 됩니다."
+    },
+    {
+      "title": "검증과 범위",
+      "text": "0xfa처럼 니블이9를 넘는 값도 _bcd2bin은 계산하여160을 반환하며 오류라고 표시하지 않습니다. _bin2bcd도100 이상을 거부하지 않습니다. 숫자 표현 변환과 입력 유효성 검사는 다른 책임입니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "같은 비트열도 인코딩에 따라 의미가 달라진다는 점,니블 마스크·시프트,제한된 입력 범위에서의 상수 곱셈 최적화,좁은 반환형을 연결합니다. BCD는 ASCII 문자 두 개를 저장하는 형식과도 다릅니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "BCD 0x42를 정수로 변환하면?",
+      "options": [
+        "42",
+        "66"
+      ],
+      "answer": 0,
+      "explanation": "비트열을 일반 이진 정수로 읽으면66이지만 BCD에서는4*10+2입니다. 인코딩 규칙을 먼저 정해야 합니다."
+    },
+    {
+      "prompt": "_bcd2bin(0xfa)가 오류를 반환하는가?",
+      "options": [
+        "그렇다. 자동으로 음수 오류 코드를 반환한다",
+        "아니다. 입력을 그대로 계산해160을 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "15*10+10=160이며 함수에 유효성 검사 분기가 없습니다."
+    },
+    {
+      "prompt": "(val*103)>>10을 모든 unsigned의 정확한 /10으로 써도 되는가?",
+      "options": [
+        "안 된다. 이 변환의 제한된 입력 범위를 고려해야 한다",
+        "된다. 전체 정수 범위에서 항상 같은 식이다"
+      ],
+      "answer": 0,
+      "explanation": "정상 BCD 변환 범위에서 검증해야 합니다. 큰 값에서는 근사와 중간 곱의 범위 문제가 생길 수 있습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/bcd.h>\n#include <linux/export.h>\n\nunsigned _bcd2bin(unsigned char val)\n{\n\treturn (val & 0x0f) + (val >> 4) * 10;\n}\nEXPORT_SYMBOL(_bcd2bin);\n\nunsigned char _bin2bcd(unsigned val)\n{\n\tconst unsigned int t = (val * 103) >> 10;\n\n\treturn (t << 4) | (val - t * 10);\n}\nEXPORT_SYMBOL(_bin2bcd);\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d63fd6903c452ff6c755509344760f34593b0bd77d8a824225164b4c74361d0d",
+    "scope": "whole-file",
+    "line_count": 17,
+    "authoring_source": "course/file_units/bcd_conversion.py",
+    "sections": [
+      "파일 전체",
+      "BCD에서 정수로",
+      "정수에서 BCD로",
+      "검증과 범위",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/bcd.c"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "id": "file-df07def1e0bda1f3",
+  "path": "arch/x86/include/asm/frame.h",
+  "title": "x86 프레임 매크로: BP 저장과 pt_regs 포인터 태그",
+  "area": "태그 포인터 · 정렬 · 프레임 포인터 · 어셈블리 매크로 · 구성별 코드 생성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "C 문자열과 assembly용 프레임 생성, x86 폭별 pt_regs 포인터 인코딩 및 비활성 구성을 해설합니다.",
+  "guide": [
+    "정렬 때문에 정상 stack 주소에서 쓰이지 않는 비트 패턴을 unwind용 태그로 활용합니다.",
+    "트램펄린·예외 진입 코드가 일반 frame과 pt_regs frame을 구별하게 하는 방법을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 범위와 사용 의도",
+      "text": "GPL-2.0, guard, asm.h 포함 뒤 FRAME_POINTER 및 ASSEMBLY 분기에 따라 macro와 inline helper를 정의합니다. 주석은 호출 가능한 non-leaf assembly 함수가 stack trace 신뢰성을 위해 frame 생성 매크로를 사용해야 한다고 설명합니다. 이 헤더 자체는 실제 unwind 순회나 자동 frame 검증을 수행하지 않습니다."
+    },
+    {
+      "title": "Frame 생성과 종료",
+      "text": "FRAME_POINTER 활성 시 FRAME_BEGIN은 BP를 push하고 SP를 BP로 옮깁니다. FRAME_END는 BP를 pop합니다. assembly에서는 .macro로, C에서는 인라인 asm에 연결할 문자열로 표현합니다. FRAME_END에는 SP를 BP로 복구하는 mov나 로컬 변수 공간 해제 코드가 없으므로 함수가 자신이 쓴 stack 공간을 적절히 되돌리는 계약이 필요합니다."
+    },
+    {
+      "title": "64비트 encoding",
+      "text": "assembly ENCODE_FRAME_POINTER는 기본값 0인 ptregs_offset을 받아 rsp+offset+1을 rbp에 넣는 lea입니다. C 문자열 버전은 offset 인자 없이 rsp+1입니다. C helper encode_frame_pointer는 regs를 unsigned long으로 변환하고 1을 더합니다. 주석은 정렬된 pt_regs 주소의 최하위 비트를 표시하여 일반 stack 주소와 구별하는 기법이라고 설명합니다. 이것은 주소 암호화나 접근 권한 검증이 아닙니다."
+    },
+    {
+      "title": "32비트 encoding",
+      "text": "assembly와 C 문자열은 esp를 ebp로 옮기고 0x7fffffff로 AND합니다. C helper도 regs 정수 주소의 같은 mask를 적용합니다. 주석은 최상위 비트를 지워 일반 kernel stack 주소가 아닌 패턴을 만들고 unwinder에 pt_regs 포인터임을 알린다고 설명합니다. 64비트 방식처럼 1을 더하는 연산이 아닙니다."
+    },
+    {
+      "title": "원래 BP를 먼저 보존",
+      "text": "encoding은 BP를 바꾸므로 주석은 64비트에서 PUSH_AND_CLEAR_REGS 뒤, 32비트에서 SAVE_ALL 뒤에 사용할 것을 요구합니다. kprobes 공통 저장 매크로도 BP를 저장한 뒤 인코딩하는 순서입니다. 태그된 BP를 만들기 전에 원래 BP를 잃으면 그 저장 register를 정상 복원할 수 없습니다."
+    },
+    {
+      "title": "Frame offset과 비활성",
+      "text": "FRAME_POINTER이면 FRAME_OFFSET은 __ASM_SEL(4,8)로 32비트에서 4, 64비트에서 8입니다. 없으면 0이고 FRAME_BEGIN/END는 빈 macro입니다. 비활성 assembly ENCODE_FRAME_POINTER는 선택 인자를 받지만 빈 본문이며 C 문자열 macro도 비어 있고 C helper는 0을 반환합니다. 그 0은 실제 regs 주소가 0이라는 측정값이 아니라 기능 없는 경로의 결과입니다."
+    },
+    {
+      "title": "인터페이스 차이와 CS",
+      "text": "활성 32비트 assembly ENCODE_FRAME_POINTER에는 64비트의 선택 offset 인자가 정의되지 않습니다. 유사한 이름이라고 구성별 시그니처를 같게 가정하지 않습니다. 정렬 기반 태그, 데이터 표현과 제어 흐름의 분리, 저장 후 변경이라는 register 보존 규칙, 빈 code generation을 학습합니다. 원본 전체 대조는 모든 assembly 호출 지점이 이 계약을 지키는지 검증한 시험과 구분합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "64비트 encode_frame_pointer는 정렬된 regs 주소에 무엇을 하는가?",
+      "options": [
+        "정수 주소에 1을 더해 낮은 비트를 표시한다",
+        "주소를 1비트 오른쪽으로 이동한다"
+      ],
+      "answer": 0,
+      "explanation": "본문은 (unsigned long)regs+1입니다. 정렬 전제를 가진 태그 표현이며 암호화가 아닙니다."
+    },
+    {
+      "prompt": "32비트 encoding 방식은?",
+      "options": [
+        "64비트와 똑같이 주소에 1을 더한다",
+        "주소와 0x7fffffff를 AND하여 최상위 비트를 지운다"
+      ],
+      "answer": 1,
+      "explanation": "폭별 코드가 다릅니다. 두 방식 모두 unwinder가 특별한 frame을 알아보게 하는 표식을 만듭니다."
+    },
+    {
+      "prompt": "FRAME_END가 모든 로컬 stack 공간을 자동 해제하는가?",
+      "options": [
+        "아니다. 본문은 BP를 pop하는 동작이다",
+        "그렇다. SP를 항상 BP로 되돌리는 명령도 포함한다"
+      ],
+      "answer": 0,
+      "explanation": "함수가 변경한 SP를 맞추는 책임과 저장 BP 복원을 구분해야 합니다. 소스에 없는 epilogue 동작을 추가해 설명하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_FRAME_H\n#define _ASM_X86_FRAME_H\n\n#include <asm/asm.h>\n\n/*\n * These are stack frame creation macros.  They should be used by every\n * callable non-leaf asm function to make kernel stack traces more reliable.\n */\n\n#ifdef CONFIG_FRAME_POINTER\n\n#ifdef __ASSEMBLY__\n\n.macro FRAME_BEGIN\n\tpush %_ASM_BP\n\t_ASM_MOV %_ASM_SP, %_ASM_BP\n.endm\n\n.macro FRAME_END\n\tpop %_ASM_BP\n.endm\n\n#ifdef CONFIG_X86_64\n/*\n * This is a sneaky trick to help the unwinder find pt_regs on the stack.  The\n * frame pointer is replaced with an encoded pointer to pt_regs.  The encoding\n * is just setting the LSB, which makes it an invalid stack address and is also\n * a signal to the unwinder that it's a pt_regs pointer in disguise.\n *\n * NOTE: This macro must be used *after* PUSH_AND_CLEAR_REGS because it corrupts\n * the original rbp.\n */\n.macro ENCODE_FRAME_POINTER ptregs_offset=0\n\tleaq 1+\\ptregs_offset(%rsp), %rbp\n.endm\n#else /* !CONFIG_X86_64 */\n/*\n * This is a sneaky trick to help the unwinder find pt_regs on the stack.  The\n * frame pointer is replaced with an encoded pointer to pt_regs.  The encoding\n * is just clearing the MSB, which makes it an invalid stack address and is also\n * a signal to the unwinder that it's a pt_regs pointer in disguise.\n *\n * NOTE: This macro must be used *after* SAVE_ALL because it corrupts the\n * original ebp.\n */\n.macro ENCODE_FRAME_POINTER\n\tmov %esp, %ebp\n\tandl $0x7fffffff, %ebp\n.endm\n#endif /* CONFIG_X86_64 */\n\n#else /* !__ASSEMBLY__ */\n\n#define FRAME_BEGIN\t\t\t\t\\\n\t\"push %\" _ASM_BP \"\\n\"\t\t\t\\\n\t_ASM_MOV \"%\" _ASM_SP \", %\" _ASM_BP \"\\n\"\n\n#define FRAME_END \"pop %\" _ASM_BP \"\\n\"\n\n#ifdef CONFIG_X86_64\n\n#define ENCODE_FRAME_POINTER\t\t\t\\\n\t\"lea 1(%rsp), %rbp\\n\\t\"\n\nstatic inline unsigned long encode_frame_pointer(struct pt_regs *regs)\n{\n\treturn (unsigned long)regs + 1;\n}\n\n#else /* !CONFIG_X86_64 */\n\n#define ENCODE_FRAME_POINTER\t\t\t\\\n\t\"movl %esp, %ebp\\n\\t\"\t\t\t\\\n\t\"andl $0x7fffffff, %ebp\\n\\t\"\n\nstatic inline unsigned long encode_frame_pointer(struct pt_regs *regs)\n{\n\treturn (unsigned long)regs & 0x7fffffff;\n}\n\n#endif /* CONFIG_X86_64 */\n\n#endif /* __ASSEMBLY__ */\n\n#define FRAME_OFFSET __ASM_SEL(4, 8)\n\n#else /* !CONFIG_FRAME_POINTER */\n\n#ifdef __ASSEMBLY__\n\n.macro ENCODE_FRAME_POINTER ptregs_offset=0\n.endm\n\n#else /* !__ASSEMBLY */\n\n#define ENCODE_FRAME_POINTER\n\nstatic inline unsigned long encode_frame_pointer(struct pt_regs *regs)\n{\n\treturn 0;\n}\n\n#endif\n\n#define FRAME_BEGIN\n#define FRAME_END\n#define FRAME_OFFSET 0\n\n#endif /* CONFIG_FRAME_POINTER */\n\n#endif /* _ASM_X86_FRAME_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "cb76710ccb7a62cfc55f7bcc36fa236e11c10da2d9e40b6a2307c713885db4e9",
+    "scope": "whole-file",
+    "line_count": 113,
+    "authoring_source": "course/file_units/x86_probe_frames.py",
+    "sections": [
+      "전체 범위와 사용 의도",
+      "Frame 생성과 종료",
+      "64비트 encoding",
+      "32비트 encoding",
+      "원래 BP를 먼저 보존",
+      "Frame offset과 비활성",
+      "인터페이스 차이와 CS"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/frame.h"
+    }
+  ]
+}

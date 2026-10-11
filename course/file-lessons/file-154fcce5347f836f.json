@@ -1,0 +1,82 @@
+{
+  "id": "file-154fcce5347f836f",
+  "path": "include/linux/getcpu.h",
+  "title": "Getcpu cache 자료형: 고정 크기와 opaque 계약",
+  "area": "Opaque 데이터 · ABI · sizeof · 스레드별 저장 · 호환성",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "캐시 구조체 전체와 역사적 주석을 현재 getcpu 구현과 구별합니다.",
+  "guide": [
+    "내부 필드를 노출하지 않는 고정 크기 저장 영역은 ABI를 유지하면서 구현을 바꿀 수 있게 합니다.",
+    "sizeof에 따른 배열 길이와 사용자 코드가 의존해선 안 되는 내부 표현을 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 정의",
+      "text": "GPL-2.0과 _LINUX_GETCPU_H를 1로 정의하는 guard 아래 getcpu_cache 구조체 하나만 있습니다. 멤버는 unsigned long blob[128 / sizeof(long)]입니다. 별도 include·함수·할당·캐시 갱신 구현은 없습니다."
+    },
+    {
+      "title": "바이트 수와 원소 수",
+      "text": "일반적인 Linux ABI에서 long이 4바이트이면 배열은 32개, 8바이트이면 16개 원소로 멤버 저장 공간은 128바이트입니다. unsigned long도 해당 long과 같은 크기를 사용합니다. 배열 원소 개수 128이라는 선언이 아니며 각 원소를 CPU·node·timestamp 필드로 해석할 정의도 없습니다."
+    },
+    {
+      "title": "주석의 opaque 계약",
+      "text": "주석은 사용자 프로그램이 내부 내용을 참조하지 말아야 하고 향후 바뀔 수 있는 private cache이며 스레드별 저장을 요구한다고 설명합니다. 결과가 짧은 시간 뒤처질 수 있고 NULL로 캐시를 피하라는 설명도 있습니다. 이는 구조체의 역사적 사용 계약이며 헤더 자체가 캐시의 유효성이나 정확도를 검사하지 않습니다."
+    },
+    {
+      "title": "현재 구현과 구별",
+      "text": "확인한 v6.12 x86 __vdso_getcpu는 cache 인수를 무시하고 CPU·node helper를 호출합니다. 따라서 이 주석을 현재 x86에서 cache를 실제 사용하는 증거로 삼으면 안 됩니다. 또한 주석의 정확성 표현을 조회 이후 CPU migration까지 막는 절대 보장으로 확대하지 않습니다. 전체 구조체와 주석을 분석했으며 다른 모든 아키텍처의 캐시 소비를 검증한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "sizeof(long)=8일 때 blob 원소 개수는?",
+      "options": [
+        "16개이다",
+        "128개이다"
+      ],
+      "answer": 0,
+      "explanation": "배열 길이는 128/sizeof(long)입니다. 16개의 8바이트 원소가 128바이트를 차지합니다."
+    },
+    {
+      "prompt": "사용자 프로그램이 blob[0]을 특정 CPU 번호 필드로 사용해도 되는가?",
+      "options": [
+        "된다. 헤더에 CPU 번호가 첫 원소라고 정의되어 있다",
+        "안 된다. 주석은 내부 표현에 의존하지 말라고 명시한다"
+      ],
+      "answer": 1,
+      "explanation": "이 구조체는 opaque 저장 공간으로 설명됩니다. 멤버의 의미를 임의로 고정하면 구현 변경과 호환되지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_GETCPU_H\n#define _LINUX_GETCPU_H 1\n\n/* Cache for getcpu() to speed it up. Results might be a short time\n   out of date, but will be faster.\n\n   User programs should not refer to the contents of this structure.\n   I repeat they should not refer to it. If they do they will break\n   in future kernels.\n\n   It is only a private cache for vgetcpu(). It will change in future kernels.\n   The user program must store this information per thread (__thread)\n   If you want 100% accurate information pass NULL instead. */\nstruct getcpu_cache {\n\tunsigned long blob[128 / sizeof(long)];\n};\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "d2d24962a960a2c9c333e21af17f9ae3235b9e5abbf94c8bb06b7f2d1046552f",
+    "scope": "whole-file",
+    "line_count": 19,
+    "authoring_source": "course/file_units/vdso_cpu_entry.py",
+    "sections": [
+      "전체 정의",
+      "바이트 수와 원소 수",
+      "주석의 opaque 계약",
+      "현재 구현과 구별"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/getcpu.h"
+    }
+  ]
+}

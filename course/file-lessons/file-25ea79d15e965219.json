@@ -1,0 +1,191 @@
+{
+  "id": "file-25ea79d15e965219",
+  "path": "scripts/link-vmlinux.sh",
+  "title": "vmlinux 링크: kallsyms 반복·BTF 추출·최종 검증",
+  "area": "링커 · ELF · kallsyms · BTF · 빌드 의존성 · shell 오류 처리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "전체 helper와 실행 순서를 따라 커널 최종 ELF가 만들어지는 과정을 분석합니다.",
+  "guide": [
+    "심볼 테이블을 이미지에 추가하면 주소와 크기가 달라질 수 있어 생성·재링크·검증을 반복해야 합니다.",
+    "링커 archive 선택, 생성 객체 의존성, ELF 메타데이터와 반복 수렴 검사를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "시작과 설정 검사",
+      "text": "#!/bin/sh, GPL-2.0 스크립트는 set -e를 사용하고 세 인수를 LD,KBUILD_LDFLAGS,LDFLAGS_vmlinux에 저장합니다. is_enabled는 auto.conf에서 ^이름=y 패턴을 grep합니다. 끝 앵커는 없으므로 일반 문자열 검증기라기보다 생성된 설정 파일의 형식을 전제로 합니다. info는 고정 폭 상태 표시를 printf합니다."
+    },
+    {
+      "title": "주요 링크 입력 선택",
+      "text": "vmlinux_link는 첫 인수를 출력명으로 받고 shift합니다. LTO_CLANG 또는 X86_KERNEL_IBT이면 이미 준비한 vmlinux.o를 쓰고 libs를 비워 느린 처리를 반복하지 않습니다. 아니면 vmlinux.a와 KBUILD_VMLINUX_LIBS를 사용합니다. MODULES이면 .vmlinux.export.o를 추가하고 언제나 init/version-timestamp.o를 추가합니다. 최종 버전 객체가 실제 링크 입력에 들어오는 지점입니다."
+    },
+    {
+      "title": "UML과 일반 linker",
+      "text": "SRCARCH=um이면 CC를 linker driver로 사용하고 wl=-Wl,를 통해 linker 옵션을 전달하며 CFLAGS_vmlinux와 -lutil -lrt -lpthread를 씁니다. 다른 아키텍처는 LD와 KBUILD_LDFLAGS·LDFLAGS_vmlinux를 사용합니다. linker script 경로는 objtree/KBUILD_LDS입니다. 모든 플랫폼이 같은 명령 실행 파일을 사용하지 않습니다."
+    },
+    {
+      "title": "Archive와 부가 옵션",
+      "text": "strip_debug가 비어 있지 않으면 --strip-debug, VMLINUX_MAP이면 출력명.map을 만드는 -Map을 추가합니다. objs는 --whole-archive 구간으로, libs는 --start-group 구간으로 링크합니다. 전자는 객체 포함을 강제하고 후자는 archive 사이 참조 해결을 위한 그룹입니다. 이후 kallsymso,btf_vmlinux_bin_o,플랫폼 libs를 추가합니다. 하나의 archive 목록처럼 해석하지 않습니다."
+    },
+    {
+      "title": "BTF 생성과 추출",
+      "text": "gen_btf는 입력 이미지에 PAHOLE -J를 실행하며 LLVM_OBJCOPY 환경 변수로 OBJCOPY를 제공합니다. 이어 objcopy로 .BTF만 남기고 alloc,readonly 플래그와 --strip-all을 적용해 입력명.btf.o를 만듭니다. 주석은 __start_BTF·__stop_BTF도 제거해 linker script에서 다시 정의하도록 설명합니다. objcopy stderr를 숨기지만 명령 오류가 자동으로 성공으로 바뀌는 것은 아닙니다."
+    },
+    {
+      "title": "ELF 종류의 바이트 수정",
+      "text": "BTF 객체를 최종 링크 입력으로 쓰기 위해 ELF e_type 위치인 offset 16에 ET_REL의 두 바이트를 씁니다. CPU_BIG_ENDIAN이면 0,1이고 아니면 1,0입니다. printf와 dd bs=1,seek=16,conv=notrunc를 사용하므로 파일 나머지를 잘라내지 않습니다. 이후 전역 btf_vmlinux_bin_o를 결과 경로로 설정합니다. ELF 전체 endian을 변환하는 작업이 아닙니다."
+    },
+    {
+      "title": "Kallsyms 객체 생성",
+      "text": "kallsyms helper는 KALLSYMS_ALL이면 --all-symbols, ABSOLUTE_PERCPU이면 --absolute-percpu를 더합니다. scripts/kallsyms에 입력 심볼 파일을 전달해 두 번째 인수.S를 만들고 CC에 전처리·어셈블리 플래그를 전달해 .o로 컴파일합니다. 마지막 kallsymso를 그 객체로 갱신합니다. 여기서 생성기를 구현하는 것이 아니라 별도 도구를 호출합니다."
+    },
+    {
+      "title": "Map 생성과 helper 연결",
+      "text": "mksysmap은 NM -n 출력에 scripts/mksysmap sed 필터를 적용해 지정 파일에 저장합니다. sysmap_and_kallsyms는 이미지.syms를 만들고 그 파일에서 이미지.kallsyms.o를 생성하며 kallsyms_sysmap을 마지막 map 경로로 설정합니다. sorttable은 objtree/scripts/sorttable을 실행합니다. set -e만으로 pipeline 앞 NM 실패까지 항상 검출한다고 단정하지 않습니다. pipefail 설정은 없습니다."
+    },
+    {
+      "title": "상세 출력과 clean",
+      "text": "KBUILD_VERBOSE에 1이 포함되면 set -x입니다. 첫 인수가 clean이면 cleanup이 .btf.*,System.map,vmlinux,vmlinux.map을 rm -f하고 0으로 끝납니다. 전체 .tmp_vmlinux 파일을 이 함수에서 모두 지우는 것은 아닙니다. 정상 경로는 Makefile.build로 init/version-timestamp.o를 먼저 빌드하고 BTF·kallsyms·strip 변수를 비웁니다."
+    },
+    {
+      "title": "최초 임시 링크",
+      "text": "KALLSYMS이면 빈 .tmp_vmlinux.kallsyms0.syms를 만들고 dummy kallsyms 객체를 생성합니다. KALLSYMS 또는 DEBUG_INFO_BTF 중 하나가 켜지면 .tmp_vmlinux1을 링크합니다. BTF가 없을 때만 이 첫 링크에서 debug를 제거합니다. BTF는 DWARF 정보를 필요로 하므로 같은 제거 정책을 적용할 수 없습니다."
+    },
+    {
+      "title": "BTF 조건부 호출의 한계",
+      "text": "BTF이면 if ! gen_btf .tmp_vmlinux1 조건에서 실패 메시지와 설정 비활성화 제안을 출력하고 exit 1합니다. 그러나 shell 함수가 조건식으로 호출되는 경우 내부 set -e 동작의 예외를 고려해야 합니다. gen_btf 내부 각 도구 실패마다 명시적으로 return을 하는 코드는 아니므로 모든 중간 실패를 이 if가 반드시 잡는다고 확대하지 않습니다. 실제 오류 주입 실행은 하지 않았습니다."
+    },
+    {
+      "title": "두 차례의 심볼 산출과 크기 비교",
+      "text": "KALLSYMS 경로는 strip_debug=1로 둔 뒤 첫 임시 이미지에서 심볼 객체를 만들고 file-size.sh로 size1을 얻습니다. 그 객체를 넣어 .tmp_vmlinux2를 링크하고 다시 심볼 객체를 만들어 size2를 얻습니다. 심볼 데이터의 추가 자체가 이미지 배치를 바꾸므로 처음 주소만 넣고 끝내지 않습니다. 비교하는 것은 생성 객체 파일 크기이며 심볼 주소 배열의 직접 동등 비교가 아닙니다."
+    },
+    {
+      "title": "추가 pass와 수렴의 한계",
+      "text": "size1과 size2가 다르거나 KALLSYMS_EXTRA_PASS가 비어 있지 않으면 세 번째 임시 링크와 심볼 생성을 수행합니다. 변수 값이 0이라는 문자열이어도 비어 있지 않으므로 추가 pass 조건입니다. 크기 확장으로 branch stub이 생겨 다시 심볼 수가 늘 수 있다는 주석이 있습니다. 변화가 없어질 때까지 무한 반복하는 알고리즘이 아니라 최대 한 번의 조건부 추가 pass입니다."
+    },
+    {
+      "title": "최종 링크 후 처리",
+      "text": "strip_debug를 비우고 vmlinux를 링크합니다. BTF이면 RESOLVE_BTFIDS로 ID를 채우고 최종 System.map을 생성합니다. BUILDTIME_TABLE_SORT이면 sorttable을 호출하며 실패를 진단하고 종료합니다. 순서는 최종 링크→BTF ID→map→조건부 정렬입니다. 임시 링크의 debug 제거 설정을 그대로 최종 링크에 남기지 않습니다."
+    },
+    {
+      "title": "최종 map 비교와 의존 파일",
+      "text": "KALLSYMS이면 cmp -s로 최종 System.map과 마지막 kallsyms_sysmap을 비교합니다. 다르면 inconsistent 진단과 EXTRA_PASS 제안을 출력하고 exit 1합니다. 같은 크기였다는 조건만으로 성공을 보증하지 않고 실제 map을 비교합니다. 끝에서 vmlinux: 스크립트경로를 .vmlinux.d에 기록해 fixdep에 제공합니다. 전체 흐름을 대조했으며 실제 커널 빌드·링크를 실행한 것은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "LTO_CLANG 또는 X86_KERNEL_IBT일 때 주요 입력은?",
+      "options": [
+        "vmlinux.o",
+        "항상 vmlinux.a만"
+      ],
+      "answer": 0,
+      "explanation": "이 경로는 이미 준비된 객체를 사용해 느린 링크 작업 반복을 피합니다. libs도 비웁니다."
+    },
+    {
+      "prompt": "init/version-timestamp.o는 어느 링크 경로에 추가되는가?",
+      "options": [
+        "BTF가 켜졌을 때만 추가된다",
+        "vmlinux_link에서 항상 objs에 추가된다"
+      ],
+      "answer": 1,
+      "explanation": "MODULES 조건 밖에 추가 문장이 있습니다. 최종 빌드 버전의 강한 정의를 연결하는 경로입니다."
+    },
+    {
+      "prompt": "BTF의 첫 임시 링크에서 debug를 유지하는 이유는?",
+      "options": [
+        "DWARF에서 BTF를 생성하기 위해서다",
+        "System.map은 항상 DWARF만 읽기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "gen_btf의 pahole 작업이 DWARF를 입력으로 사용합니다. nm 기반 map 생성과 구분합니다."
+    },
+    {
+      "prompt": "ET_REL 수정은 파일 전체를 다시 쓰는가?",
+      "options": [
+        "그렇다. 모든 ELF section을 byte swap한다",
+        "아니다. offset 16의 두 바이트를 notrunc로 갱신한다"
+      ],
+      "answer": 1,
+      "explanation": "dd는 bs=1,seek=16이며 e_type 값만 기록합니다. 대상 endian에 맞는 두 바이트를 선택합니다."
+    },
+    {
+      "prompt": "KALLSYMS_EXTRA_PASS=0이면 추가 pass가 꺼지는가?",
+      "options": [
+        "아니다. 비어 있지 않아 추가 pass 조건이다",
+        "그렇다. 숫자 0 여부를 산술 검사한다"
+      ],
+      "answer": 0,
+      "explanation": "조건은 -n 문자열 검사입니다. 주석의 =1 예제와 실제 조건을 구분합니다."
+    },
+    {
+      "prompt": "두 kallsyms 객체 크기가 같으면 마지막 map 검사를 생략하는가?",
+      "options": [
+        "그렇다. 같은 크기는 모든 주소 일치를 보장한다",
+        "아니다. KALLSYMS이면 최종 map을 비교한다"
+      ],
+      "answer": 1,
+      "explanation": "추가 pass 선택과 최종 주소 목록 검증은 다른 단계입니다."
+    },
+    {
+      "prompt": "심볼 배치가 계속 달라지면 자동으로 무한 재링크하는가?",
+      "options": [
+        "아니다. 조건부 세 번째 pass 뒤 최종 비교로 실패할 수 있다",
+        "그렇다. while 루프가 반드시 수렴할 때까지 반복한다"
+      ],
+      "answer": 0,
+      "explanation": "실제 코드에 무한 수렴 루프는 없습니다. 제한된 pass와 사후 검증으로 구성됩니다."
+    },
+    {
+      "prompt": "최종 단계에서 생성하는 .vmlinux.d의 목적은?",
+      "options": [
+        "새 사용자 namespace 생성",
+        "fixdep용 스크립트 의존성 기록"
+      ],
+      "answer": 1,
+      "explanation": "마지막 echo는 vmlinux가 실행 스크립트에 의존함을 기록합니다. ELF 내용과 별개인 빌드 메타데이터입니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n#\n# link vmlinux\n#\n# vmlinux is linked from the objects in vmlinux.a and $(KBUILD_VMLINUX_LIBS).\n# vmlinux.a contains objects that are linked unconditionally.\n# $(KBUILD_VMLINUX_LIBS) are archives which are linked conditionally\n# (not within --whole-archive), and do not require symbol indexes added.\n#\n# vmlinux\n#   ^\n#   |\n#   +--< vmlinux.a\n#   |\n#   +--< $(KBUILD_VMLINUX_LIBS)\n#   |    +--< lib/lib.a + more\n#   |\n#   +-< ${kallsymso} (see description in KALLSYMS section)\n#\n# vmlinux version (uname -v) cannot be updated during normal\n# descending-into-subdirs phase since we do not yet know if we need to\n# update vmlinux.\n# Therefore this step is delayed until just before final link of vmlinux.\n#\n# System.map is generated to document addresses of all kernel symbols\n\n# Error out on error\nset -e\n\nLD=\"$1\"\nKBUILD_LDFLAGS=\"$2\"\nLDFLAGS_vmlinux=\"$3\"\n\nis_enabled() {\n\tgrep -q \"^$1=y\" include/config/auto.conf\n}\n\n# Nice output in kbuild format\n# Will be supressed by \"make -s\"\ninfo()\n{\n\tprintf \"  %-7s %s\\n\" \"${1}\" \"${2}\"\n}\n\n# Link of vmlinux\n# ${1} - output file\nvmlinux_link()\n{\n\tlocal output=${1}\n\tlocal objs\n\tlocal libs\n\tlocal ld\n\tlocal ldflags\n\tlocal ldlibs\n\n\tinfo LD ${output}\n\n\t# skip output file argument\n\tshift\n\n\tif is_enabled CONFIG_LTO_CLANG || is_enabled CONFIG_X86_KERNEL_IBT; then\n\t\t# Use vmlinux.o instead of performing the slow LTO link again.\n\t\tobjs=vmlinux.o\n\t\tlibs=\n\telse\n\t\tobjs=vmlinux.a\n\t\tlibs=\"${KBUILD_VMLINUX_LIBS}\"\n\tfi\n\n\tif is_enabled CONFIG_MODULES; then\n\t\tobjs=\"${objs} .vmlinux.export.o\"\n\tfi\n\n\tobjs=\"${objs} init/version-timestamp.o\"\n\n\tif [ \"${SRCARCH}\" = \"um\" ]; then\n\t\twl=-Wl,\n\t\tld=\"${CC}\"\n\t\tldflags=\"${CFLAGS_vmlinux}\"\n\t\tldlibs=\"-lutil -lrt -lpthread\"\n\telse\n\t\twl=\n\t\tld=\"${LD}\"\n\t\tldflags=\"${KBUILD_LDFLAGS} ${LDFLAGS_vmlinux}\"\n\t\tldlibs=\n\tfi\n\n\tldflags=\"${ldflags} ${wl}--script=${objtree}/${KBUILD_LDS}\"\n\n\t# The kallsyms linking does not need debug symbols included.\n\tif [ -n \"${strip_debug}\" ] ; then\n\t\tldflags=\"${ldflags} ${wl}--strip-debug\"\n\tfi\n\n\tif is_enabled CONFIG_VMLINUX_MAP; then\n\t\tldflags=\"${ldflags} ${wl}-Map=${output}.map\"\n\tfi\n\n\t${ld} ${ldflags} -o ${output}\t\t\t\t\t\\\n\t\t${wl}--whole-archive ${objs} ${wl}--no-whole-archive\t\\\n\t\t${wl}--start-group ${libs} ${wl}--end-group\t\t\\\n\t\t${kallsymso} ${btf_vmlinux_bin_o} ${ldlibs}\n}\n\n# generate .BTF typeinfo from DWARF debuginfo\n# ${1} - vmlinux image\ngen_btf()\n{\n\tlocal btf_data=${1}.btf.o\n\n\tinfo BTF \"${btf_data}\"\n\tLLVM_OBJCOPY=\"${OBJCOPY}\" ${PAHOLE} -J ${PAHOLE_FLAGS} ${1}\n\n\t# Create ${btf_data} which contains just .BTF section but no symbols. Add\n\t# SHF_ALLOC because .BTF will be part of the vmlinux image. --strip-all\n\t# deletes all symbols including __start_BTF and __stop_BTF, which will\n\t# be redefined in the linker script. Add 2>/dev/null to suppress GNU\n\t# objcopy warnings: \"empty loadable segment detected at ...\"\n\t${OBJCOPY} --only-section=.BTF --set-section-flags .BTF=alloc,readonly \\\n\t\t--strip-all ${1} \"${btf_data}\" 2>/dev/null\n\t# Change e_type to ET_REL so that it can be used to link final vmlinux.\n\t# GNU ld 2.35+ and lld do not allow an ET_EXEC input.\n\tif is_enabled CONFIG_CPU_BIG_ENDIAN; then\n\t\tet_rel='\\0\\1'\n\telse\n\t\tet_rel='\\1\\0'\n\tfi\n\tprintf \"${et_rel}\" | dd of=\"${btf_data}\" conv=notrunc bs=1 seek=16 status=none\n\n\tbtf_vmlinux_bin_o=${btf_data}\n}\n\n# Create ${2}.o file with all symbols from the ${1} object file\nkallsyms()\n{\n\tlocal kallsymopt;\n\n\tif is_enabled CONFIG_KALLSYMS_ALL; then\n\t\tkallsymopt=\"${kallsymopt} --all-symbols\"\n\tfi\n\n\tif is_enabled CONFIG_KALLSYMS_ABSOLUTE_PERCPU; then\n\t\tkallsymopt=\"${kallsymopt} --absolute-percpu\"\n\tfi\n\n\tinfo KSYMS \"${2}.S\"\n\tscripts/kallsyms ${kallsymopt} \"${1}\" > \"${2}.S\"\n\n\tinfo AS \"${2}.o\"\n\t${CC} ${NOSTDINC_FLAGS} ${LINUXINCLUDE} ${KBUILD_CPPFLAGS} \\\n\t      ${KBUILD_AFLAGS} ${KBUILD_AFLAGS_KERNEL} -c -o \"${2}.o\" \"${2}.S\"\n\n\tkallsymso=${2}.o\n}\n\n# Perform kallsyms for the given temporary vmlinux.\nsysmap_and_kallsyms()\n{\n\tmksysmap \"${1}\" \"${1}.syms\"\n\tkallsyms \"${1}.syms\" \"${1}.kallsyms\"\n\n\tkallsyms_sysmap=${1}.syms\n}\n\n# Create map file with all symbols from ${1}\n# See mksymap for additional details\nmksysmap()\n{\n\tinfo NM ${2}\n\t${NM} -n \"${1}\" | sed -f \"${srctree}/scripts/mksysmap\" > \"${2}\"\n}\n\nsorttable()\n{\n\t${objtree}/scripts/sorttable ${1}\n}\n\ncleanup()\n{\n\trm -f .btf.*\n\trm -f System.map\n\trm -f vmlinux\n\trm -f vmlinux.map\n}\n\n# Use \"make V=1\" to debug this script\ncase \"${KBUILD_VERBOSE}\" in\n*1*)\n\tset -x\n\t;;\nesac\n\nif [ \"$1\" = \"clean\" ]; then\n\tcleanup\n\texit 0\nfi\n\n${MAKE} -f \"${srctree}/scripts/Makefile.build\" obj=init init/version-timestamp.o\n\nbtf_vmlinux_bin_o=\nkallsymso=\nstrip_debug=\n\nif is_enabled CONFIG_KALLSYMS; then\n\ttrue > .tmp_vmlinux.kallsyms0.syms\n\tkallsyms .tmp_vmlinux.kallsyms0.syms .tmp_vmlinux0.kallsyms\nfi\n\nif is_enabled CONFIG_KALLSYMS || is_enabled CONFIG_DEBUG_INFO_BTF; then\n\n\t# The kallsyms linking does not need debug symbols, but the BTF does.\n\tif ! is_enabled CONFIG_DEBUG_INFO_BTF; then\n\t\tstrip_debug=1\n\tfi\n\n\tvmlinux_link .tmp_vmlinux1\nfi\n\nif is_enabled CONFIG_DEBUG_INFO_BTF; then\n\tif ! gen_btf .tmp_vmlinux1; then\n\t\techo >&2 \"Failed to generate BTF for vmlinux\"\n\t\techo >&2 \"Try to disable CONFIG_DEBUG_INFO_BTF\"\n\t\texit 1\n\tfi\nfi\n\nif is_enabled CONFIG_KALLSYMS; then\n\n\t# kallsyms support\n\t# Generate section listing all symbols and add it into vmlinux\n\t# It's a four step process:\n\t# 0)  Generate a dummy __kallsyms with empty symbol list.\n\t# 1)  Link .tmp_vmlinux.kallsyms1 so it has all symbols and sections,\n\t#     with a dummy __kallsyms.\n\t#     Running kallsyms on that gives us .tmp_kallsyms1.o with\n\t#     the right size\n\t# 2)  Link .tmp_vmlinux.kallsyms2 so it now has a __kallsyms section of\n\t#     the right size, but due to the added section, some\n\t#     addresses have shifted.\n\t#     From here, we generate a correct .tmp_vmlinux.kallsyms2.o\n\t# 3)  That link may have expanded the kernel image enough that\n\t#     more linker branch stubs / trampolines had to be added, which\n\t#     introduces new names, which further expands kallsyms. Do another\n\t#     pass if that is the case. In theory it's possible this results\n\t#     in even more stubs, but unlikely.\n\t#     KALLSYMS_EXTRA_PASS=1 may also used to debug or work around\n\t#     other bugs.\n\t# 4)  The correct ${kallsymso} is linked into the final vmlinux.\n\t#\n\t# a)  Verify that the System.map from vmlinux matches the map from\n\t#     ${kallsymso}.\n\n\t# The kallsyms linking does not need debug symbols included.\n\tstrip_debug=1\n\n\tsysmap_and_kallsyms .tmp_vmlinux1\n\tsize1=$(${CONFIG_SHELL} \"${srctree}/scripts/file-size.sh\" ${kallsymso})\n\n\tvmlinux_link .tmp_vmlinux2\n\tsysmap_and_kallsyms .tmp_vmlinux2\n\tsize2=$(${CONFIG_SHELL} \"${srctree}/scripts/file-size.sh\" ${kallsymso})\n\n\tif [ $size1 -ne $size2 ] || [ -n \"${KALLSYMS_EXTRA_PASS}\" ]; then\n\t\tvmlinux_link .tmp_vmlinux3\n\t\tsysmap_and_kallsyms .tmp_vmlinux3\n\tfi\nfi\n\nstrip_debug=\n\nvmlinux_link vmlinux\n\n# fill in BTF IDs\nif is_enabled CONFIG_DEBUG_INFO_BTF; then\n\tinfo BTFIDS vmlinux\n\t${RESOLVE_BTFIDS} vmlinux\nfi\n\nmksysmap vmlinux System.map\n\nif is_enabled CONFIG_BUILDTIME_TABLE_SORT; then\n\tinfo SORTTAB vmlinux\n\tif ! sorttable vmlinux; then\n\t\techo >&2 Failed to sort kernel tables\n\t\texit 1\n\tfi\nfi\n\n# step a (see comment above)\nif is_enabled CONFIG_KALLSYMS; then\n\tif ! cmp -s System.map \"${kallsyms_sysmap}\"; then\n\t\techo >&2 Inconsistent kallsyms data\n\t\techo >&2 'Try \"make KALLSYMS_EXTRA_PASS=1\" as a workaround'\n\t\texit 1\n\tfi\nfi\n\n# For fixdep\necho \"vmlinux: $0\" > .vmlinux.d\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "ede0d3a4e86ea29d00cfbedf9cda7771069721e7d42d2f90afe0fea4157dc8ff",
+    "scope": "whole-file",
+    "line_count": 300,
+    "authoring_source": "course/file_units/vmlinux_link.py",
+    "sections": [
+      "시작과 설정 검사",
+      "주요 링크 입력 선택",
+      "UML과 일반 linker",
+      "Archive와 부가 옵션",
+      "BTF 생성과 추출",
+      "ELF 종류의 바이트 수정",
+      "Kallsyms 객체 생성",
+      "Map 생성과 helper 연결",
+      "상세 출력과 clean",
+      "최초 임시 링크",
+      "BTF 조건부 호출의 한계",
+      "두 차례의 심볼 산출과 크기 비교",
+      "추가 pass와 수렴의 한계",
+      "최종 링크 후 처리",
+      "최종 map 비교와 의존 파일"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/link-vmlinux.sh"
+    }
+  ]
+}

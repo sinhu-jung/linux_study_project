@@ -1,0 +1,159 @@
+{
+  "id": "file-7999a247431075b3",
+  "path": "include/linux/rbtree_augmented.h",
+  "title": "확장 레드블랙 트리 전체: 집계 콜백과 삭제의 세 구조",
+  "area": "균형 트리 · 서브트리 집계 · 콜백 · 삭제 복구",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "트리의 균형뿐 아니라 서브트리별 부가 정보도 일관되게 유지하도록 연결하는 구현입니다.",
+  "guide": [
+    "구조 변화에 따라 propagate·copy·rotate를 호출합니다. 삭제는 노드 교체와 집계 전파를 수행하고 필요한 경우에만 색상 균형 복구를 요청합니다.",
+    "이 헤더가 노출한다고 모든 내부 helper가 안정적인 공개 API인 것은 아닙니다. 원문은 공개 콜백 구조체와 삽입·삭제 API를 중심으로 사용하라고 경고합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "SPDX·저작권·guard·compiler/rbtree/rcupdate 포함 뒤에 공개 범위 안내, 콜백 구조체, 삽입·캐시 삽입·자동 탐색 삽입 helper가 있습니다. 이어 일반/최대값 콜백 생성 매크로, 색상·부모 접근자, 자식 교체 helper, 삭제 내부 구현과 두 삭제 wrapper, endif가 나옵니다. 실제 회전 복구 루프는 외부 __rb_insert_augmented와 __rb_erase_color에 있습니다."
+    },
+    {
+      "title": "세 콜백의 분리",
+      "text": "propagate(node,stop)는 node부터 stop 이전까지 영향을 받은 집계를 조상으로 전달합니다. copy(old,new)는 같은 서브트리 역할을 이어받을 새 루트로 저장된 집계를 복사합니다. rotate(old,new)는 회전으로 바뀐 두 루트의 정보를 조정합니다. 구조체는 함수 포인터만 가지며 집계값 자체는 사용자의 노드 안에 있습니다."
+    },
+    {
+      "title": "삽입 전제와 wrapper",
+      "text": "rb_insert_augmented는 rotate 콜백만 외부 균형 함수로 넘깁니다. 원문은 사용자가 삽입 경로의 집계를 미리 갱신하고 rb_link_node로 연결해야 한다고 설명합니다. cached 버전은 newleft일 때 최소값 포인터를 바꾼 뒤 동일한 삽입을 호출합니다. 삽입 wrapper만으로 아직 초기화하지 않은 모든 집계가 자동 계산되지는 않습니다."
+    },
+    {
+      "title": "탐색까지 포함한 삽입",
+      "text": "rb_add_augmented_cached는 less로 빈 위치를 찾아 연결하고 propagate(parent,NULL)를 호출한 뒤 cached 균형 삽입을 합니다. 주석은 이 전파 경로를 suboptimal로 표시합니다. 새 노드 자신의 집계 초기화는 parent에서 시작하는 propagate가 대신하지 않으므로 caller 계약에 포함됩니다. 반환은 새 최소이면 node, 아니면 NULL이며 실패 표시가 아닙니다."
+    },
+    {
+      "title": "일반 콜백 생성",
+      "text": "RB_DECLARE_CALLBACKS는 propagate/copy/rotate 함수와 콜백 구조체를 생성합니다. propagate는 RBCOMPUTE(node,true)가 true이면 조기 중단하고 아니면 부모로 갑니다. copy는 집계 필드 하나를 복사합니다. rotate는 new에 old의 기존 집계를 복사하고 RBCOMPUTE(old,false)로 예전 루트의 바뀐 집계를 다시 계산합니다. compute의 bool 인자는 종료 최적화 허용 여부입니다."
+    },
+    {
+      "title": "최대값 콜백 생성",
+      "text": "RB_DECLARE_CALLBACKS_MAX의 RBCOMPUTE는 노드 자신의 스칼라 값을 반환하는 함수입니다. 생성된 compute_max가 자기 값과 두 자식의 집계를 비교해 최대를 구합니다. exit가 true이고 값이 같으면 true로 상위 전파를 멈춥니다. 아니면 집계를 기록하고 false입니다. 일반 매크로의 두 인자 compute 함수와 MAX 매크로에 넘기는 한 인자 스칼라 함수를 혼동하지 않습니다."
+    },
+    {
+      "title": "색상과 부모 표현",
+      "text": "RB_RED는0, RB_BLACK은1입니다. 색상은 __rb_parent_color의 bit0으로 얻고 부모는 하위2비트를 제거합니다. rb_set_parent는 색상 비트를 보존하며 부모를 바꾸고 set_parent_color는 둘을 함께 설정합니다. 포인터 정렬과 태그 비트 표현의 전제에 의존합니다. 이 helper에 임의의 NULL 노드를 넘겨도 되는 일반 방어 코드는 없습니다."
+    },
+    {
+      "title": "부모의 자식 또는 루트 교체",
+      "text": "__rb_change_child는 parent가 있으면 old가 왼쪽인지에 따라 해당 자식 링크를 WRITE_ONCE로 바꾸고, 부모가 없으면 루트 포인터를 바꿉니다. rcu 버전은 공개 저장을 rcu_assign_pointer로 수행합니다. 이 쓰기 방식만으로 모든 동시 트리 검색의 완전성·노드 수명이 자동 보장되지는 않습니다."
+    },
+    {
+      "title": "삭제 경우1: 자식이 최대 하나",
+      "text": "왼쪽 자식이 없으면 오른쪽 자식으로 대체합니다. 유효한 레드블랙 트리에서 자식이 하나 있으면 제거 노드는 검정이고 자식은 빨강이므로 부모·색상 정보를 넘겨 국소적으로 복구합니다. 자식 없는 검정 노드 삭제는 부모를 재균형 시작점으로 반환할 수 있습니다. 오른쪽만 없는 대칭 경우도 왼쪽 자식을 올려 국소 처리합니다. 집계 전파 시작은 부모입니다."
+    },
+    {
+      "title": "삭제 경우2: 바로 오른쪽 자식이 후속자",
+      "text": "두 자식이 있고 오른쪽 자식의 왼쪽이 없으면 그 오른쪽 자식이 중위 후속자입니다. 후속자의 오른쪽 child2를 기록하고 copy로 제거 노드의 집계를 넘깁니다. 후속자는 제거 노드의 왼쪽 서브트리와 원래 부모·색상 역할을 이어받습니다. 후속자가 원래 빠진 위치의 검정 높이 문제는 child2 존재와 후속자의 원래 색상에 따라 처리합니다."
+    },
+    {
+      "title": "삭제 경우3: 오른쪽 아래의 가장 왼쪽 후속자",
+      "text": "오른쪽 서브트리에서 왼쪽을 끝까지 따라 후속자를 찾고 그 부모의 왼쪽을 child2로 바꿉니다. 후속자에는 제거 노드의 오른쪽 서브트리를 연결합니다. copy 후 propagate(parent,successor)로 후속자를 뽑아낸 경로를 먼저 갱신합니다. 이어 제거 노드의 왼쪽 서브트리와 상위 링크를 후속자로 연결합니다."
+    },
+    {
+      "title": "삭제 색상과 전파 마무리",
+      "text": "child2가 있으면 부모를 연결하고 검정으로 만들어 추가 복구 없이 처리합니다. 없으면 후속자의 기존 색상이 검정일 때 parent를 rebalance로 남깁니다. 후속자는 제거 노드의 부모·색상을 이어받고 마지막 propagate(tmp,NULL)로 바뀐 상위 집계를 갱신합니다. 이 내부 함수 반환은 삭제된 객체가 아니라 색상 복구가 필요한 부모 또는 NULL입니다."
+    },
+    {
+      "title": "공개 삭제와 캐시",
+      "text": "rb_erase_augmented는 내부 삭제 뒤 rebalance가 비NULL일 때만 __rb_erase_color에 rotate 콜백을 전달합니다. cached 버전은 지울 노드가 최소이면 먼저 rb_next를 캐시에 저장한 뒤 삭제합니다. 노드 메모리 해제나 RB_CLEAR_NODE는 여기서 수행하지 않으므로 별도 표식·수명 정책을 지켜야 합니다."
+    },
+    {
+      "title": "CS 연결과 경계",
+      "text": "검색 순서·색상 균형·집계라는 세 불변식, 후속자 이동, 조상 경로 전파, 변경 없는 값에서의 중단, 콜백 생성 매크로를 학습합니다. 자식 하나의 색상 추론은 입력 트리가 이미 유효하다는 전제입니다. 전체 헤더를 대조했으며 실제 외부 회전 루프와 아키텍처별 동시 실행을 검증한 것으로 세지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "rb_insert_augmented가 삽입 전 조상 집계 갱신까지 모두 대신하는가?",
+      "options": [
+        "아니다. 삽입 경로의 집계는 사용자가 미리 갱신해야 한다",
+        "그렇다. 어떤 초기값이어도 전체 트리를 재계산한다"
+      ],
+      "answer": 0,
+      "explanation": "wrapper는 rotate 콜백을 균형 함수로 넘깁니다. 주석이 경로 집계 갱신과 rb_link_node를 선행 단계로 요구합니다."
+    },
+    {
+      "prompt": "MAX 콜백에서 새 최대값이 이전 값과 같고 exit가 true이면?",
+      "options": [
+        "반드시 모든 조상을 끝까지 다시 쓴다",
+        "true를 반환해 상위 전파를 멈춘다"
+      ],
+      "answer": 1,
+      "explanation": "변경 없는 서브트리는 상위 집계에 추가 변화를 주지 않으므로 전파를 조기 종료할 수 있습니다."
+    },
+    {
+      "prompt": "회전에서 new의 집계를 old의 기존 값으로 복사하는 이유는?",
+      "options": [
+        "새 루트가 회전 전 전체 서브트리의 원소 집합을 이어받기 때문이다",
+        "두 노드의 키가 항상 같기 때문이다"
+      ],
+      "answer": 0,
+      "explanation": "회전은 전체 중위 원소 집합을 바꾸지 않습니다. 예전 루트의 작은 서브트리만 새 자식 기준으로 재계산합니다."
+    },
+    {
+      "prompt": "__rb_erase_augmented의 반환값은?",
+      "options": [
+        "항상 제거한 노드 주소다",
+        "색상 복구 시작 부모 또는 NULL이다"
+      ],
+      "answer": 1,
+      "explanation": "공개 wrapper는 반환값이 있으면 __rb_erase_color를 호출합니다. 반환값을 삭제 객체 소유권으로 해석하면 안 됩니다."
+    },
+    {
+      "prompt": "rb_erase_augmented가 제거한 노드를 free하고 미연결 표식도 만드는가?",
+      "options": [
+        "아니다. 객체 해제와 표식 정책은 별도다",
+        "그렇다. 모든 정리를 자동 수행한다"
+      ],
+      "answer": 0,
+      "explanation": "함수는 구조·집계·색상 복구를 수행하며 kfree나 RB_CLEAR_NODE 호출이 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n  Red Black Trees\n  (C) 1999  Andrea Arcangeli <andrea@suse.de>\n  (C) 2002  David Woodhouse <dwmw2@infradead.org>\n  (C) 2012  Michel Lespinasse <walken@google.com>\n\n\n  linux/include/linux/rbtree_augmented.h\n*/\n\n#ifndef _LINUX_RBTREE_AUGMENTED_H\n#define _LINUX_RBTREE_AUGMENTED_H\n\n#include <linux/compiler.h>\n#include <linux/rbtree.h>\n#include <linux/rcupdate.h>\n\n/*\n * Please note - only struct rb_augment_callbacks and the prototypes for\n * rb_insert_augmented() and rb_erase_augmented() are intended to be public.\n * The rest are implementation details you are not expected to depend on.\n *\n * See Documentation/core-api/rbtree.rst for documentation and samples.\n */\n\nstruct rb_augment_callbacks {\n\tvoid (*propagate)(struct rb_node *node, struct rb_node *stop);\n\tvoid (*copy)(struct rb_node *old, struct rb_node *new);\n\tvoid (*rotate)(struct rb_node *old, struct rb_node *new);\n};\n\nextern void __rb_insert_augmented(struct rb_node *node, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new));\n\n/*\n * Fixup the rbtree and update the augmented information when rebalancing.\n *\n * On insertion, the user must update the augmented information on the path\n * leading to the inserted node, then call rb_link_node() as usual and\n * rb_insert_augmented() instead of the usual rb_insert_color() call.\n * If rb_insert_augmented() rebalances the rbtree, it will callback into\n * a user provided function to update the augmented information on the\n * affected subtrees.\n */\nstatic inline void\nrb_insert_augmented(struct rb_node *node, struct rb_root *root,\n\t\t    const struct rb_augment_callbacks *augment)\n{\n\t__rb_insert_augmented(node, root, augment->rotate);\n}\n\nstatic inline void\nrb_insert_augmented_cached(struct rb_node *node,\n\t\t\t   struct rb_root_cached *root, bool newleft,\n\t\t\t   const struct rb_augment_callbacks *augment)\n{\n\tif (newleft)\n\t\troot->rb_leftmost = node;\n\trb_insert_augmented(node, &root->rb_root, augment);\n}\n\nstatic __always_inline struct rb_node *\nrb_add_augmented_cached(struct rb_node *node, struct rb_root_cached *tree,\n\t\t\tbool (*less)(struct rb_node *, const struct rb_node *),\n\t\t\tconst struct rb_augment_callbacks *augment)\n{\n\tstruct rb_node **link = &tree->rb_root.rb_node;\n\tstruct rb_node *parent = NULL;\n\tbool leftmost = true;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tif (less(node, parent)) {\n\t\t\tlink = &parent->rb_left;\n\t\t} else {\n\t\t\tlink = &parent->rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\trb_link_node(node, parent, link);\n\taugment->propagate(parent, NULL); /* suboptimal */\n\trb_insert_augmented_cached(node, tree, leftmost, augment);\n\n\treturn leftmost ? node : NULL;\n}\n\n/*\n * Template for declaring augmented rbtree callbacks (generic case)\n *\n * RBSTATIC:    'static' or empty\n * RBNAME:      name of the rb_augment_callbacks structure\n * RBSTRUCT:    struct type of the tree nodes\n * RBFIELD:     name of struct rb_node field within RBSTRUCT\n * RBAUGMENTED: name of field within RBSTRUCT holding data for subtree\n * RBCOMPUTE:   name of function that recomputes the RBAUGMENTED data\n */\n\n#define RB_DECLARE_CALLBACKS(RBSTATIC, RBNAME,\t\t\t\t\\\n\t\t\t     RBSTRUCT, RBFIELD, RBAUGMENTED, RBCOMPUTE)\t\\\nstatic inline void\t\t\t\t\t\t\t\\\nRBNAME ## _propagate(struct rb_node *rb, struct rb_node *stop)\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\twhile (rb != stop) {\t\t\t\t\t\t\\\n\t\tRBSTRUCT *node = rb_entry(rb, RBSTRUCT, RBFIELD);\t\\\n\t\tif (RBCOMPUTE(node, true))\t\t\t\t\\\n\t\t\tbreak;\t\t\t\t\t\t\\\n\t\trb = rb_parent(&node->RBFIELD);\t\t\t\t\\\n\t}\t\t\t\t\t\t\t\t\\\n}\t\t\t\t\t\t\t\t\t\\\nstatic inline void\t\t\t\t\t\t\t\\\nRBNAME ## _copy(struct rb_node *rb_old, struct rb_node *rb_new)\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\tRBSTRUCT *old = rb_entry(rb_old, RBSTRUCT, RBFIELD);\t\t\\\n\tRBSTRUCT *new = rb_entry(rb_new, RBSTRUCT, RBFIELD);\t\t\\\n\tnew->RBAUGMENTED = old->RBAUGMENTED;\t\t\t\t\\\n}\t\t\t\t\t\t\t\t\t\\\nstatic void\t\t\t\t\t\t\t\t\\\nRBNAME ## _rotate(struct rb_node *rb_old, struct rb_node *rb_new)\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\tRBSTRUCT *old = rb_entry(rb_old, RBSTRUCT, RBFIELD);\t\t\\\n\tRBSTRUCT *new = rb_entry(rb_new, RBSTRUCT, RBFIELD);\t\t\\\n\tnew->RBAUGMENTED = old->RBAUGMENTED;\t\t\t\t\\\n\tRBCOMPUTE(old, false);\t\t\t\t\t\t\\\n}\t\t\t\t\t\t\t\t\t\\\nRBSTATIC const struct rb_augment_callbacks RBNAME = {\t\t\t\\\n\t.propagate = RBNAME ## _propagate,\t\t\t\t\\\n\t.copy = RBNAME ## _copy,\t\t\t\t\t\\\n\t.rotate = RBNAME ## _rotate\t\t\t\t\t\\\n};\n\n/*\n * Template for declaring augmented rbtree callbacks,\n * computing RBAUGMENTED scalar as max(RBCOMPUTE(node)) for all subtree nodes.\n *\n * RBSTATIC:    'static' or empty\n * RBNAME:      name of the rb_augment_callbacks structure\n * RBSTRUCT:    struct type of the tree nodes\n * RBFIELD:     name of struct rb_node field within RBSTRUCT\n * RBTYPE:      type of the RBAUGMENTED field\n * RBAUGMENTED: name of RBTYPE field within RBSTRUCT holding data for subtree\n * RBCOMPUTE:   name of function that returns the per-node RBTYPE scalar\n */\n\n#define RB_DECLARE_CALLBACKS_MAX(RBSTATIC, RBNAME, RBSTRUCT, RBFIELD,\t      \\\n\t\t\t\t RBTYPE, RBAUGMENTED, RBCOMPUTE)\t      \\\nstatic inline bool RBNAME ## _compute_max(RBSTRUCT *node, bool exit)\t      \\\n{\t\t\t\t\t\t\t\t\t      \\\n\tRBSTRUCT *child;\t\t\t\t\t\t      \\\n\tRBTYPE max = RBCOMPUTE(node);\t\t\t\t\t      \\\n\tif (node->RBFIELD.rb_left) {\t\t\t\t\t      \\\n\t\tchild = rb_entry(node->RBFIELD.rb_left, RBSTRUCT, RBFIELD);   \\\n\t\tif (child->RBAUGMENTED > max)\t\t\t\t      \\\n\t\t\tmax = child->RBAUGMENTED;\t\t\t      \\\n\t}\t\t\t\t\t\t\t\t      \\\n\tif (node->RBFIELD.rb_right) {\t\t\t\t\t      \\\n\t\tchild = rb_entry(node->RBFIELD.rb_right, RBSTRUCT, RBFIELD);  \\\n\t\tif (child->RBAUGMENTED > max)\t\t\t\t      \\\n\t\t\tmax = child->RBAUGMENTED;\t\t\t      \\\n\t}\t\t\t\t\t\t\t\t      \\\n\tif (exit && node->RBAUGMENTED == max)\t\t\t\t      \\\n\t\treturn true;\t\t\t\t\t\t      \\\n\tnode->RBAUGMENTED = max;\t\t\t\t\t      \\\n\treturn false;\t\t\t\t\t\t\t      \\\n}\t\t\t\t\t\t\t\t\t      \\\nRB_DECLARE_CALLBACKS(RBSTATIC, RBNAME,\t\t\t\t\t      \\\n\t\t     RBSTRUCT, RBFIELD, RBAUGMENTED, RBNAME ## _compute_max)\n\n\n#define\tRB_RED\t\t0\n#define\tRB_BLACK\t1\n\n#define __rb_parent(pc)    ((struct rb_node *)(pc & ~3))\n\n#define __rb_color(pc)     ((pc) & 1)\n#define __rb_is_black(pc)  __rb_color(pc)\n#define __rb_is_red(pc)    (!__rb_color(pc))\n#define rb_color(rb)       __rb_color((rb)->__rb_parent_color)\n#define rb_is_red(rb)      __rb_is_red((rb)->__rb_parent_color)\n#define rb_is_black(rb)    __rb_is_black((rb)->__rb_parent_color)\n\nstatic inline void rb_set_parent(struct rb_node *rb, struct rb_node *p)\n{\n\trb->__rb_parent_color = rb_color(rb) + (unsigned long)p;\n}\n\nstatic inline void rb_set_parent_color(struct rb_node *rb,\n\t\t\t\t       struct rb_node *p, int color)\n{\n\trb->__rb_parent_color = (unsigned long)p + color;\n}\n\nstatic inline void\n__rb_change_child(struct rb_node *old, struct rb_node *new,\n\t\t  struct rb_node *parent, struct rb_root *root)\n{\n\tif (parent) {\n\t\tif (parent->rb_left == old)\n\t\t\tWRITE_ONCE(parent->rb_left, new);\n\t\telse\n\t\t\tWRITE_ONCE(parent->rb_right, new);\n\t} else\n\t\tWRITE_ONCE(root->rb_node, new);\n}\n\nstatic inline void\n__rb_change_child_rcu(struct rb_node *old, struct rb_node *new,\n\t\t      struct rb_node *parent, struct rb_root *root)\n{\n\tif (parent) {\n\t\tif (parent->rb_left == old)\n\t\t\trcu_assign_pointer(parent->rb_left, new);\n\t\telse\n\t\t\trcu_assign_pointer(parent->rb_right, new);\n\t} else\n\t\trcu_assign_pointer(root->rb_node, new);\n}\n\nextern void __rb_erase_color(struct rb_node *parent, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new));\n\nstatic __always_inline struct rb_node *\n__rb_erase_augmented(struct rb_node *node, struct rb_root *root,\n\t\t     const struct rb_augment_callbacks *augment)\n{\n\tstruct rb_node *child = node->rb_right;\n\tstruct rb_node *tmp = node->rb_left;\n\tstruct rb_node *parent, *rebalance;\n\tunsigned long pc;\n\n\tif (!tmp) {\n\t\t/*\n\t\t * Case 1: node to erase has no more than 1 child (easy!)\n\t\t *\n\t\t * Note that if there is one child it must be red due to 5)\n\t\t * and node must be black due to 4). We adjust colors locally\n\t\t * so as to bypass __rb_erase_color() later on.\n\t\t */\n\t\tpc = node->__rb_parent_color;\n\t\tparent = __rb_parent(pc);\n\t\t__rb_change_child(node, child, parent, root);\n\t\tif (child) {\n\t\t\tchild->__rb_parent_color = pc;\n\t\t\trebalance = NULL;\n\t\t} else\n\t\t\trebalance = __rb_is_black(pc) ? parent : NULL;\n\t\ttmp = parent;\n\t} else if (!child) {\n\t\t/* Still case 1, but this time the child is node->rb_left */\n\t\ttmp->__rb_parent_color = pc = node->__rb_parent_color;\n\t\tparent = __rb_parent(pc);\n\t\t__rb_change_child(node, tmp, parent, root);\n\t\trebalance = NULL;\n\t\ttmp = parent;\n\t} else {\n\t\tstruct rb_node *successor = child, *child2;\n\n\t\ttmp = child->rb_left;\n\t\tif (!tmp) {\n\t\t\t/*\n\t\t\t * Case 2: node's successor is its right child\n\t\t\t *\n\t\t\t *    (n)          (s)\n\t\t\t *    / \\          / \\\n\t\t\t *  (x) (s)  ->  (x) (c)\n\t\t\t *        \\\n\t\t\t *        (c)\n\t\t\t */\n\t\t\tparent = successor;\n\t\t\tchild2 = successor->rb_right;\n\n\t\t\taugment->copy(node, successor);\n\t\t} else {\n\t\t\t/*\n\t\t\t * Case 3: node's successor is leftmost under\n\t\t\t * node's right child subtree\n\t\t\t *\n\t\t\t *    (n)          (s)\n\t\t\t *    / \\          / \\\n\t\t\t *  (x) (y)  ->  (x) (y)\n\t\t\t *      /            /\n\t\t\t *    (p)          (p)\n\t\t\t *    /            /\n\t\t\t *  (s)          (c)\n\t\t\t *    \\\n\t\t\t *    (c)\n\t\t\t */\n\t\t\tdo {\n\t\t\t\tparent = successor;\n\t\t\t\tsuccessor = tmp;\n\t\t\t\ttmp = tmp->rb_left;\n\t\t\t} while (tmp);\n\t\t\tchild2 = successor->rb_right;\n\t\t\tWRITE_ONCE(parent->rb_left, child2);\n\t\t\tWRITE_ONCE(successor->rb_right, child);\n\t\t\trb_set_parent(child, successor);\n\n\t\t\taugment->copy(node, successor);\n\t\t\taugment->propagate(parent, successor);\n\t\t}\n\n\t\ttmp = node->rb_left;\n\t\tWRITE_ONCE(successor->rb_left, tmp);\n\t\trb_set_parent(tmp, successor);\n\n\t\tpc = node->__rb_parent_color;\n\t\ttmp = __rb_parent(pc);\n\t\t__rb_change_child(node, successor, tmp, root);\n\n\t\tif (child2) {\n\t\t\trb_set_parent_color(child2, parent, RB_BLACK);\n\t\t\trebalance = NULL;\n\t\t} else {\n\t\t\trebalance = rb_is_black(successor) ? parent : NULL;\n\t\t}\n\t\tsuccessor->__rb_parent_color = pc;\n\t\ttmp = successor;\n\t}\n\n\taugment->propagate(tmp, NULL);\n\treturn rebalance;\n}\n\nstatic __always_inline void\nrb_erase_augmented(struct rb_node *node, struct rb_root *root,\n\t\t   const struct rb_augment_callbacks *augment)\n{\n\tstruct rb_node *rebalance = __rb_erase_augmented(node, root, augment);\n\tif (rebalance)\n\t\t__rb_erase_color(rebalance, root, augment->rotate);\n}\n\nstatic __always_inline void\nrb_erase_augmented_cached(struct rb_node *node, struct rb_root_cached *root,\n\t\t\t  const struct rb_augment_callbacks *augment)\n{\n\tif (root->rb_leftmost == node)\n\t\troot->rb_leftmost = rb_next(node);\n\trb_erase_augmented(node, &root->rb_root, augment);\n}\n\n#endif\t/* _LINUX_RBTREE_AUGMENTED_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "6d9e24ee6482b468d4661eb23bfbeed490cce0aea7ba87c0ebe73101d4f168c4",
+    "scope": "whole-file",
+    "line_count": 343,
+    "authoring_source": "course/file_units/augmented_rbtree.py",
+    "sections": [
+      "전체 구성",
+      "세 콜백의 분리",
+      "삽입 전제와 wrapper",
+      "탐색까지 포함한 삽입",
+      "일반 콜백 생성",
+      "최대값 콜백 생성",
+      "색상과 부모 표현",
+      "부모의 자식 또는 루트 교체",
+      "삭제 경우1: 자식이 최대 하나",
+      "삭제 경우2: 바로 오른쪽 자식이 후속자",
+      "삭제 경우3: 오른쪽 아래의 가장 왼쪽 후속자",
+      "삭제 색상과 전파 마무리",
+      "공개 삭제와 캐시",
+      "CS 연결과 경계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/rbtree_augmented.h"
+    }
+  ]
+}

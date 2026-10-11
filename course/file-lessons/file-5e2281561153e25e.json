@@ -1,0 +1,87 @@
+{
+  "id": "file-5e2281561153e25e",
+  "path": "include/vdso/time64.h",
+  "title": "vDSO 시간 단위 상수: 밀리초부터 펨토초까지",
+  "area": "차원 분석 · 단위 변환 · 정수 리터럴 · 오버플로",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "시간 단위 변환 상수 여덟 개와 정수 리터럴의 폭을 읽습니다.",
+  "guide": [
+    "같은 정수라도 단위를 명시하고 변환 방향에 맞춰 곱하거나 나누어야 합니다.",
+    "초·밀리초·마이크로초·나노초 변환에서 배율이나 중간 정수 폭을 잘못 선택하는 오류를 줄입니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "파일 전체",
+      "text": "GPL-2.0, include guard와 timespec 변환 매개변수라는 주석, 여덟 #define이 전부입니다. 함수, 구조체 또는 동기화 코드는 없습니다. 이 헤더를 포함하는 것만으로 어떤 시간 값이 변환되지는 않습니다."
+    },
+    {
+      "title": "천 배씩 바뀌는 세 단위",
+      "text": "MSEC_PER_SEC, USEC_PER_MSEC, NSEC_PER_USEC는 각각 1000L입니다. 1초는 1000밀리초, 1밀리초는 1000마이크로초, 1마이크로초는 1000나노초입니다. 작은 단위의 개수로 바꾸려면 곱하고 큰 단위로 바꾸려면 나눕니다."
+    },
+    {
+      "title": "직접 변환 배율",
+      "text": "NSEC_PER_MSEC와 USEC_PER_SEC는 1000000L, NSEC_PER_SEC는 1000000000L입니다. 이름의 분모 단위 한 개에 포함되는 분자 단위의 개수입니다. 2밀리초는 2000000나노초이며 NSEC_PER_USEC를 쓰면 1000배 작은 잘못된 결과가 됩니다."
+    },
+    {
+      "title": "더 작은 단위와 리터럴 폭",
+      "text": "PSEC_PER_SEC는 1000000000000LL, FSEC_PER_SEC는 1000000000000000LL입니다. 피코초는 10^-12초, 펨토초는 10^-15초입니다. 앞의 상수는 L, 두 큰 상수는 LL 접미사를 사용합니다. 32비트 long에서도 큰 상수를 long long으로 표현하도록 하지만 이를 곱하는 모든 계산이 자동 overflow 안전해지는 것은 아닙니다."
+    },
+    {
+      "title": "정밀도와 단위의 구분",
+      "text": "정수로 나누면 작은 단위의 나머지를 잃을 수 있습니다. 단위를 펨토초로 바꾸어 적는 것만으로 실제 시계 정확도가 높아지지 않습니다. 이 상수들은 배율이며 하드웨어 분해능이나 측정 오차 보장이 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "2밀리초를 나노초로 바꾸는 식은?",
+      "options": [
+        "2*NSEC_PER_MSEC이다",
+        "2*NSEC_PER_USEC이다"
+      ],
+      "answer": 0,
+      "explanation": "밀리초당 나노초는 백만 개입니다. 후자는 마이크로초당 배율이므로 단위가 맞지 않습니다."
+    },
+    {
+      "prompt": "PSEC_PER_SEC가 LL 접미사를 사용하는 이유와 관련 있는 것은?",
+      "options": [
+        "항상 부동 소수점으로 계산해야 한다는 표시이다",
+        "32비트 long에 들어가지 않는 큰 상수의 정수 폭이다"
+      ],
+      "answer": 1,
+      "explanation": "LL은 long long 정수 리터럴입니다. 단위 상수가 클 때 필요한 표현 폭을 확보하지만 이후 곱셈의 overflow까지 검사하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_TIME64_H\n#define __VDSO_TIME64_H\n\n/* Parameters used to convert the timespec values: */\n#define MSEC_PER_SEC\t1000L\n#define USEC_PER_MSEC\t1000L\n#define NSEC_PER_USEC\t1000L\n#define NSEC_PER_MSEC\t1000000L\n#define USEC_PER_SEC\t1000000L\n#define NSEC_PER_SEC\t1000000000L\n#define PSEC_PER_SEC\t1000000000000LL\n#define FSEC_PER_SEC\t1000000000000000LL\n\n#endif /* __VDSO_TIME64_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "7bea2fb74771207f25d0d7659867388c65b74479e0aa7903c4ad0c7e8fac5834",
+    "scope": "whole-file",
+    "line_count": 15,
+    "authoring_source": "course/file_units/time64_arithmetic.py",
+    "sections": [
+      "파일 전체",
+      "천 배씩 바뀌는 세 단위",
+      "직접 변환 배율",
+      "더 작은 단위와 리터럴 폭",
+      "정밀도와 단위의 구분"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/time64.h"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "id": "file-747ee0a0fec15bb3",
+  "path": "include/linux/prime_numbers.h",
+  "title": "소수 헤더 전체: 시작값을 그대로 내보내는 반복 매크로",
+  "area": "소수 체 · 비트맵·RCU·실패 대체 경로",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "API 이름만으로 반복자의 첫 값과 종료를 추측하지 않습니다.",
+  "guide": [
+    "is_prime_number와 next_prime_number를 선언하고 기본 반복 매크로는 from=2인 일반 반복 매크로에 위임합니다. 일반 매크로는 prime=from을 먼저 실행한 뒤 prime<=max 동안 본문을 실행합니다.",
+    "일반 반복자의 첫 값은 소수인지 검사하지 않습니다. 소수만 필요하면 유효한 시작 소수를 선택하거나 시작 전에 보정해야 합니다. max는 ULONG_MAX보다 작게 두어 sentinel 반복을 피합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 파일",
+      "text": "SPDX,guard,types.h,두 함수 선언,각 반복 매크로의문서와 정의,#endif가 전부입니다. 소수 표·할당·RCU 코드는 구현 파일에 있습니다."
+    },
+    {
+      "title": "기본 반복",
+      "text": "for_each_prime_number(prime,max)는 from=2로위임합니다. max=10이면2,3,5,7이 나옵니다. 조건은<=이므로max 자체가소수이면 포함합니다. max<2이면 기본 반복 본문은 실행하지 않습니다."
+    },
+    {
+      "title": "일반 시작값의 의미",
+      "text": "from=4,max=10이면 첫 값4가 그대로 나오고 이후5,7이 이어집니다. from=1을사용하면1도 첫항목에 포함합니다. 문서의 successive prime 표현을 첫값까지 자동검증한다는 뜻으로 읽지 않습니다."
+    },
+    {
+      "title": "종료와 평가",
+      "text": "next_prime_number(ULONG_MAX)는 더커지지 않는 sentinel입니다. max=ULONG_MAX이면<=조건이 계속참이 될 수 있어 문서가 이 상한을 배제합니다. max 표현식은 매조건에서 평가되므로 부수효과 없는 상한을 사용합니다. 반복 변수는 unsigned long 범위의 결과를 담을 수 있어야 합니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "from=4,max=10인 반복 결과는?",
+      "options": [
+        "4,5,7",
+        "5,7"
+      ],
+      "answer": 0,
+      "explanation": "초기 대입 prime=from 뒤조건을검사하고 본문을실행합니다. 첫값4에소수검사는없습니다."
+    },
+    {
+      "prompt": "max=7인 기본 반복에7이 포함되는가?",
+      "options": [
+        "포함되지않는다. 상한은항상배타적이다",
+        "포함된다. 조건이prime<=max이다"
+      ],
+      "answer": 1,
+      "explanation": "조건의<=는포함상한입니다. 구현의다른배열크기 경계와 혼동하면 안 됩니다."
+    },
+    {
+      "prompt": "max=ULONG_MAX를 피해야 하는 이유는?",
+      "options": [
+        "sentinel이더증가하지않아반복이끝나지않을수있다",
+        "ULONG_MAX는항상0과같기때문이다"
+      ],
+      "answer": 0,
+      "explanation": "최종값에서next도같은값을반환하면<=조건이영원히참입니다. 헤더문서가종료전제를 명시합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_PRIME_NUMBERS_H\n#define __LINUX_PRIME_NUMBERS_H\n\n#include <linux/types.h>\n\nbool is_prime_number(unsigned long x);\nunsigned long next_prime_number(unsigned long x);\n\n/**\n * for_each_prime_number - iterate over each prime upto a value\n * @prime: the current prime number in this iteration\n * @max: the upper limit\n *\n * Starting from the first prime number 2 iterate over each prime number up to\n * the @max value. On each iteration, @prime is set to the current prime number.\n * @max should be less than ULONG_MAX to ensure termination. To begin with\n * @prime set to 1 on the first iteration use for_each_prime_number_from()\n * instead.\n */\n#define for_each_prime_number(prime, max) \\\n\tfor_each_prime_number_from((prime), 2, (max))\n\n/**\n * for_each_prime_number_from - iterate over each prime upto a value\n * @prime: the current prime number in this iteration\n * @from: the initial value\n * @max: the upper limit\n *\n * Starting from @from iterate over each successive prime number up to the\n * @max value. On each iteration, @prime is set to the current prime number.\n * @max should be less than ULONG_MAX, and @from less than @max, to ensure\n * termination.\n */\n#define for_each_prime_number_from(prime, from, max) \\\n\tfor (prime = (from); prime <= (max); prime = next_prime_number(prime))\n\n#endif /* !__LINUX_PRIME_NUMBERS_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "856bf720701b91de99d42a350acfbbd56e2f6fa4efdb0787753852db9d5ee613",
+    "scope": "whole-file",
+    "line_count": 38,
+    "authoring_source": "course/file_units/prime_cache.py",
+    "sections": [
+      "전체 파일",
+      "기본 반복",
+      "일반 시작값의 의미",
+      "종료와 평가"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/prime_numbers.h"
+    }
+  ]
+}

@@ -47,7 +47,17 @@ def main():
     parser = argparse.ArgumentParser(description='Linux 소스 학습실 실행')
     parser.add_argument('--port', type=int, default=None)
     parser.add_argument('--setup-only', action='store_true', help='소스만 준비하고 서버는 실행하지 않음')
+    parser.add_argument('--offline', action='store_true', help='커널 다운로드 없이 전체 문제·해설·CS 입문 학습실 열기')
     args = parser.parse_args()
+    if args.offline:
+        import webbrowser
+        sys.path.insert(0, str(ROOT / 'tools'))
+        from build_learning import build
+        report = build(ROOT)
+        address = (ROOT / 'tools/learning.html').as_uri()
+        print(f"학습실 준비 완료: {report['lessons']}개 수업, {report['questions']}문제\n{address}", flush=True)
+        webbrowser.open(address)
+        return 0
     port = args.port if args.port is not None else int(os.environ.get('PORT', '8765'))
     if not 1 <= port <= 65535:
         raise RuntimeError('포트는 1부터 65535 사이로 지정해주세요.')

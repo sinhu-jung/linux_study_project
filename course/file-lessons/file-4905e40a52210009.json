@@ -1,0 +1,96 @@
+{
+  "id": "file-4905e40a52210009",
+  "path": "arch/riscv/kernel/vdso/flush_icache.S",
+  "title": "RISC-V 명령 캐시 동기화: SMP syscall과 단일 CPU fence.i",
+  "area": "명령 캐시 · self-modifying code · SMP · fence.i · syscall · CFI",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "설정별 명령열과 공통 반환·CFI를 전체 분석합니다.",
+  "guide": [
+    "명령어 스트림의 동기화는 데이터 메모리 접근과 다르며, 여러 CPU의 실행 문맥을 다룰 때 커널의 관리가 필요할 수 있습니다.",
+    "CONFIG_SMP에 따른 빌드 분기와 실제 레지스터 쓰기 범위를 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 인터페이스",
+      "text": "GPL-2.0-only 표기 뒤 linux/linkage.h와 asm/unistd.h를 포함하고 .text에 __vdso_flush_icache 심볼을 정의합니다. 주석의 원형은 int 함수이며 start·end 포인터와 unsigned long flags를 받습니다. SYM_FUNC_START/END와 활성 .cfi_startproc/.cfi_endproc가 범위를 감쌉니다."
+    },
+    {
+      "title": "SMP 빌드의 경로",
+      "text": "CONFIG_SMP이면 a7에 __NR_riscv_flush_icache를 넣고 ecall합니다. 함수는 start·end·flags 인수를 별도 복사하거나 파싱하지 않고 전달받은 호출 문맥을 사용합니다. syscall 결과를 0으로 덮지 않고 뒤 ret로 반환합니다. 원격 CPU 처리 정책 자체는 이 짧은 파일에 구현되어 있지 않습니다."
+    },
+    {
+      "title": "비SMP 경로",
+      "text": "else에서는 fence.i를 실행하고 li a0,0으로 성공 결과를 설정합니다. start·end·flags를 읽어 범위를 순회하거나 검증하는 명령이 없습니다. 따라서 이 분기가 요청한 주소 구간만 하나씩 flush하는 구현이라고 설명하면 안 됩니다. fence.i는 명령어 fetch와 관련한 동기화이며 단순한 C 컴파일러 memory clobber와 다릅니다."
+    },
+    {
+      "title": "빌드 선택과 공통 반환",
+      "text": "#ifdef CONFIG_SMP는 빌드 시 두 명령열 중 하나를 선택합니다. 매 호출마다 실제 온라인 CPU 수를 세어 분기를 고르는 코드가 아닙니다. 두 경로 뒤 공통 ret가 있고 CFI를 닫습니다. syscall 경로의 오류 처리와 직접 경로의 0 반환을 구분해야 합니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "전체 명령과 전처리·CFI·심볼 범위를 설명했습니다. 생성·수정한 코드를 실행할 때의 명령 가시성, 로컬 명령과 OS 관리의 차이가 핵심입니다. 실제 RISC-V 코드 수정 실행, 다중 CPU 캐시 동기화, syscall flags 검증을 재현한 시험은 하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "CONFIG_SMP가 꺼진 경로에서 실행하는 핵심 명령은?",
+      "options": [
+        "fence.i이며 이어 a0=0을 설정한다",
+        "항상 __NR_riscv_flush_icache의 ecall이다"
+      ],
+      "answer": 0,
+      "explanation": "원본의 else는 직접 명령 동기화와 성공값 설정입니다. SMP 경로만 syscall 번호를 a7에 넣습니다."
+    },
+    {
+      "prompt": "현재 온라인 CPU가 하나면 SMP 빌드도 자동으로 직접 fence.i 경로로 바뀌는가?",
+      "options": [
+        "그렇다. 함수가 매번 온라인 CPU 수를 검사한다",
+        "아니다. 선택은 CONFIG_SMP 전처리 조건이다"
+      ],
+      "answer": 1,
+      "explanation": "파일에는 런타임 CPU 수 검사 명령이 없습니다. 빌드 설정과 실행 중 상태를 구분해야 합니다."
+    },
+    {
+      "prompt": "비SMP 경로가 start부터 end까지 주소를 순회하는가?",
+      "options": [
+        "아니다. 두 포인터를 읽는 명령이나 반복문이 없다",
+        "그렇다. fence.i가 C 인수의 start/end를 자동 해석한다"
+      ],
+      "answer": 0,
+      "explanation": "명령열은 fence.i, 성공값 설정, ret입니다. 함수 인수의 존재가 본문에서 범위별 처리를 한다는 증거는 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2017 SiFive\n */\n\n#include <linux/linkage.h>\n#include <asm/unistd.h>\n\n\t.text\n/* int __vdso_flush_icache(void *start, void *end, unsigned long flags); */\nSYM_FUNC_START(__vdso_flush_icache)\n\t.cfi_startproc\n#ifdef CONFIG_SMP\n\tli a7, __NR_riscv_flush_icache\n\tecall\n#else\n\tfence.i\n\tli a0, 0\n#endif\n\tret\n\t.cfi_endproc\nSYM_FUNC_END(__vdso_flush_icache)\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "778d2a2ba1380e2f48e02e3c9c94b60941c5c34f882ed6e3e3a0f576a326d25a",
+    "scope": "whole-file",
+    "line_count": 22,
+    "authoring_source": "course/file_units/riscv_vdso_syscall_stubs.py",
+    "sections": [
+      "전체 인터페이스",
+      "SMP 빌드의 경로",
+      "비SMP 경로",
+      "빌드 선택과 공통 반환",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/flush_icache.S"
+    }
+  ]
+}

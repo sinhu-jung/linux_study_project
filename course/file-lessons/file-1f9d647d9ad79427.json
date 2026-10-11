@@ -1,0 +1,167 @@
+{
+  "id": "file-1f9d647d9ad79427",
+  "path": "drivers/of/fdt_address.c",
+  "title": "초기 FDT 주소 변환: ranges 구간 탐색과 부모 버스 순회",
+  "area": "장치 트리 · 주소 공간 · 배열 파싱 · 트리 순회 · 정수 연산",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "셀 개수 결정,범위 매칭,주소 재인코딩과 루트까지의 반복 변환 전체를 분석합니다.",
+  "guide": [
+    "각 버스의 자식 주소를 부모 주소로 변환하는 단계를 합성하여 CPU 물리 주소를 얻습니다.",
+    "반개구간 검색,엔디언 변환,트리 높이와 순회 비용,경계 검사를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "구성과 제한",
+      "text": "SPDX는 GPL-2.0+이며 pr_fmt는 OF: fdt: 접두부입니다. kernel,libfdt,OF,OF FDT,sizes를 포함합니다. OF_MAX_ADDR_CELLS는 4이고 OF_CHECK_COUNTS는 address cell 수가 1~4이며 size cell 수가 양수인지 확인합니다. size cell 수의 상한까지 검사하는 식은 아닙니다."
+    },
+    {
+      "title": "Debug와 bus callback",
+      "text": "DEBUG이면 of_dump_addr가 cell들을 8자리 hex로 출력하고 아니면 빈 함수입니다. debug 출력은 cell에 별도 endian 변환을 하지 않습니다. of_bus는 count_cells,map,translate 함수 포인터를 갖습니다. 현재 of_busses 배열에는 generic default 항목 하나만 있고 별도 PCI 등 bus 매칭 분기는 없습니다. 함수와 배열은 초기화 영역 annotation을 사용합니다."
+    },
+    {
+      "title": "셀 개수 결정",
+      "text": "default_count_cells는 부모 offset의 #address-cells와 #size-cells를 fdt_getprop으로 읽습니다. 출력 포인터가 nonNULL인 항목만 처리하고 속성이 있으면 be32_to_cpup,없으면 dt_root_addr_cells 또는 dt_root_size_cells를 사용합니다. 임의 조상을 반복 검색하는 함수는 아니며 속성 바이트 길이도 여기서 검사하지 않습니다."
+    },
+    {
+      "title": "Ranges 한 항목의 배치",
+      "text": "default_map은 range 앞 na cell을 자식 기준 주소 cp,na+pna 뒤 ns cell을 크기 s로 읽고 입력 addr를 da로 읽습니다. 부모 기준 주소 pna cell은 이 매칭 함수가 직접 더하지 않습니다. da<cp 또는 da>=cp+s면 OF_BAD_ADDR,범위 안이면 da-cp offset을 반환합니다. 포함 시작·제외 끝인 반개구간 검사이며 cp+s overflow를 별도 검사하지 않습니다."
+    },
+    {
+      "title": "부모 주소 재인코딩",
+      "text": "default_translate는 addr를 u64로 읽고 na*4 바이트를 0으로 지운 뒤 offset을 더합니다. na>1이면 끝에서 두 번째 cell에 상위 32비트,마지막 cell에 하위 32비트를 cpu_to_fdt32로 기록합니다. 최대 네 cell 배열을 허용해도 계산값은 u64이며 상위 두 cell까지 임의 정밀도로 보존하는 것은 아닙니다. na=1일 때는 하위 32비트만 기록합니다."
+    },
+    {
+      "title": "Ranges 부재와 빈 속성",
+      "text": "translate_one은 지정 rprop를 읽고 속성이 없으면 1로 실패합니다. 속성은 있지만 길이가 0이면 입력 주소 자체를 offset으로 잡고 부모 주소 버퍼를 0으로 만든 뒤 translate를 호출해 1:1 변환합니다. 속성 부재와 빈 속성은 여기서 같은 의미가 아닙니다."
+    },
+    {
+      "title": "선형 ranges 검색",
+      "text": "길이가 양수이면 바이트 길이를 4로 나누고 rone=na+pna+ns cell 단위로 완전한 항목만 순회합니다. bus->map이 처음 OF_BAD_ADDR가 아닌 offset을 반환하면 멈춥니다. 없으면 1입니다. 매칭되면 range+na의 부모 기준 주소 pna cell을 addr에 복사하고 pbus->translate로 offset을 더합니다. 나머지 바이트나 불완전한 끝 항목을 별도 오류로 보고하는 검사는 없습니다."
+    },
+    {
+      "title": "입력 reg와 최초 부모",
+      "text": "fdt_translate_address는 result=OF_BAD_ADDR로 시작합니다. reg가 없으면 오류 로그 후 종료하고 부모 offset이 음수여도 실패합니다. 최초 bus는 배열의 0번입니다. 부모의 cell 수를 확인한 뒤 reg에서 na*4 바이트를 지역 addr[4]에 복사합니다. fdt_getprop이 돌려준 len을 복사 전 최소 길이 확인에 사용하지 않습니다. 첫 주소를 처리하며 reg index 인수는 없습니다."
+    },
+    {
+      "title": "루트까지 반복",
+      "text": "루프는 현재 parent를 node_offset으로 옮기고 다시 부모를 찾습니다. 결과가 음수이면 루트에 도달했다고 간주하여 현재 addr를 u64로 읽고 종료합니다. 구체적인 음수 오류 종류를 구별하지 않는 코드입니다. 새 부모가 있으면 pna,pns를 얻고 검사 후 현재 bus 노드의 ranges로 한 단계 변환합니다."
+    },
+    {
+      "title": "상태 갱신과 실패",
+      "text": "한 단계 변환이 성공하면 na=pna,ns=pns,bus=pbus로 바꾸고 반복합니다. cell 수 오류나 translate_one 실패는 break하며 초기 result=OF_BAD_ADDR가 남습니다. size-cells=0을 통과할 수 없다는 주석은 CPU 물리 주소로 해석 가능한 값이 아니라고 보는 이 구현의 관례라고 설명합니다. 이 함수는 트리 자체를 수정하지 않고 지역 주소 배열만 갱신합니다."
+    },
+    {
+      "title": "공개 wrapper와 복잡도",
+      "text": "of_flat_dt_translate_address는 unsigned long node를 받아 initial_boot_params와 함께 내부 함수에 전달합니다. blob을 복제하거나 unflatten하는 작업은 없습니다. 경로 높이가 h이고 각 층 ranges 수가 r이라면 범위 탐색은 대략 O(h*r)이며 실제로는 층별 항목 수의 합에 비례합니다. 첫 매칭 항목을 고르므로 겹치는 ranges의 순서도 영향을 줄 수 있습니다."
+    },
+    {
+      "title": "전체 범위와 한계",
+      "text": "매크로,debug 두 구성,bus 타입과 배열,세 default callback,한 단계 변환,전체 경로 변환,공개 wrapper를 모두 확인했습니다. cell 개수 검사가 reg 최소 길이·모든 산술 overflow·모든 FDT 오류를 검증한다는 뜻은 아닙니다. 실제 DTB 변환이나 아키텍처 부팅 실험은 수행하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "ranges가 없는 경우와 길이 0인 경우는 같은가?",
+      "options": [
+        "아니다. 부재는 실패,빈 속성은 1:1 변환이다",
+        "그렇다. 둘 다 항상 성공한다"
+      ],
+      "answer": 0,
+      "explanation": "포인터 NULL과 rlen==0 분기가 다릅니다. 데이터 부재와 빈 데이터의 의미를 구분합니다."
+    },
+    {
+      "prompt": "자식 주소 0x1200,범위 시작 0x1000,부모 시작 0x8000이고 범위 안이면 변환 결과는?",
+      "options": [
+        "0x9200",
+        "0x8200"
+      ],
+      "answer": 1,
+      "explanation": "map은 0x200 offset을 반환하고 translate는 부모 기준 0x8000에 이를 더합니다. 자식 전체 주소를 그대로 더하지 않습니다."
+    },
+    {
+      "prompt": "addr 배열이 네 cell이면 계산도 128비트 정밀도로 유지되는가?",
+      "options": [
+        "아니다. 계산은 u64이며 끝의 두 cell에 재기록한다",
+        "그렇다. 모든 cell을 그대로 더한다"
+      ],
+      "answer": 0,
+      "explanation": "of_read_number 결과와 a,offset은 u64입니다. 버퍼 용량과 산술 정밀도를 구분해야 합니다."
+    },
+    {
+      "prompt": "reg 길이를 얻은 뒤 na*4 이상의 크기인지 검사하는가?",
+      "options": [
+        "그렇다. len 비교가 필수 분기로 구현되어 있다",
+        "아니다. 이 함수의 복사 전에는 해당 검사가 없다"
+      ],
+      "answer": 1,
+      "explanation": "len은 fdt_getprop의 출력으로 받지만 memcpy 전에 사용되지 않습니다. 개수 검사와 속성 길이 검사는 다릅니다."
+    },
+    {
+      "prompt": "겹치는 ranges가 여러 개 매칭되면 어느 것을 선택하는가?",
+      "options": [
+        "순회 중 첫 매칭 항목",
+        "항상 가장 작은 범위를 정렬해 선택"
+      ],
+      "answer": 0,
+      "explanation": "선형 순회가 성공 offset에서 break합니다. 정렬이나 최소 범위 선택은 없습니다."
+    },
+    {
+      "prompt": "기본 cell 수 속성이 없으면 어떤 값을 사용하는가?",
+      "options": [
+        "항상 address=4,size=0",
+        "dt_root_addr_cells와 dt_root_size_cells"
+      ],
+      "answer": 1,
+      "explanation": "default_count_cells의 fallback은 전역 root 값입니다. 임의 조상을 재귀 검색하는 코드가 아닙니다."
+    },
+    {
+      "prompt": "size-cells=0인 중간 버스를 통과할 수 있는가?",
+      "options": [
+        "이 구현에서는 count 검사에 실패한다",
+        "항상 빈 ranges처럼 1:1로 통과한다"
+      ],
+      "answer": 0,
+      "explanation": "OF_CHECK_COUNTS는 ns>0을 요구합니다. 빈 ranges 분기와 cell 수 검사를 혼동하지 않습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * FDT Address translation based on u-boot fdt_support.c which in turn was\n * based on the kernel unflattened DT address translation code.\n *\n * (C) Copyright 2007\n * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com\n *\n * Copyright 2010-2011 Freescale Semiconductor, Inc.\n */\n\n#define pr_fmt(fmt)\t\"OF: fdt: \" fmt\n\n#include <linux/kernel.h>\n#include <linux/libfdt.h>\n#include <linux/of.h>\n#include <linux/of_fdt.h>\n#include <linux/sizes.h>\n\n/* Max address size we deal with */\n#define OF_MAX_ADDR_CELLS\t4\n#define OF_CHECK_COUNTS(na, ns)\t((na) > 0 && (na) <= OF_MAX_ADDR_CELLS && \\\n\t\t\t(ns) > 0)\n\n/* Debug utility */\n#ifdef DEBUG\nstatic void __init of_dump_addr(const char *s, const __be32 *addr, int na)\n{\n\tpr_debug(\"%s\", s);\n\twhile(na--)\n\t\tpr_cont(\" %08x\", *(addr++));\n\tpr_cont(\"\\n\");\n}\n#else\nstatic void __init of_dump_addr(const char *s, const __be32 *addr, int na) { }\n#endif\n\n/* Callbacks for bus specific translators */\nstruct of_bus {\n\tvoid\t\t(*count_cells)(const void *blob, int parentoffset,\n\t\t\t\tint *addrc, int *sizec);\n\tu64\t\t(*map)(__be32 *addr, const __be32 *range,\n\t\t\t\tint na, int ns, int pna);\n\tint\t\t(*translate)(__be32 *addr, u64 offset, int na);\n};\n\n/* Default translator (generic bus) */\nstatic void __init fdt_bus_default_count_cells(const void *blob, int parentoffset,\n\t\t\t\t\t       int *addrc, int *sizec)\n{\n\tconst __be32 *prop;\n\n\tif (addrc) {\n\t\tprop = fdt_getprop(blob, parentoffset, \"#address-cells\", NULL);\n\t\tif (prop)\n\t\t\t*addrc = be32_to_cpup(prop);\n\t\telse\n\t\t\t*addrc = dt_root_addr_cells;\n\t}\n\n\tif (sizec) {\n\t\tprop = fdt_getprop(blob, parentoffset, \"#size-cells\", NULL);\n\t\tif (prop)\n\t\t\t*sizec = be32_to_cpup(prop);\n\t\telse\n\t\t\t*sizec = dt_root_size_cells;\n\t}\n}\n\nstatic u64 __init fdt_bus_default_map(__be32 *addr, const __be32 *range,\n\t\t\t\t      int na, int ns, int pna)\n{\n\tu64 cp, s, da;\n\n\tcp = of_read_number(range, na);\n\ts  = of_read_number(range + na + pna, ns);\n\tda = of_read_number(addr, na);\n\n\tpr_debug(\"default map, cp=%llx, s=%llx, da=%llx\\n\",\n\t    cp, s, da);\n\n\tif (da < cp || da >= (cp + s))\n\t\treturn OF_BAD_ADDR;\n\treturn da - cp;\n}\n\nstatic int __init fdt_bus_default_translate(__be32 *addr, u64 offset, int na)\n{\n\tu64 a = of_read_number(addr, na);\n\tmemset(addr, 0, na * 4);\n\ta += offset;\n\tif (na > 1)\n\t\taddr[na - 2] = cpu_to_fdt32(a >> 32);\n\taddr[na - 1] = cpu_to_fdt32(a & 0xffffffffu);\n\n\treturn 0;\n}\n\n/* Array of bus specific translators */\nstatic const struct of_bus of_busses[] __initconst = {\n\t/* Default */\n\t{\n\t\t.count_cells = fdt_bus_default_count_cells,\n\t\t.map = fdt_bus_default_map,\n\t\t.translate = fdt_bus_default_translate,\n\t},\n};\n\nstatic int __init fdt_translate_one(const void *blob, int parent,\n\t\t\t\t    const struct of_bus *bus,\n\t\t\t\t    const struct of_bus *pbus, __be32 *addr,\n\t\t\t\t    int na, int ns, int pna, const char *rprop)\n{\n\tconst __be32 *ranges;\n\tint rlen;\n\tint rone;\n\tu64 offset = OF_BAD_ADDR;\n\n\tranges = fdt_getprop(blob, parent, rprop, &rlen);\n\tif (!ranges)\n\t\treturn 1;\n\tif (rlen == 0) {\n\t\toffset = of_read_number(addr, na);\n\t\tmemset(addr, 0, pna * 4);\n\t\tpr_debug(\"empty ranges, 1:1 translation\\n\");\n\t\tgoto finish;\n\t}\n\n\tpr_debug(\"walking ranges...\\n\");\n\n\t/* Now walk through the ranges */\n\trlen /= 4;\n\trone = na + pna + ns;\n\tfor (; rlen >= rone; rlen -= rone, ranges += rone) {\n\t\toffset = bus->map(addr, ranges, na, ns, pna);\n\t\tif (offset != OF_BAD_ADDR)\n\t\t\tbreak;\n\t}\n\tif (offset == OF_BAD_ADDR) {\n\t\tpr_debug(\"not found !\\n\");\n\t\treturn 1;\n\t}\n\tmemcpy(addr, ranges + na, 4 * pna);\n\n finish:\n\tof_dump_addr(\"parent translation for:\", addr, pna);\n\tpr_debug(\"with offset: %llx\\n\", offset);\n\n\t/* Translate it into parent bus space */\n\treturn pbus->translate(addr, offset, pna);\n}\n\n/*\n * Translate an address from the device-tree into a CPU physical address,\n * this walks up the tree and applies the various bus mappings on the\n * way.\n *\n * Note: We consider that crossing any level with #size-cells == 0 to mean\n * that translation is impossible (that is we are not dealing with a value\n * that can be mapped to a cpu physical address). This is not really specified\n * that way, but this is traditionally the way IBM at least do things\n */\nstatic u64 __init fdt_translate_address(const void *blob, int node_offset)\n{\n\tint parent, len;\n\tconst struct of_bus *bus, *pbus;\n\tconst __be32 *reg;\n\t__be32 addr[OF_MAX_ADDR_CELLS];\n\tint na, ns, pna, pns;\n\tu64 result = OF_BAD_ADDR;\n\n\tpr_debug(\"** translation for device %s **\\n\",\n\t\t fdt_get_name(blob, node_offset, NULL));\n\n\treg = fdt_getprop(blob, node_offset, \"reg\", &len);\n\tif (!reg) {\n\t\tpr_err(\"warning: device tree node '%s' has no address.\\n\",\n\t\t\tfdt_get_name(blob, node_offset, NULL));\n\t\tgoto bail;\n\t}\n\n\t/* Get parent & match bus type */\n\tparent = fdt_parent_offset(blob, node_offset);\n\tif (parent < 0)\n\t\tgoto bail;\n\tbus = &of_busses[0];\n\n\t/* Cound address cells & copy address locally */\n\tbus->count_cells(blob, parent, &na, &ns);\n\tif (!OF_CHECK_COUNTS(na, ns)) {\n\t\tpr_err(\"Bad cell count for %s\\n\",\n\t\t       fdt_get_name(blob, node_offset, NULL));\n\t\tgoto bail;\n\t}\n\tmemcpy(addr, reg, na * 4);\n\n\tpr_debug(\"bus (na=%d, ns=%d) on %s\\n\",\n\t\t na, ns, fdt_get_name(blob, parent, NULL));\n\tof_dump_addr(\"translating address:\", addr, na);\n\n\t/* Translate */\n\tfor (;;) {\n\t\t/* Switch to parent bus */\n\t\tnode_offset = parent;\n\t\tparent = fdt_parent_offset(blob, node_offset);\n\n\t\t/* If root, we have finished */\n\t\tif (parent < 0) {\n\t\t\tpr_debug(\"reached root node\\n\");\n\t\t\tresult = of_read_number(addr, na);\n\t\t\tbreak;\n\t\t}\n\n\t\t/* Get new parent bus and counts */\n\t\tpbus = &of_busses[0];\n\t\tpbus->count_cells(blob, parent, &pna, &pns);\n\t\tif (!OF_CHECK_COUNTS(pna, pns)) {\n\t\t\tpr_err(\"Bad cell count for %s\\n\",\n\t\t\t\tfdt_get_name(blob, node_offset, NULL));\n\t\t\tbreak;\n\t\t}\n\n\t\tpr_debug(\"parent bus (na=%d, ns=%d) on %s\\n\",\n\t\t\t pna, pns, fdt_get_name(blob, parent, NULL));\n\n\t\t/* Apply bus translation */\n\t\tif (fdt_translate_one(blob, node_offset, bus, pbus,\n\t\t\t\t\taddr, na, ns, pna, \"ranges\"))\n\t\t\tbreak;\n\n\t\t/* Complete the move up one level */\n\t\tna = pna;\n\t\tns = pns;\n\t\tbus = pbus;\n\n\t\tof_dump_addr(\"one level translation:\", addr, na);\n\t}\n bail:\n\treturn result;\n}\n\n/**\n * of_flat_dt_translate_address - translate DT addr into CPU phys addr\n * @node: node in the flat blob\n */\nu64 __init of_flat_dt_translate_address(unsigned long node)\n{\n\treturn fdt_translate_address(initial_boot_params, node);\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "9b574a2ebafb92656e73329cae90cc7aed060d47b68b326c6edb541ca3f74a32",
+    "scope": "whole-file",
+    "line_count": 249,
+    "authoring_source": "course/file_units/of_flat_address.py",
+    "sections": [
+      "구성과 제한",
+      "Debug와 bus callback",
+      "셀 개수 결정",
+      "Ranges 한 항목의 배치",
+      "부모 주소 재인코딩",
+      "Ranges 부재와 빈 속성",
+      "선형 ranges 검색",
+      "입력 reg와 최초 부모",
+      "루트까지 반복",
+      "상태 갱신과 실패",
+      "공개 wrapper와 복잡도",
+      "전체 범위와 한계"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/fdt_address.c"
+    }
+  ]
+}

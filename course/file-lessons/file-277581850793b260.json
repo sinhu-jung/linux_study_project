@@ -1,0 +1,135 @@
+{
+  "id": "file-277581850793b260",
+  "path": "arch/arm64/kernel/vdso32/vdso.lds.S",
+  "title": "ARM64 compat vDSO ELF 배치: 섹션·세그먼트·심볼 버전",
+  "area": "ELF · 링커 스크립트 · 메모리 권한 · 가상 주소 · 심볼 가시성 · 버전 ABI",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "32비트 ARM ELF를 만드는 링커 스크립트의 데이터 주소, 섹션 목록, 권한, export를 전체 분석합니다.",
+  "guide": [
+    "함수 구현을 바이너리 ABI로 제공하려면 주소 배치, 로드 권한, 공개 심볼의 범위를 별도로 정의해야 합니다.",
+    "ELF section과 program header의 차이, 공유 데이터의 상대 위치, 심볼 공개 제한을 설명합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전처리와 출력 아키텍처",
+      "text": "GPL-2.0 표기 뒤 linux/const.h, asm/page.h, asm/vdso.h, asm-generic/vmlinux.lds.h를 포함합니다. OUTPUT_FORMAT은 elf32-littlearm, elf32-bigarm, elf32-littlearm 세 형식을 지정하고 OUTPUT_ARCH는 arm입니다. 디렉터리가 arm64라도 이 바이너리는 32비트 compat ARM용입니다. .S 스크립트의 매크로와 CONFIG_TIME_NS 분기는 전처리 문맥에서 해석됩니다."
+    },
+    {
+      "title": "숨긴 데이터 주소와 본문 시작",
+      "text": "SECTIONS 시작에서 PROVIDE_HIDDEN으로 _vdso_data = . - __VVAR_PAGES * PAGE_SIZE를 제공합니다. CONFIG_TIME_NS이면 _timens_data = _vdso_data + PAGE_SIZE도 제공합니다. 이어 위치 카운터를 VDSO_LBASE + SIZEOF_HEADERS로 설정합니다. 숨긴 주소 심볼 정의는 데이터 페이지 할당이나 초기화가 아니며, 코드 배치와 vvar 매핑 사이의 상대 위치 계약입니다."
+    },
+    {
+      "title": "동적 검색과 버전 섹션",
+      "text": ".hash, .gnu.hash, .dynsym, .dynstr, .gnu.version, .gnu.version_d, .gnu.version_r를 각 동명 입력 섹션에서 수집합니다. .hash는 :text에 연결됩니다. 함수 이름 검색과 동적 심볼·버전 메타데이터를 담는 섹션이며 이들이 모두 C 함수 본문인 것은 아닙니다. 명시한 program header 연결은 뒤 PHDRS와 함께 읽어야 합니다."
+    },
+    {
+      "title": "Note와 dynamic의 이중 소속",
+      "text": ".note는 .note.* 입력을 모아 :text와 :note에, .dynamic은 .dynamic 입력을 모아 :text와 :dynamic에 연결합니다. 같은 내용이 로드 세그먼트에 포함되면서 전용 ELF program header로도 설명되는 형태입니다. program header가 세 개라고 세 개의 별도 PT_LOAD가 생긴다는 뜻은 아닙니다."
+    },
+    {
+      "title": "RoData 입력 목록",
+      "text": ".rodata는 .rodata*뿐 아니라 .got, .got.plt, .plt, .rel.iplt, .iplt, .igot.plt를 모아 :text에 둡니다. 출력 섹션 이름만으로 모든 입력이 일반 문자열 상수라고 판단하면 안 됩니다. 이 스크립트가 의도한 배치와 최종 바이너리에 실제 생기는 항목의 존재 여부는 구별해야 합니다."
+    },
+    {
+      "title": "Text와 ARM 보조 코드",
+      "text": ".text는 .text*, .glue_7, .glue_7t, .vfp11_veneer, .v4_bx를 수집하고 :text에 연결하며 fill 값 0xe7f001f2를 지정합니다. ARM의 연결 보조 코드 섹션도 함께 배치합니다. fill 지정은 모든 명령을 해당 값으로 바꾸는 것이 아니라 출력 섹션에서 필요한 채움 패턴을 지정하는 문법입니다."
+    },
+    {
+      "title": "재배치·unwind·디버그 메타데이터",
+      "text": ".rel.dyn은 .rel*를 수집하고 .ARM.exidx는 .ARM.exidx*를 수집합니다. 이어 DWARF_DEBUG와 ELF_DETAILS 매크로를 사용하며 .ARM.attributes는 주소 0으로 배치합니다. 디버그 매크로의 내부 구현 전체는 포함된 별도 파일에 있습니다. unwind 메타데이터가 있다는 사실만으로 앞 C 파일의 빈 unwind stub가 완전한 예외 처리를 한다고 추정하지 않습니다."
+    },
+    {
+      "title": "버리는 입력 섹션",
+      "text": "/DISCARD/에는 .note.GNU-stack, .data와 .data.*, .gnu.linkonce.d.*, .sdata*, .bss, .sbss, .dynbss, .dynsbss를 나열합니다. 일반적인 쓰기 가능 전역 데이터 저장소를 vDSO에 그대로 넣는 구성이 아닙니다. 원본에 나열되지 않은 모든 orphan section까지 무조건 같은 정책으로 처리한다고 확대해서 읽지는 않습니다."
+    },
+    {
+      "title": "세 program header와 권한",
+      "text": "PHDRS의 text는 유일한 PT_LOAD이며 FLAGS(5)=PF_R|PF_X, FILEHDR PHDRS로 ELF 및 program header도 포함합니다. dynamic은 PT_DYNAMIC FLAGS(4)=PF_R, note는 PT_NOTE FLAGS(4)=PF_R입니다. 세 항목 모두 PF_W가 없지만 text에는 실행 권한이 있습니다. 주석의 read-only를 실행 불가능이라는 뜻으로 해석하면 안 됩니다."
+    },
+    {
+      "title": "심볼 버전과 네 공개 이름",
+      "text": "VERSION의 LINUX_2.6 노드에서 __vdso_clock_gettime, __vdso_gettimeofday, __vdso_clock_getres, __vdso_clock_gettime64를 global로 지정하고 local: *로 다른 심볼을 제한합니다. LINUX_2.6이라는 버전 이름은 지금 읽는 소스가 v2.6이라는 증거가 아닙니다. 유지되는 ABI 버전 이름과 소스 릴리스 버전은 다릅니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "모든 명시적 섹션·PHDR·심볼 규칙·전처리 분기를 다뤘습니다. 섹션은 링크할 내용의 분류이고 program header는 로더가 볼 매핑과 메타데이터를 설명합니다. 이 분석은 스크립트 원본에 근거하며 실제 compat ELF를 빌드하여 섹션 중첩·권한·심볼표를 검사한 결과는 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "PHDRS에 세 항목이 있으면 PT_LOAD도 세 개인가?",
+      "options": [
+        "아니다. PT_LOAD는 text 하나이고 나머지는 PT_DYNAMIC과 PT_NOTE이다",
+        "그렇다. 모든 program header는 별도 로드 가능한 코드 세그먼트이다"
+      ],
+      "answer": 0,
+      "explanation": "ELF program header는 종류별 역할이 다릅니다. 이 스크립트는 단일 PT_LOAD를 의도한다는 주석과 선언을 갖습니다."
+    },
+    {
+      "prompt": "text의 FLAGS(5)가 뜻하는 권한은?",
+      "options": [
+        "읽기와 쓰기이며 실행은 없다",
+        "읽기와 실행이며 쓰기는 없다"
+      ],
+      "answer": 1,
+      "explanation": "PF_R=4와 PF_X=1을 합한 5입니다. PF_W=2는 포함되지 않습니다. read-only라는 주석도 실행 권한 부재를 뜻하지 않습니다."
+    },
+    {
+      "prompt": "LINUX_2.6 버전 노드가 뜻하는 것은?",
+      "options": [
+        "공개 심볼에 부여하는 ABI 버전 이름이다",
+        "이 파일이 반드시 Linux v2.6 소스라는 뜻이다"
+      ],
+      "answer": 0,
+      "explanation": "심볼 버전 이름은 호환성을 위해 유지될 수 있습니다. 이 작업의 원본은 v6.12이며 소스 버전과 심볼 버전은 구분해야 합니다."
+    },
+    {
+      "prompt": "_timens_data는 이 스크립트에서 _vdso_data와 얼마나 떨어져 있는가?",
+      "options": [
+        "항상 한 바이트 앞이다",
+        "CONFIG_TIME_NS일 때 한 PAGE_SIZE 뒤이다"
+      ],
+      "answer": 1,
+      "explanation": "정의는 _vdso_data + PAGE_SIZE이며 설정 조건도 있습니다. 주소 심볼 계산 자체가 페이지를 할당하는 동작은 아닙니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Adapted from arm64 version.\n *\n * GNU linker script for the VDSO library.\n * Heavily based on the vDSO linker scripts for other archs.\n *\n * Copyright (C) 2012-2018 ARM Limited\n */\n\n#include <linux/const.h>\n#include <asm/page.h>\n#include <asm/vdso.h>\n#include <asm-generic/vmlinux.lds.h>\n\nOUTPUT_FORMAT(\"elf32-littlearm\", \"elf32-bigarm\", \"elf32-littlearm\")\nOUTPUT_ARCH(arm)\n\nSECTIONS\n{\n\tPROVIDE_HIDDEN(_vdso_data = . - __VVAR_PAGES * PAGE_SIZE);\n#ifdef CONFIG_TIME_NS\n\tPROVIDE_HIDDEN(_timens_data = _vdso_data + PAGE_SIZE);\n#endif\n\t. = VDSO_LBASE + SIZEOF_HEADERS;\n\n\t.hash\t\t: { *(.hash) }\t\t\t:text\n\t.gnu.hash\t: { *(.gnu.hash) }\n\t.dynsym\t\t: { *(.dynsym) }\n\t.dynstr\t\t: { *(.dynstr) }\n\t.gnu.version\t: { *(.gnu.version) }\n\t.gnu.version_d\t: { *(.gnu.version_d) }\n\t.gnu.version_r\t: { *(.gnu.version_r) }\n\n\t.note\t\t: { *(.note.*) }\t\t:text\t:note\n\n\t.dynamic\t: { *(.dynamic) }\t\t:text\t:dynamic\n\n\t.rodata\t\t: {\n\t\t*(.rodata*)\n\t\t*(.got)\n\t\t*(.got.plt)\n\t\t*(.plt)\n\t\t*(.rel.iplt)\n\t\t*(.iplt)\n\t\t*(.igot.plt)\n\t}\t\t\t\t\t\t:text\n\n\t.text\t\t: {\n\t\t*(.text*)\n\t\t*(.glue_7)\n\t\t*(.glue_7t)\n\t\t*(.vfp11_veneer)\n\t\t*(.v4_bx)\n\t}\t\t\t\t\t\t:text\t=0xe7f001f2\n\n\t.rel.dyn\t: { *(.rel*) }\n\n\t.ARM.exidx : { *(.ARM.exidx*) }\n\tDWARF_DEBUG\n\tELF_DETAILS\n\t.ARM.attributes 0 : { *(.ARM.attributes) }\n\n\t/DISCARD/\t: {\n\t\t*(.note.GNU-stack)\n\t\t*(.data .data.* .gnu.linkonce.d.* .sdata*)\n\t\t*(.bss .sbss .dynbss .dynsbss)\n\t}\n}\n\n/*\n * We must supply the ELF program headers explicitly to get just one\n * PT_LOAD segment, and set the flags explicitly to make segments read-only.\n */\nPHDRS\n{\n\ttext\t\tPT_LOAD\t\tFLAGS(5) FILEHDR PHDRS; /* PF_R|PF_X */\n\tdynamic\t\tPT_DYNAMIC\tFLAGS(4);\t\t/* PF_R */\n\tnote\t\tPT_NOTE\t\tFLAGS(4);\t\t/* PF_R */\n}\n\nVERSION\n{\n\tLINUX_2.6 {\n\tglobal:\n\t\t__vdso_clock_gettime;\n\t\t__vdso_gettimeofday;\n\t\t__vdso_clock_getres;\n\t\t__vdso_clock_gettime64;\n\tlocal: *;\n\t};\n}\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "f90e5c80b8ad4cdbcc3ed57256db13e1f0ffcf8f7c9473ffe3af22abeb7d868b",
+    "scope": "whole-file",
+    "line_count": 92,
+    "authoring_source": "course/file_units/arm64_compat_vdso_entry.py",
+    "sections": [
+      "전처리와 출력 아키텍처",
+      "숨긴 데이터 주소와 본문 시작",
+      "동적 검색과 버전 섹션",
+      "Note와 dynamic의 이중 소속",
+      "RoData 입력 목록",
+      "Text와 ARM 보조 코드",
+      "재배치·unwind·디버그 메타데이터",
+      "버리는 입력 섹션",
+      "세 program header와 권한",
+      "심볼 버전과 네 공개 이름",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso32/vdso.lds.S"
+    }
+  ]
+}

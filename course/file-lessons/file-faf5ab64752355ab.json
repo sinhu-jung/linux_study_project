@@ -1,0 +1,106 @@
+{
+  "id": "file-faf5ab64752355ab",
+  "path": "fs/btrfs/rcu-string.h",
+  "title": "Btrfs RCU 문자열 전체: 복사와 지연 해제",
+  "area": "메모리 수명 · RCU · 참조 계수 · 오류 정리",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "문자열 바이트와 RCU 해제용 헤드를 한 객체에 저장하는 작은 helper입니다.",
+  "guide": [
+    "복사는 새 메모리에 하고 해제는 kfree_rcu로 지연합니다. 독자가 포인터를 읽는 문맥과 객체를 새 값으로 공개하는 과정은 호출자가 관리합니다.",
+    "참조 계수 객체가 아니며 reader가 임의로 문자열을 수정해도 안전해지는 것은 아닙니다. rcu_str_deref가 NULL을 검사하거나 읽기 임계구역을 열어주지는 않습니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "SPDX·저작권·guard와 types/string/slab/rcupdate/printk 포함 뒤에 rcu_string 구조체, strdup/free inline, 출력 wrapper 두 개, 문자열 역참조 매크로와 endif가 있습니다. 구조체는 rcu_head와 flexible char str[]이며 참조 카운터나 문자열 길이 필드는 없습니다."
+    },
+    {
+      "title": "할당과 복사",
+      "text": "rcu_string_strdup은 strlen(src)+1을 계산해 헤더와 NUL 포함 문자열 공간을 kzalloc합니다. 실패하면 NULL을 반환합니다. 성공 후 strscpy로 len 한도 내 복사하고 음수이면 WARN_ON, kfree, NULL 반환으로 정리합니다. 할당 마스크는 인자로 받습니다. NULL 원문이나 유효하지 않은 문자열을 자동 방어하는 API는 아닙니다."
+    },
+    {
+      "title": "예상치 못한 잘림",
+      "text": "주석은 길이 측정 뒤 복사에서 예상치 못하게 잘리는 경우를 경고하려는 목적을 설명합니다. 이 검사가 원문의 동시 변경을 동기화하거나 일관된 스냅샷을 보장하지는 않습니다. 호출자는 strlen과 복사 동안 원문이 유효하게 유지되도록 해야 합니다."
+    },
+    {
+      "title": "지연 해제",
+      "text": "rcu_string_free는 NULL이면 아무것도 하지 않고 비NULL이면 kfree_rcu(str,rcu)를 호출합니다. 즉시 free와 달리 기존 RCU 독자가 끝난 뒤 회수하도록 맡깁니다. 그러나 이 helper는 공유 포인터에서 객체를 제거하거나 새 객체를 공개하지 않으므로 호출자의 교체 절차와 결합해야 합니다."
+    },
+    {
+      "title": "출력 wrapper",
+      "text": "printk_in_rcu는 rcu_read_lock, printk, rcu_read_unlock을 do-while0으로 묶습니다. ratelimited 버전은 같은 보호 구간에서 printk_ratelimited를 호출합니다. 가변 인자를 그대로 전달하며 RCU를 잡았다는 사실이 로그 내용의 정확성이나 rate limit 외의 보안 정책을 보장하지 않습니다."
+    },
+    {
+      "title": "문자열 역참조",
+      "text": "rcu_str_deref는 rcu_dereference 결과를 지역 __str에 한 번 담고 __str->str을 반환하는 GNU statement expression입니다. 읽기 잠금을 직접 잡지 않고 NULL도 검사하지 않습니다. 반환 char 포인터를 RCU 보호 밖에서 계속 사용할 권한을 주는 것은 아닙니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "flexible array의 한 번 할당, 측정과 복사 사이의 전제, 실패 시 즉시 정리와 공개 후 지연 회수의 차이, 읽기 보호와 값 변경의 분리를 학습합니다. 이 파일에는 교체 함수가 없으므로 문자열 교체 전체를 이 helper 하나의 기능으로 세지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "rcu_string에 참조 카운터가 있는가?",
+      "options": [
+        "없다. rcu_head와 문자열 배열만 있다",
+        "있다. 독자마다 자동 증가한다"
+      ],
+      "answer": 0,
+      "explanation": "RCU 읽기 보호와 참조 계수는 다른 수명 관리 방식입니다. 이 구조체에는 계수 필드가 없습니다."
+    },
+    {
+      "prompt": "rcu_str_deref가 NULL 입력을 안전하게 NULL 문자열로 바꾸는가?",
+      "options": [
+        "그렇다. 내부 NULL 검사가 있다",
+        "아니다. 읽은 객체의 str에 바로 접근한다"
+      ],
+      "answer": 1,
+      "explanation": "매크로는 rcu_dereference 후 __str->str을 반환합니다. 포인터 유효성과 읽기 보호 문맥은 호출자가 지켜야 합니다."
+    },
+    {
+      "prompt": "복사 실패 경로에서 새 객체를 kfree_rcu로 해제하는가?",
+      "options": [
+        "아니다. 아직 반환하지 않은 객체를 kfree로 정리한다",
+        "그렇다. 모든 메모리는 반드시 지연 해제한다"
+      ],
+      "answer": 0,
+      "explanation": "strscpy 음수 경로에는 kfree(ret)가 있습니다. 공개되지 않은 실패 객체와 독자가 볼 수 있는 객체의 회수 조건을 구분합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2012 Red Hat.  All rights reserved.\n */\n\n#ifndef BTRFS_RCU_STRING_H\n#define BTRFS_RCU_STRING_H\n\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/slab.h>\n#include <linux/rcupdate.h>\n#include <linux/printk.h>\n\nstruct rcu_string {\n\tstruct rcu_head rcu;\n\tchar str[];\n};\n\nstatic inline struct rcu_string *rcu_string_strdup(const char *src, gfp_t mask)\n{\n\tsize_t len = strlen(src) + 1;\n\tstruct rcu_string *ret = kzalloc(sizeof(struct rcu_string) +\n\t\t\t\t\t (len * sizeof(char)), mask);\n\tif (!ret)\n\t\treturn ret;\n\t/* Warn if the source got unexpectedly truncated. */\n\tif (WARN_ON(strscpy(ret->str, src, len) < 0)) {\n\t\tkfree(ret);\n\t\treturn NULL;\n\t}\n\treturn ret;\n}\n\nstatic inline void rcu_string_free(struct rcu_string *str)\n{\n\tif (str)\n\t\tkfree_rcu(str, rcu);\n}\n\n#define printk_in_rcu(fmt, ...) do {\t\\\n\trcu_read_lock();\t\t\\\n\tprintk(fmt, __VA_ARGS__);\t\\\n\trcu_read_unlock();\t\t\\\n} while (0)\n\n#define printk_ratelimited_in_rcu(fmt, ...) do {\t\\\n\trcu_read_lock();\t\t\t\t\\\n\tprintk_ratelimited(fmt, __VA_ARGS__);\t\t\\\n\trcu_read_unlock();\t\t\t\t\\\n} while (0)\n\n#define rcu_str_deref(rcu_str) ({\t\t\t\t\\\n\tstruct rcu_string *__str = rcu_dereference(rcu_str);\t\\\n\t__str->str;\t\t\t\t\t\t\\\n})\n\n#endif\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "e8df98270544faeb0318322f2c88a4f579c0e4dbf3e299cf18aa747b08988245",
+    "scope": "whole-file",
+    "line_count": 58,
+    "authoring_source": "course/file_units/rcu_lifetime_headers.py",
+    "sections": [
+      "전체 구성",
+      "할당과 복사",
+      "예상치 못한 잘림",
+      "지연 해제",
+      "출력 wrapper",
+      "문자열 역참조",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/fs/btrfs/rcu-string.h"
+    }
+  ]
+}

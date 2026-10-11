@@ -1,0 +1,106 @@
+{
+  "id": "file-55bd5e2147c2b808",
+  "path": "include/linux/hash.h",
+  "title": "정수 해시 전체: 곱셈 상위 비트와 포인터 접기",
+  "area": "해시 테이블 · 비트 혼합 · 정수 표현",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "정수·long·포인터에서 빠르게 해시 테이블 인덱스를 만드는 helper입니다.",
+  "guide": [
+    "큰 홀수와 곱한 결과의 상위 비트를 사용합니다. 64비트 입력을 32비트 머신에서 처리할 때는 상·하위 워드를 섞는 별도 경로를 사용합니다.",
+    "bits는 결과에 사용할 비트 수입니다. 이 헤더는 인자 범위를 런타임에 검사하지 않으므로 유효한 이동 폭과 32비트 반환형을 고려해야 합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성",
+      "text": "guard와 작성자, asm/types와 compiler 포함, BITS_PER_LONG별 long 매핑, 황금비 계열 상수, 선택적 asm/hash, generic과 arch 선택 매크로, 32/64비트 함수, 두 포인터 helper와 endif로 끝납니다. long 폭이32나64가 아니면 #error입니다."
+    },
+    {
+      "title": "상수와 이름",
+      "text": "GOLDEN_RATIO_32는0x61C88647, 64는0x61C8864680B583EBull입니다. GOLDEN_RATIO_PRIME이라는 역사적 이름은 실제 소수라는 보장이 아니라고 주석이 설명합니다. 큰 홀수 곱셈과 황금비 계열 상수를 이용한 분산 기법이며 암호 해시는 아닙니다."
+    },
+    {
+      "title": "32비트 경로",
+      "text": "__hash_32_generic은 u32 입력과 상수를 곱해 하위32비트 결과를 반환합니다. hash_32는 이를 32-bits만큼 오른쪽으로 이동합니다. 곱셈의 낮은 비트는 상위 입력 비트의 영향을 받지 않으므로 상위 결과 비트를 선택합니다. bits0이면 32비트 값에32비트 이동이 생기므로 안전한 일반 인자로 볼 수 없습니다."
+    },
+    {
+      "title": "64비트 경로의 차이",
+      "text": "64비트 long 환경은 u64 곱셈 후 64-bits만큼 이동합니다. 32비트 long 환경은 입력 상위32비트를 __hash_32로 혼합하고 하위32비트와 XOR한 다음 hash_32를 적용합니다. 두 방식은 같은 수식을 실행하는 구현이 아니므로 아키텍처를 넘어 같은 해시 값을 보장한다고 해석하지 않습니다. 반환형은 u32입니다."
+    },
+    {
+      "title": "아키텍처 대체",
+      "text": "CONFIG_HAVE_ARCH_HASH이면 asm/hash.h를 포함합니다. HAVE_ARCH__HASH_32 또는 HAVE_ARCH_HASH_64가 없을 때 generic 이름으로 연결합니다. generic 함수는 lib/test_hash.c에서 아키텍처 구현과 비교할 수 있도록 별도로 남아 있습니다. 원본 주석은 구현 변경 시 관련 HAVE_ARCH 설정과 테스트 의미를 함께 맞추라고 설명합니다."
+    },
+    {
+      "title": "포인터 두 함수",
+      "text": "hash_ptr는 포인터를 unsigned long으로 바꾸어 hash_long으로 보냅니다. hash32_ptr는 64비트 long일 때 상·하위32비트를 XOR하고 u32로 줄이며 32비트에서는 값만 줄입니다. 주석도 후자는 실질적인 혼합 해시라기보다 fold32_ptr라고 부르는 편이 맞다고 설명합니다."
+    },
+    {
+      "title": "CS 연결",
+      "text": "고정 폭 모듈러 곱셈, 버킷 인덱스, 타입별 경로, 아키텍처 최적화와 참조 구현, 포인터 표현의 한계를 학습합니다. Windows LLP64 사용자 공간의 포인터/long 배치를 이 Linux 계약의 실행 검증으로 대신하지 않습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "곱셈 해시에서 주로 어느 비트를 선택하는가?",
+      "options": [
+        "결과의 상위 비트다",
+        "결과의 하위 비트만 선택한다"
+      ],
+      "answer": 0,
+      "explanation": "곱셈은 낮은 입력 변화가 위쪽으로 전파되지만 높은 입력 비트가 낮은 결과 비트에 영향을 주지 않으므로 상위 부분을 사용합니다."
+    },
+    {
+      "prompt": "GOLDEN_RATIO_PRIME이라는 이름은 상수가 소수임을 보장하는가?",
+      "options": [
+        "그렇다. 이름이 수학적 조건을 보장한다",
+        "아니다. 역사적으로 남은 이름이다"
+      ],
+      "answer": 1,
+      "explanation": "헤더 주석은 더 이상 실제 소수가 아니며 이전 소수가 해시 분산에 좋지 않았다고 명시합니다."
+    },
+    {
+      "prompt": "hash32_ptr도 반드시 곱셈 해시를 하는가?",
+      "options": [
+        "아니다. 64비트에서는 상하위 XOR로 접는다",
+        "그렇다. hash_ptr와 항상 같은 함수다"
+      ],
+      "answer": 0,
+      "explanation": "두 함수는 별도 구현입니다. hash32_ptr는 포인터 표현을32비트로 접는 용도이며 hash_long 호출이 없습니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#ifndef _LINUX_HASH_H\n#define _LINUX_HASH_H\n/* Fast hashing routine for ints,  longs and pointers.\n   (C) 2002 Nadia Yvette Chambers, IBM */\n\n#include <asm/types.h>\n#include <linux/compiler.h>\n\n/*\n * The \"GOLDEN_RATIO_PRIME\" is used in ifs/btrfs/brtfs_inode.h and\n * fs/inode.c.  It's not actually prime any more (the previous primes\n * were actively bad for hashing), but the name remains.\n */\n#if BITS_PER_LONG == 32\n#define GOLDEN_RATIO_PRIME GOLDEN_RATIO_32\n#define hash_long(val, bits) hash_32(val, bits)\n#elif BITS_PER_LONG == 64\n#define hash_long(val, bits) hash_64(val, bits)\n#define GOLDEN_RATIO_PRIME GOLDEN_RATIO_64\n#else\n#error Wordsize not 32 or 64\n#endif\n\n/*\n * This hash multiplies the input by a large odd number and takes the\n * high bits.  Since multiplication propagates changes to the most\n * significant end only, it is essential that the high bits of the\n * product be used for the hash value.\n *\n * Chuck Lever verified the effectiveness of this technique:\n * http://www.citi.umich.edu/techreports/reports/citi-tr-00-1.pdf\n *\n * Although a random odd number will do, it turns out that the golden\n * ratio phi = (sqrt(5)-1)/2, or its negative, has particularly nice\n * properties.  (See Knuth vol 3, section 6.4, exercise 9.)\n *\n * These are the negative, (1 - phi) = phi**2 = (3 - sqrt(5))/2,\n * which is very slightly easier to multiply by and makes no\n * difference to the hash distribution.\n */\n#define GOLDEN_RATIO_32 0x61C88647\n#define GOLDEN_RATIO_64 0x61C8864680B583EBull\n\n#ifdef CONFIG_HAVE_ARCH_HASH\n/* This header may use the GOLDEN_RATIO_xx constants */\n#include <asm/hash.h>\n#endif\n\n/*\n * The _generic versions exist only so lib/test_hash.c can compare\n * the arch-optimized versions with the generic.\n *\n * Note that if you change these, any <asm/hash.h> that aren't updated\n * to match need to have their HAVE_ARCH_* define values updated so the\n * self-test will not false-positive.\n */\n#ifndef HAVE_ARCH__HASH_32\n#define __hash_32 __hash_32_generic\n#endif\nstatic inline u32 __hash_32_generic(u32 val)\n{\n\treturn val * GOLDEN_RATIO_32;\n}\n\nstatic inline u32 hash_32(u32 val, unsigned int bits)\n{\n\t/* High bits are more random, so use them. */\n\treturn __hash_32(val) >> (32 - bits);\n}\n\n#ifndef HAVE_ARCH_HASH_64\n#define hash_64 hash_64_generic\n#endif\nstatic __always_inline u32 hash_64_generic(u64 val, unsigned int bits)\n{\n#if BITS_PER_LONG == 64\n\t/* 64x64-bit multiply is efficient on all 64-bit processors */\n\treturn val * GOLDEN_RATIO_64 >> (64 - bits);\n#else\n\t/* Hash 64 bits using only 32x32-bit multiply. */\n\treturn hash_32((u32)val ^ __hash_32(val >> 32), bits);\n#endif\n}\n\nstatic inline u32 hash_ptr(const void *ptr, unsigned int bits)\n{\n\treturn hash_long((unsigned long)ptr, bits);\n}\n\n/* This really should be called fold32_ptr; it does no hashing to speak of. */\nstatic inline u32 hash32_ptr(const void *ptr)\n{\n\tunsigned long val = (unsigned long)ptr;\n\n#if BITS_PER_LONG == 64\n\tval ^= (val >> 32);\n#endif\n\treturn (u32)val;\n}\n\n#endif /* _LINUX_HASH_H */\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "3619d01cd90fdaa882cccd85e1dfefe200de0578f7e2f5ccccb8cda9add4629c",
+    "scope": "whole-file",
+    "line_count": 101,
+    "authoring_source": "course/file_units/hash_contracts.py",
+    "sections": [
+      "전체 구성",
+      "상수와 이름",
+      "32비트 경로",
+      "64비트 경로의 차이",
+      "아키텍처 대체",
+      "포인터 두 함수",
+      "CS 연결"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/hash.h"
+    }
+  ]
+}

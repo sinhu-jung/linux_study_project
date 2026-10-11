@@ -1,0 +1,106 @@
+{
+  "id": "file-2fae0d572464c6bc",
+  "path": "arch/arm64/kernel/vdso/gen_vdso_offsets.sh",
+  "title": "vDSO offset 생성: nm 텍스트에서 C 정의로",
+  "area": "셸 · sed · 정규식 · 텍스트 변환 · 빌드 파이프라인 · 심볼 주소",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "셸과 sed 두 치환으로 심볼 주소를 헤더 정의로 만드는 과정을 분석합니다.",
+  "guide": [
+    "작은 빌드 도구도 입력 형식 계약, 선택 규칙, 출력 소유권을 정확히 구분해야 합니다.",
+    "정규식 캡처·앵커·출력 억제와 빌드 파이프라인의 역할을 이해합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 목적과 실행 문맥",
+      "text": "#!/bin/sh, GPL-2.0, 설명 주석, LC_ALL=C 대입과 sed 명령으로 구성됩니다. 주석은 VDSO_* 심볼을 상수 offset 헤더로 바꾸며 Makefile 안에 이 작업을 직접 넣으면 filter-out과 상호작용하여 매번 헤더를 재생성하는 문제가 있다고 설명합니다. 여기서 바이너리를 직접 열거나 nm를 실행하지 않습니다."
+    },
+    {
+      "title": "표준 입력과 출력",
+      "text": "sed에 파일 인수가 없으므로 표준 입력을 읽고 표준 출력에 결과를 씁니다. 실제 관련 Makefile은 NM 출력 → 이 스크립트 → LC_ALL=C sort → 헤더 파일 리다이렉션의 파이프라인을 구성합니다. 정렬과 파일 저장을 스크립트 자체의 기능으로 혼동하지 않습니다. sed -n은 매 줄 자동 출력을 끕니다."
+    },
+    {
+      "title": "앞의 0 정규화",
+      "text": "첫 -e 식 s/^00*/0/은 줄 시작에서 하나 이상의 0을 하나의 0으로 줄입니다. 예를 들어 0000000000000120은 0120이 됩니다. 0을 전부 삭제하여 120으로 만드는 식이 아니며 줄 중간의 0이나 문자도 건드리지 않습니다. ^가 줄 시작을 제한하고 뒤의 0*가 추가 0들을 소비합니다."
+    },
+    {
+      "title": "심볼 선택 정규식",
+      "text": "두 번째 식은 줄 전체가 hexadecimal 주소, 공백, 임의 한 글자 type, 공백, VDSO_, 영문·숫자·밑줄 suffix인 경우를 매칭합니다. 주소는 캡처 1, suffix는 캡처 2입니다. type 자리는 .이므로 T 같은 코드 심볼에만 제한하지 않습니다. 시작과 끝 앵커 때문에 뒤에 추가 텍스트가 있으면 매칭되지 않습니다. *가 쓰여 주소와 suffix에 엄격한 비어 있지 않음 검사까지 제공하는 것은 아닙니다."
+    },
+    {
+      "title": "출력 예시와 접두어",
+      "text": "매칭된 줄을 #define vdso_offset_접미사 0x주소로 바꾸고 p 플래그로 출력합니다. 예를 들어 0000000000000120 T VDSO_sigtramp는 #define vdso_offset_sigtramp 0x0120이 됩니다. VDSO_가 아닌 일반 __kernel_rt_sigreturn 이름의 줄은 직접 출력하지 않습니다. native 링커의 VDSO_sigtramp 별칭과 이 생성 규칙이 연결됩니다."
+    },
+    {
+      "title": "로케일과 처리 한계",
+      "text": "LC_ALL=C 대입은 있지만 명시적인 export는 없습니다. sed 자식의 환경으로 전달되는지는 그 변수의 기존 export 상태도 고려해야 하므로 이 대입만으로 항상 자식 환경을 강제한다고 단정하지 않습니다. 이 스크립트는 입력 ELF 검증, 중복 심볼 검출, 주소 범위 검증, 헤더 guard 생성을 하지 않습니다. 주어진 nm 출력 형식에 맞춘 제한된 텍스트 변환입니다."
+    },
+    {
+      "title": "CS 연결과 검증 범위",
+      "text": "모든 실행 줄과 치환식을 설명했습니다. 정규식 필터와 파서의 차이, 파이프라인 각 단계의 책임, 심볼 이름을 생성 헤더 API로 바꾸는 과정이 핵심입니다. 예시는 식을 추적한 결과이며 실제 셸에서 이 스크립트를 실행하거나 최종 ELF offset과 대조한 시험은 아닙니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "00000120 T VDSO_sigtramp의 출력 정의는?",
+      "options": [
+        "#define vdso_offset_sigtramp 0x0120이다",
+        "#define VDSO_sigtramp 120이다"
+      ],
+      "answer": 0,
+      "explanation": "첫 치환이 앞 0 묶음을 한 0으로 줄이고 두 번째 치환이 이름 접두어와 0x를 추가합니다. offset 수치의 의미는 유지됩니다."
+    },
+    {
+      "prompt": "이 스크립트가 nm와 sort를 직접 실행하는가?",
+      "options": [
+        "그렇다. sed 내부가 자동으로 ELF를 열고 정렬한다",
+        "아니다. 관련 Makefile의 앞뒤 파이프라인에서 수행한다"
+      ],
+      "answer": 1,
+      "explanation": "스크립트는 stdin에서 텍스트를 읽는 sed만 실행합니다. 바이너리 심볼 추출과 정렬·파일 저장은 호출 문맥의 역할입니다."
+    },
+    {
+      "prompt": "심볼 type이 T가 아니면 반드시 제외되는가?",
+      "options": [
+        "아니다. 정규식 type 자리는 임의 한 글자 .이다",
+        "그렇다. 함수 심볼 T만 하드코딩했다"
+      ],
+      "answer": 0,
+      "explanation": "필터는 VDSO_ 이름과 줄 형식에 초점을 둡니다. type의 의미를 해석하는 ELF 검증 도구로 확대해서 읽으면 안 됩니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n\n#\n# Match symbols in the DSO that look like VDSO_*; produce a header file\n# of constant offsets into the shared object.\n#\n# Doing this inside the Makefile will break the $(filter-out) function,\n# causing Kbuild to rebuild the vdso-offsets header file every time.\n#\n# Author: Will Deacon <will.deacon@arm.com>\n#\n\nLC_ALL=C\nsed -n -e 's/^00*/0/' -e \\\n's/^\\([0-9a-fA-F]*\\) . VDSO_\\([a-zA-Z0-9_]*\\)$/\\#define vdso_offset_\\2 0x\\1/p'\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "2f20d3c0fa121a56bc4d2d886413a7e9060fd879aeaa922505ab27b3b02c05d3",
+    "scope": "whole-file",
+    "line_count": 16,
+    "authoring_source": "course/file_units/vdso_notes_offsets.py",
+    "sections": [
+      "전체 목적과 실행 문맥",
+      "표준 입력과 출력",
+      "앞의 0 정규화",
+      "심볼 선택 정규식",
+      "출력 예시와 접두어",
+      "로케일과 처리 한계",
+      "CS 연결과 검증 범위"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/gen_vdso_offsets.sh"
+    }
+  ]
+}

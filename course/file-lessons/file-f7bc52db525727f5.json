@@ -1,0 +1,115 @@
+{
+  "id": "file-f7bc52db525727f5",
+  "path": "scripts/as-version.sh",
+  "title": "어셈블러 검사: integrated LLVM 우회와 GNU 버전 확인",
+  "area": "어셈블러 · compiler driver · 버전 검사 · shell",
+  "track": "files",
+  "kind": "kernel",
+  "intro": "명시적 integrated 옵션, compiler driver를 통한 GNU assembler 탐지와 버전 경계를 분석합니다.",
+  "guide": [
+    "도구 체인의 일부는 같은 compiler 버전으로 관리되지만 외부 assembler는 별도 탐지와 검사가 필요합니다.",
+    "shell 함수의 exit, driver 옵션 전달, 접미사 제거 연산과 최소 버전 비교를 학습합니다."
+  ],
+  "deep_dive": [
+    {
+      "title": "전체 구성과 canonical 계산",
+      "text": "#!/bin/sh, GPL-2.0-only 및 set -e 뒤 get_canonical_version은 점으로 나눈 major·minor·patch를 10000*major+100*minor+patch로 합칩니다. 둘째·셋째가 없으면 0이고 넷째부터 무시합니다. 2.35.1.20201116은 23501입니다. 입력 형식을 범용 버전 parser처럼 검증하는 코드는 아닙니다."
+    },
+    {
+      "title": "Integrated assembler 탐지",
+      "text": "check_integrated_as는 전달된 인수를 하나씩 살피며 정확히 -fintegrated-as를 찾으면 LLVM 0을 출력하고 exit 0합니다. exit는 함수만 반환하는 return과 달리 이 스크립트를 끝냅니다. 실제 Clang을 실행해 기능을 탐지하기 전에 명시 옵션을 신뢰하는 경로입니다. Clang의 기본값을 명령 없이 자동 판별하지 않습니다."
+    },
+    {
+      "title": "LLVM 0의 의미",
+      "text": "주석은 integrated assembler 버전이 Clang 버전과 같고 cc-version.sh에서 이미 검사했다고 설명합니다. 여기서 0은 실제 LLVM release가 0이라는 뜻이 아니라 별도 assembler 버전 검사를 생략하는 출력입니다. Clang이 -fno-integrated-as 없이 -Wa,--version을 처리하지 못한다는 배경 때문에 이 분기를 먼저 둡니다."
+    },
+    {
+      "title": "외부 assembler 호출",
+      "text": "integrated 경로가 아니면 orig_args를 보존하고 LC_ALL=C \"$@\" -Wa,--version -c -x assembler-with-cpp /dev/null -o /dev/null을 실행하며 stderr를 숨깁니다. compiler driver를 통해 assembler 옵션을 전달하고 빈 입력을 사용합니다. 입력과 출력 모두 /dev/null이며 커널 전체 코드를 어셈블하는 검사가 아닙니다."
+    },
+    {
+      "title": "첫 줄과 GNU 판별",
+      "text": "IFS를 newline으로 두어 출력을 분리한 뒤 첫 줄만 공백으로 다시 분리합니다. 첫 두 토큰이 GNU assembler이면 마지막 토큰을 버전으로 취하고 min-tool-version.sh binutils를 조회하며 name=GNU입니다. 아니면 unknown assembler invoked 진단 후 1입니다. 여기서는 다른 이름을 LLVM으로 추정하는 추가 fallback이 없습니다."
+    },
+    {
+      "title": "접미사 제거의 정확한 범위",
+      "text": "version=${version%-*}는 끝에 일치하는 가장 짧은 하이픈 시작 suffix를 제거합니다. 일반적인 2.34-4.fc32는 2.34가 되지만 2.34-4-extra는 2.34-4가 남습니다. 주석의 배포판 예를 모든 하이픈 뒤 내용 전체 제거로 확대하지 않습니다. ld-version.sh의 숫자·점 이외를 제거하는 %% 패턴과도 다릅니다."
+    },
+    {
+      "title": "최소 검사와 결과",
+      "text": "actual과 minimum을 수치화해 actual<minimum이면 현재·최소 버전을 담은 오류 블록과 exit 1, 아니면 GNU와 정수 버전을 출력합니다. 동일한 최소 버전은 허용됩니다. set -e가 있지만 명령 치환을 set의 인수로 사용하는 구조까지 고려해야 하며 모든 내부 도구 실패의 완전한 전파를 단정하지 않습니다. 전체 두 함수·탐지·비교·출력을 대조했고 실제 compiler driver 실행은 하지 않았습니다."
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "-fintegrated-as를 발견한 경우 출력은?",
+      "options": [
+        "LLVM 0",
+        "GNU 0"
+      ],
+      "answer": 0,
+      "explanation": "명시 옵션 경로에서 LLVM 0을 출력하고 스크립트를 종료합니다. 실제 release 0을 탐지한 것이 아닙니다."
+    },
+    {
+      "prompt": "check_integrated_as 안의 exit 0은 어디까지 끝내는가?",
+      "options": [
+        "함수만 반환하고 GNU 검사로 계속 진행",
+        "스크립트 실행 전체"
+      ],
+      "answer": 1,
+      "explanation": "exit와 return의 범위는 다릅니다. 아래 버전 호출과 최소 검사에 도달하지 않습니다."
+    },
+    {
+      "prompt": "외부 assembler 버전 요청을 전달하는 옵션은?",
+      "options": [
+        "-Wa,--version",
+        "커널 부팅 인수 --version"
+      ],
+      "answer": 0,
+      "explanation": "compiler driver에 -Wa로 assembler 인수를 전달합니다. 빈 assembler-with-cpp 입력을 사용합니다."
+    },
+    {
+      "prompt": "2.34-4-extra에 ${version%-*}를 적용하면?",
+      "options": [
+        "2.34",
+        "2.34-4"
+      ],
+      "answer": 1,
+      "explanation": "단일 %는 가장 짧은 일치 suffix를 제거하므로 마지막 하이픈부터 지워집니다. 주석보다 연산자의 정확한 의미를 확인해야 합니다."
+    }
+  ],
+  "concepts": [
+    {
+      "title": "파일 전체를 읽는 순서",
+      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+    }
+  ],
+  "practice": {
+    "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+  },
+  "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0-only\n#\n# Print the assembler name and its version in a 5 or 6-digit form.\n# Also, perform the minimum version check.\n# (If it is the integrated assembler, return 0 as the version, and\n# skip the version check.)\n\nset -e\n\n# Convert the version string x.y.z to a canonical 5 or 6-digit form.\nget_canonical_version()\n{\n\tIFS=.\n\tset -- $1\n\n\t# If the 2nd or 3rd field is missing, fill it with a zero.\n\t#\n\t# The 4th field, if present, is ignored.\n\t# This occurs in development snapshots as in 2.35.1.20201116\n\techo $((10000 * $1 + 100 * ${2:-0} + ${3:-0}))\n}\n\n# Clang fails to handle -Wa,--version unless -fno-integrated-as is given.\n# We check -fintegrated-as, expecting it is explicitly passed in for the\n# integrated assembler case.\ncheck_integrated_as()\n{\n\twhile [ $# -gt 0 ]; do\n\t\tif [ \"$1\" = -fintegrated-as ]; then\n\t\t\t# For the integrated assembler, we do not check the\n\t\t\t# version here. It is the same as the clang version, and\n\t\t\t# it has been already checked by scripts/cc-version.sh.\n\t\t\techo LLVM 0\n\t\t\texit 0\n\t\tfi\n\t\tshift\n\tdone\n}\n\ncheck_integrated_as \"$@\"\n\norig_args=\"$@\"\n\n# Get the first line of the --version output.\nIFS='\n'\nset -- $(LC_ALL=C \"$@\" -Wa,--version -c -x assembler-with-cpp /dev/null -o /dev/null 2>/dev/null)\n\n# Split the line on spaces.\nIFS=' '\nset -- $1\n\nmin_tool_version=$(dirname $0)/min-tool-version.sh\n\nif [ \"$1\" = GNU -a \"$2\" = assembler ]; then\n\tshift $(($# - 1))\n\tversion=$1\n\tmin_version=$($min_tool_version binutils)\n\tname=GNU\nelse\n\techo \"$orig_args: unknown assembler invoked\" >&2\n\texit 1\nfi\n\n# Some distributions append a package release number, as in 2.34-4.fc32\n# Trim the hyphen and any characters that follow.\nversion=${version%-*}\n\ncversion=$(get_canonical_version $version)\nmin_cversion=$(get_canonical_version $min_version)\n\nif [ \"$cversion\" -lt \"$min_cversion\" ]; then\n\techo >&2 \"***\"\n\techo >&2 \"*** Assembler is too old.\"\n\techo >&2 \"***   Your $name assembler version:    $version\"\n\techo >&2 \"***   Minimum $name assembler version: $min_version\"\n\techo >&2 \"***\"\n\texit 1\nfi\n\necho $name $cversion\n",
+  "source_review": {
+    "sha": "adc218676eef25575469234709c2d87185ca223a",
+    "source_sha256": "431def986dc25a7228c54f0be86bb6e787bf0b0b85f361baa8fcba38320b779d",
+    "scope": "whole-file",
+    "line_count": 82,
+    "authoring_source": "course/file_units/assembler_rust_versions.py",
+    "sections": [
+      "전체 구성과 canonical 계산",
+      "Integrated assembler 탐지",
+      "LLVM 0의 의미",
+      "외부 assembler 호출",
+      "첫 줄과 GNU 판별",
+      "접미사 제거의 정확한 범위",
+      "최소 검사와 결과"
+    ],
+    "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+  },
+  "references": [
+    {
+      "title": "고정 버전 전체 원본",
+      "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/as-version.sh"
+    }
+  ]
+}
