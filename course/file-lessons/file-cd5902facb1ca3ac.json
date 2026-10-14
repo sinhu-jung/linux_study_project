@@ -5,117 +5,143 @@
   "area": "정적 분석 · 메타데이터 · 캐시 지역성 · 이진 검색 · 병렬 배열 · 도구 의존성",
   "track": "files",
   "kind": "kernel",
-  "intro": "ORC 생성 과정, frame pointer 및 DWARF와의 비교, 병렬 배열과 빠른 검색 구조를 문서 전체에서 학습합니다.",
+  "intro": "ORC는 빌드할 때 분석한 스택 복원 정보를 실행할 때 검색하는 방식이에요. 설명이 단순해지는 이점과 표를 저장할 메모리 비용을 함께 읽어야 해요.",
   "guide": [
-    "복잡한 분석을 빌드 시점에 수행하고 실행 시점에는 단순한 메타데이터를 조회하는 시간·공간 절충입니다.",
-    "ORC의 설계 선택과 문서의 역사적 측정값 및 현재 버전 구현 차이를 이해합니다."
+    "스택은 함수 호출과 임시 값을 쌓아 두는 메모리예요. unwinder는 이 기록을 따라 이전 호출을 복원하는 도구예요.",
+    "메타데이터는 원래 코드에 대한 설명 자료예요. ORC는 실행 명령 옆에 복잡한 일을 늘리기보다 별도 표에 설명을 둬요.",
+    "frame pointer는 호출의 기준 위치를 가리키는 값이고 DWARF는 복원 규칙 등을 표현하는 다른 형식이에요. 비용 비교는 코드 실행, 조회, 저장량으로 나눠 봐야 해요."
   ],
   "deep_dive": [
     {
-      "title": "문서 전체의 범위",
-      "text": "GPL-2.0 표시 뒤 Overview, frame pointer 비교, DWARF 비교, table generation, implementation details, etymology와 세 참고 링크가 있습니다. CONFIG_UNWINDER_ORC로 기능을 선택하며 DWARF와 개념적으로 비슷하지만 자료 형식을 단순화했다고 설명합니다. 문서의 비교와 주장, 해당 버전 소스에서 확인한 동작을 구분해 읽습니다."
+      "title": "문서의 범위",
+      "text": "문서는 개요, frame pointer 및 DWARF 비교, 표 생성, 구현 세부, 이름 유래와 참고 링크를 담아요. CONFIG_UNWINDER_ORC로 기능을 선택하며 DWARF와 개념은 비슷하지만 자료 형식을 단순화했다고 설명해요. 문서의 주장과 해당 버전 소스에서 확인한 동작을 구별해요."
     },
     {
-      "title": "Objtool 생성 경로",
-      "text": "문서는 objtool이 컴파일된 .o의 코드 경로와 instruction별 stack 상태를 분석하여 .orc_unwind와 .orc_unwind_ip section을 만든다고 설명합니다. 분석 기반으로 compile-time stack metadata validation을 듭니다. 실행 중 모든 함수가 매번 전체 코드를 다시 분석하는 방식은 아닙니다. 코드 주소와 복원 규칙의 관계가 별도 데이터로 저장됩니다."
+      "title": "빌드 중 안내표 만들기",
+      "text": "objtool은 빌드된 .o 파일의 코드 경로와 명령 위치별 스택 상태를 분석해요. 그 결과를 .orc_unwind와 .orc_unwind_ip 영역에 넣어요. 컴파일 시 스택 메타데이터를 검사한 정보를 활용하는 방식이에요. 실행 중 모든 함수가 자기 코드를 매번 처음부터 분석하는 것이 아니라 코드 주소와 복원 규칙의 관계를 저장해 둬요."
     },
     {
-      "title": "링크·정렬 설명의 버전 차이",
-      "text": "문서는 object section을 링크 때 합치고 부팅 때 정렬한다고 설명합니다. 하지만 v6.12 unwind_init의 주석과 본문은 기본 커널 테이블이 sorttable 도구로 이미 빌드 시점에 정렬되어 이진 검색 준비가 되었다고 명시합니다. 모듈의 unwind_module_init에는 별도 sort 호출이 있습니다. 따라서 모든 ORC 테이블이 오직 부팅 시점에 정렬된다고 안내하지 않습니다. 관련 함수 대조는 unwind_orc.c 전체 완료가 아닙니다."
+      "title": "정렬 시점은 버전과 대상에 따라",
+      "text": "저장된 문서는 연결 때 표를 합치고 부팅 때 정렬한다고 설명해요. 다만 기존 해설이 대조한 v6.12 unwind_init은 기본 커널 표가 sorttable 도구로 빌드 중 이미 정렬돼 있다고 명시해요. 모듈은 unwind_module_init의 별도 정렬 경로가 있어요. 모든 표를 오직 부팅 때 정렬한다고 일반화하면 안 돼요. 이 관련 함수 대조가 unwind_orc.c 전체 검토 완료를 뜻하지는 않아요."
     },
     {
-      "title": "Frame pointer의 비용 비교",
-      "text": "문서는 frame pointer 계측으로 .text가 약 3.2% 커지고 일부 workload에서 5~10% 느려졌다는 과거 측정을 인용합니다. ORC 자료는 실행 명령 밖에 있어 frame pointer를 유지하는 hotpath 비용을 피할 수 있다는 설계 장점입니다. 이를 현재 모든 시스템의 동일한 성능 차이나 실제 unwind 실행 비용이 0이라는 뜻으로 읽으면 안 됩니다. 인용된 cache locality 논의는 코드 크기 감소가 명령 캐시 사용량을 줄일 수 있다는 인과 설명입니다."
+      "title": "frame pointer 유지 비용",
+      "text": "문서는 frame pointer 계측으로 실행 코드 .text가 약 3.2% 커지고 일부 작업에서 5~10% 느려졌다는 과거 측정을 인용해요. ORC 설명 자료는 실행 명령 밖에 있어 자주 실행되는 경로에서 frame pointer를 유지하는 비용을 피할 수 있어요. 그렇다고 실제 스택 조회 비용도 0이거나 모든 현대 시스템이 같은 차이를 보인다는 뜻은 아니에요. 코드가 작아지면 명령 캐시, 즉 가까이 보관하는 명령 저장소의 사용량도 줄 수 있어요."
     },
     {
-      "title": "Interrupt와 메모리 절충",
-      "text": "문서는 frame pointer가 저장되기 전 interrupt나 leaf 함수에서 caller가 빠질 수 있는 반면 ORC가 interrupt·exception 경계를 더 신뢰성 있게 추적할 수 있다고 설명합니다. 대가는 unwind table 메모리이며 2~4MB라는 수치는 커널 구성에 따른 문서상의 대략적인 예입니다. 형식 자체가 정확한 모든 입력과 오류 없는 생성 도구를 무조건 보장한다는 뜻은 아닙니다."
+      "title": "인터럽트 경계와 저장 비용",
+      "text": "인터럽트와 예외는 원래 흐름 사이에 끼어드는 처리예요. frame pointer 저장 전이나 다른 함수를 부르지 않는 leaf 함수에서 끼어들면 이전 호출을 놓칠 수 있다고 문서는 설명해요. ORC는 이런 경계를 더 신뢰성 있게 추적하려 해요. 대신 표의 메모리가 필요하며 2~4MB는 구성에 따른 문서의 대략적 예예요. 어떤 입력이나 생성 도구 오류에서도 무조건 완벽하다는 보장은 아니에요."
     },
     {
-      "title": "DWARF 대비 단순성",
-      "text": "ORC는 복잡한 CFI 상태 기계와 불필요한 register 추적을 줄여 oops 처리 같은 진단 경로를 단순하게 만들려 합니다. perf와 lockdep처럼 자주 stack을 수집하는 곳에서는 조회 비용도 중요합니다. 문서는 out-of-tree DWARF 비교 실험의 약 20배와 이후 개선을 반영한 약 40배 가능성을 언급합니다. 이는 문서가 설명하는 특정 과거 비교이며 이 프로젝트가 재현한 benchmark는 아닙니다."
+      "title": "DWARF보다 단순하게 읽기",
+      "text": "ORC는 복잡한 CFI 상태 기계와 불필요한 레지스터 추적을 줄여요. 상태 기계는 규칙에 따라 상태를 바꾸며 자료를 해석하는 방식이에요. 오류 보고와 perf·lockdep 같은 잦은 스택 수집에서 단순하고 빠른 조회가 유용해요. 문서의 약 20배와 추가 개선을 반영한 약 40배 가능성은 특정 과거 DWARF 비교예요. 이 프로젝트가 새로 측정한 값은 아니에요."
     },
     {
-      "title": "DWARF 대비 저장량과 표현력",
-      "text": "문서는 ORC table이 DWARF eh_frame보다 약 50% 더 많은 RAM, 한 x86 defconfig 예에서 1.3MB 추가를 사용한다고 설명합니다. 단순한 표현이 더 작은 표현과 항상 같은 것은 아닙니다. 향후 compiler 최적화가 더 복잡한 stack 변형을 만들면 현재 표현이 부족해질 가능성도 논의합니다. 필요한 register를 늘리더라도 형식을 통제하고 복잡한 상태 기계를 피하려는 설계 의도를 제시합니다."
+      "title": "단순함과 작은 크기는 다름",
+      "text": "문서는 ORC 표가 DWARF eh_frame보다 RAM을 약 50% 더 쓰며 한 x86 기본 설정에서 1.3MB가 늘었다는 예를 들어요. 해석이 쉬운 형식이 반드시 더 압축된 형식은 아니에요. 앞으로 컴파일러가 더 복잡하게 스택을 바꾸면 표현력이 부족할 가능성도 논의해요. 필요한 레지스터를 더 다루더라도 형식을 통제하고 복잡한 상태 기계를 피하려는 설계예요."
     },
     {
-      "title": "DWARF 변환만으로 부족한 이유",
-      "text": "문서는 DWARF를 ORC로 바꾸는 도구도 생각할 수 있지만 커널의 assembly, inline assembly, exception table 등 특수 경로 때문에 불완전할 수 있다고 설명합니다. assembly .cfi와 별도 inline assembly annotation은 유지보수와 정확성에 부담을 줄 수 있습니다. objtool도 특수 entry 코드 같은 경우 annotation이 필요하므로 annotation이 완전히 없어졌다고 이해하면 안 됩니다."
+      "title": "단순 형식 변환만으로 부족한 이유",
+      "text": "DWARF를 ORC로 바꾸는 도구도 생각할 수 있지만 커널의 어셈블리, C 안의 어셈블리, 예외 표 같은 특수 경로가 문제예요. 사람이 .cfi나 별도 annotation, 즉 분석용 설명 표시를 달면 유지와 정확성 부담이 생겨요. objtool도 특수 진입 코드처럼 스택을 특이하게 바꾸는 곳에는 일부 표시가 필요하므로 표시가 완전히 사라진 것은 아니에요."
     },
     {
-      "title": "Objtool 의존성과 대안",
-      "text": "자동 분석은 적은 annotation으로 자료를 만들고 일부 toolchain 문제에서 독립성을 얻는 대신 compiler의 코드 흐름을 추적하는 objtool 능력에 의존합니다. 복잡한 최적화가 이를 깨면 compiler와 조정, DWARF를 추가 입력으로 사용, compiler plugin 등의 대안을 고려할 수 있다고 문서는 제시합니다. 이는 가능한 미래 대안 목록이며 이미 모두 구현된 기능 목록이 아닙니다."
+      "title": "분석 도구에 대한 의존",
+      "text": "적은 표시로 자료를 만들고 일부 도구 문제에서 독립성을 얻는 대신 objtool이 컴파일러의 코드 흐름을 따라갈 수 있어야 해요. 최적화가 너무 복잡해지면 분석이 불완전해질 수 있어요. 문서는 컴파일러와 조정하거나 DWARF를 추가 입력으로 쓰거나 플러그인을 두는 대안을 제시해요. 이 목록은 가능한 대안이지 모두 이미 구현된 기능 목록이 아니에요."
     },
     {
-      "title": "병렬 배열과 검색 범위 축소",
-      "text": "orc_entry 배열과 그에 대응하는 instruction 주소 배열을 나누면 검색 대상인 .orc_unwind_ip가 작아집니다. 두 배열은 같은 인덱스의 대응을 유지하며 정렬되어야 합니다. 실행 시 생성하는 빠른 lookup table은 주소를 ORC 인덱스의 좁은 범위와 연결해 전체 대신 일부를 검색하도록 합니다. 자료 분리로 캐시 접근량을 줄이고 보조 인덱스로 검색 범위를 줄이는 별개의 최적화입니다."
+      "title": "두 배열과 빠른 찾기",
+      "text": "복원 규칙 orc_entry 배열과 명령 주소 배열을 분리하면 검색할 주소 배열을 작고 촘촘하게 둘 수 있어요. 같은 인덱스의 주소와 규칙이 짝이므로 정렬 중에도 대응을 유지해야 해요. 실행 중 만드는 빠른 lookup 표는 주소에 맞는 좁은 인덱스 범위를 알려 줘 전체 표 대신 일부만 찾게 해요. 배열 분리와 검색 범위 축소는 서로 다른 최적화예요."
     },
     {
-      "title": "이름과 참고 자료",
-      "text": "ORC는 Oops Rewind Capability의 약자입니다. 문서는 판타지의 orc와 dwarf 관계를 이용한 이름의 유래를 설명하며 frame pointer 성능 메일, DWARF 비교 메일, 민속 캐릭터 관련 링크를 각주로 둡니다. 비유를 기술적 정확성의 근거로 사용하지 않습니다. 여기서는 저장된 문서를 해설했으며 링크된 외부 자료를 새로 읽거나 원문 전체를 검증한 것은 아닙니다."
+      "title": "이름과 참고 문헌",
+      "text": "ORC는 Oops Rewind Capability의 약자예요. 문서는 판타지의 orc와 dwarf 관계를 이름에 빗대고 성능 비교 메일과 민속 캐릭터 자료를 링크해요. 재미있는 비유가 성능이나 정확성을 증명하는 것은 아니에요. 여기서는 저장된 문서 전체를 읽었으며 링크 외부 자료를 새로 읽거나 전부 검증했다고 말하지 않아요."
     },
     {
-      "title": "CS 연결과 완료 범위",
-      "text": "빌드 시 정적 분석과 실행 시 검색의 분리, 정보 표현의 단순성과 압축률의 차이, instruction cache, 병렬 배열 정렬의 대응 불변식, 인덱스를 통한 검색 범위 축소를 학습합니다. 전체 문서 대조는 성능 수치를 현재 하드웨어에서 재현하거나 모든 compiler 코드를 검증했다는 뜻은 아닙니다."
+      "title": "배울 원리와 확인 범위",
+      "text": "어려운 분석을 빌드 때 하고 실행 때는 검색하는 분업, 해석 난도와 저장량의 차이, 명령 캐시, 같은 인덱스의 대응 유지, 보조 표로 탐색을 줄이는 원리를 볼 수 있어요. 문서 전체 대조는 현재 하드웨어에서 수치를 재현하거나 모든 컴파일러 출력을 검증한 실험과 달라요."
     }
   ],
   "questions": [
     {
-      "prompt": "ORC가 별도 메타데이터를 사용하면 실제 unwind 연산 비용도 0인가?",
+      "prompt": "별도 메타데이터가 있으면 실제 스택 복원 비용도 0인가요?",
       "options": [
+        "아니요. frame pointer 유지 비용을 피하는 것과 표 조회 비용은 달라요.",
+        "네. 조회나 메모리 접근이 전혀 없어요."
+      ],
+      "answer": 0,
+      "explanation": "실행 때 표를 찾아 프레임을 복원하는 작업은 남아요.",
+      "original_prompt": "ORC가 별도 메타데이터를 사용하면 실제 unwind 연산 비용도 0인가?",
+      "original_options": [
         "아니다. frame pointer 유지 비용을 피하는 것과 unwind 조회 비용은 다르다",
         "그렇다. 어떠한 조회나 메모리 접근도 필요하지 않다"
       ],
-      "answer": 0,
-      "explanation": "실행 시 unwinder는 자료를 검색하여 프레임을 복원합니다. hotpath 계측 비용과 진단 실행 비용을 구분해야 합니다."
+      "original_explanation": "실행 시 unwinder는 자료를 검색하여 프레임을 복원합니다. hotpath 계측 비용과 진단 실행 비용을 구분해야 합니다."
     },
     {
-      "prompt": "v6.12 기본 커널 ORC 테이블은 unwind_init에서 처음 정렬되는가?",
+      "prompt": "v6.12 기본 커널 ORC 표는 unwind_init에서 처음 정렬하나요?",
       "options": [
+        "네. 문서의 부팅 정렬 설명이 모든 버전에 같아요.",
+        "아니요. 그 구현은 빌드 중 sorttable로 정렬됐다고 명시해요."
+      ],
+      "answer": 1,
+      "explanation": "기본 커널과 별도 정렬이 있는 모듈도 구별해야 해요.",
+      "original_prompt": "v6.12 기본 커널 ORC 테이블은 unwind_init에서 처음 정렬되는가?",
+      "original_options": [
         "그렇다. 문서의 부팅 정렬 설명이 모든 버전에 그대로 적용된다",
         "아니다. 해당 구현은 빌드 시 sorttable로 정렬되었다고 명시한다"
       ],
-      "answer": 1,
-      "explanation": "문서와 현재 소스의 차이를 확인했습니다. 모듈에는 별도 정렬 경로가 있으므로 객체 종류도 구분해야 합니다."
+      "original_explanation": "문서와 현재 소스의 차이를 확인했습니다. 모듈에는 별도 정렬 경로가 있으므로 객체 종류도 구분해야 합니다."
     },
     {
-      "prompt": "ORC 데이터를 두 배열로 나눈 핵심 이유는?",
+      "prompt": "ORC 정보를 두 배열로 나눈 핵심 이유는 무엇인가요?",
       "options": [
+        "찾을 명령 주소 배열을 작고 촘촘하게 두려는 것이에요.",
+        "같은 번호의 항목 사이 대응을 없애려는 것이에요."
+      ],
+      "answer": 0,
+      "explanation": "검색한 주소의 복원 규칙을 찾으려면 인덱스 대응은 유지해야 해요.",
+      "original_prompt": "ORC 데이터를 두 배열로 나눈 핵심 이유는?",
+      "original_options": [
         "검색하는 instruction 주소 배열을 더 작고 조밀하게 유지하기 위해서다",
         "같은 인덱스 사이의 대응을 제거하기 위해서다"
       ],
-      "answer": 0,
-      "explanation": "검색 후 대응 orc_entry를 찾으려면 인덱스 관계를 보존해야 합니다. 데이터 분리와 의미 분리는 다릅니다."
+      "original_explanation": "검색 후 대응 orc_entry를 찾으려면 인덱스 관계를 보존해야 합니다. 데이터 분리와 의미 분리는 다릅니다."
     },
     {
-      "prompt": "Objtool은 annotation이 전혀 필요 없는가?",
+      "prompt": "objtool에는 분석용 표시가 전혀 필요 없나요?",
       "options": [
+        "네. 모든 어셈블리 의미를 항상 자동 증명해요.",
+        "아니요. 특이한 스택 동작에는 일부 표시가 필요해요."
+      ],
+      "answer": 1,
+      "explanation": "특수 진입 코드 등에는 annotation이 남아요.",
+      "original_prompt": "Objtool은 annotation이 전혀 필요 없는가?",
+      "original_options": [
         "그렇다. 모든 assembly의 의미를 언제나 자동 증명한다",
         "아니다. 특수한 stack 동작에는 일부 annotation이 필요하다"
       ],
-      "answer": 1,
-      "explanation": "문서는 특히 entry 코드 같은 특수 경우의 annotation과 compiler 흐름 분석 의존성을 명시합니다."
+      "original_explanation": "문서는 특히 entry 코드 같은 특수 경우의 annotation과 compiler 흐름 분석 의존성을 명시합니다."
     },
     {
-      "prompt": "단순한 ORC 형식은 반드시 DWARF보다 적은 RAM을 사용하는가?",
+      "prompt": "ORC 형식이 단순하면 반드시 RAM도 적게 쓰나요?",
       "options": [
+        "아니요. 문서는 더 큰 표 저장량의 예를 제시해요.",
+        "네. 알고리즘이 단순하면 크기도 언제나 작아요."
+      ],
+      "answer": 0,
+      "explanation": "해석 비용과 메모리 크기는 별도의 비교 항목이에요.",
+      "original_prompt": "단순한 ORC 형식은 반드시 DWARF보다 적은 RAM을 사용하는가?",
+      "original_options": [
         "아니다. 문서는 오히려 더 큰 table 저장량 예를 제시한다",
         "그렇다. 알고리즘이 단순하면 표현 크기도 항상 작다"
       ],
-      "answer": 0,
-      "explanation": "실행 비용, 해석 복잡도, 저장량은 서로 다른 축입니다. 이 설계는 빠른 조회를 위해 더 많은 메모리를 사용할 수 있습니다."
+      "original_explanation": "실행 비용, 해석 복잡도, 저장량은 서로 다른 축입니다. 이 설계는 빠른 조회를 위해 더 많은 메모리를 사용할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "미리 표 만들기와 실행 중 표 찾기를 두 단계로 그려 보고, 문서의 과거 측정 수치를 현재 모든 컴퓨터의 보장으로 말할 수 있는지 생각해 보세요."
   },
   "annotated": ".. SPDX-License-Identifier: GPL-2.0\n\n============\nORC unwinder\n============\n\nOverview\n========\n\nThe kernel CONFIG_UNWINDER_ORC option enables the ORC unwinder, which is\nsimilar in concept to a DWARF unwinder.  The difference is that the\nformat of the ORC data is much simpler than DWARF, which in turn allows\nthe ORC unwinder to be much simpler and faster.\n\nThe ORC data consists of unwind tables which are generated by objtool.\nThey contain out-of-band data which is used by the in-kernel ORC\nunwinder.  Objtool generates the ORC data by first doing compile-time\nstack metadata validation (CONFIG_STACK_VALIDATION).  After analyzing\nall the code paths of a .o file, it determines information about the\nstack state at each instruction address in the file and outputs that\ninformation to the .orc_unwind and .orc_unwind_ip sections.\n\nThe per-object ORC sections are combined at link time and are sorted and\npost-processed at boot time.  The unwinder uses the resulting data to\ncorrelate instruction addresses with their stack states at run time.\n\n\nORC vs frame pointers\n=====================\n\nWith frame pointers enabled, GCC adds instrumentation code to every\nfunction in the kernel.  The kernel's .text size increases by about\n3.2%, resulting in a broad kernel-wide slowdown.  Measurements by Mel\nGorman [1]_ have shown a slowdown of 5-10% for some workloads.\n\nIn contrast, the ORC unwinder has no effect on text size or runtime\nperformance, because the debuginfo is out of band.  So if you disable\nframe pointers and enable the ORC unwinder, you get a nice performance\nimprovement across the board, and still have reliable stack traces.\n\nIngo Molnar says:\n\n  \"Note that it's not just a performance improvement, but also an\n  instruction cache locality improvement: 3.2% .text savings almost\n  directly transform into a similarly sized reduction in cache\n  footprint. That can transform to even higher speedups for workloads\n  whose cache locality is borderline.\"\n\nAnother benefit of ORC compared to frame pointers is that it can\nreliably unwind across interrupts and exceptions.  Frame pointer based\nunwinds can sometimes skip the caller of the interrupted function, if it\nwas a leaf function or if the interrupt hit before the frame pointer was\nsaved.\n\nThe main disadvantage of the ORC unwinder compared to frame pointers is\nthat it needs more memory to store the ORC unwind tables: roughly 2-4MB\ndepending on the kernel config.\n\n\nORC vs DWARF\n============\n\nORC debuginfo's advantage over DWARF itself is that it's much simpler.\nIt gets rid of the complex DWARF CFI state machine and also gets rid of\nthe tracking of unnecessary registers.  This allows the unwinder to be\nmuch simpler, meaning fewer bugs, which is especially important for\nmission critical oops code.\n\nThe simpler debuginfo format also enables the unwinder to be much faster\nthan DWARF, which is important for perf and lockdep.  In a basic\nperformance test by Jiri Slaby [2]_, the ORC unwinder was about 20x\nfaster than an out-of-tree DWARF unwinder.  (Note: That measurement was\ntaken before some performance tweaks were added, which doubled\nperformance, so the speedup over DWARF may be closer to 40x.)\n\nThe ORC data format does have a few downsides compared to DWARF.  ORC\nunwind tables take up ~50% more RAM (+1.3MB on an x86 defconfig kernel)\nthan DWARF-based eh_frame tables.\n\nAnother potential downside is that, as GCC evolves, it's conceivable\nthat the ORC data may end up being *too* simple to describe the state of\nthe stack for certain optimizations.  But IMO this is unlikely because\nGCC saves the frame pointer for any unusual stack adjustments it does,\nso I suspect we'll really only ever need to keep track of the stack\npointer and the frame pointer between call frames.  But even if we do\nend up having to track all the registers DWARF tracks, at least we will\nstill be able to control the format, e.g. no complex state machines.\n\n\nORC unwind table generation\n===========================\n\nThe ORC data is generated by objtool.  With the existing compile-time\nstack metadata validation feature, objtool already follows all code\npaths, and so it already has all the information it needs to be able to\ngenerate ORC data from scratch.  So it's an easy step to go from stack\nvalidation to ORC data generation.\n\nIt should be possible to instead generate the ORC data with a simple\ntool which converts DWARF to ORC data.  However, such a solution would\nbe incomplete due to the kernel's extensive use of asm, inline asm, and\nspecial sections like exception tables.\n\nThat could be rectified by manually annotating those special code paths\nusing GNU assembler .cfi annotations in .S files, and homegrown\nannotations for inline asm in .c files.  But asm annotations were tried\nin the past and were found to be unmaintainable.  They were often\nincorrect/incomplete and made the code harder to read and keep updated.\nAnd based on looking at glibc code, annotating inline asm in .c files\nmight be even worse.\n\nObjtool still needs a few annotations, but only in code which does\nunusual things to the stack like entry code.  And even then, far fewer\nannotations are needed than what DWARF would need, so they're much more\nmaintainable than DWARF CFI annotations.\n\nSo the advantages of using objtool to generate ORC data are that it\ngives more accurate debuginfo, with very few annotations.  It also\ninsulates the kernel from toolchain bugs which can be very painful to\ndeal with in the kernel since we often have to workaround issues in\nolder versions of the toolchain for years.\n\nThe downside is that the unwinder now becomes dependent on objtool's\nability to reverse engineer GCC code flow.  If GCC optimizations become\ntoo complicated for objtool to follow, the ORC data generation might\nstop working or become incomplete.  (It's worth noting that livepatch\nalready has such a dependency on objtool's ability to follow GCC code\nflow.)\n\nIf newer versions of GCC come up with some optimizations which break\nobjtool, we may need to revisit the current implementation.  Some\npossible solutions would be asking GCC to make the optimizations more\npalatable, or having objtool use DWARF as an additional input, or\ncreating a GCC plugin to assist objtool with its analysis.  But for now,\nobjtool follows GCC code quite well.\n\n\nUnwinder implementation details\n===============================\n\nObjtool generates the ORC data by integrating with the compile-time\nstack metadata validation feature, which is described in detail in\ntools/objtool/Documentation/objtool.txt.  After analyzing all\nthe code paths of a .o file, it creates an array of orc_entry structs,\nand a parallel array of instruction addresses associated with those\nstructs, and writes them to the .orc_unwind and .orc_unwind_ip sections\nrespectively.\n\nThe ORC data is split into the two arrays for performance reasons, to\nmake the searchable part of the data (.orc_unwind_ip) more compact.  The\narrays are sorted in parallel at boot time.\n\nPerformance is further improved by the use of a fast lookup table which\nis created at runtime.  The fast lookup table associates a given address\nwith a range of indices for the .orc_unwind table, so that only a small\nsubset of the table needs to be searched.\n\n\nEtymology\n=========\n\nOrcs, fearsome creatures of medieval folklore, are the Dwarves' natural\nenemies.  Similarly, the ORC unwinder was created in opposition to the\ncomplexity and slowness of DWARF.\n\n\"Although Orcs rarely consider multiple solutions to a problem, they do\nexcel at getting things done because they are creatures of action, not\nthought.\" [3]_  Similarly, unlike the esoteric DWARF unwinder, the\nveracious ORC unwinder wastes no time or siloconic effort decoding\nvariable-length zero-extended unsigned-integer byte-coded\nstate-machine-based debug information entries.\n\nSimilar to how Orcs frequently unravel the well-intentioned plans of\ntheir adversaries, the ORC unwinder frequently unravels stacks with\nbrutal, unyielding efficiency.\n\nORC stands for Oops Rewind Capability.\n\n\n.. [1] https://lore.kernel.org/r/20170602104048.jkkzssljsompjdwy@suse.de\n.. [2] https://lore.kernel.org/r/d2ca5435-6386-29b8-db87-7f227c2b713a@suse.cz\n.. [3] http://dustin.wikidot.com/half-orcs-and-orcs\n",
   "source_review": {
@@ -145,5 +171,182 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/arch/x86/orc-unwinder.rst"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-cd5902facb1ca3ac",
+    "path": "Documentation/arch/x86/orc-unwinder.rst",
+    "title": "ORC 설계 문서: 빌드 분석과 빠른 실행 시점 복원",
+    "area": "정적 분석 · 메타데이터 · 캐시 지역성 · 이진 검색 · 병렬 배열 · 도구 의존성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "ORC 생성 과정, frame pointer 및 DWARF와의 비교, 병렬 배열과 빠른 검색 구조를 문서 전체에서 학습합니다.",
+    "guide": [
+      "복잡한 분석을 빌드 시점에 수행하고 실행 시점에는 단순한 메타데이터를 조회하는 시간·공간 절충입니다.",
+      "ORC의 설계 선택과 문서의 역사적 측정값 및 현재 버전 구현 차이를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "문서 전체의 범위",
+        "text": "GPL-2.0 표시 뒤 Overview, frame pointer 비교, DWARF 비교, table generation, implementation details, etymology와 세 참고 링크가 있습니다. CONFIG_UNWINDER_ORC로 기능을 선택하며 DWARF와 개념적으로 비슷하지만 자료 형식을 단순화했다고 설명합니다. 문서의 비교와 주장, 해당 버전 소스에서 확인한 동작을 구분해 읽습니다."
+      },
+      {
+        "title": "Objtool 생성 경로",
+        "text": "문서는 objtool이 컴파일된 .o의 코드 경로와 instruction별 stack 상태를 분석하여 .orc_unwind와 .orc_unwind_ip section을 만든다고 설명합니다. 분석 기반으로 compile-time stack metadata validation을 듭니다. 실행 중 모든 함수가 매번 전체 코드를 다시 분석하는 방식은 아닙니다. 코드 주소와 복원 규칙의 관계가 별도 데이터로 저장됩니다."
+      },
+      {
+        "title": "링크·정렬 설명의 버전 차이",
+        "text": "문서는 object section을 링크 때 합치고 부팅 때 정렬한다고 설명합니다. 하지만 v6.12 unwind_init의 주석과 본문은 기본 커널 테이블이 sorttable 도구로 이미 빌드 시점에 정렬되어 이진 검색 준비가 되었다고 명시합니다. 모듈의 unwind_module_init에는 별도 sort 호출이 있습니다. 따라서 모든 ORC 테이블이 오직 부팅 시점에 정렬된다고 안내하지 않습니다. 관련 함수 대조는 unwind_orc.c 전체 완료가 아닙니다."
+      },
+      {
+        "title": "Frame pointer의 비용 비교",
+        "text": "문서는 frame pointer 계측으로 .text가 약 3.2% 커지고 일부 workload에서 5~10% 느려졌다는 과거 측정을 인용합니다. ORC 자료는 실행 명령 밖에 있어 frame pointer를 유지하는 hotpath 비용을 피할 수 있다는 설계 장점입니다. 이를 현재 모든 시스템의 동일한 성능 차이나 실제 unwind 실행 비용이 0이라는 뜻으로 읽으면 안 됩니다. 인용된 cache locality 논의는 코드 크기 감소가 명령 캐시 사용량을 줄일 수 있다는 인과 설명입니다."
+      },
+      {
+        "title": "Interrupt와 메모리 절충",
+        "text": "문서는 frame pointer가 저장되기 전 interrupt나 leaf 함수에서 caller가 빠질 수 있는 반면 ORC가 interrupt·exception 경계를 더 신뢰성 있게 추적할 수 있다고 설명합니다. 대가는 unwind table 메모리이며 2~4MB라는 수치는 커널 구성에 따른 문서상의 대략적인 예입니다. 형식 자체가 정확한 모든 입력과 오류 없는 생성 도구를 무조건 보장한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "DWARF 대비 단순성",
+        "text": "ORC는 복잡한 CFI 상태 기계와 불필요한 register 추적을 줄여 oops 처리 같은 진단 경로를 단순하게 만들려 합니다. perf와 lockdep처럼 자주 stack을 수집하는 곳에서는 조회 비용도 중요합니다. 문서는 out-of-tree DWARF 비교 실험의 약 20배와 이후 개선을 반영한 약 40배 가능성을 언급합니다. 이는 문서가 설명하는 특정 과거 비교이며 이 프로젝트가 재현한 benchmark는 아닙니다."
+      },
+      {
+        "title": "DWARF 대비 저장량과 표현력",
+        "text": "문서는 ORC table이 DWARF eh_frame보다 약 50% 더 많은 RAM, 한 x86 defconfig 예에서 1.3MB 추가를 사용한다고 설명합니다. 단순한 표현이 더 작은 표현과 항상 같은 것은 아닙니다. 향후 compiler 최적화가 더 복잡한 stack 변형을 만들면 현재 표현이 부족해질 가능성도 논의합니다. 필요한 register를 늘리더라도 형식을 통제하고 복잡한 상태 기계를 피하려는 설계 의도를 제시합니다."
+      },
+      {
+        "title": "DWARF 변환만으로 부족한 이유",
+        "text": "문서는 DWARF를 ORC로 바꾸는 도구도 생각할 수 있지만 커널의 assembly, inline assembly, exception table 등 특수 경로 때문에 불완전할 수 있다고 설명합니다. assembly .cfi와 별도 inline assembly annotation은 유지보수와 정확성에 부담을 줄 수 있습니다. objtool도 특수 entry 코드 같은 경우 annotation이 필요하므로 annotation이 완전히 없어졌다고 이해하면 안 됩니다."
+      },
+      {
+        "title": "Objtool 의존성과 대안",
+        "text": "자동 분석은 적은 annotation으로 자료를 만들고 일부 toolchain 문제에서 독립성을 얻는 대신 compiler의 코드 흐름을 추적하는 objtool 능력에 의존합니다. 복잡한 최적화가 이를 깨면 compiler와 조정, DWARF를 추가 입력으로 사용, compiler plugin 등의 대안을 고려할 수 있다고 문서는 제시합니다. 이는 가능한 미래 대안 목록이며 이미 모두 구현된 기능 목록이 아닙니다."
+      },
+      {
+        "title": "병렬 배열과 검색 범위 축소",
+        "text": "orc_entry 배열과 그에 대응하는 instruction 주소 배열을 나누면 검색 대상인 .orc_unwind_ip가 작아집니다. 두 배열은 같은 인덱스의 대응을 유지하며 정렬되어야 합니다. 실행 시 생성하는 빠른 lookup table은 주소를 ORC 인덱스의 좁은 범위와 연결해 전체 대신 일부를 검색하도록 합니다. 자료 분리로 캐시 접근량을 줄이고 보조 인덱스로 검색 범위를 줄이는 별개의 최적화입니다."
+      },
+      {
+        "title": "이름과 참고 자료",
+        "text": "ORC는 Oops Rewind Capability의 약자입니다. 문서는 판타지의 orc와 dwarf 관계를 이용한 이름의 유래를 설명하며 frame pointer 성능 메일, DWARF 비교 메일, 민속 캐릭터 관련 링크를 각주로 둡니다. 비유를 기술적 정확성의 근거로 사용하지 않습니다. 여기서는 저장된 문서를 해설했으며 링크된 외부 자료를 새로 읽거나 원문 전체를 검증한 것은 아닙니다."
+      },
+      {
+        "title": "CS 연결과 완료 범위",
+        "text": "빌드 시 정적 분석과 실행 시 검색의 분리, 정보 표현의 단순성과 압축률의 차이, instruction cache, 병렬 배열 정렬의 대응 불변식, 인덱스를 통한 검색 범위 축소를 학습합니다. 전체 문서 대조는 성능 수치를 현재 하드웨어에서 재현하거나 모든 compiler 코드를 검증했다는 뜻은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ORC가 별도 메타데이터를 사용하면 실제 unwind 연산 비용도 0인가?",
+        "options": [
+          "아니다. frame pointer 유지 비용을 피하는 것과 unwind 조회 비용은 다르다",
+          "그렇다. 어떠한 조회나 메모리 접근도 필요하지 않다"
+        ],
+        "answer": 0,
+        "explanation": "실행 시 unwinder는 자료를 검색하여 프레임을 복원합니다. hotpath 계측 비용과 진단 실행 비용을 구분해야 합니다."
+      },
+      {
+        "prompt": "v6.12 기본 커널 ORC 테이블은 unwind_init에서 처음 정렬되는가?",
+        "options": [
+          "그렇다. 문서의 부팅 정렬 설명이 모든 버전에 그대로 적용된다",
+          "아니다. 해당 구현은 빌드 시 sorttable로 정렬되었다고 명시한다"
+        ],
+        "answer": 1,
+        "explanation": "문서와 현재 소스의 차이를 확인했습니다. 모듈에는 별도 정렬 경로가 있으므로 객체 종류도 구분해야 합니다."
+      },
+      {
+        "prompt": "ORC 데이터를 두 배열로 나눈 핵심 이유는?",
+        "options": [
+          "검색하는 instruction 주소 배열을 더 작고 조밀하게 유지하기 위해서다",
+          "같은 인덱스 사이의 대응을 제거하기 위해서다"
+        ],
+        "answer": 0,
+        "explanation": "검색 후 대응 orc_entry를 찾으려면 인덱스 관계를 보존해야 합니다. 데이터 분리와 의미 분리는 다릅니다."
+      },
+      {
+        "prompt": "Objtool은 annotation이 전혀 필요 없는가?",
+        "options": [
+          "그렇다. 모든 assembly의 의미를 언제나 자동 증명한다",
+          "아니다. 특수한 stack 동작에는 일부 annotation이 필요하다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 특히 entry 코드 같은 특수 경우의 annotation과 compiler 흐름 분석 의존성을 명시합니다."
+      },
+      {
+        "prompt": "단순한 ORC 형식은 반드시 DWARF보다 적은 RAM을 사용하는가?",
+        "options": [
+          "아니다. 문서는 오히려 더 큰 table 저장량 예를 제시한다",
+          "그렇다. 알고리즘이 단순하면 표현 크기도 항상 작다"
+        ],
+        "answer": 0,
+        "explanation": "실행 비용, 해석 복잡도, 저장량은 서로 다른 축입니다. 이 설계는 빠른 조회를 위해 더 많은 메모리를 사용할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": ".. SPDX-License-Identifier: GPL-2.0\n\n============\nORC unwinder\n============\n\nOverview\n========\n\nThe kernel CONFIG_UNWINDER_ORC option enables the ORC unwinder, which is\nsimilar in concept to a DWARF unwinder.  The difference is that the\nformat of the ORC data is much simpler than DWARF, which in turn allows\nthe ORC unwinder to be much simpler and faster.\n\nThe ORC data consists of unwind tables which are generated by objtool.\nThey contain out-of-band data which is used by the in-kernel ORC\nunwinder.  Objtool generates the ORC data by first doing compile-time\nstack metadata validation (CONFIG_STACK_VALIDATION).  After analyzing\nall the code paths of a .o file, it determines information about the\nstack state at each instruction address in the file and outputs that\ninformation to the .orc_unwind and .orc_unwind_ip sections.\n\nThe per-object ORC sections are combined at link time and are sorted and\npost-processed at boot time.  The unwinder uses the resulting data to\ncorrelate instruction addresses with their stack states at run time.\n\n\nORC vs frame pointers\n=====================\n\nWith frame pointers enabled, GCC adds instrumentation code to every\nfunction in the kernel.  The kernel's .text size increases by about\n3.2%, resulting in a broad kernel-wide slowdown.  Measurements by Mel\nGorman [1]_ have shown a slowdown of 5-10% for some workloads.\n\nIn contrast, the ORC unwinder has no effect on text size or runtime\nperformance, because the debuginfo is out of band.  So if you disable\nframe pointers and enable the ORC unwinder, you get a nice performance\nimprovement across the board, and still have reliable stack traces.\n\nIngo Molnar says:\n\n  \"Note that it's not just a performance improvement, but also an\n  instruction cache locality improvement: 3.2% .text savings almost\n  directly transform into a similarly sized reduction in cache\n  footprint. That can transform to even higher speedups for workloads\n  whose cache locality is borderline.\"\n\nAnother benefit of ORC compared to frame pointers is that it can\nreliably unwind across interrupts and exceptions.  Frame pointer based\nunwinds can sometimes skip the caller of the interrupted function, if it\nwas a leaf function or if the interrupt hit before the frame pointer was\nsaved.\n\nThe main disadvantage of the ORC unwinder compared to frame pointers is\nthat it needs more memory to store the ORC unwind tables: roughly 2-4MB\ndepending on the kernel config.\n\n\nORC vs DWARF\n============\n\nORC debuginfo's advantage over DWARF itself is that it's much simpler.\nIt gets rid of the complex DWARF CFI state machine and also gets rid of\nthe tracking of unnecessary registers.  This allows the unwinder to be\nmuch simpler, meaning fewer bugs, which is especially important for\nmission critical oops code.\n\nThe simpler debuginfo format also enables the unwinder to be much faster\nthan DWARF, which is important for perf and lockdep.  In a basic\nperformance test by Jiri Slaby [2]_, the ORC unwinder was about 20x\nfaster than an out-of-tree DWARF unwinder.  (Note: That measurement was\ntaken before some performance tweaks were added, which doubled\nperformance, so the speedup over DWARF may be closer to 40x.)\n\nThe ORC data format does have a few downsides compared to DWARF.  ORC\nunwind tables take up ~50% more RAM (+1.3MB on an x86 defconfig kernel)\nthan DWARF-based eh_frame tables.\n\nAnother potential downside is that, as GCC evolves, it's conceivable\nthat the ORC data may end up being *too* simple to describe the state of\nthe stack for certain optimizations.  But IMO this is unlikely because\nGCC saves the frame pointer for any unusual stack adjustments it does,\nso I suspect we'll really only ever need to keep track of the stack\npointer and the frame pointer between call frames.  But even if we do\nend up having to track all the registers DWARF tracks, at least we will\nstill be able to control the format, e.g. no complex state machines.\n\n\nORC unwind table generation\n===========================\n\nThe ORC data is generated by objtool.  With the existing compile-time\nstack metadata validation feature, objtool already follows all code\npaths, and so it already has all the information it needs to be able to\ngenerate ORC data from scratch.  So it's an easy step to go from stack\nvalidation to ORC data generation.\n\nIt should be possible to instead generate the ORC data with a simple\ntool which converts DWARF to ORC data.  However, such a solution would\nbe incomplete due to the kernel's extensive use of asm, inline asm, and\nspecial sections like exception tables.\n\nThat could be rectified by manually annotating those special code paths\nusing GNU assembler .cfi annotations in .S files, and homegrown\nannotations for inline asm in .c files.  But asm annotations were tried\nin the past and were found to be unmaintainable.  They were often\nincorrect/incomplete and made the code harder to read and keep updated.\nAnd based on looking at glibc code, annotating inline asm in .c files\nmight be even worse.\n\nObjtool still needs a few annotations, but only in code which does\nunusual things to the stack like entry code.  And even then, far fewer\nannotations are needed than what DWARF would need, so they're much more\nmaintainable than DWARF CFI annotations.\n\nSo the advantages of using objtool to generate ORC data are that it\ngives more accurate debuginfo, with very few annotations.  It also\ninsulates the kernel from toolchain bugs which can be very painful to\ndeal with in the kernel since we often have to workaround issues in\nolder versions of the toolchain for years.\n\nThe downside is that the unwinder now becomes dependent on objtool's\nability to reverse engineer GCC code flow.  If GCC optimizations become\ntoo complicated for objtool to follow, the ORC data generation might\nstop working or become incomplete.  (It's worth noting that livepatch\nalready has such a dependency on objtool's ability to follow GCC code\nflow.)\n\nIf newer versions of GCC come up with some optimizations which break\nobjtool, we may need to revisit the current implementation.  Some\npossible solutions would be asking GCC to make the optimizations more\npalatable, or having objtool use DWARF as an additional input, or\ncreating a GCC plugin to assist objtool with its analysis.  But for now,\nobjtool follows GCC code quite well.\n\n\nUnwinder implementation details\n===============================\n\nObjtool generates the ORC data by integrating with the compile-time\nstack metadata validation feature, which is described in detail in\ntools/objtool/Documentation/objtool.txt.  After analyzing all\nthe code paths of a .o file, it creates an array of orc_entry structs,\nand a parallel array of instruction addresses associated with those\nstructs, and writes them to the .orc_unwind and .orc_unwind_ip sections\nrespectively.\n\nThe ORC data is split into the two arrays for performance reasons, to\nmake the searchable part of the data (.orc_unwind_ip) more compact.  The\narrays are sorted in parallel at boot time.\n\nPerformance is further improved by the use of a fast lookup table which\nis created at runtime.  The fast lookup table associates a given address\nwith a range of indices for the .orc_unwind table, so that only a small\nsubset of the table needs to be searched.\n\n\nEtymology\n=========\n\nOrcs, fearsome creatures of medieval folklore, are the Dwarves' natural\nenemies.  Similarly, the ORC unwinder was created in opposition to the\ncomplexity and slowness of DWARF.\n\n\"Although Orcs rarely consider multiple solutions to a problem, they do\nexcel at getting things done because they are creatures of action, not\nthought.\" [3]_  Similarly, unlike the esoteric DWARF unwinder, the\nveracious ORC unwinder wastes no time or siloconic effort decoding\nvariable-length zero-extended unsigned-integer byte-coded\nstate-machine-based debug information entries.\n\nSimilar to how Orcs frequently unravel the well-intentioned plans of\ntheir adversaries, the ORC unwinder frequently unravels stacks with\nbrutal, unyielding efficiency.\n\nORC stands for Oops Rewind Capability.\n\n\n.. [1] https://lore.kernel.org/r/20170602104048.jkkzssljsompjdwy@suse.de\n.. [2] https://lore.kernel.org/r/d2ca5435-6386-29b8-db87-7f227c2b713a@suse.cz\n.. [3] http://dustin.wikidot.com/half-orcs-and-orcs\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "40ee800cd8348ddce0bd12732497ee70fd7de5e5683517bbb1275e2423ea1096",
+      "scope": "whole-file",
+      "line_count": 182,
+      "authoring_source": "course/file_units/orc_design_document.py",
+      "sections": [
+        "문서 전체의 범위",
+        "Objtool 생성 경로",
+        "링크·정렬 설명의 버전 차이",
+        "Frame pointer의 비용 비교",
+        "Interrupt와 메모리 절충",
+        "DWARF 대비 단순성",
+        "DWARF 대비 저장량과 표현력",
+        "DWARF 변환만으로 부족한 이유",
+        "Objtool 의존성과 대안",
+        "병렬 배열과 검색 범위 축소",
+        "이름과 참고 자료",
+        "CS 연결과 완료 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/arch/x86/orc-unwinder.rst"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "길을 갈 때 미리 만든 지도를 보고 돌아오면 매번 길 전체를 다시 조사할 필요가 없어요. ORC는 프로그램이 어떤 함수들을 거쳐 왔는지 되짚을 안내표를 미리 만들어요.",
+    "meaning": "ORC는 빌드할 때 분석한 스택 복원 정보를 실행할 때 검색하는 방식이에요. 설명이 단순해지는 이점과 표를 저장할 메모리 비용을 함께 읽어야 해요.",
+    "exercise": "미리 표 만들기와 실행 중 표 찾기를 두 단계로 그려 보고, 문서의 과거 측정 수치를 현재 모든 컴퓨터의 보장으로 말할 수 있는지 생각해 보세요."
+  },
+  "goal": "ORC는 빌드할 때 분석한 스택 복원 정보를 실행할 때 검색하는 방식이에요. 설명이 단순해지는 이점과 표를 저장할 메모리 비용을 함께 읽어야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "미리 표 만들기와 실행 중 표 찾기를 두 단계로 그려 보고, 문서의 과거 측정 수치를 현재 모든 컴퓨터의 보장으로 말할 수 있는지 생각해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "1c1ade19dd453e3792ed9682ffce3f1c247c7df14f4688d2074135615bb15597",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

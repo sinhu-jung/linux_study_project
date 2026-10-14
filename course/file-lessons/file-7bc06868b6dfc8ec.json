@@ -5,125 +5,151 @@
   "area": "테스트 설계 · 균형 트리 · 성능 측정 · 불변식",
   "track": "files",
   "kind": "kernel",
-  "intro": "일반·캐시·확장 트리를 삽입·삭제하며 시간과 구조 조건을 확인하는 커널 테스트 모듈입니다.",
+  "intro": "불변식 검사와 성능 측정의 단위·누락 범위를 구분합니다.",
   "guide": [
-    "정렬 순서, 빨강 부모 제약, 검정 경로 수, 노드 개수, 집계값을 검사합니다. 성능 루프와 정확성 검사 루프는 별도로 구성됩니다.",
-    "테스트 코드도 검사 범위와 측정 조건을 읽어야 합니다. 모듈의 반환값이나 성능 출력만으로 모든 기능의 정확성이 검증되었다고 판단하지 않습니다."
+    "정렬 key와 집계 val은 다른 필드입니다.",
+    "WARN 로그와 모듈 init 반환값은 별도로 읽습니다.",
+    "사이클 측정값을 곧바로 노드당 나노초로 바꾸어 읽지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구성",
-      "text": "SPDX와 module/moduleparam/augmented/random/slab/timex 포함, 파라미터 생성 매크로, 세 파라미터, test_node와 전역 상태가 있습니다. 일반·캐시·확장 삽입/삭제 helper, 랜덤 입력 초기화, 색상·경로·순회·집계 검사, 모듈 init의 측정·검사 단계, exit와 메타데이터로 끝납니다."
+      "title": "파일 구성",
+      "text": "GPL-2.0-only와 여섯 헤더 뒤 매개변수 매크로·세 설정·노드와 전역 상태가 있습니다. 일반·캐시·확장 삽입/삭제, 난수 입력, 색·경로·방문·집계 검사, init의 측정과 확인, exit·메타데이터로 끝납니다."
     },
     {
-      "title": "파라미터와 입력 전제",
-      "text": "__param은 기본값을 가진 static 변수와0444 권한의 module_param 및 설명을 만듭니다. nnodes100, perf_loops1000, check_loops100이 기본입니다. init에는 양수 범위를 명시적으로 검증하는 분기가 없어 perf_loops0은 나눗셈 분모 문제를 만들 수 있습니다. 노출된 파라미터라고 임의의 값이 안전하게 지원된다는 뜻은 아닙니다."
+      "title": "설정의 범위",
+      "text": "__param은 기본 static 변수와 권한 0444의 모듈 인수·설명을 만듭니다. 기본은 노드 100, 성능 반복 1000, 검사 반복 100입니다. 양수 범위를 직접 검사하지 않아 perf_loops=0이면 나누는 값이 0이 될 수 있습니다. 설정을 노출했다고 아무 숫자나 안전한 것은 아닙니다."
     },
     {
-      "title": "자료형과 재현성",
-      "text": "test_node는 u32 key, rb_node, u32 val과 augmented를 가집니다. key는 정렬용이고 val은 집계용으로 분리됩니다. 전역 root는 RB_ROOT_CACHED로 시작하고 노드 배열을 kmalloc_array로 할당합니다. 실패는 -ENOMEM입니다. PRNG 상태를3141592653589793238ULL로 시드하므로 같은 구현·설정에서 재현 가능한 입력 흐름을 지향합니다."
+      "title": "자료와 재현",
+      "text": "노드는 u32 key, rb_node, u32 val·augmented입니다. key는 정렬, val은 집계용입니다. cached 빈 루트에서 시작하고 kmalloc_array 실패면 -ENOMEM입니다. 난수 생성기에 3141592653589793238ULL을 씨앗으로 주어 같은 구현·설정에서 입력 흐름을 재현하려고 합니다."
     },
     {
-      "title": "일반·캐시 삽입과 삭제",
-      "text": "insert는 key 비교로 빈 링크를 찾고 같은 키는 오른쪽으로 보내며 연결 뒤 rb_insert_color를 호출합니다. insert_cached는 오른쪽 이동 여부로 leftmost를 계산해 cached 균형 함수를 사용합니다. erase 두 버전도 일반/캐시 API를 각각 호출합니다. helper가 노드를 free하지 않아 반복 측정에서 같은 배열 객체를 재사용합니다."
+      "title": "일반·캐시 연결",
+      "text": "일반 insert는 key가 같으면 오른쪽으로 보내고 빈 링크 연결 뒤 색을 맞춥니다. cached는 오른쪽 이동 여부로 leftmost를 정합니다. 삭제도 각각 일반·캐시 API입니다. 노드를 free하지 않아 측정 중 같은 배열 객체를 다시 씁니다."
     },
     {
-      "title": "확장 삽입과 콜백",
-      "text": "NODE_VAL과 RB_DECLARE_CALLBACKS_MAX로 서브트리 val 최대값용 콜백을 만듭니다. 확장 삽입은 내려가는 경로의 augmented를 새 val 이상으로 올리고 새 노드 집계를 자기 val로 초기화한 뒤 확장 균형 함수를 부릅니다. cached 확장 버전은 최소값 플래그도 계산합니다. 삭제는 같은 콜백으로 집계를 복구합니다."
+      "title": "확장 집계",
+      "text": "NODE_VAL과 MAX 콜백 매크로는 서브트리 val 최대값을 유지할 함수를 만듭니다. 삽입은 경로의 집계를 새 val 이상으로 올리고 새 노드를 자기 val로 초기화한 뒤 확장 균형을 합니다. cached 확장은 최소 플래그도 구하며 삭제는 같은 콜백으로 집계를 복구합니다."
     },
     {
-      "title": "랜덤값 초기화와 색상 보조 함수",
-      "text": "init은 각 노드의 key와 val을 PRNG에서 새로 얻습니다. 링크 초기화를 따로 하지 않지만 이후 rb_link_node가 삽입할 링크 필드를 설정하는 사용 흐름입니다. is_red는 부모·색상 필드 bit0이0인지 검사하고 black_path_count는 부모를 따라가며 검정 노드 개수를 셉니다. NULL이면0입니다."
+      "title": "새 입력과 색 도구",
+      "text": "init은 각 key·val을 난수에서 채웁니다. 링크를 여기서 초기화하지 않아도 삽입 때 link_node가 설정하는 흐름입니다. is_red는 결합 필드 bit0=0을 보고 black_path_count는 부모를 따라 검정 수를 셉니다. NULL이면 0입니다."
     },
     {
-      "title": "일반 불변식 검사",
-      "text": "check는 rb_first/next로 중위 순회하며 이전 key보다 작아지지 않는지 검사합니다. 빨강 노드가 루트이거나 빨강 부모를 가지면 경고합니다. 첫 노드의 검정 경로 수를 기준으로 자식 하나 이상이 없는 노드들의 경로 수를 비교합니다. 마지막에는 기대 노드 수와 검정 높이에 따른 최소 노드 수 조건을 확인합니다. WARN_ON_ONCE는 실패를 진단하며 이 함수가 오류 코드를 반환하는 것은 아닙니다."
+      "title": "기본 규칙 검사",
+      "text": "check는 중위 순서의 key가 이전보다 작아지지 않는지 봅니다. 빨강이 루트이거나 빨강 부모를 가지면 경고합니다. 첫 노드의 검정 경로 수와 자식 하나 이상 없는 노드의 수를 비교합니다. 끝에서 기대 노드 수와 검정 높이로 필요한 최소 개수도 봅니다. WARN_ON_ONCE로 알리며 오류 코드를 반환하지는 않습니다."
     },
     {
-      "title": "후위 검사 범위",
-      "text": "check_postorder와 check_postorder_foreach는 각각 직접 후위 API와 safe 매크로로 방문 개수를 셉니다. 기대 개수와 일치하는지 보지만 각 객체가 정확히 한 번 등장하는지 별도 ID 집합으로 확인하거나 부모가 자식 뒤에 나왔는지 직접 비교하는 검사는 아닙니다. 검사 이름보다 실제 assert 조건을 기준으로 범위를 판단합니다."
+      "title": "후위 검사가 세는 것",
+      "text": "직접 후위 API와 safe 매크로의 두 검사는 방문 count만 기대 개수와 비교합니다. 각 ID가 정확히 한 번인지 별도 집합으로 확인하거나 부모가 자식 뒤였는지 직접 비교하지 않습니다. 개수가 맞다고 모든 순서를 검사한 것은 아닙니다."
     },
     {
-      "title": "확장 집계 검사",
-      "text": "check_augmented는 먼저 일반 check를 실행하고 모든 노드에 대해 자기 val과 좌우 자식 augmented의 최대값을 구해 저장값과 비교합니다. 잎부터 각 노드의 관계가 일관되어야 한다는 재귀 불변식을 사용합니다. 이것은 실제 key 최대값 검사와 다르며 key와 val이 다른 필드라는 점이 중요합니다."
+      "title": "집계 확인",
+      "text": "check_augmented는 기본 check 뒤 각 노드의 자기 val과 좌우 자식 augmented 중 최대를 저장값과 비교합니다. 잎에서 위로 이어지는 관계가 맞아야 합니다. 정렬용 key 최대를 보는 검사가 아니라는 점을 구분합니다."
     },
     {
-      "title": "일반 성능 측정 단계",
-      "text": "get_cycles 전후 차이를 perf_loops로 나눠 반복당 비용을 출력합니다. 일반 삽입·삭제, cached 삽입·삭제, 중위 순회, 첫 노드 조회를 각각 측정합니다. 삽입·삭제 숫자는 노드 하나당이 아니라 nnodes 전체를 넣고 빼는 한 묶음당 값입니다. 사이클값을 바로 나노초라고 읽으면 안 됩니다."
+      "title": "성능 단위",
+      "text": "get_cycles 전후 차이를 perf_loops로 나누어 일반 삽입·삭제, cached 삽입·삭제, 중위 방문, 첫 노드 조회를 잽니다. 삽입·삭제 값은 nnodes 전체를 넣고 뺀 한 묶음당 사이클입니다. nnodes로 나누지 않았고 나노초도 아닙니다."
     },
     {
-      "title": "최소값 측정의 중요한 한계",
-      "text": "첫 노드 조회 비교 전에 트리를 구성하는 루프는 insert_cached가 아니라 insert를 사용합니다. 앞 cached 삭제가 끝난 뒤 최소값 캐시는 NULL이고 이 일반 삽입은 캐시를 갱신하지 않습니다. 따라서 이 구간의 rb_first_cached 조회를 유효한 최소 노드 결과 비교라고 볼 수 없습니다. 더구나 조회 결과 node를 관찰 가능하게 사용하지 않아 단순 캐시 읽기 루프가 최적화될 수 있습니다. 이 출력만으로 공정한 성능 우열을 단정하면 안 됩니다."
+      "title": "최소값 비교의 한계",
+      "text": "첫 노드 비교 전에 트리를 채우는 것은 일반 insert입니다. 앞 cached 삭제 뒤 캐시는 NULL이고 일반 삽입은 고치지 않습니다. 따라서 그 cached 조회는 유효한 최소값 결과 비교가 아닙니다. 결과 node도 관찰 가능하게 사용하지 않아 단순 읽기 루프가 최적화로 사라질 수 있습니다. 출력만으로 공정한 성능 우열을 단정하지 않습니다."
     },
     {
-      "title": "정확성 루프와 누락 범위",
-      "text": "check_loops마다 입력을 새로 만들고 각 삽입 전 check(j), 각 삭제 전 check(nnodes-j), 마지막 check(0)을 수행합니다. 확장 버전도 같은 구조로 check_augmented를 사용합니다. 정확성 루프는 일반·확장 비캐시 helper를 호출하며 캐시 포인터와 rb_first 결과를 직접 비교하는 조건은 없습니다. cached 성능 루프가 존재한다는 사실만으로 캐시 정확성 검사까지 했다고 세지 않습니다."
+      "title": "정확성 루프",
+      "text": "매 검사 반복에서 새 입력을 만들고 각 삽입 전 check(j), 각 삭제 전 check(nnodes-j), 끝에 check(0)을 합니다. 확장도 같은 구조입니다. 이 검사들은 비캐시 helper를 쓰고 cached 포인터와 first를 직접 비교하지 않습니다. cached 성능 루프가 있다고 캐시 정확성까지 검사한 것은 아닙니다."
     },
     {
-      "title": "확장 성능과 종료",
-      "text": "확장 일반·cached 삽입/삭제 시간도 각각 측정합니다. 검사 후 kfree(nodes)를 하고 -EAGAIN을 반환하여 모듈이 남지 않도록 의도적으로 init을 실패시킵니다. 이것은 앞의 WARN이 발생했는지를 집계해 정한 성공·실패 반환값이 아닙니다. exit 함수는 로그만 출력하며 module_init/exit와 GPL·작성자·설명 메타데이터가 등록됩니다."
+      "title": "확장 측정과 종료",
+      "text": "확장 일반·cached 삽입/삭제도 따로 잽니다. 끝에서 배열을 free하고 -EAGAIN으로 의도적으로 init을 실패시켜 모듈이 남지 않게 합니다. WARN 수를 모아 합격·불합격을 결정한 반환이 아닙니다. exit는 로그만 내며 모듈 초기화·종료와 GPL·작성자·설명이 등록됩니다."
     },
     {
-      "title": "CS 연결과 교재 검증 범위",
-      "text": "불변식 기반 테스트, 재현 가능한 난수, 성능 계측 단위, dead-code 최적화, 실제 사용 경로와 측정 경로의 일치, 경고와 프로세스 결과의 차이를 학습합니다. 이 수업은 테스트 원본 전체를 검토한 것이며 해당 커널 모듈을 현재 호스트에서 로드·실행한 것으로 세지 않습니다."
+      "title": "검토 범위",
+      "text": "항상 지켜야 할 규칙의 검사, 재현 가능한 난수, 계측 단위, 쓰이지 않는 코드의 최적화, 사용 경로와 측정 경로 일치, 경고와 종료 결과 차이를 배웁니다. 시험 소스 전체를 읽었으며 현재 호스트에서 모듈을 올려 실행한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "삽입·삭제 시간 출력은 기본적으로 어느 단위인가?",
+      "prompt": "삽입·삭제 출력의 단위는?",
       "options": [
+        "전체 nnodes를 넣고 뺀 반복당 사이클",
+        "노드 하나당 나노초"
+      ],
+      "answer": 0,
+      "explanation": "perf_loops로만 나누며 get_cycles를 씁니다.",
+      "original_prompt": "삽입·삭제 시간 출력은 기본적으로 어느 단위인가?",
+      "original_options": [
         "nnodes개 전체를 넣고 뺀 한 반복당 사이클이다",
         "노드 하나당 나노초다"
       ],
-      "answer": 0,
-      "explanation": "전체 측정 차이를 perf_loops로만 나눕니다. nnodes로 나누지 않고 get_cycles를 사용합니다."
+      "original_explanation": "전체 측정 차이를 perf_loops로만 나눕니다. nnodes로 나누지 않고 get_cycles를 사용합니다."
     },
     {
-      "prompt": "후위 방문 개수만 맞으면 방문 순서까지 직접 확인한 것인가?",
+      "prompt": "후위 개수만 같으면 순서도 직접 검사했나요?",
       "options": [
+        "그렇다. 개수가 순서를 유일하게 정한다",
+        "아니다. 직접 확인한 것은 개수 조건이다"
+      ],
+      "answer": 1,
+      "explanation": "별도 순서나 중복 ID 검사가 없습니다.",
+      "original_prompt": "후위 방문 개수만 맞으면 방문 순서까지 직접 확인한 것인가?",
+      "original_options": [
         "그렇다. 개수만 같으면 모든 순서가 유일하게 정해진다",
         "아니다. 이 검사는 개수 조건만 직접 확인한다"
       ],
-      "answer": 1,
-      "explanation": "두 후위 helper의 본문은 count++와 기대값 비교입니다. 별도 방문 순서나 ID 중복 검사는 없습니다."
+      "original_explanation": "두 후위 helper의 본문은 count++와 기대값 비교입니다. 별도 방문 순서나 ID 중복 검사는 없습니다."
     },
     {
-      "prompt": "최소값 조회 측정 직전 트리는 어느 삽입으로 구성하는가?",
+      "prompt": "최소값 측정 전에 무엇으로 채우나요?",
       "options": [
+        "캐시를 안 고치는 일반 insert",
+        "캐시를 채우는 insert_cached"
+      ],
+      "answer": 0,
+      "explanation": "소스의 실제 호출이 일반 insert라 캐시 시간은 정확성 증거가 아닙니다.",
+      "original_prompt": "최소값 조회 측정 직전 트리는 어느 삽입으로 구성하는가?",
+      "original_options": [
         "일반 insert이며 최소값 캐시를 갱신하지 않는다",
         "insert_cached로 캐시를 정확히 채운다"
       ],
-      "answer": 0,
-      "explanation": "소스의 해당 루프는 insert(nodes+i,&root)를 호출합니다. cached 조회 시간 출력을 정확성 증거로 사용할 수 없습니다."
+      "original_explanation": "소스의 해당 루프는 insert(nodes+i,&root)를 호출합니다. cached 조회 시간 출력을 정확성 증거로 사용할 수 없습니다."
     },
     {
-      "prompt": "init의 -EAGAIN은 검사 실패를 집계한 결과인가?",
+      "prompt": "마지막 -EAGAIN은 검사 실패 집계인가요?",
       "options": [
+        "그렇다. WARN 개수를 더해 정한다",
+        "아니다. 정리 뒤 모듈을 남기지 않으려는 고정 반환이다"
+      ],
+      "answer": 1,
+      "explanation": "경고와 실행 경로를 따로 확인해야 합니다.",
+      "original_prompt": "init의 -EAGAIN은 검사 실패를 집계한 결과인가?",
+      "original_options": [
         "그렇다. 모든 WARN 개수를 합산해 결정한다",
         "아니다. 배열 정리 뒤 모듈이 남지 않게 하는 의도적 반환이다"
       ],
-      "answer": 1,
-      "explanation": "반환값은 검사 결과와 무관하게 고정입니다. 경고 로그와 코드 경로를 별도로 확인해야 합니다."
+      "original_explanation": "반환값은 검사 결과와 무관하게 고정입니다. 경고 로그와 코드 경로를 별도로 확인해야 합니다."
     },
     {
-      "prompt": "check_augmented는 어떤 최대값을 비교하는가?",
+      "prompt": "augmented는 어떤 최대값인가요?",
       "options": [
+        "자기 val과 자식 집계의 최대",
+        "언제나 정렬 key의 최대"
+      ],
+      "answer": 0,
+      "explanation": "NODE_VAL도 val을 반환합니다.",
+      "original_prompt": "check_augmented는 어떤 최대값을 비교하는가?",
+      "original_options": [
         "자기 val과 자식 서브트리 집계의 최대값이다",
         "항상 정렬 키 key의 최대값이다"
       ],
-      "answer": 0,
-      "explanation": "정렬 key와 집계 val은 다른 필드입니다. NODE_VAL도 val을 반환하도록 정의되어 있습니다."
+      "original_explanation": "정렬 key와 집계 val은 다른 필드입니다. NODE_VAL도 val을 반환하도록 정의되어 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "첫 노드 측정 전에 insert와 insert_cached 중 무엇을 쓰는지 찾아 캐시 상태를 설명하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#include <linux/module.h>\n#include <linux/moduleparam.h>\n#include <linux/rbtree_augmented.h>\n#include <linux/random.h>\n#include <linux/slab.h>\n#include <asm/timex.h>\n\n#define __param(type, name, init, msg)\t\t\\\n\tstatic type name = init;\t\t\\\n\tmodule_param(name, type, 0444);\t\t\\\n\tMODULE_PARM_DESC(name, msg);\n\n__param(int, nnodes, 100, \"Number of nodes in the rb-tree\");\n__param(int, perf_loops, 1000, \"Number of iterations modifying the rb-tree\");\n__param(int, check_loops, 100, \"Number of iterations modifying and verifying the rb-tree\");\n\nstruct test_node {\n\tu32 key;\n\tstruct rb_node rb;\n\n\t/* following fields used for testing augmented rbtree functionality */\n\tu32 val;\n\tu32 augmented;\n};\n\nstatic struct rb_root_cached root = RB_ROOT_CACHED;\nstatic struct test_node *nodes = NULL;\n\nstatic struct rnd_state rnd;\n\nstatic void insert(struct test_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *parent = NULL;\n\tu32 key = node->key;\n\n\twhile (*new) {\n\t\tparent = *new;\n\t\tif (key < rb_entry(parent, struct test_node, rb)->key)\n\t\t\tnew = &parent->rb_left;\n\t\telse\n\t\t\tnew = &parent->rb_right;\n\t}\n\n\trb_link_node(&node->rb, parent, new);\n\trb_insert_color(&node->rb, &root->rb_root);\n}\n\nstatic void insert_cached(struct test_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *parent = NULL;\n\tu32 key = node->key;\n\tbool leftmost = true;\n\n\twhile (*new) {\n\t\tparent = *new;\n\t\tif (key < rb_entry(parent, struct test_node, rb)->key)\n\t\t\tnew = &parent->rb_left;\n\t\telse {\n\t\t\tnew = &parent->rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\trb_link_node(&node->rb, parent, new);\n\trb_insert_color_cached(&node->rb, root, leftmost);\n}\n\nstatic inline void erase(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase(&node->rb, &root->rb_root);\n}\n\nstatic inline void erase_cached(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase_cached(&node->rb, root);\n}\n\n\n#define NODE_VAL(node) ((node)->val)\n\nRB_DECLARE_CALLBACKS_MAX(static, augment_callbacks,\n\t\t\t struct test_node, rb, u32, augmented, NODE_VAL)\n\nstatic void insert_augmented(struct test_node *node,\n\t\t\t     struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;\n\tu32 key = node->key;\n\tu32 val = node->val;\n\tstruct test_node *parent;\n\n\twhile (*new) {\n\t\trb_parent = *new;\n\t\tparent = rb_entry(rb_parent, struct test_node, rb);\n\t\tif (parent->augmented < val)\n\t\t\tparent->augmented = val;\n\t\tif (key < parent->key)\n\t\t\tnew = &parent->rb.rb_left;\n\t\telse\n\t\t\tnew = &parent->rb.rb_right;\n\t}\n\n\tnode->augmented = val;\n\trb_link_node(&node->rb, rb_parent, new);\n\trb_insert_augmented(&node->rb, &root->rb_root, &augment_callbacks);\n}\n\nstatic void insert_augmented_cached(struct test_node *node,\n\t\t\t\t    struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;\n\tu32 key = node->key;\n\tu32 val = node->val;\n\tstruct test_node *parent;\n\tbool leftmost = true;\n\n\twhile (*new) {\n\t\trb_parent = *new;\n\t\tparent = rb_entry(rb_parent, struct test_node, rb);\n\t\tif (parent->augmented < val)\n\t\t\tparent->augmented = val;\n\t\tif (key < parent->key)\n\t\t\tnew = &parent->rb.rb_left;\n\t\telse {\n\t\t\tnew = &parent->rb.rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\tnode->augmented = val;\n\trb_link_node(&node->rb, rb_parent, new);\n\trb_insert_augmented_cached(&node->rb, root,\n\t\t\t\t   leftmost, &augment_callbacks);\n}\n\n\nstatic void erase_augmented(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase_augmented(&node->rb, &root->rb_root, &augment_callbacks);\n}\n\nstatic void erase_augmented_cached(struct test_node *node,\n\t\t\t\t   struct rb_root_cached *root)\n{\n\trb_erase_augmented_cached(&node->rb, root, &augment_callbacks);\n}\n\nstatic void init(void)\n{\n\tint i;\n\tfor (i = 0; i < nnodes; i++) {\n\t\tnodes[i].key = prandom_u32_state(&rnd);\n\t\tnodes[i].val = prandom_u32_state(&rnd);\n\t}\n}\n\nstatic bool is_red(struct rb_node *rb)\n{\n\treturn !(rb->__rb_parent_color & 1);\n}\n\nstatic int black_path_count(struct rb_node *rb)\n{\n\tint count;\n\tfor (count = 0; rb; rb = rb_parent(rb))\n\t\tcount += !is_red(rb);\n\treturn count;\n}\n\nstatic void check_postorder_foreach(int nr_nodes)\n{\n\tstruct test_node *cur, *n;\n\tint count = 0;\n\trbtree_postorder_for_each_entry_safe(cur, n, &root.rb_root, rb)\n\t\tcount++;\n\n\tWARN_ON_ONCE(count != nr_nodes);\n}\n\nstatic void check_postorder(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\tint count = 0;\n\tfor (rb = rb_first_postorder(&root.rb_root); rb; rb = rb_next_postorder(rb))\n\t\tcount++;\n\n\tWARN_ON_ONCE(count != nr_nodes);\n}\n\nstatic void check(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\tint count = 0, blacks = 0;\n\tu32 prev_key = 0;\n\n\tfor (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {\n\t\tstruct test_node *node = rb_entry(rb, struct test_node, rb);\n\t\tWARN_ON_ONCE(node->key < prev_key);\n\t\tWARN_ON_ONCE(is_red(rb) &&\n\t\t\t     (!rb_parent(rb) || is_red(rb_parent(rb))));\n\t\tif (!count)\n\t\t\tblacks = black_path_count(rb);\n\t\telse\n\t\t\tWARN_ON_ONCE((!rb->rb_left || !rb->rb_right) &&\n\t\t\t\t     blacks != black_path_count(rb));\n\t\tprev_key = node->key;\n\t\tcount++;\n\t}\n\n\tWARN_ON_ONCE(count != nr_nodes);\n\tWARN_ON_ONCE(count < (1 << black_path_count(rb_last(&root.rb_root))) - 1);\n\n\tcheck_postorder(nr_nodes);\n\tcheck_postorder_foreach(nr_nodes);\n}\n\nstatic void check_augmented(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\n\tcheck(nr_nodes);\n\tfor (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {\n\t\tstruct test_node *node = rb_entry(rb, struct test_node, rb);\n\t\tu32 subtree, max = node->val;\n\t\tif (node->rb.rb_left) {\n\t\t\tsubtree = rb_entry(node->rb.rb_left, struct test_node,\n\t\t\t\t\t   rb)->augmented;\n\t\t\tif (max < subtree)\n\t\t\t\tmax = subtree;\n\t\t}\n\t\tif (node->rb.rb_right) {\n\t\t\tsubtree = rb_entry(node->rb.rb_right, struct test_node,\n\t\t\t\t\t   rb)->augmented;\n\t\t\tif (max < subtree)\n\t\t\t\tmax = subtree;\n\t\t}\n\t\tWARN_ON_ONCE(node->augmented != max);\n\t}\n}\n\nstatic int __init rbtree_test_init(void)\n{\n\tint i, j;\n\tcycles_t time1, time2, time;\n\tstruct rb_node *node;\n\n\tnodes = kmalloc_array(nnodes, sizeof(*nodes), GFP_KERNEL);\n\tif (!nodes)\n\t\treturn -ENOMEM;\n\n\tprintk(KERN_ALERT \"rbtree testing\");\n\n\tprandom_seed_state(&rnd, 3141592653589793238ULL);\n\tinit();\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 1 (latency of nnodes insert+delete): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_cached(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_cached(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\tfor (i = 0; i < nnodes; i++)\n\t\tinsert(nodes + i, &root);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (node = rb_first(&root.rb_root); node; node = rb_next(node))\n\t\t\t;\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 3 (latency of inorder traversal): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++)\n\t\tnode = rb_first(&root.rb_root);\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 4 (latency to fetch first node)\\n\");\n\tprintk(\"        non-cached: %llu cycles\\n\", (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++)\n\t\tnode = rb_first_cached(&root);\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\"        cached: %llu cycles\\n\", (unsigned long long)time);\n\n\tfor (i = 0; i < nnodes; i++)\n\t\terase(nodes + i, &root);\n\n\t/* run checks */\n\tfor (i = 0; i < check_loops; i++) {\n\t\tinit();\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck(j);\n\t\t\tinsert(nodes + j, &root);\n\t\t}\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck(nnodes - j);\n\t\t\terase(nodes + j, &root);\n\t\t}\n\t\tcheck(0);\n\t}\n\n\tprintk(KERN_ALERT \"augmented rbtree testing\");\n\n\tinit();\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_augmented(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_augmented(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 1 (latency of nnodes insert+delete): %llu cycles\\n\", (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_augmented_cached(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_augmented_cached(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\\n\", (unsigned long long)time);\n\n\tfor (i = 0; i < check_loops; i++) {\n\t\tinit();\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck_augmented(j);\n\t\t\tinsert_augmented(nodes + j, &root);\n\t\t}\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck_augmented(nnodes - j);\n\t\t\terase_augmented(nodes + j, &root);\n\t\t}\n\t\tcheck_augmented(0);\n\t}\n\n\tkfree(nodes);\n\n\treturn -EAGAIN; /* Fail will directly unload the module */\n}\n\nstatic void __exit rbtree_test_exit(void)\n{\n\tprintk(KERN_ALERT \"test exit\\n\");\n}\n\nmodule_init(rbtree_test_init)\nmodule_exit(rbtree_test_exit)\n\nMODULE_LICENSE(\"GPL\");\nMODULE_AUTHOR(\"Michel Lespinasse\");\nMODULE_DESCRIPTION(\"Red Black Tree test\");\n",
   "source_review": {
@@ -155,5 +181,192 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rbtree_test.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-7bc06868b6dfc8ec",
+    "path": "lib/rbtree_test.c",
+    "title": "레드블랙 트리 테스트 전체: 불변식 검사와 측정의 한계",
+    "area": "테스트 설계 · 균형 트리 · 성능 측정 · 불변식",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "일반·캐시·확장 트리를 삽입·삭제하며 시간과 구조 조건을 확인하는 커널 테스트 모듈입니다.",
+    "guide": [
+      "정렬 순서, 빨강 부모 제약, 검정 경로 수, 노드 개수, 집계값을 검사합니다. 성능 루프와 정확성 검사 루프는 별도로 구성됩니다.",
+      "테스트 코드도 검사 범위와 측정 조건을 읽어야 합니다. 모듈의 반환값이나 성능 출력만으로 모든 기능의 정확성이 검증되었다고 판단하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구성",
+        "text": "SPDX와 module/moduleparam/augmented/random/slab/timex 포함, 파라미터 생성 매크로, 세 파라미터, test_node와 전역 상태가 있습니다. 일반·캐시·확장 삽입/삭제 helper, 랜덤 입력 초기화, 색상·경로·순회·집계 검사, 모듈 init의 측정·검사 단계, exit와 메타데이터로 끝납니다."
+      },
+      {
+        "title": "파라미터와 입력 전제",
+        "text": "__param은 기본값을 가진 static 변수와0444 권한의 module_param 및 설명을 만듭니다. nnodes100, perf_loops1000, check_loops100이 기본입니다. init에는 양수 범위를 명시적으로 검증하는 분기가 없어 perf_loops0은 나눗셈 분모 문제를 만들 수 있습니다. 노출된 파라미터라고 임의의 값이 안전하게 지원된다는 뜻은 아닙니다."
+      },
+      {
+        "title": "자료형과 재현성",
+        "text": "test_node는 u32 key, rb_node, u32 val과 augmented를 가집니다. key는 정렬용이고 val은 집계용으로 분리됩니다. 전역 root는 RB_ROOT_CACHED로 시작하고 노드 배열을 kmalloc_array로 할당합니다. 실패는 -ENOMEM입니다. PRNG 상태를3141592653589793238ULL로 시드하므로 같은 구현·설정에서 재현 가능한 입력 흐름을 지향합니다."
+      },
+      {
+        "title": "일반·캐시 삽입과 삭제",
+        "text": "insert는 key 비교로 빈 링크를 찾고 같은 키는 오른쪽으로 보내며 연결 뒤 rb_insert_color를 호출합니다. insert_cached는 오른쪽 이동 여부로 leftmost를 계산해 cached 균형 함수를 사용합니다. erase 두 버전도 일반/캐시 API를 각각 호출합니다. helper가 노드를 free하지 않아 반복 측정에서 같은 배열 객체를 재사용합니다."
+      },
+      {
+        "title": "확장 삽입과 콜백",
+        "text": "NODE_VAL과 RB_DECLARE_CALLBACKS_MAX로 서브트리 val 최대값용 콜백을 만듭니다. 확장 삽입은 내려가는 경로의 augmented를 새 val 이상으로 올리고 새 노드 집계를 자기 val로 초기화한 뒤 확장 균형 함수를 부릅니다. cached 확장 버전은 최소값 플래그도 계산합니다. 삭제는 같은 콜백으로 집계를 복구합니다."
+      },
+      {
+        "title": "랜덤값 초기화와 색상 보조 함수",
+        "text": "init은 각 노드의 key와 val을 PRNG에서 새로 얻습니다. 링크 초기화를 따로 하지 않지만 이후 rb_link_node가 삽입할 링크 필드를 설정하는 사용 흐름입니다. is_red는 부모·색상 필드 bit0이0인지 검사하고 black_path_count는 부모를 따라가며 검정 노드 개수를 셉니다. NULL이면0입니다."
+      },
+      {
+        "title": "일반 불변식 검사",
+        "text": "check는 rb_first/next로 중위 순회하며 이전 key보다 작아지지 않는지 검사합니다. 빨강 노드가 루트이거나 빨강 부모를 가지면 경고합니다. 첫 노드의 검정 경로 수를 기준으로 자식 하나 이상이 없는 노드들의 경로 수를 비교합니다. 마지막에는 기대 노드 수와 검정 높이에 따른 최소 노드 수 조건을 확인합니다. WARN_ON_ONCE는 실패를 진단하며 이 함수가 오류 코드를 반환하는 것은 아닙니다."
+      },
+      {
+        "title": "후위 검사 범위",
+        "text": "check_postorder와 check_postorder_foreach는 각각 직접 후위 API와 safe 매크로로 방문 개수를 셉니다. 기대 개수와 일치하는지 보지만 각 객체가 정확히 한 번 등장하는지 별도 ID 집합으로 확인하거나 부모가 자식 뒤에 나왔는지 직접 비교하는 검사는 아닙니다. 검사 이름보다 실제 assert 조건을 기준으로 범위를 판단합니다."
+      },
+      {
+        "title": "확장 집계 검사",
+        "text": "check_augmented는 먼저 일반 check를 실행하고 모든 노드에 대해 자기 val과 좌우 자식 augmented의 최대값을 구해 저장값과 비교합니다. 잎부터 각 노드의 관계가 일관되어야 한다는 재귀 불변식을 사용합니다. 이것은 실제 key 최대값 검사와 다르며 key와 val이 다른 필드라는 점이 중요합니다."
+      },
+      {
+        "title": "일반 성능 측정 단계",
+        "text": "get_cycles 전후 차이를 perf_loops로 나눠 반복당 비용을 출력합니다. 일반 삽입·삭제, cached 삽입·삭제, 중위 순회, 첫 노드 조회를 각각 측정합니다. 삽입·삭제 숫자는 노드 하나당이 아니라 nnodes 전체를 넣고 빼는 한 묶음당 값입니다. 사이클값을 바로 나노초라고 읽으면 안 됩니다."
+      },
+      {
+        "title": "최소값 측정의 중요한 한계",
+        "text": "첫 노드 조회 비교 전에 트리를 구성하는 루프는 insert_cached가 아니라 insert를 사용합니다. 앞 cached 삭제가 끝난 뒤 최소값 캐시는 NULL이고 이 일반 삽입은 캐시를 갱신하지 않습니다. 따라서 이 구간의 rb_first_cached 조회를 유효한 최소 노드 결과 비교라고 볼 수 없습니다. 더구나 조회 결과 node를 관찰 가능하게 사용하지 않아 단순 캐시 읽기 루프가 최적화될 수 있습니다. 이 출력만으로 공정한 성능 우열을 단정하면 안 됩니다."
+      },
+      {
+        "title": "정확성 루프와 누락 범위",
+        "text": "check_loops마다 입력을 새로 만들고 각 삽입 전 check(j), 각 삭제 전 check(nnodes-j), 마지막 check(0)을 수행합니다. 확장 버전도 같은 구조로 check_augmented를 사용합니다. 정확성 루프는 일반·확장 비캐시 helper를 호출하며 캐시 포인터와 rb_first 결과를 직접 비교하는 조건은 없습니다. cached 성능 루프가 존재한다는 사실만으로 캐시 정확성 검사까지 했다고 세지 않습니다."
+      },
+      {
+        "title": "확장 성능과 종료",
+        "text": "확장 일반·cached 삽입/삭제 시간도 각각 측정합니다. 검사 후 kfree(nodes)를 하고 -EAGAIN을 반환하여 모듈이 남지 않도록 의도적으로 init을 실패시킵니다. 이것은 앞의 WARN이 발생했는지를 집계해 정한 성공·실패 반환값이 아닙니다. exit 함수는 로그만 출력하며 module_init/exit와 GPL·작성자·설명 메타데이터가 등록됩니다."
+      },
+      {
+        "title": "CS 연결과 교재 검증 범위",
+        "text": "불변식 기반 테스트, 재현 가능한 난수, 성능 계측 단위, dead-code 최적화, 실제 사용 경로와 측정 경로의 일치, 경고와 프로세스 결과의 차이를 학습합니다. 이 수업은 테스트 원본 전체를 검토한 것이며 해당 커널 모듈을 현재 호스트에서 로드·실행한 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "삽입·삭제 시간 출력은 기본적으로 어느 단위인가?",
+        "options": [
+          "nnodes개 전체를 넣고 뺀 한 반복당 사이클이다",
+          "노드 하나당 나노초다"
+        ],
+        "answer": 0,
+        "explanation": "전체 측정 차이를 perf_loops로만 나눕니다. nnodes로 나누지 않고 get_cycles를 사용합니다."
+      },
+      {
+        "prompt": "후위 방문 개수만 맞으면 방문 순서까지 직접 확인한 것인가?",
+        "options": [
+          "그렇다. 개수만 같으면 모든 순서가 유일하게 정해진다",
+          "아니다. 이 검사는 개수 조건만 직접 확인한다"
+        ],
+        "answer": 1,
+        "explanation": "두 후위 helper의 본문은 count++와 기대값 비교입니다. 별도 방문 순서나 ID 중복 검사는 없습니다."
+      },
+      {
+        "prompt": "최소값 조회 측정 직전 트리는 어느 삽입으로 구성하는가?",
+        "options": [
+          "일반 insert이며 최소값 캐시를 갱신하지 않는다",
+          "insert_cached로 캐시를 정확히 채운다"
+        ],
+        "answer": 0,
+        "explanation": "소스의 해당 루프는 insert(nodes+i,&root)를 호출합니다. cached 조회 시간 출력을 정확성 증거로 사용할 수 없습니다."
+      },
+      {
+        "prompt": "init의 -EAGAIN은 검사 실패를 집계한 결과인가?",
+        "options": [
+          "그렇다. 모든 WARN 개수를 합산해 결정한다",
+          "아니다. 배열 정리 뒤 모듈이 남지 않게 하는 의도적 반환이다"
+        ],
+        "answer": 1,
+        "explanation": "반환값은 검사 결과와 무관하게 고정입니다. 경고 로그와 코드 경로를 별도로 확인해야 합니다."
+      },
+      {
+        "prompt": "check_augmented는 어떤 최대값을 비교하는가?",
+        "options": [
+          "자기 val과 자식 서브트리 집계의 최대값이다",
+          "항상 정렬 키 key의 최대값이다"
+        ],
+        "answer": 0,
+        "explanation": "정렬 key와 집계 val은 다른 필드입니다. NODE_VAL도 val을 반환하도록 정의되어 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#include <linux/module.h>\n#include <linux/moduleparam.h>\n#include <linux/rbtree_augmented.h>\n#include <linux/random.h>\n#include <linux/slab.h>\n#include <asm/timex.h>\n\n#define __param(type, name, init, msg)\t\t\\\n\tstatic type name = init;\t\t\\\n\tmodule_param(name, type, 0444);\t\t\\\n\tMODULE_PARM_DESC(name, msg);\n\n__param(int, nnodes, 100, \"Number of nodes in the rb-tree\");\n__param(int, perf_loops, 1000, \"Number of iterations modifying the rb-tree\");\n__param(int, check_loops, 100, \"Number of iterations modifying and verifying the rb-tree\");\n\nstruct test_node {\n\tu32 key;\n\tstruct rb_node rb;\n\n\t/* following fields used for testing augmented rbtree functionality */\n\tu32 val;\n\tu32 augmented;\n};\n\nstatic struct rb_root_cached root = RB_ROOT_CACHED;\nstatic struct test_node *nodes = NULL;\n\nstatic struct rnd_state rnd;\n\nstatic void insert(struct test_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *parent = NULL;\n\tu32 key = node->key;\n\n\twhile (*new) {\n\t\tparent = *new;\n\t\tif (key < rb_entry(parent, struct test_node, rb)->key)\n\t\t\tnew = &parent->rb_left;\n\t\telse\n\t\t\tnew = &parent->rb_right;\n\t}\n\n\trb_link_node(&node->rb, parent, new);\n\trb_insert_color(&node->rb, &root->rb_root);\n}\n\nstatic void insert_cached(struct test_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *parent = NULL;\n\tu32 key = node->key;\n\tbool leftmost = true;\n\n\twhile (*new) {\n\t\tparent = *new;\n\t\tif (key < rb_entry(parent, struct test_node, rb)->key)\n\t\t\tnew = &parent->rb_left;\n\t\telse {\n\t\t\tnew = &parent->rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\trb_link_node(&node->rb, parent, new);\n\trb_insert_color_cached(&node->rb, root, leftmost);\n}\n\nstatic inline void erase(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase(&node->rb, &root->rb_root);\n}\n\nstatic inline void erase_cached(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase_cached(&node->rb, root);\n}\n\n\n#define NODE_VAL(node) ((node)->val)\n\nRB_DECLARE_CALLBACKS_MAX(static, augment_callbacks,\n\t\t\t struct test_node, rb, u32, augmented, NODE_VAL)\n\nstatic void insert_augmented(struct test_node *node,\n\t\t\t     struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;\n\tu32 key = node->key;\n\tu32 val = node->val;\n\tstruct test_node *parent;\n\n\twhile (*new) {\n\t\trb_parent = *new;\n\t\tparent = rb_entry(rb_parent, struct test_node, rb);\n\t\tif (parent->augmented < val)\n\t\t\tparent->augmented = val;\n\t\tif (key < parent->key)\n\t\t\tnew = &parent->rb.rb_left;\n\t\telse\n\t\t\tnew = &parent->rb.rb_right;\n\t}\n\n\tnode->augmented = val;\n\trb_link_node(&node->rb, rb_parent, new);\n\trb_insert_augmented(&node->rb, &root->rb_root, &augment_callbacks);\n}\n\nstatic void insert_augmented_cached(struct test_node *node,\n\t\t\t\t    struct rb_root_cached *root)\n{\n\tstruct rb_node **new = &root->rb_root.rb_node, *rb_parent = NULL;\n\tu32 key = node->key;\n\tu32 val = node->val;\n\tstruct test_node *parent;\n\tbool leftmost = true;\n\n\twhile (*new) {\n\t\trb_parent = *new;\n\t\tparent = rb_entry(rb_parent, struct test_node, rb);\n\t\tif (parent->augmented < val)\n\t\t\tparent->augmented = val;\n\t\tif (key < parent->key)\n\t\t\tnew = &parent->rb.rb_left;\n\t\telse {\n\t\t\tnew = &parent->rb.rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\tnode->augmented = val;\n\trb_link_node(&node->rb, rb_parent, new);\n\trb_insert_augmented_cached(&node->rb, root,\n\t\t\t\t   leftmost, &augment_callbacks);\n}\n\n\nstatic void erase_augmented(struct test_node *node, struct rb_root_cached *root)\n{\n\trb_erase_augmented(&node->rb, &root->rb_root, &augment_callbacks);\n}\n\nstatic void erase_augmented_cached(struct test_node *node,\n\t\t\t\t   struct rb_root_cached *root)\n{\n\trb_erase_augmented_cached(&node->rb, root, &augment_callbacks);\n}\n\nstatic void init(void)\n{\n\tint i;\n\tfor (i = 0; i < nnodes; i++) {\n\t\tnodes[i].key = prandom_u32_state(&rnd);\n\t\tnodes[i].val = prandom_u32_state(&rnd);\n\t}\n}\n\nstatic bool is_red(struct rb_node *rb)\n{\n\treturn !(rb->__rb_parent_color & 1);\n}\n\nstatic int black_path_count(struct rb_node *rb)\n{\n\tint count;\n\tfor (count = 0; rb; rb = rb_parent(rb))\n\t\tcount += !is_red(rb);\n\treturn count;\n}\n\nstatic void check_postorder_foreach(int nr_nodes)\n{\n\tstruct test_node *cur, *n;\n\tint count = 0;\n\trbtree_postorder_for_each_entry_safe(cur, n, &root.rb_root, rb)\n\t\tcount++;\n\n\tWARN_ON_ONCE(count != nr_nodes);\n}\n\nstatic void check_postorder(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\tint count = 0;\n\tfor (rb = rb_first_postorder(&root.rb_root); rb; rb = rb_next_postorder(rb))\n\t\tcount++;\n\n\tWARN_ON_ONCE(count != nr_nodes);\n}\n\nstatic void check(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\tint count = 0, blacks = 0;\n\tu32 prev_key = 0;\n\n\tfor (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {\n\t\tstruct test_node *node = rb_entry(rb, struct test_node, rb);\n\t\tWARN_ON_ONCE(node->key < prev_key);\n\t\tWARN_ON_ONCE(is_red(rb) &&\n\t\t\t     (!rb_parent(rb) || is_red(rb_parent(rb))));\n\t\tif (!count)\n\t\t\tblacks = black_path_count(rb);\n\t\telse\n\t\t\tWARN_ON_ONCE((!rb->rb_left || !rb->rb_right) &&\n\t\t\t\t     blacks != black_path_count(rb));\n\t\tprev_key = node->key;\n\t\tcount++;\n\t}\n\n\tWARN_ON_ONCE(count != nr_nodes);\n\tWARN_ON_ONCE(count < (1 << black_path_count(rb_last(&root.rb_root))) - 1);\n\n\tcheck_postorder(nr_nodes);\n\tcheck_postorder_foreach(nr_nodes);\n}\n\nstatic void check_augmented(int nr_nodes)\n{\n\tstruct rb_node *rb;\n\n\tcheck(nr_nodes);\n\tfor (rb = rb_first(&root.rb_root); rb; rb = rb_next(rb)) {\n\t\tstruct test_node *node = rb_entry(rb, struct test_node, rb);\n\t\tu32 subtree, max = node->val;\n\t\tif (node->rb.rb_left) {\n\t\t\tsubtree = rb_entry(node->rb.rb_left, struct test_node,\n\t\t\t\t\t   rb)->augmented;\n\t\t\tif (max < subtree)\n\t\t\t\tmax = subtree;\n\t\t}\n\t\tif (node->rb.rb_right) {\n\t\t\tsubtree = rb_entry(node->rb.rb_right, struct test_node,\n\t\t\t\t\t   rb)->augmented;\n\t\t\tif (max < subtree)\n\t\t\t\tmax = subtree;\n\t\t}\n\t\tWARN_ON_ONCE(node->augmented != max);\n\t}\n}\n\nstatic int __init rbtree_test_init(void)\n{\n\tint i, j;\n\tcycles_t time1, time2, time;\n\tstruct rb_node *node;\n\n\tnodes = kmalloc_array(nnodes, sizeof(*nodes), GFP_KERNEL);\n\tif (!nodes)\n\t\treturn -ENOMEM;\n\n\tprintk(KERN_ALERT \"rbtree testing\");\n\n\tprandom_seed_state(&rnd, 3141592653589793238ULL);\n\tinit();\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 1 (latency of nnodes insert+delete): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_cached(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_cached(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\tfor (i = 0; i < nnodes; i++)\n\t\tinsert(nodes + i, &root);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (node = rb_first(&root.rb_root); node; node = rb_next(node))\n\t\t\t;\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 3 (latency of inorder traversal): %llu cycles\\n\",\n\t       (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++)\n\t\tnode = rb_first(&root.rb_root);\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 4 (latency to fetch first node)\\n\");\n\tprintk(\"        non-cached: %llu cycles\\n\", (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++)\n\t\tnode = rb_first_cached(&root);\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\"        cached: %llu cycles\\n\", (unsigned long long)time);\n\n\tfor (i = 0; i < nnodes; i++)\n\t\terase(nodes + i, &root);\n\n\t/* run checks */\n\tfor (i = 0; i < check_loops; i++) {\n\t\tinit();\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck(j);\n\t\t\tinsert(nodes + j, &root);\n\t\t}\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck(nnodes - j);\n\t\t\terase(nodes + j, &root);\n\t\t}\n\t\tcheck(0);\n\t}\n\n\tprintk(KERN_ALERT \"augmented rbtree testing\");\n\n\tinit();\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_augmented(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_augmented(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 1 (latency of nnodes insert+delete): %llu cycles\\n\", (unsigned long long)time);\n\n\ttime1 = get_cycles();\n\n\tfor (i = 0; i < perf_loops; i++) {\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\tinsert_augmented_cached(nodes + j, &root);\n\t\tfor (j = 0; j < nnodes; j++)\n\t\t\terase_augmented_cached(nodes + j, &root);\n\t}\n\n\ttime2 = get_cycles();\n\ttime = time2 - time1;\n\n\ttime = div_u64(time, perf_loops);\n\tprintk(\" -> test 2 (latency of nnodes cached insert+delete): %llu cycles\\n\", (unsigned long long)time);\n\n\tfor (i = 0; i < check_loops; i++) {\n\t\tinit();\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck_augmented(j);\n\t\t\tinsert_augmented(nodes + j, &root);\n\t\t}\n\t\tfor (j = 0; j < nnodes; j++) {\n\t\t\tcheck_augmented(nnodes - j);\n\t\t\terase_augmented(nodes + j, &root);\n\t\t}\n\t\tcheck_augmented(0);\n\t}\n\n\tkfree(nodes);\n\n\treturn -EAGAIN; /* Fail will directly unload the module */\n}\n\nstatic void __exit rbtree_test_exit(void)\n{\n\tprintk(KERN_ALERT \"test exit\\n\");\n}\n\nmodule_init(rbtree_test_init)\nmodule_exit(rbtree_test_exit)\n\nMODULE_LICENSE(\"GPL\");\nMODULE_AUTHOR(\"Michel Lespinasse\");\nMODULE_DESCRIPTION(\"Red Black Tree test\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c963ccd2b15dd3c40db4edf83a46e5ebf4586c95b907eb25d6ee972593becd7a",
+      "scope": "whole-file",
+      "line_count": 408,
+      "authoring_source": "course/file_units/rbtree_test_lesson.py",
+      "sections": [
+        "전체 파일 구성",
+        "파라미터와 입력 전제",
+        "자료형과 재현성",
+        "일반·캐시 삽입과 삭제",
+        "확장 삽입과 콜백",
+        "랜덤값 초기화와 색상 보조 함수",
+        "일반 불변식 검사",
+        "후위 검사 범위",
+        "확장 집계 검사",
+        "일반 성능 측정 단계",
+        "최소값 측정의 중요한 한계",
+        "정확성 루프와 누락 범위",
+        "확장 성능과 종료",
+        "CS 연결과 교재 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rbtree_test.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "트리 시험도 무엇을 실제로 확인하는지 읽어야 합니다. 방문 개수를 세는 검사와 순서를 검증하는 검사, 빠르기를 재는 루프는 서로 다릅니다.",
+    "meaning": "불변식 검사와 성능 측정의 단위·누락 범위를 구분합니다.",
+    "exercise": "첫 노드 측정 전에 insert와 insert_cached 중 무엇을 쓰는지 찾아 캐시 상태를 설명하세요."
+  },
+  "goal": "불변식 검사와 성능 측정의 단위·누락 범위를 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "첫 노드 측정 전에 insert와 insert_cached 중 무엇을 쓰는지 찾아 캐시 상태를 설명하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "3344ff9edea3f8dd1d7ff8efcba6f993113b3cb25d5a20ab288f98309e4c3851",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

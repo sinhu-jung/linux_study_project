@@ -5,62 +5,70 @@
   "area": "큐 잠금 · 캐시 일관성 · 원자 교환 · 메모리 순서",
   "track": "files",
   "kind": "kernel",
-  "intro": "mutex나 rwsem의 낙관적 스핀을 위한 MCS 계열 큐 인터페이스입니다.",
+  "intro": "OSQ의 꼬리 인코딩과 상태 관측을 실제 획득에서 구별합니다.",
   "guide": [
-    "공유 구조체에는 큐 꼬리 CPU의 인코딩 값만 원자 정수로 저장합니다. 값 관측과 큐 획득은 서로 다른 연산입니다.",
-    "일반적인 임계구역 보호 API와 동일하게 가정하지 않습니다. 구체적인 CPU 인코딩·취소·인계는 osq_lock.c 구현을 함께 읽어야 합니다."
+    "낙관적 스핀은 잠금이 곧 풀릴 것으로 보고 잠들기 전에 잠시 돌며 기다리는 방식입니다.",
+    "인코딩은 CPU 번호 같은 정보를 정해진 값으로 바꾸어 저장하는 것입니다.",
+    "원자적 읽기는 값을 나뉘지 않게 읽는 것이며 소유권 예약을 뜻하지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0과 guard, 목적 주석, optimistic_spin_queue 구조체, unlocked 상수·초기화식·초기화 함수, lock/unlock 선언, 상태 관측과 endif가 전부입니다. 이 파일에는 include 행이 없어 atomic_t 등 필요한 정의를 가진 포함 문맥을 전제로 합니다."
+      "text": "이 헤더는 목적 설명, 큐 구조체, 빈 값과 초기화 도구, 획득·해제 선언, 상태 조회로 구성됩니다. include 행이 없으므로 atomic_t 같은 정의는 포함하는 쪽에서 준비되어 있어야 합니다."
     },
     {
       "title": "꼬리 표현",
-      "text": "구조체는 atomic_t tail 하나입니다. 주석은 꼬리 노드 CPU 번호의 인코딩을 저장하고 빈 큐는 OSQ_UNLOCKED_VAL이라고 설명합니다.0이 예약되어 있지만 이 헤더 자체는 CPU 번호를 어떤 산술식으로 인코딩하는지 정의하지 않습니다. tail을 원시 CPU 번호나 mutex 소유자 포인터라고 읽으면 안 됩니다."
+      "text": "구조체는 atomic_t tail 하나입니다. 줄 끝 노드의 CPU 번호를 인코딩해 저장하며 빈 큐는 예약값 0입니다. 정확히 어떤 계산으로 CPU 번호를 바꾸는지는 이 헤더에 없습니다. 원래 CPU 번호나 mutex 소유 태스크 주소로 읽으면 안 됩니다."
     },
     {
       "title": "초기화와 선언",
-      "text": "OSQ_UNLOCKED_VAL은0, OSQ_LOCK_UNLOCKED는 ATOMIC_INIT(0) 구조체 초기화식입니다. osq_lock_init은 atomic_set으로 tail을0으로 설정합니다. osq_lock은 bool, unlock은 void 외부 함수입니다. 이 헤더에는 큐 노드 메모리를 할당하거나 대기자를 정리하는 코드가 없습니다."
+      "text": "정적 초기화와 osq_lock_init은 tail을 OSQ_UNLOCKED_VAL인 0으로 만듭니다. osq_lock은 bool, unlock은 void를 반환하는 외부 함수입니다. 노드 할당이나 기다리는 사람 정리는 이 헤더에서 하지 않습니다."
     },
     {
       "title": "관측과 소유권",
-      "text": "osq_is_locked는 atomic_read(tail)!=0을 반환합니다. 순간적인 비어 있지 않음의 관측이지 현재 호출자가 큐 잠금을 소유한다는 증거가 아닙니다. 초기화도 사용 중인 큐를 안전하게 취소하는 기능이 아니므로 사용 수명과 동기화 계약을 지켜야 합니다."
+      "text": "osq_is_locked는 tail이 0이 아닌지를 읽을 뿐입니다. 줄이 비어 있지 않은 순간을 본 것이지 현재 호출자가 얻었다는 증거는 아닙니다. 초기화 역시 사용 중 줄을 안전하게 취소해 주지 않으므로 객체 수명과 동기화 규칙을 지켜야 합니다."
     },
     {
       "title": "CS 연결",
-      "text": "공유 상태를 작은 원자 정수로 표현하기, 예약값과 인코딩, 자료구조와 구현의 분리, 관측과 획득의 구분을 학습합니다. 본문이 없는 획득·취소 알고리즘까지 이 파일 수업으로 완료 처리하지 않습니다."
+      "text": "작은 원자 정수로 공유 상태를 나타내는 법, 예약값, 선언과 구현의 역할 분리를 배웁니다. 일반 임계구역 보호 잠금과 같다고 가정하지 말고 획득·취소·인계는 osq_lock.c에서 따로 확인합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "tail은 mutex 소유 태스크 포인터인가?",
+      "prompt": "tail은 mutex 소유 태스크 포인터인가요?",
       "options": [
+        "아니요. 줄 끝 노드의 CPU 번호를 인코딩한 값입니다.",
+        "네. task_struct 주소를 그대로 저장합니다."
+      ],
+      "answer": 0,
+      "explanation": "낙관적으로 기다리는 큐 표현과 mutex 소유자 표현은 다릅니다.",
+      "original_prompt": "tail은 mutex 소유 태스크 포인터인가?",
+      "original_options": [
         "아니다. 큐 꼬리 노드 CPU 번호의 인코딩이다",
         "그렇다. task_struct 주소를 그대로 저장한다"
       ],
-      "answer": 0,
-      "explanation": "이 구조체는 atomic_t 하나이고 주석이 CPU 인코딩을 명시합니다. mutex owner 표현과 낙관적 spinner 큐 표현은 다릅니다."
+      "original_explanation": "이 구조체는 atomic_t 하나이고 주석이 CPU 인코딩을 명시합니다. mutex owner 표현과 낙관적 spinner 큐 표현은 다릅니다."
     },
     {
-      "prompt": "osq_is_locked가 false이면 큐 잠금을 획득한 것인가?",
+      "prompt": "osq_is_locked가 false면 잠금을 얻은 건가요?",
       "options": [
+        "네. 읽으면서 자리를 예약합니다.",
+        "아니요. 그 순간 줄이 비었다는 것을 본 것뿐입니다."
+      ],
+      "answer": 1,
+      "explanation": "직후 다른 CPU가 들어올 수 있으므로 읽기가 획득을 대신하지 못합니다.",
+      "original_prompt": "osq_is_locked가 false이면 큐 잠금을 획득한 것인가?",
+      "original_options": [
         "그렇다. 읽으면서 자동으로 소유권을 예약한다",
         "아니다. 빈 상태를 관측했을 뿐이다"
       ],
-      "answer": 1,
-      "explanation": "본문은 atomic_read와 비교뿐입니다. 다른 CPU가 직후 큐에 들어올 수 있어 획득 연산을 대신하지 못합니다."
+      "original_explanation": "본문은 atomic_read와 비교뿐입니다. 다른 CPU가 직후 큐에 들어올 수 있어 획득 연산을 대신하지 못합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "tail이 0이라는 순간을 본 다음 다른 CPU가 들어오는 상황을 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_OSQ_LOCK_H\n#define __LINUX_OSQ_LOCK_H\n\n/*\n * An MCS like lock especially tailored for optimistic spinning for sleeping\n * lock implementations (mutex, rwsem, etc).\n */\n\nstruct optimistic_spin_queue {\n\t/*\n\t * Stores an encoded value of the CPU # of the tail node in the queue.\n\t * If the queue is empty, then it's set to OSQ_UNLOCKED_VAL.\n\t */\n\tatomic_t tail;\n};\n\n#define OSQ_UNLOCKED_VAL (0)\n\n/* Init macro and function. */\n#define OSQ_LOCK_UNLOCKED { ATOMIC_INIT(OSQ_UNLOCKED_VAL) }\n\nstatic inline void osq_lock_init(struct optimistic_spin_queue *lock)\n{\n\tatomic_set(&lock->tail, OSQ_UNLOCKED_VAL);\n}\n\nextern bool osq_lock(struct optimistic_spin_queue *lock);\nextern void osq_unlock(struct optimistic_spin_queue *lock);\n\nstatic inline bool osq_is_locked(struct optimistic_spin_queue *lock)\n{\n\treturn atomic_read(&lock->tail) != OSQ_UNLOCKED_VAL;\n}\n\n#endif\n",
   "source_review": {
@@ -83,5 +91,120 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/osq_lock.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-85b3876f7eb7f7f7",
+    "path": "include/linux/osq_lock.h",
+    "title": "낙관적 스핀 큐 헤더 전체: CPU 꼬리 인코딩",
+    "area": "큐 잠금 · 캐시 일관성 · 원자 교환 · 메모리 순서",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "mutex나 rwsem의 낙관적 스핀을 위한 MCS 계열 큐 인터페이스입니다.",
+    "guide": [
+      "공유 구조체에는 큐 꼬리 CPU의 인코딩 값만 원자 정수로 저장합니다. 값 관측과 큐 획득은 서로 다른 연산입니다.",
+      "일반적인 임계구역 보호 API와 동일하게 가정하지 않습니다. 구체적인 CPU 인코딩·취소·인계는 osq_lock.c 구현을 함께 읽어야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0과 guard, 목적 주석, optimistic_spin_queue 구조체, unlocked 상수·초기화식·초기화 함수, lock/unlock 선언, 상태 관측과 endif가 전부입니다. 이 파일에는 include 행이 없어 atomic_t 등 필요한 정의를 가진 포함 문맥을 전제로 합니다."
+      },
+      {
+        "title": "꼬리 표현",
+        "text": "구조체는 atomic_t tail 하나입니다. 주석은 꼬리 노드 CPU 번호의 인코딩을 저장하고 빈 큐는 OSQ_UNLOCKED_VAL이라고 설명합니다.0이 예약되어 있지만 이 헤더 자체는 CPU 번호를 어떤 산술식으로 인코딩하는지 정의하지 않습니다. tail을 원시 CPU 번호나 mutex 소유자 포인터라고 읽으면 안 됩니다."
+      },
+      {
+        "title": "초기화와 선언",
+        "text": "OSQ_UNLOCKED_VAL은0, OSQ_LOCK_UNLOCKED는 ATOMIC_INIT(0) 구조체 초기화식입니다. osq_lock_init은 atomic_set으로 tail을0으로 설정합니다. osq_lock은 bool, unlock은 void 외부 함수입니다. 이 헤더에는 큐 노드 메모리를 할당하거나 대기자를 정리하는 코드가 없습니다."
+      },
+      {
+        "title": "관측과 소유권",
+        "text": "osq_is_locked는 atomic_read(tail)!=0을 반환합니다. 순간적인 비어 있지 않음의 관측이지 현재 호출자가 큐 잠금을 소유한다는 증거가 아닙니다. 초기화도 사용 중인 큐를 안전하게 취소하는 기능이 아니므로 사용 수명과 동기화 계약을 지켜야 합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "공유 상태를 작은 원자 정수로 표현하기, 예약값과 인코딩, 자료구조와 구현의 분리, 관측과 획득의 구분을 학습합니다. 본문이 없는 획득·취소 알고리즘까지 이 파일 수업으로 완료 처리하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "tail은 mutex 소유 태스크 포인터인가?",
+        "options": [
+          "아니다. 큐 꼬리 노드 CPU 번호의 인코딩이다",
+          "그렇다. task_struct 주소를 그대로 저장한다"
+        ],
+        "answer": 0,
+        "explanation": "이 구조체는 atomic_t 하나이고 주석이 CPU 인코딩을 명시합니다. mutex owner 표현과 낙관적 spinner 큐 표현은 다릅니다."
+      },
+      {
+        "prompt": "osq_is_locked가 false이면 큐 잠금을 획득한 것인가?",
+        "options": [
+          "그렇다. 읽으면서 자동으로 소유권을 예약한다",
+          "아니다. 빈 상태를 관측했을 뿐이다"
+        ],
+        "answer": 1,
+        "explanation": "본문은 atomic_read와 비교뿐입니다. 다른 CPU가 직후 큐에 들어올 수 있어 획득 연산을 대신하지 못합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_OSQ_LOCK_H\n#define __LINUX_OSQ_LOCK_H\n\n/*\n * An MCS like lock especially tailored for optimistic spinning for sleeping\n * lock implementations (mutex, rwsem, etc).\n */\n\nstruct optimistic_spin_queue {\n\t/*\n\t * Stores an encoded value of the CPU # of the tail node in the queue.\n\t * If the queue is empty, then it's set to OSQ_UNLOCKED_VAL.\n\t */\n\tatomic_t tail;\n};\n\n#define OSQ_UNLOCKED_VAL (0)\n\n/* Init macro and function. */\n#define OSQ_LOCK_UNLOCKED { ATOMIC_INIT(OSQ_UNLOCKED_VAL) }\n\nstatic inline void osq_lock_init(struct optimistic_spin_queue *lock)\n{\n\tatomic_set(&lock->tail, OSQ_UNLOCKED_VAL);\n}\n\nextern bool osq_lock(struct optimistic_spin_queue *lock);\nextern void osq_unlock(struct optimistic_spin_queue *lock);\n\nstatic inline bool osq_is_locked(struct optimistic_spin_queue *lock)\n{\n\treturn atomic_read(&lock->tail) != OSQ_UNLOCKED_VAL;\n}\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "33b208bb2c56c99eaf22d98363542595386dcc5197fdaef2b89b849f277ae124",
+      "scope": "whole-file",
+      "line_count": 36,
+      "authoring_source": "course/file_units/spinner_interfaces.py",
+      "sections": [
+        "전체 구성",
+        "꼬리 표현",
+        "초기화와 선언",
+        "관측과 소유권",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/osq_lock.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "줄이 비었는지 보는 것과 내가 줄 맨 앞 자리를 얻는 것은 다릅니다. 낙관적 스핀 큐의 헤더는 줄 끝 CPU 정보를 담는 작은 상자와 그 확인 도구를 정합니다.",
+    "meaning": "OSQ의 꼬리 인코딩과 상태 관측을 실제 획득에서 구별합니다.",
+    "exercise": "tail이 0이라는 순간을 본 다음 다른 CPU가 들어오는 상황을 그려 보세요."
+  },
+  "goal": "OSQ의 꼬리 인코딩과 상태 관측을 실제 획득에서 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "tail이 0이라는 순간을 본 다음 다른 CPU가 들어오는 상황을 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "a5d9ec1491a0f7950d4ac178b4688604689c985ccece7a1a44fadef080560fd1",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

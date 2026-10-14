@@ -5,58 +5,66 @@
   "area": "ARM64 YIELD · busy waiting · 인라인 함수 · 컴파일러 메모리 효과 · 추상화",
   "track": "files",
   "kind": "kernel",
-  "intro": "짧은 cpu_relax 구현 전체의 전처리 조건과 어셈블리 계약을 분석합니다.",
+  "intro": "ARM64 cpu_relax의 YIELD 명령을 운영체제 양보·수면과 구별합니다.",
   "guide": [
-    "명령 이름이 yield라고 해서 운영체제 scheduler에 실행권을 넘기는 API와 같지는 않습니다.",
-    "아키텍처 공통 helper 이름 아래 다른 CPU 힌트를 제공하는 구조를 이해합니다."
+    "ARM64는 CPU 명령 체계의 한 종류입니다.",
+    "스케줄러는 어떤 태스크를 CPU에서 실행할지 정하는 운영체제 장치입니다.",
+    "인라인 함수는 호출 대신 본문을 펼쳐 넣을 수 있는 함수입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일",
-      "text": "GPL-2.0-only와 __ASM_VDSO_PROCESSOR_H guard 안의 !__ASSEMBLY__ 구역에 static inline void cpu_relax(void) 하나가 있습니다. include나 외부 변수·getcpu 선언은 없습니다. x86의 같은 이름 헤더가 제공하는 모든 API를 이 파일에도 있다고 가정하지 않습니다."
+      "text": "헤더 guard 안 C 전용 구역에 cpu_relax 하나만 있습니다. include, 외부 변수, getcpu 선언은 없으므로 같은 이름의 x86 헤더와 제공 항목이 모두 같다고 생각하지 않습니다."
     },
     {
       "title": "실제 명령과 함수 범위",
-      "text": "본문은 asm volatile(\"yield\" ::: \"memory\")입니다. ARM64의 CPU 실행 힌트를 제공하며 조건을 읽거나 반복하는 코드가 아닙니다. 호출부가 기다리는 값과 루프 종료 조건을 관리합니다. 함수는 반환값이 없는 inline 후보이며 x86 원본의 __always_inline 표기와 다르게 단순 inline입니다."
+      "text": "본문은 yield 어셈블리 명령입니다. 조건을 읽거나 반복하지 않고 CPU 실행 힌트만 주므로 기다릴 값과 종료 조건은 호출자가 관리합니다. 여기서는 단순 inline이며 x86의 __always_inline 표시와 다릅니다."
     },
     {
       "title": "Scheduler와 메모리 순서",
-      "text": "이 명령을 sched_yield syscall이나 sleep 호출과 동일시하면 안 됩니다. svc 명령도 scheduler 함수 호출도 없습니다. memory clobber는 컴파일러의 메모리 효과 선언이며 DMB·DSB·ISB 같은 명시적 장벽 명령을 여기서 실행하는 것은 아닙니다. 락·원자성·공유 데이터 가시성의 계약은 별도로 필요합니다."
+      "text": "sched_yield 시스템 호출이나 sleep과 같지 않으며 시스템 호출 진입 svc나 스케줄러 호출도 없습니다. memory 표시는 컴파일러 제약이고 DMB·DSB·ISB 장벽을 실행하지는 않습니다. 잠금·원자성·공유 자료 순서는 별도 규칙이 필요합니다."
     },
     {
       "title": "아키텍처 추상화와 범위",
-      "text": "공통 vDSO 코드는 cpu_relax 이름을 사용하고 선택된 아키텍처 헤더는 ARM64 YIELD 또는 x86 PAUSE 같은 구현을 제공합니다. 동일 이름이 동일 명령이나 정확히 같은 지연 시간을 뜻하지는 않습니다. 전체 조건과 본문을 대조했으며 실제 ARM64 명령 실행·성능 측정은 하지 않았습니다."
+      "text": "공통 코드는 cpu_relax라는 이름을 쓰고 CPU별 헤더가 ARM64 YIELD나 x86 PAUSE를 제공합니다. 이름이 같다고 실제 명령이나 지연 시간이 같지는 않습니다. 이 설명은 실제 ARM64 실행·성능 측정 결과가 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "ARM64 cpu_relax의 yield는 sched_yield 시스템 호출인가?",
+      "prompt": "여기의 yield는 sched_yield 시스템 호출인가요?",
       "options": [
+        "아니요. CPU 어셈블리 힌트입니다.",
+        "네. 현재 태스크를 실행 줄의 뒤로 반드시 옮깁니다."
+      ],
+      "answer": 0,
+      "explanation": "시스템 호출 진입이나 스케줄러 함수가 없습니다.",
+      "original_prompt": "ARM64 cpu_relax의 yield는 sched_yield 시스템 호출인가?",
+      "original_options": [
         "아니다. 어셈블리 CPU 힌트 명령이다",
         "그렇다. 운영체제 실행 큐에서 현재 task를 항상 뒤로 옮긴다"
       ],
-      "answer": 0,
-      "explanation": "본문은 yield 하나이며 syscall 진입 svc나 scheduler 호출이 없습니다. 이름의 유사성과 실행 의미를 구분해야 합니다."
+      "original_explanation": "본문은 yield 하나이며 syscall 진입 svc나 scheduler 호출이 없습니다. 이름의 유사성과 실행 의미를 구분해야 합니다."
     },
     {
-      "prompt": "이 함수 하나만으로 대기 조건이 충족될 때까지 반복하는가?",
+      "prompt": "이 함수가 조건을 만족할 때까지 혼자 반복하나요?",
       "options": [
+        "네. 모든 공유 변수가 안정될 때까지 돕니다.",
+        "아니요. 조건과 반복은 호출자가 맡습니다."
+      ],
+      "answer": 1,
+      "explanation": "함수 안에는 반복문이나 공유 변수 읽기가 없습니다.",
+      "original_prompt": "이 함수 하나만으로 대기 조건이 충족될 때까지 반복하는가?",
+      "original_options": [
         "그렇다. 모든 공유 변수가 안정될 때까지 내부에서 무한 반복한다",
         "아니다. 조건과 반복은 호출부가 담당한다"
       ],
-      "answer": 1,
-      "explanation": "함수에는 루프나 공유 변수 읽기가 없습니다. 재시도 루프가 호출할 힌트를 제공하는 작은 구성 요소입니다."
+      "original_explanation": "함수에는 루프나 공유 변수 읽기가 없습니다. 재시도 루프가 호출할 힌트를 제공하는 작은 구성 요소입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "이 함수 안에 없는 반복 조건을 호출자가 어떻게 확인해야 하는지 말해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 ARM Ltd.\n */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\nstatic inline void cpu_relax(void)\n{\n\tasm volatile(\"yield\" ::: \"memory\");\n}\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/processor.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e4741b892a78f3a8",
+    "path": "arch/arm64/include/asm/vdso/processor.h",
+    "title": "ARM64 cpu_relax: YIELD 명령과 스케줄러 양보의 차이",
+    "area": "ARM64 YIELD · busy waiting · 인라인 함수 · 컴파일러 메모리 효과 · 추상화",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "짧은 cpu_relax 구현 전체의 전처리 조건과 어셈블리 계약을 분석합니다.",
+    "guide": [
+      "명령 이름이 yield라고 해서 운영체제 scheduler에 실행권을 넘기는 API와 같지는 않습니다.",
+      "아키텍처 공통 helper 이름 아래 다른 CPU 힌트를 제공하는 구조를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0-only와 __ASM_VDSO_PROCESSOR_H guard 안의 !__ASSEMBLY__ 구역에 static inline void cpu_relax(void) 하나가 있습니다. include나 외부 변수·getcpu 선언은 없습니다. x86의 같은 이름 헤더가 제공하는 모든 API를 이 파일에도 있다고 가정하지 않습니다."
+      },
+      {
+        "title": "실제 명령과 함수 범위",
+        "text": "본문은 asm volatile(\"yield\" ::: \"memory\")입니다. ARM64의 CPU 실행 힌트를 제공하며 조건을 읽거나 반복하는 코드가 아닙니다. 호출부가 기다리는 값과 루프 종료 조건을 관리합니다. 함수는 반환값이 없는 inline 후보이며 x86 원본의 __always_inline 표기와 다르게 단순 inline입니다."
+      },
+      {
+        "title": "Scheduler와 메모리 순서",
+        "text": "이 명령을 sched_yield syscall이나 sleep 호출과 동일시하면 안 됩니다. svc 명령도 scheduler 함수 호출도 없습니다. memory clobber는 컴파일러의 메모리 효과 선언이며 DMB·DSB·ISB 같은 명시적 장벽 명령을 여기서 실행하는 것은 아닙니다. 락·원자성·공유 데이터 가시성의 계약은 별도로 필요합니다."
+      },
+      {
+        "title": "아키텍처 추상화와 범위",
+        "text": "공통 vDSO 코드는 cpu_relax 이름을 사용하고 선택된 아키텍처 헤더는 ARM64 YIELD 또는 x86 PAUSE 같은 구현을 제공합니다. 동일 이름이 동일 명령이나 정확히 같은 지연 시간을 뜻하지는 않습니다. 전체 조건과 본문을 대조했으며 실제 ARM64 명령 실행·성능 측정은 하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ARM64 cpu_relax의 yield는 sched_yield 시스템 호출인가?",
+        "options": [
+          "아니다. 어셈블리 CPU 힌트 명령이다",
+          "그렇다. 운영체제 실행 큐에서 현재 task를 항상 뒤로 옮긴다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 yield 하나이며 syscall 진입 svc나 scheduler 호출이 없습니다. 이름의 유사성과 실행 의미를 구분해야 합니다."
+      },
+      {
+        "prompt": "이 함수 하나만으로 대기 조건이 충족될 때까지 반복하는가?",
+        "options": [
+          "그렇다. 모든 공유 변수가 안정될 때까지 내부에서 무한 반복한다",
+          "아니다. 조건과 반복은 호출부가 담당한다"
+        ],
+        "answer": 1,
+        "explanation": "함수에는 루프나 공유 변수 읽기가 없습니다. 재시도 루프가 호출할 힌트를 제공하는 작은 구성 요소입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 ARM Ltd.\n */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\nstatic inline void cpu_relax(void)\n{\n\tasm volatile(\"yield\" ::: \"memory\");\n}\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "faeb7e98d7c9b151ce36d8721e0e34d417bb829672e59dc5b9a21a4b7ef1c991",
+      "scope": "whole-file",
+      "line_count": 17,
+      "authoring_source": "course/file_units/vdso_processor_hints.py",
+      "sections": [
+        "전체 파일",
+        "실제 명령과 함수 범위",
+        "Scheduler와 메모리 순서",
+        "아키텍처 추상화와 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/processor.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "양보라는 이름이 붙어 있어도 친구에게 자리를 완전히 넘기는 것과 잠깐 동작을 조절하라는 힌트는 다릅니다. ARM64의 yield는 CPU에게 보내는 힌트입니다.",
+    "meaning": "ARM64 cpu_relax의 YIELD 명령을 운영체제 양보·수면과 구별합니다.",
+    "exercise": "이 함수 안에 없는 반복 조건을 호출자가 어떻게 확인해야 하는지 말해 보세요."
+  },
+  "goal": "ARM64 cpu_relax의 YIELD 명령을 운영체제 양보·수면과 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "이 함수 안에 없는 반복 조건을 호출자가 어떻게 확인해야 하는지 말해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "5c0c501fa3466b7805e916424efc088e631a01ce6ce57c716a4c8963d9521f5a",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

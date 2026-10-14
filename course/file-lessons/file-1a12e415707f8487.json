@@ -5,67 +5,81 @@
   "area": "정수 표현 · 상한·ABI·이진 크기 단위",
   "track": "files",
   "kind": "kernel",
-  "intro": "비트 반전과 타입 변환으로 각 정수형의 표현 한계를 정의합니다.",
+  "intro": "크기·주소 타입과 고정폭 정수의 경계값을 읽고 상수 정의와 범위 검사 동작을 구별합니다.",
   "guide": [
-    "UAPI 한계와 타입, vDSO 정수 한계를 포함하고 size·물리주소·자원 크기 및 u8/s8부터u64/s64의 경계를 정의합니다.",
-    "타입의 최대값은 실제 메모리 용량이나 현재 허용된 자원 한도와 다릅니다. 경계 상수를 사용해도 덧셈·곱셈의 오버플로가 자동으로 방지되지는 않습니다."
+    "SIZE_MAX는 size_t가 표현할 최대값이며 물리 메모리 총량이 아닙니다.",
+    "오버플로는 계산 결과가 타입의 범위를 넘는 일입니다. 한계 상수가 자동으로 이를 막지는 않습니다.",
+    "s8처럼 부호 있는 타입은 음수 쪽에 한 값이 더 있으므로 최소값을 양수로 바꿀 때도 범위를 확인합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "SPDX,guard,UAPI limits/types/vdso limits include,크기 관련4개와고정폭 정수 경계 매크로,#endif입니다. 함수나 런타임 계산 저장소는 없습니다."
+      "title": "상수만 모은 파일",
+      "text": "라이선스와 중복 포함 방지, UAPI limits·types·vDSO limits 포함 뒤 크기 관련 상수 네 개와 고정폭 정수의 최대·최소값을 정의합니다. 함수나 실행 중 계산 결과를 저장하는 보관함은 없습니다."
     },
     {
-      "title": "크기와 주소",
-      "text": "SIZE_MAX는size_t의모든비트를1로만들고 SSIZE_MAX는이를한비트줄여ssize_t로변환합니다. PHYS_ADDR_MAX와RESOURCE_SIZE_MAX는각타입의모든비트가1인값입니다. phys_addr_t와resource_size_t의폭은대상설정을확인해야합니다. 최대표현주소가실제로장착된RAM의끝이라는뜻은아닙니다."
+      "title": "크기와 주소의 최대 표현값",
+      "text": "SIZE_MAX는 size_t의 모든 비트를 1로 만듭니다. SSIZE_MAX는 이를 한 비트 줄여 ssize_t로 바꿉니다. PHYS_ADDR_MAX와 RESOURCE_SIZE_MAX도 각 타입의 모든 비트가 1인 값입니다. 실제 폭은 대상 설정에 따르며 최대 표현 주소가 실제 RAM 마지막 주소라는 뜻은 아닙니다."
     },
     {
-      "title": "고정폭 정수",
-      "text": "U8_MAX/U16_MAX/U32_MAX는~0U를해당unsigned타입으로변환하고 U64_MAX는~0ULL을사용합니다. S8/S16/S32/S64_MAX는대응unsigned최대값을오른쪽으로한비트이동한뒤signed로변환합니다. MIN은-MAX-1입니다. U32_MIN은별도로0을정의합니다."
+      "title": "8·16·32·64비트 경계",
+      "text": "U8·U16·U32 최대는 ~0U를 해당 부호 없는 타입으로 바꾸고 U64는 ~0ULL을 씁니다. 부호 있는 최대는 대응 최대를 한 비트 오른쪽으로 옮긴 뒤 변환하고 최소는 -MAX-1입니다. U32_MIN은 별도로 0입니다."
     },
     {
-      "title": "수치 예제와CS",
-      "text": "u8의최대값은255,s8의최대127·최소-128입니다. 최소값의절댓값128은s8양수범위에없습니다. 경계값자체의표현과그경계를넘는연산의표현가능성을구분합니다. 값의타입을명시하는캐스트도정수승격과주변식의타입규칙까지없애지는않습니다."
+      "title": "숫자 예시와 주의",
+      "text": "u8 최대는 255, s8 최대는 127이고 최소는 -128입니다. 128은 s8 양수 범위 밖입니다. 경계값 자체를 표현하는 것과 그보다 큰 계산 결과를 담는 것은 다릅니다. 타입 캐스트가 있어도 주변 식의 정수 승격·타입 규칙은 계속 적용됩니다."
     }
   ],
   "questions": [
     {
-      "prompt": "PHYS_ADDR_MAX는 현재 RAM의 마지막 실제 주소인가?",
+      "prompt": "PHYS_ADDR_MAX는 현재 RAM의 마지막 주소인가요?",
       "options": [
+        "아니요. phys_addr_t의 최대 표현값입니다.",
+        "네. 부팅 때 메모리 크기를 조회합니다."
+      ],
+      "answer": 0,
+      "explanation": "타입의 비트를 뒤집는 상수이며 메모리 지도나 장치를 조회하지 않습니다.",
+      "original_prompt": "PHYS_ADDR_MAX는 현재 RAM의 마지막 실제 주소인가?",
+      "original_options": [
         "아니다. phys_addr_t의 최대 표현값이다",
         "그렇다. 부팅 중 메모리 크기를 조회한다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 타입에 대한 비트 반전입니다. 장치나 메모리 맵을 조회하지 않습니다."
+      "original_explanation": "매크로는 타입에 대한 비트 반전입니다. 장치나 메모리 맵을 조회하지 않습니다."
     },
     {
-      "prompt": "s8 최소값이 -127이 아니라 -128인 이유는?",
+      "prompt": "s8 최소가 -127이 아니라 -128인 이유는?",
       "options": [
+        "부호 비트가 두 개이기 때문입니다.",
+        "-S8_MAX-1로 정의하고 음수 쪽 값이 하나 더 있기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "-127-1=-128입니다. 이 최소값의 양수 짝은 같은 타입에 담기지 않습니다.",
+      "original_prompt": "s8 최소값이 -127이 아니라 -128인 이유는?",
+      "original_options": [
         "부호 비트가 두 개이기 때문이다",
         "정의가 -S8_MAX-1이며 음수 쪽 표현값이 하나 더 있다"
       ],
-      "answer": 1,
-      "explanation": "최대127에 대해 -127-1=-128입니다. 최소값을 같은 signed 타입에서 단순 절댓값으로 바꿀 때 범위를 확인해야 합니다."
+      "original_explanation": "최대127에 대해 -127-1=-128입니다. 최소값을 같은 signed 타입에서 단순 절댓값으로 바꿀 때 범위를 확인해야 합니다."
     },
     {
-      "prompt": "SIZE_MAX를 사용하면 n+1 오버플로가 자동 검사되는가?",
+      "prompt": "SIZE_MAX를 쓰면 n+1 범위 초과를 자동 검사하나요?",
       "options": [
+        "아니요. 사용하는 쪽이 범위를 확인합니다.",
+        "네. 상수가 예외를 발생시킵니다."
+      ],
+      "answer": 0,
+      "explanation": "상수와 검사는 다른 일입니다. n=SIZE_MAX인 부호 없는 덧셈은 돌아갈 수 있습니다.",
+      "original_prompt": "SIZE_MAX를 사용하면 n+1 오버플로가 자동 검사되는가?",
+      "original_options": [
         "아니다. 호출자가 범위를 검사해야 한다",
         "그렇다. 매크로가 예외를 던진다"
       ],
-      "answer": 0,
-      "explanation": "상수 정의와 검사 연산은 별개입니다. n이SIZE_MAX이면unsigned n+1은순환할수있습니다."
+      "original_explanation": "상수 정의와 검사 연산은 별개입니다. n이SIZE_MAX이면unsigned n+1은순환할수있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "u8 최대 255를 한 비트 오른쪽으로 옮겨 s8 최대 127과 최소 -128을 구해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_LIMITS_H\n#define _LINUX_LIMITS_H\n\n#include <uapi/linux/limits.h>\n#include <linux/types.h>\n#include <vdso/limits.h>\n\n#define SIZE_MAX\t(~(size_t)0)\n#define SSIZE_MAX\t((ssize_t)(SIZE_MAX >> 1))\n#define PHYS_ADDR_MAX\t(~(phys_addr_t)0)\n\n#define RESOURCE_SIZE_MAX\t((resource_size_t)~0)\n\n#define U8_MAX\t\t((u8)~0U)\n#define S8_MAX\t\t((s8)(U8_MAX >> 1))\n#define S8_MIN\t\t((s8)(-S8_MAX - 1))\n#define U16_MAX\t\t((u16)~0U)\n#define S16_MAX\t\t((s16)(U16_MAX >> 1))\n#define S16_MIN\t\t((s16)(-S16_MAX - 1))\n#define U32_MAX\t\t((u32)~0U)\n#define U32_MIN\t\t((u32)0)\n#define S32_MAX\t\t((s32)(U32_MAX >> 1))\n#define S32_MIN\t\t((s32)(-S32_MAX - 1))\n#define U64_MAX\t\t((u64)~0ULL)\n#define S64_MAX\t\t((s64)(U64_MAX >> 1))\n#define S64_MIN\t\t((s64)(-S64_MAX - 1))\n\n#endif /* _LINUX_LIMITS_H */\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/limits.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-1a12e415707f8487",
+    "path": "include/linux/limits.h",
+    "title": "커널 정수 한계 전체: 타입 폭에서 최대·최소값 만들기",
+    "area": "정수 표현 · 상한·ABI·이진 크기 단위",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "비트 반전과 타입 변환으로 각 정수형의 표현 한계를 정의합니다.",
+    "guide": [
+      "UAPI 한계와 타입, vDSO 정수 한계를 포함하고 size·물리주소·자원 크기 및 u8/s8부터u64/s64의 경계를 정의합니다.",
+      "타입의 최대값은 실제 메모리 용량이나 현재 허용된 자원 한도와 다릅니다. 경계 상수를 사용해도 덧셈·곱셈의 오버플로가 자동으로 방지되지는 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "SPDX,guard,UAPI limits/types/vdso limits include,크기 관련4개와고정폭 정수 경계 매크로,#endif입니다. 함수나 런타임 계산 저장소는 없습니다."
+      },
+      {
+        "title": "크기와 주소",
+        "text": "SIZE_MAX는size_t의모든비트를1로만들고 SSIZE_MAX는이를한비트줄여ssize_t로변환합니다. PHYS_ADDR_MAX와RESOURCE_SIZE_MAX는각타입의모든비트가1인값입니다. phys_addr_t와resource_size_t의폭은대상설정을확인해야합니다. 최대표현주소가실제로장착된RAM의끝이라는뜻은아닙니다."
+      },
+      {
+        "title": "고정폭 정수",
+        "text": "U8_MAX/U16_MAX/U32_MAX는~0U를해당unsigned타입으로변환하고 U64_MAX는~0ULL을사용합니다. S8/S16/S32/S64_MAX는대응unsigned최대값을오른쪽으로한비트이동한뒤signed로변환합니다. MIN은-MAX-1입니다. U32_MIN은별도로0을정의합니다."
+      },
+      {
+        "title": "수치 예제와CS",
+        "text": "u8의최대값은255,s8의최대127·최소-128입니다. 최소값의절댓값128은s8양수범위에없습니다. 경계값자체의표현과그경계를넘는연산의표현가능성을구분합니다. 값의타입을명시하는캐스트도정수승격과주변식의타입규칙까지없애지는않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "PHYS_ADDR_MAX는 현재 RAM의 마지막 실제 주소인가?",
+        "options": [
+          "아니다. phys_addr_t의 최대 표현값이다",
+          "그렇다. 부팅 중 메모리 크기를 조회한다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 타입에 대한 비트 반전입니다. 장치나 메모리 맵을 조회하지 않습니다."
+      },
+      {
+        "prompt": "s8 최소값이 -127이 아니라 -128인 이유는?",
+        "options": [
+          "부호 비트가 두 개이기 때문이다",
+          "정의가 -S8_MAX-1이며 음수 쪽 표현값이 하나 더 있다"
+        ],
+        "answer": 1,
+        "explanation": "최대127에 대해 -127-1=-128입니다. 최소값을 같은 signed 타입에서 단순 절댓값으로 바꿀 때 범위를 확인해야 합니다."
+      },
+      {
+        "prompt": "SIZE_MAX를 사용하면 n+1 오버플로가 자동 검사되는가?",
+        "options": [
+          "아니다. 호출자가 범위를 검사해야 한다",
+          "그렇다. 매크로가 예외를 던진다"
+        ],
+        "answer": 0,
+        "explanation": "상수 정의와 검사 연산은 별개입니다. n이SIZE_MAX이면unsigned n+1은순환할수있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_LIMITS_H\n#define _LINUX_LIMITS_H\n\n#include <uapi/linux/limits.h>\n#include <linux/types.h>\n#include <vdso/limits.h>\n\n#define SIZE_MAX\t(~(size_t)0)\n#define SSIZE_MAX\t((ssize_t)(SIZE_MAX >> 1))\n#define PHYS_ADDR_MAX\t(~(phys_addr_t)0)\n\n#define RESOURCE_SIZE_MAX\t((resource_size_t)~0)\n\n#define U8_MAX\t\t((u8)~0U)\n#define S8_MAX\t\t((s8)(U8_MAX >> 1))\n#define S8_MIN\t\t((s8)(-S8_MAX - 1))\n#define U16_MAX\t\t((u16)~0U)\n#define S16_MAX\t\t((s16)(U16_MAX >> 1))\n#define S16_MIN\t\t((s16)(-S16_MAX - 1))\n#define U32_MAX\t\t((u32)~0U)\n#define U32_MIN\t\t((u32)0)\n#define S32_MAX\t\t((s32)(U32_MAX >> 1))\n#define S32_MIN\t\t((s32)(-S32_MAX - 1))\n#define U64_MAX\t\t((u64)~0ULL)\n#define S64_MAX\t\t((s64)(U64_MAX >> 1))\n#define S64_MIN\t\t((s64)(-S64_MAX - 1))\n\n#endif /* _LINUX_LIMITS_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "0ed7dfdba324e0ce1fc732cd580338a2535727cc6a2103af9fbe027601092e33",
+      "scope": "whole-file",
+      "line_count": 29,
+      "authoring_source": "course/file_units/numeric_limits.py",
+      "sections": [
+        "전체 구성",
+        "크기와 주소",
+        "고정폭 정수",
+        "수치 예제와CS"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/limits.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "정수 상자는 크기마다 담을 수 있는 가장 큰 수와 가장 작은 수가 다릅니다. 이 파일의 한계값은 상자 크기를 말하며 실제 컴퓨터에 장착된 메모리 양을 알려 주는 것은 아닙니다.",
+    "meaning": "크기·주소 타입과 고정폭 정수의 경계값을 읽고 상수 정의와 범위 검사 동작을 구별합니다.",
+    "exercise": "u8 최대 255를 한 비트 오른쪽으로 옮겨 s8 최대 127과 최소 -128을 구해 보세요."
+  },
+  "goal": "크기·주소 타입과 고정폭 정수의 경계값을 읽고 상수 정의와 범위 검사 동작을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "u8 최대 255를 한 비트 오른쪽으로 옮겨 s8 최대 127과 최소 -128을 구해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "be623cad30432d8d40cfb480c665a89c355846fec8171ab978ac153c288da9ce",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

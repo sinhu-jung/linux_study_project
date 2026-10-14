@@ -5,127 +5,165 @@
   "area": "CPU 토폴로지 · 장치 트리 · 자료구조 · 참조 수명 · 오류 처리",
   "track": "files",
   "kind": "kernel",
-  "intro": "하드웨어 ID 해석,architecture hook,양방향 CPU 노드 검색과 idle-state 탐색 전체를 분석합니다.",
+  "intro": "셀 배열의 하드웨어 ID 읽기와 CPU별 매칭, 대체 검색 조건 및 노드 참조 반환을 이해합니다.",
   "guide": [
-    "하드웨어 식별자와 논리 CPU 번호의 대응은 아키텍처 정책이며,조회로 얻은 노드 참조는 명시적으로 반환해야 합니다.",
-    "셀 배열 파싱,선형 탐색,weak symbol,포인터 동일성과 대체 조회 경로를 학습합니다."
+    "장치 트리는 하드웨어 설명 자료이고 노드는 그 안의 항목입니다. 얻은 노드 참조는 사용 뒤 of_node_put으로 돌려줍니다.",
+    "weak 함수는 CPU별 구현이 대신할 수 있는 기본 함수입니다. 기본값의 비교를 모든 CPU의 규칙으로 넓히지 않습니다.",
+    "논리 CPU 번호와 코어 안의 지역 thread 번호는 다릅니다. 셀을 이동할 때 어느 번호를 쓰는지 봅니다."
   ],
   "deep_dive": [
     {
-      "title": "파일과 hardware ID",
-      "text": "GPL-2.0 파일은 cpu,kernel,OF 헤더를 포함합니다. of_get_cpu_hwid는 node의 address cell 수 ac와 reg 속성·바이트 길이를 얻습니다. 속성이 없거나 ac=0이거나 요청한 thread까지 필요한 바이트가 길이를 넘으면 ~0ULL을 반환합니다. 정상 경로는 ac*thread만큼 cell 포인터를 옮겨 of_read_number로 ID를 읽습니다. 논리 CPU 번호 자체를 reg 배열 첨자로 사용하는 것이 아닙니다."
+      "title": "하드웨어 ID 읽기",
+      "text": "cpu·kernel·of 헤더 뒤 of_get_cpu_hwid는 주소 셀 수 ac와 reg 속성·바이트 길이를 얻습니다. 속성이 없거나 ac=0이거나 요청 thread까지의 길이가 부족하면 ~0ULL입니다. 정상은 ac*thread셀 앞으로 가 ID를 읽습니다. 논리 CPU 번호를 그대로 reg 배열 첨자로 쓰는 함수가 아닙니다."
     },
     {
-      "title": "길이와 단위",
-      "text": "reg는 __be32 cell 배열이며 한 ID가 ac개의 cell로 표현됩니다. 길이 검사는 sizeof(*cell)*ac*(thread+1)로 바이트 단위에 맞춥니다. 소스에는 이 곱셈의 별도 overflow helper가 없으므로 모든 비정상 입력의 산술까지 방어한다고 단정하지 않습니다. 반환 sentinel은 errno 정수가 아니라 u64의 모든 비트가 1인 값입니다."
+      "title": "셀과 바이트 맞추기",
+      "text": "reg는 빅엔디언 32비트 셀 배열이고 한 ID는 ac개 셀입니다. sizeof(*cell)*ac*(thread+1)로 필요한 바이트를 검사합니다. 곱셈의 별도 범위 초과 검사 도구는 없으므로 모든 비정상 입력 산술까지 방어한다고 하지 않습니다. 실패값은 errno가 아니라 u64의 모든 비트 1입니다."
     },
     {
-      "title": "Weak 기본 매칭",
-      "text": "arch_match_cpu_phys_id는 __weak이며 기본 구현은 (u32)phys_id==cpu입니다. 상위 32비트를 포함한 u64 전체 동등성 비교가 아닙니다. 아키텍처 구현으로 대체할 수 있다는 주석이 있고 실제 논리·물리 mapping은 secondary core를 부팅하기 전에 구성된다는 문서가 있습니다."
+      "title": "대체 가능한 기본 매칭",
+      "text": "기본 arch_match_cpu_phys_id는 __weak이며 (u32)phys_id==cpu를 검사합니다. 64비트 전체가 아니라 변환 후 값을 비교합니다. 논리·물리 대응은 CPU 종류별 구현으로 바꿀 수 있으며 문서는 보조 코어를 부팅하기 전에 대응을 준비한다고 설명합니다."
     },
     {
-      "title": "속성의 thread 순회",
-      "text": "__of_find_n_match_cpu_property는 임의 속성명으로 cell과 ac를 얻습니다. cell도 없고 ac도 0이며 물리 ID 0이 cpu와 매칭되면 true를 반환하는 특수 경로가 있습니다. 이 경로는 thread 출력에 값을 쓰지 않습니다. 나머지 cell 또는 ac 부재는 false입니다. 바이트 길이를 sizeof(cell)*ac로 나누어 완전한 ID 개수만 순회하고 첫 매칭 tid를 thread가 nonNULL일 때 저장합니다."
+      "title": "속성 안의 thread들을 찾기",
+      "text": "속성 이름으로 셀과 ac를 얻습니다. 둘 다 없고 물리 ID 0이 맞으면 바로 true인 특별 경로가 있는데 thread 출력은 쓰지 않습니다. 나머지 속성 또는 ac 부재는 false입니다. 길이를 항목 바이트로 나눠 완전한 ID만 순회하고 첫 매칭 때 출력 주소가 있으면 tid를 씁니다."
     },
     {
-      "title": "PowerPC 우선 속성과 fallback",
-      "text": "weak arch_find_n_match_cpu_physical_id는 CONFIG_PPC이면 ibm,ppc-interrupt-server#s를 먼저 검사합니다. 그 조회가 true일 때만 바로 성공하고 그 밖에는 reg를 검사합니다. 주석은 속성 부재의 fallback을 설명하지만 실제 조건은 속성이 있어도 매칭되지 않으면 reg로 진행합니다. 속성 존재와 match 성공을 구분합니다."
+      "title": "PowerPC의 우선 속성",
+      "text": "CONFIG_PPC에서는 ibm,ppc-interrupt-server#s를 먼저 검사하고 맞았을 때만 성공 반환합니다. 아니면 reg로 이어갑니다. 주석은 속성이 없을 때를 설명하지만 실제로는 속성이 있어도 매칭이 실패하면 reg를 봅니다. 존재와 매칭 성공은 다릅니다."
     },
     {
-      "title": "CPU 노드 획득",
-      "text": "of_get_cpu_node는 for_each_of_cpu_node로 노드를 선형 순회하며 아키텍처 hook의 첫 성공 노드를 반환합니다. 없으면 NULL입니다. 반환 노드는 참조를 보유하므로 사용 후 of_node_put해야 합니다. 가능한 노드 수와 각 thread ID 수에 따라 검색 비용이 누적되며 전역 hash lookup을 구현하는 함수가 아닙니다."
+      "title": "CPU 노드를 차례로 찾기",
+      "text": "of_get_cpu_node는 모든 CPU 노드를 선형 순회하며 CPU별 매칭 함수의 첫 성공 노드를 반환합니다. 없으면 NULL입니다. 반환 참조는 사용 뒤 put해야 합니다. 노드 수와 각 thread ID 수만큼 비용이 쌓이며 전역 해시 조회 구현은 아닙니다."
     },
     {
-      "title": "CPU device의 빠른 경로",
-      "text": "of_cpu_device_node_get은 get_cpu_device(cpu)가 NULL일 때만 of_get_cpu_node(cpu,NULL)로 fallback합니다. device가 있으면 그 of_node에 of_node_get을 적용해 반환합니다. device는 있지만 of_node=NULL인 경우에도 트리를 다시 검색하는 분기는 없습니다. 기존 device 연결을 사용하는 것과 항상 전체 트리를 검색하는 것은 다릅니다."
+      "title": "이미 연결된 device 사용",
+      "text": "of_cpu_device_node_get은 get_cpu_device가 NULL일 때만 트리 검색으로 갑니다. device가 있으면 그 of_node에 get을 적용해 반환합니다. device는 있지만 노드가 NULL일 때 다시 트리를 찾는 분기는 없습니다. 빠른 연결 경로와 항상 재검색하는 방식은 다릅니다."
     },
     {
-      "title": "노드에서 논리 번호로",
-      "text": "of_cpu_node_to_id는 possible CPU들을 순회하며 각각 참조를 얻고 cpu_node==np의 포인터 동일성을 기록한 뒤 np를 put합니다. 같으면 cpu를 반환하고 끝까지 없으면 -ENODEV입니다. 이름이나 reg 값 자체를 여기서 비교하지 않습니다. 입력 NULL 검사가 없으므로 조회 np도 NULL이면 동등 비교가 참이 될 수 있습니다. NULL 입력을 무조건 -ENODEV로 처리한다고 가정하면 안 됩니다."
+      "title": "노드로 논리 번호 찾기",
+      "text": "가능한 CPU를 돌며 노드 참조를 얻고 입력과 주소가 같은지 기록한 뒤 put합니다. 같으면 CPU 번호, 끝까지 없으면 -ENODEV입니다. 이름이나 reg 값을 직접 비교하지 않습니다. 입력 NULL 검사도 없어 조회 노드까지 NULL이면 같다고 될 수 있으므로 NULL 입력이 반드시 오류라고 하지 않습니다."
     },
     {
-      "title": "Idle state 계층 조회",
-      "text": "of_get_cpu_state_node는 power-domains의 0번 항목을 #power-domain-cells 규칙으로 파싱합니다. 성공하면 args.np의 domain-idle-states에서 요청 index를 찾고 중간 args.np 참조를 put합니다. state_node가 있으면 반환하고 없거나 첫 파싱 오류면 CPU의 cpu-idle-states에서 같은 index를 조회합니다. 임의 깊이의 power-domain 트리를 재귀 순회하는 구현은 아닙니다."
+      "title": "CPU 휴식 상태 찾기",
+      "text": "power-domains의 0번을 #power-domain-cells 규칙으로 읽습니다. 성공하면 그 노드의 domain-idle-states에서 index를 찾고 중간 노드 참조를 put합니다. 상태 노드가 있으면 반환하고 없거나 첫 해석 실패면 CPU의 cpu-idle-states를 찾습니다. 임의 깊이 전원 도메인 트리를 재귀 탐색하는 것은 아닙니다."
     },
     {
-      "title": "반환 참조와 전체 범위",
-      "text": "idle state 반환도 참조가 증가한 노드이므로 호출자가 put합니다. 공개 CPU 노드 get,device node get,node to id,state node 함수 네 개는 EXPORT_SYMBOL입니다. ID reader,두 weak hook,속성 helper와 네 공개 함수 전체를 대조했습니다. 이 파일에는 캐시 노드 탐색이 없으며 실제 CPU hotplug나 아키텍처별 실행 테스트를 수행하지 않았습니다."
+      "title": "반환 참조와 검토 범위",
+      "text": "휴식 상태 노드도 참조를 얻어 반환하므로 호출자가 put합니다. CPU 노드 get·device 노드 get·번호 변환·상태 노드의 네 함수는 EXPORT_SYMBOL입니다. ID 읽기와 두 weak 함수, 속성 helper와 공개 함수들을 읽었습니다. 캐시 노드 검색은 이 파일에 없고 실제 CPU 추가·제거나 CPU별 실행 시험은 하지 않았습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "기본 arch_match_cpu_phys_id는 phys_id의 모든 64비트를 비교하는가?",
+      "prompt": "기본 물리 ID 매칭은 64비트 전체를 비교하나요?",
       "options": [
+        "아니요. u32로 바꾼 값을 cpu와 비교합니다.",
+        "네. 언제나 u64 전체가 같아야 합니다."
+      ],
+      "answer": 0,
+      "explanation": "명시적 변환이 있습니다. 대체 가능한 CPU별 구현과 기본식을 구별합니다.",
+      "original_prompt": "기본 arch_match_cpu_phys_id는 phys_id의 모든 64비트를 비교하는가?",
+      "original_options": [
         "아니다. u32로 변환한 값을 cpu와 비교한다",
         "그렇다. 항상 u64 완전 동등성이다"
       ],
-      "answer": 0,
-      "explanation": "명시적 캐스트가 있습니다. 아키텍처별 override와 기본 구현을 구분해야 합니다."
+      "original_explanation": "명시적 캐스트가 있습니다. 아키텍처별 override와 기본 구현을 구분해야 합니다."
     },
     {
-      "prompt": "PPC 특수 속성이 있지만 매칭되지 않으면?",
+      "prompt": "PPC 특별 속성이 있지만 매칭이 실패하면?",
       "options": [
+        "존재만으로 즉시 false를 반환합니다.",
+        "reg 속성도 이어 검사합니다."
+      ],
+      "answer": 1,
+      "explanation": "특별 helper가 true인 경우만 즉시 성공합니다. 존재 여부와 성공 여부는 다릅니다.",
+      "original_prompt": "PPC 특수 속성이 있지만 매칭되지 않으면?",
+      "original_options": [
         "속성이 존재한다는 이유만으로 즉시 false를 반환한다",
         "reg 속성을 이어 검사한다"
       ],
-      "answer": 1,
-      "explanation": "조건은 특수 속성 helper의 true 반환 여부입니다. 주석의 부재 설명보다 실제 분기 범위가 넓습니다."
+      "original_explanation": "조건은 특수 속성 helper의 true 반환 여부입니다. 주석의 부재 설명보다 실제 분기 범위가 넓습니다."
     },
     {
-      "prompt": "CPU device는 있으나 of_node가 NULL이면 다시 트리를 검색하는가?",
+      "prompt": "CPU device는 있지만 of_node=NULL이면 다시 트리를 찾나요?",
       "options": [
+        "아니요. of_node_get(NULL) 결과를 반환합니다.",
+        "네. NULL이면 항상 전체를 찾습니다."
+      ],
+      "answer": 0,
+      "explanation": "대체 검색 조건은 device 자체의 부재입니다. 내부 노드 부재와 구별합니다.",
+      "original_prompt": "CPU device는 있으나 of_node가 NULL이면 다시 트리를 검색하는가?",
+      "original_options": [
         "아니다. of_node_get(NULL)의 결과를 반환하는 경로다",
         "그렇다. NULL이면 항상 전체 검색한다"
       ],
-      "answer": 0,
-      "explanation": "fallback 조건은 cpu_dev의 부재입니다. 내부 필드의 부재와 다른 조건입니다."
+      "original_explanation": "fallback 조건은 cpu_dev의 부재입니다. 내부 필드의 부재와 다른 조건입니다."
     },
     {
-      "prompt": "node_to_id가 비교하는 것은?",
+      "prompt": "node_to_id는 무엇을 비교하나요?",
       "options": [
+        "노드 이름 문자열만 봅니다.",
+        "노드 주소가 같은지 봅니다."
+      ],
+      "answer": 1,
+      "explanation": "cpu_node==np를 기록한 뒤 조회 참조를 놓습니다. 같은 이름과 같은 객체는 다릅니다.",
+      "original_prompt": "node_to_id가 비교하는 것은?",
+      "original_options": [
         "노드 이름 문자열만",
         "노드 포인터 동일성"
       ],
-      "answer": 1,
-      "explanation": "cpu_node==np를 계산하고 조회 참조를 put합니다. 이름이 같다는 것과 같은 객체라는 것은 다릅니다."
+      "original_explanation": "cpu_node==np를 계산하고 조회 참조를 put합니다. 이름이 같다는 것과 같은 객체라는 것은 다릅니다."
     },
     {
-      "prompt": "node_to_id에 NULL을 주면 반드시 -ENODEV인가?",
+      "prompt": "node_to_id에 NULL을 주면 반드시 -ENODEV인가요?",
       "options": [
+        "아니요. 조회 노드도 NULL이면 같다고 될 수 있습니다.",
+        "네. 첫 줄에서 NULL을 거절합니다."
+      ],
+      "answer": 0,
+      "explanation": "명시적 방어가 없습니다. 정상 사용 전제와 실제 분기를 나누어 읽습니다.",
+      "original_prompt": "node_to_id에 NULL을 주면 반드시 -ENODEV인가?",
+      "original_options": [
         "아니다. 조회 np도 NULL이면 비교가 참일 수 있다",
         "그렇다. 첫 줄에서 NULL을 거부한다"
       ],
-      "answer": 0,
-      "explanation": "명시적 NULL 방어가 없음을 확인해야 합니다. API의 정상 사용 전제와 실제 분기를 구분합니다."
+      "original_explanation": "명시적 NULL 방어가 없음을 확인해야 합니다. API의 정상 사용 전제와 실제 분기를 구분합니다."
     },
     {
-      "prompt": "계층형 idle-state 조회에서 중간 power-domain 노드 참조는?",
+      "prompt": "휴식 상태를 찾은 뒤 중간 전원 도메인 참조는?",
       "options": [
+        "성공 때마다 영원히 보유합니다.",
+        "domain-idle-states 조회 뒤 put합니다."
+      ],
+      "answer": 1,
+      "explanation": "중간 노드와 반환 상태 노드는 별개입니다. 결과 노드는 호출자 책임으로 남습니다.",
+      "original_prompt": "계층형 idle-state 조회에서 중간 power-domain 노드 참조는?",
+      "original_options": [
         "성공할 때마다 영구 보유한다",
         "domain-idle-states 조회 뒤 put한다"
       ],
-      "answer": 1,
-      "explanation": "중간 args.np와 반환 state_node는 별개의 참조입니다. 반환 노드는 호출자 책임으로 남습니다."
+      "original_explanation": "중간 args.np와 반환 state_node는 별개의 참조입니다. 반환 노드는 호출자 책임으로 남습니다."
     },
     {
-      "prompt": "속성도 없고 ac=0인 특수 매칭 성공 시 thread를 0으로 쓰는가?",
+      "prompt": "속성도 없고 ac=0인 특별 성공 경로는 thread=0을 쓰나요?",
       "options": [
+        "아니요. 그 경로에는 thread 대입이 없습니다.",
+        "네. 모든 성공이 thread=0을 보장합니다."
+      ],
+      "answer": 0,
+      "explanation": "출력 대입은 정상 배열 순회 매칭 안에 있습니다. 성공 결과만으로 출력 초기화를 추측하지 않습니다.",
+      "original_prompt": "속성도 없고 ac=0인 특수 매칭 성공 시 thread를 0으로 쓰는가?",
+      "original_options": [
         "아니다. 그 경로에는 thread 대입이 없다",
         "그렇다. 모든 성공 경로가 thread=0을 보장한다"
       ],
-      "answer": 0,
-      "explanation": "thread 대입은 뒤의 정상 배열 순회 매칭 안에만 있습니다. 출력 인수는 모든 반환 경로를 추적해야 합니다."
+      "original_explanation": "thread 대입은 뒤의 정상 배열 순회 매칭 안에만 있습니다. 출력 인수는 모든 반환 경로를 추적해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "CPU device가 없는 경우와 device는 있지만 of_node가 없는 경우를 각각 따라가 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/cpu.h>\n#include <linux/kernel.h>\n#include <linux/of.h>\n\n/**\n * of_get_cpu_hwid - Get the hardware ID from a CPU device node\n *\n * @cpun: CPU number(logical index) for which device node is required\n * @thread: The local thread number to get the hardware ID for.\n *\n * Return: The hardware ID for the CPU node or ~0ULL if not found.\n */\nu64 of_get_cpu_hwid(struct device_node *cpun, unsigned int thread)\n{\n\tconst __be32 *cell;\n\tint ac, len;\n\n\tac = of_n_addr_cells(cpun);\n\tcell = of_get_property(cpun, \"reg\", &len);\n\tif (!cell || !ac || ((sizeof(*cell) * ac * (thread + 1)) > len))\n\t\treturn ~0ULL;\n\n\tcell += ac * thread;\n\treturn of_read_number(cell, ac);\n}\n\n/*\n * arch_match_cpu_phys_id - Match the given logical CPU and physical id\n *\n * @cpu: logical cpu index of a core/thread\n * @phys_id: physical identifier of a core/thread\n *\n * CPU logical to physical index mapping is architecture specific.\n * However this __weak function provides a default match of physical\n * id to logical cpu index. phys_id provided here is usually values read\n * from the device tree which must match the hardware internal registers.\n *\n * Returns true if the physical identifier and the logical cpu index\n * correspond to the same core/thread, false otherwise.\n */\nbool __weak arch_match_cpu_phys_id(int cpu, u64 phys_id)\n{\n\treturn (u32)phys_id == cpu;\n}\n\n/*\n * Checks if the given \"prop_name\" property holds the physical id of the\n * core/thread corresponding to the logical cpu 'cpu'. If 'thread' is not\n * NULL, local thread number within the core is returned in it.\n */\nstatic bool __of_find_n_match_cpu_property(struct device_node *cpun,\n\t\t\tconst char *prop_name, int cpu, unsigned int *thread)\n{\n\tconst __be32 *cell;\n\tint ac, prop_len, tid;\n\tu64 hwid;\n\n\tac = of_n_addr_cells(cpun);\n\tcell = of_get_property(cpun, prop_name, &prop_len);\n\tif (!cell && !ac && arch_match_cpu_phys_id(cpu, 0))\n\t\treturn true;\n\tif (!cell || !ac)\n\t\treturn false;\n\tprop_len /= sizeof(*cell) * ac;\n\tfor (tid = 0; tid < prop_len; tid++) {\n\t\thwid = of_read_number(cell, ac);\n\t\tif (arch_match_cpu_phys_id(cpu, hwid)) {\n\t\t\tif (thread)\n\t\t\t\t*thread = tid;\n\t\t\treturn true;\n\t\t}\n\t\tcell += ac;\n\t}\n\treturn false;\n}\n\n/*\n * arch_find_n_match_cpu_physical_id - See if the given device node is\n * for the cpu corresponding to logical cpu 'cpu'.  Return true if so,\n * else false.  If 'thread' is non-NULL, the local thread number within the\n * core is returned in it.\n */\nbool __weak arch_find_n_match_cpu_physical_id(struct device_node *cpun,\n\t\t\t\t\t      int cpu, unsigned int *thread)\n{\n\t/* Check for non-standard \"ibm,ppc-interrupt-server#s\" property\n\t * for thread ids on PowerPC. If it doesn't exist fallback to\n\t * standard \"reg\" property.\n\t */\n\tif (IS_ENABLED(CONFIG_PPC) &&\n\t    __of_find_n_match_cpu_property(cpun,\n\t\t\t\t\t   \"ibm,ppc-interrupt-server#s\",\n\t\t\t\t\t   cpu, thread))\n\t\treturn true;\n\n\treturn __of_find_n_match_cpu_property(cpun, \"reg\", cpu, thread);\n}\n\n/**\n * of_get_cpu_node - Get device node associated with the given logical CPU\n *\n * @cpu: CPU number(logical index) for which device node is required\n * @thread: if not NULL, local thread number within the physical core is\n *          returned\n *\n * The main purpose of this function is to retrieve the device node for the\n * given logical CPU index. It should be used to initialize the of_node in\n * cpu device. Once of_node in cpu device is populated, all the further\n * references can use that instead.\n *\n * CPU logical to physical index mapping is architecture specific and is built\n * before booting secondary cores. This function uses arch_match_cpu_phys_id\n * which can be overridden by architecture specific implementation.\n *\n * Return: A node pointer for the logical cpu with refcount incremented, use\n * of_node_put() on it when done. Returns NULL if not found.\n */\nstruct device_node *of_get_cpu_node(int cpu, unsigned int *thread)\n{\n\tstruct device_node *cpun;\n\n\tfor_each_of_cpu_node(cpun) {\n\t\tif (arch_find_n_match_cpu_physical_id(cpun, cpu, thread))\n\t\t\treturn cpun;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(of_get_cpu_node);\n\n/**\n * of_cpu_device_node_get: Get the CPU device_node for a given logical CPU number\n *\n * @cpu: The logical CPU number\n *\n * Return: Pointer to the device_node for CPU with its reference count\n * incremented of the given logical CPU number or NULL if the CPU device_node\n * is not found.\n */\nstruct device_node *of_cpu_device_node_get(int cpu)\n{\n\tstruct device *cpu_dev;\n\tcpu_dev = get_cpu_device(cpu);\n\tif (!cpu_dev)\n\t\treturn of_get_cpu_node(cpu, NULL);\n\treturn of_node_get(cpu_dev->of_node);\n}\nEXPORT_SYMBOL(of_cpu_device_node_get);\n\n/**\n * of_cpu_node_to_id: Get the logical CPU number for a given device_node\n *\n * @cpu_node: Pointer to the device_node for CPU.\n *\n * Return: The logical CPU number of the given CPU device_node or -ENODEV if the\n * CPU is not found.\n */\nint of_cpu_node_to_id(struct device_node *cpu_node)\n{\n\tint cpu;\n\tbool found = false;\n\tstruct device_node *np;\n\n\tfor_each_possible_cpu(cpu) {\n\t\tnp = of_cpu_device_node_get(cpu);\n\t\tfound = (cpu_node == np);\n\t\tof_node_put(np);\n\t\tif (found)\n\t\t\treturn cpu;\n\t}\n\n\treturn -ENODEV;\n}\nEXPORT_SYMBOL(of_cpu_node_to_id);\n\n/**\n * of_get_cpu_state_node - Get CPU's idle state node at the given index\n *\n * @cpu_node: The device node for the CPU\n * @index: The index in the list of the idle states\n *\n * Two generic methods can be used to describe a CPU's idle states, either via\n * a flattened description through the \"cpu-idle-states\" binding or via the\n * hierarchical layout, using the \"power-domains\" and the \"domain-idle-states\"\n * bindings. This function check for both and returns the idle state node for\n * the requested index.\n *\n * Return: An idle state node if found at @index. The refcount is incremented\n * for it, so call of_node_put() on it when done. Returns NULL if not found.\n */\nstruct device_node *of_get_cpu_state_node(struct device_node *cpu_node,\n\t\t\t\t\t  int index)\n{\n\tstruct of_phandle_args args;\n\tint err;\n\n\terr = of_parse_phandle_with_args(cpu_node, \"power-domains\",\n\t\t\t\t\t\"#power-domain-cells\", 0, &args);\n\tif (!err) {\n\t\tstruct device_node *state_node =\n\t\t\tof_parse_phandle(args.np, \"domain-idle-states\", index);\n\n\t\tof_node_put(args.np);\n\t\tif (state_node)\n\t\t\treturn state_node;\n\t}\n\n\treturn of_parse_phandle(cpu_node, \"cpu-idle-states\", index);\n}\nEXPORT_SYMBOL(of_get_cpu_state_node);\n",
   "source_review": {
@@ -153,5 +191,190 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/cpu.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-fc06c294ff02f709",
+    "path": "drivers/of/cpu.c",
+    "title": "OF CPU 연결: 하드웨어 ID와 논리 번호, idle-state 참조",
+    "area": "CPU 토폴로지 · 장치 트리 · 자료구조 · 참조 수명 · 오류 처리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "하드웨어 ID 해석,architecture hook,양방향 CPU 노드 검색과 idle-state 탐색 전체를 분석합니다.",
+    "guide": [
+      "하드웨어 식별자와 논리 CPU 번호의 대응은 아키텍처 정책이며,조회로 얻은 노드 참조는 명시적으로 반환해야 합니다.",
+      "셀 배열 파싱,선형 탐색,weak symbol,포인터 동일성과 대체 조회 경로를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일과 hardware ID",
+        "text": "GPL-2.0 파일은 cpu,kernel,OF 헤더를 포함합니다. of_get_cpu_hwid는 node의 address cell 수 ac와 reg 속성·바이트 길이를 얻습니다. 속성이 없거나 ac=0이거나 요청한 thread까지 필요한 바이트가 길이를 넘으면 ~0ULL을 반환합니다. 정상 경로는 ac*thread만큼 cell 포인터를 옮겨 of_read_number로 ID를 읽습니다. 논리 CPU 번호 자체를 reg 배열 첨자로 사용하는 것이 아닙니다."
+      },
+      {
+        "title": "길이와 단위",
+        "text": "reg는 __be32 cell 배열이며 한 ID가 ac개의 cell로 표현됩니다. 길이 검사는 sizeof(*cell)*ac*(thread+1)로 바이트 단위에 맞춥니다. 소스에는 이 곱셈의 별도 overflow helper가 없으므로 모든 비정상 입력의 산술까지 방어한다고 단정하지 않습니다. 반환 sentinel은 errno 정수가 아니라 u64의 모든 비트가 1인 값입니다."
+      },
+      {
+        "title": "Weak 기본 매칭",
+        "text": "arch_match_cpu_phys_id는 __weak이며 기본 구현은 (u32)phys_id==cpu입니다. 상위 32비트를 포함한 u64 전체 동등성 비교가 아닙니다. 아키텍처 구현으로 대체할 수 있다는 주석이 있고 실제 논리·물리 mapping은 secondary core를 부팅하기 전에 구성된다는 문서가 있습니다."
+      },
+      {
+        "title": "속성의 thread 순회",
+        "text": "__of_find_n_match_cpu_property는 임의 속성명으로 cell과 ac를 얻습니다. cell도 없고 ac도 0이며 물리 ID 0이 cpu와 매칭되면 true를 반환하는 특수 경로가 있습니다. 이 경로는 thread 출력에 값을 쓰지 않습니다. 나머지 cell 또는 ac 부재는 false입니다. 바이트 길이를 sizeof(cell)*ac로 나누어 완전한 ID 개수만 순회하고 첫 매칭 tid를 thread가 nonNULL일 때 저장합니다."
+      },
+      {
+        "title": "PowerPC 우선 속성과 fallback",
+        "text": "weak arch_find_n_match_cpu_physical_id는 CONFIG_PPC이면 ibm,ppc-interrupt-server#s를 먼저 검사합니다. 그 조회가 true일 때만 바로 성공하고 그 밖에는 reg를 검사합니다. 주석은 속성 부재의 fallback을 설명하지만 실제 조건은 속성이 있어도 매칭되지 않으면 reg로 진행합니다. 속성 존재와 match 성공을 구분합니다."
+      },
+      {
+        "title": "CPU 노드 획득",
+        "text": "of_get_cpu_node는 for_each_of_cpu_node로 노드를 선형 순회하며 아키텍처 hook의 첫 성공 노드를 반환합니다. 없으면 NULL입니다. 반환 노드는 참조를 보유하므로 사용 후 of_node_put해야 합니다. 가능한 노드 수와 각 thread ID 수에 따라 검색 비용이 누적되며 전역 hash lookup을 구현하는 함수가 아닙니다."
+      },
+      {
+        "title": "CPU device의 빠른 경로",
+        "text": "of_cpu_device_node_get은 get_cpu_device(cpu)가 NULL일 때만 of_get_cpu_node(cpu,NULL)로 fallback합니다. device가 있으면 그 of_node에 of_node_get을 적용해 반환합니다. device는 있지만 of_node=NULL인 경우에도 트리를 다시 검색하는 분기는 없습니다. 기존 device 연결을 사용하는 것과 항상 전체 트리를 검색하는 것은 다릅니다."
+      },
+      {
+        "title": "노드에서 논리 번호로",
+        "text": "of_cpu_node_to_id는 possible CPU들을 순회하며 각각 참조를 얻고 cpu_node==np의 포인터 동일성을 기록한 뒤 np를 put합니다. 같으면 cpu를 반환하고 끝까지 없으면 -ENODEV입니다. 이름이나 reg 값 자체를 여기서 비교하지 않습니다. 입력 NULL 검사가 없으므로 조회 np도 NULL이면 동등 비교가 참이 될 수 있습니다. NULL 입력을 무조건 -ENODEV로 처리한다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "Idle state 계층 조회",
+        "text": "of_get_cpu_state_node는 power-domains의 0번 항목을 #power-domain-cells 규칙으로 파싱합니다. 성공하면 args.np의 domain-idle-states에서 요청 index를 찾고 중간 args.np 참조를 put합니다. state_node가 있으면 반환하고 없거나 첫 파싱 오류면 CPU의 cpu-idle-states에서 같은 index를 조회합니다. 임의 깊이의 power-domain 트리를 재귀 순회하는 구현은 아닙니다."
+      },
+      {
+        "title": "반환 참조와 전체 범위",
+        "text": "idle state 반환도 참조가 증가한 노드이므로 호출자가 put합니다. 공개 CPU 노드 get,device node get,node to id,state node 함수 네 개는 EXPORT_SYMBOL입니다. ID reader,두 weak hook,속성 helper와 네 공개 함수 전체를 대조했습니다. 이 파일에는 캐시 노드 탐색이 없으며 실제 CPU hotplug나 아키텍처별 실행 테스트를 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "기본 arch_match_cpu_phys_id는 phys_id의 모든 64비트를 비교하는가?",
+        "options": [
+          "아니다. u32로 변환한 값을 cpu와 비교한다",
+          "그렇다. 항상 u64 완전 동등성이다"
+        ],
+        "answer": 0,
+        "explanation": "명시적 캐스트가 있습니다. 아키텍처별 override와 기본 구현을 구분해야 합니다."
+      },
+      {
+        "prompt": "PPC 특수 속성이 있지만 매칭되지 않으면?",
+        "options": [
+          "속성이 존재한다는 이유만으로 즉시 false를 반환한다",
+          "reg 속성을 이어 검사한다"
+        ],
+        "answer": 1,
+        "explanation": "조건은 특수 속성 helper의 true 반환 여부입니다. 주석의 부재 설명보다 실제 분기 범위가 넓습니다."
+      },
+      {
+        "prompt": "CPU device는 있으나 of_node가 NULL이면 다시 트리를 검색하는가?",
+        "options": [
+          "아니다. of_node_get(NULL)의 결과를 반환하는 경로다",
+          "그렇다. NULL이면 항상 전체 검색한다"
+        ],
+        "answer": 0,
+        "explanation": "fallback 조건은 cpu_dev의 부재입니다. 내부 필드의 부재와 다른 조건입니다."
+      },
+      {
+        "prompt": "node_to_id가 비교하는 것은?",
+        "options": [
+          "노드 이름 문자열만",
+          "노드 포인터 동일성"
+        ],
+        "answer": 1,
+        "explanation": "cpu_node==np를 계산하고 조회 참조를 put합니다. 이름이 같다는 것과 같은 객체라는 것은 다릅니다."
+      },
+      {
+        "prompt": "node_to_id에 NULL을 주면 반드시 -ENODEV인가?",
+        "options": [
+          "아니다. 조회 np도 NULL이면 비교가 참일 수 있다",
+          "그렇다. 첫 줄에서 NULL을 거부한다"
+        ],
+        "answer": 0,
+        "explanation": "명시적 NULL 방어가 없음을 확인해야 합니다. API의 정상 사용 전제와 실제 분기를 구분합니다."
+      },
+      {
+        "prompt": "계층형 idle-state 조회에서 중간 power-domain 노드 참조는?",
+        "options": [
+          "성공할 때마다 영구 보유한다",
+          "domain-idle-states 조회 뒤 put한다"
+        ],
+        "answer": 1,
+        "explanation": "중간 args.np와 반환 state_node는 별개의 참조입니다. 반환 노드는 호출자 책임으로 남습니다."
+      },
+      {
+        "prompt": "속성도 없고 ac=0인 특수 매칭 성공 시 thread를 0으로 쓰는가?",
+        "options": [
+          "아니다. 그 경로에는 thread 대입이 없다",
+          "그렇다. 모든 성공 경로가 thread=0을 보장한다"
+        ],
+        "answer": 0,
+        "explanation": "thread 대입은 뒤의 정상 배열 순회 매칭 안에만 있습니다. 출력 인수는 모든 반환 경로를 추적해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/cpu.h>\n#include <linux/kernel.h>\n#include <linux/of.h>\n\n/**\n * of_get_cpu_hwid - Get the hardware ID from a CPU device node\n *\n * @cpun: CPU number(logical index) for which device node is required\n * @thread: The local thread number to get the hardware ID for.\n *\n * Return: The hardware ID for the CPU node or ~0ULL if not found.\n */\nu64 of_get_cpu_hwid(struct device_node *cpun, unsigned int thread)\n{\n\tconst __be32 *cell;\n\tint ac, len;\n\n\tac = of_n_addr_cells(cpun);\n\tcell = of_get_property(cpun, \"reg\", &len);\n\tif (!cell || !ac || ((sizeof(*cell) * ac * (thread + 1)) > len))\n\t\treturn ~0ULL;\n\n\tcell += ac * thread;\n\treturn of_read_number(cell, ac);\n}\n\n/*\n * arch_match_cpu_phys_id - Match the given logical CPU and physical id\n *\n * @cpu: logical cpu index of a core/thread\n * @phys_id: physical identifier of a core/thread\n *\n * CPU logical to physical index mapping is architecture specific.\n * However this __weak function provides a default match of physical\n * id to logical cpu index. phys_id provided here is usually values read\n * from the device tree which must match the hardware internal registers.\n *\n * Returns true if the physical identifier and the logical cpu index\n * correspond to the same core/thread, false otherwise.\n */\nbool __weak arch_match_cpu_phys_id(int cpu, u64 phys_id)\n{\n\treturn (u32)phys_id == cpu;\n}\n\n/*\n * Checks if the given \"prop_name\" property holds the physical id of the\n * core/thread corresponding to the logical cpu 'cpu'. If 'thread' is not\n * NULL, local thread number within the core is returned in it.\n */\nstatic bool __of_find_n_match_cpu_property(struct device_node *cpun,\n\t\t\tconst char *prop_name, int cpu, unsigned int *thread)\n{\n\tconst __be32 *cell;\n\tint ac, prop_len, tid;\n\tu64 hwid;\n\n\tac = of_n_addr_cells(cpun);\n\tcell = of_get_property(cpun, prop_name, &prop_len);\n\tif (!cell && !ac && arch_match_cpu_phys_id(cpu, 0))\n\t\treturn true;\n\tif (!cell || !ac)\n\t\treturn false;\n\tprop_len /= sizeof(*cell) * ac;\n\tfor (tid = 0; tid < prop_len; tid++) {\n\t\thwid = of_read_number(cell, ac);\n\t\tif (arch_match_cpu_phys_id(cpu, hwid)) {\n\t\t\tif (thread)\n\t\t\t\t*thread = tid;\n\t\t\treturn true;\n\t\t}\n\t\tcell += ac;\n\t}\n\treturn false;\n}\n\n/*\n * arch_find_n_match_cpu_physical_id - See if the given device node is\n * for the cpu corresponding to logical cpu 'cpu'.  Return true if so,\n * else false.  If 'thread' is non-NULL, the local thread number within the\n * core is returned in it.\n */\nbool __weak arch_find_n_match_cpu_physical_id(struct device_node *cpun,\n\t\t\t\t\t      int cpu, unsigned int *thread)\n{\n\t/* Check for non-standard \"ibm,ppc-interrupt-server#s\" property\n\t * for thread ids on PowerPC. If it doesn't exist fallback to\n\t * standard \"reg\" property.\n\t */\n\tif (IS_ENABLED(CONFIG_PPC) &&\n\t    __of_find_n_match_cpu_property(cpun,\n\t\t\t\t\t   \"ibm,ppc-interrupt-server#s\",\n\t\t\t\t\t   cpu, thread))\n\t\treturn true;\n\n\treturn __of_find_n_match_cpu_property(cpun, \"reg\", cpu, thread);\n}\n\n/**\n * of_get_cpu_node - Get device node associated with the given logical CPU\n *\n * @cpu: CPU number(logical index) for which device node is required\n * @thread: if not NULL, local thread number within the physical core is\n *          returned\n *\n * The main purpose of this function is to retrieve the device node for the\n * given logical CPU index. It should be used to initialize the of_node in\n * cpu device. Once of_node in cpu device is populated, all the further\n * references can use that instead.\n *\n * CPU logical to physical index mapping is architecture specific and is built\n * before booting secondary cores. This function uses arch_match_cpu_phys_id\n * which can be overridden by architecture specific implementation.\n *\n * Return: A node pointer for the logical cpu with refcount incremented, use\n * of_node_put() on it when done. Returns NULL if not found.\n */\nstruct device_node *of_get_cpu_node(int cpu, unsigned int *thread)\n{\n\tstruct device_node *cpun;\n\n\tfor_each_of_cpu_node(cpun) {\n\t\tif (arch_find_n_match_cpu_physical_id(cpun, cpu, thread))\n\t\t\treturn cpun;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(of_get_cpu_node);\n\n/**\n * of_cpu_device_node_get: Get the CPU device_node for a given logical CPU number\n *\n * @cpu: The logical CPU number\n *\n * Return: Pointer to the device_node for CPU with its reference count\n * incremented of the given logical CPU number or NULL if the CPU device_node\n * is not found.\n */\nstruct device_node *of_cpu_device_node_get(int cpu)\n{\n\tstruct device *cpu_dev;\n\tcpu_dev = get_cpu_device(cpu);\n\tif (!cpu_dev)\n\t\treturn of_get_cpu_node(cpu, NULL);\n\treturn of_node_get(cpu_dev->of_node);\n}\nEXPORT_SYMBOL(of_cpu_device_node_get);\n\n/**\n * of_cpu_node_to_id: Get the logical CPU number for a given device_node\n *\n * @cpu_node: Pointer to the device_node for CPU.\n *\n * Return: The logical CPU number of the given CPU device_node or -ENODEV if the\n * CPU is not found.\n */\nint of_cpu_node_to_id(struct device_node *cpu_node)\n{\n\tint cpu;\n\tbool found = false;\n\tstruct device_node *np;\n\n\tfor_each_possible_cpu(cpu) {\n\t\tnp = of_cpu_device_node_get(cpu);\n\t\tfound = (cpu_node == np);\n\t\tof_node_put(np);\n\t\tif (found)\n\t\t\treturn cpu;\n\t}\n\n\treturn -ENODEV;\n}\nEXPORT_SYMBOL(of_cpu_node_to_id);\n\n/**\n * of_get_cpu_state_node - Get CPU's idle state node at the given index\n *\n * @cpu_node: The device node for the CPU\n * @index: The index in the list of the idle states\n *\n * Two generic methods can be used to describe a CPU's idle states, either via\n * a flattened description through the \"cpu-idle-states\" binding or via the\n * hierarchical layout, using the \"power-domains\" and the \"domain-idle-states\"\n * bindings. This function check for both and returns the idle state node for\n * the requested index.\n *\n * Return: An idle state node if found at @index. The refcount is incremented\n * for it, so call of_node_put() on it when done. Returns NULL if not found.\n */\nstruct device_node *of_get_cpu_state_node(struct device_node *cpu_node,\n\t\t\t\t\t  int index)\n{\n\tstruct of_phandle_args args;\n\tint err;\n\n\terr = of_parse_phandle_with_args(cpu_node, \"power-domains\",\n\t\t\t\t\t\"#power-domain-cells\", 0, &args);\n\tif (!err) {\n\t\tstruct device_node *state_node =\n\t\t\tof_parse_phandle(args.np, \"domain-idle-states\", index);\n\n\t\tof_node_put(args.np);\n\t\tif (state_node)\n\t\t\treturn state_node;\n\t}\n\n\treturn of_parse_phandle(cpu_node, \"cpu-idle-states\", index);\n}\nEXPORT_SYMBOL(of_get_cpu_state_node);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "39b3db7d64d54444dacaf4e08838c1a8a9b0ef4a949ed91de1e624e2c10e11ad",
+      "scope": "whole-file",
+      "line_count": 210,
+      "authoring_source": "course/file_units/of_cpu_nodes.py",
+      "sections": [
+        "파일과 hardware ID",
+        "길이와 단위",
+        "Weak 기본 매칭",
+        "속성의 thread 순회",
+        "PowerPC 우선 속성과 fallback",
+        "CPU 노드 획득",
+        "CPU device의 빠른 경로",
+        "노드에서 논리 번호로",
+        "Idle state 계층 조회",
+        "반환 참조와 전체 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/cpu.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "하드웨어 CPU의 이름표와 운영체제가 붙인 CPU 번호는 다를 수 있습니다. 장치 트리의 이름표를 읽고 CPU별 약속으로 맞는 노드를 찾습니다.",
+    "meaning": "셀 배열의 하드웨어 ID 읽기와 CPU별 매칭, 대체 검색 조건 및 노드 참조 반환을 이해합니다.",
+    "exercise": "CPU device가 없는 경우와 device는 있지만 of_node가 없는 경우를 각각 따라가 보세요."
+  },
+  "goal": "셀 배열의 하드웨어 ID 읽기와 CPU별 매칭, 대체 검색 조건 및 노드 참조 반환을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "CPU device가 없는 경우와 device는 있지만 of_node가 없는 경우를 각각 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "a02d03082e3629478bc6c92b68ee4dee92a276de7070b9848e4171ebe02a30ed",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

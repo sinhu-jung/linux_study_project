@@ -5,125 +5,151 @@
   "area": "상태 모델 · CPU별 데이터 · 비트 마스크 · 통계 · seqcount · atomic · stub",
   "track": "files",
   "kind": "kernel",
-  "intro": "장치 모드, 상태 비트 여섯 개, tick_sched의 모든 필드와 조건부 인터페이스를 읽습니다.",
+  "intro": "tick_sched의 상태 비트·시각·횟수·누적량과 조건부 함수를 구분해요.",
   "guide": [
-    "CPU의 idle 상태, tick 중단, 실제 수면 집계와 tick 의존성은 서로 다른 정보로 저장됩니다.",
-    "tickless 코드를 읽을 때 비슷한 이름의 시각·계수·상태 비트를 혼동하지 않습니다."
+    "idle은 CPU가 실행할 일이 없어 쉬는 상태예요. idle 진입, tick 중단과 실제 수면 시간 집계를 하나의 상태로 합쳐 생각하면 안 돼요.",
+    "이 헤더는 상태 구조와 선언을 정해요. 이름이 비슷한 last_tick_jiffies와 last_jiffies도 실제 목적이 달라요.",
+    "atomic이나 seqcount 멤버 하나가 구조체 전체를 자동 보호하지는 않아요. 지원이 없는 함수 stub도 항상 성공하는 것은 아니므로 본문 반환을 확인해요."
   ],
   "deep_dive": [
     {
       "title": "파일 전체와 포함 문맥",
-      "text": "GPL-2.0과 guard, hrtimer include 뒤 tick_device_mode, tick_device, 여섯 TS_FLAG 상수, tick_sched 구조체와 함수 선언·stub이 있습니다. 상태 구조를 정의하지만 실제 idle 진입·이탈 알고리즘이나 per-CPU 객체 저장소를 여기서 정의하지는 않습니다."
+      "text": "GPL-2.0과 중복 포함 guard, hrtimer 헤더 뒤에 장치 모드, tick_device, 상태 비트 여섯 개, tick_sched와 함수 선언·stub이 있어요. stub은 기능이 꺼졌을 때 대신 제공하는 짧은 함수예요. 실제 idle 진입·이탈 알고리즘이나 CPU별 객체 저장소 자체를 여기서 정의하지는 않아요."
     },
     {
       "title": "Tick 장치 모드",
-      "text": "enum의 PERIODIC은 첫 값 0, ONESHOT은 다음 값 1입니다. tick_device는 clock_event_device *evtdev와 enum mode만 가집니다. 장치 포인터와 소프트웨어 tick 모드를 연결하는 구조이며 hrtimer queue나 이벤트 callback 구현을 직접 내장하지 않습니다."
+      "text": "enum의 PERIODIC은 0, ONESHOT은 1이에요. periodic은 정기 눈금, oneshot은 다음 사건을 한 번씩 예약하는 모드예요. tick_device는 evtdev 장치 포인터와 mode만 보관해요. 고해상도 타이머 대기줄이나 이벤트 함수 구현을 이 구조체 안에 직접 담지는 않아요."
     },
     {
       "title": "Idle 관련 세 비트",
-      "text": "TS_FLAG_INIDLE=BIT(0)은 tick idle 모드, STOPPED=BIT(1)은 idle tick 중단, IDLE_ACTIVE=BIT(2)는 실제로 idle 시간 집계가 활성인 상태를 나타내며 IRQ 처리 중에는 해제된다는 주석이 있습니다. 따라서 INIDLE과 IDLE_ACTIVE를 같은 비트로 합쳐 읽거나 idle 진입이 항상 tick 중단을 뜻한다고 추정하면 안 됩니다."
+      "text": "INIDLE=BIT(0)은 tick idle 모드, STOPPED=BIT(1)은 idle tick 중단, IDLE_ACTIVE=BIT(2)는 실제 idle 시간 집계 활성 표시예요. IRQ 처리 중에는 IDLE_ACTIVE가 풀릴 수 있어요. BIT(n)은 n번 자리 비트 하나를 켠 값이에요. idle 진입이 항상 tick 중단이라거나 INIDLE과 ACTIVE가 같다는 뜻은 아니에요."
     },
     {
       "title": "나머지 상태 비트",
-      "text": "DO_TIMER_LAST=BIT(3)은 idle에 들어가기 전 마지막 do_timer 담당 CPU였음을, NOHZ=BIT(4)는 NO_HZ 활성, HIGHRES=BIT(5)는 고해상도 tick 모드를 나타냅니다. flags 필드는 unsigned long이며 이 헤더에는 비트 set/clear 함수가 없습니다. 각 비트의 전이는 실제 tick-sched.c에서 확인해야 합니다."
+      "text": "DO_TIMER_LAST=BIT(3)은 쉬기 전 마지막 do_timer 담당 CPU였다는 뜻, NOHZ=BIT(4)는 NO_HZ 활성, HIGHRES=BIT(5)는 고해상도 tick 모드예요. NO_HZ는 불필요한 정기 tick을 줄이는 기능이에요. flags는 unsigned long이며 실제 비트 켜기·끄기는 이 헤더가 아니라 tick-sched.c에서 확인해야 해요."
     },
     {
       "title": "Jiffies 정체 감지 필드",
-      "text": "stalled_jiffies는 unsigned int로 tick 사이에 감지한 정체를 세고 last_tick_jiffies는 unsigned long으로 마지막 tick에서 본 jiffies를 보관합니다. 뒤의 last_jiffies와 이름이 비슷하지만 목적이 다릅니다. 구조체 선언만으로 정체 판정 임계값이나 복구 정책까지 알 수는 없습니다."
+      "text": "stalled_jiffies는 unsigned int로 tick 사이 발견한 시간 눈금 정체를 세어요. last_tick_jiffies는 unsigned long으로 마지막 tick 때 본 jiffies를 기억해요. 뒤의 last_jiffies와는 목적이 달라요. 구조체만 보고 몇 번 정체하면 조치하는지나 복구 정책까지 알 수는 없어요."
     },
     {
       "title": "Tick 처리 필드 전체",
-      "text": "sched_timer는 고해상도 모드의 주기적 tick을 예약하는 hrtimer입니다. last_tick은 nohz 수면을 위해 timer를 바꾸기 전 마지막 만료 시각을 보존하여 복귀 시 원래 시간축을 이어 가기 위한 ktime_t이고 next_tick은 dynticks의 다음 tick입니다. idle_jiffies는 idle 진입 시 jiffies, idle_waketime은 idle 중단 시각, got_idle_tick은 idle 중 timer 함수가 실행되었음을 기록하는 unsigned int입니다. 주석의 @inidle 언급에 대응하는 상태는 현재 구조에서는 flags에 있으며 별도 inidle 멤버는 없습니다."
+      "text": "sched_timer는 고해상도 모드에서 정기 tick을 예약할 hrtimer예요. ktime_t last_tick은 nohz 수면 때문에 타이머를 바꾸기 전 만료 시각으로, 깨어나 원래 시간축을 이어 가는 기준이에요. next_tick은 dynticks의 다음 tick, idle_jiffies는 idle 진입 눈금, idle_waketime은 idle이 끊긴 시각이에요. unsigned int got_idle_tick은 idle 중 타이머 함수 실행 표시예요. 주석의 inidle 상태는 현재 별도 멤버가 아니라 flags에 있어요."
     },
     {
       "title": "Idle 진입과 일관성",
-      "text": "idle_sleeptime_seq는 데이터 일관성을 위한 seqcount_t이고 idle_entrytime은 진입 시각 ktime_t입니다. seqcount 객체가 있다는 것만으로 구조체 전체가 자동으로 보호되거나 reader가 잠금을 잡는 것은 아닙니다. 실제 writer begin/end와 reader retry 구간은 구현에서 결정합니다."
+      "text": "idle_sleeptime_seq는 값 일관성을 검사할 seqcount_t이고 idle_entrytime은 ktime_t 진입 시각이에요. seqcount는 쓰는 동안 바뀐 번호를 독자가 확인해 재시도할 수 있게 해요. 멤버가 있다는 것만으로 모든 필드가 자동 보호되거나 독자가 잠금을 잡는 것은 아니며 실제 begin/end와 retry 범위를 구현에서 봐야 해요."
     },
     {
       "title": "다음 만료 계산 상태",
-      "text": "last_jiffies는 다음 이벤트를 마지막 계산할 때의 기준 jiffies입니다. timer_expires_base는 monotonic 기준 시간, timer_expires는 tick 중단 시 예상 timer 만료 시간이며 둘 다 u64입니다. next_timer는 다음 timer 만료 시각 u64, idle_expires는 다음 idle tick의 ktime_t이고 두 필드는 주석상 디버깅 목적입니다. 디버그 값이 실제 예약 장치 상태의 유일한 권위라고 가정하지 않습니다."
+      "text": "last_jiffies는 다음 사건을 마지막 계산할 때의 기준 눈금이에요. u64 timer_expires_base는 monotonic, 즉 뒤로 가지 않는 시간 기준이고 timer_expires는 tick 중단 때 예상 만료예요. u64 next_timer와 ktime_t idle_expires는 각각 다음 타이머 만료와 idle의 다음 tick을 적는 디버그 정보예요. 관찰용 값만이 실제 장치 예약 상태의 유일한 기준이라고 가정하지 마세요."
     },
     {
       "title": "Idle 횟수와 기간",
-      "text": "idle_calls와 idle_sleeps는 unsigned long이며 각각 전체 idle 호출 수와 scheduler tick을 중단한 idle 호출 수입니다. idle_exittime은 idle 종료 시각, idle_sleeptime은 tick을 중단한 idle 수면 합, iowait_sleeptime은 IO가 남아 있던 해당 수면 합을 나타내는 ktime_t입니다. 횟수와 기간, 단일 시각과 누적량을 구분합니다."
+      "text": "unsigned long idle_calls는 전체 idle 호출 수, idle_sleeps는 그중 scheduler tick을 멈춘 호출 수예요. ktime_t idle_exittime은 종료 순간, idle_sleeptime은 tick 중단 idle 수면의 누적 시간, iowait_sleeptime은 그중 처리할 I/O가 남았던 수면 합이에요. 횟수와 기간, 한 시각과 누적량을 구분하세요."
     },
     {
       "title": "Full dynticks와 clock 변경",
-      "text": "tick_dep_mask는 atomic_t이며 누군가 tick을 필요로 할 때 설정하는 의존성 mask입니다. check_clocks는 clocksource 변경 알림용 unsigned long입니다. 하나가 atomic이라고 주변의 다른 필드까지 원자적인 스냅샷이 되는 것은 아닙니다. 개별 mask bit 의미나 알림 소비 코드는 이 파일에 없습니다."
+      "text": "atomic_t tick_dep_mask는 누군가 tick을 필요로 할 때 표시하는 의존성 비트 집합이에요. check_clocks는 clocksource 변경 알림을 담는 unsigned long이에요. clocksource는 시간을 읽을 기준 장치예요. atomic 멤버의 연산 보장이 주변 시각 필드까지 한 묶음으로 만들어 주지는 않아요. 각 비트 의미와 알림을 소비하는 코드는 여기 없어요."
     },
     {
       "title": "공통 함수 선언",
-      "text": "tick_get_tick_sched(int cpu)는 해당 CPU 상태 포인터를 반환하는 외부 선언이고 tick_setup_sched_timer(bool hrtimer)는 timer 설정의 외부 선언입니다. CPU 번호 검사, 포인터 수명, hrtimer bool에 따른 모든 분기는 본문이 없으므로 이 헤더만으로 보장하지 않습니다."
+      "text": "tick_get_tick_sched(int cpu)는 CPU 상태 포인터를 얻는 외부 선언, tick_setup_sched_timer(bool hrtimer)는 타이머를 설정하는 외부 선언이에요. 본문이 없으므로 CPU 번호 검사·포인터 수명·bool에 따른 모든 분기를 이 헤더만으로 보장하지 마세요."
     },
     {
       "title": "Oneshot 종료 분기",
-      "text": "CONFIG_TICK_ONESHOT이 정의되어 있으면 tick_sched_timer_dying(int cpu)를 선언하고 아니면 빈 void inline을 제공합니다. 비활성 경로에서도 호출 코드를 유지할 수 있지만 실제 timer 정리를 수행한다는 뜻은 아닙니다. inline 함수이므로 인자의 관측 가능한 부작용은 빈 매크로와 달리 평가 규칙을 따릅니다."
+      "text": "CONFIG_TICK_ONESHOT이면 tick_sched_timer_dying(int cpu)를 선언하고 아니면 몸체가 빈 void inline을 제공해요. 기능이 꺼져도 같은 호출 코드를 유지할 수 있지만 실제 타이머 정리는 하지 않아요. 그래도 함수 인자 표현식의 관측 가능한 부작용은 C 함수 호출 평가 규칙을 따라요. 인자를 통째로 없애는 빈 매크로와 같지 않아요."
     },
     {
       "title": "Broadcast 비활성은 성공이 아님",
-      "text": "CONFIG_GENERIC_CLOCKEVENTS_BROADCAST이면 __tick_broadcast_oneshot_control(enum tick_broadcast_state)을 외부 int 함수로 선언합니다. 아니면 stub은 -EBUSY를 반환합니다. 모든 비활성 stub이 0이나 성공을 반환한다는 가정은 틀립니다. 이 함수는 비활성 기능에서 요청을 수락하지 않는 결과를 명시합니다."
+      "text": "CONFIG_GENERIC_CLOCKEVENTS_BROADCAST이면 __tick_broadcast_oneshot_control을 외부 int 함수로 선언해요. 아니면 stub이 -EBUSY를 반환해 요청을 받아들이지 않아요. 기능이 없는 모든 stub이 0을 반환한다는 규칙은 없으므로 각각 확인해야 해요."
     },
     {
       "title": "CS와 검증 범위",
-      "text": "모든 필드와 설정 분기를 다뤘습니다. 상태 머신의 여러 차원을 별도 비트로 보존하는 이유, 누적량과 순간값의 구분, 구조체 타입과 동시성 계약의 차이, 실패하는 stub을 학습합니다. tick-sched.c 전체 실행이나 실제 CPU idle 측정을 검증한 결과는 아닙니다."
+      "text": "모든 필드와 설정 분기를 통해 상태의 여러 측면을 별도 비트로 저장하는 이유, 횟수·기간·시각의 구분, 자료형과 동시성 계약의 차이, 실패 stub을 배워요. 이 설명은 tick-sched.c 전체 실행이나 실제 CPU idle 시간을 측정해 검증한 결과는 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "INIDLE과 IDLE_ACTIVE는 항상 같은 의미인가?",
+      "prompt": "INIDLE과 IDLE_ACTIVE는 언제나 같은 뜻인가요?",
       "options": [
+        "아니요. IRQ 처리 중 IDLE_ACTIVE는 풀릴 수 있어요.",
+        "네. 같은 비트에 이름만 다르게 붙였어요."
+      ],
+      "answer": 0,
+      "explanation": "각각 BIT(0)과 BIT(2)이며 주석이 인터럽트 처리 동안의 차이를 설명해요.",
+      "original_prompt": "INIDLE과 IDLE_ACTIVE는 항상 같은 의미인가?",
+      "original_options": [
         "아니다. IDLE_ACTIVE는 IRQ 처리 중 해제될 수 있다",
         "그렇다. 같은 비트를 이름만 바꾸어 정의한다"
       ],
-      "answer": 0,
-      "explanation": "BIT(0)과 BIT(2)로 분리되어 있으며 주석이 IRQ 처리 중의 차이를 설명합니다."
+      "original_explanation": "BIT(0)과 BIT(2)로 분리되어 있으며 주석이 IRQ 처리 중의 차이를 설명합니다."
     },
     {
-      "prompt": "idle_calls와 idle_sleeps의 차이는?",
+      "prompt": "idle_calls와 idle_sleeps는 어떻게 다른가요?",
       "options": [
+        "같은 시간을 초와 나노초로 각각 저장해요.",
+        "전체 idle 호출과 tick을 멈춘 idle 호출을 각각 세어요."
+      ],
+      "answer": 1,
+      "explanation": "둘 다 횟수예요. 실제 누적 수면 시간은 별도 ktime_t 필드에 있어요.",
+      "original_prompt": "idle_calls와 idle_sleeps의 차이는?",
+      "original_options": [
         "하나는 초, 다른 하나는 나노초로 같은 시간을 저장한다",
         "전체 idle 호출과 tick을 중단한 idle 호출을 각각 센다"
       ],
-      "answer": 1,
-      "explanation": "둘 다 횟수입니다. 실제 수면 기간 합계는 별도의 ktime_t 필드들에 있습니다."
+      "original_explanation": "둘 다 횟수입니다. 실제 수면 기간 합계는 별도의 ktime_t 필드들에 있습니다."
     },
     {
-      "prompt": "last_tick_jiffies와 last_jiffies는 같은 목적의 복제 필드인가?",
+      "prompt": "last_tick_jiffies와 last_jiffies는 같은 목적의 복제인가요?",
       "options": [
+        "아니요. 정체 관찰과 다음 이벤트 계산 기준으로 목적이 달라요.",
+        "네. 두 값은 언제나 같아야 해요."
+      ],
+      "answer": 0,
+      "explanation": "이름이 비슷해도 주석과 필드 묶음이 다른 역할을 정해요.",
+      "original_prompt": "last_tick_jiffies와 last_jiffies는 같은 목적의 복제 필드인가?",
+      "original_options": [
         "아니다. tick 정체 관측과 다음 이벤트 계산 기준이라는 목적이 다르다",
         "그렇다. 어느 쪽을 읽어도 항상 같은 값이어야 한다"
       ],
-      "answer": 0,
-      "explanation": "구조체 주석과 필드 묶음이 역할을 구분합니다. 값의 일치 여부를 이름의 유사성만으로 가정하지 않습니다."
+      "original_explanation": "구조체 주석과 필드 묶음이 역할을 구분합니다. 값의 일치 여부를 이름의 유사성만으로 가정하지 않습니다."
     },
     {
-      "prompt": "Broadcast가 비활성일 때 control stub의 반환값은?",
+      "prompt": "broadcast 기능이 꺼졌을 때 control stub은 무엇을 반환하나요?",
       "options": [
+        "0이에요.",
+        "-EBUSY예요."
+      ],
+      "answer": 1,
+      "explanation": "이 stub은 요청을 성공 처리하지 않아요. 본문의 반환값을 따라야 해요.",
+      "original_prompt": "Broadcast가 비활성일 때 control stub의 반환값은?",
+      "original_options": [
         "0이다",
         "-EBUSY이다"
       ],
-      "answer": 1,
-      "explanation": "이 비활성 stub은 요청을 성공으로 처리하지 않습니다. 각 stub 본문의 반환값을 직접 확인해야 합니다."
+      "original_explanation": "이 비활성 stub은 요청을 성공으로 처리하지 않습니다. 각 stub 본문의 반환값을 직접 확인해야 합니다."
     },
     {
-      "prompt": "atomic_t tick_dep_mask가 있으므로 tick_sched 전체 읽기가 원자적인가?",
+      "prompt": "atomic_t tick_dep_mask가 있으니 tick_sched 전체 읽기도 원자적인가요?",
       "options": [
+        "아니요. 여러 필드의 일관성은 별도 계약이 필요해요.",
+        "네. atomic 멤버 하나면 전체 구조체도 atomic이에요."
+      ],
+      "answer": 0,
+      "explanation": "atomic의 보장은 해당 객체의 지원 연산에 관한 것이며 모든 시각·계수를 한 번에 읽는 보장이 아니에요.",
+      "original_prompt": "atomic_t tick_dep_mask가 있으므로 tick_sched 전체 읽기가 원자적인가?",
+      "original_options": [
         "아니다. 다른 필드와 함께 읽는 일관성은 별도 계약이 필요하다",
         "그렇다. 구조체에 atomic 멤버가 하나라도 있으면 전체가 atomic이다"
       ],
-      "answer": 0,
-      "explanation": "atomic 타입은 해당 객체의 지원 연산에 관한 것입니다. 여러 시각·계수의 스냅샷을 자동 보장하지 않습니다."
+      "original_explanation": "atomic 타입은 해당 객체의 지원 연산에 관한 것입니다. 여러 시각·계수의 스냅샷을 자동 보장하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "INIDLE·STOPPED·IDLE_ACTIVE를 따로 설명하고 idle_calls와 idle_sleeptime의 단위를 비교하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _TICK_SCHED_H\n#define _TICK_SCHED_H\n\n#include <linux/hrtimer.h>\n\nenum tick_device_mode {\n\tTICKDEV_MODE_PERIODIC,\n\tTICKDEV_MODE_ONESHOT,\n};\n\nstruct tick_device {\n\tstruct clock_event_device *evtdev;\n\tenum tick_device_mode mode;\n};\n\n/* The CPU is in the tick idle mode */\n#define TS_FLAG_INIDLE\t\tBIT(0)\n/* The idle tick has been stopped */\n#define TS_FLAG_STOPPED\t\tBIT(1)\n/*\n * Indicator that the CPU is actively in the tick idle mode;\n * it is reset during irq handling phases.\n */\n#define TS_FLAG_IDLE_ACTIVE\tBIT(2)\n/* CPU was the last one doing do_timer before going idle */\n#define TS_FLAG_DO_TIMER_LAST\tBIT(3)\n/* NO_HZ is enabled */\n#define TS_FLAG_NOHZ\t\tBIT(4)\n/* High resolution tick mode */\n#define TS_FLAG_HIGHRES\t\tBIT(5)\n\n/**\n * struct tick_sched - sched tick emulation and no idle tick control/stats\n *\n * @flags:\t\tState flags gathering the TS_FLAG_* features\n * @got_idle_tick:\tTick timer function has run with @inidle set\n * @stalled_jiffies:\tNumber of stalled jiffies detected across ticks\n * @last_tick_jiffies:\tValue of jiffies seen on last tick\n * @sched_timer:\thrtimer to schedule the periodic tick in high\n *\t\t\tresolution mode\n * @last_tick:\t\tStore the last tick expiry time when the tick\n *\t\t\ttimer is modified for nohz sleeps. This is necessary\n *\t\t\tto resume the tick timer operation in the timeline\n *\t\t\twhen the CPU returns from nohz sleep.\n * @next_tick:\t\tNext tick to be fired when in dynticks mode.\n * @idle_jiffies:\tjiffies at the entry to idle for idle time accounting\n * @idle_waketime:\tTime when the idle was interrupted\n * @idle_sleeptime_seq:\tsequence counter for data consistency\n * @idle_entrytime:\tTime when the idle call was entered\n * @last_jiffies:\tBase jiffies snapshot when next event was last computed\n * @timer_expires_base:\tBase time clock monotonic for @timer_expires\n * @timer_expires:\tAnticipated timer expiration time (in case sched tick is stopped)\n * @next_timer:\t\tExpiry time of next expiring timer for debugging purpose only\n * @idle_expires:\tNext tick in idle, for debugging purpose only\n * @idle_calls:\t\tTotal number of idle calls\n * @idle_sleeps:\tNumber of idle calls, where the sched tick was stopped\n * @idle_exittime:\tTime when the idle state was left\n * @idle_sleeptime:\tSum of the time slept in idle with sched tick stopped\n * @iowait_sleeptime:\tSum of the time slept in idle with sched tick stopped, with IO outstanding\n * @tick_dep_mask:\tTick dependency mask - is set, if someone needs the tick\n * @check_clocks:\tNotification mechanism about clocksource changes\n */\nstruct tick_sched {\n\t/* Common flags */\n\tunsigned long\t\t\tflags;\n\n\t/* Tick handling: jiffies stall check */\n\tunsigned int\t\t\tstalled_jiffies;\n\tunsigned long\t\t\tlast_tick_jiffies;\n\n\t/* Tick handling */\n\tstruct hrtimer\t\t\tsched_timer;\n\tktime_t\t\t\t\tlast_tick;\n\tktime_t\t\t\t\tnext_tick;\n\tunsigned long\t\t\tidle_jiffies;\n\tktime_t\t\t\t\tidle_waketime;\n\tunsigned int\t\t\tgot_idle_tick;\n\n\t/* Idle entry */\n\tseqcount_t\t\t\tidle_sleeptime_seq;\n\tktime_t\t\t\t\tidle_entrytime;\n\n\t/* Tick stop */\n\tunsigned long\t\t\tlast_jiffies;\n\tu64\t\t\t\ttimer_expires_base;\n\tu64\t\t\t\ttimer_expires;\n\tu64\t\t\t\tnext_timer;\n\tktime_t\t\t\t\tidle_expires;\n\tunsigned long\t\t\tidle_calls;\n\tunsigned long\t\t\tidle_sleeps;\n\n\t/* Idle exit */\n\tktime_t\t\t\t\tidle_exittime;\n\tktime_t\t\t\t\tidle_sleeptime;\n\tktime_t\t\t\t\tiowait_sleeptime;\n\n\t/* Full dynticks handling */\n\tatomic_t\t\t\ttick_dep_mask;\n\n\t/* Clocksource changes */\n\tunsigned long\t\t\tcheck_clocks;\n};\n\nextern struct tick_sched *tick_get_tick_sched(int cpu);\n\nextern void tick_setup_sched_timer(bool hrtimer);\n#if defined CONFIG_TICK_ONESHOT\nextern void tick_sched_timer_dying(int cpu);\n#else\nstatic inline void tick_sched_timer_dying(int cpu) { }\n#endif\n\n#ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST\nextern int __tick_broadcast_oneshot_control(enum tick_broadcast_state state);\n#else\nstatic inline int\n__tick_broadcast_oneshot_control(enum tick_broadcast_state state)\n{\n\treturn -EBUSY;\n}\n#endif\n\n#endif\n",
   "source_review": {
@@ -155,5 +181,192 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/tick-sched.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-17cce471f06413cb",
+    "path": "kernel/time/tick-sched.h",
+    "title": "Tick scheduler 상태: idle 플래그와 시간 집계 필드",
+    "area": "상태 모델 · CPU별 데이터 · 비트 마스크 · 통계 · seqcount · atomic · stub",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "장치 모드, 상태 비트 여섯 개, tick_sched의 모든 필드와 조건부 인터페이스를 읽습니다.",
+    "guide": [
+      "CPU의 idle 상태, tick 중단, 실제 수면 집계와 tick 의존성은 서로 다른 정보로 저장됩니다.",
+      "tickless 코드를 읽을 때 비슷한 이름의 시각·계수·상태 비트를 혼동하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체와 포함 문맥",
+        "text": "GPL-2.0과 guard, hrtimer include 뒤 tick_device_mode, tick_device, 여섯 TS_FLAG 상수, tick_sched 구조체와 함수 선언·stub이 있습니다. 상태 구조를 정의하지만 실제 idle 진입·이탈 알고리즘이나 per-CPU 객체 저장소를 여기서 정의하지는 않습니다."
+      },
+      {
+        "title": "Tick 장치 모드",
+        "text": "enum의 PERIODIC은 첫 값 0, ONESHOT은 다음 값 1입니다. tick_device는 clock_event_device *evtdev와 enum mode만 가집니다. 장치 포인터와 소프트웨어 tick 모드를 연결하는 구조이며 hrtimer queue나 이벤트 callback 구현을 직접 내장하지 않습니다."
+      },
+      {
+        "title": "Idle 관련 세 비트",
+        "text": "TS_FLAG_INIDLE=BIT(0)은 tick idle 모드, STOPPED=BIT(1)은 idle tick 중단, IDLE_ACTIVE=BIT(2)는 실제로 idle 시간 집계가 활성인 상태를 나타내며 IRQ 처리 중에는 해제된다는 주석이 있습니다. 따라서 INIDLE과 IDLE_ACTIVE를 같은 비트로 합쳐 읽거나 idle 진입이 항상 tick 중단을 뜻한다고 추정하면 안 됩니다."
+      },
+      {
+        "title": "나머지 상태 비트",
+        "text": "DO_TIMER_LAST=BIT(3)은 idle에 들어가기 전 마지막 do_timer 담당 CPU였음을, NOHZ=BIT(4)는 NO_HZ 활성, HIGHRES=BIT(5)는 고해상도 tick 모드를 나타냅니다. flags 필드는 unsigned long이며 이 헤더에는 비트 set/clear 함수가 없습니다. 각 비트의 전이는 실제 tick-sched.c에서 확인해야 합니다."
+      },
+      {
+        "title": "Jiffies 정체 감지 필드",
+        "text": "stalled_jiffies는 unsigned int로 tick 사이에 감지한 정체를 세고 last_tick_jiffies는 unsigned long으로 마지막 tick에서 본 jiffies를 보관합니다. 뒤의 last_jiffies와 이름이 비슷하지만 목적이 다릅니다. 구조체 선언만으로 정체 판정 임계값이나 복구 정책까지 알 수는 없습니다."
+      },
+      {
+        "title": "Tick 처리 필드 전체",
+        "text": "sched_timer는 고해상도 모드의 주기적 tick을 예약하는 hrtimer입니다. last_tick은 nohz 수면을 위해 timer를 바꾸기 전 마지막 만료 시각을 보존하여 복귀 시 원래 시간축을 이어 가기 위한 ktime_t이고 next_tick은 dynticks의 다음 tick입니다. idle_jiffies는 idle 진입 시 jiffies, idle_waketime은 idle 중단 시각, got_idle_tick은 idle 중 timer 함수가 실행되었음을 기록하는 unsigned int입니다. 주석의 @inidle 언급에 대응하는 상태는 현재 구조에서는 flags에 있으며 별도 inidle 멤버는 없습니다."
+      },
+      {
+        "title": "Idle 진입과 일관성",
+        "text": "idle_sleeptime_seq는 데이터 일관성을 위한 seqcount_t이고 idle_entrytime은 진입 시각 ktime_t입니다. seqcount 객체가 있다는 것만으로 구조체 전체가 자동으로 보호되거나 reader가 잠금을 잡는 것은 아닙니다. 실제 writer begin/end와 reader retry 구간은 구현에서 결정합니다."
+      },
+      {
+        "title": "다음 만료 계산 상태",
+        "text": "last_jiffies는 다음 이벤트를 마지막 계산할 때의 기준 jiffies입니다. timer_expires_base는 monotonic 기준 시간, timer_expires는 tick 중단 시 예상 timer 만료 시간이며 둘 다 u64입니다. next_timer는 다음 timer 만료 시각 u64, idle_expires는 다음 idle tick의 ktime_t이고 두 필드는 주석상 디버깅 목적입니다. 디버그 값이 실제 예약 장치 상태의 유일한 권위라고 가정하지 않습니다."
+      },
+      {
+        "title": "Idle 횟수와 기간",
+        "text": "idle_calls와 idle_sleeps는 unsigned long이며 각각 전체 idle 호출 수와 scheduler tick을 중단한 idle 호출 수입니다. idle_exittime은 idle 종료 시각, idle_sleeptime은 tick을 중단한 idle 수면 합, iowait_sleeptime은 IO가 남아 있던 해당 수면 합을 나타내는 ktime_t입니다. 횟수와 기간, 단일 시각과 누적량을 구분합니다."
+      },
+      {
+        "title": "Full dynticks와 clock 변경",
+        "text": "tick_dep_mask는 atomic_t이며 누군가 tick을 필요로 할 때 설정하는 의존성 mask입니다. check_clocks는 clocksource 변경 알림용 unsigned long입니다. 하나가 atomic이라고 주변의 다른 필드까지 원자적인 스냅샷이 되는 것은 아닙니다. 개별 mask bit 의미나 알림 소비 코드는 이 파일에 없습니다."
+      },
+      {
+        "title": "공통 함수 선언",
+        "text": "tick_get_tick_sched(int cpu)는 해당 CPU 상태 포인터를 반환하는 외부 선언이고 tick_setup_sched_timer(bool hrtimer)는 timer 설정의 외부 선언입니다. CPU 번호 검사, 포인터 수명, hrtimer bool에 따른 모든 분기는 본문이 없으므로 이 헤더만으로 보장하지 않습니다."
+      },
+      {
+        "title": "Oneshot 종료 분기",
+        "text": "CONFIG_TICK_ONESHOT이 정의되어 있으면 tick_sched_timer_dying(int cpu)를 선언하고 아니면 빈 void inline을 제공합니다. 비활성 경로에서도 호출 코드를 유지할 수 있지만 실제 timer 정리를 수행한다는 뜻은 아닙니다. inline 함수이므로 인자의 관측 가능한 부작용은 빈 매크로와 달리 평가 규칙을 따릅니다."
+      },
+      {
+        "title": "Broadcast 비활성은 성공이 아님",
+        "text": "CONFIG_GENERIC_CLOCKEVENTS_BROADCAST이면 __tick_broadcast_oneshot_control(enum tick_broadcast_state)을 외부 int 함수로 선언합니다. 아니면 stub은 -EBUSY를 반환합니다. 모든 비활성 stub이 0이나 성공을 반환한다는 가정은 틀립니다. 이 함수는 비활성 기능에서 요청을 수락하지 않는 결과를 명시합니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "모든 필드와 설정 분기를 다뤘습니다. 상태 머신의 여러 차원을 별도 비트로 보존하는 이유, 누적량과 순간값의 구분, 구조체 타입과 동시성 계약의 차이, 실패하는 stub을 학습합니다. tick-sched.c 전체 실행이나 실제 CPU idle 측정을 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "INIDLE과 IDLE_ACTIVE는 항상 같은 의미인가?",
+        "options": [
+          "아니다. IDLE_ACTIVE는 IRQ 처리 중 해제될 수 있다",
+          "그렇다. 같은 비트를 이름만 바꾸어 정의한다"
+        ],
+        "answer": 0,
+        "explanation": "BIT(0)과 BIT(2)로 분리되어 있으며 주석이 IRQ 처리 중의 차이를 설명합니다."
+      },
+      {
+        "prompt": "idle_calls와 idle_sleeps의 차이는?",
+        "options": [
+          "하나는 초, 다른 하나는 나노초로 같은 시간을 저장한다",
+          "전체 idle 호출과 tick을 중단한 idle 호출을 각각 센다"
+        ],
+        "answer": 1,
+        "explanation": "둘 다 횟수입니다. 실제 수면 기간 합계는 별도의 ktime_t 필드들에 있습니다."
+      },
+      {
+        "prompt": "last_tick_jiffies와 last_jiffies는 같은 목적의 복제 필드인가?",
+        "options": [
+          "아니다. tick 정체 관측과 다음 이벤트 계산 기준이라는 목적이 다르다",
+          "그렇다. 어느 쪽을 읽어도 항상 같은 값이어야 한다"
+        ],
+        "answer": 0,
+        "explanation": "구조체 주석과 필드 묶음이 역할을 구분합니다. 값의 일치 여부를 이름의 유사성만으로 가정하지 않습니다."
+      },
+      {
+        "prompt": "Broadcast가 비활성일 때 control stub의 반환값은?",
+        "options": [
+          "0이다",
+          "-EBUSY이다"
+        ],
+        "answer": 1,
+        "explanation": "이 비활성 stub은 요청을 성공으로 처리하지 않습니다. 각 stub 본문의 반환값을 직접 확인해야 합니다."
+      },
+      {
+        "prompt": "atomic_t tick_dep_mask가 있으므로 tick_sched 전체 읽기가 원자적인가?",
+        "options": [
+          "아니다. 다른 필드와 함께 읽는 일관성은 별도 계약이 필요하다",
+          "그렇다. 구조체에 atomic 멤버가 하나라도 있으면 전체가 atomic이다"
+        ],
+        "answer": 0,
+        "explanation": "atomic 타입은 해당 객체의 지원 연산에 관한 것입니다. 여러 시각·계수의 스냅샷을 자동 보장하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _TICK_SCHED_H\n#define _TICK_SCHED_H\n\n#include <linux/hrtimer.h>\n\nenum tick_device_mode {\n\tTICKDEV_MODE_PERIODIC,\n\tTICKDEV_MODE_ONESHOT,\n};\n\nstruct tick_device {\n\tstruct clock_event_device *evtdev;\n\tenum tick_device_mode mode;\n};\n\n/* The CPU is in the tick idle mode */\n#define TS_FLAG_INIDLE\t\tBIT(0)\n/* The idle tick has been stopped */\n#define TS_FLAG_STOPPED\t\tBIT(1)\n/*\n * Indicator that the CPU is actively in the tick idle mode;\n * it is reset during irq handling phases.\n */\n#define TS_FLAG_IDLE_ACTIVE\tBIT(2)\n/* CPU was the last one doing do_timer before going idle */\n#define TS_FLAG_DO_TIMER_LAST\tBIT(3)\n/* NO_HZ is enabled */\n#define TS_FLAG_NOHZ\t\tBIT(4)\n/* High resolution tick mode */\n#define TS_FLAG_HIGHRES\t\tBIT(5)\n\n/**\n * struct tick_sched - sched tick emulation and no idle tick control/stats\n *\n * @flags:\t\tState flags gathering the TS_FLAG_* features\n * @got_idle_tick:\tTick timer function has run with @inidle set\n * @stalled_jiffies:\tNumber of stalled jiffies detected across ticks\n * @last_tick_jiffies:\tValue of jiffies seen on last tick\n * @sched_timer:\thrtimer to schedule the periodic tick in high\n *\t\t\tresolution mode\n * @last_tick:\t\tStore the last tick expiry time when the tick\n *\t\t\ttimer is modified for nohz sleeps. This is necessary\n *\t\t\tto resume the tick timer operation in the timeline\n *\t\t\twhen the CPU returns from nohz sleep.\n * @next_tick:\t\tNext tick to be fired when in dynticks mode.\n * @idle_jiffies:\tjiffies at the entry to idle for idle time accounting\n * @idle_waketime:\tTime when the idle was interrupted\n * @idle_sleeptime_seq:\tsequence counter for data consistency\n * @idle_entrytime:\tTime when the idle call was entered\n * @last_jiffies:\tBase jiffies snapshot when next event was last computed\n * @timer_expires_base:\tBase time clock monotonic for @timer_expires\n * @timer_expires:\tAnticipated timer expiration time (in case sched tick is stopped)\n * @next_timer:\t\tExpiry time of next expiring timer for debugging purpose only\n * @idle_expires:\tNext tick in idle, for debugging purpose only\n * @idle_calls:\t\tTotal number of idle calls\n * @idle_sleeps:\tNumber of idle calls, where the sched tick was stopped\n * @idle_exittime:\tTime when the idle state was left\n * @idle_sleeptime:\tSum of the time slept in idle with sched tick stopped\n * @iowait_sleeptime:\tSum of the time slept in idle with sched tick stopped, with IO outstanding\n * @tick_dep_mask:\tTick dependency mask - is set, if someone needs the tick\n * @check_clocks:\tNotification mechanism about clocksource changes\n */\nstruct tick_sched {\n\t/* Common flags */\n\tunsigned long\t\t\tflags;\n\n\t/* Tick handling: jiffies stall check */\n\tunsigned int\t\t\tstalled_jiffies;\n\tunsigned long\t\t\tlast_tick_jiffies;\n\n\t/* Tick handling */\n\tstruct hrtimer\t\t\tsched_timer;\n\tktime_t\t\t\t\tlast_tick;\n\tktime_t\t\t\t\tnext_tick;\n\tunsigned long\t\t\tidle_jiffies;\n\tktime_t\t\t\t\tidle_waketime;\n\tunsigned int\t\t\tgot_idle_tick;\n\n\t/* Idle entry */\n\tseqcount_t\t\t\tidle_sleeptime_seq;\n\tktime_t\t\t\t\tidle_entrytime;\n\n\t/* Tick stop */\n\tunsigned long\t\t\tlast_jiffies;\n\tu64\t\t\t\ttimer_expires_base;\n\tu64\t\t\t\ttimer_expires;\n\tu64\t\t\t\tnext_timer;\n\tktime_t\t\t\t\tidle_expires;\n\tunsigned long\t\t\tidle_calls;\n\tunsigned long\t\t\tidle_sleeps;\n\n\t/* Idle exit */\n\tktime_t\t\t\t\tidle_exittime;\n\tktime_t\t\t\t\tidle_sleeptime;\n\tktime_t\t\t\t\tiowait_sleeptime;\n\n\t/* Full dynticks handling */\n\tatomic_t\t\t\ttick_dep_mask;\n\n\t/* Clocksource changes */\n\tunsigned long\t\t\tcheck_clocks;\n};\n\nextern struct tick_sched *tick_get_tick_sched(int cpu);\n\nextern void tick_setup_sched_timer(bool hrtimer);\n#if defined CONFIG_TICK_ONESHOT\nextern void tick_sched_timer_dying(int cpu);\n#else\nstatic inline void tick_sched_timer_dying(int cpu) { }\n#endif\n\n#ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST\nextern int __tick_broadcast_oneshot_control(enum tick_broadcast_state state);\n#else\nstatic inline int\n__tick_broadcast_oneshot_control(enum tick_broadcast_state state)\n{\n\treturn -EBUSY;\n}\n#endif\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "99a02a45fd5315ad634c3a1da900a2e6071ff94b49a579afb877960d48780595",
+      "scope": "whole-file",
+      "line_count": 124,
+      "authoring_source": "course/file_units/tick_scheduler_state.py",
+      "sections": [
+        "파일 전체와 포함 문맥",
+        "Tick 장치 모드",
+        "Idle 관련 세 비트",
+        "나머지 상태 비트",
+        "Jiffies 정체 감지 필드",
+        "Tick 처리 필드 전체",
+        "Idle 진입과 일관성",
+        "다음 만료 계산 상태",
+        "Idle 횟수와 기간",
+        "Full dynticks와 clock 변경",
+        "공통 함수 선언",
+        "Oneshot 종료 분기",
+        "Broadcast 비활성은 성공이 아님",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/tick-sched.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "CPU가 쉬는 중인지, 시간 눈금을 멈췄는지, 실제 쉰 시간을 세는 중인지는 같은 질문이 아니에요. 그래서 서로 다른 표시와 시간 기록을 둬요.",
+    "meaning": "tick_sched의 상태 비트·시각·횟수·누적량과 조건부 함수를 구분해요.",
+    "exercise": "INIDLE·STOPPED·IDLE_ACTIVE를 따로 설명하고 idle_calls와 idle_sleeptime의 단위를 비교하세요."
+  },
+  "goal": "tick_sched의 상태 비트·시각·횟수·누적량과 조건부 함수를 구분해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "INIDLE·STOPPED·IDLE_ACTIVE를 따로 설명하고 idle_calls와 idle_sleeptime의 단위를 비교하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_f.json",
+    "authoring_sha256": "e27904c45280045155bf6d429732a140d95e26994414260bd3500b1d44b1caa1",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

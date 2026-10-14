@@ -5,58 +5,66 @@
   "area": "원자 연산 · 메모리 순서 · 참조 계수 · 정수 경계",
   "track": "files",
   "kind": "kernel",
-  "intro": "refcount_t의 메모리 표현만 분리한 작은 헤더입니다.",
+  "intro": "refcount_types.h는 원자 카운터를 품은 별도 참조 계수 타입을 정의해요. 포화 규칙을 실행하는 곳은 다른 연산 구현이에요.",
   "guide": [
-    "atomic_t를 필드로 가진 별도 구조체를 정의해 일반 원자 정수와 참조 계수의 사용 계약을 구분합니다. 포화는 타입 자체가 아니라 연산 구현이 지킵니다.",
-    "타입만 필요한 선언에서 사용할 수 있습니다. 참조 수 연산과 초기화 상수는 refcount.h를 함께 확인해야 합니다."
+    "참조 계수는 아직 객체를 쓰는 사용권이 몇 개 남았는지 세는 값이에요. 원자 정수와 목적이 달라 전용 연산을 써야 해요.",
+    "포화는 범위를 넘은 카운터를 특별한 값에 머물게 해 잘못된 순환으로 너무 일찍 해제되지 않도록 하는 규칙이에요.",
+    "타입은 자료 모양과 사용 의미를 나타내요. 타입을 선언했다고 모든 필드 접근에 보호 코드가 자동으로 실행되는 것은 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0 표시, include guard, linux/types.h 포함, refcount_t의 kernel-doc, atomic_t refs 하나를 가진 refcount_struct와 typedef, endif가 전부입니다. 별도 잠금, destructor, 객체 포인터나 카운터 폭 필드는 없습니다."
+      "title": "한 필드를 가진 타입",
+      "text": "라이선스와 중복 포함 방지, types.h와 설명 주석 뒤 atomic_t refs 한 칸을 가진 struct refcount_struct에 refcount_t라는 이름을 붙여요. 별도 잠금, 해제 함수, 객체 포인터나 카운터 폭 필드는 없어요."
     },
     {
-      "title": "표현과 연산의 분리",
-      "text": "refcount_t는 atomic_t 그 자체의 typedef가 아니라 atomic_t를 포함하는 구조체입니다. 따라서 일반 atomic_t API와 구별되는 인터페이스를 만들 수 있습니다. 그러나 C 구조체 필드가 공개되어 있으므로 refs를 직접 변경하는 잘못된 코드까지 언어 차원에서 금지하지는 않습니다."
+      "title": "atomic_t와 같은 별명이 아니에요",
+      "text": "typedef의 대상은 atomic_t 자체가 아니라 그것을 품은 구조체예요. 그래서 일반 원자 정수와 구별되는 인터페이스를 만들 수 있어요. 다만 C 필드가 공개돼 있으므로 refs를 직접 잘못 바꾸는 코드를 언어가 모두 금지하지는 않아요."
     },
     {
-      "title": "포화 계약의 위치",
-      "text": "주석은 REFCOUNT_SATURATED에 포화해 잘못된 순환에 따른 use-after-free를 막는다고 설명합니다. 이 파일은 그 상수를 정의하거나 포화 검사를 실행하지 않습니다. 실제 구현은 refcount.h의 연산과 lib/refcount.c의 경고·포화 경로이며, 경합 중 잠시 값이 달라졌다가 복원되는 동작까지 함께 읽어야 합니다."
+      "title": "포화는 어디서 지키나요",
+      "text": "주석은 REFCOUNT_SATURATED에 포화해 순환으로 생기는 해제 후 접근을 막는다고 설명해요. 여기에는 그 상수 정의나 실행 검사 코드가 없어요. refcount.h의 연산과 lib/refcount.c의 경고·포화 경로가 이를 지켜요. 경쟁 중 잠시 값이 달라졌다 복원되는 구현도 함께 읽어야 해요."
     },
     {
-      "title": "CS 연결",
-      "text": "표현을 공유하면서 인터페이스로 의미를 분리하는 타입 설계, 최소 의존 헤더, 원자성과 수명 안전성의 차이를 학습합니다. refcount_t 멤버를 넣었다고 구조체의 모든 필드 접근이 자동으로 원자적이거나 동기화되는 것은 아닙니다."
+      "title": "표현과 안전한 사용의 차이",
+      "text": "같은 원자 정수 표현을 사용해도 참조 계수라는 의미를 별도 타입·연산으로 구분해요. 타입만 필요한 곳에 작은 의존성으로 포함할 수 있어요. 이 멤버 하나를 넣었다고 객체의 다른 필드까지 모두 원자적으로 읽히거나 동기화되는 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "refcount_t는 atomic_t의 단순 별명인가?",
+      "prompt": "refcount_t는 atomic_t의 단순 별명인가요?",
       "options": [
+        "아니요. atomic_t refs를 품은 별도 구조체예요.",
+        "네. 두 타입의 모든 연산을 구분 없이 써요."
+      ],
+      "answer": 0,
+      "explanation": "내부 값은 원자 카운터지만 전용 참조 계수 연산이 수명과 포화 규칙을 지켜요.",
+      "original_prompt": "refcount_t는 atomic_t의 단순 별명인가?",
+      "original_options": [
         "아니다. atomic_t refs를 포함한 별도 구조체 타입이다",
         "그렇다. 두 타입의 모든 API를 구분 없이 사용한다"
       ],
-      "answer": 0,
-      "explanation": "typedef 대상은 struct refcount_struct입니다. 내부 표현은 원자 카운터지만 사용자는 참조 계수의 포화와 수명 규칙을 지키는 API를 이용해야 합니다."
+      "original_explanation": "typedef 대상은 struct refcount_struct입니다. 내부 표현은 원자 카운터지만 사용자는 참조 계수의 포화와 수명 규칙을 지키는 API를 이용해야 합니다."
     },
     {
-      "prompt": "이 타입 정의만으로 임의의 refs 직접 수정에도 포화가 보장되는가?",
+      "prompt": "타입만으로 refs를 직접 고쳐도 포화가 보장되나요?",
       "options": [
+        "네. 구조체가 모든 저장을 자동으로 포화시켜요.",
+        "아니요. 포화는 전용 연산 구현의 책임이에요."
+      ],
+      "answer": 1,
+      "explanation": "이 파일에는 실행 코드가 없어요. 문서의 의미를 실제 연산이 유지하는 과정을 구분해요.",
+      "original_prompt": "이 타입 정의만으로 임의의 refs 직접 수정에도 포화가 보장되는가?",
+      "original_options": [
         "그렇다. C 구조체가 자동으로 모든 저장을 포화시킨다",
         "아니다. 포화는 참조 계수 연산 구현의 책임이다"
       ],
-      "answer": 1,
-      "explanation": "이 파일에는 실행 코드도 REFCOUNT_SATURATED 정의도 없습니다. 타입의 문서화된 의미와 실제 연산이 그 의미를 유지하는 절차를 구별해야 합니다."
+      "original_explanation": "이 파일에는 실행 코드도 REFCOUNT_SATURATED 정의도 없습니다. 타입의 문서화된 의미와 실제 연산이 그 의미를 유지하는 절차를 구별해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "refcount_t 구조체 안에 atomic_t refs 한 칸을 그리고, 타입 정의와 포화 연산을 두 곳으로 나누어 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_REFCOUNT_TYPES_H\n#define _LINUX_REFCOUNT_TYPES_H\n\n#include <linux/types.h>\n\n/**\n * typedef refcount_t - variant of atomic_t specialized for reference counts\n * @refs: atomic_t counter field\n *\n * The counter saturates at REFCOUNT_SATURATED and will not move once\n * there. This avoids wrapping the counter and causing 'spurious'\n * use-after-free bugs.\n */\ntypedef struct refcount_struct {\n\tatomic_t refs;\n} refcount_t;\n\n#endif /* _LINUX_REFCOUNT_TYPES_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/refcount_types.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e45499aa5c41e3ce",
+    "path": "include/linux/refcount_types.h",
+    "title": "Refcount 타입 전체: 원자 정수를 소유권 계수로 구분하기",
+    "area": "원자 연산 · 메모리 순서 · 참조 계수 · 정수 경계",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "refcount_t의 메모리 표현만 분리한 작은 헤더입니다.",
+    "guide": [
+      "atomic_t를 필드로 가진 별도 구조체를 정의해 일반 원자 정수와 참조 계수의 사용 계약을 구분합니다. 포화는 타입 자체가 아니라 연산 구현이 지킵니다.",
+      "타입만 필요한 선언에서 사용할 수 있습니다. 참조 수 연산과 초기화 상수는 refcount.h를 함께 확인해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 표시, include guard, linux/types.h 포함, refcount_t의 kernel-doc, atomic_t refs 하나를 가진 refcount_struct와 typedef, endif가 전부입니다. 별도 잠금, destructor, 객체 포인터나 카운터 폭 필드는 없습니다."
+      },
+      {
+        "title": "표현과 연산의 분리",
+        "text": "refcount_t는 atomic_t 그 자체의 typedef가 아니라 atomic_t를 포함하는 구조체입니다. 따라서 일반 atomic_t API와 구별되는 인터페이스를 만들 수 있습니다. 그러나 C 구조체 필드가 공개되어 있으므로 refs를 직접 변경하는 잘못된 코드까지 언어 차원에서 금지하지는 않습니다."
+      },
+      {
+        "title": "포화 계약의 위치",
+        "text": "주석은 REFCOUNT_SATURATED에 포화해 잘못된 순환에 따른 use-after-free를 막는다고 설명합니다. 이 파일은 그 상수를 정의하거나 포화 검사를 실행하지 않습니다. 실제 구현은 refcount.h의 연산과 lib/refcount.c의 경고·포화 경로이며, 경합 중 잠시 값이 달라졌다가 복원되는 동작까지 함께 읽어야 합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "표현을 공유하면서 인터페이스로 의미를 분리하는 타입 설계, 최소 의존 헤더, 원자성과 수명 안전성의 차이를 학습합니다. refcount_t 멤버를 넣었다고 구조체의 모든 필드 접근이 자동으로 원자적이거나 동기화되는 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "refcount_t는 atomic_t의 단순 별명인가?",
+        "options": [
+          "아니다. atomic_t refs를 포함한 별도 구조체 타입이다",
+          "그렇다. 두 타입의 모든 API를 구분 없이 사용한다"
+        ],
+        "answer": 0,
+        "explanation": "typedef 대상은 struct refcount_struct입니다. 내부 표현은 원자 카운터지만 사용자는 참조 계수의 포화와 수명 규칙을 지키는 API를 이용해야 합니다."
+      },
+      {
+        "prompt": "이 타입 정의만으로 임의의 refs 직접 수정에도 포화가 보장되는가?",
+        "options": [
+          "그렇다. C 구조체가 자동으로 모든 저장을 포화시킨다",
+          "아니다. 포화는 참조 계수 연산 구현의 책임이다"
+        ],
+        "answer": 1,
+        "explanation": "이 파일에는 실행 코드도 REFCOUNT_SATURATED 정의도 없습니다. 타입의 문서화된 의미와 실제 연산이 그 의미를 유지하는 절차를 구별해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_REFCOUNT_TYPES_H\n#define _LINUX_REFCOUNT_TYPES_H\n\n#include <linux/types.h>\n\n/**\n * typedef refcount_t - variant of atomic_t specialized for reference counts\n * @refs: atomic_t counter field\n *\n * The counter saturates at REFCOUNT_SATURATED and will not move once\n * there. This avoids wrapping the counter and causing 'spurious'\n * use-after-free bugs.\n */\ntypedef struct refcount_struct {\n\tatomic_t refs;\n} refcount_t;\n\n#endif /* _LINUX_REFCOUNT_TYPES_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1cd15b66e38dc4408329d4bd61ec605222a5c440dde64a0af7e73dcfc1a2472f",
+      "scope": "whole-file",
+      "line_count": 19,
+      "authoring_source": "course/file_units/refcount_headers.py",
+      "sections": [
+        "전체 구성",
+        "표현과 연산의 분리",
+        "포화 계약의 위치",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/refcount_types.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 숫자 장부라도 사용권 수를 적는 전용 표지를 씌우면, 일반 숫자 계산과 다른 규칙을 지키도록 안내할 수 있어요.",
+    "meaning": "refcount_types.h는 원자 카운터를 품은 별도 참조 계수 타입을 정의해요. 포화 규칙을 실행하는 곳은 다른 연산 구현이에요.",
+    "exercise": "refcount_t 구조체 안에 atomic_t refs 한 칸을 그리고, 타입 정의와 포화 연산을 두 곳으로 나누어 적어 보세요."
+  },
+  "goal": "refcount_types.h는 원자 카운터를 품은 별도 참조 계수 타입을 정의해요. 포화 규칙을 실행하는 곳은 다른 연산 구현이에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "refcount_t 구조체 안에 atomic_t refs 한 칸을 그리고, 타입 정의와 포화 연산을 두 곳으로 나누어 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "626f4d93dd13afd25e3e0b07377cb4296850dff88046ef056dadcbcb11d7eb52",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

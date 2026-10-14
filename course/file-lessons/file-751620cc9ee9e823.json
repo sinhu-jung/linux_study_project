@@ -5,62 +5,70 @@
   "area": "함수 원형 · wrapper · 빌드 의존성 · ABI",
   "track": "files",
   "kind": "kernel",
-  "intro": "세 함수의 원형과 본문 전체를 연결하여 공개 진입점의 책임을 구분합니다.",
+  "intro": "vgettimeofday.c의 세 함수는 시간 관련 요청과 결과를 공통 vDSO 구현에 그대로 전달합니다.",
   "guide": [
-    "공개 함수의 이름과 실제 시간 알고리즘의 구현 위치는 다를 수 있습니다.",
-    "wrapper의 반환값 전달과 빌드 단계의 공통 구현 포함을 읽습니다."
+    "wrapper는 실제 일을 하는 함수를 감싸서 호출하는 짧은 함수입니다. 여기서는 시간 계산 전체를 새로 구현하지 않습니다.",
+    "소스에 적힌 include와 컴파일 옵션으로 강제 포함되는 입력을 함께 읽어야 함수와 자료형의 출처를 알 수 있습니다.",
+    "__kernel이라는 이름만으로 매번 커널 시스템 호출이 일어난다고 판단하지 않습니다. 이 파일은 사용자 공간 vDSO 진입점입니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일과 포함 문맥",
-      "text": "GPL-2.0과 ARM64 userspace 구현이라는 주석 뒤 세 함수 원형, 이어 세 본문이 있습니다. 소스 자체에 #include가 없습니다. 관련 Makefile은 c-gettimeofday-y가 비어 있지 않으면 vgettimeofday.o의 CFLAGS에 -include를 추가합니다. 따라서 파일 단독 텍스트만 보고 필요한 자료형과 __cvdso 함수 정의가 존재하지 않는다고 결론내리지 않고 실제 빌드 문맥을 확인해야 합니다."
+      "title": "파일 구성과 빌드 입력",
+      "text": "GPL-2.0 및 ARM64 사용자 공간 구현 주석 뒤 세 함수의 선언과 세 본문이 있습니다. 선언은 함수의 인수와 결과 형식을 미리 알리는 부분입니다. 소스에는 #include가 없지만 Makefile에서 c-gettimeofday-y가 있으면 -include를 추가합니다. 자료형이나 __cvdso 구현의 출처를 판단할 때 실제 컴파일 입력까지 확인해야 합니다."
     },
     {
-      "title": "Clock_gettime",
-      "text": "__kernel_clock_gettime은 clockid_t clock과 __kernel_timespec *ts를 받아 __cvdso_clock_gettime(clock, ts)의 int 결과를 그대로 반환합니다. 여기서 clock ID를 따로 분류하거나 시간 구조체를 복사하지 않습니다. 실제 공유 시간 계산과 fallback 선택은 호출된 구현에 있습니다."
+      "title": "현재 시간 조회 전달",
+      "text": "__kernel_clock_gettime은 시계 종류 clock과 결과를 담을 ts의 주소를 __cvdso_clock_gettime에 그대로 줍니다. 그 함수가 반환한 int도 그대로 반환합니다. 여기서 시계 종류를 분류하거나 시간 구조체를 별도로 복사하지 않습니다. 공유 자료로 시간을 계산할지 다른 경로로 넘길지는 공통 구현의 일입니다."
     },
     {
-      "title": "Gettimeofday",
-      "text": "__kernel_gettimeofday는 __kernel_old_timeval *tv와 timezone *tz를 받고 __cvdso_gettimeofday(tv, tz)를 반환합니다. __kernel이라는 이름이 붙어도 이 파일의 주석과 위치는 사용자 공간 vDSO 진입점입니다. 모든 호출이 곧바로 syscall을 실행한다는 뜻은 아닙니다."
+      "title": "날짜·시간 조회 전달",
+      "text": "__kernel_gettimeofday는 tv와 tz라는 결과 자료 주소를 __cvdso_gettimeofday에 전달하고 결과를 반환합니다. __kernel이라는 이름은 곧바로 시스템 호출을 실행한다는 뜻이 아닙니다. 파일 주석과 위치는 사용자 공간에서 쓰는 vDSO 함수임을 알려 줍니다."
     },
     {
-      "title": "Clock_getres와 없는 심볼",
-      "text": "__kernel_clock_getres는 clockid_t clock_id와 __kernel_timespec *res로 __cvdso_clock_getres를 호출합니다. 이 파일에는 __kernel_time, __kernel_clock_gettime64, 일반 이름의 weak alias 정의가 없습니다. 다른 아키텍처의 진입점 목록과 자동으로 같다고 가정하면 안 됩니다."
+      "title": "시간 해상도 조회와 없는 이름",
+      "text": "__kernel_clock_getres는 시계 종류 clock_id와 해상도 결과 res를 __cvdso_clock_getres에 넘깁니다. 해상도는 시계가 표현하는 시간의 간격과 관련된 정보입니다. 이 파일에는 __kernel_time, __kernel_clock_gettime64, 일반 이름의 weak alias 정의가 없습니다. 다른 아키텍처의 함수 목록을 그대로 가져와 설명하면 안 됩니다."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "세 함수의 선언과 정의가 일치하고 모두 인수와 int 결과를 직접 전달합니다. 인터페이스와 공통 알고리즘 분리, 번역 단위 구성, 심볼 이름과 실행 위치의 구별이 학습 핵심입니다. 전체 파일 원본을 대조했으며 실제 ELF export 목록이나 ARM64 바이너리 실행까지 검증한 것은 아닙니다."
+      "title": "인터페이스와 알고리즘을 구별하기",
+      "text": "세 선언과 정의는 맞물리며 모두 인수와 int 결과를 직접 전달합니다. 접수 창구인 인터페이스와 실제 공통 알고리즘을 나눈 설계입니다. 소스와 빌드 입력을 함께 읽었지만 실제 ELF가 공개하는 이름 목록이나 ARM64 실행 결과를 시험한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "__kernel_clock_gettime이 이 파일에서 직접 구현하는 작업은?",
+      "prompt": "__kernel_clock_gettime이 이 파일에서 하는 일은 무엇인가요?",
       "options": [
+        "__cvdso_clock_gettime에 인수를 넘기고 그 결과를 돌려줍니다.",
+        "호출될 때마다 svc #0을 직접 실행합니다."
+      ],
+      "answer": 0,
+      "explanation": "본문은 공통 함수 호출 한 번입니다. 빠른 계산과 대체 경로 선택은 호출된 구현을 읽어야 합니다.",
+      "original_prompt": "__kernel_clock_gettime이 이 파일에서 직접 구현하는 작업은?",
+      "original_options": [
         "__cvdso_clock_gettime으로 인수를 전달하고 결과를 반환한다",
         "매 호출마다 svc #0을 직접 실행한다"
       ],
-      "answer": 0,
-      "explanation": "본문은 한 번의 함수 위임입니다. 공통 구현에서 빠른 경로와 fallback을 선택할 수 있으므로 이름만 보고 직접 syscall이라고 판단하면 안 됩니다."
+      "original_explanation": "본문은 한 번의 함수 위임입니다. 공통 구현에서 빠른 경로와 fallback을 선택할 수 있으므로 이름만 보고 직접 syscall이라고 판단하면 안 됩니다."
     },
     {
-      "prompt": "파일에 #include가 없으면 필요한 구현도 빌드에서 포함될 수 없는가?",
+      "prompt": "#include가 없는 소스는 빌드 중 다른 구현을 포함할 수 없나요?",
       "options": [
+        "예. 소스에 적힌 #include만 가능합니다.",
+        "아니요. 컴파일 옵션 -include로도 내용을 포함할 수 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "Makefile이 공통 구현 경로를 컴파일러에 강제 포함 입력으로 전달할 수 있습니다.",
+      "original_prompt": "파일에 #include가 없으면 필요한 구현도 빌드에서 포함될 수 없는가?",
+      "original_options": [
         "그렇다. C 컴파일에는 소스에 적힌 #include만 존재한다",
         "아니다. 빌드 플래그의 -include도 번역 단위에 내용을 제공할 수 있다"
       ],
-      "answer": 1,
-      "explanation": "관련 Makefile은 c-gettimeofday-y가 있을 때 -include를 추가합니다. 소스 본문과 실제 컴파일 옵션을 함께 읽어야 의존성을 파악할 수 있습니다."
+      "original_explanation": "관련 Makefile은 c-gettimeofday-y가 있을 때 -include를 추가합니다. 소스 본문과 실제 컴파일 옵션을 함께 읽어야 의존성을 파악할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "세 __kernel_ 함수와 대응하는 __cvdso_ 함수를 한 쌍씩 적으세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * ARM64 userspace implementations of gettimeofday() and similar.\n *\n * Copyright (C) 2018 ARM Limited\n *\n */\n\nint __kernel_clock_gettime(clockid_t clock, struct __kernel_timespec *ts);\nint __kernel_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz);\nint __kernel_clock_getres(clockid_t clock_id, struct __kernel_timespec *res);\n\nint __kernel_clock_gettime(clockid_t clock,\n\t\t\t   struct __kernel_timespec *ts)\n{\n\treturn __cvdso_clock_gettime(clock, ts);\n}\n\nint __kernel_gettimeofday(struct __kernel_old_timeval *tv,\n\t\t\t  struct timezone *tz)\n{\n\treturn __cvdso_gettimeofday(tv, tz);\n}\n\nint __kernel_clock_getres(clockid_t clock_id,\n\t\t\t  struct __kernel_timespec *res)\n{\n\treturn __cvdso_clock_getres(clock_id, res);\n}\n",
   "source_review": {
@@ -83,5 +91,120 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/vgettimeofday.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-751620cc9ee9e823",
+    "path": "arch/arm64/kernel/vdso/vgettimeofday.c",
+    "title": "ARM64 공개 시간 함수: __kernel 이름과 공통 구현 위임",
+    "area": "함수 원형 · wrapper · 빌드 의존성 · ABI",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "세 함수의 원형과 본문 전체를 연결하여 공개 진입점의 책임을 구분합니다.",
+    "guide": [
+      "공개 함수의 이름과 실제 시간 알고리즘의 구현 위치는 다를 수 있습니다.",
+      "wrapper의 반환값 전달과 빌드 단계의 공통 구현 포함을 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 포함 문맥",
+        "text": "GPL-2.0과 ARM64 userspace 구현이라는 주석 뒤 세 함수 원형, 이어 세 본문이 있습니다. 소스 자체에 #include가 없습니다. 관련 Makefile은 c-gettimeofday-y가 비어 있지 않으면 vgettimeofday.o의 CFLAGS에 -include를 추가합니다. 따라서 파일 단독 텍스트만 보고 필요한 자료형과 __cvdso 함수 정의가 존재하지 않는다고 결론내리지 않고 실제 빌드 문맥을 확인해야 합니다."
+      },
+      {
+        "title": "Clock_gettime",
+        "text": "__kernel_clock_gettime은 clockid_t clock과 __kernel_timespec *ts를 받아 __cvdso_clock_gettime(clock, ts)의 int 결과를 그대로 반환합니다. 여기서 clock ID를 따로 분류하거나 시간 구조체를 복사하지 않습니다. 실제 공유 시간 계산과 fallback 선택은 호출된 구현에 있습니다."
+      },
+      {
+        "title": "Gettimeofday",
+        "text": "__kernel_gettimeofday는 __kernel_old_timeval *tv와 timezone *tz를 받고 __cvdso_gettimeofday(tv, tz)를 반환합니다. __kernel이라는 이름이 붙어도 이 파일의 주석과 위치는 사용자 공간 vDSO 진입점입니다. 모든 호출이 곧바로 syscall을 실행한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "Clock_getres와 없는 심볼",
+        "text": "__kernel_clock_getres는 clockid_t clock_id와 __kernel_timespec *res로 __cvdso_clock_getres를 호출합니다. 이 파일에는 __kernel_time, __kernel_clock_gettime64, 일반 이름의 weak alias 정의가 없습니다. 다른 아키텍처의 진입점 목록과 자동으로 같다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "세 함수의 선언과 정의가 일치하고 모두 인수와 int 결과를 직접 전달합니다. 인터페이스와 공통 알고리즘 분리, 번역 단위 구성, 심볼 이름과 실행 위치의 구별이 학습 핵심입니다. 전체 파일 원본을 대조했으며 실제 ELF export 목록이나 ARM64 바이너리 실행까지 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "__kernel_clock_gettime이 이 파일에서 직접 구현하는 작업은?",
+        "options": [
+          "__cvdso_clock_gettime으로 인수를 전달하고 결과를 반환한다",
+          "매 호출마다 svc #0을 직접 실행한다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 한 번의 함수 위임입니다. 공통 구현에서 빠른 경로와 fallback을 선택할 수 있으므로 이름만 보고 직접 syscall이라고 판단하면 안 됩니다."
+      },
+      {
+        "prompt": "파일에 #include가 없으면 필요한 구현도 빌드에서 포함될 수 없는가?",
+        "options": [
+          "그렇다. C 컴파일에는 소스에 적힌 #include만 존재한다",
+          "아니다. 빌드 플래그의 -include도 번역 단위에 내용을 제공할 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "관련 Makefile은 c-gettimeofday-y가 있을 때 -include를 추가합니다. 소스 본문과 실제 컴파일 옵션을 함께 읽어야 의존성을 파악할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * ARM64 userspace implementations of gettimeofday() and similar.\n *\n * Copyright (C) 2018 ARM Limited\n *\n */\n\nint __kernel_clock_gettime(clockid_t clock, struct __kernel_timespec *ts);\nint __kernel_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz);\nint __kernel_clock_getres(clockid_t clock_id, struct __kernel_timespec *res);\n\nint __kernel_clock_gettime(clockid_t clock,\n\t\t\t   struct __kernel_timespec *ts)\n{\n\treturn __cvdso_clock_gettime(clock, ts);\n}\n\nint __kernel_gettimeofday(struct __kernel_old_timeval *tv,\n\t\t\t  struct timezone *tz)\n{\n\treturn __cvdso_gettimeofday(tv, tz);\n}\n\nint __kernel_clock_getres(clockid_t clock_id,\n\t\t\t  struct __kernel_timespec *res)\n{\n\treturn __cvdso_clock_getres(clock_id, res);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b0f5765e8e4ab8b262d2e95f8e9d356bfce7f8b91850a69f1bee5befda00d73e",
+      "scope": "whole-file",
+      "line_count": 29,
+      "authoring_source": "course/file_units/arm64_vdso_entry_update.py",
+      "sections": [
+        "전체 파일과 포함 문맥",
+        "Clock_gettime",
+        "Gettimeofday",
+        "Clock_getres와 없는 심볼",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/vgettimeofday.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "안내 창구가 직접 시계를 만드는 대신 시계 담당자에게 요청을 그대로 넘기고 답을 돌려주는 모습입니다.",
+    "meaning": "vgettimeofday.c의 세 함수는 시간 관련 요청과 결과를 공통 vDSO 구현에 그대로 전달합니다.",
+    "exercise": "세 __kernel_ 함수와 대응하는 __cvdso_ 함수를 한 쌍씩 적으세요."
+  },
+  "goal": "vgettimeofday.c의 세 함수는 시간 관련 요청과 결과를 공통 vDSO 구현에 그대로 전달합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "세 __kernel_ 함수와 대응하는 __cvdso_ 함수를 한 쌍씩 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "0a5c820bcec6d1ec9c1174d8e37edb12ae5c195cad404100cf6c73bbf640a01b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

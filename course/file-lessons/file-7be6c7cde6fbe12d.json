@@ -5,150 +5,182 @@
   "area": "자료구조 · 균형 복구 · 회전 · 중위·후위 순회",
   "track": "files",
   "kind": "kernel",
-  "intro": "정렬된 이진 트리의 높이를 제한하는 색상 불변식과 회전, 순회·교체 연산을 구현합니다.",
+  "intro": "국소 회전과 색 변경, 순회·교체와 잠금 없는 조회의 한계를 이해합니다.",
   "guide": [
-    "삽입은 빨강 노드의 빨강 부모 충돌을, 삭제는 한 경로의 검정 수 부족을 복구합니다. 같은 균형 알고리즘에 빈 콜백 또는 확장 집계 콜백을 전달합니다.",
-    "삽입 위치와 키 비교는 호출자가 올바르게 처리해야 합니다. 이 구현의 제한적인 잠금 없는 조회 설명을 객체 수명이나 부모 포인터 순회까지 일반화하지 않습니다."
+    "키에 맞는 삽입 위치는 호출자가 찾습니다.",
+    "회전 콜백은 바뀐 서브트리의 보충 집계를 고칩니다.",
+    "잠금 없는 조회의 미발견은 항상 부재 증명이 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구성",
-      "text": "SPDX와 저작권, augmented/export 포함 뒤에 다섯 트리 성질과 잠금 없는 조회 주석이 있습니다. 색상·부모·회전 helper, 내부 삽입과 삭제 색상 복구, 공개 wrapper와 dummy 콜백, 중위 first/last/next/prev, 일반/RCU 교체, 후위 helper와 두 공개 순회 함수로 끝납니다. 공개 함수들은 EXPORT_SYMBOL로 노출됩니다."
+      "title": "전체 구성",
+      "text": "GPL-2.0-or-later와 저작권, augmented·export 헤더 뒤 색 규칙과 잠금 없는 읽기 설명이 있습니다. 부모·색·회전 도구, 삽입·삭제 복구, 일반·확장 연결 함수, 중위 순회, 일반·RCU 교체, 후위 순회로 끝납니다. 공개 함수는 export로 다른 커널 코드에 제공합니다."
     },
     {
-      "title": "높이를 제한하는 성질",
-      "text": "노드는 빨강 또는 검정이고 루트와 NULL 잎은 검정입니다. 빨강 노드의 자식은 검정이며 루트에서 모든 NULL 잎까지 검정 노드 수가 같습니다. 연속 빨강이 없으므로 가장 긴 경로는 같은 검정 높이를 가진 최단 경로의 두 배를 넘지 않는 구조가 됩니다. 이 성질이 검색 높이 O(log n)의 근거이며 모든 경로 길이가 정확히 같다는 뜻은 아닙니다."
+      "title": "다섯 색 규칙",
+      "text": "노드는 빨강 또는 검정, 루트와 NULL 잎은 검정입니다. 빨강의 자식은 검정이고 루트에서 모든 NULL 잎까지 검정 수가 같습니다. 빨강이 연속될 수 없어 가장 긴 길은 같은 검정 높이의 가장 짧은 길의 두 배를 넘지 않습니다. 이로써 높이 O(log n)을 얻지만 모든 길이가 똑같지는 않습니다."
     },
     {
-      "title": "색상 helper의 전제",
-      "text": "rb_set_black은 색상 비트를 더하므로 이미 빨강인 노드를 검정으로 바꾸는 문맥에서 사용합니다. rb_red_parent는 빨강 노드의 색상 비트가0인 점을 이용해 부모·색상 필드를 바로 포인터로 해석합니다. 어느 색상의 노드에나 쓸 수 있는 일반 부모 접근자는 아닙니다."
+      "title": "빠른 색 도구의 전제",
+      "text": "rb_set_black은 색 비트를 더하므로 빨강을 검정으로 바꾸는 문맥에서 씁니다. rb_red_parent는 빨강의 색 비트가 0인 점을 이용해 결합 필드를 바로 부모 주소로 읽습니다. 아무 색에나 쓸 일반 부모 접근자는 아닙니다."
     },
     {
-      "title": "회전의 공통 부모 처리",
-      "text": "__rb_rotate_set_parents는 old의 부모와 색상을 new에 넘기고 old의 부모를 new, 색상을 인자로 지정한 값으로 설정합니다. 그 후 이전 부모의 자식 또는 트리 루트를 new로 바꿉니다. 실제 좌우 자식 링크 변경은 각 회전 경우의 코드가 먼저 수행하며 이 helper만으로 완전한 회전이 되는 것은 아닙니다."
+      "title": "회전의 부모 처리",
+      "text": "rotate_set_parents는 old의 부모·색을 new에 넘기고 old의 부모를 new, 색을 지정값으로 정한 뒤 윗 부모의 자식이나 전체 루트를 new로 바꿉니다. 좌우 자식 링크는 각 경우에서 먼저 고칩니다. 이 도구 하나가 완전한 회전을 다 하는 것은 아닙니다."
     },
     {
-      "title": "삽입의 기본 종료",
-      "text": "__rb_insert 반복의 불변식은 node가 빨강이라는 것입니다. 부모가 없으면 새 루트를 검정으로 만들고 끝납니다. 부모가 검정이면 빨강-빨강 충돌이 없어 끝납니다. 부모가 빨강이면 할아버지와 삼촌을 이용한 세 경우로 복구하며 부모가 왼쪽/오른쪽인 대칭 코드를 모두 제공합니다."
+      "title": "삽입의 끝 조건",
+      "text": "반복 중 node는 빨강이라는 규칙을 유지합니다. 부모가 없으면 루트를 검정으로 해 끝내고 부모가 검정이어도 충돌이 없어 끝납니다. 빨강 부모면 할아버지·삼촌으로 세 경우를 나눕니다. 부모가 왼쪽인 경우와 오른쪽인 거울상 모두 있습니다."
     },
     {
-      "title": "삽입 경우1: 빨강 삼촌",
-      "text": "부모와 삼촌을 검정, 할아버지를 빨강으로 바꿉니다. 해당 서브트리의 검정 높이는 유지하지만 할아버지 위에서 빨강 충돌이 생길 수 있으므로 node를 할아버지로 옮겨 반복합니다. 이 경우는 회전 없이 위로 문제를 전달합니다."
+      "title": "삽입: 빨강 삼촌",
+      "text": "부모와 삼촌을 검정, 할아버지를 빨강으로 만듭니다. 아래 검정 높이는 유지하지만 위와 빨강이 맞닿을 수 있어 node를 할아버지로 옮겨 반복합니다. 회전 없이 문제를 한 층 위로 보내는 경우입니다."
     },
     {
-      "title": "삽입 경우2·3: 검정 삼촌",
-      "text": "부모가 할아버지의 왼쪽일 때 node가 부모의 오른쪽인 꺾인 모양이면 부모에서 왼쪽 회전해 일직선으로 바꿉니다. 이어 할아버지에서 오른쪽 회전하고 부모가 기존 할아버지의 검정 역할을 이어받으며 옛 할아버지는 빨강이 됩니다. 부모가 오른쪽이면 방향을 반대로 합니다. 각 구조 회전 후 augment_rotate가 집계를 갱신합니다."
+      "title": "삽입: 검정 삼촌",
+      "text": "부모가 왼쪽인데 node가 오른쪽이면 꺾인 모양입니다. 부모에서 왼쪽 회전해 일직선으로 만든 뒤 할아버지에서 오른쪽 회전합니다. 올라간 부모가 검정 역할을 받고 옛 할아버지는 빨강입니다. 반대쪽은 방향을 뒤집습니다. 매 구조 회전 뒤 augment_rotate 콜백으로 집계를 맞춥니다."
     },
     {
-      "title": "삭제 색상 복구의 진입",
-      "text": "실제 노드 제거·후속자 교체는 augmented 헤더의 __rb_erase_augmented가 먼저 합니다. ____rb_erase_color는 node=NULL과 주어진 parent로 시작하고 node 쪽 경로의 검정 수가 하나 적다는 불변식을 유지합니다. node가 루트가 아니라는 전제로 형제와 자식 색상을 살핍니다. 임의의 손상된 트리를 복구하는 검증기는 아닙니다."
+      "title": "삭제 복구 시작",
+      "text": "실제 제거와 후속자 옮기기는 augmented 헤더의 erase가 먼저 합니다. 색 복구는 node=NULL과 parent에서 시작하며 node 쪽 길의 검정이 하나 부족하다는 규칙을 유지합니다. node가 루트가 아님을 전제로 형제·자식을 봅니다. 임의로 망가진 트리를 검사·수리하는 함수가 아닙니다."
     },
     {
-      "title": "삭제 경우1: 빨강 형제",
-      "text": "부족한 쪽이 왼쪽이면 오른쪽 형제가 빨강일 때 부모에서 왼쪽 회전합니다. 형제를 위로 올려 검정 역할을 주고 부모를 빨강으로 만들며 새 형제를 선택합니다. 이 변환은 이후 검정 형제 경우를 적용할 수 있도록 형태를 바꾸는 단계입니다. 오른쪽 부족은 대칭입니다."
+      "title": "삭제: 빨강 형제",
+      "text": "부족한 쪽이 왼쪽이고 오른쪽 형제가 빨강이면 부모에서 왼쪽 회전합니다. 형제가 올라가 검정 역할을 받고 부모는 빨강이 되며 새 형제를 고릅니다. 이후 검정 형제 경우로 바꾸는 준비입니다. 반대편 부족은 거울상입니다."
     },
     {
-      "title": "삭제 경우2: 검정 형제와 검정 자식들",
-      "text": "형제의 두 자식이 검정 또는 NULL이면 형제를 빨강으로 바꿉니다. 부모가 빨강이면 검정으로 만들어 부족을 해소하고 종료합니다. 부모도 검정이면 node를 부모로 옮겨 부족을 한 단계 위로 전파합니다. 위에 부모가 없으면 종료합니다. 회전 없이 반복할 수 있는 경우입니다."
+      "title": "삭제: 형제 자식도 검정",
+      "text": "형제의 두 자식이 검정 또는 NULL이면 형제를 빨강으로 합니다. 부모가 빨강이면 검정으로 바꿔 부족을 채우고 끝납니다. 부모도 검정이면 node를 부모로 옮겨 위에서 반복하며 위 부모가 없으면 끝납니다. 회전 없이 위로 계속 갈 수 있습니다."
     },
     {
-      "title": "삭제 경우3: 가까운 빨강 자식",
-      "text": "부족한 쪽이 왼쪽이고 형제의 먼 오른쪽 자식은 검정, 가까운 왼쪽 자식은 빨강이면 형제에서 오른쪽 회전합니다. 이 과정은 먼 자식이 빨강인 다음 경우로 바꾸는 준비이며 잠시 부모-자식 색상 위반이 생길 수 있어 경우4까지 이어서 읽어야 합니다. 반대쪽은 좌우 대칭입니다."
+      "title": "삭제: 가까운 자식이 빨강",
+      "text": "왼쪽이 부족하고 형제의 먼 오른쪽 자식은 검정, 가까운 왼쪽은 빨강이면 형제에서 오른쪽 회전합니다. 먼 자식이 빨강인 다음 경우를 준비하는 것이며 잠깐 색 위반이 있을 수 있어 다음 단계까지 읽어야 합니다. 반대쪽은 좌우를 뒤집습니다."
     },
     {
-      "title": "삭제 경우4: 먼 빨강 자식",
-      "text": "부모에서 부족한 쪽 반대로 회전합니다. 올라간 형제는 부모의 기존 색상을 받고 내려간 부모와 먼 자식은 검정이 됩니다. 부족한 검정 수를 맞춘 뒤 종료합니다. 각 회전은 자식 링크를 WRITE_ONCE로 갱신하고 해당 augment_rotate를 호출합니다."
+      "title": "삭제: 먼 자식이 빨강",
+      "text": "부모에서 부족한 쪽의 반대로 회전합니다. 올라간 형제는 부모의 옛 색, 내려간 부모와 먼 자식은 검정으로 하여 부족을 채우고 끝냅니다. 각 회전은 자식 링크를 WRITE_ONCE로 쓰고 집계 콜백을 부릅니다."
     },
     {
-      "title": "일반·확장 wrapper 공유",
-      "text": "dummy_propagate/copy/rotate는 빈 함수입니다. 일반 rb_insert_color는 내부 삽입에 dummy_rotate를 주고 rb_erase는 내부 구조 삭제 후 필요할 때 내부 색상 복구를 부릅니다. 확장용 __rb_insert_augmented와 외부 __rb_erase_color는 같은 알고리즘에 사용자 회전 콜백을 전달합니다. 주석은 일반 경로에서 빈 콜백을 인라인 최적화로 제거하려는 의도를 설명합니다."
+      "title": "같은 알고리즘 재사용",
+      "text": "일반용 dummy 세 콜백은 빈 함수입니다. 일반 삽입은 내부 삽입에 빈 회전 콜백을 주고 일반 삭제는 구조 제거 뒤 필요하면 색 복구를 합니다. 확장 삽입과 외부 색 복구도 같은 알고리즘에 사용자 콜백을 줍니다. 일반 경로에서는 인라인 최적화로 빈 호출을 지우려는 설계입니다."
     },
     {
-      "title": "중위 순회 전체",
-      "text": "rb_first/last는 빈 루트면 NULL, 아니면 왼쪽/오른쪽 끝으로 내려갑니다. rb_next는 미연결 표식이면 NULL이고 오른쪽 자식이 있으면 그 아래 가장 왼쪽을 반환합니다. 없으면 오른쪽 자식에서 올라오는 동안 조상으로 이동하고 처음 왼쪽에서 올라온 부모가 다음입니다. rb_prev는 완전한 좌우 대칭입니다. next/prev에는 인자 NULL 자체를 검사하는 분기는 없습니다."
+      "title": "작은 순서부터 순회",
+      "text": "first/last는 빈 루트면 NULL, 아니면 왼쪽/오른쪽 끝입니다. next는 미연결 표지면 NULL, 오른쪽 자식이 있으면 그 아래 왼쪽 끝입니다. 없으면 오른쪽에서 올라오는 동안 계속 올라가 처음 왼쪽에서 올라온 부모를 줍니다. prev는 반대입니다. next/prev는 입력 NULL 자체를 먼저 검사하지 않습니다."
     },
     {
-      "title": "노드 교체와 RCU 공개",
-      "text": "replace는 *new=*victim으로 rb_node의 링크·부모·색상을 복사하고 자식들의 부모를 new로 바꾼 뒤 상위 링크를 교체합니다. 포함 객체의 사용자 키·집계까지 복사하는 함수가 아닙니다. rcu 버전은 상위 링크 공개를 마지막에 __rb_change_child_rcu로 수행하여 새 노드의 후속 포인터가 먼저 보이게 합니다. victim의 메모리를 즉시 회수해도 된다는 뜻은 아닙니다."
+      "title": "노드 바꾸기",
+      "text": "*new=*victim은 rb_node의 부모·색·자식만 복사합니다. 자식의 부모를 new로 바꾼 뒤 상위 링크를 바꿉니다. 사용자 키나 집계는 전체 객체 복사가 아니므로 따로 준비합니다. RCU 버전은 후속 포인터를 먼저 준비하고 상위 공개를 마지막에 합니다. 옛 객체를 즉시 해제해도 된다는 뜻은 아닙니다."
     },
     {
-      "title": "후위 순회 전체",
-      "text": "rb_left_deepest_node는 왼쪽이 있으면 왼쪽, 없고 오른쪽이 있으면 오른쪽으로 내려가 잎을 찾습니다. first_postorder는 빈 트리면 NULL 아니면 이 잎에서 시작합니다. next_postorder는 NULL 입력이면 NULL이고, 부모의 왼쪽에서 올라왔으며 오른쪽 서브트리가 있으면 그쪽의 첫 후위 노드를 찾습니다. 그 외에는 부모를 반환해 자식 뒤 부모 순서를 만듭니다."
+      "title": "자식 뒤 부모 순회",
+      "text": "left_deepest는 왼쪽 우선, 없으면 오른쪽으로 내려 잎을 찾습니다. first_postorder는 빈 트리면 NULL, 아니면 이 잎입니다. next_postorder는 NULL 입력도 처리합니다. 부모의 왼쪽에서 왔고 오른쪽이 남으면 그쪽 첫 후위 노드를, 아니면 부모를 줍니다. 그래서 자식 방문 뒤 부모를 봅니다."
     },
     {
-      "title": "잠금 없는 조회의 정확한 한계",
-      "text": "원문은 자식 링크 저장에 WRITE_ONCE를 사용하고 임시 순환을 만들지 않으면 아래로 내려가는 조회가 구조 순환에 갇히지 않도록 할 수 있다고 설명합니다. 하지만 회전은 원자적이지 않아 서브트리를 놓칠 수 있으며 미발견이 부재를 뜻하지 않습니다. 부모 포인터가 관련된 순환은 검토 범위가 아니라고도 명시합니다. 유효한 객체 수명과 호출자 동기화는 따로 보장해야 합니다."
+      "title": "잠금 없는 검색의 한계",
+      "text": "자식 저장을 WRITE_ONCE로 하고 임시 순환을 만들지 않으면 아래로만 가는 검색이 고리에 갇히지 않게 할 수 있습니다. 그러나 회전 전체는 쪼개지지 않는 원자 작업이 아니므로 가지를 통째로 놓칠 수 있습니다. 찾은 일치와 못 찾았다는 답의 의미는 다릅니다. 부모 포인터 순환은 원문도 검토 범위 밖이며 객체 수명과 동기화는 별도입니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "불변식 기반 복구, 국소 회전과 전역 검정 높이, 대칭 알고리즘, 공통 구현과 특수 콜백, 중위·후위 순회, 저장 순서와 논리 스냅샷의 차이를 학습합니다. 전체 함수와 양쪽 대칭 경로를 원본 대조했으며 여기의 교재 검사는 모든 회전 조합이나 실제 RCU 실행을 증명하는 테스트가 아닙니다."
+      "title": "검토 범위",
+      "text": "계속 지켜야 할 규칙으로 복구하기, 회전과 전체 검정 높이, 대칭 경우, 공통 코드와 콜백, 두 순회, 저장 순서와 같은 순간의 스냅샷 차이를 배웁니다. 전체·양쪽 경로를 대조한 설명이지 모든 회전 조합이나 RCU 경쟁을 실행 증명한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "삽입 중 부모와 삼촌이 모두 빨강이면 먼저 무엇을 하는가?",
+      "prompt": "부모·삼촌이 빨강이면 먼저?",
       "options": [
+        "둘을 검정, 할아버지를 빨강으로 하고 위로 간다",
+        "새 노드를 지우고 처음부터 다시 넣는다"
+      ],
+      "answer": 0,
+      "explanation": "현재 검정 높이를 보존하고 위의 잠재 충돌을 고칩니다.",
+      "original_prompt": "삽입 중 부모와 삼촌이 모두 빨강이면 먼저 무엇을 하는가?",
+      "original_options": [
         "부모·삼촌을 검정, 할아버지를 빨강으로 바꾸고 위로 진행한다",
         "항상 새 노드를 삭제하고 처음부터 다시 넣는다"
       ],
-      "answer": 0,
-      "explanation": "경우1은 색상 전환으로 현재 검정 높이를 보존하고 할아버지 위의 잠재 충돌만 이어서 처리합니다."
+      "original_explanation": "경우1은 색상 전환으로 현재 검정 높이를 보존하고 할아버지 위의 잠재 충돌만 이어서 처리합니다."
     },
     {
-      "prompt": "삽입의 꺾인 모양에서 부모 회전만으로 항상 끝나는가?",
+      "prompt": "꺾인 모양은 부모 회전만으로 끝나나요?",
       "options": [
+        "그렇다. 경우 2는 늘 독립 종료다",
+        "아니다. 일직선 뒤 할아버지 회전으로 간다"
+      ],
+      "answer": 1,
+      "explanation": "경우 2는 경우 3을 준비합니다.",
+      "original_prompt": "삽입의 꺾인 모양에서 부모 회전만으로 항상 끝나는가?",
+      "original_options": [
         "그렇다. 경우2가 항상 독립적인 종료다",
         "아니다. 일직선으로 바꾼 뒤 할아버지 회전으로 이어진다"
       ],
-      "answer": 1,
-      "explanation": "경우2는 경우3으로 바꾸는 준비입니다. 원본도 부모 회전 뒤 할아버지 회전 경로로 이어집니다."
+      "original_explanation": "경우2는 경우3으로 바꾸는 준비입니다. 원본도 부모 회전 뒤 할아버지 회전 경로로 이어집니다."
     },
     {
-      "prompt": "삭제에서 형제와 형제 자식들이 검정이고 부모도 검정이면?",
+      "prompt": "삭제에서 형제·자식·부모도 검정이면?",
       "options": [
+        "부족을 부모 쪽으로 올려 보낸다",
+        "높이 차이를 무시하고 끝낸다"
+      ],
+      "answer": 0,
+      "explanation": "형제를 빨강으로 바꾸고 위에서 반복합니다.",
+      "original_prompt": "삭제에서 형제와 형제 자식들이 검정이고 부모도 검정이면?",
+      "original_options": [
         "부족한 검정 수 문제를 부모 쪽으로 전파한다",
         "검정 높이 차이를 무시하고 종료한다"
       ],
-      "answer": 0,
-      "explanation": "형제를 빨강으로 바꾸고 node=parent로 올려 반복합니다. 빨강 부모였다면 검정으로 바꾸어 바로 끝낼 수 있습니다."
+      "original_explanation": "형제를 빨강으로 바꾸고 node=parent로 올려 반복합니다. 빨강 부모였다면 검정으로 바꾸어 바로 끝낼 수 있습니다."
     },
     {
-      "prompt": "rb_replace_node가 사용자 객체 전체를 복사하는가?",
+      "prompt": "replace가 사용자 객체 전체를 복사하나요?",
       "options": [
+        "그렇다. 키와 모든 필드도 복사한다",
+        "아니다. rb_node의 링크와 색 부분이다"
+      ],
+      "answer": 1,
+      "explanation": "인수가 rb_node 주소이며 그 크기만 대입합니다.",
+      "original_prompt": "rb_replace_node가 사용자 객체 전체를 복사하는가?",
+      "original_options": [
         "그렇다. 키와 모든 사용자 필드까지 복사한다",
         "아니다. rb_node 부분의 링크·색상을 복사한다"
       ],
-      "answer": 1,
-      "explanation": "매개변수는 rb_node 포인터이고 *new=*victim은 그 구조체 크기의 대입입니다. 포함 객체의 필드는 호출자가 준비해야 합니다."
+      "original_explanation": "매개변수는 rb_node 포인터이고 *new=*victim은 그 구조체 크기의 대입입니다. 포함 객체의 필드는 호출자가 준비해야 합니다."
     },
     {
-      "prompt": "후위 순회에서 부모는 언제 방문하는가?",
+      "prompt": "후위 순회에서 부모는 언제인가요?",
       "options": [
+        "자식 서브트리 뒤",
+        "항상 자식 둘보다 먼저"
+      ],
+      "answer": 0,
+      "explanation": "남은 오른쪽 가지를 먼저 보고 부모로 갑니다.",
+      "original_prompt": "후위 순회에서 부모는 언제 방문하는가?",
+      "original_options": [
         "자식 서브트리를 방문한 뒤다",
         "항상 두 자식보다 먼저다"
       ],
-      "answer": 0,
-      "explanation": "next_postorder는 아직 방문하지 않은 오른쪽 서브트리가 있으면 먼저 내려가고 그 외에 부모를 반환합니다."
+      "original_explanation": "next_postorder는 아직 방문하지 않은 오른쪽 서브트리가 있으면 먼저 내려가고 그 외에 부모를 반환합니다."
     },
     {
-      "prompt": "잠금 없는 하향 검색이 NULL이면 키가 없다고 단정할 수 있는가?",
+      "prompt": "잠금 없는 하향 검색이 NULL이면 키가 없나요?",
       "options": [
+        "그렇다. WRITE_ONCE가 전체 스냅샷을 만든다",
+        "단정 못 한다. 동시 회전으로 가지를 놓칠 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "개별 저장이 여러 링크 변경 전체를 원자적으로 만들지는 않습니다.",
+      "original_prompt": "잠금 없는 하향 검색이 NULL이면 키가 없다고 단정할 수 있는가?",
+      "original_options": [
         "있다. WRITE_ONCE가 완전한 스냅샷을 만든다",
         "없다. 동시 회전으로 서브트리를 놓칠 수 있다"
       ],
-      "answer": 1,
-      "explanation": "원문은 반환된 일치와 미발견의 의미를 구분합니다. 개별 링크 저장의 성질이 여러 링크 변경 전체의 원자성을 만들지는 않습니다."
+      "original_explanation": "원문은 반환된 일치와 미발견의 의미를 구분합니다. 개별 링크 저장의 성질이 여러 링크 변경 전체의 원자성을 만들지는 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "부모와 삼촌이 빨강인 삽입 그림에서 두 노드를 검정으로 바꾸고 문제를 위로 옮겨 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n  Red Black Trees\n  (C) 1999  Andrea Arcangeli <andrea@suse.de>\n  (C) 2002  David Woodhouse <dwmw2@infradead.org>\n  (C) 2012  Michel Lespinasse <walken@google.com>\n\n\n  linux/lib/rbtree.c\n*/\n\n#include <linux/rbtree_augmented.h>\n#include <linux/export.h>\n\n/*\n * red-black trees properties:  https://en.wikipedia.org/wiki/Rbtree\n *\n *  1) A node is either red or black\n *  2) The root is black\n *  3) All leaves (NULL) are black\n *  4) Both children of every red node are black\n *  5) Every simple path from root to leaves contains the same number\n *     of black nodes.\n *\n *  4 and 5 give the O(log n) guarantee, since 4 implies you cannot have two\n *  consecutive red nodes in a path and every red node is therefore followed by\n *  a black. So if B is the number of black nodes on every simple path (as per\n *  5), then the longest possible path due to 4 is 2B.\n *\n *  We shall indicate color with case, where black nodes are uppercase and red\n *  nodes will be lowercase. Unknown color nodes shall be drawn as red within\n *  parentheses and have some accompanying text comment.\n */\n\n/*\n * Notes on lockless lookups:\n *\n * All stores to the tree structure (rb_left and rb_right) must be done using\n * WRITE_ONCE(). And we must not inadvertently cause (temporary) loops in the\n * tree structure as seen in program order.\n *\n * These two requirements will allow lockless iteration of the tree -- not\n * correct iteration mind you, tree rotations are not atomic so a lookup might\n * miss entire subtrees.\n *\n * But they do guarantee that any such traversal will only see valid elements\n * and that it will indeed complete -- does not get stuck in a loop.\n *\n * It also guarantees that if the lookup returns an element it is the 'correct'\n * one. But not returning an element does _NOT_ mean it's not present.\n *\n * NOTE:\n *\n * Stores to __rb_parent_color are not important for simple lookups so those\n * are left undone as of now. Nor did I check for loops involving parent\n * pointers.\n */\n\nstatic inline void rb_set_black(struct rb_node *rb)\n{\n\trb->__rb_parent_color += RB_BLACK;\n}\n\nstatic inline struct rb_node *rb_red_parent(struct rb_node *red)\n{\n\treturn (struct rb_node *)red->__rb_parent_color;\n}\n\n/*\n * Helper function for rotations:\n * - old's parent and color get assigned to new\n * - old gets assigned new as a parent and 'color' as a color.\n */\nstatic inline void\n__rb_rotate_set_parents(struct rb_node *old, struct rb_node *new,\n\t\t\tstruct rb_root *root, int color)\n{\n\tstruct rb_node *parent = rb_parent(old);\n\tnew->__rb_parent_color = old->__rb_parent_color;\n\trb_set_parent_color(old, new, color);\n\t__rb_change_child(old, new, parent, root);\n}\n\nstatic __always_inline void\n__rb_insert(struct rb_node *node, struct rb_root *root,\n\t    void (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\tstruct rb_node *parent = rb_red_parent(node), *gparent, *tmp;\n\n\twhile (true) {\n\t\t/*\n\t\t * Loop invariant: node is red.\n\t\t */\n\t\tif (unlikely(!parent)) {\n\t\t\t/*\n\t\t\t * The inserted node is root. Either this is the\n\t\t\t * first node, or we recursed at Case 1 below and\n\t\t\t * are no longer violating 4).\n\t\t\t */\n\t\t\trb_set_parent_color(node, NULL, RB_BLACK);\n\t\t\tbreak;\n\t\t}\n\n\t\t/*\n\t\t * If there is a black parent, we are done.\n\t\t * Otherwise, take some corrective action as,\n\t\t * per 4), we don't want a red root or two\n\t\t * consecutive red nodes.\n\t\t */\n\t\tif(rb_is_black(parent))\n\t\t\tbreak;\n\n\t\tgparent = rb_red_parent(parent);\n\n\t\ttmp = gparent->rb_right;\n\t\tif (parent != tmp) {\t/* parent == gparent->rb_left */\n\t\t\tif (tmp && rb_is_red(tmp)) {\n\t\t\t\t/*\n\t\t\t\t * Case 1 - node's uncle is red (color flips).\n\t\t\t\t *\n\t\t\t\t *       G            g\n\t\t\t\t *      / \\          / \\\n\t\t\t\t *     p   u  -->   P   U\n\t\t\t\t *    /            /\n\t\t\t\t *   n            n\n\t\t\t\t *\n\t\t\t\t * However, since g's parent might be red, and\n\t\t\t\t * 4) does not allow this, we need to recurse\n\t\t\t\t * at g.\n\t\t\t\t */\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, gparent, RB_BLACK);\n\t\t\t\tnode = gparent;\n\t\t\t\tparent = rb_parent(node);\n\t\t\t\trb_set_parent_color(node, parent, RB_RED);\n\t\t\t\tcontinue;\n\t\t\t}\n\n\t\t\ttmp = parent->rb_right;\n\t\t\tif (node == tmp) {\n\t\t\t\t/*\n\t\t\t\t * Case 2 - node's uncle is black and node is\n\t\t\t\t * the parent's right child (left rotate at parent).\n\t\t\t\t *\n\t\t\t\t *      G             G\n\t\t\t\t *     / \\           / \\\n\t\t\t\t *    p   U  -->    n   U\n\t\t\t\t *     \\           /\n\t\t\t\t *      n         p\n\t\t\t\t *\n\t\t\t\t * This still leaves us in violation of 4), the\n\t\t\t\t * continuation into Case 3 will fix that.\n\t\t\t\t */\n\t\t\t\ttmp = node->rb_left;\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp);\n\t\t\t\tWRITE_ONCE(node->rb_left, parent);\n\t\t\t\tif (tmp)\n\t\t\t\t\trb_set_parent_color(tmp, parent,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, node, RB_RED);\n\t\t\t\taugment_rotate(parent, node);\n\t\t\t\tparent = node;\n\t\t\t\ttmp = node->rb_right;\n\t\t\t}\n\n\t\t\t/*\n\t\t\t * Case 3 - node's uncle is black and node is\n\t\t\t * the parent's left child (right rotate at gparent).\n\t\t\t *\n\t\t\t *        G           P\n\t\t\t *       / \\         / \\\n\t\t\t *      p   U  -->  n   g\n\t\t\t *     /                 \\\n\t\t\t *    n                   U\n\t\t\t */\n\t\t\tWRITE_ONCE(gparent->rb_left, tmp); /* == parent->rb_right */\n\t\t\tWRITE_ONCE(parent->rb_right, gparent);\n\t\t\tif (tmp)\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t__rb_rotate_set_parents(gparent, parent, root, RB_RED);\n\t\t\taugment_rotate(gparent, parent);\n\t\t\tbreak;\n\t\t} else {\n\t\t\ttmp = gparent->rb_left;\n\t\t\tif (tmp && rb_is_red(tmp)) {\n\t\t\t\t/* Case 1 - color flips */\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, gparent, RB_BLACK);\n\t\t\t\tnode = gparent;\n\t\t\t\tparent = rb_parent(node);\n\t\t\t\trb_set_parent_color(node, parent, RB_RED);\n\t\t\t\tcontinue;\n\t\t\t}\n\n\t\t\ttmp = parent->rb_left;\n\t\t\tif (node == tmp) {\n\t\t\t\t/* Case 2 - right rotate at parent */\n\t\t\t\ttmp = node->rb_right;\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp);\n\t\t\t\tWRITE_ONCE(node->rb_right, parent);\n\t\t\t\tif (tmp)\n\t\t\t\t\trb_set_parent_color(tmp, parent,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, node, RB_RED);\n\t\t\t\taugment_rotate(parent, node);\n\t\t\t\tparent = node;\n\t\t\t\ttmp = node->rb_left;\n\t\t\t}\n\n\t\t\t/* Case 3 - left rotate at gparent */\n\t\t\tWRITE_ONCE(gparent->rb_right, tmp); /* == parent->rb_left */\n\t\t\tWRITE_ONCE(parent->rb_left, gparent);\n\t\t\tif (tmp)\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t__rb_rotate_set_parents(gparent, parent, root, RB_RED);\n\t\t\taugment_rotate(gparent, parent);\n\t\t\tbreak;\n\t\t}\n\t}\n}\n\n/*\n * Inline version for rb_erase() use - we want to be able to inline\n * and eliminate the dummy_rotate callback there\n */\nstatic __always_inline void\n____rb_erase_color(struct rb_node *parent, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\tstruct rb_node *node = NULL, *sibling, *tmp1, *tmp2;\n\n\twhile (true) {\n\t\t/*\n\t\t * Loop invariants:\n\t\t * - node is black (or NULL on first iteration)\n\t\t * - node is not the root (parent is not NULL)\n\t\t * - All leaf paths going through parent and node have a\n\t\t *   black node count that is 1 lower than other leaf paths.\n\t\t */\n\t\tsibling = parent->rb_right;\n\t\tif (node != sibling) {\t/* node == parent->rb_left */\n\t\t\tif (rb_is_red(sibling)) {\n\t\t\t\t/*\n\t\t\t\t * Case 1 - left rotate at parent\n\t\t\t\t *\n\t\t\t\t *     P               S\n\t\t\t\t *    / \\             / \\\n\t\t\t\t *   N   s    -->    p   Sr\n\t\t\t\t *      / \\         / \\\n\t\t\t\t *     Sl  Sr      N   Sl\n\t\t\t\t */\n\t\t\t\ttmp1 = sibling->rb_left;\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp1);\n\t\t\t\tWRITE_ONCE(sibling->rb_left, parent);\n\t\t\t\trb_set_parent_color(tmp1, parent, RB_BLACK);\n\t\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\t\tRB_RED);\n\t\t\t\taugment_rotate(parent, sibling);\n\t\t\t\tsibling = tmp1;\n\t\t\t}\n\t\t\ttmp1 = sibling->rb_right;\n\t\t\tif (!tmp1 || rb_is_black(tmp1)) {\n\t\t\t\ttmp2 = sibling->rb_left;\n\t\t\t\tif (!tmp2 || rb_is_black(tmp2)) {\n\t\t\t\t\t/*\n\t\t\t\t\t * Case 2 - sibling color flip\n\t\t\t\t\t * (p could be either color here)\n\t\t\t\t\t *\n\t\t\t\t\t *    (p)           (p)\n\t\t\t\t\t *    / \\           / \\\n\t\t\t\t\t *   N   S    -->  N   s\n\t\t\t\t\t *      / \\           / \\\n\t\t\t\t\t *     Sl  Sr        Sl  Sr\n\t\t\t\t\t *\n\t\t\t\t\t * This leaves us violating 5) which\n\t\t\t\t\t * can be fixed by flipping p to black\n\t\t\t\t\t * if it was red, or by recursing at p.\n\t\t\t\t\t * p is red when coming from Case 1.\n\t\t\t\t\t */\n\t\t\t\t\trb_set_parent_color(sibling, parent,\n\t\t\t\t\t\t\t    RB_RED);\n\t\t\t\t\tif (rb_is_red(parent))\n\t\t\t\t\t\trb_set_black(parent);\n\t\t\t\t\telse {\n\t\t\t\t\t\tnode = parent;\n\t\t\t\t\t\tparent = rb_parent(node);\n\t\t\t\t\t\tif (parent)\n\t\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\t/*\n\t\t\t\t * Case 3 - right rotate at sibling\n\t\t\t\t * (p could be either color here)\n\t\t\t\t *\n\t\t\t\t *   (p)           (p)\n\t\t\t\t *   / \\           / \\\n\t\t\t\t *  N   S    -->  N   sl\n\t\t\t\t *     / \\             \\\n\t\t\t\t *    sl  sr            S\n\t\t\t\t *                       \\\n\t\t\t\t *                        sr\n\t\t\t\t *\n\t\t\t\t * Note: p might be red, and then both\n\t\t\t\t * p and sl are red after rotation(which\n\t\t\t\t * breaks property 4). This is fixed in\n\t\t\t\t * Case 4 (in __rb_rotate_set_parents()\n\t\t\t\t *         which set sl the color of p\n\t\t\t\t *         and set p RB_BLACK)\n\t\t\t\t *\n\t\t\t\t *   (p)            (sl)\n\t\t\t\t *   / \\            /  \\\n\t\t\t\t *  N   sl   -->   P    S\n\t\t\t\t *       \\        /      \\\n\t\t\t\t *        S      N        sr\n\t\t\t\t *         \\\n\t\t\t\t *          sr\n\t\t\t\t */\n\t\t\t\ttmp1 = tmp2->rb_right;\n\t\t\t\tWRITE_ONCE(sibling->rb_left, tmp1);\n\t\t\t\tWRITE_ONCE(tmp2->rb_right, sibling);\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp2);\n\t\t\t\tif (tmp1)\n\t\t\t\t\trb_set_parent_color(tmp1, sibling,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\taugment_rotate(sibling, tmp2);\n\t\t\t\ttmp1 = sibling;\n\t\t\t\tsibling = tmp2;\n\t\t\t}\n\t\t\t/*\n\t\t\t * Case 4 - left rotate at parent + color flips\n\t\t\t * (p and sl could be either color here.\n\t\t\t *  After rotation, p becomes black, s acquires\n\t\t\t *  p's color, and sl keeps its color)\n\t\t\t *\n\t\t\t *      (p)             (s)\n\t\t\t *      / \\             / \\\n\t\t\t *     N   S     -->   P   Sr\n\t\t\t *        / \\         / \\\n\t\t\t *      (sl) sr      N  (sl)\n\t\t\t */\n\t\t\ttmp2 = sibling->rb_left;\n\t\t\tWRITE_ONCE(parent->rb_right, tmp2);\n\t\t\tWRITE_ONCE(sibling->rb_left, parent);\n\t\t\trb_set_parent_color(tmp1, sibling, RB_BLACK);\n\t\t\tif (tmp2)\n\t\t\t\trb_set_parent(tmp2, parent);\n\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\tRB_BLACK);\n\t\t\taugment_rotate(parent, sibling);\n\t\t\tbreak;\n\t\t} else {\n\t\t\tsibling = parent->rb_left;\n\t\t\tif (rb_is_red(sibling)) {\n\t\t\t\t/* Case 1 - right rotate at parent */\n\t\t\t\ttmp1 = sibling->rb_right;\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp1);\n\t\t\t\tWRITE_ONCE(sibling->rb_right, parent);\n\t\t\t\trb_set_parent_color(tmp1, parent, RB_BLACK);\n\t\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\t\tRB_RED);\n\t\t\t\taugment_rotate(parent, sibling);\n\t\t\t\tsibling = tmp1;\n\t\t\t}\n\t\t\ttmp1 = sibling->rb_left;\n\t\t\tif (!tmp1 || rb_is_black(tmp1)) {\n\t\t\t\ttmp2 = sibling->rb_right;\n\t\t\t\tif (!tmp2 || rb_is_black(tmp2)) {\n\t\t\t\t\t/* Case 2 - sibling color flip */\n\t\t\t\t\trb_set_parent_color(sibling, parent,\n\t\t\t\t\t\t\t    RB_RED);\n\t\t\t\t\tif (rb_is_red(parent))\n\t\t\t\t\t\trb_set_black(parent);\n\t\t\t\t\telse {\n\t\t\t\t\t\tnode = parent;\n\t\t\t\t\t\tparent = rb_parent(node);\n\t\t\t\t\t\tif (parent)\n\t\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\t/* Case 3 - left rotate at sibling */\n\t\t\t\ttmp1 = tmp2->rb_left;\n\t\t\t\tWRITE_ONCE(sibling->rb_right, tmp1);\n\t\t\t\tWRITE_ONCE(tmp2->rb_left, sibling);\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp2);\n\t\t\t\tif (tmp1)\n\t\t\t\t\trb_set_parent_color(tmp1, sibling,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\taugment_rotate(sibling, tmp2);\n\t\t\t\ttmp1 = sibling;\n\t\t\t\tsibling = tmp2;\n\t\t\t}\n\t\t\t/* Case 4 - right rotate at parent + color flips */\n\t\t\ttmp2 = sibling->rb_right;\n\t\t\tWRITE_ONCE(parent->rb_left, tmp2);\n\t\t\tWRITE_ONCE(sibling->rb_right, parent);\n\t\t\trb_set_parent_color(tmp1, sibling, RB_BLACK);\n\t\t\tif (tmp2)\n\t\t\t\trb_set_parent(tmp2, parent);\n\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\tRB_BLACK);\n\t\t\taugment_rotate(parent, sibling);\n\t\t\tbreak;\n\t\t}\n\t}\n}\n\n/* Non-inline version for rb_erase_augmented() use */\nvoid __rb_erase_color(struct rb_node *parent, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\t____rb_erase_color(parent, root, augment_rotate);\n}\nEXPORT_SYMBOL(__rb_erase_color);\n\n/*\n * Non-augmented rbtree manipulation functions.\n *\n * We use dummy augmented callbacks here, and have the compiler optimize them\n * out of the rb_insert_color() and rb_erase() function definitions.\n */\n\nstatic inline void dummy_propagate(struct rb_node *node, struct rb_node *stop) {}\nstatic inline void dummy_copy(struct rb_node *old, struct rb_node *new) {}\nstatic inline void dummy_rotate(struct rb_node *old, struct rb_node *new) {}\n\nstatic const struct rb_augment_callbacks dummy_callbacks = {\n\t.propagate = dummy_propagate,\n\t.copy = dummy_copy,\n\t.rotate = dummy_rotate\n};\n\nvoid rb_insert_color(struct rb_node *node, struct rb_root *root)\n{\n\t__rb_insert(node, root, dummy_rotate);\n}\nEXPORT_SYMBOL(rb_insert_color);\n\nvoid rb_erase(struct rb_node *node, struct rb_root *root)\n{\n\tstruct rb_node *rebalance;\n\trebalance = __rb_erase_augmented(node, root, &dummy_callbacks);\n\tif (rebalance)\n\t\t____rb_erase_color(rebalance, root, dummy_rotate);\n}\nEXPORT_SYMBOL(rb_erase);\n\n/*\n * Augmented rbtree manipulation functions.\n *\n * This instantiates the same __always_inline functions as in the non-augmented\n * case, but this time with user-defined callbacks.\n */\n\nvoid __rb_insert_augmented(struct rb_node *node, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\t__rb_insert(node, root, augment_rotate);\n}\nEXPORT_SYMBOL(__rb_insert_augmented);\n\n/*\n * This function returns the first node (in sort order) of the tree.\n */\nstruct rb_node *rb_first(const struct rb_root *root)\n{\n\tstruct rb_node\t*n;\n\n\tn = root->rb_node;\n\tif (!n)\n\t\treturn NULL;\n\twhile (n->rb_left)\n\t\tn = n->rb_left;\n\treturn n;\n}\nEXPORT_SYMBOL(rb_first);\n\nstruct rb_node *rb_last(const struct rb_root *root)\n{\n\tstruct rb_node\t*n;\n\n\tn = root->rb_node;\n\tif (!n)\n\t\treturn NULL;\n\twhile (n->rb_right)\n\t\tn = n->rb_right;\n\treturn n;\n}\nEXPORT_SYMBOL(rb_last);\n\nstruct rb_node *rb_next(const struct rb_node *node)\n{\n\tstruct rb_node *parent;\n\n\tif (RB_EMPTY_NODE(node))\n\t\treturn NULL;\n\n\t/*\n\t * If we have a right-hand child, go down and then left as far\n\t * as we can.\n\t */\n\tif (node->rb_right) {\n\t\tnode = node->rb_right;\n\t\twhile (node->rb_left)\n\t\t\tnode = node->rb_left;\n\t\treturn (struct rb_node *)node;\n\t}\n\n\t/*\n\t * No right-hand children. Everything down and left is smaller than us,\n\t * so any 'next' node must be in the general direction of our parent.\n\t * Go up the tree; any time the ancestor is a right-hand child of its\n\t * parent, keep going up. First time it's a left-hand child of its\n\t * parent, said parent is our 'next' node.\n\t */\n\twhile ((parent = rb_parent(node)) && node == parent->rb_right)\n\t\tnode = parent;\n\n\treturn parent;\n}\nEXPORT_SYMBOL(rb_next);\n\nstruct rb_node *rb_prev(const struct rb_node *node)\n{\n\tstruct rb_node *parent;\n\n\tif (RB_EMPTY_NODE(node))\n\t\treturn NULL;\n\n\t/*\n\t * If we have a left-hand child, go down and then right as far\n\t * as we can.\n\t */\n\tif (node->rb_left) {\n\t\tnode = node->rb_left;\n\t\twhile (node->rb_right)\n\t\t\tnode = node->rb_right;\n\t\treturn (struct rb_node *)node;\n\t}\n\n\t/*\n\t * No left-hand children. Go up till we find an ancestor which\n\t * is a right-hand child of its parent.\n\t */\n\twhile ((parent = rb_parent(node)) && node == parent->rb_left)\n\t\tnode = parent;\n\n\treturn parent;\n}\nEXPORT_SYMBOL(rb_prev);\n\nvoid rb_replace_node(struct rb_node *victim, struct rb_node *new,\n\t\t     struct rb_root *root)\n{\n\tstruct rb_node *parent = rb_parent(victim);\n\n\t/* Copy the pointers/colour from the victim to the replacement */\n\t*new = *victim;\n\n\t/* Set the surrounding nodes to point to the replacement */\n\tif (victim->rb_left)\n\t\trb_set_parent(victim->rb_left, new);\n\tif (victim->rb_right)\n\t\trb_set_parent(victim->rb_right, new);\n\t__rb_change_child(victim, new, parent, root);\n}\nEXPORT_SYMBOL(rb_replace_node);\n\nvoid rb_replace_node_rcu(struct rb_node *victim, struct rb_node *new,\n\t\t\t struct rb_root *root)\n{\n\tstruct rb_node *parent = rb_parent(victim);\n\n\t/* Copy the pointers/colour from the victim to the replacement */\n\t*new = *victim;\n\n\t/* Set the surrounding nodes to point to the replacement */\n\tif (victim->rb_left)\n\t\trb_set_parent(victim->rb_left, new);\n\tif (victim->rb_right)\n\t\trb_set_parent(victim->rb_right, new);\n\n\t/* Set the parent's pointer to the new node last after an RCU barrier\n\t * so that the pointers onwards are seen to be set correctly when doing\n\t * an RCU walk over the tree.\n\t */\n\t__rb_change_child_rcu(victim, new, parent, root);\n}\nEXPORT_SYMBOL(rb_replace_node_rcu);\n\nstatic struct rb_node *rb_left_deepest_node(const struct rb_node *node)\n{\n\tfor (;;) {\n\t\tif (node->rb_left)\n\t\t\tnode = node->rb_left;\n\t\telse if (node->rb_right)\n\t\t\tnode = node->rb_right;\n\t\telse\n\t\t\treturn (struct rb_node *)node;\n\t}\n}\n\nstruct rb_node *rb_next_postorder(const struct rb_node *node)\n{\n\tconst struct rb_node *parent;\n\tif (!node)\n\t\treturn NULL;\n\tparent = rb_parent(node);\n\n\t/* If we're sitting on node, we've already seen our children */\n\tif (parent && node == parent->rb_left && parent->rb_right) {\n\t\t/* If we are the parent's left node, go to the parent's right\n\t\t * node then all the way down to the left */\n\t\treturn rb_left_deepest_node(parent->rb_right);\n\t} else\n\t\t/* Otherwise we are the parent's right node, and the parent\n\t\t * should be next */\n\t\treturn (struct rb_node *)parent;\n}\nEXPORT_SYMBOL(rb_next_postorder);\n\nstruct rb_node *rb_first_postorder(const struct rb_root *root)\n{\n\tif (!root->rb_node)\n\t\treturn NULL;\n\n\treturn rb_left_deepest_node(root->rb_node);\n}\nEXPORT_SYMBOL(rb_first_postorder);\n",
   "source_review": {
@@ -184,5 +216,221 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rbtree.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-7be6c7cde6fbe12d",
+    "path": "lib/rbtree.c",
+    "title": "레드블랙 트리 구현 전체: 삽입3경우·삭제4경우·순회·교체",
+    "area": "자료구조 · 균형 복구 · 회전 · 중위·후위 순회",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정렬된 이진 트리의 높이를 제한하는 색상 불변식과 회전, 순회·교체 연산을 구현합니다.",
+    "guide": [
+      "삽입은 빨강 노드의 빨강 부모 충돌을, 삭제는 한 경로의 검정 수 부족을 복구합니다. 같은 균형 알고리즘에 빈 콜백 또는 확장 집계 콜백을 전달합니다.",
+      "삽입 위치와 키 비교는 호출자가 올바르게 처리해야 합니다. 이 구현의 제한적인 잠금 없는 조회 설명을 객체 수명이나 부모 포인터 순회까지 일반화하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구성",
+        "text": "SPDX와 저작권, augmented/export 포함 뒤에 다섯 트리 성질과 잠금 없는 조회 주석이 있습니다. 색상·부모·회전 helper, 내부 삽입과 삭제 색상 복구, 공개 wrapper와 dummy 콜백, 중위 first/last/next/prev, 일반/RCU 교체, 후위 helper와 두 공개 순회 함수로 끝납니다. 공개 함수들은 EXPORT_SYMBOL로 노출됩니다."
+      },
+      {
+        "title": "높이를 제한하는 성질",
+        "text": "노드는 빨강 또는 검정이고 루트와 NULL 잎은 검정입니다. 빨강 노드의 자식은 검정이며 루트에서 모든 NULL 잎까지 검정 노드 수가 같습니다. 연속 빨강이 없으므로 가장 긴 경로는 같은 검정 높이를 가진 최단 경로의 두 배를 넘지 않는 구조가 됩니다. 이 성질이 검색 높이 O(log n)의 근거이며 모든 경로 길이가 정확히 같다는 뜻은 아닙니다."
+      },
+      {
+        "title": "색상 helper의 전제",
+        "text": "rb_set_black은 색상 비트를 더하므로 이미 빨강인 노드를 검정으로 바꾸는 문맥에서 사용합니다. rb_red_parent는 빨강 노드의 색상 비트가0인 점을 이용해 부모·색상 필드를 바로 포인터로 해석합니다. 어느 색상의 노드에나 쓸 수 있는 일반 부모 접근자는 아닙니다."
+      },
+      {
+        "title": "회전의 공통 부모 처리",
+        "text": "__rb_rotate_set_parents는 old의 부모와 색상을 new에 넘기고 old의 부모를 new, 색상을 인자로 지정한 값으로 설정합니다. 그 후 이전 부모의 자식 또는 트리 루트를 new로 바꿉니다. 실제 좌우 자식 링크 변경은 각 회전 경우의 코드가 먼저 수행하며 이 helper만으로 완전한 회전이 되는 것은 아닙니다."
+      },
+      {
+        "title": "삽입의 기본 종료",
+        "text": "__rb_insert 반복의 불변식은 node가 빨강이라는 것입니다. 부모가 없으면 새 루트를 검정으로 만들고 끝납니다. 부모가 검정이면 빨강-빨강 충돌이 없어 끝납니다. 부모가 빨강이면 할아버지와 삼촌을 이용한 세 경우로 복구하며 부모가 왼쪽/오른쪽인 대칭 코드를 모두 제공합니다."
+      },
+      {
+        "title": "삽입 경우1: 빨강 삼촌",
+        "text": "부모와 삼촌을 검정, 할아버지를 빨강으로 바꿉니다. 해당 서브트리의 검정 높이는 유지하지만 할아버지 위에서 빨강 충돌이 생길 수 있으므로 node를 할아버지로 옮겨 반복합니다. 이 경우는 회전 없이 위로 문제를 전달합니다."
+      },
+      {
+        "title": "삽입 경우2·3: 검정 삼촌",
+        "text": "부모가 할아버지의 왼쪽일 때 node가 부모의 오른쪽인 꺾인 모양이면 부모에서 왼쪽 회전해 일직선으로 바꿉니다. 이어 할아버지에서 오른쪽 회전하고 부모가 기존 할아버지의 검정 역할을 이어받으며 옛 할아버지는 빨강이 됩니다. 부모가 오른쪽이면 방향을 반대로 합니다. 각 구조 회전 후 augment_rotate가 집계를 갱신합니다."
+      },
+      {
+        "title": "삭제 색상 복구의 진입",
+        "text": "실제 노드 제거·후속자 교체는 augmented 헤더의 __rb_erase_augmented가 먼저 합니다. ____rb_erase_color는 node=NULL과 주어진 parent로 시작하고 node 쪽 경로의 검정 수가 하나 적다는 불변식을 유지합니다. node가 루트가 아니라는 전제로 형제와 자식 색상을 살핍니다. 임의의 손상된 트리를 복구하는 검증기는 아닙니다."
+      },
+      {
+        "title": "삭제 경우1: 빨강 형제",
+        "text": "부족한 쪽이 왼쪽이면 오른쪽 형제가 빨강일 때 부모에서 왼쪽 회전합니다. 형제를 위로 올려 검정 역할을 주고 부모를 빨강으로 만들며 새 형제를 선택합니다. 이 변환은 이후 검정 형제 경우를 적용할 수 있도록 형태를 바꾸는 단계입니다. 오른쪽 부족은 대칭입니다."
+      },
+      {
+        "title": "삭제 경우2: 검정 형제와 검정 자식들",
+        "text": "형제의 두 자식이 검정 또는 NULL이면 형제를 빨강으로 바꿉니다. 부모가 빨강이면 검정으로 만들어 부족을 해소하고 종료합니다. 부모도 검정이면 node를 부모로 옮겨 부족을 한 단계 위로 전파합니다. 위에 부모가 없으면 종료합니다. 회전 없이 반복할 수 있는 경우입니다."
+      },
+      {
+        "title": "삭제 경우3: 가까운 빨강 자식",
+        "text": "부족한 쪽이 왼쪽이고 형제의 먼 오른쪽 자식은 검정, 가까운 왼쪽 자식은 빨강이면 형제에서 오른쪽 회전합니다. 이 과정은 먼 자식이 빨강인 다음 경우로 바꾸는 준비이며 잠시 부모-자식 색상 위반이 생길 수 있어 경우4까지 이어서 읽어야 합니다. 반대쪽은 좌우 대칭입니다."
+      },
+      {
+        "title": "삭제 경우4: 먼 빨강 자식",
+        "text": "부모에서 부족한 쪽 반대로 회전합니다. 올라간 형제는 부모의 기존 색상을 받고 내려간 부모와 먼 자식은 검정이 됩니다. 부족한 검정 수를 맞춘 뒤 종료합니다. 각 회전은 자식 링크를 WRITE_ONCE로 갱신하고 해당 augment_rotate를 호출합니다."
+      },
+      {
+        "title": "일반·확장 wrapper 공유",
+        "text": "dummy_propagate/copy/rotate는 빈 함수입니다. 일반 rb_insert_color는 내부 삽입에 dummy_rotate를 주고 rb_erase는 내부 구조 삭제 후 필요할 때 내부 색상 복구를 부릅니다. 확장용 __rb_insert_augmented와 외부 __rb_erase_color는 같은 알고리즘에 사용자 회전 콜백을 전달합니다. 주석은 일반 경로에서 빈 콜백을 인라인 최적화로 제거하려는 의도를 설명합니다."
+      },
+      {
+        "title": "중위 순회 전체",
+        "text": "rb_first/last는 빈 루트면 NULL, 아니면 왼쪽/오른쪽 끝으로 내려갑니다. rb_next는 미연결 표식이면 NULL이고 오른쪽 자식이 있으면 그 아래 가장 왼쪽을 반환합니다. 없으면 오른쪽 자식에서 올라오는 동안 조상으로 이동하고 처음 왼쪽에서 올라온 부모가 다음입니다. rb_prev는 완전한 좌우 대칭입니다. next/prev에는 인자 NULL 자체를 검사하는 분기는 없습니다."
+      },
+      {
+        "title": "노드 교체와 RCU 공개",
+        "text": "replace는 *new=*victim으로 rb_node의 링크·부모·색상을 복사하고 자식들의 부모를 new로 바꾼 뒤 상위 링크를 교체합니다. 포함 객체의 사용자 키·집계까지 복사하는 함수가 아닙니다. rcu 버전은 상위 링크 공개를 마지막에 __rb_change_child_rcu로 수행하여 새 노드의 후속 포인터가 먼저 보이게 합니다. victim의 메모리를 즉시 회수해도 된다는 뜻은 아닙니다."
+      },
+      {
+        "title": "후위 순회 전체",
+        "text": "rb_left_deepest_node는 왼쪽이 있으면 왼쪽, 없고 오른쪽이 있으면 오른쪽으로 내려가 잎을 찾습니다. first_postorder는 빈 트리면 NULL 아니면 이 잎에서 시작합니다. next_postorder는 NULL 입력이면 NULL이고, 부모의 왼쪽에서 올라왔으며 오른쪽 서브트리가 있으면 그쪽의 첫 후위 노드를 찾습니다. 그 외에는 부모를 반환해 자식 뒤 부모 순서를 만듭니다."
+      },
+      {
+        "title": "잠금 없는 조회의 정확한 한계",
+        "text": "원문은 자식 링크 저장에 WRITE_ONCE를 사용하고 임시 순환을 만들지 않으면 아래로 내려가는 조회가 구조 순환에 갇히지 않도록 할 수 있다고 설명합니다. 하지만 회전은 원자적이지 않아 서브트리를 놓칠 수 있으며 미발견이 부재를 뜻하지 않습니다. 부모 포인터가 관련된 순환은 검토 범위가 아니라고도 명시합니다. 유효한 객체 수명과 호출자 동기화는 따로 보장해야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "불변식 기반 복구, 국소 회전과 전역 검정 높이, 대칭 알고리즘, 공통 구현과 특수 콜백, 중위·후위 순회, 저장 순서와 논리 스냅샷의 차이를 학습합니다. 전체 함수와 양쪽 대칭 경로를 원본 대조했으며 여기의 교재 검사는 모든 회전 조합이나 실제 RCU 실행을 증명하는 테스트가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "삽입 중 부모와 삼촌이 모두 빨강이면 먼저 무엇을 하는가?",
+        "options": [
+          "부모·삼촌을 검정, 할아버지를 빨강으로 바꾸고 위로 진행한다",
+          "항상 새 노드를 삭제하고 처음부터 다시 넣는다"
+        ],
+        "answer": 0,
+        "explanation": "경우1은 색상 전환으로 현재 검정 높이를 보존하고 할아버지 위의 잠재 충돌만 이어서 처리합니다."
+      },
+      {
+        "prompt": "삽입의 꺾인 모양에서 부모 회전만으로 항상 끝나는가?",
+        "options": [
+          "그렇다. 경우2가 항상 독립적인 종료다",
+          "아니다. 일직선으로 바꾼 뒤 할아버지 회전으로 이어진다"
+        ],
+        "answer": 1,
+        "explanation": "경우2는 경우3으로 바꾸는 준비입니다. 원본도 부모 회전 뒤 할아버지 회전 경로로 이어집니다."
+      },
+      {
+        "prompt": "삭제에서 형제와 형제 자식들이 검정이고 부모도 검정이면?",
+        "options": [
+          "부족한 검정 수 문제를 부모 쪽으로 전파한다",
+          "검정 높이 차이를 무시하고 종료한다"
+        ],
+        "answer": 0,
+        "explanation": "형제를 빨강으로 바꾸고 node=parent로 올려 반복합니다. 빨강 부모였다면 검정으로 바꾸어 바로 끝낼 수 있습니다."
+      },
+      {
+        "prompt": "rb_replace_node가 사용자 객체 전체를 복사하는가?",
+        "options": [
+          "그렇다. 키와 모든 사용자 필드까지 복사한다",
+          "아니다. rb_node 부분의 링크·색상을 복사한다"
+        ],
+        "answer": 1,
+        "explanation": "매개변수는 rb_node 포인터이고 *new=*victim은 그 구조체 크기의 대입입니다. 포함 객체의 필드는 호출자가 준비해야 합니다."
+      },
+      {
+        "prompt": "후위 순회에서 부모는 언제 방문하는가?",
+        "options": [
+          "자식 서브트리를 방문한 뒤다",
+          "항상 두 자식보다 먼저다"
+        ],
+        "answer": 0,
+        "explanation": "next_postorder는 아직 방문하지 않은 오른쪽 서브트리가 있으면 먼저 내려가고 그 외에 부모를 반환합니다."
+      },
+      {
+        "prompt": "잠금 없는 하향 검색이 NULL이면 키가 없다고 단정할 수 있는가?",
+        "options": [
+          "있다. WRITE_ONCE가 완전한 스냅샷을 만든다",
+          "없다. 동시 회전으로 서브트리를 놓칠 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "원문은 반환된 일치와 미발견의 의미를 구분합니다. 개별 링크 저장의 성질이 여러 링크 변경 전체의 원자성을 만들지는 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n  Red Black Trees\n  (C) 1999  Andrea Arcangeli <andrea@suse.de>\n  (C) 2002  David Woodhouse <dwmw2@infradead.org>\n  (C) 2012  Michel Lespinasse <walken@google.com>\n\n\n  linux/lib/rbtree.c\n*/\n\n#include <linux/rbtree_augmented.h>\n#include <linux/export.h>\n\n/*\n * red-black trees properties:  https://en.wikipedia.org/wiki/Rbtree\n *\n *  1) A node is either red or black\n *  2) The root is black\n *  3) All leaves (NULL) are black\n *  4) Both children of every red node are black\n *  5) Every simple path from root to leaves contains the same number\n *     of black nodes.\n *\n *  4 and 5 give the O(log n) guarantee, since 4 implies you cannot have two\n *  consecutive red nodes in a path and every red node is therefore followed by\n *  a black. So if B is the number of black nodes on every simple path (as per\n *  5), then the longest possible path due to 4 is 2B.\n *\n *  We shall indicate color with case, where black nodes are uppercase and red\n *  nodes will be lowercase. Unknown color nodes shall be drawn as red within\n *  parentheses and have some accompanying text comment.\n */\n\n/*\n * Notes on lockless lookups:\n *\n * All stores to the tree structure (rb_left and rb_right) must be done using\n * WRITE_ONCE(). And we must not inadvertently cause (temporary) loops in the\n * tree structure as seen in program order.\n *\n * These two requirements will allow lockless iteration of the tree -- not\n * correct iteration mind you, tree rotations are not atomic so a lookup might\n * miss entire subtrees.\n *\n * But they do guarantee that any such traversal will only see valid elements\n * and that it will indeed complete -- does not get stuck in a loop.\n *\n * It also guarantees that if the lookup returns an element it is the 'correct'\n * one. But not returning an element does _NOT_ mean it's not present.\n *\n * NOTE:\n *\n * Stores to __rb_parent_color are not important for simple lookups so those\n * are left undone as of now. Nor did I check for loops involving parent\n * pointers.\n */\n\nstatic inline void rb_set_black(struct rb_node *rb)\n{\n\trb->__rb_parent_color += RB_BLACK;\n}\n\nstatic inline struct rb_node *rb_red_parent(struct rb_node *red)\n{\n\treturn (struct rb_node *)red->__rb_parent_color;\n}\n\n/*\n * Helper function for rotations:\n * - old's parent and color get assigned to new\n * - old gets assigned new as a parent and 'color' as a color.\n */\nstatic inline void\n__rb_rotate_set_parents(struct rb_node *old, struct rb_node *new,\n\t\t\tstruct rb_root *root, int color)\n{\n\tstruct rb_node *parent = rb_parent(old);\n\tnew->__rb_parent_color = old->__rb_parent_color;\n\trb_set_parent_color(old, new, color);\n\t__rb_change_child(old, new, parent, root);\n}\n\nstatic __always_inline void\n__rb_insert(struct rb_node *node, struct rb_root *root,\n\t    void (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\tstruct rb_node *parent = rb_red_parent(node), *gparent, *tmp;\n\n\twhile (true) {\n\t\t/*\n\t\t * Loop invariant: node is red.\n\t\t */\n\t\tif (unlikely(!parent)) {\n\t\t\t/*\n\t\t\t * The inserted node is root. Either this is the\n\t\t\t * first node, or we recursed at Case 1 below and\n\t\t\t * are no longer violating 4).\n\t\t\t */\n\t\t\trb_set_parent_color(node, NULL, RB_BLACK);\n\t\t\tbreak;\n\t\t}\n\n\t\t/*\n\t\t * If there is a black parent, we are done.\n\t\t * Otherwise, take some corrective action as,\n\t\t * per 4), we don't want a red root or two\n\t\t * consecutive red nodes.\n\t\t */\n\t\tif(rb_is_black(parent))\n\t\t\tbreak;\n\n\t\tgparent = rb_red_parent(parent);\n\n\t\ttmp = gparent->rb_right;\n\t\tif (parent != tmp) {\t/* parent == gparent->rb_left */\n\t\t\tif (tmp && rb_is_red(tmp)) {\n\t\t\t\t/*\n\t\t\t\t * Case 1 - node's uncle is red (color flips).\n\t\t\t\t *\n\t\t\t\t *       G            g\n\t\t\t\t *      / \\          / \\\n\t\t\t\t *     p   u  -->   P   U\n\t\t\t\t *    /            /\n\t\t\t\t *   n            n\n\t\t\t\t *\n\t\t\t\t * However, since g's parent might be red, and\n\t\t\t\t * 4) does not allow this, we need to recurse\n\t\t\t\t * at g.\n\t\t\t\t */\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, gparent, RB_BLACK);\n\t\t\t\tnode = gparent;\n\t\t\t\tparent = rb_parent(node);\n\t\t\t\trb_set_parent_color(node, parent, RB_RED);\n\t\t\t\tcontinue;\n\t\t\t}\n\n\t\t\ttmp = parent->rb_right;\n\t\t\tif (node == tmp) {\n\t\t\t\t/*\n\t\t\t\t * Case 2 - node's uncle is black and node is\n\t\t\t\t * the parent's right child (left rotate at parent).\n\t\t\t\t *\n\t\t\t\t *      G             G\n\t\t\t\t *     / \\           / \\\n\t\t\t\t *    p   U  -->    n   U\n\t\t\t\t *     \\           /\n\t\t\t\t *      n         p\n\t\t\t\t *\n\t\t\t\t * This still leaves us in violation of 4), the\n\t\t\t\t * continuation into Case 3 will fix that.\n\t\t\t\t */\n\t\t\t\ttmp = node->rb_left;\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp);\n\t\t\t\tWRITE_ONCE(node->rb_left, parent);\n\t\t\t\tif (tmp)\n\t\t\t\t\trb_set_parent_color(tmp, parent,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, node, RB_RED);\n\t\t\t\taugment_rotate(parent, node);\n\t\t\t\tparent = node;\n\t\t\t\ttmp = node->rb_right;\n\t\t\t}\n\n\t\t\t/*\n\t\t\t * Case 3 - node's uncle is black and node is\n\t\t\t * the parent's left child (right rotate at gparent).\n\t\t\t *\n\t\t\t *        G           P\n\t\t\t *       / \\         / \\\n\t\t\t *      p   U  -->  n   g\n\t\t\t *     /                 \\\n\t\t\t *    n                   U\n\t\t\t */\n\t\t\tWRITE_ONCE(gparent->rb_left, tmp); /* == parent->rb_right */\n\t\t\tWRITE_ONCE(parent->rb_right, gparent);\n\t\t\tif (tmp)\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t__rb_rotate_set_parents(gparent, parent, root, RB_RED);\n\t\t\taugment_rotate(gparent, parent);\n\t\t\tbreak;\n\t\t} else {\n\t\t\ttmp = gparent->rb_left;\n\t\t\tif (tmp && rb_is_red(tmp)) {\n\t\t\t\t/* Case 1 - color flips */\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, gparent, RB_BLACK);\n\t\t\t\tnode = gparent;\n\t\t\t\tparent = rb_parent(node);\n\t\t\t\trb_set_parent_color(node, parent, RB_RED);\n\t\t\t\tcontinue;\n\t\t\t}\n\n\t\t\ttmp = parent->rb_left;\n\t\t\tif (node == tmp) {\n\t\t\t\t/* Case 2 - right rotate at parent */\n\t\t\t\ttmp = node->rb_right;\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp);\n\t\t\t\tWRITE_ONCE(node->rb_right, parent);\n\t\t\t\tif (tmp)\n\t\t\t\t\trb_set_parent_color(tmp, parent,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\trb_set_parent_color(parent, node, RB_RED);\n\t\t\t\taugment_rotate(parent, node);\n\t\t\t\tparent = node;\n\t\t\t\ttmp = node->rb_left;\n\t\t\t}\n\n\t\t\t/* Case 3 - left rotate at gparent */\n\t\t\tWRITE_ONCE(gparent->rb_right, tmp); /* == parent->rb_left */\n\t\t\tWRITE_ONCE(parent->rb_left, gparent);\n\t\t\tif (tmp)\n\t\t\t\trb_set_parent_color(tmp, gparent, RB_BLACK);\n\t\t\t__rb_rotate_set_parents(gparent, parent, root, RB_RED);\n\t\t\taugment_rotate(gparent, parent);\n\t\t\tbreak;\n\t\t}\n\t}\n}\n\n/*\n * Inline version for rb_erase() use - we want to be able to inline\n * and eliminate the dummy_rotate callback there\n */\nstatic __always_inline void\n____rb_erase_color(struct rb_node *parent, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\tstruct rb_node *node = NULL, *sibling, *tmp1, *tmp2;\n\n\twhile (true) {\n\t\t/*\n\t\t * Loop invariants:\n\t\t * - node is black (or NULL on first iteration)\n\t\t * - node is not the root (parent is not NULL)\n\t\t * - All leaf paths going through parent and node have a\n\t\t *   black node count that is 1 lower than other leaf paths.\n\t\t */\n\t\tsibling = parent->rb_right;\n\t\tif (node != sibling) {\t/* node == parent->rb_left */\n\t\t\tif (rb_is_red(sibling)) {\n\t\t\t\t/*\n\t\t\t\t * Case 1 - left rotate at parent\n\t\t\t\t *\n\t\t\t\t *     P               S\n\t\t\t\t *    / \\             / \\\n\t\t\t\t *   N   s    -->    p   Sr\n\t\t\t\t *      / \\         / \\\n\t\t\t\t *     Sl  Sr      N   Sl\n\t\t\t\t */\n\t\t\t\ttmp1 = sibling->rb_left;\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp1);\n\t\t\t\tWRITE_ONCE(sibling->rb_left, parent);\n\t\t\t\trb_set_parent_color(tmp1, parent, RB_BLACK);\n\t\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\t\tRB_RED);\n\t\t\t\taugment_rotate(parent, sibling);\n\t\t\t\tsibling = tmp1;\n\t\t\t}\n\t\t\ttmp1 = sibling->rb_right;\n\t\t\tif (!tmp1 || rb_is_black(tmp1)) {\n\t\t\t\ttmp2 = sibling->rb_left;\n\t\t\t\tif (!tmp2 || rb_is_black(tmp2)) {\n\t\t\t\t\t/*\n\t\t\t\t\t * Case 2 - sibling color flip\n\t\t\t\t\t * (p could be either color here)\n\t\t\t\t\t *\n\t\t\t\t\t *    (p)           (p)\n\t\t\t\t\t *    / \\           / \\\n\t\t\t\t\t *   N   S    -->  N   s\n\t\t\t\t\t *      / \\           / \\\n\t\t\t\t\t *     Sl  Sr        Sl  Sr\n\t\t\t\t\t *\n\t\t\t\t\t * This leaves us violating 5) which\n\t\t\t\t\t * can be fixed by flipping p to black\n\t\t\t\t\t * if it was red, or by recursing at p.\n\t\t\t\t\t * p is red when coming from Case 1.\n\t\t\t\t\t */\n\t\t\t\t\trb_set_parent_color(sibling, parent,\n\t\t\t\t\t\t\t    RB_RED);\n\t\t\t\t\tif (rb_is_red(parent))\n\t\t\t\t\t\trb_set_black(parent);\n\t\t\t\t\telse {\n\t\t\t\t\t\tnode = parent;\n\t\t\t\t\t\tparent = rb_parent(node);\n\t\t\t\t\t\tif (parent)\n\t\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\t/*\n\t\t\t\t * Case 3 - right rotate at sibling\n\t\t\t\t * (p could be either color here)\n\t\t\t\t *\n\t\t\t\t *   (p)           (p)\n\t\t\t\t *   / \\           / \\\n\t\t\t\t *  N   S    -->  N   sl\n\t\t\t\t *     / \\             \\\n\t\t\t\t *    sl  sr            S\n\t\t\t\t *                       \\\n\t\t\t\t *                        sr\n\t\t\t\t *\n\t\t\t\t * Note: p might be red, and then both\n\t\t\t\t * p and sl are red after rotation(which\n\t\t\t\t * breaks property 4). This is fixed in\n\t\t\t\t * Case 4 (in __rb_rotate_set_parents()\n\t\t\t\t *         which set sl the color of p\n\t\t\t\t *         and set p RB_BLACK)\n\t\t\t\t *\n\t\t\t\t *   (p)            (sl)\n\t\t\t\t *   / \\            /  \\\n\t\t\t\t *  N   sl   -->   P    S\n\t\t\t\t *       \\        /      \\\n\t\t\t\t *        S      N        sr\n\t\t\t\t *         \\\n\t\t\t\t *          sr\n\t\t\t\t */\n\t\t\t\ttmp1 = tmp2->rb_right;\n\t\t\t\tWRITE_ONCE(sibling->rb_left, tmp1);\n\t\t\t\tWRITE_ONCE(tmp2->rb_right, sibling);\n\t\t\t\tWRITE_ONCE(parent->rb_right, tmp2);\n\t\t\t\tif (tmp1)\n\t\t\t\t\trb_set_parent_color(tmp1, sibling,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\taugment_rotate(sibling, tmp2);\n\t\t\t\ttmp1 = sibling;\n\t\t\t\tsibling = tmp2;\n\t\t\t}\n\t\t\t/*\n\t\t\t * Case 4 - left rotate at parent + color flips\n\t\t\t * (p and sl could be either color here.\n\t\t\t *  After rotation, p becomes black, s acquires\n\t\t\t *  p's color, and sl keeps its color)\n\t\t\t *\n\t\t\t *      (p)             (s)\n\t\t\t *      / \\             / \\\n\t\t\t *     N   S     -->   P   Sr\n\t\t\t *        / \\         / \\\n\t\t\t *      (sl) sr      N  (sl)\n\t\t\t */\n\t\t\ttmp2 = sibling->rb_left;\n\t\t\tWRITE_ONCE(parent->rb_right, tmp2);\n\t\t\tWRITE_ONCE(sibling->rb_left, parent);\n\t\t\trb_set_parent_color(tmp1, sibling, RB_BLACK);\n\t\t\tif (tmp2)\n\t\t\t\trb_set_parent(tmp2, parent);\n\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\tRB_BLACK);\n\t\t\taugment_rotate(parent, sibling);\n\t\t\tbreak;\n\t\t} else {\n\t\t\tsibling = parent->rb_left;\n\t\t\tif (rb_is_red(sibling)) {\n\t\t\t\t/* Case 1 - right rotate at parent */\n\t\t\t\ttmp1 = sibling->rb_right;\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp1);\n\t\t\t\tWRITE_ONCE(sibling->rb_right, parent);\n\t\t\t\trb_set_parent_color(tmp1, parent, RB_BLACK);\n\t\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\t\tRB_RED);\n\t\t\t\taugment_rotate(parent, sibling);\n\t\t\t\tsibling = tmp1;\n\t\t\t}\n\t\t\ttmp1 = sibling->rb_left;\n\t\t\tif (!tmp1 || rb_is_black(tmp1)) {\n\t\t\t\ttmp2 = sibling->rb_right;\n\t\t\t\tif (!tmp2 || rb_is_black(tmp2)) {\n\t\t\t\t\t/* Case 2 - sibling color flip */\n\t\t\t\t\trb_set_parent_color(sibling, parent,\n\t\t\t\t\t\t\t    RB_RED);\n\t\t\t\t\tif (rb_is_red(parent))\n\t\t\t\t\t\trb_set_black(parent);\n\t\t\t\t\telse {\n\t\t\t\t\t\tnode = parent;\n\t\t\t\t\t\tparent = rb_parent(node);\n\t\t\t\t\t\tif (parent)\n\t\t\t\t\t\t\tcontinue;\n\t\t\t\t\t}\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t\t/* Case 3 - left rotate at sibling */\n\t\t\t\ttmp1 = tmp2->rb_left;\n\t\t\t\tWRITE_ONCE(sibling->rb_right, tmp1);\n\t\t\t\tWRITE_ONCE(tmp2->rb_left, sibling);\n\t\t\t\tWRITE_ONCE(parent->rb_left, tmp2);\n\t\t\t\tif (tmp1)\n\t\t\t\t\trb_set_parent_color(tmp1, sibling,\n\t\t\t\t\t\t\t    RB_BLACK);\n\t\t\t\taugment_rotate(sibling, tmp2);\n\t\t\t\ttmp1 = sibling;\n\t\t\t\tsibling = tmp2;\n\t\t\t}\n\t\t\t/* Case 4 - right rotate at parent + color flips */\n\t\t\ttmp2 = sibling->rb_right;\n\t\t\tWRITE_ONCE(parent->rb_left, tmp2);\n\t\t\tWRITE_ONCE(sibling->rb_right, parent);\n\t\t\trb_set_parent_color(tmp1, sibling, RB_BLACK);\n\t\t\tif (tmp2)\n\t\t\t\trb_set_parent(tmp2, parent);\n\t\t\t__rb_rotate_set_parents(parent, sibling, root,\n\t\t\t\t\t\tRB_BLACK);\n\t\t\taugment_rotate(parent, sibling);\n\t\t\tbreak;\n\t\t}\n\t}\n}\n\n/* Non-inline version for rb_erase_augmented() use */\nvoid __rb_erase_color(struct rb_node *parent, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\t____rb_erase_color(parent, root, augment_rotate);\n}\nEXPORT_SYMBOL(__rb_erase_color);\n\n/*\n * Non-augmented rbtree manipulation functions.\n *\n * We use dummy augmented callbacks here, and have the compiler optimize them\n * out of the rb_insert_color() and rb_erase() function definitions.\n */\n\nstatic inline void dummy_propagate(struct rb_node *node, struct rb_node *stop) {}\nstatic inline void dummy_copy(struct rb_node *old, struct rb_node *new) {}\nstatic inline void dummy_rotate(struct rb_node *old, struct rb_node *new) {}\n\nstatic const struct rb_augment_callbacks dummy_callbacks = {\n\t.propagate = dummy_propagate,\n\t.copy = dummy_copy,\n\t.rotate = dummy_rotate\n};\n\nvoid rb_insert_color(struct rb_node *node, struct rb_root *root)\n{\n\t__rb_insert(node, root, dummy_rotate);\n}\nEXPORT_SYMBOL(rb_insert_color);\n\nvoid rb_erase(struct rb_node *node, struct rb_root *root)\n{\n\tstruct rb_node *rebalance;\n\trebalance = __rb_erase_augmented(node, root, &dummy_callbacks);\n\tif (rebalance)\n\t\t____rb_erase_color(rebalance, root, dummy_rotate);\n}\nEXPORT_SYMBOL(rb_erase);\n\n/*\n * Augmented rbtree manipulation functions.\n *\n * This instantiates the same __always_inline functions as in the non-augmented\n * case, but this time with user-defined callbacks.\n */\n\nvoid __rb_insert_augmented(struct rb_node *node, struct rb_root *root,\n\tvoid (*augment_rotate)(struct rb_node *old, struct rb_node *new))\n{\n\t__rb_insert(node, root, augment_rotate);\n}\nEXPORT_SYMBOL(__rb_insert_augmented);\n\n/*\n * This function returns the first node (in sort order) of the tree.\n */\nstruct rb_node *rb_first(const struct rb_root *root)\n{\n\tstruct rb_node\t*n;\n\n\tn = root->rb_node;\n\tif (!n)\n\t\treturn NULL;\n\twhile (n->rb_left)\n\t\tn = n->rb_left;\n\treturn n;\n}\nEXPORT_SYMBOL(rb_first);\n\nstruct rb_node *rb_last(const struct rb_root *root)\n{\n\tstruct rb_node\t*n;\n\n\tn = root->rb_node;\n\tif (!n)\n\t\treturn NULL;\n\twhile (n->rb_right)\n\t\tn = n->rb_right;\n\treturn n;\n}\nEXPORT_SYMBOL(rb_last);\n\nstruct rb_node *rb_next(const struct rb_node *node)\n{\n\tstruct rb_node *parent;\n\n\tif (RB_EMPTY_NODE(node))\n\t\treturn NULL;\n\n\t/*\n\t * If we have a right-hand child, go down and then left as far\n\t * as we can.\n\t */\n\tif (node->rb_right) {\n\t\tnode = node->rb_right;\n\t\twhile (node->rb_left)\n\t\t\tnode = node->rb_left;\n\t\treturn (struct rb_node *)node;\n\t}\n\n\t/*\n\t * No right-hand children. Everything down and left is smaller than us,\n\t * so any 'next' node must be in the general direction of our parent.\n\t * Go up the tree; any time the ancestor is a right-hand child of its\n\t * parent, keep going up. First time it's a left-hand child of its\n\t * parent, said parent is our 'next' node.\n\t */\n\twhile ((parent = rb_parent(node)) && node == parent->rb_right)\n\t\tnode = parent;\n\n\treturn parent;\n}\nEXPORT_SYMBOL(rb_next);\n\nstruct rb_node *rb_prev(const struct rb_node *node)\n{\n\tstruct rb_node *parent;\n\n\tif (RB_EMPTY_NODE(node))\n\t\treturn NULL;\n\n\t/*\n\t * If we have a left-hand child, go down and then right as far\n\t * as we can.\n\t */\n\tif (node->rb_left) {\n\t\tnode = node->rb_left;\n\t\twhile (node->rb_right)\n\t\t\tnode = node->rb_right;\n\t\treturn (struct rb_node *)node;\n\t}\n\n\t/*\n\t * No left-hand children. Go up till we find an ancestor which\n\t * is a right-hand child of its parent.\n\t */\n\twhile ((parent = rb_parent(node)) && node == parent->rb_left)\n\t\tnode = parent;\n\n\treturn parent;\n}\nEXPORT_SYMBOL(rb_prev);\n\nvoid rb_replace_node(struct rb_node *victim, struct rb_node *new,\n\t\t     struct rb_root *root)\n{\n\tstruct rb_node *parent = rb_parent(victim);\n\n\t/* Copy the pointers/colour from the victim to the replacement */\n\t*new = *victim;\n\n\t/* Set the surrounding nodes to point to the replacement */\n\tif (victim->rb_left)\n\t\trb_set_parent(victim->rb_left, new);\n\tif (victim->rb_right)\n\t\trb_set_parent(victim->rb_right, new);\n\t__rb_change_child(victim, new, parent, root);\n}\nEXPORT_SYMBOL(rb_replace_node);\n\nvoid rb_replace_node_rcu(struct rb_node *victim, struct rb_node *new,\n\t\t\t struct rb_root *root)\n{\n\tstruct rb_node *parent = rb_parent(victim);\n\n\t/* Copy the pointers/colour from the victim to the replacement */\n\t*new = *victim;\n\n\t/* Set the surrounding nodes to point to the replacement */\n\tif (victim->rb_left)\n\t\trb_set_parent(victim->rb_left, new);\n\tif (victim->rb_right)\n\t\trb_set_parent(victim->rb_right, new);\n\n\t/* Set the parent's pointer to the new node last after an RCU barrier\n\t * so that the pointers onwards are seen to be set correctly when doing\n\t * an RCU walk over the tree.\n\t */\n\t__rb_change_child_rcu(victim, new, parent, root);\n}\nEXPORT_SYMBOL(rb_replace_node_rcu);\n\nstatic struct rb_node *rb_left_deepest_node(const struct rb_node *node)\n{\n\tfor (;;) {\n\t\tif (node->rb_left)\n\t\t\tnode = node->rb_left;\n\t\telse if (node->rb_right)\n\t\t\tnode = node->rb_right;\n\t\telse\n\t\t\treturn (struct rb_node *)node;\n\t}\n}\n\nstruct rb_node *rb_next_postorder(const struct rb_node *node)\n{\n\tconst struct rb_node *parent;\n\tif (!node)\n\t\treturn NULL;\n\tparent = rb_parent(node);\n\n\t/* If we're sitting on node, we've already seen our children */\n\tif (parent && node == parent->rb_left && parent->rb_right) {\n\t\t/* If we are the parent's left node, go to the parent's right\n\t\t * node then all the way down to the left */\n\t\treturn rb_left_deepest_node(parent->rb_right);\n\t} else\n\t\t/* Otherwise we are the parent's right node, and the parent\n\t\t * should be next */\n\t\treturn (struct rb_node *)parent;\n}\nEXPORT_SYMBOL(rb_next_postorder);\n\nstruct rb_node *rb_first_postorder(const struct rb_root *root)\n{\n\tif (!root->rb_node)\n\t\treturn NULL;\n\n\treturn rb_left_deepest_node(root->rb_node);\n}\nEXPORT_SYMBOL(rb_first_postorder);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "af9e0683db2dc9ce457a3262d9aaa8c73ce46cb5019e1a968502bb30d69f5dd5",
+      "scope": "whole-file",
+      "line_count": 630,
+      "authoring_source": "course/file_units/rbtree_implementation.py",
+      "sections": [
+        "전체 파일 구성",
+        "높이를 제한하는 성질",
+        "색상 helper의 전제",
+        "회전의 공통 부모 처리",
+        "삽입의 기본 종료",
+        "삽입 경우1: 빨강 삼촌",
+        "삽입 경우2·3: 검정 삼촌",
+        "삭제 색상 복구의 진입",
+        "삭제 경우1: 빨강 형제",
+        "삭제 경우2: 검정 형제와 검정 자식들",
+        "삭제 경우3: 가까운 빨강 자식",
+        "삭제 경우4: 먼 빨강 자식",
+        "일반·확장 wrapper 공유",
+        "중위 순회 전체",
+        "노드 교체와 RCU 공개",
+        "후위 순회 전체",
+        "잠금 없는 조회의 정확한 한계",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rbtree.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "트리의 색 규칙이 깨진 곳만 고쳐 균형을 되찾습니다. 삽입은 빨강이 연달아 나오는 문제를, 삭제는 검정 수가 하나 모자란 길을 고칩니다.",
+    "meaning": "국소 회전과 색 변경, 순회·교체와 잠금 없는 조회의 한계를 이해합니다.",
+    "exercise": "부모와 삼촌이 빨강인 삽입 그림에서 두 노드를 검정으로 바꾸고 문제를 위로 옮겨 보세요."
+  },
+  "goal": "국소 회전과 색 변경, 순회·교체와 잠금 없는 조회의 한계를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "부모와 삼촌이 빨강인 삽입 그림에서 두 노드를 검정으로 바꾸고 문제를 위로 옮겨 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "c562148fb7a46d93e38e96d215873f469126b79d8bb9f572c629ba8095f99388",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

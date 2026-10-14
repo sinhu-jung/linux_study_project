@@ -5,62 +5,70 @@
   "area": "구조체 · 증강 트리 · enum 표시 · 조건부 stub · 진단",
   "track": "files",
   "kind": "kernel",
-  "intro": "캐시 예약 노드의 필드,진단 이름,CONFIG_X86_PAT별 인터페이스를 읽습니다.",
+  "intro": "이 헤더는 메모리 타입 구간의 자료형과 진단 이름, PAT 유무별 함수 약속을 정의해요. 반환값과 출력 칸 변경을 따로 읽어요.",
   "guide": [
-    "비활성 구성의 성공형 반환값이 실제 자료구조 변경이나 출력값 갱신을 의미하지 않을 수 있습니다.",
-    "memtype_interval.c의 node layout과 debug 출력을 연결합니다."
+    "PAT는 페이지의 캐시 속성을 정하는 기능이에요. memtype 노드는 물리 주소 구간과 캐시 모드를 함께 저장해요.",
+    "stub은 기능 없는 구성에서 대신 사용하는 작은 함수예요. 이름이 같아도 활성 구현의 작업까지 하는 것은 아니에요.",
+    "보강 정보는 검색을 빠르게 하려고 원래 자료에 더해 둔 값이에요. subtree_max_end는 트리 검색용 값이지 별도 예약이에요."
   ],
   "deep_dive": [
     {
-      "title": "진단과 노드",
-      "text": "GPL-2.0·guard 뒤 pat_debug_enable extern과 조건부 pr_info의 dprintk를 정의합니다. memtype는u64 start,end,subtree_max_end,캐시 mode type,rb_node를 가집니다. subtree_max_end는 트리 검색용 보강 정보이며 별도 예약의 끝 주소가 아닙니다."
+      "title": "진단 매크로와 노드",
+      "text": "pat_debug_enable이 참일 때만 dprintk가 x86/PAT 접두어로 로그를 써요. memtype에는 u64 start, end, subtree_max_end, 캐시 모드 type, rb 연결이 있어요. 범위 자료와 검색 트리 연결을 한 객체에 넣은 모양이에요."
     },
     {
-      "title": "모드 이름",
-      "text": "cattr_name은 UC/UC_MINUS/WB/WC/WT/WP를 각각 uncached/uncached-minus/write-back/write-combining/write-through/write-protected 문자열로 반환합니다. 다른 값은 broken입니다. 이 함수가 캐시 모드나 페이지 접근 권한을 변경하는 것은 아닙니다."
+      "title": "모드를 사람이 읽는 이름으로",
+      "text": "cattr_name은 UC를 uncached, UC_MINUS를 uncached-minus, WB를 write-back, WC를 write-combining, WT를 write-through, WP를 write-protected로 돌려줘요. 모르는 값은 broken이에요. 문자열을 고르는 진단 함수일 뿐 캐시 모드나 페이지 쓰기 권한을 실제 바꾸지 않아요."
     },
     {
-      "title": "PAT 활성 선언",
-      "text": "CONFIG_X86_PAT이면 check_insert,erase,lookup,copy_nth_element를 extern 선언합니다. 구현에서 debug 복사는 DEBUG_FS 조건도 있으므로 선언만으로 모든 조합에서 함수를 사용할 수 있다고 추측하지 않습니다."
+      "title": "PAT가 있을 때의 선언",
+      "text": "CONFIG_X86_PAT이면 check_insert, erase, lookup, copy_nth_element를 외부 함수로 선언해요. 실제 진단 복사 구현은 DEBUG_FS 조건도 따르므로 선언이 보인다고 모든 설정 조합에서 마음대로 사용할 수 있다고 생각하면 안 돼요."
     },
     {
-      "title": "PAT 비활성 본문",
-      "text": "비PAT에서는 insert와 copy_nth가0,erase와lookup은NULL을 반환하는 inline stub입니다. insert는 node를 트리에 넣지 않고new_type도 기록하지 않습니다. copy_nth도 out을 채우지 않습니다. 실제 구현의 성공0 의미를 stub에서 출력 초기화 보장으로 잘못 확장하지 않습니다."
+      "title": "PAT가 없을 때의 본문",
+      "text": "insert와 copy_nth는 대입 없이 0, erase와 lookup은 NULL을 반환해요. insert는 트리에 넣거나 new_type을 채우지 않고 copy_nth도 out을 채우지 않아요. 활성 함수의 성공 0에 동반되던 출력 작업을 이 빈 구현에도 있다고 가져오면 안 돼요."
     },
     {
-      "title": "CS 연결",
-      "text": "자료와 인덱스 링크의 결합,보강 metadata,진단용 enum-to-string,조건부 기능 제거,출력 인자 계약을 학습합니다. 헤더가 생성한 타입과 stub만으로 실제 예약이 등록된 것으로 세지 않습니다."
+      "title": "배울 점",
+      "text": "데이터와 트리 연결, 보강값, enum을 문자열로 바꾸는 진단, 기능 제거와 출력 인자의 약속을 읽었어요. 이 헤더의 자료형이나 성공형 stub만으로 실제 메모리 예약이 등록됐다고 세면 안 돼요."
     }
   ],
   "questions": [
     {
-      "prompt": "비PAT copy_nth stub이0을 반환하면 out도 채웠는가?",
+      "prompt": "비PAT copy_nth가 0이면 out도 채워졌나요?",
       "options": [
+        "아니요. 대입 없이 0만 반환해요.",
+        "네. 첫 노드를 반드시 복사해요."
+      ],
+      "answer": 0,
+      "explanation": "반환값과 실제 출력 변경은 별도로 확인해요.",
+      "original_prompt": "비PAT copy_nth stub이0을 반환하면 out도 채웠는가?",
+      "original_options": [
         "아니다.대입 없이0만 반환한다",
         "그렇다.유효한 첫 노드를 복사한다"
       ],
-      "answer": 0,
-      "explanation": "stub 본문은return 0뿐입니다. 활성 구현의 성공 경로와 출력 부작용을 구별해야 합니다."
+      "original_explanation": "stub 본문은return 0뿐입니다. 활성 구현의 성공 경로와 출력 부작용을 구별해야 합니다."
     },
     {
-      "prompt": "알 수 없는 캐시 mode를 cattr_name에 넘기면?",
+      "prompt": "모르는 캐시 모드를 cattr_name에 주면 어떻게 되나요?",
       "options": [
+        "자동으로 WC 모드로 바꿔요.",
+        "broken 문자열을 반환해요."
+      ],
+      "answer": 1,
+      "explanation": "입력 상태를 고치는 함수가 아니라 이름을 표시하는 함수예요.",
+      "original_prompt": "알 수 없는 캐시 mode를 cattr_name에 넘기면?",
+      "original_options": [
         "자동으로WC 모드로 수정한다",
         "broken 문자열이다"
       ],
-      "answer": 1,
-      "explanation": "default 반환은진단 문자열입니다. 이 함수는 입력 상태를 변경하지 않습니다."
+      "original_explanation": "default 반환은진단 문자열입니다. 이 함수는 입력 상태를 변경하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "PAT가 없을 때 copy_nth의 본문을 보고 0 반환과 out 내용이 각각 어떻게 되는지 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __MEMTYPE_H_\n#define __MEMTYPE_H_\n\nextern int pat_debug_enable;\n\n#define dprintk(fmt, arg...) \\\n\tdo { if (pat_debug_enable) pr_info(\"x86/PAT: \" fmt, ##arg); } while (0)\n\nstruct memtype {\n\tu64\t\t\tstart;\n\tu64\t\t\tend;\n\tu64\t\t\tsubtree_max_end;\n\tenum page_cache_mode\ttype;\n\tstruct rb_node\t\trb;\n};\n\nstatic inline char *cattr_name(enum page_cache_mode pcm)\n{\n\tswitch (pcm) {\n\tcase _PAGE_CACHE_MODE_UC:\t\treturn \"uncached\";\n\tcase _PAGE_CACHE_MODE_UC_MINUS:\t\treturn \"uncached-minus\";\n\tcase _PAGE_CACHE_MODE_WB:\t\treturn \"write-back\";\n\tcase _PAGE_CACHE_MODE_WC:\t\treturn \"write-combining\";\n\tcase _PAGE_CACHE_MODE_WT:\t\treturn \"write-through\";\n\tcase _PAGE_CACHE_MODE_WP:\t\treturn \"write-protected\";\n\tdefault:\t\t\t\treturn \"broken\";\n\t}\n}\n\n#ifdef CONFIG_X86_PAT\nextern int memtype_check_insert(struct memtype *entry_new,\n\t\t\t\tenum page_cache_mode *new_type);\nextern struct memtype *memtype_erase(u64 start, u64 end);\nextern struct memtype *memtype_lookup(u64 addr);\nextern int memtype_copy_nth_element(struct memtype *entry_out, loff_t pos);\n#else\nstatic inline int memtype_check_insert(struct memtype *entry_new,\n\t\t\t\t       enum page_cache_mode *new_type)\n{ return 0; }\nstatic inline struct memtype *memtype_erase(u64 start, u64 end)\n{ return NULL; }\nstatic inline struct memtype *memtype_lookup(u64 addr)\n{ return NULL; }\nstatic inline int memtype_copy_nth_element(struct memtype *out, loff_t pos)\n{ return 0; }\n#endif\n\n#endif /* __MEMTYPE_H_ */\n",
   "source_review": {
@@ -83,5 +91,120 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/mm/pat/memtype.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-082a3434ba37c150",
+    "path": "arch/x86/mm/pat/memtype.h",
+    "title": "PAT 내부 타입 전체: 구간 노드와 비활성 대체 함수",
+    "area": "구조체 · 증강 트리 · enum 표시 · 조건부 stub · 진단",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "캐시 예약 노드의 필드,진단 이름,CONFIG_X86_PAT별 인터페이스를 읽습니다.",
+    "guide": [
+      "비활성 구성의 성공형 반환값이 실제 자료구조 변경이나 출력값 갱신을 의미하지 않을 수 있습니다.",
+      "memtype_interval.c의 node layout과 debug 출력을 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "진단과 노드",
+        "text": "GPL-2.0·guard 뒤 pat_debug_enable extern과 조건부 pr_info의 dprintk를 정의합니다. memtype는u64 start,end,subtree_max_end,캐시 mode type,rb_node를 가집니다. subtree_max_end는 트리 검색용 보강 정보이며 별도 예약의 끝 주소가 아닙니다."
+      },
+      {
+        "title": "모드 이름",
+        "text": "cattr_name은 UC/UC_MINUS/WB/WC/WT/WP를 각각 uncached/uncached-minus/write-back/write-combining/write-through/write-protected 문자열로 반환합니다. 다른 값은 broken입니다. 이 함수가 캐시 모드나 페이지 접근 권한을 변경하는 것은 아닙니다."
+      },
+      {
+        "title": "PAT 활성 선언",
+        "text": "CONFIG_X86_PAT이면 check_insert,erase,lookup,copy_nth_element를 extern 선언합니다. 구현에서 debug 복사는 DEBUG_FS 조건도 있으므로 선언만으로 모든 조합에서 함수를 사용할 수 있다고 추측하지 않습니다."
+      },
+      {
+        "title": "PAT 비활성 본문",
+        "text": "비PAT에서는 insert와 copy_nth가0,erase와lookup은NULL을 반환하는 inline stub입니다. insert는 node를 트리에 넣지 않고new_type도 기록하지 않습니다. copy_nth도 out을 채우지 않습니다. 실제 구현의 성공0 의미를 stub에서 출력 초기화 보장으로 잘못 확장하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "자료와 인덱스 링크의 결합,보강 metadata,진단용 enum-to-string,조건부 기능 제거,출력 인자 계약을 학습합니다. 헤더가 생성한 타입과 stub만으로 실제 예약이 등록된 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "비PAT copy_nth stub이0을 반환하면 out도 채웠는가?",
+        "options": [
+          "아니다.대입 없이0만 반환한다",
+          "그렇다.유효한 첫 노드를 복사한다"
+        ],
+        "answer": 0,
+        "explanation": "stub 본문은return 0뿐입니다. 활성 구현의 성공 경로와 출력 부작용을 구별해야 합니다."
+      },
+      {
+        "prompt": "알 수 없는 캐시 mode를 cattr_name에 넘기면?",
+        "options": [
+          "자동으로WC 모드로 수정한다",
+          "broken 문자열이다"
+        ],
+        "answer": 1,
+        "explanation": "default 반환은진단 문자열입니다. 이 함수는 입력 상태를 변경하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __MEMTYPE_H_\n#define __MEMTYPE_H_\n\nextern int pat_debug_enable;\n\n#define dprintk(fmt, arg...) \\\n\tdo { if (pat_debug_enable) pr_info(\"x86/PAT: \" fmt, ##arg); } while (0)\n\nstruct memtype {\n\tu64\t\t\tstart;\n\tu64\t\t\tend;\n\tu64\t\t\tsubtree_max_end;\n\tenum page_cache_mode\ttype;\n\tstruct rb_node\t\trb;\n};\n\nstatic inline char *cattr_name(enum page_cache_mode pcm)\n{\n\tswitch (pcm) {\n\tcase _PAGE_CACHE_MODE_UC:\t\treturn \"uncached\";\n\tcase _PAGE_CACHE_MODE_UC_MINUS:\t\treturn \"uncached-minus\";\n\tcase _PAGE_CACHE_MODE_WB:\t\treturn \"write-back\";\n\tcase _PAGE_CACHE_MODE_WC:\t\treturn \"write-combining\";\n\tcase _PAGE_CACHE_MODE_WT:\t\treturn \"write-through\";\n\tcase _PAGE_CACHE_MODE_WP:\t\treturn \"write-protected\";\n\tdefault:\t\t\t\treturn \"broken\";\n\t}\n}\n\n#ifdef CONFIG_X86_PAT\nextern int memtype_check_insert(struct memtype *entry_new,\n\t\t\t\tenum page_cache_mode *new_type);\nextern struct memtype *memtype_erase(u64 start, u64 end);\nextern struct memtype *memtype_lookup(u64 addr);\nextern int memtype_copy_nth_element(struct memtype *entry_out, loff_t pos);\n#else\nstatic inline int memtype_check_insert(struct memtype *entry_new,\n\t\t\t\t       enum page_cache_mode *new_type)\n{ return 0; }\nstatic inline struct memtype *memtype_erase(u64 start, u64 end)\n{ return NULL; }\nstatic inline struct memtype *memtype_lookup(u64 addr)\n{ return NULL; }\nstatic inline int memtype_copy_nth_element(struct memtype *out, loff_t pos)\n{ return 0; }\n#endif\n\n#endif /* __MEMTYPE_H_ */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c0f6507e078711594fc793f767f62a22488bd634705770cbc0ab58e5894e2fa8",
+      "scope": "whole-file",
+      "line_count": 49,
+      "authoring_source": "course/file_units/pat_intervals.py",
+      "sections": [
+        "진단과 노드",
+        "모드 이름",
+        "PAT 활성 선언",
+        "PAT 비활성 본문",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/mm/pat/memtype.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "안내 창구가 쉬는 날 형식상 접수 번호만 돌려준다고 실제 예약이 생긴 것은 아니에요. 비활성 stub의 0도 실제 자료 변경을 뜻하지 않을 수 있어요.",
+    "meaning": "이 헤더는 메모리 타입 구간의 자료형과 진단 이름, PAT 유무별 함수 약속을 정의해요. 반환값과 출력 칸 변경을 따로 읽어요.",
+    "exercise": "PAT가 없을 때 copy_nth의 본문을 보고 0 반환과 out 내용이 각각 어떻게 되는지 적어 보세요."
+  },
+  "goal": "이 헤더는 메모리 타입 구간의 자료형과 진단 이름, PAT 유무별 함수 약속을 정의해요. 반환값과 출력 칸 변경을 따로 읽어요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "PAT가 없을 때 copy_nth의 본문을 보고 0 반환과 out 내용이 각각 어떻게 되는지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "dfaebab929a7a86d6a867ecf34c04227b297760c6df608a9618e15f8c88f711b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

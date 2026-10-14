@@ -5,121 +5,147 @@
   "area": "Kbuild · GNU make · 컴파일 옵션 · ELF linking · 심볼 바인딩 · 생성 헤더 · 증분 빌드",
   "track": "files",
   "kind": "kernel",
-  "intro": "객체 목록부터 링크·검사·strip·offset 헤더 생성까지 전체 빌드 규칙을 분석합니다.",
+  "intro": "ARM64 vDSO Makefile은 사용자 공간에 제공할 작은 코드 묶음을 전용 옵션으로 만들고 디버그 ELF, 배포 ELF, 주소 차이 헤더를 생성합니다.",
   "guide": [
-    "사용자 공간에 매핑할 커널 제공 코드에는 일반 커널 객체와 다른 컴파일 계약과 별도의 산출물 검사가 필요합니다.",
-    "GNU make의 타깃·의존성·변수 범위를 읽고 디버그 이미지와 배포 이미지의 관계를 설명합니다."
+    "vDSO는 커널이 제공하지만 사용자 공간에서 사용할 수 있게 연결하는 작은 코드 묶음입니다. 일반 커널 객체와 빌드 조건이 다릅니다.",
+    "make의 타깃은 만들 결과물이고 의존성은 먼저 준비되어야 할 입력입니다. 변수 이름만 보지 말고 어떤 타깃이나 객체에 실제 연결되는지 따라갑니다.",
+    "컴파일, 링크, strip, 심볼 추출은 서로 다른 단계입니다. 이 파일은 단계들을 연결하며 실제 ARM64 빌드 성공을 여기서 시험한 것은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 객체와 공통 규칙",
-      "text": "GPL-2.0과 AArch64 vDSO 빌드 주석 뒤 lib/vdso/Makefile을 포함합니다. obj-vdso는 vgettimeofday.o, note.o, sigreturn.o, vgetrandom.o, vgetrandom-chacha.o 다섯 개입니다. targets에 이 목록과 vdso.so·vdso.so.dbg를 먼저 저장한 뒤 obj-vdso에 $(obj)/ 접두어를 붙입니다. := 즉시 확장 때문에 targets에 저장한 목록과 나중의 경로 포함 목록을 구분해야 합니다."
+      "title": "객체 다섯 개와 목록이 저장되는 시점",
+      "text": "GPL-2.0 표기와 AArch64 vDSO 설명 뒤 공통 lib/vdso/Makefile을 포함합니다. 객체는 vgettimeofday.o, note.o, sigreturn.o, vgetrandom.o, vgetrandom-chacha.o입니다. 먼저 이 목록과 vdso.so·vdso.so.dbg를 targets에 저장하고 나중에 obj-vdso에 $(obj)/ 경로를 붙입니다. :=는 그 줄에서 즉시 값을 계산하므로 먼저 저장된 targets까지 나중의 경로로 저절로 바뀌지는 않습니다."
     },
     {
-      "title": "BTI와 링크 옵션",
-      "text": "CONFIG_ARM64_BTI_KERNEL에 따라 btildflags-y에 -z force-bti를 넣습니다. ldflags-y는 -shared, -soname=linux-vdso.so.1, -Bsymbolic, --build-id=sha1, -n과 해당 BTI 옵션입니다. 공유 ELF의 이름과 내부 심볼 바인딩·식별자·링크 배치를 지정하는 옵션이며 소스 함수의 인수 ABI를 바꾸는 선언은 아닙니다. build-id의 sha1 선택을 코드 서명의 진위 검증으로 해석하지 않습니다."
+      "title": "공유 ELF의 이름과 BTI 옵션",
+      "text": "-shared는 공유 ELF를 만들고 -soname=linux-vdso.so.1은 공유 객체 이름을 정합니다. -Bsymbolic, --build-id=sha1, -n은 내부 이름 연결, 식별값, 배치 관련 링크 선택입니다. CONFIG_ARM64_BTI_KERNEL이 켜지면 -z force-bti도 추가합니다. 이들은 함수 인수 규칙을 새로 선언하는 코드가 아닙니다. SHA-1 build-id는 결과물을 구분할 식별자이며 코드 서명의 진위를 검증하는 절차와 다릅니다."
     },
     {
-      "title": "Bsymbolic과 orphan 정책",
-      "text": "주석은 -Bsymbolic을 ARM·compat와의 일관성 및 향후 공개 함수 내부 호출에 대비해 넣었다고 설명합니다. 공유 객체 안의 정의에 내부 참조를 바인딩하는 링크 선택입니다. CONFIG_LD_ORPHAN_WARN이 정의되면 --orphan-handling=$(CONFIG_LD_ORPHAN_WARN_LEVEL)을 추가합니다. 실제 동작 수준은 설정값에 따르므로 항상 오류로 중단한다고 단정하지 않습니다."
+      "title": "내부 이름 연결과 남은 섹션 처리",
+      "text": "-Bsymbolic은 이 공유 객체 내부의 참조를 내부 정의에 연결하게 합니다. 주석은 ARM 및 compat와 맞추고, 나중에 공개 함수를 내부에서 부를 가능성에 대비한다고 설명합니다. CONFIG_LD_ORPHAN_WARN이 정의되면 --orphan-handling에 설정된 수준을 전달합니다. orphan은 배치 규칙에 명시되지 않은 입력 섹션이며, 설정 수준에 따라 처리하므로 언제나 오류로 중단한다고 말할 수 없습니다."
     },
     {
-      "title": "디렉터리 공통 C 옵션",
-      "text": "ccflags-y는 -fno-common, -fno-builtin, -fno-stack-protector, -ffixed-x18과 DISABLE_BRANCH_PROFILING·BUILD_VDSO 정의를 제공합니다. builtin 치환·스택 보호 코드 삽입·x18 할당 등에 대한 컴파일 계약입니다. kernel에서 가져온 코드라고 일반 커널의 모든 계측 옵션을 그대로 허용하는 구성이 아닙니다. 이 변수의 적용 범위와 아래 특정 객체 옵션을 구별해야 합니다."
+      "title": "디렉터리의 공통 컴파일 규칙",
+      "text": "ccflags-y는 -fno-common, -fno-builtin, -fno-stack-protector, -ffixed-x18과 DISABLE_BRANCH_PROFILING·BUILD_VDSO 정의를 제공합니다. 컴파일러의 공통 심볼 처리, 내장 함수 치환, 스택 보호 코드 삽입, x18 레지스터 사용을 조절합니다. vDSO에 일반 커널의 모든 측정·보호 코드가 그대로 들어가면 되는 것은 아닙니다. 이 공통 범위와 아래 두 객체에만 적용하는 옵션을 구분합니다."
     },
     {
-      "title": "제거할 옵션과 대상",
-      "text": "CC_FLAGS_REMOVE_VDSO에는 FTRACE, -Os, SCS, RANDSTRUCT, GCC plugin, LTO, CFI 관련 플래그 변수와 -Wmissing-prototypes·-Wmissing-declarations가 나열됩니다. 주석은 마지막 두 경고를 제거하여 CONFIG_WERROR 빌드를 가능하게 한다고 설명합니다. CFLAGS_REMOVE_vgettimeofday.o와 CFLAGS_REMOVE_vgetrandom.o만 이 목록을 사용합니다. 모든 객체에 똑같은 제거 변수가 지정됐다고 확대해서 읽지 않습니다."
+      "title": "옵션 제거 목록과 실제 적용 대상",
+      "text": "CC_FLAGS_REMOVE_VDSO에는 FTRACE, -Os, SCS, RANDSTRUCT, GCC 플러그인, LTO, CFI 관련 옵션과 -Wmissing-prototypes·-Wmissing-declarations가 들어 있습니다. 추적·배치 변경·최적화·제어 흐름 검사 등 빌드 기능을 이 대상에서 빼려는 목록입니다. 마지막 두 경고 제거는 경고를 오류로 보는 CONFIG_WERROR 빌드를 가능하게 하려는 주석과 연결됩니다. 실제로 목록을 연결한 객체는 vgettimeofday.o와 vgetrandom.o 두 개입니다. 목록 이름에 VDSO가 있다고 모든 객체에 자동 적용되지는 않습니다."
     },
     {
-      "title": "추가할 옵션과 소스 강제 포함",
-      "text": "CC_FLAGS_ADD_VDSO는 -O2 -mcmodel=tiny -fasynchronous-unwind-tables이며 두 C 객체의 CFLAGS에 적용합니다. c-gettimeofday-y와 c-getrandom-y가 비어 있지 않으면 각각 -include를 추가합니다. 따라서 wrapper 소스에 공통 C 구현의 include가 직접 없어도 컴파일 문맥에 들어올 수 있습니다. unwind 테이블 생성 옵션과 최종 링커의 .eh_frame discard 정책은 서로 다른 단계입니다."
+      "title": "추가 옵션과 보이지 않는 include",
+      "text": "두 C 객체에 -O2, -mcmodel=tiny, -fasynchronous-unwind-tables를 추가합니다. 각각 최적화 수준, 코드 주소 모델, 실행 흐름을 거슬러 찾을 표의 생성에 관련됩니다. c-gettimeofday-y나 c-getrandom-y에 경로가 있으면 해당 객체에 -include로 공통 소스를 강제로 포함합니다. 따라서 wrapper 소스에 #include가 없어도 컴파일 입력에 구현이 들어갈 수 있습니다. unwind 표를 만드는 단계와 최종 링크에서 .eh_frame을 버리는 단계는 다릅니다."
     },
     {
-      "title": "링커 스크립트 전처리",
-      "text": "targets에 vdso.lds를 추가하고 CPPFLAGS_vdso.lds에 -P -C -U$(ARCH)를 줍니다. -P는 전처리 줄 표시 억제, -C는 주석 보존, -U는 해당 이름 매크로 해제입니다. 이 파일이 직접 vdso.lds.S 전체를 문자열로 생성하는 것은 아니며 Kbuild 전처리 규칙과 함께 작동합니다."
+      "title": "링커 배치표의 전처리",
+      "text": "targets에 vdso.lds를 더하고 전처리 옵션 -P -C -U$(ARCH)를 줍니다. -P는 줄 위치 표시를 빼고, -C는 주석을 남기며, -U는 지정한 이름의 매크로 정의를 해제합니다. 전처리는 실제 번역 전에 포함과 매크로를 정리하는 단계입니다. 이 Makefile이 배치표 전체 문자열을 직접 만드는 것이 아니라 Kbuild의 전처리 규칙과 함께 작동합니다."
     },
     {
-      "title": "Dbg 링크와 의존성 순서",
-      "text": "ldflags-y 마지막에 -T를 추가합니다. vdso.so.dbg의 첫 prerequisite는 vdso.lds이고 뒤에 경로가 붙은 다섯 객체와 FORCE가 옵니다. 주석은 .lds가 반드시 첫 번째여야 한다고 강조합니다. 공유 링크 명령과 -T의 스크립트 입력이 맞물리는 순서이므로 목록을 무심코 바꾸면 안 됩니다. recipe는 if_changed,vdsold_and_vdso_check를 호출합니다."
+      "title": "디버그 ELF 링크에서 첫 입력이 중요한 이유",
+      "text": "링크 옵션의 마지막에 -T가 있고 vdso.so.dbg의 첫 의존성은 vdso.lds입니다. 뒤에는 경로가 붙은 다섯 객체와 FORCE가 옵니다. -T는 배치 스크립트 입력과 연결되므로 .lds가 맨 앞이라는 주석을 지켜야 합니다. 단순한 보기 좋은 정렬 순서가 아닙니다. 실행 부분은 if_changed,vdsold_and_vdso_check를 호출합니다."
     },
     {
-      "title": "FORCE와 증분 빌드",
-      "text": "FORCE prerequisite가 있어도 본문은 Kbuild의 if_changed를 호출합니다. 따라서 이 텍스트만 보고 매번 무조건 새 ELF로 링크한다고 결론내리면 안 됩니다. 실제 변경 판단은 명령과 의존성을 다루는 Kbuild helper의 계약과 함께 봐야 합니다. 이 파일에 그 helper 구현 자체는 없습니다."
+      "title": "FORCE와 변경 검사 함께 읽기",
+      "text": "FORCE라는 의존성이 있어도 실행 부분에서는 Kbuild의 if_changed를 거칩니다. 이 도우미는 명령과 의존성 변경을 고려하는 별도 계약을 가집니다. 그러므로 FORCE만 보고 매번 무조건 ELF를 새로 링크한다고 단정할 수 없습니다. 도우미 구현은 이 파일 바깥에 있습니다."
     },
     {
-      "title": "Strip 산출물",
-      "text": "$(obj)/%.so 패턴 타깃에 OBJCOPYFLAGS := -S를 타깃별로 설정합니다. 같은 stem의 %.so.dbg와 FORCE에 의존하여 if_changed,objcopy를 호출합니다. 소스에서 다시 컴파일하는 것이 아니라 dbg 이미지를 바탕으로 strip한 .so를 만드는 경로입니다. dbg 파일을 삭제한다는 recipe는 없습니다."
+      "title": "디버그 결과에서 배포 결과 만들기",
+      "text": "%.so 타깃에는 OBJCOPYFLAGS를 -S로 지정하고 같은 이름의 %.so.dbg와 FORCE에 의존하게 합니다. if_changed,objcopy로 디버그 정보를 덜어 낸 .so를 만듭니다. C 소스를 처음부터 다시 컴파일하는 단계가 아닙니다. 원래 .dbg 파일을 삭제하라는 명령도 없습니다."
     },
     {
-      "title": "Offset 헤더 생성 경로",
-      "text": "gen-vdsosym은 $(src)/gen_vdso_offsets.sh입니다. cmd_vdsosym은 $(NM) $< 출력에서 helper로 VDSO_ 심볼을 변환하고 LC_ALL=C sort 결과를 $@로 저장합니다. include/generated/vdso-offsets.h는 vdso.so.dbg와 FORCE에 의존하며 $<는 첫 의존성인 dbg ELF입니다. strip한 .so를 입력으로 쓰는 경로가 아닙니다."
+      "title": "주소 차이를 담은 헤더 만들기",
+      "text": "gen_vdsosym은 gen_vdso_offsets.sh를 가리킵니다. NM으로 첫 입력인 vdso.so.dbg의 심볼 목록을 읽고, 도우미로 VDSO_ 이름을 변환하고, LC_ALL=C sort로 일정한 순서로 정렬하여 결과 타깃에 씁니다. make의 $<는 첫 의존성, $@는 만들 타깃입니다. vdso-offsets.h의 입력은 strip한 .so가 아니라 .so.dbg입니다."
     },
     {
-      "title": "링크 후 검사와 해석 한계",
-      "text": "quiet_cmd_vdsold_and_vdso_check는 LD와 타깃을 표시하고 실제 명령은 $(cmd_ld); $(cmd_vdso_check)입니다. 원본의 구분자는 &&가 아니라 세미콜론이므로 이 식만으로 링크 실패 시 검사를 반드시 건너뛴다고 주장할 수 없습니다. 공통 검사 명령은 재배치 출력 필터이며 전체 셸 오류 처리와 Kbuild 실행 문맥도 확인해야 합니다. 이 학습에서는 링크나 검사 recipe를 실제 실행하지 않았습니다."
+      "title": "링크 뒤 검사 명령의 정확한 연결",
+      "text": "표시용 명령은 LD와 타깃을 보여 줍니다. 실제 식은 $(cmd_ld); $(cmd_vdso_check)로 세미콜론으로 잇습니다. 앞이 성공해야 뒤를 실행하는 &&와 다르므로 이 식만 보고 링크 실패 때 검사를 반드시 건너뛴다고 말할 수 없습니다. 공통 검사는 재배치 출력을 거르는 방식이며 셸 오류 처리와 Kbuild 실행 문맥을 더 확인해야 합니다. 이 학습에서 링크와 검사 명령을 실제 실행한 것은 아닙니다."
     },
     {
-      "title": "전체 범위와 CS 연결",
-      "text": "모든 변수·조건부·타깃·패턴 규칙·실행 명령을 설명했습니다. 공통 코드의 강제 포함, 객체별 계측 제거, ELF 생성·strip·offset 추출의 의존성 그래프가 핵심입니다. 원본에 근거한 빌드 구조 분석이며 native ARM64 컴파일 성공이나 최종 ELF 권한·심볼 검증을 대신하지 않습니다."
+      "title": "전체 흐름에서 확인한 범위",
+      "text": "변수, 조건, 객체별 옵션, 패턴 타깃, 실행 명령을 연결해 읽었습니다. 핵심은 공통 소스 강제 포함, 일부 객체의 옵션 제거, 디버그 ELF에서 배포 ELF와 헤더로 갈라지는 의존성입니다. 이는 원본 빌드 구조의 설명이며 실제 ARM64 컴파일 성공이나 최종 ELF 권한·심볼 검증을 대신하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "vdso-offsets.h를 생성할 때 NM의 입력은?",
+      "prompt": "vdso-offsets.h를 만들 때 NM은 어느 파일을 읽나요?",
       "options": [
+        "vdso.so.dbg를 읽습니다.",
+        "디버그 정보를 뺀 vdso.so를 읽습니다."
+      ],
+      "answer": 0,
+      "explanation": "헤더 타깃의 첫 의존성 .dbg가 명령의 $<에 들어갑니다.",
+      "original_prompt": "vdso-offsets.h를 생성할 때 NM의 입력은?",
+      "original_options": [
         "vdso.so.dbg이다",
         "strip한 vdso.so이다"
       ],
-      "answer": 0,
-      "explanation": "생성 헤더 타깃의 첫 의존성은 dbg ELF이며 명령의 $<가 이를 가리킵니다. strip 산출물은 별도 경로입니다."
+      "original_explanation": "생성 헤더 타깃의 첫 의존성은 dbg ELF이며 명령의 $<가 이를 가리킵니다. strip 산출물은 별도 경로입니다."
     },
     {
-      "prompt": "왜 vdso.so.dbg 의존성에서 vdso.lds가 맨 앞인가?",
+      "prompt": "vdso.so.dbg 입력에서 vdso.lds가 맨 앞이어야 하는 이유는 무엇인가요?",
       "options": [
+        "작은 파일부터 정렬하면 빌드가 빨라지기 때문입니다.",
+        "링크 옵션 끝의 -T에 대응할 배치 스크립트 순서를 맞추기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "이 순서는 링크 명령의 의미를 구성하므로 단순 표시 순서가 아닙니다.",
+      "original_prompt": "왜 vdso.so.dbg 의존성에서 vdso.lds가 맨 앞인가?",
+      "original_options": [
         "가장 작은 파일부터 정렬하면 빌드가 빨라지기 때문이다",
         "링크 플래그 끝의 -T와 연결되는 스크립트 입력 순서를 맞추기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "원본 주석이 .lds has to be first를 명시합니다. 의존성의 순서가 공유 링크 명령 구성에 참여하므로 단순 표시 순서가 아닙니다."
+      "original_explanation": "원본 주석이 .lds has to be first를 명시합니다. 의존성의 순서가 공유 링크 명령 구성에 참여하므로 단순 표시 순서가 아닙니다."
     },
     {
-      "prompt": "wrapper C 소스에 공통 gettimeofday.c include가 없어도 구현을 가져오는 방식은?",
+      "prompt": "wrapper에 공통 gettimeofday.c의 #include가 없어도 어떻게 구현을 가져오나요?",
       "options": [
+        "조건부 컴파일 옵션 -include로 가져옵니다.",
+        "실행 중 gettimeofday.c 파일을 읽어 실행합니다."
+      ],
+      "answer": 0,
+      "explanation": "빌드 때 컴파일 입력에 소스를 포함하는 과정입니다.",
+      "original_prompt": "wrapper C 소스에 공통 gettimeofday.c include가 없어도 구현을 가져오는 방식은?",
+      "original_options": [
         "조건부 CFLAGS의 -include이다",
         "런타임에 gettimeofday.c를 파일로 읽어 실행한다"
       ],
-      "answer": 0,
-      "explanation": "공통 Makefile이 선택한 경로를 컴파일러의 강제 포함 옵션으로 전달합니다. 빌드 시 번역 단위 구성입니다."
+      "original_explanation": "공통 Makefile이 선택한 경로를 컴파일러의 강제 포함 옵션으로 전달합니다. 빌드 시 번역 단위 구성입니다."
     },
     {
-      "prompt": "CFLAGS_REMOVE 목록이 이 파일의 모든 객체에 동일하게 지정되는가?",
+      "prompt": "제거 옵션 목록이 모든 객체에 똑같이 적용되나요?",
       "options": [
+        "예. 변수 이름에 VDSO가 있으면 자동 적용됩니다.",
+        "아니요. vgettimeofday.o와 vgetrandom.o에 명시적으로 연결됩니다."
+      ],
+      "answer": 1,
+      "explanation": "목록을 정의하는 일과 객체별 변수에서 참조하는 일은 별도입니다.",
+      "original_prompt": "CFLAGS_REMOVE 목록이 이 파일의 모든 객체에 동일하게 지정되는가?",
+      "original_options": [
         "그렇다. 변수 이름이 VDSO이면 자동으로 모든 객체에 적용된다",
         "아니다. 명시적으로 vgettimeofday.o와 vgetrandom.o에 연결된다"
       ],
-      "answer": 1,
-      "explanation": "목록 변수와 이를 참조하는 객체별 변수는 별개입니다. 실제 연결 대상을 확인해야 합니다."
+      "original_explanation": "목록 변수와 이를 참조하는 객체별 변수는 별개입니다. 실제 연결 대상을 확인해야 합니다."
     },
     {
-      "prompt": "FORCE 의존성만 보고 매 실행마다 링크한다고 확정할 수 있는가?",
+      "prompt": "FORCE만 보고 매번 링크한다고 확정할 수 있나요?",
       "options": [
+        "아니요. if_changed의 변경 판단도 봐야 합니다.",
+        "예. if_changed는 무조건 링크합니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 재작업 여부에는 Kbuild 도우미의 판단이 참여합니다.",
+      "original_prompt": "FORCE 의존성만 보고 매 실행마다 링크한다고 확정할 수 있는가?",
+      "original_options": [
         "아니다. recipe의 if_changed 판단도 함께 봐야 한다",
         "그렇다. if_changed는 이름뿐이고 무조건 링크한다"
       ],
-      "answer": 0,
-      "explanation": "FORCE와 Kbuild의 변경 판단 helper는 함께 쓰입니다. 이 파일만으로 helper의 판단을 제거해서 해석하면 안 됩니다."
+      "original_explanation": "FORCE와 Kbuild의 변경 판단 helper는 함께 쓰입니다. 이 파일만으로 helper의 판단을 제거해서 해석하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "다섯 객체 → vdso.so.dbg → vdso.so와 vdso-offsets.h의 갈래를 그리세요. 첫 링크 입력과 헤더 생성 입력도 표시하세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0\n#\n# Building a vDSO image for AArch64.\n#\n# Author: Will Deacon <will.deacon@arm.com>\n# Heavily based on the vDSO Makefiles for other archs.\n#\n\n# Include the generic Makefile to check the built vdso.\ninclude $(srctree)/lib/vdso/Makefile\n\nobj-vdso := vgettimeofday.o note.o sigreturn.o vgetrandom.o vgetrandom-chacha.o\n\n# Build rules\ntargets := $(obj-vdso) vdso.so vdso.so.dbg\nobj-vdso := $(addprefix $(obj)/, $(obj-vdso))\n\nbtildflags-$(CONFIG_ARM64_BTI_KERNEL) += -z force-bti\n\n# -Bsymbolic has been added for consistency with arm, the compat vDSO and\n# potential future proofing if we end up with internal calls to the exported\n# routines, as x86 does (see 6f121e548f83 (\"x86, vdso: Reimplement vdso.so\n# preparation in build-time C\")).\nldflags-y := -shared -soname=linux-vdso.so.1 \\\n\t     -Bsymbolic --build-id=sha1 -n $(btildflags-y)\n\nifdef CONFIG_LD_ORPHAN_WARN\n  ldflags-y += --orphan-handling=$(CONFIG_LD_ORPHAN_WARN_LEVEL)\nendif\n\nldflags-y += -T\n\nccflags-y := -fno-common -fno-builtin -fno-stack-protector -ffixed-x18\nccflags-y += -DDISABLE_BRANCH_PROFILING -DBUILD_VDSO\n\n# -Wmissing-prototypes and -Wmissing-declarations are removed from\n# the CFLAGS to make possible to build the kernel with CONFIG_WERROR enabled.\nCC_FLAGS_REMOVE_VDSO := $(CC_FLAGS_FTRACE) -Os $(CC_FLAGS_SCS) \\\n\t\t\t$(RANDSTRUCT_CFLAGS) $(GCC_PLUGINS_CFLAGS) \\\n\t\t\t$(CC_FLAGS_LTO) $(CC_FLAGS_CFI) \\\n\t\t\t-Wmissing-prototypes -Wmissing-declarations\n\nCC_FLAGS_ADD_VDSO := -O2 -mcmodel=tiny -fasynchronous-unwind-tables\n\nCFLAGS_REMOVE_vgettimeofday.o = $(CC_FLAGS_REMOVE_VDSO)\nCFLAGS_REMOVE_vgetrandom.o = $(CC_FLAGS_REMOVE_VDSO)\n\nCFLAGS_vgettimeofday.o = $(CC_FLAGS_ADD_VDSO)\nCFLAGS_vgetrandom.o = $(CC_FLAGS_ADD_VDSO)\n\nifneq ($(c-gettimeofday-y),)\n  CFLAGS_vgettimeofday.o += -include $(c-gettimeofday-y)\nendif\n\nifneq ($(c-getrandom-y),)\n  CFLAGS_vgetrandom.o += -include $(c-getrandom-y)\nendif\n\ntargets += vdso.lds\nCPPFLAGS_vdso.lds += -P -C -U$(ARCH)\n\n# Link rule for the .so file, .lds has to be first\n$(obj)/vdso.so.dbg: $(obj)/vdso.lds $(obj-vdso) FORCE\n\t$(call if_changed,vdsold_and_vdso_check)\n\n# Strip rule for the .so file\n$(obj)/%.so: OBJCOPYFLAGS := -S\n$(obj)/%.so: $(obj)/%.so.dbg FORCE\n\t$(call if_changed,objcopy)\n\n# Generate VDSO offsets using helper script\ngen-vdsosym := $(src)/gen_vdso_offsets.sh\nquiet_cmd_vdsosym = VDSOSYM $@\n      cmd_vdsosym = $(NM) $< | $(gen-vdsosym) | LC_ALL=C sort > $@\n\ninclude/generated/vdso-offsets.h: $(obj)/vdso.so.dbg FORCE\n\t$(call if_changed,vdsosym)\n\n# Actual build commands\nquiet_cmd_vdsold_and_vdso_check = LD      $@\n      cmd_vdsold_and_vdso_check = $(cmd_ld); $(cmd_vdso_check)\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/Makefile"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-5096391b4bfb88a0",
+    "path": "arch/arm64/kernel/vdso/Makefile",
+    "title": "ARM64 vDSO 빌드: 전용 옵션과 ELF·offset 산출물",
+    "area": "Kbuild · GNU make · 컴파일 옵션 · ELF linking · 심볼 바인딩 · 생성 헤더 · 증분 빌드",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "객체 목록부터 링크·검사·strip·offset 헤더 생성까지 전체 빌드 규칙을 분석합니다.",
+    "guide": [
+      "사용자 공간에 매핑할 커널 제공 코드에는 일반 커널 객체와 다른 컴파일 계약과 별도의 산출물 검사가 필요합니다.",
+      "GNU make의 타깃·의존성·변수 범위를 읽고 디버그 이미지와 배포 이미지의 관계를 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 객체와 공통 규칙",
+        "text": "GPL-2.0과 AArch64 vDSO 빌드 주석 뒤 lib/vdso/Makefile을 포함합니다. obj-vdso는 vgettimeofday.o, note.o, sigreturn.o, vgetrandom.o, vgetrandom-chacha.o 다섯 개입니다. targets에 이 목록과 vdso.so·vdso.so.dbg를 먼저 저장한 뒤 obj-vdso에 $(obj)/ 접두어를 붙입니다. := 즉시 확장 때문에 targets에 저장한 목록과 나중의 경로 포함 목록을 구분해야 합니다."
+      },
+      {
+        "title": "BTI와 링크 옵션",
+        "text": "CONFIG_ARM64_BTI_KERNEL에 따라 btildflags-y에 -z force-bti를 넣습니다. ldflags-y는 -shared, -soname=linux-vdso.so.1, -Bsymbolic, --build-id=sha1, -n과 해당 BTI 옵션입니다. 공유 ELF의 이름과 내부 심볼 바인딩·식별자·링크 배치를 지정하는 옵션이며 소스 함수의 인수 ABI를 바꾸는 선언은 아닙니다. build-id의 sha1 선택을 코드 서명의 진위 검증으로 해석하지 않습니다."
+      },
+      {
+        "title": "Bsymbolic과 orphan 정책",
+        "text": "주석은 -Bsymbolic을 ARM·compat와의 일관성 및 향후 공개 함수 내부 호출에 대비해 넣었다고 설명합니다. 공유 객체 안의 정의에 내부 참조를 바인딩하는 링크 선택입니다. CONFIG_LD_ORPHAN_WARN이 정의되면 --orphan-handling=$(CONFIG_LD_ORPHAN_WARN_LEVEL)을 추가합니다. 실제 동작 수준은 설정값에 따르므로 항상 오류로 중단한다고 단정하지 않습니다."
+      },
+      {
+        "title": "디렉터리 공통 C 옵션",
+        "text": "ccflags-y는 -fno-common, -fno-builtin, -fno-stack-protector, -ffixed-x18과 DISABLE_BRANCH_PROFILING·BUILD_VDSO 정의를 제공합니다. builtin 치환·스택 보호 코드 삽입·x18 할당 등에 대한 컴파일 계약입니다. kernel에서 가져온 코드라고 일반 커널의 모든 계측 옵션을 그대로 허용하는 구성이 아닙니다. 이 변수의 적용 범위와 아래 특정 객체 옵션을 구별해야 합니다."
+      },
+      {
+        "title": "제거할 옵션과 대상",
+        "text": "CC_FLAGS_REMOVE_VDSO에는 FTRACE, -Os, SCS, RANDSTRUCT, GCC plugin, LTO, CFI 관련 플래그 변수와 -Wmissing-prototypes·-Wmissing-declarations가 나열됩니다. 주석은 마지막 두 경고를 제거하여 CONFIG_WERROR 빌드를 가능하게 한다고 설명합니다. CFLAGS_REMOVE_vgettimeofday.o와 CFLAGS_REMOVE_vgetrandom.o만 이 목록을 사용합니다. 모든 객체에 똑같은 제거 변수가 지정됐다고 확대해서 읽지 않습니다."
+      },
+      {
+        "title": "추가할 옵션과 소스 강제 포함",
+        "text": "CC_FLAGS_ADD_VDSO는 -O2 -mcmodel=tiny -fasynchronous-unwind-tables이며 두 C 객체의 CFLAGS에 적용합니다. c-gettimeofday-y와 c-getrandom-y가 비어 있지 않으면 각각 -include를 추가합니다. 따라서 wrapper 소스에 공통 C 구현의 include가 직접 없어도 컴파일 문맥에 들어올 수 있습니다. unwind 테이블 생성 옵션과 최종 링커의 .eh_frame discard 정책은 서로 다른 단계입니다."
+      },
+      {
+        "title": "링커 스크립트 전처리",
+        "text": "targets에 vdso.lds를 추가하고 CPPFLAGS_vdso.lds에 -P -C -U$(ARCH)를 줍니다. -P는 전처리 줄 표시 억제, -C는 주석 보존, -U는 해당 이름 매크로 해제입니다. 이 파일이 직접 vdso.lds.S 전체를 문자열로 생성하는 것은 아니며 Kbuild 전처리 규칙과 함께 작동합니다."
+      },
+      {
+        "title": "Dbg 링크와 의존성 순서",
+        "text": "ldflags-y 마지막에 -T를 추가합니다. vdso.so.dbg의 첫 prerequisite는 vdso.lds이고 뒤에 경로가 붙은 다섯 객체와 FORCE가 옵니다. 주석은 .lds가 반드시 첫 번째여야 한다고 강조합니다. 공유 링크 명령과 -T의 스크립트 입력이 맞물리는 순서이므로 목록을 무심코 바꾸면 안 됩니다. recipe는 if_changed,vdsold_and_vdso_check를 호출합니다."
+      },
+      {
+        "title": "FORCE와 증분 빌드",
+        "text": "FORCE prerequisite가 있어도 본문은 Kbuild의 if_changed를 호출합니다. 따라서 이 텍스트만 보고 매번 무조건 새 ELF로 링크한다고 결론내리면 안 됩니다. 실제 변경 판단은 명령과 의존성을 다루는 Kbuild helper의 계약과 함께 봐야 합니다. 이 파일에 그 helper 구현 자체는 없습니다."
+      },
+      {
+        "title": "Strip 산출물",
+        "text": "$(obj)/%.so 패턴 타깃에 OBJCOPYFLAGS := -S를 타깃별로 설정합니다. 같은 stem의 %.so.dbg와 FORCE에 의존하여 if_changed,objcopy를 호출합니다. 소스에서 다시 컴파일하는 것이 아니라 dbg 이미지를 바탕으로 strip한 .so를 만드는 경로입니다. dbg 파일을 삭제한다는 recipe는 없습니다."
+      },
+      {
+        "title": "Offset 헤더 생성 경로",
+        "text": "gen-vdsosym은 $(src)/gen_vdso_offsets.sh입니다. cmd_vdsosym은 $(NM) $< 출력에서 helper로 VDSO_ 심볼을 변환하고 LC_ALL=C sort 결과를 $@로 저장합니다. include/generated/vdso-offsets.h는 vdso.so.dbg와 FORCE에 의존하며 $<는 첫 의존성인 dbg ELF입니다. strip한 .so를 입력으로 쓰는 경로가 아닙니다."
+      },
+      {
+        "title": "링크 후 검사와 해석 한계",
+        "text": "quiet_cmd_vdsold_and_vdso_check는 LD와 타깃을 표시하고 실제 명령은 $(cmd_ld); $(cmd_vdso_check)입니다. 원본의 구분자는 &&가 아니라 세미콜론이므로 이 식만으로 링크 실패 시 검사를 반드시 건너뛴다고 주장할 수 없습니다. 공통 검사 명령은 재배치 출력 필터이며 전체 셸 오류 처리와 Kbuild 실행 문맥도 확인해야 합니다. 이 학습에서는 링크나 검사 recipe를 실제 실행하지 않았습니다."
+      },
+      {
+        "title": "전체 범위와 CS 연결",
+        "text": "모든 변수·조건부·타깃·패턴 규칙·실행 명령을 설명했습니다. 공통 코드의 강제 포함, 객체별 계측 제거, ELF 생성·strip·offset 추출의 의존성 그래프가 핵심입니다. 원본에 근거한 빌드 구조 분석이며 native ARM64 컴파일 성공이나 최종 ELF 권한·심볼 검증을 대신하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "vdso-offsets.h를 생성할 때 NM의 입력은?",
+        "options": [
+          "vdso.so.dbg이다",
+          "strip한 vdso.so이다"
+        ],
+        "answer": 0,
+        "explanation": "생성 헤더 타깃의 첫 의존성은 dbg ELF이며 명령의 $<가 이를 가리킵니다. strip 산출물은 별도 경로입니다."
+      },
+      {
+        "prompt": "왜 vdso.so.dbg 의존성에서 vdso.lds가 맨 앞인가?",
+        "options": [
+          "가장 작은 파일부터 정렬하면 빌드가 빨라지기 때문이다",
+          "링크 플래그 끝의 -T와 연결되는 스크립트 입력 순서를 맞추기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "원본 주석이 .lds has to be first를 명시합니다. 의존성의 순서가 공유 링크 명령 구성에 참여하므로 단순 표시 순서가 아닙니다."
+      },
+      {
+        "prompt": "wrapper C 소스에 공통 gettimeofday.c include가 없어도 구현을 가져오는 방식은?",
+        "options": [
+          "조건부 CFLAGS의 -include이다",
+          "런타임에 gettimeofday.c를 파일로 읽어 실행한다"
+        ],
+        "answer": 0,
+        "explanation": "공통 Makefile이 선택한 경로를 컴파일러의 강제 포함 옵션으로 전달합니다. 빌드 시 번역 단위 구성입니다."
+      },
+      {
+        "prompt": "CFLAGS_REMOVE 목록이 이 파일의 모든 객체에 동일하게 지정되는가?",
+        "options": [
+          "그렇다. 변수 이름이 VDSO이면 자동으로 모든 객체에 적용된다",
+          "아니다. 명시적으로 vgettimeofday.o와 vgetrandom.o에 연결된다"
+        ],
+        "answer": 1,
+        "explanation": "목록 변수와 이를 참조하는 객체별 변수는 별개입니다. 실제 연결 대상을 확인해야 합니다."
+      },
+      {
+        "prompt": "FORCE 의존성만 보고 매 실행마다 링크한다고 확정할 수 있는가?",
+        "options": [
+          "아니다. recipe의 if_changed 판단도 함께 봐야 한다",
+          "그렇다. if_changed는 이름뿐이고 무조건 링크한다"
+        ],
+        "answer": 0,
+        "explanation": "FORCE와 Kbuild의 변경 판단 helper는 함께 쓰입니다. 이 파일만으로 helper의 판단을 제거해서 해석하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0\n#\n# Building a vDSO image for AArch64.\n#\n# Author: Will Deacon <will.deacon@arm.com>\n# Heavily based on the vDSO Makefiles for other archs.\n#\n\n# Include the generic Makefile to check the built vdso.\ninclude $(srctree)/lib/vdso/Makefile\n\nobj-vdso := vgettimeofday.o note.o sigreturn.o vgetrandom.o vgetrandom-chacha.o\n\n# Build rules\ntargets := $(obj-vdso) vdso.so vdso.so.dbg\nobj-vdso := $(addprefix $(obj)/, $(obj-vdso))\n\nbtildflags-$(CONFIG_ARM64_BTI_KERNEL) += -z force-bti\n\n# -Bsymbolic has been added for consistency with arm, the compat vDSO and\n# potential future proofing if we end up with internal calls to the exported\n# routines, as x86 does (see 6f121e548f83 (\"x86, vdso: Reimplement vdso.so\n# preparation in build-time C\")).\nldflags-y := -shared -soname=linux-vdso.so.1 \\\n\t     -Bsymbolic --build-id=sha1 -n $(btildflags-y)\n\nifdef CONFIG_LD_ORPHAN_WARN\n  ldflags-y += --orphan-handling=$(CONFIG_LD_ORPHAN_WARN_LEVEL)\nendif\n\nldflags-y += -T\n\nccflags-y := -fno-common -fno-builtin -fno-stack-protector -ffixed-x18\nccflags-y += -DDISABLE_BRANCH_PROFILING -DBUILD_VDSO\n\n# -Wmissing-prototypes and -Wmissing-declarations are removed from\n# the CFLAGS to make possible to build the kernel with CONFIG_WERROR enabled.\nCC_FLAGS_REMOVE_VDSO := $(CC_FLAGS_FTRACE) -Os $(CC_FLAGS_SCS) \\\n\t\t\t$(RANDSTRUCT_CFLAGS) $(GCC_PLUGINS_CFLAGS) \\\n\t\t\t$(CC_FLAGS_LTO) $(CC_FLAGS_CFI) \\\n\t\t\t-Wmissing-prototypes -Wmissing-declarations\n\nCC_FLAGS_ADD_VDSO := -O2 -mcmodel=tiny -fasynchronous-unwind-tables\n\nCFLAGS_REMOVE_vgettimeofday.o = $(CC_FLAGS_REMOVE_VDSO)\nCFLAGS_REMOVE_vgetrandom.o = $(CC_FLAGS_REMOVE_VDSO)\n\nCFLAGS_vgettimeofday.o = $(CC_FLAGS_ADD_VDSO)\nCFLAGS_vgetrandom.o = $(CC_FLAGS_ADD_VDSO)\n\nifneq ($(c-gettimeofday-y),)\n  CFLAGS_vgettimeofday.o += -include $(c-gettimeofday-y)\nendif\n\nifneq ($(c-getrandom-y),)\n  CFLAGS_vgetrandom.o += -include $(c-getrandom-y)\nendif\n\ntargets += vdso.lds\nCPPFLAGS_vdso.lds += -P -C -U$(ARCH)\n\n# Link rule for the .so file, .lds has to be first\n$(obj)/vdso.so.dbg: $(obj)/vdso.lds $(obj-vdso) FORCE\n\t$(call if_changed,vdsold_and_vdso_check)\n\n# Strip rule for the .so file\n$(obj)/%.so: OBJCOPYFLAGS := -S\n$(obj)/%.so: $(obj)/%.so.dbg FORCE\n\t$(call if_changed,objcopy)\n\n# Generate VDSO offsets using helper script\ngen-vdsosym := $(src)/gen_vdso_offsets.sh\nquiet_cmd_vdsosym = VDSOSYM $@\n      cmd_vdsosym = $(NM) $< | $(gen-vdsosym) | LC_ALL=C sort > $@\n\ninclude/generated/vdso-offsets.h: $(obj)/vdso.so.dbg FORCE\n\t$(call if_changed,vdsosym)\n\n# Actual build commands\nquiet_cmd_vdsold_and_vdso_check = LD      $@\n      cmd_vdsold_and_vdso_check = $(cmd_ld); $(cmd_vdso_check)\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "00c404297dc01e1b07396dde423b1071f6d458f14dbfccdee0f1924940b81200",
+      "scope": "whole-file",
+      "line_count": 81,
+      "authoring_source": "course/file_units/arm64_vdso_build.py",
+      "sections": [
+        "전체 객체와 공통 규칙",
+        "BTI와 링크 옵션",
+        "Bsymbolic과 orphan 정책",
+        "디렉터리 공통 C 옵션",
+        "제거할 옵션과 대상",
+        "추가할 옵션과 소스 강제 포함",
+        "링커 스크립트 전처리",
+        "Dbg 링크와 의존성 순서",
+        "FORCE와 증분 빌드",
+        "Strip 산출물",
+        "Offset 헤더 생성 경로",
+        "링크 후 검사와 해석 한계",
+        "전체 범위와 CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/kernel/vdso/Makefile"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "작은 도서관 안내 책자를 만들 때 원고를 모으고, 배치하고, 검사용 책과 배포용 책을 따로 만드는 과정입니다.",
+    "meaning": "ARM64 vDSO Makefile은 사용자 공간에 제공할 작은 코드 묶음을 전용 옵션으로 만들고 디버그 ELF, 배포 ELF, 주소 차이 헤더를 생성합니다.",
+    "exercise": "다섯 객체 → vdso.so.dbg → vdso.so와 vdso-offsets.h의 갈래를 그리세요. 첫 링크 입력과 헤더 생성 입력도 표시하세요."
+  },
+  "goal": "ARM64 vDSO Makefile은 사용자 공간에 제공할 작은 코드 묶음을 전용 옵션으로 만들고 디버그 ELF, 배포 ELF, 주소 차이 헤더를 생성합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "다섯 객체 → vdso.so.dbg → vdso.so와 vdso-offsets.h의 갈래를 그리세요. 첫 링크 입력과 헤더 생성 입력도 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "3104cdb81272a7b190f602c61f29b12673e7eaf3ba356147b91411f052d4eeb5",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

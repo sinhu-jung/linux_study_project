@@ -5,62 +5,70 @@
   "area": "API 선언 · 물리 범위 · 출력 인자 · 캐시 모드 · PFN",
   "track": "files",
   "kind": "kernel",
-  "intro": "PAT 초기화·상태 조회,물리 범위 예약·해제,캐시 모드 변환 선언을 구분합니다.",
+  "intro": "이 공개 헤더는 PAT 관련 함수의 인자와 반환 타입을 알리는 약속이에요. 실제 정책·오류·잠금은 함수 구현에서 확인해야 해요.",
   "guide": [
-    "선언은 인자·출력·반환 타입을 제공하며 정책과 구현의 구성별 동작은 별도로 확인해야 합니다.",
-    "iomap과 PAT 내부 구간 트리 사이의 public 인터페이스를 연결합니다."
+    "PAT는 페이지의 캐시 속성을 정하는 x86 기능이에요. 캐시 모드는 메모리를 가까운 저장소와 어떤 규칙으로 주고받는지 나타내요.",
+    "PFN은 페이지 번호이고 바이트 주소와 단위가 달라요. 포인터 출력 인자는 함수가 결과를 적어 줄 칸의 주소예요.",
+    "extern 선언은 다른 곳의 함수를 어떻게 부를지 알려 줘요. 선언을 읽는 것은 실제 함수를 실행한 것이 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "구조와 초기화",
-      "text": "GPL-2.0·guard·types와 pgtable_types 포함 뒤 pat_enabled bool 조회,pat_bp_init과pat_cpu_init void 초기화 선언을 제공합니다. 이 헤더에는CONFIG_X86_PAT 분기나 함수 본문이 없습니다."
+      "title": "헤더와 초기화 선언",
+      "text": "types와 pgtable_types를 포함하고 pat_enabled는 bool 조회, pat_bp_init과 pat_cpu_init은 void 초기화 함수로 선언해요. 이 헤더 안에는 CONFIG_X86_PAT 분기나 함수 본문이 없어요. 따라서 선언만으로 현재 PAT가 켜졌다고 알 수는 없어요."
     },
     {
-      "title": "일반 예약 API",
-      "text": "memtype_reserve는u64 start/end,요청 mode,반환 mode 포인터를 받아int를 반환합니다. memtype_free는u64 범위를 받아int입니다. memtype_kernel_map_sync는base,size,mode를 받고int를 반환합니다. 범위 경계 인자와 크기 인자의 차이를 유지하며 구현의 오류 코드·잠금은 별도입니다."
+      "title": "일반 메모리 예약",
+      "text": "memtype_reserve는 u64 start/end, 요청 모드, 결과 모드를 적을 포인터를 받아 int 결과를 반환해요. memtype_free도 u64 범위를 받아 int예요. kernel_map_sync는 base, size, 모드를 받아 int예요. 끝 주소와 크기를 구별해야 하며 자세한 오류 번호나 잠금은 이 선언에 없어요."
     },
     {
-      "title": "I/O 예약 API",
-      "text": "memtype_reserve_io는resource_size_t start/end와mode 포인터를 받아int를 반환합니다. memtype_free_io는같은 범위에void를 반환합니다. 일반 free가int라는 사실을IO free에도 그대로 적용하지 않습니다."
+      "title": "I/O용 예약",
+      "text": "memtype_reserve_io는 resource_size_t start/end와 모드 포인터를 받아 int를 반환해요. memtype_free_io는 같은 범위를 받지만 void예요. 일반 free가 오류 상태를 돌려준다고 I/O free에도 같은 반환값이 있다고 생각하면 안 돼요."
     },
     {
-      "title": "추가 조회와 변환",
-      "text": "pat_pfn_immune_to_uc_mtrr는unsigned long pfn을 받아bool,x86_has_pat_wp는bool,pgprot2cachemode는pgprot_t를 받아page_cache_mode를 반환합니다. PFN과byte 주소를 구분하며 이름만으로 예외 정책의 모든 조건을 만들어 설명하지 않습니다."
+      "title": "조회와 타입 변환",
+      "text": "pat_pfn_immune_to_uc_mtrr는 unsigned long PFN에 대해 bool을, x86_has_pat_wp도 bool을 반환해요. pgprot2cachemode는 페이지 보호값 pgprot_t를 받아 캐시 모드 enum을 반환해요. 가상 주소를 새로 할당하는 함수는 아니에요. 이름만으로 MTRR 예외 정책의 세부 조건을 만들어 설명하지 마세요."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "공개 선언과 내부 구현,타입에 나타나는 주소 단위,요청·반환 mode,void와오류 상태 반환을 학습합니다. 이 헤더를 읽는 것만으로PAT 지원 상태나 실제 예약 성공을 확정할 수 없습니다."
+      "title": "이 파일에서 배울 점",
+      "text": "공개 약속과 내부 구현, 주소 단위, 요청과 결과 모드, 상태 반환과 void의 차이를 읽었어요. 실제 PAT 지원 여부나 예약 성공은 이 헤더를 읽는 것만으로 확정하지 못해요."
     }
   ],
   "questions": [
     {
-      "prompt": "memtype_free와 memtype_free_io의 반환형은?",
+      "prompt": "memtype_free와 memtype_free_io의 반환형은 무엇인가요?",
       "options": [
+        "각각 int와 void예요.",
+        "둘 다 같은 int예요."
+      ],
+      "answer": 0,
+      "explanation": "호출자가 결과 상태를 받을 수 있는지가 달라요.",
+      "original_prompt": "memtype_free와 memtype_free_io의 반환형은?",
+      "original_options": [
         "각각int와void이다",
         "둘 다동일한int이다"
       ],
-      "answer": 0,
-      "explanation": "공개 선언이 다릅니다. 상위 호출에서 반환 상태를 확인할 수 있는지 구분해야 합니다."
+      "original_explanation": "공개 선언이 다릅니다. 상위 호출에서 반환 상태를 확인할 수 있는지 구분해야 합니다."
     },
     {
-      "prompt": "pgprot2cachemode는 무엇을 반환하는가?",
+      "prompt": "pgprot2cachemode는 무엇을 반환하나요?",
       "options": [
+        "새로 할당한 가상 주소예요.",
+        "enum page_cache_mode예요."
+      ],
+      "answer": 1,
+      "explanation": "보호값에서 캐시 모드를 얻는 선언이에요.",
+      "original_prompt": "pgprot2cachemode는 무엇을 반환하는가?",
+      "original_options": [
         "새로 할당한 가상주소이다",
         "enum page_cache_mode이다"
       ],
-      "answer": 1,
-      "explanation": "보호값을 받아캐시 mode로 변환하는 선언입니다. 매핑 할당 API와 다릅니다."
+      "original_explanation": "보호값을 받아캐시 mode로 변환하는 선언입니다. 매핑 할당 API와 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "memtype_free와 free_io의 반환형, reserve와 kernel_map_sync의 범위 표현을 나란히 비교해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_MEMTYPE_H\n#define _ASM_X86_MEMTYPE_H\n\n#include <linux/types.h>\n#include <asm/pgtable_types.h>\n\nextern bool pat_enabled(void);\nextern void pat_bp_init(void);\nextern void pat_cpu_init(void);\n\nextern int memtype_reserve(u64 start, u64 end,\n\t\tenum page_cache_mode req_pcm, enum page_cache_mode *ret_pcm);\nextern int memtype_free(u64 start, u64 end);\n\nextern int memtype_kernel_map_sync(u64 base, unsigned long size,\n\t\tenum page_cache_mode pcm);\n\nextern int memtype_reserve_io(resource_size_t start, resource_size_t end,\n\t\t\tenum page_cache_mode *pcm);\n\nextern void memtype_free_io(resource_size_t start, resource_size_t end);\n\nextern bool pat_pfn_immune_to_uc_mtrr(unsigned long pfn);\n\nbool x86_has_pat_wp(void);\nenum page_cache_mode pgprot2cachemode(pgprot_t pgprot);\n\n#endif /* _ASM_X86_MEMTYPE_H */\n",
   "source_review": {
@@ -83,5 +91,120 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/memtype.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b54bba935ebc7b0d",
+    "path": "arch/x86/include/asm/memtype.h",
+    "title": "x86 memtype 공개 헤더 전체: PAT 기능과 예약 API",
+    "area": "API 선언 · 물리 범위 · 출력 인자 · 캐시 모드 · PFN",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "PAT 초기화·상태 조회,물리 범위 예약·해제,캐시 모드 변환 선언을 구분합니다.",
+    "guide": [
+      "선언은 인자·출력·반환 타입을 제공하며 정책과 구현의 구성별 동작은 별도로 확인해야 합니다.",
+      "iomap과 PAT 내부 구간 트리 사이의 public 인터페이스를 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구조와 초기화",
+        "text": "GPL-2.0·guard·types와 pgtable_types 포함 뒤 pat_enabled bool 조회,pat_bp_init과pat_cpu_init void 초기화 선언을 제공합니다. 이 헤더에는CONFIG_X86_PAT 분기나 함수 본문이 없습니다."
+      },
+      {
+        "title": "일반 예약 API",
+        "text": "memtype_reserve는u64 start/end,요청 mode,반환 mode 포인터를 받아int를 반환합니다. memtype_free는u64 범위를 받아int입니다. memtype_kernel_map_sync는base,size,mode를 받고int를 반환합니다. 범위 경계 인자와 크기 인자의 차이를 유지하며 구현의 오류 코드·잠금은 별도입니다."
+      },
+      {
+        "title": "I/O 예약 API",
+        "text": "memtype_reserve_io는resource_size_t start/end와mode 포인터를 받아int를 반환합니다. memtype_free_io는같은 범위에void를 반환합니다. 일반 free가int라는 사실을IO free에도 그대로 적용하지 않습니다."
+      },
+      {
+        "title": "추가 조회와 변환",
+        "text": "pat_pfn_immune_to_uc_mtrr는unsigned long pfn을 받아bool,x86_has_pat_wp는bool,pgprot2cachemode는pgprot_t를 받아page_cache_mode를 반환합니다. PFN과byte 주소를 구분하며 이름만으로 예외 정책의 모든 조건을 만들어 설명하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "공개 선언과 내부 구현,타입에 나타나는 주소 단위,요청·반환 mode,void와오류 상태 반환을 학습합니다. 이 헤더를 읽는 것만으로PAT 지원 상태나 실제 예약 성공을 확정할 수 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "memtype_free와 memtype_free_io의 반환형은?",
+        "options": [
+          "각각int와void이다",
+          "둘 다동일한int이다"
+        ],
+        "answer": 0,
+        "explanation": "공개 선언이 다릅니다. 상위 호출에서 반환 상태를 확인할 수 있는지 구분해야 합니다."
+      },
+      {
+        "prompt": "pgprot2cachemode는 무엇을 반환하는가?",
+        "options": [
+          "새로 할당한 가상주소이다",
+          "enum page_cache_mode이다"
+        ],
+        "answer": 1,
+        "explanation": "보호값을 받아캐시 mode로 변환하는 선언입니다. 매핑 할당 API와 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_MEMTYPE_H\n#define _ASM_X86_MEMTYPE_H\n\n#include <linux/types.h>\n#include <asm/pgtable_types.h>\n\nextern bool pat_enabled(void);\nextern void pat_bp_init(void);\nextern void pat_cpu_init(void);\n\nextern int memtype_reserve(u64 start, u64 end,\n\t\tenum page_cache_mode req_pcm, enum page_cache_mode *ret_pcm);\nextern int memtype_free(u64 start, u64 end);\n\nextern int memtype_kernel_map_sync(u64 base, unsigned long size,\n\t\tenum page_cache_mode pcm);\n\nextern int memtype_reserve_io(resource_size_t start, resource_size_t end,\n\t\t\tenum page_cache_mode *pcm);\n\nextern void memtype_free_io(resource_size_t start, resource_size_t end);\n\nextern bool pat_pfn_immune_to_uc_mtrr(unsigned long pfn);\n\nbool x86_has_pat_wp(void);\nenum page_cache_mode pgprot2cachemode(pgprot_t pgprot);\n\n#endif /* _ASM_X86_MEMTYPE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "dafd788f33abf2d117099f8778aeea0bdd74983dadad63a99d834a509fb8bac5",
+      "scope": "whole-file",
+      "line_count": 29,
+      "authoring_source": "course/file_units/pat_intervals.py",
+      "sections": [
+        "구조와 초기화",
+        "일반 예약 API",
+        "I/O 예약 API",
+        "추가 조회와 변환",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/memtype.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "사용 설명서의 신청서 양식에는 시작·끝을 쓰는 칸도 있고 시작·크기를 쓰는 칸도 있어요. 비슷해 보여도 서로 바꾸면 다른 범위가 돼요.",
+    "meaning": "이 공개 헤더는 PAT 관련 함수의 인자와 반환 타입을 알리는 약속이에요. 실제 정책·오류·잠금은 함수 구현에서 확인해야 해요.",
+    "exercise": "memtype_free와 free_io의 반환형, reserve와 kernel_map_sync의 범위 표현을 나란히 비교해 보세요."
+  },
+  "goal": "이 공개 헤더는 PAT 관련 함수의 인자와 반환 타입을 알리는 약속이에요. 실제 정책·오류·잠금은 함수 구현에서 확인해야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "memtype_free와 free_io의 반환형, reserve와 kernel_map_sync의 범위 표현을 나란히 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "074ad2b4d91122039fb92f026c8063578ce177073a53e2e6cdc14f3e6f757bdf",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

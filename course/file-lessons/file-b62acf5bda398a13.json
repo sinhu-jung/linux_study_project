@@ -5,58 +5,66 @@
   "area": "정수 알고리즘 · 테스트·빌드 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "코드가 저장소에 있다는 것과 선택한 커널에 포함된다는 것을 구분합니다.",
+  "intro": "수학 객체의 기본·조건부 빌드 선택과 테스트 실행 증거를 구별합니다.",
   "guide": [
-    "obj-y에 div64,gcd,lcm,int_log,int_pow,int_sqrt,reciprocal_div 객체를 추가합니다. 나머지는 CONFIG 값에 따라 obj-y 또는 obj-m 등에 배치됩니다.",
-    "상위 lib/Makefile이 math/를 포함합니다. 이 파일은 함수 알고리즘이나 테스트 실행 결과를 정의하지 않고 Kbuild의 객체 선택을 지정합니다."
+    ".o는 소스 코드를 번역한 객체 파일 이름입니다. obj-y는 해당 빌드 문맥에서 커널에 넣는 목록입니다.",
+    "CONFIG 값이 y이면 내장, m이면 모듈 쪽 목록으로 이어지는 조건부 규칙입니다. 꺼져 있으면 활성 객체에 넣지 않습니다.",
+    "설정 파일, 빌드 성공 기록, 테스트 실행 기록은 각각 다른 증거입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 기본 목록",
-      "text": "SPDX 다음 기본7개 객체가 한 줄에 있습니다. 목록의 .o는 대응 소스의 빌드 산출물 이름입니다. 이 하위 디렉터리를 처리하는 빌드 문맥에서 obj-y로 선택된다는 의미입니다."
+      "text": "GPL 뒤 기본 객체 일곱 개가 있습니다. div64, gcd, lcm, int_log, int_pow, int_sqrt, reciprocal_div의 .o를 이 디렉터리 빌드 문맥의 obj-y에 더합니다. 이 줄 자체가 프로그램을 실행하지는 않습니다."
     },
     {
       "title": "기능 선택3개",
-      "text": "CONFIG_CORDIC은 cordic.o, CONFIG_PRIME_NUMBERS는 prime_numbers.o, CONFIG_RATIONAL은 rational.o를 선택합니다. tristate가 y이면 built-in 쪽, m이면 모듈 쪽에 들어가며 비활성 설정은 활성 객체 목록에 추가되지 않습니다."
+      "text": "CORDIC은 cordic.o, PRIME_NUMBERS는 prime_numbers.o, RATIONAL은 rational.o를 고릅니다. 세 상태 설정의 y는 내장, m은 모듈, 비활성은 활성 목록 제외로 이어집니다."
     },
     {
       "title": "테스트 선택4개",
-      "text": "CONFIG_INT_POW_TEST는 tests/int_pow_kunit.o를 이 파일에서 직접 가리킵니다. TEST_DIV64는 test_div64.o, TEST_MULDIV64는 test_mul_u64_u64_div_u64.o, RATIONAL_KUNIT_TEST는 rational-test.o입니다. tests/Makefile의 존재만으로 이 직접 경로를 별도 테스트 두 번 실행으로 세면 안 됩니다."
+      "text": "INT_POW_TEST는 tests/int_pow_kunit.o를 직접 가리킵니다. TEST_DIV64는 test_div64.o, TEST_MULDIV64는 test_mul_u64_u64_div_u64.o, RATIONAL_KUNIT_TEST는 rational-test.o를 선택합니다. tests/Makefile도 있다고 같은 시험을 두 번 실행했다고 세면 안 됩니다."
     },
     {
       "title": "빌드와 실행 구분",
-      "text": "설정이 객체를 선택해도 테스트가 실행되어 성공했다는 증거는 아닙니다. 해당 설정 정의는 lib/Kconfig.debug에도 연결되어 있습니다. Makefile 목록, 최종 설정, 빌드 로그, 테스트 실행 로그는 서로 다른 단계의 증거입니다."
+      "text": "테스트 객체를 고르는 규칙은 통과 기록이 아닙니다. 관련 설정 정의는 lib/Kconfig.debug에도 이어집니다. 목록, 최종 설정, 번역 결과, 실행 로그를 각각 확인해야 성공 여부를 말할 수 있습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "int_pow.o와 int_pow_kunit.o의 선택 조건은 같은가?",
+      "prompt": "int_pow.o와 검사 객체의 선택 조건은 같은가요?",
       "options": [
+        "아니요. 구현은 기본이고 검사는 INT_POW_TEST 조건입니다.",
+        "예. 검사를 켜야 구현도 생깁니다."
+      ],
+      "answer": 0,
+      "explanation": "구현은 obj-y 줄, 검사는 조건부 줄에 있습니다.",
+      "original_prompt": "int_pow.o와 int_pow_kunit.o의 선택 조건은 같은가?",
+      "original_options": [
         "아니다. 구현은 기본 목록이고 테스트는 INT_POW_TEST 조건이다",
         "그렇다. 테스트를 켜야 구현도 생긴다"
       ],
-      "answer": 0,
-      "explanation": "기본 obj-y 줄에 int_pow.o가 있고 테스트 줄은 obj-$(CONFIG_INT_POW_TEST)입니다."
+      "original_explanation": "기본 obj-y 줄에 int_pow.o가 있고 테스트 줄은 obj-$(CONFIG_INT_POW_TEST)입니다."
     },
     {
-      "prompt": "이 Makefile을 읽으면 테스트 성공을 알 수 있는가?",
+      "prompt": "이 파일만 읽고 테스트가 통과했다고 알 수 있나요?",
       "options": [
+        "예. 목록에 있으면 이미 통과했습니다.",
+        "아니요. 선택 규칙과 실행 결과는 다릅니다."
+      ],
+      "answer": 1,
+      "explanation": "성공 여부는 실제 실행 기록이 필요합니다.",
+      "original_prompt": "이 Makefile을 읽으면 테스트 성공을 알 수 있는가?",
+      "original_options": [
         "있다. 목록에 테스트가 있으면 이미 통과했다",
         "없다. 객체 선택과 테스트 실행 결과는 별개다"
       ],
-      "answer": 1,
-      "explanation": "빌드 선언은 실행 로그가 아닙니다. 성공 주장은 실제 빌드·실행 근거가 필요합니다."
+      "original_explanation": "빌드 선언은 실행 로그가 아닙니다. 성공 주장은 실제 빌드·실행 근거가 필요합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "int_pow.o와 tests/int_pow_kunit.o가 각각 어느 설정으로 선택되는지 찾아 보세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0-only\nobj-y += div64.o gcd.o lcm.o int_log.o int_pow.o int_sqrt.o reciprocal_div.o\n\nobj-$(CONFIG_CORDIC)\t\t+= cordic.o\nobj-$(CONFIG_PRIME_NUMBERS)\t+= prime_numbers.o\nobj-$(CONFIG_RATIONAL)\t\t+= rational.o\n\nobj-$(CONFIG_INT_POW_TEST)  += tests/int_pow_kunit.o\nobj-$(CONFIG_TEST_DIV64)\t+= test_div64.o\nobj-$(CONFIG_TEST_MULDIV64)\t+= test_mul_u64_u64_div_u64.o\nobj-$(CONFIG_RATIONAL_KUNIT_TEST) += rational-test.o\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/Makefile"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b62acf5bda398a13",
+    "path": "lib/math/Makefile",
+    "title": "수학 라이브러리 빌드 목록 전체: 기본 객체와 설정별 객체",
+    "area": "정수 알고리즘 · 테스트·빌드 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "코드가 저장소에 있다는 것과 선택한 커널에 포함된다는 것을 구분합니다.",
+    "guide": [
+      "obj-y에 div64,gcd,lcm,int_log,int_pow,int_sqrt,reciprocal_div 객체를 추가합니다. 나머지는 CONFIG 값에 따라 obj-y 또는 obj-m 등에 배치됩니다.",
+      "상위 lib/Makefile이 math/를 포함합니다. 이 파일은 함수 알고리즘이나 테스트 실행 결과를 정의하지 않고 Kbuild의 객체 선택을 지정합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 기본 목록",
+        "text": "SPDX 다음 기본7개 객체가 한 줄에 있습니다. 목록의 .o는 대응 소스의 빌드 산출물 이름입니다. 이 하위 디렉터리를 처리하는 빌드 문맥에서 obj-y로 선택된다는 의미입니다."
+      },
+      {
+        "title": "기능 선택3개",
+        "text": "CONFIG_CORDIC은 cordic.o, CONFIG_PRIME_NUMBERS는 prime_numbers.o, CONFIG_RATIONAL은 rational.o를 선택합니다. tristate가 y이면 built-in 쪽, m이면 모듈 쪽에 들어가며 비활성 설정은 활성 객체 목록에 추가되지 않습니다."
+      },
+      {
+        "title": "테스트 선택4개",
+        "text": "CONFIG_INT_POW_TEST는 tests/int_pow_kunit.o를 이 파일에서 직접 가리킵니다. TEST_DIV64는 test_div64.o, TEST_MULDIV64는 test_mul_u64_u64_div_u64.o, RATIONAL_KUNIT_TEST는 rational-test.o입니다. tests/Makefile의 존재만으로 이 직접 경로를 별도 테스트 두 번 실행으로 세면 안 됩니다."
+      },
+      {
+        "title": "빌드와 실행 구분",
+        "text": "설정이 객체를 선택해도 테스트가 실행되어 성공했다는 증거는 아닙니다. 해당 설정 정의는 lib/Kconfig.debug에도 연결되어 있습니다. Makefile 목록, 최종 설정, 빌드 로그, 테스트 실행 로그는 서로 다른 단계의 증거입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "int_pow.o와 int_pow_kunit.o의 선택 조건은 같은가?",
+        "options": [
+          "아니다. 구현은 기본 목록이고 테스트는 INT_POW_TEST 조건이다",
+          "그렇다. 테스트를 켜야 구현도 생긴다"
+        ],
+        "answer": 0,
+        "explanation": "기본 obj-y 줄에 int_pow.o가 있고 테스트 줄은 obj-$(CONFIG_INT_POW_TEST)입니다."
+      },
+      {
+        "prompt": "이 Makefile을 읽으면 테스트 성공을 알 수 있는가?",
+        "options": [
+          "있다. 목록에 테스트가 있으면 이미 통과했다",
+          "없다. 객체 선택과 테스트 실행 결과는 별개다"
+        ],
+        "answer": 1,
+        "explanation": "빌드 선언은 실행 로그가 아닙니다. 성공 주장은 실제 빌드·실행 근거가 필요합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0-only\nobj-y += div64.o gcd.o lcm.o int_log.o int_pow.o int_sqrt.o reciprocal_div.o\n\nobj-$(CONFIG_CORDIC)\t\t+= cordic.o\nobj-$(CONFIG_PRIME_NUMBERS)\t+= prime_numbers.o\nobj-$(CONFIG_RATIONAL)\t\t+= rational.o\n\nobj-$(CONFIG_INT_POW_TEST)  += tests/int_pow_kunit.o\nobj-$(CONFIG_TEST_DIV64)\t+= test_div64.o\nobj-$(CONFIG_TEST_MULDIV64)\t+= test_mul_u64_u64_div_u64.o\nobj-$(CONFIG_RATIONAL_KUNIT_TEST) += rational-test.o\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "8d0c43278ab1e362b097d1e9f30712b84694976faf2535b791b1e23e2718c2c6",
+      "scope": "whole-file",
+      "line_count": 11,
+      "authoring_source": "course/file_units/integer_power_root.py",
+      "sections": [
+        "전체 기본 목록",
+        "기능 선택3개",
+        "테스트 선택4개",
+        "빌드와 실행 구분"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/Makefile"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "요리 목록에 재료가 적혀 있어도 음식이 완성된 것은 아닙니다. Makefile에 검사 코드가 있어도 실제 검사 결과는 따로 확인해야 합니다.",
+    "meaning": "수학 객체의 기본·조건부 빌드 선택과 테스트 실행 증거를 구별합니다.",
+    "exercise": "int_pow.o와 tests/int_pow_kunit.o가 각각 어느 설정으로 선택되는지 찾아 보세요."
+  },
+  "goal": "수학 객체의 기본·조건부 빌드 선택과 테스트 실행 증거를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "int_pow.o와 tests/int_pow_kunit.o가 각각 어느 설정으로 선택되는지 찾아 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "f91728b0c2e37e8b9dc1785094888e6d2ebbec525a6cad9826119606f4de6300",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

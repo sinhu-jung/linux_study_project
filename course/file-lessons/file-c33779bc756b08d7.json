@@ -5,101 +5,128 @@
   "area": "네트워크 · MAC · PHY · NVMEM · 오류 처리",
   "track": "files",
   "kind": "kernel",
-  "intro": "PHY 모드 해석,MAC 속성 검증,NVMEM fallback과 netdevice 갱신 전체를 분석합니다.",
+  "intro": "PHY 연결 방식의 재시도 조건과 MAC 주소의 후보 순서를 구별하고, 읽기가 실패해도 장치 참조·저장 셀·버퍼를 제때 정리하는 흐름을 설명합니다.",
   "guide": [
-    "우선순위 조회는 속성의 존재뿐 아니라 유효성에 따라 다음 후보로 진행할 수 있습니다.",
-    "문자열 검색,실패 전파,자원 참조와 성공 시에만 상태 변경하는 패턴을 학습합니다."
+    "PHY는 랜선의 물리 신호를 다루는 장치입니다. 연결 방식 이름은 커널이 아는 방식 목록에서 찾으며, NA는 아직 알 수 없는 상태를 뜻합니다.",
+    "MAC 주소는 이더넷 장치를 구분하는 6바이트 값입니다. 속성이 있어도 길이나 주소 내용이 유효하지 않으면 그대로 쓰지 않습니다.",
+    "NVMEM은 전원이 꺼져도 자료를 유지하는 저장 공간입니다. 셀은 그 안에서 이름으로 찾는 자료 구역이며, 읽어 온 메모리 버퍼와 셀 참조는 별도로 정리합니다.",
+    "참조를 얻는 일은 대상을 사용하는 동안 수명을 지키는 약속입니다. put_device()나 nvmem_cell_put()은 그 사용을 마쳤음을 알리고, kfree()는 얻었던 메모리 버퍼를 돌려줍니다."
   ],
   "deep_dive": [
     {
       "title": "구성과 PHY 초기값",
-      "text": "GPL-2.0-only 파일은 etherdevice,kernel,OF net/platform,platform_device,phy,export,device,nvmem-consumer를 포함합니다. get_phy_mode는 먼저 *interface=PHY_INTERFACE_MODE_NA로 둡니다. phy-mode 문자열 읽기 오류이면 phy-connection-type을 읽고 그마저 오류면 반환합니다."
+      "text": "파일은 OF, 네트워크, PHY, NVMEM 등에 필요한 정의를 포함합니다. of_get_phy_mode()는 먼저 출력 연결 방식을 PHY_INTERFACE_MODE_NA로 만듭니다. phy-mode 속성을 읽지 못한 경우에만 phy-connection-type을 읽습니다. 두 번째 읽기도 실패하면 읽기 오류를 반환합니다."
     },
     {
       "title": "모드 선형 검색과 fallback 한계",
-      "text": "읽은 문자열은 0부터 PHY_INTERFACE_MODE_MAX 미만까지 phy_modes(i)와 strcasecmp로 비교합니다. 첫 일치의 인덱스를 저장하고 0,없으면 -ENODEV입니다. phy-mode를 읽었지만 알 수 없는 문자열인 경우에는 phy-connection-type을 다시 시도하지 않습니다. 속성 읽기 실패와 값 인식 실패의 fallback 위치가 다릅니다."
+      "text": "읽은 이름은 PHY 방식 목록의 처음부터 PHY_INTERFACE_MODE_MAX 전까지 차례로 비교합니다. strcasecmp()를 쓰므로 영문 대문자와 소문자는 구별하지 않습니다. 맞는 항목을 만나면 그 번호를 출력하고 성공 값 0을 반환합니다. 첫 속성을 읽는 데 성공했지만 이름이 목록에 없으면 -ENODEV이며, 이때 두 번째 속성으로 다시 시도하지는 않습니다."
     },
     {
       "title": "MAC 속성 검증",
-      "text": "내부 get_mac_addr는 해당 속성이 있고 길이가 ETH_ALEN이며 is_valid_ether_addr가 참일 때만 ETH_ALEN바이트를 복사하고 성공합니다. 아니면 -ENODEV입니다. 주석은 특히 부트로더가 채우지 않은 all-zero 속성을 거부해야 한다고 설명합니다. 존재한다는 사실만으로 그 후보를 선택하지 않습니다."
+      "text": "내부 MAC 속성 읽기 함수는 속성이 존재하는지, 길이가 ETH_ALEN인 6바이트인지, 유효한 이더넷 주소인지를 모두 확인합니다. 조건을 만족할 때만 주소를 복사하고 0을 반환하며, 그렇지 않으면 -ENODEV입니다. 예를 들어 부트로더가 아직 채우지 않은 전부 0인 주소는 후보로 받아들이지 않습니다."
     },
     {
       "title": "NVMEM의 device 경로",
-      "text": "get_mac_address_nvmem은 먼저 of_find_device_by_node로 platform device를 찾습니다. 있으면 nvmem_get_mac_address를 호출하고 put_device한 뒤 결과를 그대로 반환합니다. 이 경로가 실패했다고 뒤의 OF cell 조회로 계속 진행하지는 않습니다. device lookup에 연결된 nvmem_cell_lookup을 사용할 수 있다는 주석이 있습니다."
+      "text": "NVMEM 읽기는 먼저 노드에 해당하는 플랫폼 장치를 찾습니다. 찾으면 그 장치로 nvmem_get_mac_address()를 호출하므로 장치에 연결된 nvmem_cell_lookup 정보도 이용할 수 있습니다. 얻은 장치 참조는 put_device()로 돌려준 뒤 읽기 결과를 그대로 반환합니다. 여기서 실패했다고 뒤의 OF 셀 경로를 다시 시도하지는 않습니다."
     },
     {
       "title": "OF cell 경로의 자원 정리",
-      "text": "platform device가 없을 때 of_nvmem_cell_get(np,\"mac-address\")를 호출하고 오류 포인터면 PTR_ERR입니다. cell_read 뒤에는 성공 여부와 무관하게 cell_put을 실행합니다. 읽기 결과가 오류 포인터면 반환하고,길이 또는 주소 유효성이 맞지 않으면 읽은 버퍼를 kfree하고 -EINVAL입니다. 성공이면 복사 후 같은 버퍼를 kfree합니다. cell 참조와 읽은 데이터 버퍼 수명은 별개입니다."
+      "text": "플랫폼 장치가 없는 경로에서는 mac-address라는 NVMEM 셀을 얻고, 오류 포인터이면 담긴 오류 번호를 반환합니다. 셀을 읽은 직후에는 읽기 성공 여부를 검사하기 전에 nvmem_cell_put()으로 셀 참조를 돌려줍니다. 읽기 버퍼가 오류이면 그 오류를 반환하고, 길이나 주소가 잘못되면 버퍼를 해제하고 -EINVAL입니다. 성공해도 주소를 복사한 뒤 버퍼를 해제합니다. 셀과 읽은 버퍼의 수명이 서로 다릅니다."
     },
     {
       "title": "MAC 후보의 순서",
-      "text": "공개 get_mac_address는 np=NULL이면 -ENODEV입니다. mac-address,local-mac-address,구형 address 순으로 내부 helper를 호출해 첫 유효 결과를 반환하고 모두 실패하면 NVMEM을 조회합니다. address는 원래 레지스터의 가상 주소 의미지만 일부 DTS의 과거 사용을 지원한다는 문서가 있습니다. 앞 후보가 존재해도 길이나 값이 부적절하면 다음을 시도합니다."
+      "text": "of_get_mac_address()는 노드가 NULL이면 -ENODEV입니다. 그 다음 mac-address, local-mac-address, address 순으로 유효한 값을 찾고 모두 안 되면 NVMEM을 시도합니다. 속성이 존재해도 값이 잘못됐으면 다음 후보로 넘어갑니다. address는 예전 장치 트리에서 레지스터 가상 주소를 뜻하기도 했던 속성이므로 이름만 보고 무조건 MAC 주소라 믿지 않고 같은 검증을 합니다."
     },
     {
       "title": "Netdevice 갱신",
-      "text": "get_ethdev_address는 지역 ETH_ALEN 배열에 주소를 조회하고 성공한 경우에만 eth_hw_addr_set(dev,addr)를 호출합니다. 오류면 장치 주소를 이 함수에서 바꾸지 않고 같은 ret을 반환합니다. 이 동작은 패킷 송신이나 인터페이스 활성화를 수행하는 것이 아닙니다."
+      "text": "of_get_ethdev_address()는 임시 6바이트 공간에 주소를 얻습니다. 읽기가 성공한 경우에만 eth_hw_addr_set()으로 네트워크 장치 주소를 바꾸고 읽기 결과를 반환합니다. 실패하면 기존 장치 주소를 0으로 지우지 않습니다. 이 함수가 주소를 설정한다고 패킷 전송이나 장치 활성화까지 수행하는 것은 아닙니다."
     },
     {
       "title": "Export와 검토 범위",
-      "text": "PHY helper는 EXPORT_SYMBOL_GPL이고 NVMEM MAC,일반 MAC,ethdev 주소 함수는 EXPORT_SYMBOL입니다. 내부 속성 helper와 공개 함수 네 개,문서 및 모든 실패 경로를 확인했습니다. 헤더의 of_find_net_device_by_node 구현은 이 파일에 없습니다. 실제 NVMEM·PHY 하드웨어 조회나 MAC 변경을 실행하지 않았습니다."
+      "text": "PHY 방식 함수는 GPL 전용으로 공개하고, 세 MAC 관련 공개 함수는 일반 EXPORT_SYMBOL을 사용합니다. of_find_net_device_by_node()의 구현은 이 파일에 없습니다. 속성·NVMEM의 성공과 실패 경로, 자원 정리, 장치 갱신 조건을 읽어 확인한 것이며 실제 하드웨어의 주소를 바꾼 실험은 하지 않았습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "phy-mode를 읽었지만 모드 이름이 미지원이면 두 번째 속성도 시도하는가?",
+      "prompt": "phy-mode를 읽었지만 커널이 모르는 이름이면 두 번째 속성을 읽나요?",
       "options": [
+        "아니요. 목록에서 못 찾으면 -ENODEV를 반환합니다.",
+        "네. 이름이 안 맞을 때마다 phy-connection-type으로 다시 시도합니다."
+      ],
+      "answer": 0,
+      "explanation": "두 번째 속성을 읽는 조건은 첫 속성 읽기 자체의 실패입니다. 읽기는 성공했지만 이름을 못 찾는 경우와 구별합니다.",
+      "original_prompt": "phy-mode를 읽었지만 모드 이름이 미지원이면 두 번째 속성도 시도하는가?",
+      "original_options": [
         "아니다. 모드 검색 실패는 -ENODEV다",
         "그렇다. 어떤 실패든 항상 두 번째 속성으로 간다"
       ],
-      "answer": 0,
-      "explanation": "fallback은 문자열 읽기 오류 직후에만 있습니다. 파싱 성공과 의미 인식 성공을 구분합니다."
+      "original_explanation": "fallback은 문자열 읽기 오류 직후에만 있습니다. 파싱 성공과 의미 인식 성공을 구분합니다."
     },
     {
-      "prompt": "MAC 후보 속성이 있지만 모두 0이면 다음 후보를 보는가?",
+      "prompt": "mac-address 속성이 있지만 6바이트가 모두 0이면 어떻게 되나요?",
       "options": [
+        "속성이 있다는 이유만으로 그 주소를 채택합니다.",
+        "유효하지 않은 주소로 보고 다음 후보를 살핍니다."
+      ],
+      "answer": 1,
+      "explanation": "존재 여부와 길이뿐 아니라 주소 내용도 검사합니다. 전부 0인 값은 통과하지 못하므로 다음 후보를 시도합니다.",
+      "original_prompt": "MAC 후보 속성이 있지만 모두 0이면 다음 후보를 보는가?",
+      "original_options": [
         "아니다. 존재하는 첫 속성을 무조건 선택한다",
         "그렇다. 유효 주소 검사에 실패해 다음으로 진행한다"
       ],
-      "answer": 1,
-      "explanation": "길이와 주소 유효성이 함께 필요합니다. 부트로더가 초기화하지 않은 속성 사례가 문서에 있습니다."
+      "original_explanation": "길이와 주소 유효성이 함께 필요합니다. 부트로더가 초기화하지 않은 속성 사례가 문서에 있습니다."
     },
     {
-      "prompt": "Platform device 경로의 NVMEM 조회가 실패하면 OF cell 경로로 이어지는가?",
+      "prompt": "플랫폼 장치를 찾았는데 그 장치의 NVMEM 읽기가 실패하면 어떻게 되나요?",
       "options": [
+        "장치 참조를 돌려주고 그 오류를 바로 반환합니다.",
+        "항상 OF NVMEM 셀 경로로 넘어가 다시 읽습니다."
+      ],
+      "answer": 0,
+      "explanation": "플랫폼 장치가 있는 경로는 읽기 결과를 그대로 반환합니다. OF 셀을 직접 찾는 경로는 플랫폼 장치가 없을 때 사용합니다.",
+      "original_prompt": "Platform device 경로의 NVMEM 조회가 실패하면 OF cell 경로로 이어지는가?",
+      "original_options": [
         "아니다. device 참조 반환 후 즉시 그 오류를 반환한다",
         "그렇다. 모든 NVMEM 경로를 끝까지 시도한다"
       ],
-      "answer": 0,
-      "explanation": "pdev가 존재하는 분기에 return ret이 있습니다. 경로 선택과 실패 fallback은 다릅니다."
+      "original_explanation": "pdev가 존재하는 분기에 return ret이 있습니다. 경로 선택과 실패 fallback은 다릅니다."
     },
     {
-      "prompt": "cell_read 오류에서도 cell 참조를 반환하는가?",
+      "prompt": "nvmem_cell_read()가 실패한 경우에도 셀 참조를 돌려주나요?",
       "options": [
+        "아니요. 읽기가 성공했을 때만 돌려줍니다.",
+        "네. 읽기 결과가 오류인지 확인하기 전에 돌려줍니다."
+      ],
+      "answer": 1,
+      "explanation": "nvmem_cell_put()은 read 다음, 오류 포인터 검사 앞에 있습니다. 읽기 실패 때문에 셀 참조가 남지 않도록 합니다.",
+      "original_prompt": "cell_read 오류에서도 cell 참조를 반환하는가?",
+      "original_options": [
         "아니다. 성공할 때만 cell_put한다",
         "그렇다. IS_ERR(mac) 검사 전에 cell_put한다"
       ],
-      "answer": 1,
-      "explanation": "읽은 버퍼와 cell 자체는 서로 다른 자원입니다. 각각의 해제 위치를 추적합니다."
+      "original_explanation": "읽은 버퍼와 cell 자체는 서로 다른 자원입니다. 각각의 해제 위치를 추적합니다."
     },
     {
-      "prompt": "MAC 조회 실패 시 get_ethdev_address가 장치 주소를 0으로 지우는가?",
+      "prompt": "MAC 주소 읽기가 실패하면 네트워크 장치의 기존 주소를 0으로 지우나요?",
       "options": [
+        "아니요. 성공한 경우에만 장치 주소를 설정합니다.",
+        "네. 실패를 나타내려고 기존 주소를 모두 0으로 만듭니다."
+      ],
+      "answer": 0,
+      "explanation": "eth_hw_addr_set()은 성공 조건 안에서만 호출됩니다. 실패 경로는 기존 장치 주소를 덮어쓰지 않습니다.",
+      "original_prompt": "MAC 조회 실패 시 get_ethdev_address가 장치 주소를 0으로 지우는가?",
+      "original_options": [
         "아니다. 성공할 때만 주소를 설정한다",
         "그렇다. 모든 실패가 기존 주소를 지운다"
       ],
-      "answer": 0,
-      "explanation": "eth_hw_addr_set은 !ret 조건 안에 있습니다. 실패 시 출력 대상 상태 보존을 확인할 수 있습니다."
+      "original_explanation": "eth_hw_addr_set은 !ret 조건 안에 있습니다. 실패 시 출력 대상 상태 보존을 확인할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "phy-mode를 읽었지만 모르는 이름인 경우와 속성 자체를 못 읽은 경우를 비교하세요. MAC 주소가 전부 0일 때 다음 후보로 넘어가는 흐름도 화살표로 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * OF helpers for network devices.\n *\n * Initially copied out of arch/powerpc/kernel/prom_parse.c\n */\n#include <linux/etherdevice.h>\n#include <linux/kernel.h>\n#include <linux/of_net.h>\n#include <linux/of_platform.h>\n#include <linux/platform_device.h>\n#include <linux/phy.h>\n#include <linux/export.h>\n#include <linux/device.h>\n#include <linux/nvmem-consumer.h>\n\n/**\n * of_get_phy_mode - Get phy mode for given device_node\n * @np:\tPointer to the given device_node\n * @interface: Pointer to the result\n *\n * The function gets phy interface string from property 'phy-mode' or\n * 'phy-connection-type'. The index in phy_modes table is set in\n * interface and 0 returned. In case of error interface is set to\n * PHY_INTERFACE_MODE_NA and an errno is returned, e.g. -ENODEV.\n */\nint of_get_phy_mode(struct device_node *np, phy_interface_t *interface)\n{\n\tconst char *pm;\n\tint err, i;\n\n\t*interface = PHY_INTERFACE_MODE_NA;\n\n\terr = of_property_read_string(np, \"phy-mode\", &pm);\n\tif (err < 0)\n\t\terr = of_property_read_string(np, \"phy-connection-type\", &pm);\n\tif (err < 0)\n\t\treturn err;\n\n\tfor (i = 0; i < PHY_INTERFACE_MODE_MAX; i++)\n\t\tif (!strcasecmp(pm, phy_modes(i))) {\n\t\t\t*interface = i;\n\t\t\treturn 0;\n\t\t}\n\n\treturn -ENODEV;\n}\nEXPORT_SYMBOL_GPL(of_get_phy_mode);\n\nstatic int of_get_mac_addr(struct device_node *np, const char *name, u8 *addr)\n{\n\tstruct property *pp = of_find_property(np, name, NULL);\n\n\tif (pp && pp->length == ETH_ALEN && is_valid_ether_addr(pp->value)) {\n\t\tmemcpy(addr, pp->value, ETH_ALEN);\n\t\treturn 0;\n\t}\n\treturn -ENODEV;\n}\n\nint of_get_mac_address_nvmem(struct device_node *np, u8 *addr)\n{\n\tstruct platform_device *pdev = of_find_device_by_node(np);\n\tstruct nvmem_cell *cell;\n\tconst void *mac;\n\tsize_t len;\n\tint ret;\n\n\t/* Try lookup by device first, there might be a nvmem_cell_lookup\n\t * associated with a given device.\n\t */\n\tif (pdev) {\n\t\tret = nvmem_get_mac_address(&pdev->dev, addr);\n\t\tput_device(&pdev->dev);\n\t\treturn ret;\n\t}\n\n\tcell = of_nvmem_cell_get(np, \"mac-address\");\n\tif (IS_ERR(cell))\n\t\treturn PTR_ERR(cell);\n\n\tmac = nvmem_cell_read(cell, &len);\n\tnvmem_cell_put(cell);\n\n\tif (IS_ERR(mac))\n\t\treturn PTR_ERR(mac);\n\n\tif (len != ETH_ALEN || !is_valid_ether_addr(mac)) {\n\t\tkfree(mac);\n\t\treturn -EINVAL;\n\t}\n\n\tmemcpy(addr, mac, ETH_ALEN);\n\tkfree(mac);\n\n\treturn 0;\n}\nEXPORT_SYMBOL(of_get_mac_address_nvmem);\n\n/**\n * of_get_mac_address()\n * @np:\t\tCaller's Device Node\n * @addr:\tPointer to a six-byte array for the result\n *\n * Search the device tree for the best MAC address to use.  'mac-address' is\n * checked first, because that is supposed to contain to \"most recent\" MAC\n * address. If that isn't set, then 'local-mac-address' is checked next,\n * because that is the default address. If that isn't set, then the obsolete\n * 'address' is checked, just in case we're using an old device tree. If any\n * of the above isn't set, then try to get MAC address from nvmem cell named\n * 'mac-address'.\n *\n * Note that the 'address' property is supposed to contain a virtual address of\n * the register set, but some DTS files have redefined that property to be the\n * MAC address.\n *\n * All-zero MAC addresses are rejected, because those could be properties that\n * exist in the device tree, but were not set by U-Boot.  For example, the\n * DTS could define 'mac-address' and 'local-mac-address', with zero MAC\n * addresses.  Some older U-Boots only initialized 'local-mac-address'.  In\n * this case, the real MAC is in 'local-mac-address', and 'mac-address' exists\n * but is all zeros.\n *\n * Return: 0 on success and errno in case of error.\n*/\nint of_get_mac_address(struct device_node *np, u8 *addr)\n{\n\tint ret;\n\n\tif (!np)\n\t\treturn -ENODEV;\n\n\tret = of_get_mac_addr(np, \"mac-address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\tret = of_get_mac_addr(np, \"local-mac-address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\tret = of_get_mac_addr(np, \"address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\treturn of_get_mac_address_nvmem(np, addr);\n}\nEXPORT_SYMBOL(of_get_mac_address);\n\n/**\n * of_get_ethdev_address()\n * @np:\t\tCaller's Device Node\n * @dev:\tPointer to netdevice which address will be updated\n *\n * Search the device tree for the best MAC address to use.\n * If found set @dev->dev_addr to that address.\n *\n * See documentation of of_get_mac_address() for more information on how\n * the best address is determined.\n *\n * Return: 0 on success and errno in case of error.\n */\nint of_get_ethdev_address(struct device_node *np, struct net_device *dev)\n{\n\tu8 addr[ETH_ALEN];\n\tint ret;\n\n\tret = of_get_mac_address(np, addr);\n\tif (!ret)\n\t\teth_hw_addr_set(dev, addr);\n\treturn ret;\n}\nEXPORT_SYMBOL(of_get_ethdev_address);\n",
   "source_review": {
@@ -125,5 +152,162 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/net/core/of_net.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c33779bc756b08d7",
+    "path": "net/core/of_net.c",
+    "title": "OF PHY·MAC 조회: 우선순위와 NVMEM 소유권",
+    "area": "네트워크 · MAC · PHY · NVMEM · 오류 처리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "PHY 모드 해석,MAC 속성 검증,NVMEM fallback과 netdevice 갱신 전체를 분석합니다.",
+    "guide": [
+      "우선순위 조회는 속성의 존재뿐 아니라 유효성에 따라 다음 후보로 진행할 수 있습니다.",
+      "문자열 검색,실패 전파,자원 참조와 성공 시에만 상태 변경하는 패턴을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성과 PHY 초기값",
+        "text": "GPL-2.0-only 파일은 etherdevice,kernel,OF net/platform,platform_device,phy,export,device,nvmem-consumer를 포함합니다. get_phy_mode는 먼저 *interface=PHY_INTERFACE_MODE_NA로 둡니다. phy-mode 문자열 읽기 오류이면 phy-connection-type을 읽고 그마저 오류면 반환합니다."
+      },
+      {
+        "title": "모드 선형 검색과 fallback 한계",
+        "text": "읽은 문자열은 0부터 PHY_INTERFACE_MODE_MAX 미만까지 phy_modes(i)와 strcasecmp로 비교합니다. 첫 일치의 인덱스를 저장하고 0,없으면 -ENODEV입니다. phy-mode를 읽었지만 알 수 없는 문자열인 경우에는 phy-connection-type을 다시 시도하지 않습니다. 속성 읽기 실패와 값 인식 실패의 fallback 위치가 다릅니다."
+      },
+      {
+        "title": "MAC 속성 검증",
+        "text": "내부 get_mac_addr는 해당 속성이 있고 길이가 ETH_ALEN이며 is_valid_ether_addr가 참일 때만 ETH_ALEN바이트를 복사하고 성공합니다. 아니면 -ENODEV입니다. 주석은 특히 부트로더가 채우지 않은 all-zero 속성을 거부해야 한다고 설명합니다. 존재한다는 사실만으로 그 후보를 선택하지 않습니다."
+      },
+      {
+        "title": "NVMEM의 device 경로",
+        "text": "get_mac_address_nvmem은 먼저 of_find_device_by_node로 platform device를 찾습니다. 있으면 nvmem_get_mac_address를 호출하고 put_device한 뒤 결과를 그대로 반환합니다. 이 경로가 실패했다고 뒤의 OF cell 조회로 계속 진행하지는 않습니다. device lookup에 연결된 nvmem_cell_lookup을 사용할 수 있다는 주석이 있습니다."
+      },
+      {
+        "title": "OF cell 경로의 자원 정리",
+        "text": "platform device가 없을 때 of_nvmem_cell_get(np,\"mac-address\")를 호출하고 오류 포인터면 PTR_ERR입니다. cell_read 뒤에는 성공 여부와 무관하게 cell_put을 실행합니다. 읽기 결과가 오류 포인터면 반환하고,길이 또는 주소 유효성이 맞지 않으면 읽은 버퍼를 kfree하고 -EINVAL입니다. 성공이면 복사 후 같은 버퍼를 kfree합니다. cell 참조와 읽은 데이터 버퍼 수명은 별개입니다."
+      },
+      {
+        "title": "MAC 후보의 순서",
+        "text": "공개 get_mac_address는 np=NULL이면 -ENODEV입니다. mac-address,local-mac-address,구형 address 순으로 내부 helper를 호출해 첫 유효 결과를 반환하고 모두 실패하면 NVMEM을 조회합니다. address는 원래 레지스터의 가상 주소 의미지만 일부 DTS의 과거 사용을 지원한다는 문서가 있습니다. 앞 후보가 존재해도 길이나 값이 부적절하면 다음을 시도합니다."
+      },
+      {
+        "title": "Netdevice 갱신",
+        "text": "get_ethdev_address는 지역 ETH_ALEN 배열에 주소를 조회하고 성공한 경우에만 eth_hw_addr_set(dev,addr)를 호출합니다. 오류면 장치 주소를 이 함수에서 바꾸지 않고 같은 ret을 반환합니다. 이 동작은 패킷 송신이나 인터페이스 활성화를 수행하는 것이 아닙니다."
+      },
+      {
+        "title": "Export와 검토 범위",
+        "text": "PHY helper는 EXPORT_SYMBOL_GPL이고 NVMEM MAC,일반 MAC,ethdev 주소 함수는 EXPORT_SYMBOL입니다. 내부 속성 helper와 공개 함수 네 개,문서 및 모든 실패 경로를 확인했습니다. 헤더의 of_find_net_device_by_node 구현은 이 파일에 없습니다. 실제 NVMEM·PHY 하드웨어 조회나 MAC 변경을 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "phy-mode를 읽었지만 모드 이름이 미지원이면 두 번째 속성도 시도하는가?",
+        "options": [
+          "아니다. 모드 검색 실패는 -ENODEV다",
+          "그렇다. 어떤 실패든 항상 두 번째 속성으로 간다"
+        ],
+        "answer": 0,
+        "explanation": "fallback은 문자열 읽기 오류 직후에만 있습니다. 파싱 성공과 의미 인식 성공을 구분합니다."
+      },
+      {
+        "prompt": "MAC 후보 속성이 있지만 모두 0이면 다음 후보를 보는가?",
+        "options": [
+          "아니다. 존재하는 첫 속성을 무조건 선택한다",
+          "그렇다. 유효 주소 검사에 실패해 다음으로 진행한다"
+        ],
+        "answer": 1,
+        "explanation": "길이와 주소 유효성이 함께 필요합니다. 부트로더가 초기화하지 않은 속성 사례가 문서에 있습니다."
+      },
+      {
+        "prompt": "Platform device 경로의 NVMEM 조회가 실패하면 OF cell 경로로 이어지는가?",
+        "options": [
+          "아니다. device 참조 반환 후 즉시 그 오류를 반환한다",
+          "그렇다. 모든 NVMEM 경로를 끝까지 시도한다"
+        ],
+        "answer": 0,
+        "explanation": "pdev가 존재하는 분기에 return ret이 있습니다. 경로 선택과 실패 fallback은 다릅니다."
+      },
+      {
+        "prompt": "cell_read 오류에서도 cell 참조를 반환하는가?",
+        "options": [
+          "아니다. 성공할 때만 cell_put한다",
+          "그렇다. IS_ERR(mac) 검사 전에 cell_put한다"
+        ],
+        "answer": 1,
+        "explanation": "읽은 버퍼와 cell 자체는 서로 다른 자원입니다. 각각의 해제 위치를 추적합니다."
+      },
+      {
+        "prompt": "MAC 조회 실패 시 get_ethdev_address가 장치 주소를 0으로 지우는가?",
+        "options": [
+          "아니다. 성공할 때만 주소를 설정한다",
+          "그렇다. 모든 실패가 기존 주소를 지운다"
+        ],
+        "answer": 0,
+        "explanation": "eth_hw_addr_set은 !ret 조건 안에 있습니다. 실패 시 출력 대상 상태 보존을 확인할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * OF helpers for network devices.\n *\n * Initially copied out of arch/powerpc/kernel/prom_parse.c\n */\n#include <linux/etherdevice.h>\n#include <linux/kernel.h>\n#include <linux/of_net.h>\n#include <linux/of_platform.h>\n#include <linux/platform_device.h>\n#include <linux/phy.h>\n#include <linux/export.h>\n#include <linux/device.h>\n#include <linux/nvmem-consumer.h>\n\n/**\n * of_get_phy_mode - Get phy mode for given device_node\n * @np:\tPointer to the given device_node\n * @interface: Pointer to the result\n *\n * The function gets phy interface string from property 'phy-mode' or\n * 'phy-connection-type'. The index in phy_modes table is set in\n * interface and 0 returned. In case of error interface is set to\n * PHY_INTERFACE_MODE_NA and an errno is returned, e.g. -ENODEV.\n */\nint of_get_phy_mode(struct device_node *np, phy_interface_t *interface)\n{\n\tconst char *pm;\n\tint err, i;\n\n\t*interface = PHY_INTERFACE_MODE_NA;\n\n\terr = of_property_read_string(np, \"phy-mode\", &pm);\n\tif (err < 0)\n\t\terr = of_property_read_string(np, \"phy-connection-type\", &pm);\n\tif (err < 0)\n\t\treturn err;\n\n\tfor (i = 0; i < PHY_INTERFACE_MODE_MAX; i++)\n\t\tif (!strcasecmp(pm, phy_modes(i))) {\n\t\t\t*interface = i;\n\t\t\treturn 0;\n\t\t}\n\n\treturn -ENODEV;\n}\nEXPORT_SYMBOL_GPL(of_get_phy_mode);\n\nstatic int of_get_mac_addr(struct device_node *np, const char *name, u8 *addr)\n{\n\tstruct property *pp = of_find_property(np, name, NULL);\n\n\tif (pp && pp->length == ETH_ALEN && is_valid_ether_addr(pp->value)) {\n\t\tmemcpy(addr, pp->value, ETH_ALEN);\n\t\treturn 0;\n\t}\n\treturn -ENODEV;\n}\n\nint of_get_mac_address_nvmem(struct device_node *np, u8 *addr)\n{\n\tstruct platform_device *pdev = of_find_device_by_node(np);\n\tstruct nvmem_cell *cell;\n\tconst void *mac;\n\tsize_t len;\n\tint ret;\n\n\t/* Try lookup by device first, there might be a nvmem_cell_lookup\n\t * associated with a given device.\n\t */\n\tif (pdev) {\n\t\tret = nvmem_get_mac_address(&pdev->dev, addr);\n\t\tput_device(&pdev->dev);\n\t\treturn ret;\n\t}\n\n\tcell = of_nvmem_cell_get(np, \"mac-address\");\n\tif (IS_ERR(cell))\n\t\treturn PTR_ERR(cell);\n\n\tmac = nvmem_cell_read(cell, &len);\n\tnvmem_cell_put(cell);\n\n\tif (IS_ERR(mac))\n\t\treturn PTR_ERR(mac);\n\n\tif (len != ETH_ALEN || !is_valid_ether_addr(mac)) {\n\t\tkfree(mac);\n\t\treturn -EINVAL;\n\t}\n\n\tmemcpy(addr, mac, ETH_ALEN);\n\tkfree(mac);\n\n\treturn 0;\n}\nEXPORT_SYMBOL(of_get_mac_address_nvmem);\n\n/**\n * of_get_mac_address()\n * @np:\t\tCaller's Device Node\n * @addr:\tPointer to a six-byte array for the result\n *\n * Search the device tree for the best MAC address to use.  'mac-address' is\n * checked first, because that is supposed to contain to \"most recent\" MAC\n * address. If that isn't set, then 'local-mac-address' is checked next,\n * because that is the default address. If that isn't set, then the obsolete\n * 'address' is checked, just in case we're using an old device tree. If any\n * of the above isn't set, then try to get MAC address from nvmem cell named\n * 'mac-address'.\n *\n * Note that the 'address' property is supposed to contain a virtual address of\n * the register set, but some DTS files have redefined that property to be the\n * MAC address.\n *\n * All-zero MAC addresses are rejected, because those could be properties that\n * exist in the device tree, but were not set by U-Boot.  For example, the\n * DTS could define 'mac-address' and 'local-mac-address', with zero MAC\n * addresses.  Some older U-Boots only initialized 'local-mac-address'.  In\n * this case, the real MAC is in 'local-mac-address', and 'mac-address' exists\n * but is all zeros.\n *\n * Return: 0 on success and errno in case of error.\n*/\nint of_get_mac_address(struct device_node *np, u8 *addr)\n{\n\tint ret;\n\n\tif (!np)\n\t\treturn -ENODEV;\n\n\tret = of_get_mac_addr(np, \"mac-address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\tret = of_get_mac_addr(np, \"local-mac-address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\tret = of_get_mac_addr(np, \"address\", addr);\n\tif (!ret)\n\t\treturn 0;\n\n\treturn of_get_mac_address_nvmem(np, addr);\n}\nEXPORT_SYMBOL(of_get_mac_address);\n\n/**\n * of_get_ethdev_address()\n * @np:\t\tCaller's Device Node\n * @dev:\tPointer to netdevice which address will be updated\n *\n * Search the device tree for the best MAC address to use.\n * If found set @dev->dev_addr to that address.\n *\n * See documentation of of_get_mac_address() for more information on how\n * the best address is determined.\n *\n * Return: 0 on success and errno in case of error.\n */\nint of_get_ethdev_address(struct device_node *np, struct net_device *dev)\n{\n\tu8 addr[ETH_ALEN];\n\tint ret;\n\n\tret = of_get_mac_address(np, addr);\n\tif (!ret)\n\t\teth_hw_addr_set(dev, addr);\n\treturn ret;\n}\nEXPORT_SYMBOL(of_get_ethdev_address);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f0b6e748745196ab9fb5670d3ad00fe71f53d14ab2e4ed60c0437ccbc2ce4aa2",
+      "scope": "whole-file",
+      "line_count": 172,
+      "authoring_source": "course/file_units/of_network_helpers.py",
+      "sections": [
+        "구성과 PHY 초기값",
+        "모드 선형 검색과 fallback 한계",
+        "MAC 속성 검증",
+        "NVMEM의 device 경로",
+        "OF cell 경로의 자원 정리",
+        "MAC 후보의 순서",
+        "Netdevice 갱신",
+        "Export와 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/net/core/of_net.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "네트워크 장치가 쓸 연결 방식과 주소는 하드웨어 설명서나 작은 저장 공간에 들어 있습니다. 이 파일은 후보를 정해진 순서로 살펴보고, 맞는 값만 장치에 전달합니다.",
+    "meaning": "PHY 연결 방식의 재시도 조건과 MAC 주소의 후보 순서를 구별하고, 읽기가 실패해도 장치 참조·저장 셀·버퍼를 제때 정리하는 흐름을 설명합니다.",
+    "exercise": "phy-mode를 읽었지만 모르는 이름인 경우와 속성 자체를 못 읽은 경우를 비교하세요. MAC 주소가 전부 0일 때 다음 후보로 넘어가는 흐름도 화살표로 적어 보세요."
+  },
+  "goal": "PHY 연결 방식의 재시도 조건과 MAC 주소의 후보 순서를 구별하고, 읽기가 실패해도 장치 참조·저장 셀·버퍼를 제때 정리하는 흐름을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "phy-mode를 읽었지만 모르는 이름인 경우와 속성 자체를 못 읽은 경우를 비교하세요. MAC 주소가 전부 0일 때 다음 후보로 넘어가는 흐름도 화살표로 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "150dc00a80f4c7a08bfc01bf947afb779d1c4a4131856c100d4cec9cff656ee2",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

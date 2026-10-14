@@ -5,119 +5,157 @@
   "area": "PCI ROM · 바이너리 파싱 · MMIO · 자원 수명 · 경계 검사",
   "track": "files",
   "kind": "kernel",
-  "intro": "ROM enable/disable, 이미지 길이 탐색, map/unmap의 모든 경로를 분석합니다.",
+  "intro": "ROM 창의 크기와 실제 이미지 길이는 다를 수 있어요. 마지막 반환 길이를 제한하는 검사와 매번 읽을 주소가 안전한지 확인하는 검사는 서로 달라요.",
   "guide": [
-    "반환 길이를 창 크기로 제한하는 것과 각 메모리 읽기 전에 범위를 검증하는 것은 다른 보장입니다.",
-    "바이너리 형식의 오프셋, 블록 단위 길이, 반복 종료 조건과 부분 자원 정리를 학습합니다."
+    "ROM 디코딩은 장치가 특정 주소 접근을 ROM으로 받아들이도록 켜는 일이에요. shadow는 RAM에 복사된 ROM 자료예요.",
+    "MMIO는 장치에 메모리 주소로 접근하는 방식이에요. readw·readl·readb는 정해진 크기로 장치 자료를 읽는 함수예요.",
+    "블록 하나는 여기서 512바이트예요. ROM의 length 숫자에 512를 곱해야 실제 바이트 길이가 돼요."
   ],
   "deep_dive": [
     {
-      "title": "ROM 디코딩 활성화",
-      "text": "GPL-2.0 파일은 kernel,export,pci,slab과 내부 pci.h를 포함합니다. pci_enable_rom은 ROM resource flags가 0이면 -1, ROM_SHADOW이면 하드웨어를 건드리지 않고 0입니다. 그 외에는 pcibios_resource_to_bus로 버스 주소를 얻고 ROM BAR를 읽어 PCI_ROM_ADDRESS_MASK 비트를 지운 뒤 region.start와 ENABLE을 OR해서 씁니다. 단순 enable 비트 변경뿐 아니라 비활성 시 주소를 0으로 읽는 장치를 위해 주소도 갱신합니다. 설정 공간 read/write의 반환 오류는 검사하지 않습니다."
+      "title": "ROM 주소와 활성 비트를 함께 써요",
+      "text": "pci_enable_rom은 자원 flags가 0이면 -1, ROM_SHADOW면 하드웨어를 바꾸지 않고 0이에요. 나머지는 버스 주소로 바꾼 뒤 ROM BAR의 주소 비트를 지우고 region.start와 ENABLE을 넣어요. 꺼져 있을 때 주소를 0으로 읽는 장치를 위해 주소도 갱신하는 것이에요. 설정 공간 읽기·쓰기 오류는 검사하지 않아요."
     },
     {
-      "title": "디코딩 비활성화",
-      "text": "pci_disable_rom은 SHADOW이면 반환하고 나머지는 ROM BAR를 읽어 ENABLE 비트만 지운 뒤 씁니다. enable과 달리 flags 전체가 0인지 선행 검사하지 않습니다. 두 함수는 GPL export입니다. 주석은 ROM과 MMIO가 디코더를 공유하는 장치에서는 ROM 활성화가 다른 자원 접근에 영향을 줄 수 있다고 설명합니다. RAM shadow와 실제 ROM 디코딩 제어를 구분해야 합니다."
+      "title": "끄기는 활성 비트만 지워요",
+      "text": "pci_disable_rom은 SHADOW면 그대로 돌아오고 나머지는 ROM BAR에서 ENABLE만 지워 써요. enable처럼 flags 전체가 0인지 먼저 검사하지 않아요. 두 함수는 GPL용으로 내보내요. ROM과 다른 MMIO가 주소 해석 회로를 공유하는 장치는 ROM을 켜면 다른 자원 접근에 영향을 받을 수 있어요. RAM 복사본과 실제 ROM 제어를 나눠 생각해요."
     },
     {
-      "title": "이미지 서명과 데이터 구조 오프셋",
-      "text": "pci_get_rom_size는 image=rom에서 do 루프를 시작합니다. readw(image)가 0xAA55가 아니면 로그 후 멈춥니다. image+24에서 읽은 16비트 값을 현재 image에 더해 pds를 구하고 readl(pds)가 PCIR의 수치 표현 0x52494350인지 검사합니다. 이들은 MMIO 접근자 readw/readl/readb를 사용하며 일반 문자열 비교가 아닙니다. 첫 서명이나 첫 PCIR 검사가 실패하면 image가 전진하지 않아 반환 길이는 0입니다."
+      "title": "이미지 표지와 PCIR 자료를 읽어요",
+      "text": "크기 도우미는 ROM 첫 위치에서 readw로 0xAA55를 확인해요. 다르면 로그를 남기고 멈춰요. image + 24에서 읽은 값을 현재 위치에 더해 pds를 찾고 readl로 0x52494350, 즉 PCIR 표지를 확인해요. 일반 문자열 비교가 아니라 MMIO 숫자 읽기예요. 첫 검사에서 실패하면 위치가 전진하지 않아 길이는 0이에요."
     },
     {
-      "title": "512바이트 길이와 종료 조건",
-      "text": "pds+21의 0x80 비트를 last_image로, pds+16의 16비트를 length로 읽고 image를 length*512만큼 이동합니다. 새 image가 rom+size 이상이면 멈춥니다. 마지막 이미지가 아니면 새 위치의 0xAA55를 미리 확인하고 없으면 종료합니다. 루프 지속 조건은 length가 0이 아니며 last_image가 거짓인 경우입니다. 길이 0은 다음 반복을 막지만 그 전에 !last_image 블록의 readw는 실행될 수 있습니다. 마지막 표식과 0 길이, 창 끝, 잘못된 다음 서명은 서로 다른 종료 원인입니다."
+      "title": "512바이트씩 전진하며 끝을 찾아요",
+      "text": "pds + 21의 0x80 비트는 마지막 이미지 표시, pds + 16의 16비트 값은 length예요. length * 512만큼 전진하고 창 끝 이상이면 멈춰요. 마지막 표시가 없으면 다음 위치의 0xAA55도 미리 확인해요. 반복은 length가 0이 아니고 마지막도 아닐 때 계속해요. length 0도 다음 반복을 막지만 그 전에 다음 표지 읽기가 실행될 수 있어요."
     },
     {
-      "title": "길이 제한과 읽기 경계의 차이",
-      "text": "최종 결과는 min(image-rom,size)이므로 창보다 큰 길이를 반환하지 않습니다. 그러나 첫 readw, image+24의 읽기, pds 서명과 필드 읽기 전에 각각 창 경계를 검증하는 코드는 없습니다. 포인터를 전진시킨 뒤의 검사만으로 모든 잘못된 내부 오프셋의 읽기가 안전하다고 주장해서는 안 됩니다. 이미 정상 처리한 이미지 뒤에서 새 이미지가 잘못되면 그 전까지의 양수 길이를 반환할 수 있어 모든 부분 오류가 전체 실패 0으로 바뀌는 것도 아닙니다."
+      "title": "반환 길이 제한이 모든 읽기를 보호하지는 않아요",
+      "text": "마지막 min(image - rom, size)는 창보다 큰 길이를 반환하지 않게 해요. 그러나 첫 표지, image + 24, pds 안의 필드를 읽기 전에 각각 창 경계를 검사하는 코드는 없어요. 전진 후 검사만으로 잘못된 내부 오프셋의 모든 읽기가 안전하다고 말하면 안 돼요. 뒤 이미지에서 오류가 나면 앞서 읽은 양수 길이는 남을 수 있어요."
     },
     {
-      "title": "ROM 주소 할당과 매핑",
-      "text": "pci_map_rom은 resource에 parent가 없을 때 pci_assign_resource를 시도하고 실패하면 NULL입니다. 이 조기 실패에는 *size 쓰기가 없습니다. 그다음 resource 시작과 길이를 얻어 *size에 창 길이를 쓰고 0이면 NULL입니다. ROM enable 실패도 NULL이며 성공하면 전체 창을 ioremap합니다. 매핑 후 실제 이미지 길이로 *size를 갱신하고 0이면 invalid_rom 경로, 양수이면 rom을 반환합니다. 반환 size는 최종적으로 스캔한 길이이고 초기 창 크기와 같다고 보장되지 않습니다."
+      "title": "주소를 마련하고 창을 매핑해요",
+      "text": "map_rom은 parent 없는 자원에 주소 할당을 시도하고 실패하면 size 출력도 쓰기 전에 NULL을 줘요. 이어 시작 주소와 창 길이를 읽어 *size에 쓰고 길이 0이면 NULL이에요. ROM 활성화가 실패해도 NULL이며 성공하면 전체 창을 ioremap해요. 실제 이미지 길이로 *size를 갱신해 0이면 실패 정리, 양수면 매핑을 반환해요. 최종 길이는 처음 창 길이와 다를 수 있어요."
     },
     {
-      "title": "실패와 unmap의 복구 범위",
-      "text": "invalid_rom은 iounmap한 뒤 공통 오류 경로로 내려갑니다. ioremap 실패는 unmap 없이 그 공통 경로로 갑니다. resource flags에 ROM_ENABLE이 없을 때만 pci_disable_rom을 호출하고 NULL을 반환합니다. 정상 pci_unmap_rom도 iounmap 후 같은 조건으로 disable합니다. 이전 하드웨어 BAR 값을 별도로 저장해 그대로 복원하는 방식은 아니며 resource flag를 기준으로 동작합니다. 앞서 성공한 pci_assign_resource를 이 함수가 실패 때 해제하는 코드도 없습니다."
+      "title": "실패와 정상 해제의 복구 범위",
+      "text": "잘못된 ROM이면 먼저 iounmap하고 공통 실패 경로로 가요. ioremap 자체 실패는 해제할 매핑 없이 같은 경로로 가요. ROM_ENABLE 자원 표시가 없을 때만 disable해요. 정상 unmap도 같은 조건이에요. 옛 하드웨어 BAR 값을 따로 저장해 그대로 복원하는 방식이 아니에요. 앞서 할당한 자원을 실패 때 이 함수가 해제하는 코드도 없어요."
     },
     {
-      "title": "전체 범위와 계산 예",
-      "text": "다섯 함수의 본문과 모든 export, 실패 레이블을 대조했습니다. 두 이미지 길이가 2블록과 3블록이고 창이 충분하면 누적 길이는 2560바이트입니다. 양수 길이 이미지마다 전진하는 스캔은 방문 이미지 수에 선형이며 추가 상태는 일정합니다. 실제 ROM MMIO 읽기, 손상 이미지 실행이나 커널 빌드는 수행하지 않았습니다. 이 코드는 ROM을 매핑·읽는 경로이며 ROM 코드를 실행하는 본문은 아닙니다."
+      "title": "숫자 예와 확인 범위",
+      "text": "이미지 길이가 2와 3블록이고 창이 충분하면 (2 + 3) * 512 = 2560바이트예요. 양수 길이 이미지를 따라가는 방문 수는 이미지 개수에 비례하고 추가 저장 공간은 일정해요. 다섯 함수와 실패 경로·내보내기를 확인했으며 실제 ROM 읽기나 손상 이미지 실행, 커널 빌드는 하지 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "ROM enable이 단순히 ENABLE 비트만 세우는가?",
+      "prompt": "ROM enable은 ENABLE 비트만 켤까요?",
       "options": [
+        "아니요. 버스 주소를 구해 BAR 주소 부분도 갱신해요.",
+        "네. 주소 비트는 전혀 건드리지 않아요."
+      ],
+      "answer": 0,
+      "explanation": "꺼진 BAR가 주소 0으로 읽히는 장치도 고려한 코드예요.",
+      "original_prompt": "ROM enable이 단순히 ENABLE 비트만 세우는가?",
+      "original_options": [
         "아니다. 버스 주소를 계산해 BAR 주소 필드도 갱신한다",
         "그렇다. 주소 관련 비트는 전혀 다루지 않는다"
       ],
-      "answer": 0,
-      "explanation": "비활성 BAR가 주소0으로 읽히는 장치를 고려해 기존 주소 마스크를 지우고 region.start를 OR합니다. 주석의 짧은 설명보다 본문을 확인해야 합니다."
+      "original_explanation": "비활성 BAR가 주소0으로 읽히는 장치를 고려해 기존 주소 마스크를 지우고 region.start를 OR합니다. 주석의 짧은 설명보다 본문을 확인해야 합니다."
     },
     {
-      "prompt": "두 이미지 length가 2와 3이고 창이 충분하면 총 길이는?",
+      "prompt": "2블록과 3블록 이미지의 총 길이는 얼마일까요?",
       "options": [
+        "5바이트예요.",
+        "2560바이트예요."
+      ],
+      "answer": 1,
+      "explanation": "한 블록 512바이트이므로 5 * 512예요.",
+      "original_prompt": "두 이미지 length가 2와 3이고 창이 충분하면 총 길이는?",
+      "original_options": [
         "5바이트",
         "2560바이트"
       ],
-      "answer": 1,
-      "explanation": "length 단위는 512바이트이므로 (2+3)*512=2560입니다. 필드 값 자체와 바이트 길이를 구분해야 합니다."
+      "original_explanation": "length 단위는 512바이트이므로 (2+3)*512=2560입니다. 필드 값 자체와 바이트 길이를 구분해야 합니다."
     },
     {
-      "prompt": "min으로 최종 길이를 제한하므로 모든 pds 읽기 전에 경계가 검증되는가?",
+      "prompt": "마지막 min이 모든 pds 읽기 전에 주소 경계를 검사할까요?",
       "options": [
+        "아니요. 내부 오프셋별 선행 검사는 없어요.",
+        "네. 반환 길이를 제한하면 모든 읽기도 자동 보호돼요."
+      ],
+      "answer": 0,
+      "explanation": "반환 길이와 읽는 주소의 안전성은 다른 보장이에요.",
+      "original_prompt": "min으로 최종 길이를 제한하므로 모든 pds 읽기 전에 경계가 검증되는가?",
+      "original_options": [
         "아니다. 내부 오프셋별 선행 검사는 없다",
         "그렇다. 반환값 제한이 모든 읽기를 자동 보호한다"
       ],
-      "answer": 0,
-      "explanation": "pds는 image+24에서 얻은 값으로 계산한 뒤 바로 읽습니다. 최종 길이의 상한 보장과 접근 위치 검증은 별개입니다."
+      "original_explanation": "pds는 image+24에서 얻은 값으로 계산한 뒤 바로 읽습니다. 최종 길이의 상한 보장과 접근 위치 검증은 별개입니다."
     },
     {
-      "prompt": "첫 이미지 서명이 잘못되면 map_rom은 어떤 경로로 가는가?",
+      "prompt": "첫 이미지 표지가 잘못되면 map_rom은 어떻게 할까요?",
       "options": [
+        "무시하고 전체 창을 정상 ROM으로 줘요.",
+        "길이 0으로 판단해 매핑 해제와 조건부 disable 후 NULL을 줘요."
+      ],
+      "answer": 1,
+      "explanation": "첫 위치에서 전진하지 못하면 실제 이미지 길이가 0이에요.",
+      "original_prompt": "첫 이미지 서명이 잘못되면 map_rom은 어떤 경로로 가는가?",
+      "original_options": [
         "서명을 무시하고 전체 창을 정상 ROM으로 반환한다",
         "스캔 길이0이 되어 unmap 후 조건부 disable하고 NULL을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "첫 위치에서 image가 전진하지 않아 크기는0입니다. map 함수는 이를 invalid_rom으로 처리합니다."
+      "original_explanation": "첫 위치에서 image가 전진하지 않아 크기는0입니다. map 함수는 이를 invalid_rom으로 처리합니다."
     },
     {
-      "prompt": "주소 할당이 실패한 map_rom이 *size를 반드시 0으로 만드는가?",
+      "prompt": "주소 할당이 실패하면 *size도 반드시 0일까요?",
       "options": [
+        "아니요. size 대입보다 앞에서 실패할 수 있어요.",
+        "네. 모든 실패는 size를 0으로 만들어요."
+      ],
+      "answer": 0,
+      "explanation": "NULL 결과만으로 출력 칸의 값을 단정하지 마세요.",
+      "original_prompt": "주소 할당이 실패한 map_rom이 *size를 반드시 0으로 만드는가?",
+      "original_options": [
         "아니다. 그 실패는 size 대입보다 앞에 있다",
         "그렇다. 모든 실패 경로가 출력값을0으로 초기화한다"
       ],
-      "answer": 0,
-      "explanation": "출력값은 resource 길이를 읽는 단계에서 처음 쓰입니다. NULL 반환만으로 size가 어떤 값인지 일괄 가정하면 안 됩니다."
+      "original_explanation": "출력값은 resource 길이를 읽는 단계에서 처음 쓰입니다. NULL 반환만으로 size가 어떤 값인지 일괄 가정하면 안 됩니다."
     },
     {
-      "prompt": "unmap_rom은 ROM_ENABLE 플래그가 있더라도 항상 disable하는가?",
+      "prompt": "ROM_ENABLE 표시가 있어도 unmap은 항상 disable할까요?",
       "options": [
+        "네. 표시와 관계없이 항상 꺼요.",
+        "아니요. 그 표시가 없을 때만 disable을 불러요."
+      ],
+      "answer": 1,
+      "explanation": "또한 disable 자체도 SHADOW에서는 아무 일도 하지 않아요.",
+      "original_prompt": "unmap_rom은 ROM_ENABLE 플래그가 있더라도 항상 disable하는가?",
+      "original_options": [
         "그렇다. 플래그와 무관하게 항상 디코딩을 끈다",
         "아니다. 해당 플래그가 없을 때만 disable을 호출한다"
       ],
-      "answer": 1,
-      "explanation": "코드는 !(res->flags & IORESOURCE_ROM_ENABLE) 조건을 사용합니다. 또한 disable 자체는 SHADOW에서 무동작입니다."
+      "original_explanation": "코드는 !(res->flags & IORESOURCE_ROM_ENABLE) 조건을 사용합니다. 또한 disable 자체는 SHADOW에서 무동작입니다."
     },
     {
-      "prompt": "뒤쪽 이미지의 서명이 잘못되면 이전에 처리한 길이도 무조건 버리는가?",
+      "prompt": "뒤 이미지 표지가 틀리면 앞서 처리한 길이도 반드시 버릴까요?",
       "options": [
+        "아니요. 이미 전진한 누적 길이를 반환할 수 있어요.",
+        "네. 어떤 표지 오류든 전체 길이가 0이에요."
+      ],
+      "answer": 0,
+      "explanation": "반환은 위치 차이이므로 오류가 난 위치에 따라 달라요.",
+      "original_prompt": "뒤쪽 이미지의 서명이 잘못되면 이전에 처리한 길이도 무조건 버리는가?",
+      "original_options": [
         "아니다. 이미 전진한 누적 길이를 반환할 수 있다",
         "그렇다. 어떤 서명 오류든 반드시 전체 길이0이다"
       ],
-      "answer": 0,
-      "explanation": "반환값은 별도 오류 변수가 아니라 image-rom입니다. 오류가 어느 위치에서 발생했는지에 따라 반환 길이가 다릅니다."
+      "original_explanation": "반환값은 별도 오류 변수가 아니라 image-rom입니다. 오류가 어느 위치에서 발생했는지에 따라 반환 길이가 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "이미지 길이 2블록과 3블록을 바이트로 바꾸고, 첫 서명 실패와 두 번째 이미지 서명 실패의 누적 길이를 비교해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * PCI ROM access routines\n *\n * (C) Copyright 2004 Jon Smirl <jonsmirl@yahoo.com>\n * (C) Copyright 2004 Silicon Graphics, Inc. Jesse Barnes <jbarnes@sgi.com>\n */\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/pci.h>\n#include <linux/slab.h>\n\n#include \"pci.h\"\n\n/**\n * pci_enable_rom - enable ROM decoding for a PCI device\n * @pdev: PCI device to enable\n *\n * Enable ROM decoding on @dev.  This involves simply turning on the last\n * bit of the PCI ROM BAR.  Note that some cards may share address decoders\n * between the ROM and other resources, so enabling it may disable access\n * to MMIO registers or other card memory.\n */\nint pci_enable_rom(struct pci_dev *pdev)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tstruct pci_bus_region region;\n\tu32 rom_addr;\n\n\tif (!res->flags)\n\t\treturn -1;\n\n\t/* Nothing to enable if we're using a shadow copy in RAM */\n\tif (res->flags & IORESOURCE_ROM_SHADOW)\n\t\treturn 0;\n\n\t/*\n\t * Ideally pci_update_resource() would update the ROM BAR address,\n\t * and we would only set the enable bit here.  But apparently some\n\t * devices have buggy ROM BARs that read as zero when disabled.\n\t */\n\tpcibios_resource_to_bus(pdev->bus, &region, res);\n\tpci_read_config_dword(pdev, pdev->rom_base_reg, &rom_addr);\n\trom_addr &= ~PCI_ROM_ADDRESS_MASK;\n\trom_addr |= region.start | PCI_ROM_ADDRESS_ENABLE;\n\tpci_write_config_dword(pdev, pdev->rom_base_reg, rom_addr);\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(pci_enable_rom);\n\n/**\n * pci_disable_rom - disable ROM decoding for a PCI device\n * @pdev: PCI device to disable\n *\n * Disable ROM decoding on a PCI device by turning off the last bit in the\n * ROM BAR.\n */\nvoid pci_disable_rom(struct pci_dev *pdev)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tu32 rom_addr;\n\n\tif (res->flags & IORESOURCE_ROM_SHADOW)\n\t\treturn;\n\n\tpci_read_config_dword(pdev, pdev->rom_base_reg, &rom_addr);\n\trom_addr &= ~PCI_ROM_ADDRESS_ENABLE;\n\tpci_write_config_dword(pdev, pdev->rom_base_reg, rom_addr);\n}\nEXPORT_SYMBOL_GPL(pci_disable_rom);\n\n/**\n * pci_get_rom_size - obtain the actual size of the ROM image\n * @pdev: target PCI device\n * @rom: kernel virtual pointer to image of ROM\n * @size: size of PCI window\n *  return: size of actual ROM image\n *\n * Determine the actual length of the ROM image.\n * The PCI window size could be much larger than the\n * actual image size.\n */\nstatic size_t pci_get_rom_size(struct pci_dev *pdev, void __iomem *rom,\n\t\t\t       size_t size)\n{\n\tvoid __iomem *image;\n\tint last_image;\n\tunsigned int length;\n\n\timage = rom;\n\tdo {\n\t\tvoid __iomem *pds;\n\t\t/* Standard PCI ROMs start out with these bytes 55 AA */\n\t\tif (readw(image) != 0xAA55) {\n\t\t\tpci_info(pdev, \"Invalid PCI ROM header signature: expecting 0xaa55, got %#06x\\n\",\n\t\t\t\t readw(image));\n\t\t\tbreak;\n\t\t}\n\t\t/* get the PCI data structure and check its \"PCIR\" signature */\n\t\tpds = image + readw(image + 24);\n\t\tif (readl(pds) != 0x52494350) {\n\t\t\tpci_info(pdev, \"Invalid PCI ROM data signature: expecting 0x52494350, got %#010x\\n\",\n\t\t\t\t readl(pds));\n\t\t\tbreak;\n\t\t}\n\t\tlast_image = readb(pds + 21) & 0x80;\n\t\tlength = readw(pds + 16);\n\t\timage += length * 512;\n\t\t/* Avoid iterating through memory outside the resource window */\n\t\tif (image >= rom + size)\n\t\t\tbreak;\n\t\tif (!last_image) {\n\t\t\tif (readw(image) != 0xAA55) {\n\t\t\t\tpci_info(pdev, \"No more image in the PCI ROM\\n\");\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\t} while (length && !last_image);\n\n\t/* never return a size larger than the PCI resource window */\n\t/* there are known ROMs that get the size wrong */\n\treturn min((size_t)(image - rom), size);\n}\n\n/**\n * pci_map_rom - map a PCI ROM to kernel space\n * @pdev: pointer to pci device struct\n * @size: pointer to receive size of pci window over ROM\n *\n * Return: kernel virtual pointer to image of ROM\n *\n * Map a PCI ROM into kernel space. If ROM is boot video ROM,\n * the shadow BIOS copy will be returned instead of the\n * actual ROM.\n */\nvoid __iomem *pci_map_rom(struct pci_dev *pdev, size_t *size)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tloff_t start;\n\tvoid __iomem *rom;\n\n\t/* assign the ROM an address if it doesn't have one */\n\tif (res->parent == NULL && pci_assign_resource(pdev, PCI_ROM_RESOURCE))\n\t\treturn NULL;\n\n\tstart = pci_resource_start(pdev, PCI_ROM_RESOURCE);\n\t*size = pci_resource_len(pdev, PCI_ROM_RESOURCE);\n\tif (*size == 0)\n\t\treturn NULL;\n\n\t/* Enable ROM space decodes */\n\tif (pci_enable_rom(pdev))\n\t\treturn NULL;\n\n\trom = ioremap(start, *size);\n\tif (!rom)\n\t\tgoto err_ioremap;\n\n\t/*\n\t * Try to find the true size of the ROM since sometimes the PCI window\n\t * size is much larger than the actual size of the ROM.\n\t * True size is important if the ROM is going to be copied.\n\t */\n\t*size = pci_get_rom_size(pdev, rom, *size);\n\tif (!*size)\n\t\tgoto invalid_rom;\n\n\treturn rom;\n\ninvalid_rom:\n\tiounmap(rom);\nerr_ioremap:\n\t/* restore enable if ioremap fails */\n\tif (!(res->flags & IORESOURCE_ROM_ENABLE))\n\t\tpci_disable_rom(pdev);\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_map_rom);\n\n/**\n * pci_unmap_rom - unmap the ROM from kernel space\n * @pdev: pointer to pci device struct\n * @rom: virtual address of the previous mapping\n *\n * Remove a mapping of a previously mapped ROM\n */\nvoid pci_unmap_rom(struct pci_dev *pdev, void __iomem *rom)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\n\tiounmap(rom);\n\n\t/* Disable again before continuing */\n\tif (!(res->flags & IORESOURCE_ROM_ENABLE))\n\t\tpci_disable_rom(pdev);\n}\nEXPORT_SYMBOL(pci_unmap_rom);\n",
   "source_review": {
@@ -143,5 +181,180 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/rom.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-3c3679bdc31e3527",
+    "path": "drivers/pci/rom.c",
+    "title": "PCI ROM 접근: 이미지 사슬·길이 제한·매핑 복구",
+    "area": "PCI ROM · 바이너리 파싱 · MMIO · 자원 수명 · 경계 검사",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "ROM enable/disable, 이미지 길이 탐색, map/unmap의 모든 경로를 분석합니다.",
+    "guide": [
+      "반환 길이를 창 크기로 제한하는 것과 각 메모리 읽기 전에 범위를 검증하는 것은 다른 보장입니다.",
+      "바이너리 형식의 오프셋, 블록 단위 길이, 반복 종료 조건과 부분 자원 정리를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "ROM 디코딩 활성화",
+        "text": "GPL-2.0 파일은 kernel,export,pci,slab과 내부 pci.h를 포함합니다. pci_enable_rom은 ROM resource flags가 0이면 -1, ROM_SHADOW이면 하드웨어를 건드리지 않고 0입니다. 그 외에는 pcibios_resource_to_bus로 버스 주소를 얻고 ROM BAR를 읽어 PCI_ROM_ADDRESS_MASK 비트를 지운 뒤 region.start와 ENABLE을 OR해서 씁니다. 단순 enable 비트 변경뿐 아니라 비활성 시 주소를 0으로 읽는 장치를 위해 주소도 갱신합니다. 설정 공간 read/write의 반환 오류는 검사하지 않습니다."
+      },
+      {
+        "title": "디코딩 비활성화",
+        "text": "pci_disable_rom은 SHADOW이면 반환하고 나머지는 ROM BAR를 읽어 ENABLE 비트만 지운 뒤 씁니다. enable과 달리 flags 전체가 0인지 선행 검사하지 않습니다. 두 함수는 GPL export입니다. 주석은 ROM과 MMIO가 디코더를 공유하는 장치에서는 ROM 활성화가 다른 자원 접근에 영향을 줄 수 있다고 설명합니다. RAM shadow와 실제 ROM 디코딩 제어를 구분해야 합니다."
+      },
+      {
+        "title": "이미지 서명과 데이터 구조 오프셋",
+        "text": "pci_get_rom_size는 image=rom에서 do 루프를 시작합니다. readw(image)가 0xAA55가 아니면 로그 후 멈춥니다. image+24에서 읽은 16비트 값을 현재 image에 더해 pds를 구하고 readl(pds)가 PCIR의 수치 표현 0x52494350인지 검사합니다. 이들은 MMIO 접근자 readw/readl/readb를 사용하며 일반 문자열 비교가 아닙니다. 첫 서명이나 첫 PCIR 검사가 실패하면 image가 전진하지 않아 반환 길이는 0입니다."
+      },
+      {
+        "title": "512바이트 길이와 종료 조건",
+        "text": "pds+21의 0x80 비트를 last_image로, pds+16의 16비트를 length로 읽고 image를 length*512만큼 이동합니다. 새 image가 rom+size 이상이면 멈춥니다. 마지막 이미지가 아니면 새 위치의 0xAA55를 미리 확인하고 없으면 종료합니다. 루프 지속 조건은 length가 0이 아니며 last_image가 거짓인 경우입니다. 길이 0은 다음 반복을 막지만 그 전에 !last_image 블록의 readw는 실행될 수 있습니다. 마지막 표식과 0 길이, 창 끝, 잘못된 다음 서명은 서로 다른 종료 원인입니다."
+      },
+      {
+        "title": "길이 제한과 읽기 경계의 차이",
+        "text": "최종 결과는 min(image-rom,size)이므로 창보다 큰 길이를 반환하지 않습니다. 그러나 첫 readw, image+24의 읽기, pds 서명과 필드 읽기 전에 각각 창 경계를 검증하는 코드는 없습니다. 포인터를 전진시킨 뒤의 검사만으로 모든 잘못된 내부 오프셋의 읽기가 안전하다고 주장해서는 안 됩니다. 이미 정상 처리한 이미지 뒤에서 새 이미지가 잘못되면 그 전까지의 양수 길이를 반환할 수 있어 모든 부분 오류가 전체 실패 0으로 바뀌는 것도 아닙니다."
+      },
+      {
+        "title": "ROM 주소 할당과 매핑",
+        "text": "pci_map_rom은 resource에 parent가 없을 때 pci_assign_resource를 시도하고 실패하면 NULL입니다. 이 조기 실패에는 *size 쓰기가 없습니다. 그다음 resource 시작과 길이를 얻어 *size에 창 길이를 쓰고 0이면 NULL입니다. ROM enable 실패도 NULL이며 성공하면 전체 창을 ioremap합니다. 매핑 후 실제 이미지 길이로 *size를 갱신하고 0이면 invalid_rom 경로, 양수이면 rom을 반환합니다. 반환 size는 최종적으로 스캔한 길이이고 초기 창 크기와 같다고 보장되지 않습니다."
+      },
+      {
+        "title": "실패와 unmap의 복구 범위",
+        "text": "invalid_rom은 iounmap한 뒤 공통 오류 경로로 내려갑니다. ioremap 실패는 unmap 없이 그 공통 경로로 갑니다. resource flags에 ROM_ENABLE이 없을 때만 pci_disable_rom을 호출하고 NULL을 반환합니다. 정상 pci_unmap_rom도 iounmap 후 같은 조건으로 disable합니다. 이전 하드웨어 BAR 값을 별도로 저장해 그대로 복원하는 방식은 아니며 resource flag를 기준으로 동작합니다. 앞서 성공한 pci_assign_resource를 이 함수가 실패 때 해제하는 코드도 없습니다."
+      },
+      {
+        "title": "전체 범위와 계산 예",
+        "text": "다섯 함수의 본문과 모든 export, 실패 레이블을 대조했습니다. 두 이미지 길이가 2블록과 3블록이고 창이 충분하면 누적 길이는 2560바이트입니다. 양수 길이 이미지마다 전진하는 스캔은 방문 이미지 수에 선형이며 추가 상태는 일정합니다. 실제 ROM MMIO 읽기, 손상 이미지 실행이나 커널 빌드는 수행하지 않았습니다. 이 코드는 ROM을 매핑·읽는 경로이며 ROM 코드를 실행하는 본문은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ROM enable이 단순히 ENABLE 비트만 세우는가?",
+        "options": [
+          "아니다. 버스 주소를 계산해 BAR 주소 필드도 갱신한다",
+          "그렇다. 주소 관련 비트는 전혀 다루지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "비활성 BAR가 주소0으로 읽히는 장치를 고려해 기존 주소 마스크를 지우고 region.start를 OR합니다. 주석의 짧은 설명보다 본문을 확인해야 합니다."
+      },
+      {
+        "prompt": "두 이미지 length가 2와 3이고 창이 충분하면 총 길이는?",
+        "options": [
+          "5바이트",
+          "2560바이트"
+        ],
+        "answer": 1,
+        "explanation": "length 단위는 512바이트이므로 (2+3)*512=2560입니다. 필드 값 자체와 바이트 길이를 구분해야 합니다."
+      },
+      {
+        "prompt": "min으로 최종 길이를 제한하므로 모든 pds 읽기 전에 경계가 검증되는가?",
+        "options": [
+          "아니다. 내부 오프셋별 선행 검사는 없다",
+          "그렇다. 반환값 제한이 모든 읽기를 자동 보호한다"
+        ],
+        "answer": 0,
+        "explanation": "pds는 image+24에서 얻은 값으로 계산한 뒤 바로 읽습니다. 최종 길이의 상한 보장과 접근 위치 검증은 별개입니다."
+      },
+      {
+        "prompt": "첫 이미지 서명이 잘못되면 map_rom은 어떤 경로로 가는가?",
+        "options": [
+          "서명을 무시하고 전체 창을 정상 ROM으로 반환한다",
+          "스캔 길이0이 되어 unmap 후 조건부 disable하고 NULL을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "첫 위치에서 image가 전진하지 않아 크기는0입니다. map 함수는 이를 invalid_rom으로 처리합니다."
+      },
+      {
+        "prompt": "주소 할당이 실패한 map_rom이 *size를 반드시 0으로 만드는가?",
+        "options": [
+          "아니다. 그 실패는 size 대입보다 앞에 있다",
+          "그렇다. 모든 실패 경로가 출력값을0으로 초기화한다"
+        ],
+        "answer": 0,
+        "explanation": "출력값은 resource 길이를 읽는 단계에서 처음 쓰입니다. NULL 반환만으로 size가 어떤 값인지 일괄 가정하면 안 됩니다."
+      },
+      {
+        "prompt": "unmap_rom은 ROM_ENABLE 플래그가 있더라도 항상 disable하는가?",
+        "options": [
+          "그렇다. 플래그와 무관하게 항상 디코딩을 끈다",
+          "아니다. 해당 플래그가 없을 때만 disable을 호출한다"
+        ],
+        "answer": 1,
+        "explanation": "코드는 !(res->flags & IORESOURCE_ROM_ENABLE) 조건을 사용합니다. 또한 disable 자체는 SHADOW에서 무동작입니다."
+      },
+      {
+        "prompt": "뒤쪽 이미지의 서명이 잘못되면 이전에 처리한 길이도 무조건 버리는가?",
+        "options": [
+          "아니다. 이미 전진한 누적 길이를 반환할 수 있다",
+          "그렇다. 어떤 서명 오류든 반드시 전체 길이0이다"
+        ],
+        "answer": 0,
+        "explanation": "반환값은 별도 오류 변수가 아니라 image-rom입니다. 오류가 어느 위치에서 발생했는지에 따라 반환 길이가 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * PCI ROM access routines\n *\n * (C) Copyright 2004 Jon Smirl <jonsmirl@yahoo.com>\n * (C) Copyright 2004 Silicon Graphics, Inc. Jesse Barnes <jbarnes@sgi.com>\n */\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/pci.h>\n#include <linux/slab.h>\n\n#include \"pci.h\"\n\n/**\n * pci_enable_rom - enable ROM decoding for a PCI device\n * @pdev: PCI device to enable\n *\n * Enable ROM decoding on @dev.  This involves simply turning on the last\n * bit of the PCI ROM BAR.  Note that some cards may share address decoders\n * between the ROM and other resources, so enabling it may disable access\n * to MMIO registers or other card memory.\n */\nint pci_enable_rom(struct pci_dev *pdev)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tstruct pci_bus_region region;\n\tu32 rom_addr;\n\n\tif (!res->flags)\n\t\treturn -1;\n\n\t/* Nothing to enable if we're using a shadow copy in RAM */\n\tif (res->flags & IORESOURCE_ROM_SHADOW)\n\t\treturn 0;\n\n\t/*\n\t * Ideally pci_update_resource() would update the ROM BAR address,\n\t * and we would only set the enable bit here.  But apparently some\n\t * devices have buggy ROM BARs that read as zero when disabled.\n\t */\n\tpcibios_resource_to_bus(pdev->bus, &region, res);\n\tpci_read_config_dword(pdev, pdev->rom_base_reg, &rom_addr);\n\trom_addr &= ~PCI_ROM_ADDRESS_MASK;\n\trom_addr |= region.start | PCI_ROM_ADDRESS_ENABLE;\n\tpci_write_config_dword(pdev, pdev->rom_base_reg, rom_addr);\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(pci_enable_rom);\n\n/**\n * pci_disable_rom - disable ROM decoding for a PCI device\n * @pdev: PCI device to disable\n *\n * Disable ROM decoding on a PCI device by turning off the last bit in the\n * ROM BAR.\n */\nvoid pci_disable_rom(struct pci_dev *pdev)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tu32 rom_addr;\n\n\tif (res->flags & IORESOURCE_ROM_SHADOW)\n\t\treturn;\n\n\tpci_read_config_dword(pdev, pdev->rom_base_reg, &rom_addr);\n\trom_addr &= ~PCI_ROM_ADDRESS_ENABLE;\n\tpci_write_config_dword(pdev, pdev->rom_base_reg, rom_addr);\n}\nEXPORT_SYMBOL_GPL(pci_disable_rom);\n\n/**\n * pci_get_rom_size - obtain the actual size of the ROM image\n * @pdev: target PCI device\n * @rom: kernel virtual pointer to image of ROM\n * @size: size of PCI window\n *  return: size of actual ROM image\n *\n * Determine the actual length of the ROM image.\n * The PCI window size could be much larger than the\n * actual image size.\n */\nstatic size_t pci_get_rom_size(struct pci_dev *pdev, void __iomem *rom,\n\t\t\t       size_t size)\n{\n\tvoid __iomem *image;\n\tint last_image;\n\tunsigned int length;\n\n\timage = rom;\n\tdo {\n\t\tvoid __iomem *pds;\n\t\t/* Standard PCI ROMs start out with these bytes 55 AA */\n\t\tif (readw(image) != 0xAA55) {\n\t\t\tpci_info(pdev, \"Invalid PCI ROM header signature: expecting 0xaa55, got %#06x\\n\",\n\t\t\t\t readw(image));\n\t\t\tbreak;\n\t\t}\n\t\t/* get the PCI data structure and check its \"PCIR\" signature */\n\t\tpds = image + readw(image + 24);\n\t\tif (readl(pds) != 0x52494350) {\n\t\t\tpci_info(pdev, \"Invalid PCI ROM data signature: expecting 0x52494350, got %#010x\\n\",\n\t\t\t\t readl(pds));\n\t\t\tbreak;\n\t\t}\n\t\tlast_image = readb(pds + 21) & 0x80;\n\t\tlength = readw(pds + 16);\n\t\timage += length * 512;\n\t\t/* Avoid iterating through memory outside the resource window */\n\t\tif (image >= rom + size)\n\t\t\tbreak;\n\t\tif (!last_image) {\n\t\t\tif (readw(image) != 0xAA55) {\n\t\t\t\tpci_info(pdev, \"No more image in the PCI ROM\\n\");\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\t} while (length && !last_image);\n\n\t/* never return a size larger than the PCI resource window */\n\t/* there are known ROMs that get the size wrong */\n\treturn min((size_t)(image - rom), size);\n}\n\n/**\n * pci_map_rom - map a PCI ROM to kernel space\n * @pdev: pointer to pci device struct\n * @size: pointer to receive size of pci window over ROM\n *\n * Return: kernel virtual pointer to image of ROM\n *\n * Map a PCI ROM into kernel space. If ROM is boot video ROM,\n * the shadow BIOS copy will be returned instead of the\n * actual ROM.\n */\nvoid __iomem *pci_map_rom(struct pci_dev *pdev, size_t *size)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\tloff_t start;\n\tvoid __iomem *rom;\n\n\t/* assign the ROM an address if it doesn't have one */\n\tif (res->parent == NULL && pci_assign_resource(pdev, PCI_ROM_RESOURCE))\n\t\treturn NULL;\n\n\tstart = pci_resource_start(pdev, PCI_ROM_RESOURCE);\n\t*size = pci_resource_len(pdev, PCI_ROM_RESOURCE);\n\tif (*size == 0)\n\t\treturn NULL;\n\n\t/* Enable ROM space decodes */\n\tif (pci_enable_rom(pdev))\n\t\treturn NULL;\n\n\trom = ioremap(start, *size);\n\tif (!rom)\n\t\tgoto err_ioremap;\n\n\t/*\n\t * Try to find the true size of the ROM since sometimes the PCI window\n\t * size is much larger than the actual size of the ROM.\n\t * True size is important if the ROM is going to be copied.\n\t */\n\t*size = pci_get_rom_size(pdev, rom, *size);\n\tif (!*size)\n\t\tgoto invalid_rom;\n\n\treturn rom;\n\ninvalid_rom:\n\tiounmap(rom);\nerr_ioremap:\n\t/* restore enable if ioremap fails */\n\tif (!(res->flags & IORESOURCE_ROM_ENABLE))\n\t\tpci_disable_rom(pdev);\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_map_rom);\n\n/**\n * pci_unmap_rom - unmap the ROM from kernel space\n * @pdev: pointer to pci device struct\n * @rom: virtual address of the previous mapping\n *\n * Remove a mapping of a previously mapped ROM\n */\nvoid pci_unmap_rom(struct pci_dev *pdev, void __iomem *rom)\n{\n\tstruct resource *res = &pdev->resource[PCI_ROM_RESOURCE];\n\n\tiounmap(rom);\n\n\t/* Disable again before continuing */\n\tif (!(res->flags & IORESOURCE_ROM_ENABLE))\n\t\tpci_disable_rom(pdev);\n}\nEXPORT_SYMBOL(pci_unmap_rom);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "31fb18155d3730d86cc9ca8c8b6933e29ad6c1c262791f20714cfe3eca596c34",
+      "scope": "whole-file",
+      "line_count": 197,
+      "authoring_source": "course/file_units/pci_rom_access.py",
+      "sections": [
+        "ROM 디코딩 활성화",
+        "디코딩 비활성화",
+        "이미지 서명과 데이터 구조 오프셋",
+        "512바이트 길이와 종료 조건",
+        "길이 제한과 읽기 경계의 차이",
+        "ROM 주소 할당과 매핑",
+        "실패와 unmap의 복구 범위",
+        "전체 범위와 계산 예"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/rom.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "PCI ROM은 장치에 들어 있는 작은 자료 꾸러미예요. 읽을 통로를 열고 표지와 길이를 살피지만 이 코드는 ROM 안의 프로그램을 실행하지는 않아요.",
+    "meaning": "ROM 창의 크기와 실제 이미지 길이는 다를 수 있어요. 마지막 반환 길이를 제한하는 검사와 매번 읽을 주소가 안전한지 확인하는 검사는 서로 달라요.",
+    "exercise": "이미지 길이 2블록과 3블록을 바이트로 바꾸고, 첫 서명 실패와 두 번째 이미지 서명 실패의 누적 길이를 비교해 보세요."
+  },
+  "goal": "ROM 창의 크기와 실제 이미지 길이는 다를 수 있어요. 마지막 반환 길이를 제한하는 검사와 매번 읽을 주소가 안전한지 확인하는 검사는 서로 달라요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "이미지 길이 2블록과 3블록을 바이트로 바꾸고, 첫 서명 실패와 두 번째 이미지 서명 실패의 누적 길이를 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "ea25af13f8d6f1405f40af6f4aed3f80b738f61c4bea1f785275eba6d8288cb4",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

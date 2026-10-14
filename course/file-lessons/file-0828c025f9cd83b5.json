@@ -5,97 +5,123 @@
   "area": "PCI · 드라이버 · 문자열 파싱 · 모듈 수명 · 오류 처리",
   "track": "files",
   "kind": "kernel",
-  "intro": "모듈 매개변수, 드라이버 정의, probe와 init/exit 전체를 분석합니다.",
+  "intro": "초기 ID 문자열은 최소 두 숫자만 읽어도 받아들일 수 있어요. 개별 ID가 잘못되어도 이미 등록한 드라이버 전체가 실패하는 것은 아니에요.",
   "guide": [
-    "파싱에 성공한 필드 수와 입력 전체의 유효성은 다르며 개별 항목 실패가 모듈 등록 실패와 같지는 않습니다.",
-    "구분자 파싱, 기본값, 콜백 등록, 부분 성공과 초기화 데이터 수명을 학습합니다."
+    "동적 ID는 실행 중 드라이버에 추가하는 장치 식별 조건이에요. 고정 ID 표와 달라요.",
+    "probe는 드라이버가 장치를 맡을 때 부르는 함수예요. 여기서는 로그와 성공 반환만 해요.",
+    "파싱은 문자열에서 필요한 값을 읽는 일이에요. 값 두 개를 읽었다는 사실이 나머지 문자열까지 모두 올바르다는 뜻은 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "파일 목적과 사용 예의 범위",
-      "text": "GPL-2.0의 stub 드라이버는 PCI 장치를 예약하기 위한 코드입니다. 주석은 new_id에 ID를 추가하고 기존 드라이버에서 unbind한 뒤 pci-stub에 bind하는 sysfs 예를 제시합니다. 이는 사용 설명이며 이 소스의 init이 해당 예의 쉘 명령을 실행하거나 기존 드라이버를 직접 unbind하는 것은 아닙니다. include는 module.h와 pci.h입니다."
+      "title": "장치 예약용 작은 드라이버",
+      "text": "GPL-2.0 파일은 module.h와 pci.h를 써요. 주석의 new_id 추가, 기존 드라이버 unbind, pci-stub bind 명령은 사용 예예요. 이 소스의 init이 그 셸 명령을 실행하거나 기존 드라이버 연결을 직접 해제하는 것은 아니에요."
     },
     {
-      "title": "매개변수 저장소와 문법",
-      "text": "ids는 1024바이트 char 배열이며 __initdata입니다. module_param_string으로 같은 버퍼와 sizeof(ids),권한0을 지정합니다. 설명은 vendor:device 뒤에 subvendor,subdevice,class,class_mask를 차례로 생략할 수 있고 여러 항목은 쉼표로 나눈다고 합니다. 권한0은 이 매개변수를 일반 sysfs 매개변수 파일로 노출하는 읽기 권한이 아닙니다. 별도 driver new_id 인터페이스와 모듈 초기 ids 버퍼를 구분해야 합니다."
+      "title": "초기 문자열 저장 공간",
+      "text": "ids는 초기화 때 쓰는 1024바이트 배열이고 module_param_string에 같은 버퍼와 크기, 권한 0을 등록해요. vendor:device 뒤에 subvendor·subdevice·class·class_mask를 순서대로 생략할 수 있고 항목은 쉼표로 나눠요. 권한 0은 일반 sysfs 매개변수 파일로 읽게 노출하는 설정이 아니에요. 별도의 new_id 통로와 초기 ids 버퍼를 구분해요."
     },
     {
-      "title": "드라이버 정의와 probe",
-      "text": "stub_driver는 이름 pci-stub,id_table=NULL,probe=pci_stub_probe,driver_managed_dma=true입니다. 고정 ID 테이블 대신 동적 ID만 사용한다는 주석이 있습니다. probe는 claimed by stub 로그를 출력하고 0을 반환할 뿐 BAR 요청이나 인터럽트 등록, DMA 전송을 수행하지 않습니다. driver_managed_dma 플래그의 설정과 실제 DMA 작업 수행은 다른 사실입니다."
+      "title": "드라이버가 직접 하는 일",
+      "text": "이름은 pci-stub, 고정 id_table은 NULL이며 동적 ID를 써요. driver_managed_dma는 true지만 실제 DMA 전송을 이 파일에서 하는 것은 아니에요. probe는 claimed by stub 로그 후 0만 반환하며 BAR 예약이나 IRQ 등록도 하지 않아요. 설정 표시와 실제 장치 작업을 혼동하지 마세요."
     },
     {
-      "title": "등록 후 문자열 분리",
-      "text": "init은 pci_register_driver를 먼저 호출하고 실패하면 그 오류를 반환합니다. 등록 성공 후 ids[0]이 NUL이면 즉시 0입니다. 그 외에는 p=ids에서 strsep(&p,\",\")로 항목을 얻습니다. strsep은 버퍼의 구분자를 NUL로 바꾸며 다음 위치를 갱신하는 방식이고, 길이0인 항목은 continue로 무시합니다. 선행·연속·마지막 쉼표로 생긴 빈 항목을 별도의 오류로 처리하지 않습니다."
+      "title": "드라이버 등록 다음에 문자열을 나눠요",
+      "text": "init은 먼저 pci_register_driver를 부르고 실패하면 오류를 반환해요. 성공한 뒤 ids가 빈 문자열이면 0이에요. 나머지는 strsep으로 쉼표를 NUL로 바꾸면서 항목을 나눠요. 앞·연속·마지막 쉼표 때문에 생긴 빈 항목은 오류 대신 건너뛰어요."
     },
     {
-      "title": "필드 기본값과 느슨한 수용 조건",
-      "text": "매 항목에서 subvendor/subdevice는 PCI_ANY_ID,class/class_mask는 0으로 초기화하고 vendor/device는 sscanf의 첫 두 변환 결과로 채웁니다. 여섯 %x 변환을 시도해 fields<2이면 경고 후 건너뜁니다. 그 이상이면 수용하므로 여섯 필드 모두를 요구하지 않습니다. %n이나 끝 포인터로 남은 문자열을 검사하지 않으므로 두 값 뒤의 잘못된 꼬리도 변환 개수가2이면 수용될 수 있습니다. 읽히지 않은 선택 필드는 각 항목의 기본값을 유지합니다."
+      "title": "생략 필드는 매번 기본값으로 시작해요",
+      "text": "항목마다 하위 제조사·장치는 ANY, class·mask는 0으로 시작해요. sscanf는 16진수 여섯 필드를 시도하지만 두 개 미만만 읽었을 때만 경고하고 버려요. 두 값 뒤의 남은 문자를 끝까지 검사하지 않아 1234:5678:zz도 두 필드 성공으로 받아들일 수 있어요. 읽히지 않은 선택 필드는 이전 항목이 아니라 새 기본값을 유지해요."
     },
     {
-      "title": "동적 ID 추가와 부분 성공",
-      "text": "수용한 필드를 로그로 표시하고 pci_add_dynid에 driver와 여섯 필드,마지막 driver_data=0을 전달합니다. 추가 실패는 경고만 하고 다음 항목으로 진행합니다. 루프가 끝나면 rc에 마지막 오류가 남아 있어도 0을 반환합니다. 따라서 등록 성공 후 모든 항목이 잘못되거나 동적 추가가 실패해도 모듈 초기화는 성공할 수 있습니다. 앞서 추가한 ID를 이 함수가 항목 오류 때문에 롤백하는 코드는 없습니다."
+      "title": "일부 ID 실패가 전체 실패는 아니에요",
+      "text": "수용한 여섯 필드와 driver_data 0을 pci_add_dynid에 넘겨요. 실패하면 경고만 남기고 다음 항목으로 가요. 마지막 rc가 오류여도 반복 끝의 반환은 0이에요. 등록 후 모든 ID가 잘못돼도 init은 성공할 수 있어요. 한 항목 오류 때문에 앞서 추가한 ID를 되돌리는 코드도 없어요."
     },
     {
-      "title": "종료와 전체 검토",
-      "text": "exit는 pci_unregister_driver 한 번을 호출합니다. module_init/module_exit 연결과 VM device assignment 설명,GPL 라이선스,작성자 메타데이터까지 대조했습니다. 직접 구현된 함수는 probe,init,exit 세 개입니다. 드라이버 코어의 매칭·바인딩과 동적 ID 메모리 관리는 외부 호출의 구현 범위이며 실제 장치 unbind/bind나 모듈 로드는 실행하지 않았습니다."
+      "title": "종료와 외부 코어 역할",
+      "text": "exit는 pci_unregister_driver 한 번을 불러요. init·exit 연결, VM 장치 할당 설명과 GPL·작성자 정보까지 확인했어요. 직접 함수는 probe·init·exit 세 개이며 실제 매칭·연결과 동적 ID 메모리 관리는 외부 드라이버 코어가 맡아요. 실제 장치를 unbind하거나 모듈을 로드하지는 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "ids가 빈 문자열이면 드라이버 등록도 생략하는가?",
+      "prompt": "ids가 비어 있으면 드라이버 등록도 생략할까요?",
       "options": [
+        "아니요. 등록 성공을 먼저 확인해요.",
+        "네. register_driver를 부르지 않아요."
+      ],
+      "answer": 0,
+      "explanation": "ID 없는 등록 상태와 미등록 상태는 달라요.",
+      "original_prompt": "ids가 빈 문자열이면 드라이버 등록도 생략하는가?",
+      "original_options": [
         "아니다. 등록 성공을 확인한 뒤 빈 문자열 검사를 한다",
         "그렇다. 빈 문자열이면 register_driver를 호출하지 않는다"
       ],
-      "answer": 0,
-      "explanation": "등록 호출이 ids 검사보다 앞에 있습니다. 초기 ID가 없는 상태로 등록된 드라이버와 아예 미등록 상태는 다릅니다."
+      "original_explanation": "등록 호출이 ids 검사보다 앞에 있습니다. 초기 ID가 없는 상태로 등록된 드라이버와 아예 미등록 상태는 다릅니다."
     },
     {
-      "prompt": "vendor와 device만 읽으면 subsystem과 class 필터는 어떤 값인가?",
+      "prompt": "vendor·device만 읽으면 나머지 필드는 무엇일까요?",
       "options": [
+        "직전 항목 값을 재사용해요.",
+        "하위 두 ID는 ANY, class와 mask는 0이에요."
+      ],
+      "answer": 1,
+      "explanation": "각 반복 안에서 기본값을 새로 지정해요.",
+      "original_prompt": "vendor와 device만 읽으면 subsystem과 class 필터는 어떤 값인가?",
+      "original_options": [
         "모든 생략 필드는 직전 항목의 값을 재사용한다",
         "subsystem 둘은 ANY,class와 class_mask는0이다"
       ],
-      "answer": 1,
-      "explanation": "기본값 선언이 while 본문 안에 있으므로 각 항목마다 새로 초기화됩니다. 이전 항목의 선택 필드가 다음 항목에 남지 않습니다."
+      "original_explanation": "기본값 선언이 while 본문 안에 있으므로 각 항목마다 새로 초기화됩니다. 이전 항목의 선택 필드가 다음 항목에 남지 않습니다."
     },
     {
-      "prompt": "입력 1234:5678:zz는 반드시 전체 거부되는가?",
+      "prompt": "1234:5678:zz는 반드시 전부 거절할까요?",
       "options": [
+        "아니요. 앞 두 변환 성공으로 수용될 수 있어요.",
+        "네. 전체 문자열을 엄격히 검사해요."
+      ],
+      "answer": 0,
+      "explanation": "수용 조건은 fields >= 2이며 꼬리 검사는 없어요.",
+      "original_prompt": "입력 1234:5678:zz는 반드시 전체 거부되는가?",
+      "original_options": [
         "아니다. 앞 두 변환이 성공하면 fields=2로 수용될 수 있다",
         "그렇다. 문자열 전체를 엄격하게 검증한다"
       ],
-      "answer": 0,
-      "explanation": "허용 기준은 fields>=2이고 남은 입력 검사는 없습니다. 최소 필드 파싱과 전체 문법 검증은 별개입니다."
+      "original_explanation": "허용 기준은 fields>=2이고 남은 입력 검사는 없습니다. 최소 필드 파싱과 전체 문법 검증은 별개입니다."
     },
     {
-      "prompt": "pci_add_dynid 실패가 init의 최종 실패 반환으로 이어지는가?",
+      "prompt": "dynid 추가 실패가 init의 최종 실패가 될까요?",
       "options": [
+        "네. 즉시 드라이버를 해제하고 오류를 줘요.",
+        "아니요. 경고 후 계속하고 마지막에 0을 줘요."
+      ],
+      "answer": 1,
+      "explanation": "초기 드라이버 등록 실패와 개별 ID 실패의 처리가 달라요.",
+      "original_prompt": "pci_add_dynid 실패가 init의 최종 실패 반환으로 이어지는가?",
+      "original_options": [
         "그렇다. 즉시 드라이버를 해제하고 오류를 반환한다",
         "아니다. 경고 후 계속하고 마지막에는0을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "등록 자체 실패만 초기에 반환합니다. 개별 ID 추가 실패 경로에는 unregister나 오류 반환이 없습니다."
+      "original_explanation": "등록 자체 실패만 초기에 반환합니다. 개별 ID 추가 실패 경로에는 unregister나 오류 반환이 없습니다."
     },
     {
-      "prompt": "stub probe가 PCI 하드웨어를 적극적으로 초기화하는가?",
+      "prompt": "probe가 BAR와 IRQ를 적극적으로 초기화할까요?",
       "options": [
+        "아니요. 로그와 0 반환만 해요.",
+        "네. 항상 BAR와 IRQ를 할당해요."
+      ],
+      "answer": 0,
+      "explanation": "장치를 맡는 성공과 하드웨어 자원 설정은 별개예요.",
+      "original_prompt": "stub probe가 PCI 하드웨어를 적극적으로 초기화하는가?",
+      "original_options": [
         "아니다. 로그를 출력하고0을 반환한다",
         "그렇다. BAR와 IRQ를 항상 할당한다"
       ],
-      "answer": 0,
-      "explanation": "본문에는 pci_info와 return만 있습니다. 성공 probe로 드라이버가 바인딩되는 것과 장치의 BAR·IRQ·DMA를 설정하는 것은 구분해야 합니다."
+      "original_explanation": "본문에는 pci_info와 return만 있습니다. 성공 probe로 드라이버가 바인딩되는 것과 장치의 BAR·IRQ·DMA를 설정하는 것은 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "1234:5678과 1234:5678:zz를 파서가 몇 필드 읽는지 비교하고, ID 추가 실패 뒤 init이 반환하는 값을 찾아보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Simple stub driver to reserve a PCI device\n *\n * Copyright (C) 2008 Red Hat, Inc.\n * Author:\n *\tChris Wright\n *\n * Usage is simple, allocate a new id to the stub driver and bind the\n * device to it.  For example:\n *\n * # echo \"8086 10f5\" > /sys/bus/pci/drivers/pci-stub/new_id\n * # echo -n 0000:00:19.0 > /sys/bus/pci/drivers/e1000e/unbind\n * # echo -n 0000:00:19.0 > /sys/bus/pci/drivers/pci-stub/bind\n * # ls -l /sys/bus/pci/devices/0000:00:19.0/driver\n * .../0000:00:19.0/driver -> ../../../bus/pci/drivers/pci-stub\n */\n\n#include <linux/module.h>\n#include <linux/pci.h>\n\nstatic char ids[1024] __initdata;\n\nmodule_param_string(ids, ids, sizeof(ids), 0);\nMODULE_PARM_DESC(ids, \"Initial PCI IDs to add to the stub driver, format is \"\n\t\t \"\\\"vendor:device[:subvendor[:subdevice[:class[:class_mask]]]]\\\"\"\n\t\t \" and multiple comma separated entries can be specified\");\n\nstatic int pci_stub_probe(struct pci_dev *dev, const struct pci_device_id *id)\n{\n\tpci_info(dev, \"claimed by stub\\n\");\n\treturn 0;\n}\n\nstatic struct pci_driver stub_driver = {\n\t.name\t\t= \"pci-stub\",\n\t.id_table\t= NULL,\t/* only dynamic id's */\n\t.probe\t\t= pci_stub_probe,\n\t.driver_managed_dma = true,\n};\n\nstatic int __init pci_stub_init(void)\n{\n\tchar *p, *id;\n\tint rc;\n\n\trc = pci_register_driver(&stub_driver);\n\tif (rc)\n\t\treturn rc;\n\n\t/* no ids passed actually */\n\tif (ids[0] == '\\0')\n\t\treturn 0;\n\n\t/* add ids specified in the module parameter */\n\tp = ids;\n\twhile ((id = strsep(&p, \",\"))) {\n\t\tunsigned int vendor, device, subvendor = PCI_ANY_ID,\n\t\t\tsubdevice = PCI_ANY_ID, class = 0, class_mask = 0;\n\t\tint fields;\n\n\t\tif (!strlen(id))\n\t\t\tcontinue;\n\n\t\tfields = sscanf(id, \"%x:%x:%x:%x:%x:%x\",\n\t\t\t\t&vendor, &device, &subvendor, &subdevice,\n\t\t\t\t&class, &class_mask);\n\n\t\tif (fields < 2) {\n\t\t\tpr_warn(\"pci-stub: invalid ID string \\\"%s\\\"\\n\", id);\n\t\t\tcontinue;\n\t\t}\n\n\t\tpr_info(\"pci-stub: add %04X:%04X sub=%04X:%04X cls=%08X/%08X\\n\",\n\t\t       vendor, device, subvendor, subdevice, class, class_mask);\n\n\t\trc = pci_add_dynid(&stub_driver, vendor, device,\n\t\t\t\t   subvendor, subdevice, class, class_mask, 0);\n\t\tif (rc)\n\t\t\tpr_warn(\"pci-stub: failed to add dynamic ID (%d)\\n\",\n\t\t\t\trc);\n\t}\n\n\treturn 0;\n}\n\nstatic void __exit pci_stub_exit(void)\n{\n\tpci_unregister_driver(&stub_driver);\n}\n\nmodule_init(pci_stub_init);\nmodule_exit(pci_stub_exit);\n\nMODULE_DESCRIPTION(\"VM device assignment stub driver\");\nMODULE_LICENSE(\"GPL\");\nMODULE_AUTHOR(\"Chris Wright <chrisw@sous-sol.org>\");\n",
   "source_review": {
@@ -120,5 +146,157 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/pci-stub.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0828c025f9cd83b5",
+    "path": "drivers/pci/pci-stub.c",
+    "title": "PCI stub: 동적 ID 파싱과 부분 실패를 허용하는 등록",
+    "area": "PCI · 드라이버 · 문자열 파싱 · 모듈 수명 · 오류 처리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "모듈 매개변수, 드라이버 정의, probe와 init/exit 전체를 분석합니다.",
+    "guide": [
+      "파싱에 성공한 필드 수와 입력 전체의 유효성은 다르며 개별 항목 실패가 모듈 등록 실패와 같지는 않습니다.",
+      "구분자 파싱, 기본값, 콜백 등록, 부분 성공과 초기화 데이터 수명을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 목적과 사용 예의 범위",
+        "text": "GPL-2.0의 stub 드라이버는 PCI 장치를 예약하기 위한 코드입니다. 주석은 new_id에 ID를 추가하고 기존 드라이버에서 unbind한 뒤 pci-stub에 bind하는 sysfs 예를 제시합니다. 이는 사용 설명이며 이 소스의 init이 해당 예의 쉘 명령을 실행하거나 기존 드라이버를 직접 unbind하는 것은 아닙니다. include는 module.h와 pci.h입니다."
+      },
+      {
+        "title": "매개변수 저장소와 문법",
+        "text": "ids는 1024바이트 char 배열이며 __initdata입니다. module_param_string으로 같은 버퍼와 sizeof(ids),권한0을 지정합니다. 설명은 vendor:device 뒤에 subvendor,subdevice,class,class_mask를 차례로 생략할 수 있고 여러 항목은 쉼표로 나눈다고 합니다. 권한0은 이 매개변수를 일반 sysfs 매개변수 파일로 노출하는 읽기 권한이 아닙니다. 별도 driver new_id 인터페이스와 모듈 초기 ids 버퍼를 구분해야 합니다."
+      },
+      {
+        "title": "드라이버 정의와 probe",
+        "text": "stub_driver는 이름 pci-stub,id_table=NULL,probe=pci_stub_probe,driver_managed_dma=true입니다. 고정 ID 테이블 대신 동적 ID만 사용한다는 주석이 있습니다. probe는 claimed by stub 로그를 출력하고 0을 반환할 뿐 BAR 요청이나 인터럽트 등록, DMA 전송을 수행하지 않습니다. driver_managed_dma 플래그의 설정과 실제 DMA 작업 수행은 다른 사실입니다."
+      },
+      {
+        "title": "등록 후 문자열 분리",
+        "text": "init은 pci_register_driver를 먼저 호출하고 실패하면 그 오류를 반환합니다. 등록 성공 후 ids[0]이 NUL이면 즉시 0입니다. 그 외에는 p=ids에서 strsep(&p,\",\")로 항목을 얻습니다. strsep은 버퍼의 구분자를 NUL로 바꾸며 다음 위치를 갱신하는 방식이고, 길이0인 항목은 continue로 무시합니다. 선행·연속·마지막 쉼표로 생긴 빈 항목을 별도의 오류로 처리하지 않습니다."
+      },
+      {
+        "title": "필드 기본값과 느슨한 수용 조건",
+        "text": "매 항목에서 subvendor/subdevice는 PCI_ANY_ID,class/class_mask는 0으로 초기화하고 vendor/device는 sscanf의 첫 두 변환 결과로 채웁니다. 여섯 %x 변환을 시도해 fields<2이면 경고 후 건너뜁니다. 그 이상이면 수용하므로 여섯 필드 모두를 요구하지 않습니다. %n이나 끝 포인터로 남은 문자열을 검사하지 않으므로 두 값 뒤의 잘못된 꼬리도 변환 개수가2이면 수용될 수 있습니다. 읽히지 않은 선택 필드는 각 항목의 기본값을 유지합니다."
+      },
+      {
+        "title": "동적 ID 추가와 부분 성공",
+        "text": "수용한 필드를 로그로 표시하고 pci_add_dynid에 driver와 여섯 필드,마지막 driver_data=0을 전달합니다. 추가 실패는 경고만 하고 다음 항목으로 진행합니다. 루프가 끝나면 rc에 마지막 오류가 남아 있어도 0을 반환합니다. 따라서 등록 성공 후 모든 항목이 잘못되거나 동적 추가가 실패해도 모듈 초기화는 성공할 수 있습니다. 앞서 추가한 ID를 이 함수가 항목 오류 때문에 롤백하는 코드는 없습니다."
+      },
+      {
+        "title": "종료와 전체 검토",
+        "text": "exit는 pci_unregister_driver 한 번을 호출합니다. module_init/module_exit 연결과 VM device assignment 설명,GPL 라이선스,작성자 메타데이터까지 대조했습니다. 직접 구현된 함수는 probe,init,exit 세 개입니다. 드라이버 코어의 매칭·바인딩과 동적 ID 메모리 관리는 외부 호출의 구현 범위이며 실제 장치 unbind/bind나 모듈 로드는 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ids가 빈 문자열이면 드라이버 등록도 생략하는가?",
+        "options": [
+          "아니다. 등록 성공을 확인한 뒤 빈 문자열 검사를 한다",
+          "그렇다. 빈 문자열이면 register_driver를 호출하지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "등록 호출이 ids 검사보다 앞에 있습니다. 초기 ID가 없는 상태로 등록된 드라이버와 아예 미등록 상태는 다릅니다."
+      },
+      {
+        "prompt": "vendor와 device만 읽으면 subsystem과 class 필터는 어떤 값인가?",
+        "options": [
+          "모든 생략 필드는 직전 항목의 값을 재사용한다",
+          "subsystem 둘은 ANY,class와 class_mask는0이다"
+        ],
+        "answer": 1,
+        "explanation": "기본값 선언이 while 본문 안에 있으므로 각 항목마다 새로 초기화됩니다. 이전 항목의 선택 필드가 다음 항목에 남지 않습니다."
+      },
+      {
+        "prompt": "입력 1234:5678:zz는 반드시 전체 거부되는가?",
+        "options": [
+          "아니다. 앞 두 변환이 성공하면 fields=2로 수용될 수 있다",
+          "그렇다. 문자열 전체를 엄격하게 검증한다"
+        ],
+        "answer": 0,
+        "explanation": "허용 기준은 fields>=2이고 남은 입력 검사는 없습니다. 최소 필드 파싱과 전체 문법 검증은 별개입니다."
+      },
+      {
+        "prompt": "pci_add_dynid 실패가 init의 최종 실패 반환으로 이어지는가?",
+        "options": [
+          "그렇다. 즉시 드라이버를 해제하고 오류를 반환한다",
+          "아니다. 경고 후 계속하고 마지막에는0을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "등록 자체 실패만 초기에 반환합니다. 개별 ID 추가 실패 경로에는 unregister나 오류 반환이 없습니다."
+      },
+      {
+        "prompt": "stub probe가 PCI 하드웨어를 적극적으로 초기화하는가?",
+        "options": [
+          "아니다. 로그를 출력하고0을 반환한다",
+          "그렇다. BAR와 IRQ를 항상 할당한다"
+        ],
+        "answer": 0,
+        "explanation": "본문에는 pci_info와 return만 있습니다. 성공 probe로 드라이버가 바인딩되는 것과 장치의 BAR·IRQ·DMA를 설정하는 것은 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Simple stub driver to reserve a PCI device\n *\n * Copyright (C) 2008 Red Hat, Inc.\n * Author:\n *\tChris Wright\n *\n * Usage is simple, allocate a new id to the stub driver and bind the\n * device to it.  For example:\n *\n * # echo \"8086 10f5\" > /sys/bus/pci/drivers/pci-stub/new_id\n * # echo -n 0000:00:19.0 > /sys/bus/pci/drivers/e1000e/unbind\n * # echo -n 0000:00:19.0 > /sys/bus/pci/drivers/pci-stub/bind\n * # ls -l /sys/bus/pci/devices/0000:00:19.0/driver\n * .../0000:00:19.0/driver -> ../../../bus/pci/drivers/pci-stub\n */\n\n#include <linux/module.h>\n#include <linux/pci.h>\n\nstatic char ids[1024] __initdata;\n\nmodule_param_string(ids, ids, sizeof(ids), 0);\nMODULE_PARM_DESC(ids, \"Initial PCI IDs to add to the stub driver, format is \"\n\t\t \"\\\"vendor:device[:subvendor[:subdevice[:class[:class_mask]]]]\\\"\"\n\t\t \" and multiple comma separated entries can be specified\");\n\nstatic int pci_stub_probe(struct pci_dev *dev, const struct pci_device_id *id)\n{\n\tpci_info(dev, \"claimed by stub\\n\");\n\treturn 0;\n}\n\nstatic struct pci_driver stub_driver = {\n\t.name\t\t= \"pci-stub\",\n\t.id_table\t= NULL,\t/* only dynamic id's */\n\t.probe\t\t= pci_stub_probe,\n\t.driver_managed_dma = true,\n};\n\nstatic int __init pci_stub_init(void)\n{\n\tchar *p, *id;\n\tint rc;\n\n\trc = pci_register_driver(&stub_driver);\n\tif (rc)\n\t\treturn rc;\n\n\t/* no ids passed actually */\n\tif (ids[0] == '\\0')\n\t\treturn 0;\n\n\t/* add ids specified in the module parameter */\n\tp = ids;\n\twhile ((id = strsep(&p, \",\"))) {\n\t\tunsigned int vendor, device, subvendor = PCI_ANY_ID,\n\t\t\tsubdevice = PCI_ANY_ID, class = 0, class_mask = 0;\n\t\tint fields;\n\n\t\tif (!strlen(id))\n\t\t\tcontinue;\n\n\t\tfields = sscanf(id, \"%x:%x:%x:%x:%x:%x\",\n\t\t\t\t&vendor, &device, &subvendor, &subdevice,\n\t\t\t\t&class, &class_mask);\n\n\t\tif (fields < 2) {\n\t\t\tpr_warn(\"pci-stub: invalid ID string \\\"%s\\\"\\n\", id);\n\t\t\tcontinue;\n\t\t}\n\n\t\tpr_info(\"pci-stub: add %04X:%04X sub=%04X:%04X cls=%08X/%08X\\n\",\n\t\t       vendor, device, subvendor, subdevice, class, class_mask);\n\n\t\trc = pci_add_dynid(&stub_driver, vendor, device,\n\t\t\t\t   subvendor, subdevice, class, class_mask, 0);\n\t\tif (rc)\n\t\t\tpr_warn(\"pci-stub: failed to add dynamic ID (%d)\\n\",\n\t\t\t\trc);\n\t}\n\n\treturn 0;\n}\n\nstatic void __exit pci_stub_exit(void)\n{\n\tpci_unregister_driver(&stub_driver);\n}\n\nmodule_init(pci_stub_init);\nmodule_exit(pci_stub_exit);\n\nMODULE_DESCRIPTION(\"VM device assignment stub driver\");\nMODULE_LICENSE(\"GPL\");\nMODULE_AUTHOR(\"Chris Wright <chrisw@sous-sol.org>\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f67bfd05b2929595a95ffc9a73b690a2386090745de4901e3c3227d35dd30e43",
+      "scope": "whole-file",
+      "line_count": 97,
+      "authoring_source": "course/file_units/pci_stub_dynamic_ids.py",
+      "sections": [
+        "파일 목적과 사용 예의 범위",
+        "매개변수 저장소와 문법",
+        "드라이버 정의와 probe",
+        "등록 후 문자열 분리",
+        "필드 기본값과 느슨한 수용 조건",
+        "동적 ID 추가와 부분 성공",
+        "종료와 전체 검토"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/pci-stub.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치를 다른 용도로 넘기기 전에 다른 드라이버가 맡지 못하도록 작은 대역 드라이버에 연결할 수 있어요. pci-stub은 그런 예약 역할을 하며 복잡한 장치 작업은 하지 않아요.",
+    "meaning": "초기 ID 문자열은 최소 두 숫자만 읽어도 받아들일 수 있어요. 개별 ID가 잘못되어도 이미 등록한 드라이버 전체가 실패하는 것은 아니에요.",
+    "exercise": "1234:5678과 1234:5678:zz를 파서가 몇 필드 읽는지 비교하고, ID 추가 실패 뒤 init이 반환하는 값을 찾아보세요."
+  },
+  "goal": "초기 ID 문자열은 최소 두 숫자만 읽어도 받아들일 수 있어요. 개별 ID가 잘못되어도 이미 등록한 드라이버 전체가 실패하는 것은 아니에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "1234:5678과 1234:5678:zz를 파서가 몇 필드 읽는지 비교하고, ID 추가 실패 뒤 init이 반환하는 값을 찾아보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "4ee64a240f06e7bc3ae858c0d6cc75e9485012e2ac00b01c4c652f5a878e45e5",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

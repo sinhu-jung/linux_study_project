@@ -5,79 +5,93 @@
   "area": "고정소수점 · 정수 오버플로 · 함수 포인터 · 컴파일 상수 · 타이머",
   "track": "files",
   "kind": "kernel",
-  "intro": "마이크로초를 loop 또는 tick 수로 바꾸는 정수 산술과 구현 선택 테이블을 읽습니다.",
+  "intro": "ARM delay 헤더는 마이크로초를 대기 횟수로 바꾸는 정수 배율과 상수 입력 검사, 교체 가능한 대기 함수 표를 정의합니다.",
   "guide": [
-    "작은 분수를 정수 곱셈과 시프트로 표현하되 중간값의 폭과 지원 범위를 함께 제한합니다.",
-    "공통 delay.h의 MAX_UDELAY_MS가 ARM에서2로 바뀌는 이유를 계산식과 연결합니다."
+    "마이크로초는 1초의 백만분의 1입니다. HZ는 1초에 해당하는 jiffy 수이며 단위를 맞추기 위해 나눗셈이 필요합니다.",
+    "고정소수점 계산은 작은 분수를 큰 정수로 표현하는 방법입니다. 정수 저장 폭을 넘지 않는 조건도 함께 지켜야 합니다.",
+    "컴파일러가 미리 아는 상수와 실행 중에 정해지는 변수는 검사 경로가 다릅니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0·저작권·guard 뒤 page.h와 HZ용 param.h를 포함합니다. 변환식 주석과 상수는 어셈블리에서도 볼 수 있고 C 분기 안에 timer 구조체,연산 테이블,매크로,loop 함수와 등록 함수 선언을 둡니다. 실제 대기 루프 본문은 이 파일에 없습니다."
+      "title": "전체 정의의 배치",
+      "text": "GPL-2.0·저작권·include guard 뒤 page.h와 HZ용 param.h를 포함합니다. 변환식 주석과 상수는 어셈블리에서도 볼 수 있습니다. C 구간에 타이머 구조체, 함수 표, 매크로와 등록·루프 함수 선언을 놓지만 실제 대기 반복문은 여기 없습니다."
     },
     {
-      "title": "단위 변환 식",
-      "text": "기본 식은 loops_per_jiffy*HZ*delay_us/1000000입니다. 분수 HZ/1000000을2^31만큼 확대해 정수 곱셈에 사용하고 마지막에31비트 이동합니다. UDELAY_MULT는2147*HZ+483648*HZ/1000000이며 UDELAY_SHIFT는31입니다. 이 정수식은 소수2147.483648*HZ의 분해와 연결됩니다."
+      "title": "마이크로초를 횟수로 바꾸기",
+      "text": "기본 식은 loops_per_jiffy × HZ × delay_us / 1000000입니다. 작은 비율 HZ/1000000을 2의 31제곱만큼 키워 정수 곱에 사용한 뒤 31비트 오른쪽 이동으로 줄입니다. UDELAY_MULT의 2147*HZ + 483648*HZ/1000000은 2147.483648*HZ를 정수 부분과 나머지로 나눈 표현입니다."
     },
     {
-      "title": "폭의 제한",
-      "text": "주석은 HZ<=1000,delay_us<=2000일 때 delay_us*UDELAY_MULT가32비트에서 넘치지 않는 최대 scale shift가31이라고 설명합니다. MAX_UDELAY_MS는2입니다. 이 조건 밖의 임의 입력에 같은 안전성 증명을 적용할 수 없습니다. 정수 나눗셈의 절삭과 하드웨어 지연 정확성은 별도로 구분합니다."
+      "title": "왜 2밀리초와 31비트인가",
+      "text": "주석의 전제는 HZ가 1000 이하, delay_us가 2000 이하입니다. 그 범위에서 delay_us*UDELAY_MULT가 32비트를 넘지 않게 하는 최대 확대 이동량이 31이라고 설명합니다. MAX_UDELAY_MS는 2입니다. 전제를 벗어난 입력까지 안전하다는 증명은 아니며 정수 나눗셈 절삭과 실제 대기 시간 정확도도 별도입니다."
     },
     {
-      "title": "타이머와 연산 테이블",
-      "text": "delay_timer는 unsigned long을 반환하는 read_current_timer callback과 freq를 가집니다. arm_delay_ops는 delay,const_udelay,udelay 함수 포인터와 ticks_per_jiffy를 가집니다. __delay,__udelay,__const_udelay는 대응 포인터에 위임합니다. 테이블의 이름이 같아도 전달량은 원래 us 또는 미리 배율을 적용한 값으로 다릅니다."
+      "title": "타이머와 실행 전략 표",
+      "text": "delay_timer에는 현재 타이머를 읽는 callback과 주파수 freq가 있습니다. callback은 등록해 두고 나중에 부를 함수입니다. arm_delay_ops는 delay·const_udelay·udelay 함수 포인터와 ticks_per_jiffy를 가집니다. 각 매크로는 대응 함수를 부르지만 인수 단위는 원래 마이크로초인지 배율 적용 값인지 다르므로 이름별 계약을 확인합니다."
     },
     {
-      "title": "상수 인자 검사",
-      "text": "udelay(n)은 compiler가 n을 상수로 판단하면2000us 초과에 __bad_udelay를 호출하고 그 이하면 n*UDELAY_MULT를 const_udelay에 넘깁니다. __bad_udelay는 의도적으로 존재하지 않아 잘못된 상수 사용을 드러냅니다. 런타임 변수 경로는 __udelay(n)이며 동일한 크기 검사를 추가하지 않습니다. 따라서 런타임 큰 값이 안전하게 거부된다고 설명하면 틀립니다."
+      "title": "상수 입력에만 있는 범위 검사",
+      "text": "컴파일러가 n을 상수로 알면 2000보다 클 때 __bad_udelay를 부르고 아니면 n*UDELAY_MULT를 const_udelay로 넘깁니다. __bad_udelay는 의도적으로 구현하지 않아 잘못된 상수 사용이 드러나게 합니다. 변수 경로는 __udelay(n)으로 바로 넘기며 같은 크기 검사를 하지 않습니다. 큰 변수가 자동으로 안전하게 거부된다고 읽으면 안 됩니다."
     },
     {
-      "title": "선언과 기능 표시",
-      "text": "__loop_delay,__loop_udelay,__loop_const_udelay는 loop 구현 선언입니다. ARCH_HAS_READ_CURRENT_TIMER는 기능 매크로이고 register_current_timer_delay는 timer 구조체의 const 포인터를 받습니다. 선언만으로 등록된 callback의 수명이나 주파수 정확도를 보증하지 않습니다."
+      "title": "선언과 타이머 등록",
+      "text": "__loop_delay·__loop_udelay·__loop_const_udelay는 루프 구현을 알리는 선언입니다. ARCH_HAS_READ_CURRENT_TIMER는 기능 존재 표시이고 등록 함수는 const delay_timer 포인터를 받습니다. 선언만으로 그 객체가 얼마나 오래 살아 있는지나 주파수가 정확한지까지 보장하지 않습니다."
     },
     {
-      "title": "CS 연결",
-      "text": "시간 단위와 정수 scale,중간 곱의 폭,상수 접기와 런타임 경로,전략 테이블을 통한 구현 교체를 학습합니다. 주석의 계산 유도와 실제 asm loop의 실행 정확성을 같은 검증으로 세지 않습니다."
+      "title": "계산과 실행 검증의 차이",
+      "text": "단위 변환, 정수 배율, 중간 곱의 폭과 상수·변수 경로를 연결했습니다. 함수 포인터 표로 실제 방법을 바꿀 수 있습니다. 주석의 계산을 이해한 것과 실제 ARM 루프의 시간 정확도를 측정한 것은 다른 검증입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "ARM MAX_UDELAY_MS의 값은?",
+      "prompt": "ARM의 MAX_UDELAY_MS는 얼마인가요?",
       "options": [
+        "2입니다.",
+        "공통 기본값인 5입니다."
+      ],
+      "answer": 0,
+      "explanation": "아키텍처가 2를 먼저 정의하므로 공통 헤더의 기본값은 적용되지 않습니다.",
+      "original_prompt": "ARM MAX_UDELAY_MS의 값은?",
+      "original_options": [
         "2이다",
         "항상 공통 기본값5이다"
       ],
-      "answer": 0,
-      "explanation": "아키텍처 헤더에서2를 정의하므로 공통 delay.h의 #ifndef 기본5가 적용되지 않습니다."
+      "original_explanation": "아키텍처 헤더에서2를 정의하므로 공통 delay.h의 #ifndef 기본5가 적용되지 않습니다."
     },
     {
-      "prompt": "udelay의 런타임 변수 경로도2000us 초과를 검사하는가?",
+      "prompt": "변수 n 경로도 2000마이크로초 초과를 검사하나요?",
       "options": [
+        "예. 모든 입력이 __bad_udelay 검사로 갑니다.",
+        "아니요. __udelay(n)에 바로 맡깁니다."
+      ],
+      "answer": 1,
+      "explanation": "크기 검사는 __builtin_constant_p가 참인 분기에만 있습니다.",
+      "original_prompt": "udelay의 런타임 변수 경로도2000us 초과를 검사하는가?",
+      "original_options": [
         "그렇다. 모든 입력은 __bad_udelay로 검사한다",
         "아니다. __udelay(n)에 위임한다"
       ],
-      "answer": 1,
-      "explanation": "__builtin_constant_p가 참인 분기에만 크기 조건이 있습니다. 상수 검사와 런타임 검사를 혼동하지 않아야 합니다."
+      "original_explanation": "__builtin_constant_p가 참인 분기에만 크기 조건이 있습니다. 상수 검사와 런타임 검사를 혼동하지 않아야 합니다."
     },
     {
-      "prompt": "UDELAY_SHIFT=31의 목적은?",
+      "prompt": "UDELAY_SHIFT 31의 목적은 무엇인가요?",
       "options": [
+        "확대한 정수 곱을 원래 크기로 줄이는 것입니다.",
+        "타이머 인터럽트를 31번 기다리는 것입니다."
+      ],
+      "answer": 0,
+      "explanation": "2의 31제곱 확대를 오른쪽 이동으로 되돌립니다.",
+      "original_prompt": "UDELAY_SHIFT=31의 목적은?",
+      "original_options": [
         "확대한 고정소수점 곱을 다시 축소하는 것이다",
         "타이머 인터럽트를31번 기다리는 것이다"
       ],
-      "answer": 0,
-      "explanation": "2^31 scale을 정수 곱에 사용하므로 마지막 오른쪽 이동으로 단위를 복원합니다. 인터럽트 횟수 상수가 아닙니다."
+      "original_explanation": "2^31 scale을 정수 곱에 사용하므로 마지막 오른쪽 이동으로 단위를 복원합니다. 인터럽트 횟수 상수가 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "상수 2000과 2001, 실행 중 정해지는 변수 n이 각각 어느 경로로 가는지 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 1995-2004 Russell King\n *\n * Delay routines, using a pre-computed \"loops_per_second\" value.\n */\n#ifndef __ASM_ARM_DELAY_H\n#define __ASM_ARM_DELAY_H\n\n#include <asm/page.h>\n#include <asm/param.h>\t/* HZ */\n\n/*\n * Loop (or tick) based delay:\n *\n * loops = loops_per_jiffy * jiffies_per_sec * delay_us / us_per_sec\n *\n * where:\n *\n * jiffies_per_sec = HZ\n * us_per_sec = 1000000\n *\n * Therefore the constant part is HZ / 1000000 which is a small\n * fractional number. To make this usable with integer math, we\n * scale up this constant by 2^31, perform the actual multiplication,\n * and scale the result back down by 2^31 with a simple shift:\n *\n * loops = (loops_per_jiffy * delay_us * UDELAY_MULT) >> 31\n *\n * where:\n *\n * UDELAY_MULT = 2^31 * HZ / 1000000\n *             = (2^31 / 1000000) * HZ\n *             = 2147.483648 * HZ\n *             = 2147 * HZ + 483648 * HZ / 1000000\n *\n * 31 is the biggest scale shift value that won't overflow 32 bits for\n * delay_us * UDELAY_MULT assuming HZ <= 1000 and delay_us <= 2000.\n */\n#define MAX_UDELAY_MS\t2\n#define UDELAY_MULT\tUL(2147 * HZ + 483648 * HZ / 1000000)\n#define UDELAY_SHIFT\t31\n\n#ifndef __ASSEMBLY__\n\nstruct delay_timer {\n\tunsigned long (*read_current_timer)(void);\n\tunsigned long freq;\n};\n\nextern struct arm_delay_ops {\n\tvoid (*delay)(unsigned long);\n\tvoid (*const_udelay)(unsigned long);\n\tvoid (*udelay)(unsigned long);\n\tunsigned long ticks_per_jiffy;\n} arm_delay_ops;\n\n#define __delay(n)\t\tarm_delay_ops.delay(n)\n\n/*\n * This function intentionally does not exist; if you see references to\n * it, it means that you're calling udelay() with an out of range value.\n *\n * With currently imposed limits, this means that we support a max delay\n * of 2000us. Further limits: HZ<=1000\n */\nextern void __bad_udelay(void);\n\n/*\n * division by multiplication: you don't have to worry about\n * loss of precision.\n *\n * Use only for very small delays ( < 2 msec).  Should probably use a\n * lookup table, really, as the multiplications take much too long with\n * short delays.  This is a \"reasonable\" implementation, though (and the\n * first constant multiplications gets optimized away if the delay is\n * a constant)\n */\n#define __udelay(n)\t\tarm_delay_ops.udelay(n)\n#define __const_udelay(n)\tarm_delay_ops.const_udelay(n)\n\n#define udelay(n)\t\t\t\t\t\t\t\\\n\t(__builtin_constant_p(n) ?\t\t\t\t\t\\\n\t  ((n) > (MAX_UDELAY_MS * 1000) ? __bad_udelay() :\t\t\\\n\t\t\t__const_udelay((n) * UDELAY_MULT)) :\t\t\\\n\t  __udelay(n))\n\n/* Loop-based definitions for assembly code. */\nextern void __loop_delay(unsigned long loops);\nextern void __loop_udelay(unsigned long usecs);\nextern void __loop_const_udelay(unsigned long);\n\n/* Delay-loop timer registration. */\n#define ARCH_HAS_READ_CURRENT_TIMER\nextern void register_current_timer_delay(const struct delay_timer *timer);\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* defined(_ARM_DELAY_H) */\n\n",
   "source_review": {
@@ -102,5 +116,139 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/delay.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-023545f863d6b01a",
+    "path": "arch/arm/include/asm/delay.h",
+    "title": "ARM 지연 헤더 전체: 고정소수점 변환과 상수 검사",
+    "area": "고정소수점 · 정수 오버플로 · 함수 포인터 · 컴파일 상수 · 타이머",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "마이크로초를 loop 또는 tick 수로 바꾸는 정수 산술과 구현 선택 테이블을 읽습니다.",
+    "guide": [
+      "작은 분수를 정수 곱셈과 시프트로 표현하되 중간값의 폭과 지원 범위를 함께 제한합니다.",
+      "공통 delay.h의 MAX_UDELAY_MS가 ARM에서2로 바뀌는 이유를 계산식과 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0·저작권·guard 뒤 page.h와 HZ용 param.h를 포함합니다. 변환식 주석과 상수는 어셈블리에서도 볼 수 있고 C 분기 안에 timer 구조체,연산 테이블,매크로,loop 함수와 등록 함수 선언을 둡니다. 실제 대기 루프 본문은 이 파일에 없습니다."
+      },
+      {
+        "title": "단위 변환 식",
+        "text": "기본 식은 loops_per_jiffy*HZ*delay_us/1000000입니다. 분수 HZ/1000000을2^31만큼 확대해 정수 곱셈에 사용하고 마지막에31비트 이동합니다. UDELAY_MULT는2147*HZ+483648*HZ/1000000이며 UDELAY_SHIFT는31입니다. 이 정수식은 소수2147.483648*HZ의 분해와 연결됩니다."
+      },
+      {
+        "title": "폭의 제한",
+        "text": "주석은 HZ<=1000,delay_us<=2000일 때 delay_us*UDELAY_MULT가32비트에서 넘치지 않는 최대 scale shift가31이라고 설명합니다. MAX_UDELAY_MS는2입니다. 이 조건 밖의 임의 입력에 같은 안전성 증명을 적용할 수 없습니다. 정수 나눗셈의 절삭과 하드웨어 지연 정확성은 별도로 구분합니다."
+      },
+      {
+        "title": "타이머와 연산 테이블",
+        "text": "delay_timer는 unsigned long을 반환하는 read_current_timer callback과 freq를 가집니다. arm_delay_ops는 delay,const_udelay,udelay 함수 포인터와 ticks_per_jiffy를 가집니다. __delay,__udelay,__const_udelay는 대응 포인터에 위임합니다. 테이블의 이름이 같아도 전달량은 원래 us 또는 미리 배율을 적용한 값으로 다릅니다."
+      },
+      {
+        "title": "상수 인자 검사",
+        "text": "udelay(n)은 compiler가 n을 상수로 판단하면2000us 초과에 __bad_udelay를 호출하고 그 이하면 n*UDELAY_MULT를 const_udelay에 넘깁니다. __bad_udelay는 의도적으로 존재하지 않아 잘못된 상수 사용을 드러냅니다. 런타임 변수 경로는 __udelay(n)이며 동일한 크기 검사를 추가하지 않습니다. 따라서 런타임 큰 값이 안전하게 거부된다고 설명하면 틀립니다."
+      },
+      {
+        "title": "선언과 기능 표시",
+        "text": "__loop_delay,__loop_udelay,__loop_const_udelay는 loop 구현 선언입니다. ARCH_HAS_READ_CURRENT_TIMER는 기능 매크로이고 register_current_timer_delay는 timer 구조체의 const 포인터를 받습니다. 선언만으로 등록된 callback의 수명이나 주파수 정확도를 보증하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "시간 단위와 정수 scale,중간 곱의 폭,상수 접기와 런타임 경로,전략 테이블을 통한 구현 교체를 학습합니다. 주석의 계산 유도와 실제 asm loop의 실행 정확성을 같은 검증으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ARM MAX_UDELAY_MS의 값은?",
+        "options": [
+          "2이다",
+          "항상 공통 기본값5이다"
+        ],
+        "answer": 0,
+        "explanation": "아키텍처 헤더에서2를 정의하므로 공통 delay.h의 #ifndef 기본5가 적용되지 않습니다."
+      },
+      {
+        "prompt": "udelay의 런타임 변수 경로도2000us 초과를 검사하는가?",
+        "options": [
+          "그렇다. 모든 입력은 __bad_udelay로 검사한다",
+          "아니다. __udelay(n)에 위임한다"
+        ],
+        "answer": 1,
+        "explanation": "__builtin_constant_p가 참인 분기에만 크기 조건이 있습니다. 상수 검사와 런타임 검사를 혼동하지 않아야 합니다."
+      },
+      {
+        "prompt": "UDELAY_SHIFT=31의 목적은?",
+        "options": [
+          "확대한 고정소수점 곱을 다시 축소하는 것이다",
+          "타이머 인터럽트를31번 기다리는 것이다"
+        ],
+        "answer": 0,
+        "explanation": "2^31 scale을 정수 곱에 사용하므로 마지막 오른쪽 이동으로 단위를 복원합니다. 인터럽트 횟수 상수가 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 1995-2004 Russell King\n *\n * Delay routines, using a pre-computed \"loops_per_second\" value.\n */\n#ifndef __ASM_ARM_DELAY_H\n#define __ASM_ARM_DELAY_H\n\n#include <asm/page.h>\n#include <asm/param.h>\t/* HZ */\n\n/*\n * Loop (or tick) based delay:\n *\n * loops = loops_per_jiffy * jiffies_per_sec * delay_us / us_per_sec\n *\n * where:\n *\n * jiffies_per_sec = HZ\n * us_per_sec = 1000000\n *\n * Therefore the constant part is HZ / 1000000 which is a small\n * fractional number. To make this usable with integer math, we\n * scale up this constant by 2^31, perform the actual multiplication,\n * and scale the result back down by 2^31 with a simple shift:\n *\n * loops = (loops_per_jiffy * delay_us * UDELAY_MULT) >> 31\n *\n * where:\n *\n * UDELAY_MULT = 2^31 * HZ / 1000000\n *             = (2^31 / 1000000) * HZ\n *             = 2147.483648 * HZ\n *             = 2147 * HZ + 483648 * HZ / 1000000\n *\n * 31 is the biggest scale shift value that won't overflow 32 bits for\n * delay_us * UDELAY_MULT assuming HZ <= 1000 and delay_us <= 2000.\n */\n#define MAX_UDELAY_MS\t2\n#define UDELAY_MULT\tUL(2147 * HZ + 483648 * HZ / 1000000)\n#define UDELAY_SHIFT\t31\n\n#ifndef __ASSEMBLY__\n\nstruct delay_timer {\n\tunsigned long (*read_current_timer)(void);\n\tunsigned long freq;\n};\n\nextern struct arm_delay_ops {\n\tvoid (*delay)(unsigned long);\n\tvoid (*const_udelay)(unsigned long);\n\tvoid (*udelay)(unsigned long);\n\tunsigned long ticks_per_jiffy;\n} arm_delay_ops;\n\n#define __delay(n)\t\tarm_delay_ops.delay(n)\n\n/*\n * This function intentionally does not exist; if you see references to\n * it, it means that you're calling udelay() with an out of range value.\n *\n * With currently imposed limits, this means that we support a max delay\n * of 2000us. Further limits: HZ<=1000\n */\nextern void __bad_udelay(void);\n\n/*\n * division by multiplication: you don't have to worry about\n * loss of precision.\n *\n * Use only for very small delays ( < 2 msec).  Should probably use a\n * lookup table, really, as the multiplications take much too long with\n * short delays.  This is a \"reasonable\" implementation, though (and the\n * first constant multiplications gets optimized away if the delay is\n * a constant)\n */\n#define __udelay(n)\t\tarm_delay_ops.udelay(n)\n#define __const_udelay(n)\tarm_delay_ops.const_udelay(n)\n\n#define udelay(n)\t\t\t\t\t\t\t\\\n\t(__builtin_constant_p(n) ?\t\t\t\t\t\\\n\t  ((n) > (MAX_UDELAY_MS * 1000) ? __bad_udelay() :\t\t\\\n\t\t\t__const_udelay((n) * UDELAY_MULT)) :\t\t\\\n\t  __udelay(n))\n\n/* Loop-based definitions for assembly code. */\nextern void __loop_delay(unsigned long loops);\nextern void __loop_udelay(unsigned long usecs);\nextern void __loop_const_udelay(unsigned long);\n\n/* Delay-loop timer registration. */\n#define ARCH_HAS_READ_CURRENT_TIMER\nextern void register_current_timer_delay(const struct delay_timer *timer);\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* defined(_ARM_DELAY_H) */\n\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "3959cea355f9cc09e4eba8258585934f775d0a6bea7784b2dc3ab457d3465488",
+      "scope": "whole-file",
+      "line_count": 100,
+      "authoring_source": "course/file_units/arm_delay.py",
+      "sections": [
+        "전체 구성",
+        "단위 변환 식",
+        "폭의 제한",
+        "타이머와 연산 테이블",
+        "상수 인자 검사",
+        "선언과 기능 표시",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/delay.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "아주 작은 소수를 계산하려고 먼저 크게 확대해 정수로 계산하고 마지막에 다시 줄입니다.",
+    "meaning": "ARM delay 헤더는 마이크로초를 대기 횟수로 바꾸는 정수 배율과 상수 입력 검사, 교체 가능한 대기 함수 표를 정의합니다.",
+    "exercise": "상수 2000과 2001, 실행 중 정해지는 변수 n이 각각 어느 경로로 가는지 표시하세요."
+  },
+  "goal": "ARM delay 헤더는 마이크로초를 대기 횟수로 바꾸는 정수 배율과 상수 입력 검사, 교체 가능한 대기 함수 표를 정의합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "상수 2000과 2001, 실행 중 정해지는 변수 n이 각각 어느 경로로 가는지 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "c7698d0d3c809a7bf06beaf3d252d18674e20280eb0280a2561e532d31308048",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

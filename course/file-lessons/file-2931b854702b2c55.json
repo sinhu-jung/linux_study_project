@@ -5,122 +5,154 @@
   "area": "공유 객체 그래프 · 참조 카운팅 · task 잠금 · C _Generic · scope cleanup",
   "track": "files",
   "kind": "kernel",
-  "intro": "task가 공유하는 namespace 포인터 묶음과 nsset, 타입 선택 매크로, 참조 helper를 모두 살펴봅니다.",
+  "intro": "namespace 묶음 공유, 자식용 설정, 접근 잠금과 참조 수의 각 책임을 이해합니다.",
   "guide": [
-    "컨테이너 객체의 참조 수와 그 안에 든 개별 객체의 참조 수는 서로 다른 공유 관계를 표현합니다.",
-    "객체 그래프의 수명, 현재 task와 다른 task 접근의 잠금 규칙, 조건부 가변 자격 증명을 학습합니다."
+    "nsproxy는 여러 namespace 주소를 모은 묶음입니다. get_nsproxy는 묶음 참조 하나만 늘립니다.",
+    "다른 작업의 nsproxy는 task_lock 아래 NULL을 확인하고 사용합니다. 잠금 밖에서도 쓰려면 수명 보유가 필요합니다.",
+    "nsset은 새 공간들을 설치하기 위해 준비한 자료입니다. 수정 가능한 자격 증명을 얻는 조건은 CLONE_NEWUSER입니다."
   ],
   "deep_dive": [
     {
-      "title": "포함과 구조체 전체",
-      "text": "GPL-2.0 guard 안에 refcount·spinlock·sched를 포함하고 여러 namespace와 fs_struct를 전방 선언합니다. nsproxy는 refcount_t count와 uts_ns,ipc_ns,mnt_ns,pid_ns_for_children,net_ns,time_ns,time_ns_for_children,cgroup_ns 여덟 포인터를 보관합니다. init_nsproxy는 extern 선언입니다. user namespace 포인터가 이 묶음의 직접 필드로 들어 있다고 가정하면 안 됩니다."
+      "title": "묶음의 여덟 주소",
+      "text": "refcount·spinlock·sched를 포함하고 관련 타입을 미리 선언합니다. nsproxy에는 count와 uts_ns·ipc_ns·mnt_ns·pid_ns_for_children·net_ns·time_ns·time_ns_for_children·cgroup_ns가 있습니다. init_nsproxy는 외부 선언입니다. user namespace 주소가 이 묶음의 직접 칸으로 있다고 가정하지 않습니다."
     },
     {
-      "title": "공유와 두 종류의 참조 수",
-      "text": "주석은 모든 namespace를 공유하는 task들이 nsproxy도 공유하며 하나의 namespace를 clone하거나 unshare하면 nsproxy를 복사한다고 설명합니다. nsproxy의 count는 이를 보유하는 task 참조를, 각 namespace의 count는 해당 객체를 가리키는 nsproxy 등 보유 참조를 관리합니다. 같은 namespace를 가리키는 필드가 여러 개면 그 보유 관계도 구분해야 합니다. get_nsproxy는 묶음 count만 증가시키므로 호출할 때마다 여덟 namespace를 전부 get하는 함수가 아닙니다."
+      "title": "묶음 공유와 내부 공유",
+      "text": "모든 공간을 공유하는 작업들은 nsproxy도 공유하고 하나라도 새로 만들거나 분리하면 묶음을 복사합니다. 묶음 count는 이를 보유하는 작업 참조를, 개별 공간의 count는 이를 가리키는 묶음 등 보유 관계를 관리합니다. 여러 필드가 같은 공간을 가리키는 관계도 따로 세어야 합니다. get_nsproxy가 내부 여덟 객체를 매번 각각 get하는 것은 아닙니다."
     },
     {
-      "title": "자식용 PID와 시간 포인터",
-      "text": "주석은 현재 활성 PID namespace를 task_active_pid_ns로 얻으며 이 구조체에는 자식용 PID namespace를 보관한다고 명시합니다. 시간은 time_ns와 time_ns_for_children을 둘 다 보관합니다. 포인터 이름에서 현재 실행 문맥과 향후 자식의 설정을 구분해야 합니다. 이 헤더가 fork 시 실제 포인터 교체를 구현하는 것은 아닙니다."
+      "title": "현재 공간과 자식용 공간",
+      "text": "현재 활성 PID 공간은 task_active_pid_ns로 얻고 여기에는 앞으로 자식이 쓸 pid_ns_for_children을 둡니다. 시간은 현재 time_ns와 자식용 time_ns_for_children을 모두 담습니다. 이름에서 현재와 미래 자식 설정을 구별하며 실제 fork 때 교체 과정은 이 헤더에 없습니다."
     },
     {
-      "title": "컴파일 시 타입 선택",
-      "text": "to_ns_common은 C _Generic으로 cgroup,ipc,net,pid,mnt,time,user,uts namespace 포인터 여덟 타입에 대해 &(__ns->ns)를 선택합니다. runtime type tag를 검사하는 switch가 아닙니다. default 항목이 없으므로 목록 밖의 포인터 타입을 임의로 받아들이는 API가 아닙니다. 호출 지점에는 대상 구조체의 ns 멤버를 해석할 수 있는 정의가 필요하며 const-qualified 대상 포인터 등을 자동으로 폭넓게 지원한다고 가정하지 않습니다."
+      "title": "컴파일 때 타입 고르기",
+      "text": "to_ns_common은 C _Generic으로 cgroup·ipc·net·pid·mnt·time·user·uts 주소 타입을 골라 내부 ns의 주소를 줍니다. 실행 중 문자열이나 종류 번호를 비교하는 switch가 아닙니다. default가 없어 목록 밖 타입을 임의로 받지 않으며 해당 ns 멤버를 알 정의가 호출 위치에 필요합니다. const가 붙은 대상 포인터까지 자동으로 모두 허용한다고 가정하지 않습니다."
     },
     {
-      "title": "설치 준비 상태 nsset",
-      "text": "nsset은 unsigned flags, nsproxy 포인터, fs_struct 포인터, const cred 포인터를 묶습니다. 부분적이거나 완전한 namespace 집합 설치에 필요한 상태입니다. 주석은 새 user namespace 요청일 때 cred가 수정 가능한 자격 증명을 가리키며 가변 포인터가 필요하면 nsset_cred를 사용하고 결과를 검사하라고 설명합니다. 구조체 필드가 const이므로 모든 경우에 무조건 cast해서 수정하는 계약은 아닙니다."
+      "title": "설치 준비 묶음",
+      "text": "nsset은 unsigned flags, nsproxy 주소, fs_struct 주소, const cred 주소를 묶어 일부 또는 전체 공간 설치를 준비합니다. cred는 권한·신원 자격 증명입니다. 새 user 공간을 요청했을 때는 수정 가능한 자료를 가리키며 nsset_cred를 쓰고 결과를 검사해야 합니다. const를 무조건 떼고 수정해도 된다는 뜻은 아닙니다."
     },
     {
-      "title": "nsset_cred의 정확한 조건",
-      "text": "nsset_cred는 flags&CLONE_NEWUSER이면 (struct cred *)set->cred를 반환하고 아니면 NULL입니다. 함수 내부에 새 cred 할당, 복사, 참조 수 증가, CAP 검사, set->cred NULL 검사는 없습니다. 조건에 맞게 준비된 nsset이라는 계약을 사용하며 반환 결과를 검사해야 합니다. CLONE_NEWTIME만 있는 요청은 이 helper에서 가변 cred를 받는 조건이 아닙니다."
+      "title": "수정 가능한 자격 증명의 조건",
+      "text": "nsset_cred는 flags에 CLONE_NEWUSER가 있을 때만 cred를 수정 가능한 주소로 바꿔 반환하고 아니면 NULL입니다. 새 자료 할당·복사·참조 증가·권한 검사가 없고 cred 자체의 NULL도 검사하지 않습니다. 제대로 준비된 nsset을 전제로 결과를 검사해야 합니다. CLONE_NEWTIME만으로는 이 조건을 만족하지 않습니다."
     },
     {
-      "title": "접근 규칙: 현재 task와 변경",
-      "text": "주석상 tsk->nsproxy 또는 그 안의 포인터 변경은 current task만 허용하며 tsk->nsproxy를 바꿀 때 task_lock이 필요합니다. 현재 task의 namespace를 읽는 경우에는 포인터를 직접 따라갈 수 있다고 설명합니다. 이것을 namespace 객체의 모든 내부 필드가 무잠금 수정 가능하다는 의미로 확대하지 않습니다. 내부 객체 데이터는 별도 동기화 규칙을 가질 수 있습니다."
+      "title": "현재 작업의 읽기와 변경",
+      "text": "주석상 nsproxy 주소나 그 안의 포인터 변경은 현재 작업만 할 수 있고 tsk->nsproxy 교체에는 task_lock이 필요합니다. 현재 작업의 공간을 읽을 때는 포인터를 직접 따라갈 수 있습니다. 이를 각 namespace 내부 자료까지 잠금 없이 바꿔도 된다는 뜻으로 넓히지 않습니다."
     },
     {
-      "title": "다른 task의 namespace 접근",
-      "text": "주석의 패턴은 task_lock(task), nsproxy=task->nsproxy, NULL이 아니면 필요한 namespace 사용 또는 참조 획득, task_unlock 순서입니다. NULL은 종료에 가까운 task 상태일 수 있습니다. 포인터를 얻은 뒤 lock 밖에서 계속 사용하려면 해당 객체의 수명 보유 계약을 지켜야 합니다. 읽기라는 이유로 다른 task의 nsproxy를 잠금 없이 임의 접근하는 패턴과 다릅니다."
+      "title": "다른 작업을 볼 때",
+      "text": "task_lock을 잡고 task->nsproxy를 읽어 NULL이 아닐 때 공간을 사용하거나 참조를 얻은 뒤 task_unlock합니다. NULL은 작업이 종료 직전인 상태일 수 있습니다. 잠금 밖에서 계속 쓸 경우 해당 객체의 수명을 따로 확보해야 합니다. 현재 작업을 읽는 규칙을 다른 작업에 그대로 적용하지 않습니다."
     },
     {
-      "title": "외부 수명·전환 API 전체",
-      "text": "copy_namespaces(flags,tsk)는 int, exit_task_namespaces(tsk)와 switch_task_namespaces(tsk,new)는 void, exec_task_namespaces(void)는 int입니다. free_nsproxy(ns)는 void이고 unshare_nsproxy_namespaces는 flags,nsproxy 이중 포인터,cred,fs를 받아 int를 반환합니다. nsproxy_cache_init은 __init int 선언입니다. 실제 복사 순서·오류 코드·객체별 해제는 이 헤더 밖 구현에 있습니다."
+      "title": "외부에서 구현하는 함수들",
+      "text": "copy_namespaces와 exec_task_namespaces는 정수 결과, exit_task_namespaces·switch_task_namespaces·free_nsproxy는 void입니다. unshare_nsproxy_namespaces는 flags, 묶음 주소를 담을 이중 포인터, cred와 fs를 받아 정수 결과를 냅니다. nsproxy_cache_init은 초기화 때 쓰는 정수 함수 선언입니다. 복사 순서·오류·개별 해제의 실제 처리는 이 헤더 밖에 있습니다."
     },
     {
-      "title": "참조 helper와 자동 정리 정의",
-      "text": "put_nsproxy는 refcount_dec_and_test가 true일 때 free_nsproxy를 호출하고 get_nsproxy는 refcount_inc를 수행하며 반환형은 void입니다. 두 helper 자체에는 NULL 검사가 없습니다. 마지막 DEFINE_FREE(put_nsproxy,struct nsproxy *,if (_T) put_nsproxy(_T))는 cleanup 용도의 동작을 정의하며 그 동작은 NULL을 건너뜁니다. 이 정의만으로 모든 nsproxy 지역 변수에 자동 cleanup이 붙는 것은 아닙니다. 호출부에서 해당 cleanup 방식을 사용해야 합니다."
+      "title": "참조 반환과 자동 정리의 차이",
+      "text": "put_nsproxy는 count를 줄여 마지막이면 free_nsproxy를 부르고 get_nsproxy는 count를 늘리는 void 함수입니다. 둘 다 NULL 검사가 없습니다. DEFINE_FREE는 범위 끝 정리에 쓸 규칙을 정의하며 if (_T)로 NULL은 건너뜁니다. 이 선언 하나가 모든 지역 변수에 자동 적용되지는 않으며 호출부가 해당 정리 방식을 선택해야 합니다."
     },
     {
-      "title": "검토 범위와 예제",
-      "text": "두 task가 하나의 nsproxy를 함께 보유하다 한 task가 다른 namespace 집합을 준비하면 묶음의 공유 관계와 개별 namespace 재사용 관계를 따로 추적해야 합니다. 이 파일의 구조체 두 개, 타입 선택 매크로, 외부 선언, inline helper, cleanup 정의와 접근 규칙을 모두 검토했습니다. 실제 clone·unshare·setns 실행이나 모든 경합 상황을 테스트한 결과는 아닙니다."
+      "title": "공유 관계를 두 층으로 읽기",
+      "text": "두 작업이 한 묶음을 쓰다가 하나가 새 공간 집합을 준비할 때 묶음 공유와 내부 공간 재사용을 따로 추적합니다. 이 헤더의 두 구조체, 타입 선택, 선언과 짧은 함수, 정리 규칙을 읽은 범위입니다. 실제 clone·unshare·setns 실행이나 모든 경쟁 상황을 시험한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "nsproxy의 PID 포인터가 나타내는 namespace는?",
+      "prompt": "nsproxy의 PID 주소는 어떤 공간인가요?",
       "options": [
+        "자식들이 사용할 PID 공간입니다.",
+        "언제나 현재 작업의 활성 PID 공간입니다."
+      ],
+      "answer": 0,
+      "explanation": "이름은 pid_ns_for_children입니다. 현재 활성 공간은 task_active_pid_ns로 얻습니다.",
+      "original_prompt": "nsproxy의 PID 포인터가 나타내는 namespace는?",
+      "original_options": [
         "자식들이 사용할 PID namespace",
         "항상 현재 task의 활성 PID namespace"
       ],
-      "answer": 0,
-      "explanation": "주석은 현재 활성 PID namespace를 task_active_pid_ns로 얻는 예외를 명시합니다. 필드 이름도 pid_ns_for_children입니다."
+      "original_explanation": "주석은 현재 활성 PID namespace를 task_active_pid_ns로 얻는 예외를 명시합니다. 필드 이름도 pid_ns_for_children입니다."
     },
     {
-      "prompt": "get_nsproxy가 직접 증가시키는 참조 수는?",
+      "prompt": "get_nsproxy는 어떤 참조 수를 직접 늘리나요?",
       "options": [
+        "내부 여덟 공간 각각의 count입니다.",
+        "nsproxy 묶음의 count 하나입니다."
+      ],
+      "answer": 1,
+      "explanation": "본문은 refcount_inc(&ns->count)뿐입니다. 새 묶음에 내부 객체를 연결하는 절차와 구별합니다.",
+      "original_prompt": "get_nsproxy가 직접 증가시키는 참조 수는?",
+      "original_options": [
         "여덟 namespace 객체 각각의 count",
         "nsproxy 묶음의 count 하나"
       ],
-      "answer": 1,
-      "explanation": "본문에는 refcount_inc(&ns->count)만 있습니다. 묶음 참조 증가와 내부 객체를 새 묶음에 연결하는 절차를 구분합니다."
+      "original_explanation": "본문에는 refcount_inc(&ns->count)만 있습니다. 묶음 참조 증가와 내부 객체를 새 묶음에 연결하는 절차를 구분합니다."
     },
     {
-      "prompt": "to_ns_common은 언제 대상 타입을 선택하는가?",
+      "prompt": "to_ns_common은 언제 타입을 고르나요?",
       "options": [
+        "컴파일할 때 _Generic으로 고릅니다.",
+        "실행할 때 공간 이름 문자열을 비교합니다."
+      ],
+      "answer": 0,
+      "explanation": "정해진 타입 목록을 사용하며 default도 없습니다. 실행 중 종류를 읽는 동작이 아닙니다.",
+      "original_prompt": "to_ns_common은 언제 대상 타입을 선택하는가?",
+      "original_options": [
         "컴파일 시 _Generic으로 선택한다",
         "실행 시 namespace 이름 문자열을 비교한다"
       ],
-      "answer": 0,
-      "explanation": "타입 association 목록으로 선택하며 default도 없습니다. 문자열이나 runtime type 태그를 읽는 동작이 아닙니다."
+      "original_explanation": "타입 association 목록으로 선택하며 default도 없습니다. 문자열이나 runtime type 태그를 읽는 동작이 아닙니다."
     },
     {
-      "prompt": "CLONE_NEWTIME만 있는 nsset의 nsset_cred 반환은?",
+      "prompt": "CLONE_NEWTIME만 요청한 nsset_cred의 결과는?",
       "options": [
+        "항상 수정 가능한 cred 주소입니다.",
+        "NULL입니다."
+      ],
+      "answer": 1,
+      "explanation": "검사하는 비트는 CLONE_NEWUSER입니다. 시간 공간 요청과 사용자 공간 요청은 다릅니다.",
+      "original_prompt": "CLONE_NEWTIME만 있는 nsset의 nsset_cred 반환은?",
+      "original_options": [
         "무조건 수정 가능한 cred 포인터",
         "NULL"
       ],
-      "answer": 1,
-      "explanation": "검사하는 비트는 CLONE_NEWUSER입니다. 새 시간 namespace와 새 user namespace 요청은 서로 다릅니다."
+      "original_explanation": "검사하는 비트는 CLONE_NEWUSER입니다. 새 시간 namespace와 새 user namespace 요청은 서로 다릅니다."
     },
     {
-      "prompt": "다른 task의 nsproxy를 읽는 주석상 절차는?",
+      "prompt": "다른 작업의 nsproxy는 어떻게 읽도록 설명하나요?",
       "options": [
+        "task_lock 아래 NULL을 확인하고 필요하면 참조를 얻습니다.",
+        "읽기이므로 잠금 없이 주소만 저장합니다."
+      ],
+      "answer": 0,
+      "explanation": "다른 작업은 종료로 상태가 바뀔 수 있습니다. 현재 작업에 적용되는 읽기 규칙과 구별합니다.",
+      "original_prompt": "다른 task의 nsproxy를 읽는 주석상 절차는?",
+      "original_options": [
         "task_lock 아래 NULL을 검사하고 필요하면 참조를 획득한다",
         "읽기이므로 아무 잠금 없이 포인터만 저장한다"
       ],
-      "answer": 0,
-      "explanation": "다른 task는 종료 등으로 상태가 바뀔 수 있습니다. 현재 task 읽기 규칙을 다른 task에도 그대로 적용해서는 안 됩니다."
+      "original_explanation": "다른 task는 종료 등으로 상태가 바뀔 수 있습니다. 현재 task 읽기 규칙을 다른 task에도 그대로 적용해서는 안 됩니다."
     },
     {
-      "prompt": "put_nsproxy 자체와 DEFINE_FREE의 NULL 처리 차이는?",
+      "prompt": "put_nsproxy와 DEFINE_FREE의 NULL 처리는 어떻게 다른가요?",
       "options": [
+        "둘 다 반드시 NULL의 내부를 읽습니다.",
+        "helper에는 NULL 검사가 없고 자동 정리 규칙은 NULL을 건너뜁니다."
+      ],
+      "answer": 1,
+      "explanation": "inline 함수는 바로 count를 쓰지만 정리 규칙에는 if (_T)가 있습니다. 바깥 포장과 내부 함수의 계약은 다릅니다.",
+      "original_prompt": "put_nsproxy 자체와 DEFINE_FREE의 NULL 처리 차이는?",
+      "original_options": [
         "둘 다 반드시 NULL 역참조를 수행한다",
         "helper 자체는 NULL 검사 없이 사용하고 cleanup 동작은 NULL을 건너뛴다"
       ],
-      "answer": 1,
-      "explanation": "inline 함수에는 검사 없이 ns->count를 읽지만 DEFINE_FREE 본문에는 if (_T)가 있습니다. wrapper와 내부 helper 계약이 다릅니다."
+      "original_explanation": "inline 함수에는 검사 없이 ns->count를 읽지만 DEFINE_FREE 본문에는 if (_T)가 있습니다. wrapper와 내부 helper 계약이 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "두 작업이 한 nsproxy를 공유하다 하나가 새 묶음을 만드는 상황에서 묶음과 개별 공간의 참조를 따로 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_NSPROXY_H\n#define _LINUX_NSPROXY_H\n\n#include <linux/refcount.h>\n#include <linux/spinlock.h>\n#include <linux/sched.h>\n\nstruct mnt_namespace;\nstruct uts_namespace;\nstruct ipc_namespace;\nstruct pid_namespace;\nstruct cgroup_namespace;\nstruct fs_struct;\n\n/*\n * A structure to contain pointers to all per-process\n * namespaces - fs (mount), uts, network, sysvipc, etc.\n *\n * The pid namespace is an exception -- it's accessed using\n * task_active_pid_ns.  The pid namespace here is the\n * namespace that children will use.\n *\n * 'count' is the number of tasks holding a reference.\n * The count for each namespace, then, will be the number\n * of nsproxies pointing to it, not the number of tasks.\n *\n * The nsproxy is shared by tasks which share all namespaces.\n * As soon as a single namespace is cloned or unshared, the\n * nsproxy is copied.\n */\nstruct nsproxy {\n\trefcount_t count;\n\tstruct uts_namespace *uts_ns;\n\tstruct ipc_namespace *ipc_ns;\n\tstruct mnt_namespace *mnt_ns;\n\tstruct pid_namespace *pid_ns_for_children;\n\tstruct net \t     *net_ns;\n\tstruct time_namespace *time_ns;\n\tstruct time_namespace *time_ns_for_children;\n\tstruct cgroup_namespace *cgroup_ns;\n};\nextern struct nsproxy init_nsproxy;\n\n#define to_ns_common(__ns)                              \\\n\t_Generic((__ns),                                \\\n\t\tstruct cgroup_namespace *: &(__ns->ns), \\\n\t\tstruct ipc_namespace *:    &(__ns->ns), \\\n\t\tstruct net *:              &(__ns->ns), \\\n\t\tstruct pid_namespace *:    &(__ns->ns), \\\n\t\tstruct mnt_namespace *:    &(__ns->ns), \\\n\t\tstruct time_namespace *:   &(__ns->ns), \\\n\t\tstruct user_namespace *:   &(__ns->ns), \\\n\t\tstruct uts_namespace *:    &(__ns->ns))\n\n/*\n * A structure to encompass all bits needed to install\n * a partial or complete new set of namespaces.\n *\n * If a new user namespace is requested cred will\n * point to a modifiable set of credentials. If a pointer\n * to a modifiable set is needed nsset_cred() must be\n * used and tested.\n */\nstruct nsset {\n\tunsigned flags;\n\tstruct nsproxy *nsproxy;\n\tstruct fs_struct *fs;\n\tconst struct cred *cred;\n};\n\nstatic inline struct cred *nsset_cred(struct nsset *set)\n{\n\tif (set->flags & CLONE_NEWUSER)\n\t\treturn (struct cred *)set->cred;\n\n\treturn NULL;\n}\n\n/*\n * the namespaces access rules are:\n *\n *  1. only current task is allowed to change tsk->nsproxy pointer or\n *     any pointer on the nsproxy itself.  Current must hold the task_lock\n *     when changing tsk->nsproxy.\n *\n *  2. when accessing (i.e. reading) current task's namespaces - no\n *     precautions should be taken - just dereference the pointers\n *\n *  3. the access to other task namespaces is performed like this\n *     task_lock(task);\n *     nsproxy = task->nsproxy;\n *     if (nsproxy != NULL) {\n *             / *\n *               * work with the namespaces here\n *               * e.g. get the reference on one of them\n *               * /\n *     } / *\n *         * NULL task->nsproxy means that this task is\n *         * almost dead (zombie)\n *         * /\n *     task_unlock(task);\n *\n */\n\nint copy_namespaces(unsigned long flags, struct task_struct *tsk);\nvoid exit_task_namespaces(struct task_struct *tsk);\nvoid switch_task_namespaces(struct task_struct *tsk, struct nsproxy *new);\nint exec_task_namespaces(void);\nvoid free_nsproxy(struct nsproxy *ns);\nint unshare_nsproxy_namespaces(unsigned long, struct nsproxy **,\n\tstruct cred *, struct fs_struct *);\nint __init nsproxy_cache_init(void);\n\nstatic inline void put_nsproxy(struct nsproxy *ns)\n{\n\tif (refcount_dec_and_test(&ns->count))\n\t\tfree_nsproxy(ns);\n}\n\nstatic inline void get_nsproxy(struct nsproxy *ns)\n{\n\trefcount_inc(&ns->count);\n}\n\nDEFINE_FREE(put_nsproxy, struct nsproxy *, if (_T) put_nsproxy(_T))\n\n#endif\n",
   "source_review": {
@@ -149,5 +181,186 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/nsproxy.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-2931b854702b2c55",
+    "path": "include/linux/nsproxy.h",
+    "title": "nsproxy: namespace 묶음 공유·설치 상태·접근 규칙",
+    "area": "공유 객체 그래프 · 참조 카운팅 · task 잠금 · C _Generic · scope cleanup",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "task가 공유하는 namespace 포인터 묶음과 nsset, 타입 선택 매크로, 참조 helper를 모두 살펴봅니다.",
+    "guide": [
+      "컨테이너 객체의 참조 수와 그 안에 든 개별 객체의 참조 수는 서로 다른 공유 관계를 표현합니다.",
+      "객체 그래프의 수명, 현재 task와 다른 task 접근의 잠금 규칙, 조건부 가변 자격 증명을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "포함과 구조체 전체",
+        "text": "GPL-2.0 guard 안에 refcount·spinlock·sched를 포함하고 여러 namespace와 fs_struct를 전방 선언합니다. nsproxy는 refcount_t count와 uts_ns,ipc_ns,mnt_ns,pid_ns_for_children,net_ns,time_ns,time_ns_for_children,cgroup_ns 여덟 포인터를 보관합니다. init_nsproxy는 extern 선언입니다. user namespace 포인터가 이 묶음의 직접 필드로 들어 있다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "공유와 두 종류의 참조 수",
+        "text": "주석은 모든 namespace를 공유하는 task들이 nsproxy도 공유하며 하나의 namespace를 clone하거나 unshare하면 nsproxy를 복사한다고 설명합니다. nsproxy의 count는 이를 보유하는 task 참조를, 각 namespace의 count는 해당 객체를 가리키는 nsproxy 등 보유 참조를 관리합니다. 같은 namespace를 가리키는 필드가 여러 개면 그 보유 관계도 구분해야 합니다. get_nsproxy는 묶음 count만 증가시키므로 호출할 때마다 여덟 namespace를 전부 get하는 함수가 아닙니다."
+      },
+      {
+        "title": "자식용 PID와 시간 포인터",
+        "text": "주석은 현재 활성 PID namespace를 task_active_pid_ns로 얻으며 이 구조체에는 자식용 PID namespace를 보관한다고 명시합니다. 시간은 time_ns와 time_ns_for_children을 둘 다 보관합니다. 포인터 이름에서 현재 실행 문맥과 향후 자식의 설정을 구분해야 합니다. 이 헤더가 fork 시 실제 포인터 교체를 구현하는 것은 아닙니다."
+      },
+      {
+        "title": "컴파일 시 타입 선택",
+        "text": "to_ns_common은 C _Generic으로 cgroup,ipc,net,pid,mnt,time,user,uts namespace 포인터 여덟 타입에 대해 &(__ns->ns)를 선택합니다. runtime type tag를 검사하는 switch가 아닙니다. default 항목이 없으므로 목록 밖의 포인터 타입을 임의로 받아들이는 API가 아닙니다. 호출 지점에는 대상 구조체의 ns 멤버를 해석할 수 있는 정의가 필요하며 const-qualified 대상 포인터 등을 자동으로 폭넓게 지원한다고 가정하지 않습니다."
+      },
+      {
+        "title": "설치 준비 상태 nsset",
+        "text": "nsset은 unsigned flags, nsproxy 포인터, fs_struct 포인터, const cred 포인터를 묶습니다. 부분적이거나 완전한 namespace 집합 설치에 필요한 상태입니다. 주석은 새 user namespace 요청일 때 cred가 수정 가능한 자격 증명을 가리키며 가변 포인터가 필요하면 nsset_cred를 사용하고 결과를 검사하라고 설명합니다. 구조체 필드가 const이므로 모든 경우에 무조건 cast해서 수정하는 계약은 아닙니다."
+      },
+      {
+        "title": "nsset_cred의 정확한 조건",
+        "text": "nsset_cred는 flags&CLONE_NEWUSER이면 (struct cred *)set->cred를 반환하고 아니면 NULL입니다. 함수 내부에 새 cred 할당, 복사, 참조 수 증가, CAP 검사, set->cred NULL 검사는 없습니다. 조건에 맞게 준비된 nsset이라는 계약을 사용하며 반환 결과를 검사해야 합니다. CLONE_NEWTIME만 있는 요청은 이 helper에서 가변 cred를 받는 조건이 아닙니다."
+      },
+      {
+        "title": "접근 규칙: 현재 task와 변경",
+        "text": "주석상 tsk->nsproxy 또는 그 안의 포인터 변경은 current task만 허용하며 tsk->nsproxy를 바꿀 때 task_lock이 필요합니다. 현재 task의 namespace를 읽는 경우에는 포인터를 직접 따라갈 수 있다고 설명합니다. 이것을 namespace 객체의 모든 내부 필드가 무잠금 수정 가능하다는 의미로 확대하지 않습니다. 내부 객체 데이터는 별도 동기화 규칙을 가질 수 있습니다."
+      },
+      {
+        "title": "다른 task의 namespace 접근",
+        "text": "주석의 패턴은 task_lock(task), nsproxy=task->nsproxy, NULL이 아니면 필요한 namespace 사용 또는 참조 획득, task_unlock 순서입니다. NULL은 종료에 가까운 task 상태일 수 있습니다. 포인터를 얻은 뒤 lock 밖에서 계속 사용하려면 해당 객체의 수명 보유 계약을 지켜야 합니다. 읽기라는 이유로 다른 task의 nsproxy를 잠금 없이 임의 접근하는 패턴과 다릅니다."
+      },
+      {
+        "title": "외부 수명·전환 API 전체",
+        "text": "copy_namespaces(flags,tsk)는 int, exit_task_namespaces(tsk)와 switch_task_namespaces(tsk,new)는 void, exec_task_namespaces(void)는 int입니다. free_nsproxy(ns)는 void이고 unshare_nsproxy_namespaces는 flags,nsproxy 이중 포인터,cred,fs를 받아 int를 반환합니다. nsproxy_cache_init은 __init int 선언입니다. 실제 복사 순서·오류 코드·객체별 해제는 이 헤더 밖 구현에 있습니다."
+      },
+      {
+        "title": "참조 helper와 자동 정리 정의",
+        "text": "put_nsproxy는 refcount_dec_and_test가 true일 때 free_nsproxy를 호출하고 get_nsproxy는 refcount_inc를 수행하며 반환형은 void입니다. 두 helper 자체에는 NULL 검사가 없습니다. 마지막 DEFINE_FREE(put_nsproxy,struct nsproxy *,if (_T) put_nsproxy(_T))는 cleanup 용도의 동작을 정의하며 그 동작은 NULL을 건너뜁니다. 이 정의만으로 모든 nsproxy 지역 변수에 자동 cleanup이 붙는 것은 아닙니다. 호출부에서 해당 cleanup 방식을 사용해야 합니다."
+      },
+      {
+        "title": "검토 범위와 예제",
+        "text": "두 task가 하나의 nsproxy를 함께 보유하다 한 task가 다른 namespace 집합을 준비하면 묶음의 공유 관계와 개별 namespace 재사용 관계를 따로 추적해야 합니다. 이 파일의 구조체 두 개, 타입 선택 매크로, 외부 선언, inline helper, cleanup 정의와 접근 규칙을 모두 검토했습니다. 실제 clone·unshare·setns 실행이나 모든 경합 상황을 테스트한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "nsproxy의 PID 포인터가 나타내는 namespace는?",
+        "options": [
+          "자식들이 사용할 PID namespace",
+          "항상 현재 task의 활성 PID namespace"
+        ],
+        "answer": 0,
+        "explanation": "주석은 현재 활성 PID namespace를 task_active_pid_ns로 얻는 예외를 명시합니다. 필드 이름도 pid_ns_for_children입니다."
+      },
+      {
+        "prompt": "get_nsproxy가 직접 증가시키는 참조 수는?",
+        "options": [
+          "여덟 namespace 객체 각각의 count",
+          "nsproxy 묶음의 count 하나"
+        ],
+        "answer": 1,
+        "explanation": "본문에는 refcount_inc(&ns->count)만 있습니다. 묶음 참조 증가와 내부 객체를 새 묶음에 연결하는 절차를 구분합니다."
+      },
+      {
+        "prompt": "to_ns_common은 언제 대상 타입을 선택하는가?",
+        "options": [
+          "컴파일 시 _Generic으로 선택한다",
+          "실행 시 namespace 이름 문자열을 비교한다"
+        ],
+        "answer": 0,
+        "explanation": "타입 association 목록으로 선택하며 default도 없습니다. 문자열이나 runtime type 태그를 읽는 동작이 아닙니다."
+      },
+      {
+        "prompt": "CLONE_NEWTIME만 있는 nsset의 nsset_cred 반환은?",
+        "options": [
+          "무조건 수정 가능한 cred 포인터",
+          "NULL"
+        ],
+        "answer": 1,
+        "explanation": "검사하는 비트는 CLONE_NEWUSER입니다. 새 시간 namespace와 새 user namespace 요청은 서로 다릅니다."
+      },
+      {
+        "prompt": "다른 task의 nsproxy를 읽는 주석상 절차는?",
+        "options": [
+          "task_lock 아래 NULL을 검사하고 필요하면 참조를 획득한다",
+          "읽기이므로 아무 잠금 없이 포인터만 저장한다"
+        ],
+        "answer": 0,
+        "explanation": "다른 task는 종료 등으로 상태가 바뀔 수 있습니다. 현재 task 읽기 규칙을 다른 task에도 그대로 적용해서는 안 됩니다."
+      },
+      {
+        "prompt": "put_nsproxy 자체와 DEFINE_FREE의 NULL 처리 차이는?",
+        "options": [
+          "둘 다 반드시 NULL 역참조를 수행한다",
+          "helper 자체는 NULL 검사 없이 사용하고 cleanup 동작은 NULL을 건너뛴다"
+        ],
+        "answer": 1,
+        "explanation": "inline 함수에는 검사 없이 ns->count를 읽지만 DEFINE_FREE 본문에는 if (_T)가 있습니다. wrapper와 내부 helper 계약이 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_NSPROXY_H\n#define _LINUX_NSPROXY_H\n\n#include <linux/refcount.h>\n#include <linux/spinlock.h>\n#include <linux/sched.h>\n\nstruct mnt_namespace;\nstruct uts_namespace;\nstruct ipc_namespace;\nstruct pid_namespace;\nstruct cgroup_namespace;\nstruct fs_struct;\n\n/*\n * A structure to contain pointers to all per-process\n * namespaces - fs (mount), uts, network, sysvipc, etc.\n *\n * The pid namespace is an exception -- it's accessed using\n * task_active_pid_ns.  The pid namespace here is the\n * namespace that children will use.\n *\n * 'count' is the number of tasks holding a reference.\n * The count for each namespace, then, will be the number\n * of nsproxies pointing to it, not the number of tasks.\n *\n * The nsproxy is shared by tasks which share all namespaces.\n * As soon as a single namespace is cloned or unshared, the\n * nsproxy is copied.\n */\nstruct nsproxy {\n\trefcount_t count;\n\tstruct uts_namespace *uts_ns;\n\tstruct ipc_namespace *ipc_ns;\n\tstruct mnt_namespace *mnt_ns;\n\tstruct pid_namespace *pid_ns_for_children;\n\tstruct net \t     *net_ns;\n\tstruct time_namespace *time_ns;\n\tstruct time_namespace *time_ns_for_children;\n\tstruct cgroup_namespace *cgroup_ns;\n};\nextern struct nsproxy init_nsproxy;\n\n#define to_ns_common(__ns)                              \\\n\t_Generic((__ns),                                \\\n\t\tstruct cgroup_namespace *: &(__ns->ns), \\\n\t\tstruct ipc_namespace *:    &(__ns->ns), \\\n\t\tstruct net *:              &(__ns->ns), \\\n\t\tstruct pid_namespace *:    &(__ns->ns), \\\n\t\tstruct mnt_namespace *:    &(__ns->ns), \\\n\t\tstruct time_namespace *:   &(__ns->ns), \\\n\t\tstruct user_namespace *:   &(__ns->ns), \\\n\t\tstruct uts_namespace *:    &(__ns->ns))\n\n/*\n * A structure to encompass all bits needed to install\n * a partial or complete new set of namespaces.\n *\n * If a new user namespace is requested cred will\n * point to a modifiable set of credentials. If a pointer\n * to a modifiable set is needed nsset_cred() must be\n * used and tested.\n */\nstruct nsset {\n\tunsigned flags;\n\tstruct nsproxy *nsproxy;\n\tstruct fs_struct *fs;\n\tconst struct cred *cred;\n};\n\nstatic inline struct cred *nsset_cred(struct nsset *set)\n{\n\tif (set->flags & CLONE_NEWUSER)\n\t\treturn (struct cred *)set->cred;\n\n\treturn NULL;\n}\n\n/*\n * the namespaces access rules are:\n *\n *  1. only current task is allowed to change tsk->nsproxy pointer or\n *     any pointer on the nsproxy itself.  Current must hold the task_lock\n *     when changing tsk->nsproxy.\n *\n *  2. when accessing (i.e. reading) current task's namespaces - no\n *     precautions should be taken - just dereference the pointers\n *\n *  3. the access to other task namespaces is performed like this\n *     task_lock(task);\n *     nsproxy = task->nsproxy;\n *     if (nsproxy != NULL) {\n *             / *\n *               * work with the namespaces here\n *               * e.g. get the reference on one of them\n *               * /\n *     } / *\n *         * NULL task->nsproxy means that this task is\n *         * almost dead (zombie)\n *         * /\n *     task_unlock(task);\n *\n */\n\nint copy_namespaces(unsigned long flags, struct task_struct *tsk);\nvoid exit_task_namespaces(struct task_struct *tsk);\nvoid switch_task_namespaces(struct task_struct *tsk, struct nsproxy *new);\nint exec_task_namespaces(void);\nvoid free_nsproxy(struct nsproxy *ns);\nint unshare_nsproxy_namespaces(unsigned long, struct nsproxy **,\n\tstruct cred *, struct fs_struct *);\nint __init nsproxy_cache_init(void);\n\nstatic inline void put_nsproxy(struct nsproxy *ns)\n{\n\tif (refcount_dec_and_test(&ns->count))\n\t\tfree_nsproxy(ns);\n}\n\nstatic inline void get_nsproxy(struct nsproxy *ns)\n{\n\trefcount_inc(&ns->count);\n}\n\nDEFINE_FREE(put_nsproxy, struct nsproxy *, if (_T) put_nsproxy(_T))\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "2b76160db39bb21e8c05478f236f19f66c1da9a393ee3081c8a1c24290eceeb9",
+      "scope": "whole-file",
+      "line_count": 128,
+      "authoring_source": "course/file_units/namespace_common_interfaces.py",
+      "sections": [
+        "포함과 구조체 전체",
+        "공유와 두 종류의 참조 수",
+        "자식용 PID와 시간 포인터",
+        "컴파일 시 타입 선택",
+        "설치 준비 상태 nsset",
+        "nsset_cred의 정확한 조건",
+        "접근 규칙: 현재 task와 변경",
+        "다른 task의 namespace 접근",
+        "외부 수명·전환 API 전체",
+        "참조 helper와 자동 정리 정의",
+        "검토 범위와 예제"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/nsproxy.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "여러 사람이 같은 열쇠 꾸러미를 함께 쓸 수 있고, 서로 다른 꾸러미가 같은 방의 열쇠를 담을 수도 있습니다. nsproxy 묶음의 참조 수와 각각의 namespace 참조 수는 그래서 다릅니다.",
+    "meaning": "namespace 묶음 공유, 자식용 설정, 접근 잠금과 참조 수의 각 책임을 이해합니다.",
+    "exercise": "두 작업이 한 nsproxy를 공유하다 하나가 새 묶음을 만드는 상황에서 묶음과 개별 공간의 참조를 따로 그려 보세요."
+  },
+  "goal": "namespace 묶음 공유, 자식용 설정, 접근 잠금과 참조 수의 각 책임을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "두 작업이 한 nsproxy를 공유하다 하나가 새 묶음을 만드는 상황에서 묶음과 개별 공간의 참조를 따로 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "6180cdc5c062fe5f9493358e20205d655d0e1f28c421c3872bf5dc92c801b97b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

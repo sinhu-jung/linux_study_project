@@ -5,92 +5,112 @@
   "area": "GNU make · 빌드 의존성 · ELF 재배치 · 셸 파이프라인 · 종료 상태 · 검증 범위",
   "track": "files",
   "kind": "kernel",
-  "intro": "공통 C 파일 선택과 링크 후 readelf 검사 명령을 전체 분석합니다.",
+  "intro": "make 변수의 확장 시점과 파이프라인 검사의 범위를 이해합니다.",
   "guide": [
-    "빌드 규칙의 의도와 실제 텍스트 필터가 검사하는 범위를 구분해야 검증 결과를 과신하지 않을 수 있습니다.",
-    "GNU make 변수 확장과 셸 파이프라인을 읽고 실패한 생성물을 제거하는 조건을 설명합니다."
+    ":=는 지금 값을 계산해 저장합니다.",
+    "소스 선택 변수 정의는 컴파일 실행이 아닙니다.",
+    "이 수업에서는 원본 삭제 명령을 실행하지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "자신의 경로 계산",
-      "text": "GPL-2.0 표기 뒤 GENERIC_VDSO_MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))로 현재 읽는 makefile의 절대 경로를 얻습니다. GENERIC_VDSO_DIR := $(dir ...)는 그 디렉터리를 구합니다. :=의 즉시 확장 덕분에 나중에 다른 makefile을 포함한 뒤 MAKEFILE_LIST의 마지막 항목이 바뀌어도 저장한 경로가 다시 계산되지 않습니다."
+      "title": "현재 경로 고정",
+      "text": "GPL-2.0 뒤 MAKEFILE_LIST의 마지막 항목을 abspath로 절대 경로로 만들고 dir로 디렉터리를 얻습니다. :=가 즉시 계산하므로 뒤에 다른 makefile이 포함되어 목록이 바뀌어도 현재 경로는 그대로입니다."
     },
     {
-      "title": "설정별 공통 소스 선택",
-      "text": "c-gettimeofday-$(CONFIG_GENERIC_GETTIMEOFDAY)는 gettimeofday.c, c-getrandom-$(CONFIG_VDSO_GETRANDOM)는 getrandom.c의 앞에 GENERIC_VDSO_DIR을 붙입니다. 설정이 y이면 각각 c-gettimeofday-y와 c-getrandom-y 변수가 됩니다. 값이 비어 있으면 다른 변수 이름으로 확장되므로 -y를 사용하는 호출부에서 자동으로 선택되는 것과 다릅니다. 이 줄 자체는 두 파일을 컴파일하거나 링크하지 않습니다."
+      "title": "설정별 소스 이름",
+      "text": "CONFIG_GENERIC_GETTIMEOFDAY가 y면 c-gettimeofday-y에 공통 gettimeofday.c 경로, CONFIG_VDSO_GETRANDOM이 y면 c-getrandom-y에 getrandom.c 경로를 넣습니다. 비어 있으면 -y와 다른 변수 이름이 되어 호출부의 선택이 달라집니다. 이 두 줄이 실제 컴파일이나 링크를 하지는 않습니다."
     },
     {
-      "title": "호출부와의 관계",
-      "text": "아키텍처 Makefile이 이 파일을 include하고 선택된 C 파일을 컴파일 옵션 등으로 사용할 수 있습니다. 예를 들어 확인한 ARM64 규칙은 c-gettimeofday-y가 있으면 -include로 공통 구현을 제공합니다. 여기에는 독립적인 obj-y 목록이나 vDSO 링크 타깃 recipe가 없습니다. 공통 변수와 명령 조각을 제공하는 역할입니다."
+      "title": "아키텍처 호출부",
+      "text": "아키텍처 Makefile이 include하여 이 변수와 명령 조각을 씁니다. 확인한 ARM64는 c-gettimeofday-y가 있으면 -include로 공통 구현을 제공합니다. 여기 자체에는 obj-y 목록이나 vDSO 링크 실행 규칙이 없습니다."
     },
     {
-      "title": "검사 명령의 표시와 입력",
-      "text": "quiet_cmd_vdso_check는 VDSOCHK $@라는 짧은 표시 문자열입니다. cmd_vdso_check는 $(READELF) -rW $@의 출력을 파이프라인으로 검사합니다. $@는 호출되는 make 타깃을 가리키며 별도의 스크립트 위치 인수가 아닙니다. 주석은 vDSO 링크 후 검사해야 한다고 명시합니다. 명령 변수 정의만으로 모든 vDSO 빌드에서 자동 실행되는 것은 아닙니다."
+      "title": "표시와 검사 대상",
+      "text": "quiet_cmd는 VDSOCHK $@ 표시이고 cmd는 READELF -rW $@ 출력을 검사합니다. $@는 현재 make 타깃입니다. 주석대로 vDSO를 링크한 뒤 불러야 하며 명령 변수를 정의했다고 모든 빌드에서 저절로 실행되지는 않습니다."
     },
     {
-      "title": "NONE 제외와 정규식",
-      "text": "첫 grep -v _NONE은 _NONE을 포함한 출력 줄을 제외합니다. 주석은 일부 GNU ld 포트가 불필요한 R_*_NONE 재배치를 내보내는 경우를 위한 예외라고 설명합니다. 다음 grep -q \" R_\\w*_\"는 남은 줄에서 재배치 이름 형태를 찾고 결과 내용은 출력하지 않습니다. 실제 필터는 readelf 텍스트 형식에 의존하며 ELF 구조를 별도로 파싱하는 구현은 아닙니다."
+      "title": "NONE과 패턴",
+      "text": "grep -v _NONE은 그 글자가 있는 줄을 빼 일부 링커의 불필요한 R_*_NONE 재배치를 예외로 둡니다. 다음 grep -q는 재배치 이름 형태인 공백 R_ 뒤의 패턴을 찾고 본문 출력은 하지 않습니다. 바이너리를 고치는 것이 아니라 readelf 텍스트 형식에 의존하는 필터입니다."
     },
     {
-      "title": "일치했을 때의 실패 처리",
-      "text": "패턴이 발견되면 then의 서브셸에서 타깃 이름과 dynamic relocations are not supported 메시지를 stderr로 출력하고 rm -f $@로 생성물을 제거한 뒤 /bin/false로 실패합니다. 잘못된 결과 파일을 남겨 성공한 타깃으로 재사용하지 않으려는 구성입니다. 이 학습 작업에서는 원본의 삭제 명령을 실행하지 않았고 해당 recipe의 의미만 분석합니다."
+      "title": "발견하면 실패",
+      "text": "패턴이 있으면 서브셸에서 타깃 이름과 dynamic relocations are not supported를 오류 출력에 쓰고 rm -f로 결과를 지운 뒤 /bin/false로 실패합니다. 잘못된 파일이 성공 결과로 재사용되는 것을 막으려는 규칙입니다. 여기서는 의미를 읽었고 삭제 명령을 실행하지 않았습니다."
     },
     {
-      "title": "검사의 한계와 종료 상태",
-      "text": "정상 readelf 출력에 패턴이 없으면 then을 실행하지 않습니다. 이 명령 조각에는 pipefail 설정이나 READELF 실행 실패를 별도로 검사하는 절차가 없습니다. 도구 실행 자체가 실패해 출력이 없더라도 마지막 grep의 불일치가 if의 거짓으로 처리될 수 있으므로 이 검사만으로 도구 실행 성공까지 증명했다고 볼 수 없습니다. 또한 -rW와 grep이 보인 항목을 판정하므로 주석의 동적 재배치 금지 의도와 실제 출력 기반 검사의 범위를 구별해야 합니다."
+      "title": "못 찾은 경우의 한계",
+      "text": "패턴이 없으면 then을 안 합니다. pipefail이나 READELF 실패를 따로 확인하는 코드가 없어 도구가 실패해 출력이 비어도 마지막 grep 불일치로 지나갈 수 있습니다. 동적 재배치 금지 의도와 실제 -rW 텍스트 검사의 범위를 구분해야 합니다."
     },
     {
-      "title": "CS 연결과 전체 범위",
-      "text": "경로 변수 두 개, 소스 선택 두 개, 검사 표시·실행 변수와 모든 주석을 설명했습니다. 즉시 확장과 호출 시 확장, 선택 변수와 실행 recipe, 구조 검증과 텍스트 필터의 차이가 핵심입니다. 실제 vDSO를 링크하거나 readelf 검사를 실행한 결과는 아니며 다른 ABI의 모든 재배치 표기를 검증한 것으로 집계하지 않습니다."
+      "title": "전체 검토 범위",
+      "text": "두 경로 변수, 두 소스 선택과 표시·실행 변수를 읽었습니다. 즉시 확장과 호출 때 확장, 선택과 실행, 구조 검사와 글자 필터의 차이가 핵심입니다. 실제 vDSO 링크·readelf 실행이나 모든 ABI 표기를 시험한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "현재 Makefile 경로 계산에 :=를 쓰는 효과는?",
+      "prompt": "경로 계산에 :=를 쓰면?",
       "options": [
+        "지금 목록의 마지막 항목을 계산해 저장한다",
+        "쓸 때마다 가장 최근 포함 파일로 바꾼다"
+      ],
+      "answer": 0,
+      "explanation": "뒤 include가 현재 저장 경로를 바꾸지 않습니다.",
+      "original_prompt": "현재 Makefile 경로 계산에 :=를 쓰는 효과는?",
+      "original_options": [
         "지금의 MAKEFILE_LIST 마지막 항목을 즉시 계산해 저장한다",
         "변수를 사용할 때마다 마지막으로 포함한 Makefile로 경로를 바꾼다"
       ],
-      "answer": 0,
-      "explanation": "GNU make의 단순 확장 변수입니다. 이후 include로 목록이 늘어나도 저장된 현재 파일 경로가 다시 계산되지 않습니다."
+      "original_explanation": "GNU make의 단순 확장 변수입니다. 이후 include로 목록이 늘어나도 저장된 현재 파일 경로가 다시 계산되지 않습니다."
     },
     {
-      "prompt": "R_*_NONE 형태의 줄은 왜 먼저 제외하는가?",
+      "prompt": "NONE 줄을 빼는 이유는?",
       "options": [
+        "모든 재배치 이름을 NONE으로 바꾸려고",
+        "일부 링커의 불필요한 NONE 항목을 예외로 두려고"
+      ],
+      "answer": 1,
+      "explanation": "줄을 필터링할 뿐 바이너리 이름을 고치지 않습니다.",
+      "original_prompt": "R_*_NONE 형태의 줄은 왜 먼저 제외하는가?",
+      "original_options": [
         "모든 실제 재배치도 NONE으로 이름을 바꾸기 위해서다",
         "일부 linker가 내보내는 불필요한 NONE 재배치를 검사 예외로 두기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "grep -v는 해당 문자열이 있는 줄을 출력에서 제외합니다. 바이너리나 재배치 이름 자체를 수정하지 않습니다."
+      "original_explanation": "grep -v는 해당 문자열이 있는 줄을 출력에서 제외합니다. 바이너리나 재배치 이름 자체를 수정하지 않습니다."
     },
     {
-      "prompt": "금지 패턴을 발견하면 recipe는 무엇을 하는가?",
+      "prompt": "금지 패턴을 찾으면?",
       "options": [
+        "오류 출력 후 타깃을 지우고 실패한다",
+        "경고만 하고 성공 파일을 남긴다"
+      ],
+      "answer": 0,
+      "explanation": "echo, rm -f, false의 순서입니다.",
+      "original_prompt": "금지 패턴을 발견하면 recipe는 무엇을 하는가?",
+      "original_options": [
         "오류를 stderr에 출력하고 타깃 파일을 지운 뒤 실패한다",
         "경고만 출력하고 성공한 타깃 파일을 그대로 보존한다"
       ],
-      "answer": 0,
-      "explanation": "then 경로는 echo, rm -f, /bin/false로 구성됩니다. 실패한 생성물이 남는 것을 피하려는 처리입니다."
+      "original_explanation": "then 경로는 echo, rm -f, /bin/false로 구성됩니다. 실패한 생성물이 남는 것을 피하려는 처리입니다."
     },
     {
-      "prompt": "이 검사에서 패턴을 찾지 못했으면 READELF 실행 성공도 보장되는가?",
+      "prompt": "패턴을 못 찾으면 readelf 성공도 확실한가요?",
       "options": [
+        "그렇다. 파이프라인이 모든 앞 명령을 증명한다",
+        "아니다. 앞 도구 실패를 따로 확인하지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "출력 없는 실패도 마지막 grep에서는 불일치가 될 수 있습니다.",
+      "original_prompt": "이 검사에서 패턴을 찾지 못했으면 READELF 실행 성공도 보장되는가?",
+      "original_options": [
         "그렇다. 파이프라인은 모든 앞 명령의 성공을 자동 증명한다",
         "아니다. 앞 도구의 실패를 별도로 확인하는 코드가 없다"
       ],
-      "answer": 1,
-      "explanation": "일반적인 파이프라인 종료 상태와 if 조건은 앞 도구의 오류를 놓칠 수 있습니다. 본문에는 별도 상태 검사나 pipefail 설정이 없습니다."
+      "original_explanation": "일반적인 파이프라인 종료 상태와 if 조건은 앞 도구의 오류를 놓칠 수 있습니다. 본문에는 별도 상태 검사나 pipefail 설정이 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "검사 패턴을 찾았을 때 출력·파일 제거·실패의 순서를 적어 보세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0\n\nGENERIC_VDSO_MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))\nGENERIC_VDSO_DIR := $(dir $(GENERIC_VDSO_MK_PATH))\n\nc-gettimeofday-$(CONFIG_GENERIC_GETTIMEOFDAY) := $(addprefix $(GENERIC_VDSO_DIR), gettimeofday.c)\nc-getrandom-$(CONFIG_VDSO_GETRANDOM) := $(addprefix $(GENERIC_VDSO_DIR), getrandom.c)\n\n# This cmd checks that the vdso library does not contain dynamic relocations.\n# It has to be called after the linking of the vdso library and requires it\n# as a parameter.\n#\n# As a workaround for some GNU ld ports which produce unneeded R_*_NONE\n# dynamic relocations, ignore R_*_NONE.\nquiet_cmd_vdso_check = VDSOCHK $@\n      cmd_vdso_check = if $(READELF) -rW $@ | grep -v _NONE | grep -q \" R_\\w*_\"; \\\n\t\t       then (echo >&2 \"$@: dynamic relocations are not supported\"; \\\n\t\t\t     rm -f $@; /bin/false); fi\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/vdso/Makefile"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-ce0aa619f33619d3",
+    "path": "lib/vdso/Makefile",
+    "title": "vDSO 공통 빌드: 소스 경로 선택과 재배치 검사",
+    "area": "GNU make · 빌드 의존성 · ELF 재배치 · 셸 파이프라인 · 종료 상태 · 검증 범위",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "공통 C 파일 선택과 링크 후 readelf 검사 명령을 전체 분석합니다.",
+    "guide": [
+      "빌드 규칙의 의도와 실제 텍스트 필터가 검사하는 범위를 구분해야 검증 결과를 과신하지 않을 수 있습니다.",
+      "GNU make 변수 확장과 셸 파이프라인을 읽고 실패한 생성물을 제거하는 조건을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "자신의 경로 계산",
+        "text": "GPL-2.0 표기 뒤 GENERIC_VDSO_MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))로 현재 읽는 makefile의 절대 경로를 얻습니다. GENERIC_VDSO_DIR := $(dir ...)는 그 디렉터리를 구합니다. :=의 즉시 확장 덕분에 나중에 다른 makefile을 포함한 뒤 MAKEFILE_LIST의 마지막 항목이 바뀌어도 저장한 경로가 다시 계산되지 않습니다."
+      },
+      {
+        "title": "설정별 공통 소스 선택",
+        "text": "c-gettimeofday-$(CONFIG_GENERIC_GETTIMEOFDAY)는 gettimeofday.c, c-getrandom-$(CONFIG_VDSO_GETRANDOM)는 getrandom.c의 앞에 GENERIC_VDSO_DIR을 붙입니다. 설정이 y이면 각각 c-gettimeofday-y와 c-getrandom-y 변수가 됩니다. 값이 비어 있으면 다른 변수 이름으로 확장되므로 -y를 사용하는 호출부에서 자동으로 선택되는 것과 다릅니다. 이 줄 자체는 두 파일을 컴파일하거나 링크하지 않습니다."
+      },
+      {
+        "title": "호출부와의 관계",
+        "text": "아키텍처 Makefile이 이 파일을 include하고 선택된 C 파일을 컴파일 옵션 등으로 사용할 수 있습니다. 예를 들어 확인한 ARM64 규칙은 c-gettimeofday-y가 있으면 -include로 공통 구현을 제공합니다. 여기에는 독립적인 obj-y 목록이나 vDSO 링크 타깃 recipe가 없습니다. 공통 변수와 명령 조각을 제공하는 역할입니다."
+      },
+      {
+        "title": "검사 명령의 표시와 입력",
+        "text": "quiet_cmd_vdso_check는 VDSOCHK $@라는 짧은 표시 문자열입니다. cmd_vdso_check는 $(READELF) -rW $@의 출력을 파이프라인으로 검사합니다. $@는 호출되는 make 타깃을 가리키며 별도의 스크립트 위치 인수가 아닙니다. 주석은 vDSO 링크 후 검사해야 한다고 명시합니다. 명령 변수 정의만으로 모든 vDSO 빌드에서 자동 실행되는 것은 아닙니다."
+      },
+      {
+        "title": "NONE 제외와 정규식",
+        "text": "첫 grep -v _NONE은 _NONE을 포함한 출력 줄을 제외합니다. 주석은 일부 GNU ld 포트가 불필요한 R_*_NONE 재배치를 내보내는 경우를 위한 예외라고 설명합니다. 다음 grep -q \" R_\\w*_\"는 남은 줄에서 재배치 이름 형태를 찾고 결과 내용은 출력하지 않습니다. 실제 필터는 readelf 텍스트 형식에 의존하며 ELF 구조를 별도로 파싱하는 구현은 아닙니다."
+      },
+      {
+        "title": "일치했을 때의 실패 처리",
+        "text": "패턴이 발견되면 then의 서브셸에서 타깃 이름과 dynamic relocations are not supported 메시지를 stderr로 출력하고 rm -f $@로 생성물을 제거한 뒤 /bin/false로 실패합니다. 잘못된 결과 파일을 남겨 성공한 타깃으로 재사용하지 않으려는 구성입니다. 이 학습 작업에서는 원본의 삭제 명령을 실행하지 않았고 해당 recipe의 의미만 분석합니다."
+      },
+      {
+        "title": "검사의 한계와 종료 상태",
+        "text": "정상 readelf 출력에 패턴이 없으면 then을 실행하지 않습니다. 이 명령 조각에는 pipefail 설정이나 READELF 실행 실패를 별도로 검사하는 절차가 없습니다. 도구 실행 자체가 실패해 출력이 없더라도 마지막 grep의 불일치가 if의 거짓으로 처리될 수 있으므로 이 검사만으로 도구 실행 성공까지 증명했다고 볼 수 없습니다. 또한 -rW와 grep이 보인 항목을 판정하므로 주석의 동적 재배치 금지 의도와 실제 출력 기반 검사의 범위를 구별해야 합니다."
+      },
+      {
+        "title": "CS 연결과 전체 범위",
+        "text": "경로 변수 두 개, 소스 선택 두 개, 검사 표시·실행 변수와 모든 주석을 설명했습니다. 즉시 확장과 호출 시 확장, 선택 변수와 실행 recipe, 구조 검증과 텍스트 필터의 차이가 핵심입니다. 실제 vDSO를 링크하거나 readelf 검사를 실행한 결과는 아니며 다른 ABI의 모든 재배치 표기를 검증한 것으로 집계하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "현재 Makefile 경로 계산에 :=를 쓰는 효과는?",
+        "options": [
+          "지금의 MAKEFILE_LIST 마지막 항목을 즉시 계산해 저장한다",
+          "변수를 사용할 때마다 마지막으로 포함한 Makefile로 경로를 바꾼다"
+        ],
+        "answer": 0,
+        "explanation": "GNU make의 단순 확장 변수입니다. 이후 include로 목록이 늘어나도 저장된 현재 파일 경로가 다시 계산되지 않습니다."
+      },
+      {
+        "prompt": "R_*_NONE 형태의 줄은 왜 먼저 제외하는가?",
+        "options": [
+          "모든 실제 재배치도 NONE으로 이름을 바꾸기 위해서다",
+          "일부 linker가 내보내는 불필요한 NONE 재배치를 검사 예외로 두기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "grep -v는 해당 문자열이 있는 줄을 출력에서 제외합니다. 바이너리나 재배치 이름 자체를 수정하지 않습니다."
+      },
+      {
+        "prompt": "금지 패턴을 발견하면 recipe는 무엇을 하는가?",
+        "options": [
+          "오류를 stderr에 출력하고 타깃 파일을 지운 뒤 실패한다",
+          "경고만 출력하고 성공한 타깃 파일을 그대로 보존한다"
+        ],
+        "answer": 0,
+        "explanation": "then 경로는 echo, rm -f, /bin/false로 구성됩니다. 실패한 생성물이 남는 것을 피하려는 처리입니다."
+      },
+      {
+        "prompt": "이 검사에서 패턴을 찾지 못했으면 READELF 실행 성공도 보장되는가?",
+        "options": [
+          "그렇다. 파이프라인은 모든 앞 명령의 성공을 자동 증명한다",
+          "아니다. 앞 도구의 실패를 별도로 확인하는 코드가 없다"
+        ],
+        "answer": 1,
+        "explanation": "일반적인 파이프라인 종료 상태와 if 조건은 앞 도구의 오류를 놓칠 수 있습니다. 본문에는 별도 상태 검사나 pipefail 설정이 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0\n\nGENERIC_VDSO_MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))\nGENERIC_VDSO_DIR := $(dir $(GENERIC_VDSO_MK_PATH))\n\nc-gettimeofday-$(CONFIG_GENERIC_GETTIMEOFDAY) := $(addprefix $(GENERIC_VDSO_DIR), gettimeofday.c)\nc-getrandom-$(CONFIG_VDSO_GETRANDOM) := $(addprefix $(GENERIC_VDSO_DIR), getrandom.c)\n\n# This cmd checks that the vdso library does not contain dynamic relocations.\n# It has to be called after the linking of the vdso library and requires it\n# as a parameter.\n#\n# As a workaround for some GNU ld ports which produce unneeded R_*_NONE\n# dynamic relocations, ignore R_*_NONE.\nquiet_cmd_vdso_check = VDSOCHK $@\n      cmd_vdso_check = if $(READELF) -rW $@ | grep -v _NONE | grep -q \" R_\\w*_\"; \\\n\t\t       then (echo >&2 \"$@: dynamic relocations are not supported\"; \\\n\t\t\t     rm -f $@; /bin/false); fi\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c51e3daa14b053f8d73a23a4e09a4025dcfa79d62912925b7d39b3e1e8082389",
+      "scope": "whole-file",
+      "line_count": 18,
+      "authoring_source": "course/file_units/vdso_common_build.py",
+      "sections": [
+        "자신의 경로 계산",
+        "설정별 공통 소스 선택",
+        "호출부와의 관계",
+        "검사 명령의 표시와 입력",
+        "NONE 제외와 정규식",
+        "일치했을 때의 실패 처리",
+        "검사의 한계와 종료 상태",
+        "CS 연결과 전체 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/vdso/Makefile"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공통 vDSO 소스의 위치를 정하고 완성된 파일의 재배치 표시를 검사합니다. 텍스트에서 표시를 못 찾았다는 것과 도구 실행 성공은 다릅니다.",
+    "meaning": "make 변수의 확장 시점과 파이프라인 검사의 범위를 이해합니다.",
+    "exercise": "검사 패턴을 찾았을 때 출력·파일 제거·실패의 순서를 적어 보세요."
+  },
+  "goal": "make 변수의 확장 시점과 파이프라인 검사의 범위를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "검사 패턴을 찾았을 때 출력·파일 제거·실패의 순서를 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "bf27e9919f0e1e23a9543799b3d26a645c0daf4c3e4fe84c2a1ee6447505dbd3",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

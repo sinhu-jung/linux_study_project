@@ -5,190 +5,246 @@
   "area": "VFS · 파일 디스크립터 · 소유권 · ioctl · RCU · ABI 확장",
   "track": "files",
   "kind": "kernel",
-  "intro": "파일시스템 초기화, namespace 이름과 경로, 전체 ioctl 분기와 자원 소유권을 분석합니다.",
+  "intro": "nsfs의 참조 인계와 ioctl 분기, 실패 정리, 사용자 정보 복사의 실제 순서를 이해합니다.",
   "guide": [
-    "참조를 가진 객체를 경로·열린 파일·FD로 바꾸는 각 단계에서 소유권 이전과 실패 정리를 구별해야 합니다.",
-    "가상 파일시스템, callback, 사용자 메모리 복사, RCU, 확장 ioctl의 실제 제어 흐름을 읽습니다."
+    "FD는 열린 파일 번호이고 참조는 객체가 사라지지 않게 보유한 몫입니다. open_namespace는 실패해도 입력 참조를 소비합니다.",
+    "callback은 필요한 때 부를 함수입니다. 어떤 함수는 NULL, 어떤 함수는 오류를 담은 주소 ERR_PTR로 실패하므로 각각의 계약을 읽습니다.",
+    "ioctl의 명령 표기와 실제 인자 전달 방식이 다를 수 있습니다. 여기 PID 명령은 arg를 주소가 아닌 숫자로 씁니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성과 파일 작업",
-      "text": "GPL-2.0 파일은 mount·pseudo_fs·file·fs·proc namespace·PID/user namespace·uaccess 등의 인터페이스와 내부 mount.h,internal.h를 포함합니다. static nsfs_mnt를 보관하며 ns_file_operations는 unlocked_ioctl=ns_ioctl, compat_ioctl=compat_ptr_ioctl 두 항목을 지정합니다. 이 테이블에는 일반 read/write 메서드가 없습니다. namespace 파일을 일반 텍스트 데이터 파일로 읽는 구현이 아닙니다."
+      "title": "namespace 파일의 역할",
+      "text": "파일시스템·마운트·파일·proc namespace·PID/user 공간·사용자 메모리 접근 헤더와 내부 mount.h·internal.h를 포함합니다. nsfs_mnt를 보관하고 파일 동작 표에는 unlocked_ioctl=ns_ioctl, compat_ioctl=compat_ptr_ioctl만 둡니다. 일반 read/write 함수가 없어 namespace 파일을 보통 텍스트 내용으로 읽는 구현은 아닙니다."
     },
     {
-      "title": "Dentry 이름과 inode 수명",
-      "text": "ns_dname은 inode->i_private의 namespace에서 ops->name을 얻어 이름:[inode번호] 형태로 dynamic_dname을 호출합니다. ns_dentry_operations는 always_delete_dentry, ns_dname, stashed_dentry_prune을 연결합니다. nsfs_evict는 clear_inode 후 ns->ops->put으로 namespace 참조를 놓습니다. dentry 이름 생성과 namespace 객체의 마지막 수명 처리는 별도 callback입니다."
+      "title": "이름 만들기와 수명 끝내기",
+      "text": "ns_dname은 inode의 i_private에서 공간을 얻어 ops->name과 inode 번호를 이름:[번호]로 만듭니다. dentry 동작 표는 항목 삭제, 이름 만들기, 임시 보관 항목 가지치기를 연결합니다. nsfs_evict는 clear_inode 뒤 공간의 put을 불러 참조를 놓습니다. 이름 생성과 수명 종료는 별도 담당 함수입니다."
     },
     {
-      "title": "Task에서 경로 얻기",
-      "text": "ns_get_path_cb는 callback(private_data)로 참조를 가진 namespace를 얻고 NULL이면 -ENOENT, 있으면 path_from_stashed(&ns->stashed,nsfs_mnt,ns,path)를 호출합니다. task adapter는 ns_ops와 task를 담은 작은 구조체에서 get(task)를 호출하고 ns_get_path는 이 adapter를 공통 함수에 전달합니다. 이 경로는 NULL을 검사하며 ERR_PTR를 별도로 검사하는 코드가 아니므로 callback 계약을 구분해야 합니다."
+      "title": "작업에서 경로로",
+      "text": "ns_get_path_cb는 전달된 함수에 private_data를 주어 참조를 가진 공간을 얻습니다. NULL이면 -ENOENT, 있으면 path_from_stashed에 넘깁니다. task용 연결 함수는 표와 작업을 담은 작은 묶음에서 get(task)를 부릅니다. 이 경로는 NULL만 검사하고 ERR_PTR를 따로 검사하지 않으므로 전달 함수의 실패 약속에 맞춰야 합니다."
     },
     {
-      "title": "Namespace 열기의 참조 소비",
-      "text": "open_namespace 문서는 성공·실패와 관계없이 입력 ns 참조를 소비한다고 명시합니다. 먼저 path_from_stashed를 호출하는 이유도 그 계약 때문입니다. path는 __free(path_put)로 정리합니다. 이어 O_CLOEXEC로 미사용 FD를 예약하고 dentry_open을 O_RDONLY,current_cred로 수행합니다. 성공하면 fd_install 후 take_fd로 FD 예약의 소유권을 호출자에게 넘깁니다. 중간 실패는 음수 오류를 반환하며 참조를 호출자가 다시 put하는 계약이 아닙니다."
+      "title": "열기는 실패해도 참조 소비",
+      "text": "open_namespace는 성공·실패와 무관하게 입력 참조를 소비합니다. 그래서 path_from_stashed부터 호출하고 경로는 __free(path_put)로 정리합니다. 새 프로그램 실행 때 닫는 O_CLOEXEC FD를 예약하고 현재 자격 증명으로 O_RDONLY 파일을 엽니다. 성공하면 fd_install과 take_fd로 책임을 호출자에게 넘깁니다. 중간 오류에 호출자가 입력 ns를 다시 put하는 계약은 아닙니다."
     },
     {
-      "title": "관련 namespace 열기",
-      "text": "open_related_ns는 get_ns(ns)를 호출하고 ERR_PTR이면 PTR_ERR를 반환하며 아니면 open_namespace에 넘깁니다. 여기에는 NULL 검사가 따로 없습니다. owner나 parent를 얻는 callback과 참조 소비 함수의 계약이 맞아야 합니다. 이 함수만 EXPORT_SYMBOL_GPL로 내보냅니다. 단순 조회와 새 FD 생성이 결합된 작업입니다."
+      "title": "관련된 공간 열기",
+      "text": "open_related_ns는 get_ns(ns)로 관련 공간을 얻고 ERR_PTR이면 담긴 오류를 반환하며 아니면 open_namespace에 넘깁니다. NULL 검사는 따로 없으므로 owner·parent 담당 함수의 계약과 맞아야 합니다. 이 함수만 이 파일에서 GPL 심볼로 내보냅니다. 단순 조회가 아니라 새 FD를 만드는 동작입니다."
     },
     {
-      "title": "Mount 정보 복사",
-      "text": "copy_ns_info_to_user는 kinfo->size=min(usize,sizeof(*kinfo)), mnt_ns_id=mnt_ns->seq, nr_mounts=READ_ONCE(nr_mounts)를 설정합니다. mount 수가 0이 아닐 때만 1을 빼 root mount를 제외하므로 0에서 unsigned underflow하지 않습니다. copy_to_user가 실패하면 -EFAULT, 성공하면 0입니다. 큰 사용자 구조체의 남은 tail을 여기서 전부 0으로 채우는 코드는 없고 알려진 크기까지만 복사합니다."
+      "title": "정보표를 사용자에게 복사",
+      "text": "size에는 사용자 크기와 커널 구조체 크기 중 작은 값, ID에는 seq, 개수에는 READ_ONCE(nr_mounts)를 넣습니다. 개수가 0이 아닐 때만 1을 빼서 루트 마운트를 제외합니다. 복사 실패는 -EFAULT, 성공은 0입니다. 사용자가 더 큰 표를 줘도 나머지 끝부분을 여기서 모두 0으로 채우지는 않고 아는 크기만 복사합니다."
     },
     {
-      "title": "기본 ioctl: owner·parent·type",
-      "text": "첫 switch는 완전한 ioctl 명령값을 비교합니다. USERNS는 ns_get_owner로 관련 namespace를 엽니다. PARENT는 get_parent가 없으면 -EINVAL이며 있으면 해당 callback으로 엽니다. NSTYPE은 ns->ops->type을 그대로 반환합니다. 이들은 모두 사용자 버퍼를 채우는 동일한 작업이 아닙니다."
+      "title": "기본 명령 세 가지",
+      "text": "첫 switch는 명령값 전체를 비교합니다. USERNS는 소유 user 공간을 열고 PARENT는 부모 함수가 없으면 -EINVAL, 있으면 그 공간을 엽니다. NSTYPE은 공간 종류 값을 그대로 반환합니다. 모두 같은 사용자 버퍼를 채우는 동작은 아닙니다."
     },
     {
-      "title": "Owner UID와 mount ID 출력",
-      "text": "OWNER_UID는 namespace type이 NEWUSER가 아니면 -EINVAL입니다. owner를 from_kuid_munged(current_user_ns(),user_ns->owner)로 호출자 공간에 변환하고 uid_t 사용자 포인터에 put_user합니다. MNTNS_ID는 NEWNS만 허용하고 __u64 mnt_ns->seq를 사용자 포인터에 씁니다. namespace 내부 식별자와 owner의 호출자 기준 UID 표현은 서로 다릅니다."
+      "title": "UID와 마운트 ID 쓰기",
+      "text": "OWNER_UID는 NEWUSER 공간만 허용하고 소유 UID를 호출자의 user 공간 기준으로 바꿔 사용자 uid_t 주소에 put_user합니다. MNTNS_ID는 NEWNS 공간만 허용하며 seq를 __u64 사용자 주소에 씁니다. 다른 종류는 -EINVAL입니다. 공간 자체의 ID와 소유자의 호출자 기준 UID는 다른 값입니다."
     },
     {
-      "title": "PID 변환의 조회 방향",
-      "text": "네 PID ioctl은 NEWPID인지 검사한 뒤 guard(rcu) 구간에서 처리합니다. IN 계열은 find_task_by_vpid(arg)로 호출자 공간에서 입력 PID를 찾고 FROM 계열은 find_task_by_pid_ns(arg,pid_ns)로 파일 대상 공간에서 찾습니다. arg는 사용자 포인터에서 읽어온 값이 아니라 직접 PID 숫자로 사용합니다. PID 반환은 task_pid, TGID 반환은 task_tgid 계열 helper를 씁니다."
+      "title": "PID를 어느 공간에서 찾나",
+      "text": "네 PID 명령은 NEWPID인지 검사한 뒤 guard(rcu)로 읽는 동안 객체 접근을 보호합니다. IN은 find_task_by_vpid로 호출자 공간에서, FROM은 find_task_by_pid_ns로 파일 대상 공간에서 arg 번호를 찾습니다. arg에서 값을 읽어 오는 get_user는 없습니다. PID 결과는 작업 번호, TGID 결과는 작업 그룹 대표 번호를 구합니다."
     },
     {
-      "title": "PID 변환 결과와 못 찾은 경로",
-      "text": "찾은 task에 대해 FROM은 task_pid_vnr 또는 task_tgid_vnr, IN은 task_pid_nr_ns 또는 task_tgid_nr_ns로 출력 공간의 ID를 얻습니다. 결과가 0이면 -ESRCH로 바꿔 반환합니다. 그러나 task를 처음부터 찾지 못했을 때의 if (!tsk) break는 첫 switch를 벗어나 아래 확장 switch로 진행합니다. ret를 -ESRCH로 초기화했어도 이 네 명령 번호는 그 switch의 default에서 -ENOTTY로 덮입니다. 원본의 이 두 실패 경로를 모두 -ESRCH라고 설명하면 틀립니다. 실제 커널 실행 결과를 측정한 것이 아니라 제어 흐름을 대조한 결론입니다."
+      "title": "찾기 실패와 변환 실패의 차이",
+      "text": "작업을 찾으면 FROM은 호출자 공간의 vnr, IN은 대상 공간의 nr_ns 번호를 구합니다. 결과 0은 -ESRCH로 바꿔 바로 반환합니다. 하지만 처음부터 작업을 못 찾으면 return이 아닌 break라 첫 switch를 벗어나 아래 switch로 갑니다. 거기 default가 -ENOTTY로 덮습니다. ret 초기값 -ESRCH만 보고 두 실패를 같다고 하면 틀립니다. 이는 소스 흐름 분석이며 실제 실행 측정은 아닙니다."
     },
     {
-      "title": "확장 ioctl dispatch의 범위",
-      "text": "두 번째 switch는 _IOC_NR(ioctl)만 비교하며 크기는 _IOC_SIZE로 별도 읽습니다. 여기에는 _IOC_TYPE 또는 _IOC_DIR를 다시 확인하는 분기가 없습니다. 따라서 전체 명령값을 엄격히 비교하는 앞 switch와 동일한 검증이라고 설명하지 않습니다. 확장 명령이 아닌 경우 default는 -ENOTTY입니다."
+      "title": "확장 명령의 선택 기준",
+      "text": "두 번째 switch는 전체 값이 아닌 _IOC_NR 명령 번호만 봅니다. 크기는 _IOC_SIZE로 따로 읽으며 _IOC_TYPE이나 _IOC_DIR를 다시 검사하지 않습니다. 앞 switch와 같은 엄격한 전체 명령 비교라고 설명하면 안 됩니다. 해당 번호가 아니면 -ENOTTY입니다."
     },
     {
-      "title": "Mount INFO 검증",
-      "text": "INFO는 0으로 초기화한 kinfo를 준비하고 사용자 포인터와 명령 크기를 얻습니다. NEWNS가 아니거나 uinfo가 NULL이거나 usize가 VER0 16보다 작으면 -EINVAL입니다. 통과하면 공통 복사 helper를 호출합니다. uinfo->size를 먼저 사용자 메모리에서 읽어 허용 크기를 정하는 방식이 아닙니다. 크기 협상은 ioctl 명령의 인코딩을 사용합니다."
+      "title": "INFO의 입력 확인",
+      "text": "0으로 채운 커널 정보표와 사용자 주소, 명령에 담긴 크기를 준비합니다. NEWNS가 아니거나 주소가 NULL이거나 크기가 최초 공개 크기 16보다 작으면 -EINVAL입니다. 통과하면 복사 함수를 부릅니다. 사용자 표의 size를 먼저 읽어 크기를 정하는 방식이 아닙니다."
     },
     {
-      "title": "이전·다음 mount namespace",
-      "text": "PREV는 previous=true 후 NEXT와 같은 블록으로 fallthrough합니다. NEWNS와 최소 크기를 검사한 뒤 lookup_prev_mnt_ns 또는 lookup_next_mnt_ns를 호출하고 ERR_PTR를 전달합니다. 조회 순서와 권한의 세부 정책은 lookup helper의 책임이며 이 파일만으로 목록이 단순 연결 리스트라고 추정하지 않습니다. 반환 namespace 참조를 path_from_stashed에 넘겨 path 소유권으로 바꿉니다."
+      "title": "이전·다음 공간 찾기",
+      "text": "PREV는 previous=true로 한 뒤 NEXT와 같은 블록으로 이어집니다. 종류와 최소 크기를 확인한 뒤 앞·뒤 공간 조회 함수를 고르고 오류 주소면 오류를 반환합니다. 순서·권한 정책은 그 조회 함수가 맡으며 단순 연결 리스트라고 추정하지 않습니다. 얻은 공간 참조는 path_from_stashed로 경로 보유 책임에 넘깁니다."
     },
     {
-      "title": "순회 FD와 선택적 정보",
-      "text": "NEXT/PREV는 O_CLOEXEC FD를 예약하고 O_RDONLY로 파일을 엽니다. uinfo가 있으면 정보 복사를 수행하며 실패 시 FD를 설치하기 전에 반환합니다. NULL이면 복사를 생략합니다. 성공 시 fd_install(fd,no_free_ptr(f))로 파일 참조를 FD table에 넘기고 take_fd로 FD를 인계합니다. path와 file의 cleanup, 예약 FD cleanup은 소유권을 넘기지 않은 실패 경로를 관리합니다. 이 블록의 f는 __free(fput)이고 초기값은 NULL입니다."
+      "title": "FD 설치 전 선택적 복사",
+      "text": "NEXT/PREV는 O_CLOEXEC FD를 예약해 읽기 전용으로 엽니다. 사용자 정보 주소가 있으면 복사하며 실패하면 FD 설치 전에 오류 반환합니다. NULL이면 복사 없이 진행합니다. 성공 때 no_free_ptr(f)로 파일 참조를 FD 표에 넘기고 take_fd로 번호를 인계합니다. 경로·파일·예약 번호의 자동 정리는 실패 시 남은 책임을 처리하며 f는 처음 NULL인 __free(fput) 변수입니다."
     },
     {
-      "title": "이름 조회의 별칭",
-      "text": "ns_get_name은 ns_ops->get(task)를 호출하고 없으면 -ENOENT입니다. 있으면 real_ns_name이 존재할 때 그것을, 아니면 name을 사용해 이름:[inum]을 snprintf로 쓴 뒤 put합니다. snprintf 반환값을 그대로 돌려주므로 버퍼에 실제 저장된 길이와 항상 같다고 단정하지 않습니다. 앞 ns_dname과 아래 show_path는 real_ns_name 선택 없이 ops->name을 사용합니다."
+      "title": "표시 이름의 별칭",
+      "text": "ns_get_name은 get(task)가 없으면 -ENOENT입니다. 있으면 real_ns_name을 우선하고 없으면 name으로 이름:[inum]을 쓴 뒤 put합니다. snprintf 반환값은 필요한 길이일 수 있어 실제 저장 길이와 늘 같지 않습니다. ns_dname과 show_path는 이 별칭 선택 없이 ops->name을 씁니다."
     },
     {
-      "title": "파일 종류와 식별 비교",
-      "text": "proc_ns_file은 file->f_op가 &ns_file_operations와 같은지 포인터로 비교합니다. 파일 이름 문자열이 namespace처럼 보이는지 검사하지 않습니다. ns_match는 ns->inum==ino와 nsfs superblock s_dev==dev를 모두 요구합니다. inode 번호 하나가 다른 파일시스템에서도 전역적으로 고유하다고 가정하지 않습니다."
+      "title": "파일 종류와 동일성 확인",
+      "text": "proc_ns_file은 f_op 주소가 ns_file_operations 주소와 같은지 비교합니다. 경로 글자가 /proc으로 시작하는지를 보지 않습니다. ns_match는 inum과 inode 번호가 같고 nsfs의 장치 번호도 같아야 합니다. inode 번호가 모든 파일시스템에서 전역적으로 유일한 것은 아닙니다."
     },
     {
-      "title": "Superblock과 inode 초기화",
-      "text": "nsfs_show_path는 ops->name과 inode->i_ino를 seq_file에 출력하고 0을 반환합니다. nsfs_ops는 simple_statfs, nsfs_evict, nsfs_show_path를 연결합니다. nsfs_init_inode는 i_private=data, i_mode에 S_IRUGO 추가, i_fop=ns_file_operations, i_ino=ns->inum을 설정하고 0입니다. 모드 전체를 새 상수로 덮는 것이 아니라 OR합니다."
+      "title": "파일시스템과 inode 준비",
+      "text": "show_path는 이름과 inode 번호를 출력하고 0을 반환합니다. super 동작 표는 통계·inode 제거·경로 출력 함수를 연결합니다. init_inode는 i_private에 공간 주소, i_fop에 동작 표, i_ino에 공간 번호를 넣고 읽기 권한 S_IRUGO를 i_mode에 OR로 더합니다. 모드 전체를 새 값으로 덮지는 않습니다."
     },
     {
-      "title": "Stashed 자료와 파일시스템 context",
-      "text": "nsfs_put_data는 ns->ops->put을 호출하고 nsfs_stashed_ops는 init_inode와 put_data 두 callback을 연결합니다. nsfs_init_fs_context는 init_pseudo(fc,NSFS_MAGIC)가 NULL이면 -ENOMEM, 성공하면 context의 ops,dops와 fc->s_fs_info에 stashed operation을 설정합니다. inode 수명과 path 생성 helper가 namespace 참조를 관리하는 연결점입니다."
+      "title": "임시 보관 자료와 생성 문맥",
+      "text": "nsfs_put_data는 공간의 put을 부르고 stashed 동작 표는 이 정리 함수와 init_inode를 연결합니다. init_fs_context는 init_pseudo가 NULL이면 -ENOMEM입니다. 성공하면 파일시스템·경로 항목 동작과 stashed 동작 표를 설정해 경로 생성과 inode 수명이 참조를 관리하게 연결합니다."
     },
     {
-      "title": "파일시스템 초기화와 검토 범위",
-      "text": "file_system_type은 name=nsfs, init_fs_context와 kill_anon_super를 연결합니다. __init nsfs_init은 kern_mount하고 ERR_PTR이면 panic하며 성공 시 superblock flags에서 SB_NOUSER를 지웁니다. 이 파일 안에 register_filesystem 호출이 있다고 가정하지 않습니다. 전체 함수·테이블·ioctl·실패 경로를 대조했으며 실제 ioctl 실행·compat ABI·사용자 메모리 fault 주입을 검증한 것은 아닙니다."
+      "title": "시작과 확인 범위",
+      "text": "file_system_type은 nsfs 이름, 생성 문맥 함수와 kill_anon_super를 연결합니다. 초기화는 kern_mount를 부르고 오류면 panic하며 성공하면 SB_NOUSER 비트를 지웁니다. 이 파일에 register_filesystem 호출은 없습니다. 전체 분기·표·실패 경로를 읽었지만 실제 ioctl 실행, 호환 ABI, 사용자 메모리 오류 주입 시험은 하지 않았습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "open_namespace가 실패하면 입력 ns 참조는 호출자가 다시 put해야 하는가?",
+      "prompt": "open_namespace가 실패하면 입력 ns를 호출자가 다시 put해야 하나요?",
       "options": [
+        "아니요. 성공·실패 모두 입력 참조를 소비합니다.",
+        "네. 성공할 때만 소비합니다."
+      ],
+      "answer": 0,
+      "explanation": "문서와 처음 path_from_stashed를 부르는 주석이 같은 계약을 명시합니다. 이미 넘긴 참조를 다시 놓으면 잘못 셀 수 있습니다.",
+      "original_prompt": "open_namespace가 실패하면 입력 ns 참조는 호출자가 다시 put해야 하는가?",
+      "original_options": [
         "아니다. 성공·실패와 관계없이 소비하는 계약이다",
         "그렇다. 성공했을 때만 소비한다"
       ],
-      "answer": 0,
-      "explanation": "문서와 첫 path_from_stashed 호출의 주석이 명시합니다. 소유권 소비 후 다시 put하면 참조 관리가 어긋날 수 있습니다."
+      "original_explanation": "문서와 첫 path_from_stashed 호출의 주석이 명시합니다. 소유권 소비 후 다시 put하면 참조 관리가 어긋날 수 있습니다."
     },
     {
-      "prompt": "nr_mounts가 0이면 정보 복사에서 root를 빼고 어떤 값이 되는가?",
+      "prompt": "nr_mounts가 0일 때 루트 하나를 제외하면 어떻게 되나요?",
       "options": [
+        "부호 없는 최댓값이 됩니다.",
+        "0을 유지합니다."
+      ],
+      "answer": 1,
+      "explanation": "0이 아닌 경우에만 줄이므로 0에서 범위를 돌아가는 감소를 막습니다.",
+      "original_prompt": "nr_mounts가 0이면 정보 복사에서 root를 빼고 어떤 값이 되는가?",
+      "original_options": [
         "unsigned 최댓값으로 바뀐다",
         "0을 유지한다"
       ],
-      "answer": 1,
-      "explanation": "if (kinfo->nr_mounts) 조건이 있으므로 0에서는 감소하지 않습니다."
+      "original_explanation": "if (kinfo->nr_mounts) 조건이 있으므로 0에서는 감소하지 않습니다."
     },
     {
-      "prompt": "PID ioctl의 arg를 구현은 어떻게 사용하는가?",
+      "prompt": "PID 명령의 arg는 어떻게 사용하나요?",
       "options": [
+        "직접 PID 숫자로 조회 함수에 줍니다.",
+        "int 사용자 주소로 보고 get_user합니다."
+      ],
+      "answer": 0,
+      "explanation": "이 블록에는 get_user가 없습니다. _IOR 표기와 실제 계약을 함께 읽습니다.",
+      "original_prompt": "PID ioctl의 arg를 구현은 어떻게 사용하는가?",
+      "original_options": [
         "직접 PID 숫자로 조회 helper에 전달한다",
         "int 사용자 포인터로 보고 get_user한다"
       ],
-      "answer": 0,
-      "explanation": "네 PID 변환 블록에는 get_user가 없습니다. _IOR 인코딩과 실제 인수 계약을 함께 읽어야 합니다."
+      "original_explanation": "네 PID 변환 블록에는 get_user가 없습니다. _IOR 인코딩과 실제 인수 계약을 함께 읽어야 합니다."
     },
     {
-      "prompt": "PID 조회가 task를 처음부터 찾지 못했을 때 이 소스의 최종 흐름은?",
+      "prompt": "처음부터 작업을 찾지 못한 PID 명령의 최종 흐름은?",
       "options": [
+        "초기 -ESRCH를 즉시 반환합니다.",
+        "아래 확장 switch의 default에서 -ENOTTY가 됩니다."
+      ],
+      "answer": 1,
+      "explanation": "if (!tsk)는 break입니다. 아래 분기가 ret를 덮으므로 초기값만 보고 끝을 판단하지 않습니다.",
+      "original_prompt": "PID 조회가 task를 처음부터 찾지 못했을 때 이 소스의 최종 흐름은?",
+      "original_options": [
         "초기 ret=-ESRCH를 즉시 return한다",
         "아래 확장 switch default를 거쳐 -ENOTTY가 된다"
       ],
-      "answer": 1,
-      "explanation": "if (!tsk)는 return이 아니라 break입니다. 첫 switch 뒤 다른 switch가 ret를 덮으므로 초기값만 보고 오류를 결론내릴 수 없습니다."
+      "original_explanation": "if (!tsk)는 return이 아니라 break입니다. 첫 switch 뒤 다른 switch가 ret를 덮으므로 초기값만 보고 오류를 결론내릴 수 없습니다."
     },
     {
-      "prompt": "Task는 찾았지만 변환된 PID가 0이면?",
+      "prompt": "작업을 찾았지만 변환 번호가 0이면 어떻게 하나요?",
       "options": [
+        "-ESRCH로 바꾸어 직접 반환합니다.",
+        "늘 새 namespace FD를 엽니다."
+      ],
+      "answer": 0,
+      "explanation": "이 경로는 PID 블록 안에서 결과를 바꾸고 return합니다. 작업을 못 찾아 break하는 길과 다릅니다.",
+      "original_prompt": "Task는 찾았지만 변환된 PID가 0이면?",
+      "original_options": [
         "-ESRCH로 바꿔 직접 반환한다",
         "항상 새 namespace FD를 연다"
       ],
-      "answer": 0,
-      "explanation": "이 경로는 PID 블록 안에서 if (!ret) ret=-ESRCH 후 return합니다. task를 못 찾는 break 경로와 다릅니다."
+      "original_explanation": "이 경로는 PID 블록 안에서 if (!ret) ret=-ESRCH 후 return합니다. task를 못 찾는 break 경로와 다릅니다."
     },
     {
-      "prompt": "확장 mount ioctl은 무엇으로 dispatch하는가?",
+      "prompt": "확장 마운트 명령은 무엇으로 동작을 고르나요?",
       "options": [
+        "언제나 ioctl 전체 정수값입니다.",
+        "_IOC_NR의 명령 번호입니다."
+      ],
+      "answer": 1,
+      "explanation": "두 번째 switch는 번호만 비교하며 종류·방향의 별도 검사는 없습니다.",
+      "original_prompt": "확장 mount ioctl은 무엇으로 dispatch하는가?",
+      "original_options": [
         "항상 전체 ioctl 정수값",
         "_IOC_NR의 명령 번호"
       ],
-      "answer": 1,
-      "explanation": "두 번째 switch는 번호만 비교합니다. 이 부분에는 type·direction의 별도 검사가 없습니다."
+      "original_explanation": "두 번째 switch는 번호만 비교합니다. 이 부분에는 type·direction의 별도 검사가 없습니다."
     },
     {
-      "prompt": "NS_MNT_GET_INFO가 구조체 크기로 사용하는 값은?",
+      "prompt": "INFO가 사용자 정보표 크기로 사용하는 값은?",
       "options": [
+        "명령에 담긴 _IOC_SIZE입니다.",
+        "사용자 표 size를 먼저 읽은 값입니다."
+      ],
+      "answer": 0,
+      "explanation": "size 출력 칸은 나중에 복사 크기로 설정합니다. 입력 허용 크기는 명령 인코딩에서 얻습니다.",
+      "original_prompt": "NS_MNT_GET_INFO가 구조체 크기로 사용하는 값은?",
+      "original_options": [
         "ioctl 명령에 인코딩된 _IOC_SIZE",
         "사용자 구조체 size 필드를 먼저 읽은 값"
       ],
-      "answer": 0,
-      "explanation": "usize는 _IOC_SIZE(ioctl)로 얻습니다. kinfo->size는 복사할 크기로 나중에 설정하는 출력 필드입니다."
+      "original_explanation": "usize는 _IOC_SIZE(ioctl)로 얻습니다. kinfo->size는 복사할 크기로 나중에 설정하는 출력 필드입니다."
     },
     {
-      "prompt": "NEXT/PREV에서 정보 copy_to_user가 실패하면 FD가 이미 설치되어 있는가?",
+      "prompt": "NEXT/PREV의 정보 복사가 실패할 때 FD는 이미 설치됐나요?",
       "options": [
+        "네. 실패해도 사용 가능한 FD를 반환합니다.",
+        "아니요. 설치 전에 오류로 돌아갑니다."
+      ],
+      "answer": 1,
+      "explanation": "복사 뒤에 fd_install이 있습니다. 남은 경로·파일·예약 번호는 자동 정리가 맡습니다.",
+      "original_prompt": "NEXT/PREV에서 정보 copy_to_user가 실패하면 FD가 이미 설치되어 있는가?",
+      "original_options": [
         "그렇다. 실패해도 live FD를 반환한다",
         "아니다. 설치 전에 오류 반환한다"
       ],
-      "answer": 1,
-      "explanation": "정보 복사 뒤에 fd_install이 있습니다. 중간 실패의 path·file·예약 FD는 cleanup 경로가 관리합니다."
+      "original_explanation": "정보 복사 뒤에 fd_install이 있습니다. 중간 실패의 path·file·예약 FD는 cleanup 경로가 관리합니다."
     },
     {
       "prompt": "ns_get_name과 ns_dname의 이름 선택 차이는?",
       "options": [
+        "ns_get_name은 real_ns_name이 있으면 먼저 씁니다.",
+        "둘 다 언제나 번호만 출력합니다."
+      ],
+      "answer": 0,
+      "explanation": "real_ns_name 우선 선택은 ns_get_name에 있습니다. dname과 show_path는 ops->name을 씁니다.",
+      "original_prompt": "ns_get_name과 ns_dname의 이름 선택 차이는?",
+      "original_options": [
         "ns_get_name은 real_ns_name이 있으면 우선 사용한다",
         "둘 다 무조건 inode 번호만 출력한다"
       ],
-      "answer": 0,
-      "explanation": "ns_get_name만 real_ns_name 선택을 합니다. ns_dname과 show_path는 ops->name을 사용합니다."
+      "original_explanation": "ns_get_name만 real_ns_name 선택을 합니다. ns_dname과 show_path는 ops->name을 사용합니다."
     },
     {
-      "prompt": "proc_ns_file은 namespace 파일임을 무엇으로 판별하는가?",
+      "prompt": "proc_ns_file은 어떤 기준으로 namespace 파일을 알아보나요?",
       "options": [
+        "경로가 /proc으로 시작하는지 봅니다.",
+        "파일 동작 표 주소가 같은지 봅니다."
+      ],
+      "answer": 1,
+      "explanation": "본문은 f_op와 ns_file_operations의 주소 비교입니다. 경로 문자열 검사와 다릅니다.",
+      "original_prompt": "proc_ns_file은 namespace 파일임을 무엇으로 판별하는가?",
+      "original_options": [
         "파일 경로가 /proc으로 시작하는지 여부",
         "file operation 테이블 포인터 동일성"
       ],
-      "answer": 1,
-      "explanation": "구현은 file->f_op == &ns_file_operations 한 줄입니다. 경로 문자열 기반 판단이 아닙니다."
+      "original_explanation": "구현은 file->f_op == &ns_file_operations 한 줄입니다. 경로 문자열 기반 판단이 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "PID 변환에서 작업을 아예 못 찾는 경우와 작업은 찾았지만 결과 번호가 0인 경우를 각각 마지막 반환까지 따라가 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/mount.h>\n#include <linux/pseudo_fs.h>\n#include <linux/file.h>\n#include <linux/fs.h>\n#include <linux/proc_fs.h>\n#include <linux/proc_ns.h>\n#include <linux/magic.h>\n#include <linux/ktime.h>\n#include <linux/seq_file.h>\n#include <linux/pid_namespace.h>\n#include <linux/user_namespace.h>\n#include <linux/nsfs.h>\n#include <linux/uaccess.h>\n#include <linux/mnt_namespace.h>\n\n#include \"mount.h\"\n#include \"internal.h\"\n\nstatic struct vfsmount *nsfs_mnt;\n\nstatic long ns_ioctl(struct file *filp, unsigned int ioctl,\n\t\t\tunsigned long arg);\nstatic const struct file_operations ns_file_operations = {\n\t.unlocked_ioctl = ns_ioctl,\n\t.compat_ioctl   = compat_ptr_ioctl,\n};\n\nstatic char *ns_dname(struct dentry *dentry, char *buffer, int buflen)\n{\n\tstruct inode *inode = d_inode(dentry);\n\tstruct ns_common *ns = inode->i_private;\n\tconst struct proc_ns_operations *ns_ops = ns->ops;\n\n\treturn dynamic_dname(buffer, buflen, \"%s:[%lu]\",\n\t\tns_ops->name, inode->i_ino);\n}\n\nconst struct dentry_operations ns_dentry_operations = {\n\t.d_delete\t= always_delete_dentry,\n\t.d_dname\t= ns_dname,\n\t.d_prune\t= stashed_dentry_prune,\n};\n\nstatic void nsfs_evict(struct inode *inode)\n{\n\tstruct ns_common *ns = inode->i_private;\n\tclear_inode(inode);\n\tns->ops->put(ns);\n}\n\nint ns_get_path_cb(struct path *path, ns_get_path_helper_t *ns_get_cb,\n\t\t     void *private_data)\n{\n\tstruct ns_common *ns;\n\n\tns = ns_get_cb(private_data);\n\tif (!ns)\n\t\treturn -ENOENT;\n\n\treturn path_from_stashed(&ns->stashed, nsfs_mnt, ns, path);\n}\n\nstruct ns_get_path_task_args {\n\tconst struct proc_ns_operations *ns_ops;\n\tstruct task_struct *task;\n};\n\nstatic struct ns_common *ns_get_path_task(void *private_data)\n{\n\tstruct ns_get_path_task_args *args = private_data;\n\n\treturn args->ns_ops->get(args->task);\n}\n\nint ns_get_path(struct path *path, struct task_struct *task,\n\t\t  const struct proc_ns_operations *ns_ops)\n{\n\tstruct ns_get_path_task_args args = {\n\t\t.ns_ops\t= ns_ops,\n\t\t.task\t= task,\n\t};\n\n\treturn ns_get_path_cb(path, ns_get_path_task, &args);\n}\n\n/**\n * open_namespace - open a namespace\n * @ns: the namespace to open\n *\n * This will consume a reference to @ns indendent of success or failure.\n *\n * Return: A file descriptor on success or a negative error code on failure.\n */\nint open_namespace(struct ns_common *ns)\n{\n\tstruct path path __free(path_put) = {};\n\tstruct file *f;\n\tint err;\n\n\t/* call first to consume reference */\n\terr = path_from_stashed(&ns->stashed, nsfs_mnt, ns, &path);\n\tif (err < 0)\n\t\treturn err;\n\n\tCLASS(get_unused_fd, fd)(O_CLOEXEC);\n\tif (fd < 0)\n\t\treturn fd;\n\n\tf = dentry_open(&path, O_RDONLY, current_cred());\n\tif (IS_ERR(f))\n\t\treturn PTR_ERR(f);\n\n\tfd_install(fd, f);\n\treturn take_fd(fd);\n}\n\nint open_related_ns(struct ns_common *ns,\n\t\t   struct ns_common *(*get_ns)(struct ns_common *ns))\n{\n\tstruct ns_common *relative;\n\n\trelative = get_ns(ns);\n\tif (IS_ERR(relative))\n\t\treturn PTR_ERR(relative);\n\n\treturn open_namespace(relative);\n}\nEXPORT_SYMBOL_GPL(open_related_ns);\n\nstatic int copy_ns_info_to_user(const struct mnt_namespace *mnt_ns,\n\t\t\t\tstruct mnt_ns_info __user *uinfo, size_t usize,\n\t\t\t\tstruct mnt_ns_info *kinfo)\n{\n\t/*\n\t * If userspace and the kernel have the same struct size it can just\n\t * be copied. If userspace provides an older struct, only the bits that\n\t * userspace knows about will be copied. If userspace provides a new\n\t * struct, only the bits that the kernel knows aobut will be copied and\n\t * the size value will be set to the size the kernel knows about.\n\t */\n\tkinfo->size\t\t= min(usize, sizeof(*kinfo));\n\tkinfo->mnt_ns_id\t= mnt_ns->seq;\n\tkinfo->nr_mounts\t= READ_ONCE(mnt_ns->nr_mounts);\n\t/* Subtract the root mount of the mount namespace. */\n\tif (kinfo->nr_mounts)\n\t\tkinfo->nr_mounts--;\n\n\tif (copy_to_user(uinfo, kinfo, kinfo->size))\n\t\treturn -EFAULT;\n\n\treturn 0;\n}\n\nstatic long ns_ioctl(struct file *filp, unsigned int ioctl,\n\t\t\tunsigned long arg)\n{\n\tstruct user_namespace *user_ns;\n\tstruct pid_namespace *pid_ns;\n\tstruct task_struct *tsk;\n\tstruct ns_common *ns = get_proc_ns(file_inode(filp));\n\tstruct mnt_namespace *mnt_ns;\n\tbool previous = false;\n\tuid_t __user *argp;\n\tuid_t uid;\n\tint ret;\n\n\tswitch (ioctl) {\n\tcase NS_GET_USERNS:\n\t\treturn open_related_ns(ns, ns_get_owner);\n\tcase NS_GET_PARENT:\n\t\tif (!ns->ops->get_parent)\n\t\t\treturn -EINVAL;\n\t\treturn open_related_ns(ns, ns->ops->get_parent);\n\tcase NS_GET_NSTYPE:\n\t\treturn ns->ops->type;\n\tcase NS_GET_OWNER_UID:\n\t\tif (ns->ops->type != CLONE_NEWUSER)\n\t\t\treturn -EINVAL;\n\t\tuser_ns = container_of(ns, struct user_namespace, ns);\n\t\targp = (uid_t __user *) arg;\n\t\tuid = from_kuid_munged(current_user_ns(), user_ns->owner);\n\t\treturn put_user(uid, argp);\n\tcase NS_GET_MNTNS_ID: {\n\t\t__u64 __user *idp;\n\t\t__u64 id;\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tmnt_ns = container_of(ns, struct mnt_namespace, ns);\n\t\tidp = (__u64 __user *)arg;\n\t\tid = mnt_ns->seq;\n\t\treturn put_user(id, idp);\n\t}\n\tcase NS_GET_PID_FROM_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_TGID_FROM_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_PID_IN_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_TGID_IN_PIDNS: {\n\t\tif (ns->ops->type != CLONE_NEWPID)\n\t\t\treturn -EINVAL;\n\n\t\tret = -ESRCH;\n\t\tpid_ns = container_of(ns, struct pid_namespace, ns);\n\n\t\tguard(rcu)();\n\n\t\tif (ioctl == NS_GET_PID_IN_PIDNS ||\n\t\t    ioctl == NS_GET_TGID_IN_PIDNS)\n\t\t\ttsk = find_task_by_vpid(arg);\n\t\telse\n\t\t\ttsk = find_task_by_pid_ns(arg, pid_ns);\n\t\tif (!tsk)\n\t\t\tbreak;\n\n\t\tswitch (ioctl) {\n\t\tcase NS_GET_PID_FROM_PIDNS:\n\t\t\tret = task_pid_vnr(tsk);\n\t\t\tbreak;\n\t\tcase NS_GET_TGID_FROM_PIDNS:\n\t\t\tret = task_tgid_vnr(tsk);\n\t\t\tbreak;\n\t\tcase NS_GET_PID_IN_PIDNS:\n\t\t\tret = task_pid_nr_ns(tsk, pid_ns);\n\t\t\tbreak;\n\t\tcase NS_GET_TGID_IN_PIDNS:\n\t\t\tret = task_tgid_nr_ns(tsk, pid_ns);\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tret = 0;\n\t\t\tbreak;\n\t\t}\n\n\t\tif (!ret)\n\t\t\tret = -ESRCH;\n\t\treturn ret;\n\t}\n\t}\n\n\t/* extensible ioctls */\n\tswitch (_IOC_NR(ioctl)) {\n\tcase _IOC_NR(NS_MNT_GET_INFO): {\n\t\tstruct mnt_ns_info kinfo = {};\n\t\tstruct mnt_ns_info __user *uinfo = (struct mnt_ns_info __user *)arg;\n\t\tsize_t usize = _IOC_SIZE(ioctl);\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tif (!uinfo)\n\t\t\treturn -EINVAL;\n\n\t\tif (usize < MNT_NS_INFO_SIZE_VER0)\n\t\t\treturn -EINVAL;\n\n\t\treturn copy_ns_info_to_user(to_mnt_ns(ns), uinfo, usize, &kinfo);\n\t}\n\tcase _IOC_NR(NS_MNT_GET_PREV):\n\t\tprevious = true;\n\t\tfallthrough;\n\tcase _IOC_NR(NS_MNT_GET_NEXT): {\n\t\tstruct mnt_ns_info kinfo = {};\n\t\tstruct mnt_ns_info __user *uinfo = (struct mnt_ns_info __user *)arg;\n\t\tstruct path path __free(path_put) = {};\n\t\tstruct file *f __free(fput) = NULL;\n\t\tsize_t usize = _IOC_SIZE(ioctl);\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tif (usize < MNT_NS_INFO_SIZE_VER0)\n\t\t\treturn -EINVAL;\n\n\t\tif (previous)\n\t\t\tmnt_ns = lookup_prev_mnt_ns(to_mnt_ns(ns));\n\t\telse\n\t\t\tmnt_ns = lookup_next_mnt_ns(to_mnt_ns(ns));\n\t\tif (IS_ERR(mnt_ns))\n\t\t\treturn PTR_ERR(mnt_ns);\n\n\t\tns = to_ns_common(mnt_ns);\n\t\t/* Transfer ownership of @mnt_ns reference to @path. */\n\t\tret = path_from_stashed(&ns->stashed, nsfs_mnt, ns, &path);\n\t\tif (ret)\n\t\t\treturn ret;\n\n\t\tCLASS(get_unused_fd, fd)(O_CLOEXEC);\n\t\tif (fd < 0)\n\t\t\treturn fd;\n\n\t\tf = dentry_open(&path, O_RDONLY, current_cred());\n\t\tif (IS_ERR(f))\n\t\t\treturn PTR_ERR(f);\n\n\t\tif (uinfo) {\n\t\t\t/*\n\t\t\t * If @uinfo is passed return all information about the\n\t\t\t * mount namespace as well.\n\t\t\t */\n\t\t\tret = copy_ns_info_to_user(to_mnt_ns(ns), uinfo, usize, &kinfo);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\n\t\t/* Transfer reference of @f to caller's fdtable. */\n\t\tfd_install(fd, no_free_ptr(f));\n\t\t/* File descriptor is live so hand it off to the caller. */\n\t\treturn take_fd(fd);\n\t}\n\tdefault:\n\t\tret = -ENOTTY;\n\t}\n\n\treturn ret;\n}\n\nint ns_get_name(char *buf, size_t size, struct task_struct *task,\n\t\t\tconst struct proc_ns_operations *ns_ops)\n{\n\tstruct ns_common *ns;\n\tint res = -ENOENT;\n\tconst char *name;\n\tns = ns_ops->get(task);\n\tif (ns) {\n\t\tname = ns_ops->real_ns_name ? : ns_ops->name;\n\t\tres = snprintf(buf, size, \"%s:[%u]\", name, ns->inum);\n\t\tns_ops->put(ns);\n\t}\n\treturn res;\n}\n\nbool proc_ns_file(const struct file *file)\n{\n\treturn file->f_op == &ns_file_operations;\n}\n\n/**\n * ns_match() - Returns true if current namespace matches dev/ino provided.\n * @ns: current namespace\n * @dev: dev_t from nsfs that will be matched against current nsfs\n * @ino: ino_t from nsfs that will be matched against current nsfs\n *\n * Return: true if dev and ino matches the current nsfs.\n */\nbool ns_match(const struct ns_common *ns, dev_t dev, ino_t ino)\n{\n\treturn (ns->inum == ino) && (nsfs_mnt->mnt_sb->s_dev == dev);\n}\n\n\nstatic int nsfs_show_path(struct seq_file *seq, struct dentry *dentry)\n{\n\tstruct inode *inode = d_inode(dentry);\n\tconst struct ns_common *ns = inode->i_private;\n\tconst struct proc_ns_operations *ns_ops = ns->ops;\n\n\tseq_printf(seq, \"%s:[%lu]\", ns_ops->name, inode->i_ino);\n\treturn 0;\n}\n\nstatic const struct super_operations nsfs_ops = {\n\t.statfs = simple_statfs,\n\t.evict_inode = nsfs_evict,\n\t.show_path = nsfs_show_path,\n};\n\nstatic int nsfs_init_inode(struct inode *inode, void *data)\n{\n\tstruct ns_common *ns = data;\n\n\tinode->i_private = data;\n\tinode->i_mode |= S_IRUGO;\n\tinode->i_fop = &ns_file_operations;\n\tinode->i_ino = ns->inum;\n\treturn 0;\n}\n\nstatic void nsfs_put_data(void *data)\n{\n\tstruct ns_common *ns = data;\n\tns->ops->put(ns);\n}\n\nstatic const struct stashed_operations nsfs_stashed_ops = {\n\t.init_inode = nsfs_init_inode,\n\t.put_data = nsfs_put_data,\n};\n\nstatic int nsfs_init_fs_context(struct fs_context *fc)\n{\n\tstruct pseudo_fs_context *ctx = init_pseudo(fc, NSFS_MAGIC);\n\tif (!ctx)\n\t\treturn -ENOMEM;\n\tctx->ops = &nsfs_ops;\n\tctx->dops = &ns_dentry_operations;\n\tfc->s_fs_info = (void *)&nsfs_stashed_ops;\n\treturn 0;\n}\n\nstatic struct file_system_type nsfs = {\n\t.name = \"nsfs\",\n\t.init_fs_context = nsfs_init_fs_context,\n\t.kill_sb = kill_anon_super,\n};\n\nvoid __init nsfs_init(void)\n{\n\tnsfs_mnt = kern_mount(&nsfs);\n\tif (IS_ERR(nsfs_mnt))\n\t\tpanic(\"can't set nsfs up\\n\");\n\tnsfs_mnt->mnt_sb->s_flags &= ~SB_NOUSER;\n}\n",
   "source_review": {
@@ -225,5 +281,262 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/fs/nsfs.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-4291f6a3c03c9d98",
+    "path": "fs/nsfs.c",
+    "title": "nsfs 구현: 참조를 경로와 FD로 바꾸기·ioctl dispatch",
+    "area": "VFS · 파일 디스크립터 · 소유권 · ioctl · RCU · ABI 확장",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "파일시스템 초기화, namespace 이름과 경로, 전체 ioctl 분기와 자원 소유권을 분석합니다.",
+    "guide": [
+      "참조를 가진 객체를 경로·열린 파일·FD로 바꾸는 각 단계에서 소유권 이전과 실패 정리를 구별해야 합니다.",
+      "가상 파일시스템, callback, 사용자 메모리 복사, RCU, 확장 ioctl의 실제 제어 흐름을 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 파일 작업",
+        "text": "GPL-2.0 파일은 mount·pseudo_fs·file·fs·proc namespace·PID/user namespace·uaccess 등의 인터페이스와 내부 mount.h,internal.h를 포함합니다. static nsfs_mnt를 보관하며 ns_file_operations는 unlocked_ioctl=ns_ioctl, compat_ioctl=compat_ptr_ioctl 두 항목을 지정합니다. 이 테이블에는 일반 read/write 메서드가 없습니다. namespace 파일을 일반 텍스트 데이터 파일로 읽는 구현이 아닙니다."
+      },
+      {
+        "title": "Dentry 이름과 inode 수명",
+        "text": "ns_dname은 inode->i_private의 namespace에서 ops->name을 얻어 이름:[inode번호] 형태로 dynamic_dname을 호출합니다. ns_dentry_operations는 always_delete_dentry, ns_dname, stashed_dentry_prune을 연결합니다. nsfs_evict는 clear_inode 후 ns->ops->put으로 namespace 참조를 놓습니다. dentry 이름 생성과 namespace 객체의 마지막 수명 처리는 별도 callback입니다."
+      },
+      {
+        "title": "Task에서 경로 얻기",
+        "text": "ns_get_path_cb는 callback(private_data)로 참조를 가진 namespace를 얻고 NULL이면 -ENOENT, 있으면 path_from_stashed(&ns->stashed,nsfs_mnt,ns,path)를 호출합니다. task adapter는 ns_ops와 task를 담은 작은 구조체에서 get(task)를 호출하고 ns_get_path는 이 adapter를 공통 함수에 전달합니다. 이 경로는 NULL을 검사하며 ERR_PTR를 별도로 검사하는 코드가 아니므로 callback 계약을 구분해야 합니다."
+      },
+      {
+        "title": "Namespace 열기의 참조 소비",
+        "text": "open_namespace 문서는 성공·실패와 관계없이 입력 ns 참조를 소비한다고 명시합니다. 먼저 path_from_stashed를 호출하는 이유도 그 계약 때문입니다. path는 __free(path_put)로 정리합니다. 이어 O_CLOEXEC로 미사용 FD를 예약하고 dentry_open을 O_RDONLY,current_cred로 수행합니다. 성공하면 fd_install 후 take_fd로 FD 예약의 소유권을 호출자에게 넘깁니다. 중간 실패는 음수 오류를 반환하며 참조를 호출자가 다시 put하는 계약이 아닙니다."
+      },
+      {
+        "title": "관련 namespace 열기",
+        "text": "open_related_ns는 get_ns(ns)를 호출하고 ERR_PTR이면 PTR_ERR를 반환하며 아니면 open_namespace에 넘깁니다. 여기에는 NULL 검사가 따로 없습니다. owner나 parent를 얻는 callback과 참조 소비 함수의 계약이 맞아야 합니다. 이 함수만 EXPORT_SYMBOL_GPL로 내보냅니다. 단순 조회와 새 FD 생성이 결합된 작업입니다."
+      },
+      {
+        "title": "Mount 정보 복사",
+        "text": "copy_ns_info_to_user는 kinfo->size=min(usize,sizeof(*kinfo)), mnt_ns_id=mnt_ns->seq, nr_mounts=READ_ONCE(nr_mounts)를 설정합니다. mount 수가 0이 아닐 때만 1을 빼 root mount를 제외하므로 0에서 unsigned underflow하지 않습니다. copy_to_user가 실패하면 -EFAULT, 성공하면 0입니다. 큰 사용자 구조체의 남은 tail을 여기서 전부 0으로 채우는 코드는 없고 알려진 크기까지만 복사합니다."
+      },
+      {
+        "title": "기본 ioctl: owner·parent·type",
+        "text": "첫 switch는 완전한 ioctl 명령값을 비교합니다. USERNS는 ns_get_owner로 관련 namespace를 엽니다. PARENT는 get_parent가 없으면 -EINVAL이며 있으면 해당 callback으로 엽니다. NSTYPE은 ns->ops->type을 그대로 반환합니다. 이들은 모두 사용자 버퍼를 채우는 동일한 작업이 아닙니다."
+      },
+      {
+        "title": "Owner UID와 mount ID 출력",
+        "text": "OWNER_UID는 namespace type이 NEWUSER가 아니면 -EINVAL입니다. owner를 from_kuid_munged(current_user_ns(),user_ns->owner)로 호출자 공간에 변환하고 uid_t 사용자 포인터에 put_user합니다. MNTNS_ID는 NEWNS만 허용하고 __u64 mnt_ns->seq를 사용자 포인터에 씁니다. namespace 내부 식별자와 owner의 호출자 기준 UID 표현은 서로 다릅니다."
+      },
+      {
+        "title": "PID 변환의 조회 방향",
+        "text": "네 PID ioctl은 NEWPID인지 검사한 뒤 guard(rcu) 구간에서 처리합니다. IN 계열은 find_task_by_vpid(arg)로 호출자 공간에서 입력 PID를 찾고 FROM 계열은 find_task_by_pid_ns(arg,pid_ns)로 파일 대상 공간에서 찾습니다. arg는 사용자 포인터에서 읽어온 값이 아니라 직접 PID 숫자로 사용합니다. PID 반환은 task_pid, TGID 반환은 task_tgid 계열 helper를 씁니다."
+      },
+      {
+        "title": "PID 변환 결과와 못 찾은 경로",
+        "text": "찾은 task에 대해 FROM은 task_pid_vnr 또는 task_tgid_vnr, IN은 task_pid_nr_ns 또는 task_tgid_nr_ns로 출력 공간의 ID를 얻습니다. 결과가 0이면 -ESRCH로 바꿔 반환합니다. 그러나 task를 처음부터 찾지 못했을 때의 if (!tsk) break는 첫 switch를 벗어나 아래 확장 switch로 진행합니다. ret를 -ESRCH로 초기화했어도 이 네 명령 번호는 그 switch의 default에서 -ENOTTY로 덮입니다. 원본의 이 두 실패 경로를 모두 -ESRCH라고 설명하면 틀립니다. 실제 커널 실행 결과를 측정한 것이 아니라 제어 흐름을 대조한 결론입니다."
+      },
+      {
+        "title": "확장 ioctl dispatch의 범위",
+        "text": "두 번째 switch는 _IOC_NR(ioctl)만 비교하며 크기는 _IOC_SIZE로 별도 읽습니다. 여기에는 _IOC_TYPE 또는 _IOC_DIR를 다시 확인하는 분기가 없습니다. 따라서 전체 명령값을 엄격히 비교하는 앞 switch와 동일한 검증이라고 설명하지 않습니다. 확장 명령이 아닌 경우 default는 -ENOTTY입니다."
+      },
+      {
+        "title": "Mount INFO 검증",
+        "text": "INFO는 0으로 초기화한 kinfo를 준비하고 사용자 포인터와 명령 크기를 얻습니다. NEWNS가 아니거나 uinfo가 NULL이거나 usize가 VER0 16보다 작으면 -EINVAL입니다. 통과하면 공통 복사 helper를 호출합니다. uinfo->size를 먼저 사용자 메모리에서 읽어 허용 크기를 정하는 방식이 아닙니다. 크기 협상은 ioctl 명령의 인코딩을 사용합니다."
+      },
+      {
+        "title": "이전·다음 mount namespace",
+        "text": "PREV는 previous=true 후 NEXT와 같은 블록으로 fallthrough합니다. NEWNS와 최소 크기를 검사한 뒤 lookup_prev_mnt_ns 또는 lookup_next_mnt_ns를 호출하고 ERR_PTR를 전달합니다. 조회 순서와 권한의 세부 정책은 lookup helper의 책임이며 이 파일만으로 목록이 단순 연결 리스트라고 추정하지 않습니다. 반환 namespace 참조를 path_from_stashed에 넘겨 path 소유권으로 바꿉니다."
+      },
+      {
+        "title": "순회 FD와 선택적 정보",
+        "text": "NEXT/PREV는 O_CLOEXEC FD를 예약하고 O_RDONLY로 파일을 엽니다. uinfo가 있으면 정보 복사를 수행하며 실패 시 FD를 설치하기 전에 반환합니다. NULL이면 복사를 생략합니다. 성공 시 fd_install(fd,no_free_ptr(f))로 파일 참조를 FD table에 넘기고 take_fd로 FD를 인계합니다. path와 file의 cleanup, 예약 FD cleanup은 소유권을 넘기지 않은 실패 경로를 관리합니다. 이 블록의 f는 __free(fput)이고 초기값은 NULL입니다."
+      },
+      {
+        "title": "이름 조회의 별칭",
+        "text": "ns_get_name은 ns_ops->get(task)를 호출하고 없으면 -ENOENT입니다. 있으면 real_ns_name이 존재할 때 그것을, 아니면 name을 사용해 이름:[inum]을 snprintf로 쓴 뒤 put합니다. snprintf 반환값을 그대로 돌려주므로 버퍼에 실제 저장된 길이와 항상 같다고 단정하지 않습니다. 앞 ns_dname과 아래 show_path는 real_ns_name 선택 없이 ops->name을 사용합니다."
+      },
+      {
+        "title": "파일 종류와 식별 비교",
+        "text": "proc_ns_file은 file->f_op가 &ns_file_operations와 같은지 포인터로 비교합니다. 파일 이름 문자열이 namespace처럼 보이는지 검사하지 않습니다. ns_match는 ns->inum==ino와 nsfs superblock s_dev==dev를 모두 요구합니다. inode 번호 하나가 다른 파일시스템에서도 전역적으로 고유하다고 가정하지 않습니다."
+      },
+      {
+        "title": "Superblock과 inode 초기화",
+        "text": "nsfs_show_path는 ops->name과 inode->i_ino를 seq_file에 출력하고 0을 반환합니다. nsfs_ops는 simple_statfs, nsfs_evict, nsfs_show_path를 연결합니다. nsfs_init_inode는 i_private=data, i_mode에 S_IRUGO 추가, i_fop=ns_file_operations, i_ino=ns->inum을 설정하고 0입니다. 모드 전체를 새 상수로 덮는 것이 아니라 OR합니다."
+      },
+      {
+        "title": "Stashed 자료와 파일시스템 context",
+        "text": "nsfs_put_data는 ns->ops->put을 호출하고 nsfs_stashed_ops는 init_inode와 put_data 두 callback을 연결합니다. nsfs_init_fs_context는 init_pseudo(fc,NSFS_MAGIC)가 NULL이면 -ENOMEM, 성공하면 context의 ops,dops와 fc->s_fs_info에 stashed operation을 설정합니다. inode 수명과 path 생성 helper가 namespace 참조를 관리하는 연결점입니다."
+      },
+      {
+        "title": "파일시스템 초기화와 검토 범위",
+        "text": "file_system_type은 name=nsfs, init_fs_context와 kill_anon_super를 연결합니다. __init nsfs_init은 kern_mount하고 ERR_PTR이면 panic하며 성공 시 superblock flags에서 SB_NOUSER를 지웁니다. 이 파일 안에 register_filesystem 호출이 있다고 가정하지 않습니다. 전체 함수·테이블·ioctl·실패 경로를 대조했으며 실제 ioctl 실행·compat ABI·사용자 메모리 fault 주입을 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "open_namespace가 실패하면 입력 ns 참조는 호출자가 다시 put해야 하는가?",
+        "options": [
+          "아니다. 성공·실패와 관계없이 소비하는 계약이다",
+          "그렇다. 성공했을 때만 소비한다"
+        ],
+        "answer": 0,
+        "explanation": "문서와 첫 path_from_stashed 호출의 주석이 명시합니다. 소유권 소비 후 다시 put하면 참조 관리가 어긋날 수 있습니다."
+      },
+      {
+        "prompt": "nr_mounts가 0이면 정보 복사에서 root를 빼고 어떤 값이 되는가?",
+        "options": [
+          "unsigned 최댓값으로 바뀐다",
+          "0을 유지한다"
+        ],
+        "answer": 1,
+        "explanation": "if (kinfo->nr_mounts) 조건이 있으므로 0에서는 감소하지 않습니다."
+      },
+      {
+        "prompt": "PID ioctl의 arg를 구현은 어떻게 사용하는가?",
+        "options": [
+          "직접 PID 숫자로 조회 helper에 전달한다",
+          "int 사용자 포인터로 보고 get_user한다"
+        ],
+        "answer": 0,
+        "explanation": "네 PID 변환 블록에는 get_user가 없습니다. _IOR 인코딩과 실제 인수 계약을 함께 읽어야 합니다."
+      },
+      {
+        "prompt": "PID 조회가 task를 처음부터 찾지 못했을 때 이 소스의 최종 흐름은?",
+        "options": [
+          "초기 ret=-ESRCH를 즉시 return한다",
+          "아래 확장 switch default를 거쳐 -ENOTTY가 된다"
+        ],
+        "answer": 1,
+        "explanation": "if (!tsk)는 return이 아니라 break입니다. 첫 switch 뒤 다른 switch가 ret를 덮으므로 초기값만 보고 오류를 결론내릴 수 없습니다."
+      },
+      {
+        "prompt": "Task는 찾았지만 변환된 PID가 0이면?",
+        "options": [
+          "-ESRCH로 바꿔 직접 반환한다",
+          "항상 새 namespace FD를 연다"
+        ],
+        "answer": 0,
+        "explanation": "이 경로는 PID 블록 안에서 if (!ret) ret=-ESRCH 후 return합니다. task를 못 찾는 break 경로와 다릅니다."
+      },
+      {
+        "prompt": "확장 mount ioctl은 무엇으로 dispatch하는가?",
+        "options": [
+          "항상 전체 ioctl 정수값",
+          "_IOC_NR의 명령 번호"
+        ],
+        "answer": 1,
+        "explanation": "두 번째 switch는 번호만 비교합니다. 이 부분에는 type·direction의 별도 검사가 없습니다."
+      },
+      {
+        "prompt": "NS_MNT_GET_INFO가 구조체 크기로 사용하는 값은?",
+        "options": [
+          "ioctl 명령에 인코딩된 _IOC_SIZE",
+          "사용자 구조체 size 필드를 먼저 읽은 값"
+        ],
+        "answer": 0,
+        "explanation": "usize는 _IOC_SIZE(ioctl)로 얻습니다. kinfo->size는 복사할 크기로 나중에 설정하는 출력 필드입니다."
+      },
+      {
+        "prompt": "NEXT/PREV에서 정보 copy_to_user가 실패하면 FD가 이미 설치되어 있는가?",
+        "options": [
+          "그렇다. 실패해도 live FD를 반환한다",
+          "아니다. 설치 전에 오류 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "정보 복사 뒤에 fd_install이 있습니다. 중간 실패의 path·file·예약 FD는 cleanup 경로가 관리합니다."
+      },
+      {
+        "prompt": "ns_get_name과 ns_dname의 이름 선택 차이는?",
+        "options": [
+          "ns_get_name은 real_ns_name이 있으면 우선 사용한다",
+          "둘 다 무조건 inode 번호만 출력한다"
+        ],
+        "answer": 0,
+        "explanation": "ns_get_name만 real_ns_name 선택을 합니다. ns_dname과 show_path는 ops->name을 사용합니다."
+      },
+      {
+        "prompt": "proc_ns_file은 namespace 파일임을 무엇으로 판별하는가?",
+        "options": [
+          "파일 경로가 /proc으로 시작하는지 여부",
+          "file operation 테이블 포인터 동일성"
+        ],
+        "answer": 1,
+        "explanation": "구현은 file->f_op == &ns_file_operations 한 줄입니다. 경로 문자열 기반 판단이 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/mount.h>\n#include <linux/pseudo_fs.h>\n#include <linux/file.h>\n#include <linux/fs.h>\n#include <linux/proc_fs.h>\n#include <linux/proc_ns.h>\n#include <linux/magic.h>\n#include <linux/ktime.h>\n#include <linux/seq_file.h>\n#include <linux/pid_namespace.h>\n#include <linux/user_namespace.h>\n#include <linux/nsfs.h>\n#include <linux/uaccess.h>\n#include <linux/mnt_namespace.h>\n\n#include \"mount.h\"\n#include \"internal.h\"\n\nstatic struct vfsmount *nsfs_mnt;\n\nstatic long ns_ioctl(struct file *filp, unsigned int ioctl,\n\t\t\tunsigned long arg);\nstatic const struct file_operations ns_file_operations = {\n\t.unlocked_ioctl = ns_ioctl,\n\t.compat_ioctl   = compat_ptr_ioctl,\n};\n\nstatic char *ns_dname(struct dentry *dentry, char *buffer, int buflen)\n{\n\tstruct inode *inode = d_inode(dentry);\n\tstruct ns_common *ns = inode->i_private;\n\tconst struct proc_ns_operations *ns_ops = ns->ops;\n\n\treturn dynamic_dname(buffer, buflen, \"%s:[%lu]\",\n\t\tns_ops->name, inode->i_ino);\n}\n\nconst struct dentry_operations ns_dentry_operations = {\n\t.d_delete\t= always_delete_dentry,\n\t.d_dname\t= ns_dname,\n\t.d_prune\t= stashed_dentry_prune,\n};\n\nstatic void nsfs_evict(struct inode *inode)\n{\n\tstruct ns_common *ns = inode->i_private;\n\tclear_inode(inode);\n\tns->ops->put(ns);\n}\n\nint ns_get_path_cb(struct path *path, ns_get_path_helper_t *ns_get_cb,\n\t\t     void *private_data)\n{\n\tstruct ns_common *ns;\n\n\tns = ns_get_cb(private_data);\n\tif (!ns)\n\t\treturn -ENOENT;\n\n\treturn path_from_stashed(&ns->stashed, nsfs_mnt, ns, path);\n}\n\nstruct ns_get_path_task_args {\n\tconst struct proc_ns_operations *ns_ops;\n\tstruct task_struct *task;\n};\n\nstatic struct ns_common *ns_get_path_task(void *private_data)\n{\n\tstruct ns_get_path_task_args *args = private_data;\n\n\treturn args->ns_ops->get(args->task);\n}\n\nint ns_get_path(struct path *path, struct task_struct *task,\n\t\t  const struct proc_ns_operations *ns_ops)\n{\n\tstruct ns_get_path_task_args args = {\n\t\t.ns_ops\t= ns_ops,\n\t\t.task\t= task,\n\t};\n\n\treturn ns_get_path_cb(path, ns_get_path_task, &args);\n}\n\n/**\n * open_namespace - open a namespace\n * @ns: the namespace to open\n *\n * This will consume a reference to @ns indendent of success or failure.\n *\n * Return: A file descriptor on success or a negative error code on failure.\n */\nint open_namespace(struct ns_common *ns)\n{\n\tstruct path path __free(path_put) = {};\n\tstruct file *f;\n\tint err;\n\n\t/* call first to consume reference */\n\terr = path_from_stashed(&ns->stashed, nsfs_mnt, ns, &path);\n\tif (err < 0)\n\t\treturn err;\n\n\tCLASS(get_unused_fd, fd)(O_CLOEXEC);\n\tif (fd < 0)\n\t\treturn fd;\n\n\tf = dentry_open(&path, O_RDONLY, current_cred());\n\tif (IS_ERR(f))\n\t\treturn PTR_ERR(f);\n\n\tfd_install(fd, f);\n\treturn take_fd(fd);\n}\n\nint open_related_ns(struct ns_common *ns,\n\t\t   struct ns_common *(*get_ns)(struct ns_common *ns))\n{\n\tstruct ns_common *relative;\n\n\trelative = get_ns(ns);\n\tif (IS_ERR(relative))\n\t\treturn PTR_ERR(relative);\n\n\treturn open_namespace(relative);\n}\nEXPORT_SYMBOL_GPL(open_related_ns);\n\nstatic int copy_ns_info_to_user(const struct mnt_namespace *mnt_ns,\n\t\t\t\tstruct mnt_ns_info __user *uinfo, size_t usize,\n\t\t\t\tstruct mnt_ns_info *kinfo)\n{\n\t/*\n\t * If userspace and the kernel have the same struct size it can just\n\t * be copied. If userspace provides an older struct, only the bits that\n\t * userspace knows about will be copied. If userspace provides a new\n\t * struct, only the bits that the kernel knows aobut will be copied and\n\t * the size value will be set to the size the kernel knows about.\n\t */\n\tkinfo->size\t\t= min(usize, sizeof(*kinfo));\n\tkinfo->mnt_ns_id\t= mnt_ns->seq;\n\tkinfo->nr_mounts\t= READ_ONCE(mnt_ns->nr_mounts);\n\t/* Subtract the root mount of the mount namespace. */\n\tif (kinfo->nr_mounts)\n\t\tkinfo->nr_mounts--;\n\n\tif (copy_to_user(uinfo, kinfo, kinfo->size))\n\t\treturn -EFAULT;\n\n\treturn 0;\n}\n\nstatic long ns_ioctl(struct file *filp, unsigned int ioctl,\n\t\t\tunsigned long arg)\n{\n\tstruct user_namespace *user_ns;\n\tstruct pid_namespace *pid_ns;\n\tstruct task_struct *tsk;\n\tstruct ns_common *ns = get_proc_ns(file_inode(filp));\n\tstruct mnt_namespace *mnt_ns;\n\tbool previous = false;\n\tuid_t __user *argp;\n\tuid_t uid;\n\tint ret;\n\n\tswitch (ioctl) {\n\tcase NS_GET_USERNS:\n\t\treturn open_related_ns(ns, ns_get_owner);\n\tcase NS_GET_PARENT:\n\t\tif (!ns->ops->get_parent)\n\t\t\treturn -EINVAL;\n\t\treturn open_related_ns(ns, ns->ops->get_parent);\n\tcase NS_GET_NSTYPE:\n\t\treturn ns->ops->type;\n\tcase NS_GET_OWNER_UID:\n\t\tif (ns->ops->type != CLONE_NEWUSER)\n\t\t\treturn -EINVAL;\n\t\tuser_ns = container_of(ns, struct user_namespace, ns);\n\t\targp = (uid_t __user *) arg;\n\t\tuid = from_kuid_munged(current_user_ns(), user_ns->owner);\n\t\treturn put_user(uid, argp);\n\tcase NS_GET_MNTNS_ID: {\n\t\t__u64 __user *idp;\n\t\t__u64 id;\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tmnt_ns = container_of(ns, struct mnt_namespace, ns);\n\t\tidp = (__u64 __user *)arg;\n\t\tid = mnt_ns->seq;\n\t\treturn put_user(id, idp);\n\t}\n\tcase NS_GET_PID_FROM_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_TGID_FROM_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_PID_IN_PIDNS:\n\t\tfallthrough;\n\tcase NS_GET_TGID_IN_PIDNS: {\n\t\tif (ns->ops->type != CLONE_NEWPID)\n\t\t\treturn -EINVAL;\n\n\t\tret = -ESRCH;\n\t\tpid_ns = container_of(ns, struct pid_namespace, ns);\n\n\t\tguard(rcu)();\n\n\t\tif (ioctl == NS_GET_PID_IN_PIDNS ||\n\t\t    ioctl == NS_GET_TGID_IN_PIDNS)\n\t\t\ttsk = find_task_by_vpid(arg);\n\t\telse\n\t\t\ttsk = find_task_by_pid_ns(arg, pid_ns);\n\t\tif (!tsk)\n\t\t\tbreak;\n\n\t\tswitch (ioctl) {\n\t\tcase NS_GET_PID_FROM_PIDNS:\n\t\t\tret = task_pid_vnr(tsk);\n\t\t\tbreak;\n\t\tcase NS_GET_TGID_FROM_PIDNS:\n\t\t\tret = task_tgid_vnr(tsk);\n\t\t\tbreak;\n\t\tcase NS_GET_PID_IN_PIDNS:\n\t\t\tret = task_pid_nr_ns(tsk, pid_ns);\n\t\t\tbreak;\n\t\tcase NS_GET_TGID_IN_PIDNS:\n\t\t\tret = task_tgid_nr_ns(tsk, pid_ns);\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tret = 0;\n\t\t\tbreak;\n\t\t}\n\n\t\tif (!ret)\n\t\t\tret = -ESRCH;\n\t\treturn ret;\n\t}\n\t}\n\n\t/* extensible ioctls */\n\tswitch (_IOC_NR(ioctl)) {\n\tcase _IOC_NR(NS_MNT_GET_INFO): {\n\t\tstruct mnt_ns_info kinfo = {};\n\t\tstruct mnt_ns_info __user *uinfo = (struct mnt_ns_info __user *)arg;\n\t\tsize_t usize = _IOC_SIZE(ioctl);\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tif (!uinfo)\n\t\t\treturn -EINVAL;\n\n\t\tif (usize < MNT_NS_INFO_SIZE_VER0)\n\t\t\treturn -EINVAL;\n\n\t\treturn copy_ns_info_to_user(to_mnt_ns(ns), uinfo, usize, &kinfo);\n\t}\n\tcase _IOC_NR(NS_MNT_GET_PREV):\n\t\tprevious = true;\n\t\tfallthrough;\n\tcase _IOC_NR(NS_MNT_GET_NEXT): {\n\t\tstruct mnt_ns_info kinfo = {};\n\t\tstruct mnt_ns_info __user *uinfo = (struct mnt_ns_info __user *)arg;\n\t\tstruct path path __free(path_put) = {};\n\t\tstruct file *f __free(fput) = NULL;\n\t\tsize_t usize = _IOC_SIZE(ioctl);\n\n\t\tif (ns->ops->type != CLONE_NEWNS)\n\t\t\treturn -EINVAL;\n\n\t\tif (usize < MNT_NS_INFO_SIZE_VER0)\n\t\t\treturn -EINVAL;\n\n\t\tif (previous)\n\t\t\tmnt_ns = lookup_prev_mnt_ns(to_mnt_ns(ns));\n\t\telse\n\t\t\tmnt_ns = lookup_next_mnt_ns(to_mnt_ns(ns));\n\t\tif (IS_ERR(mnt_ns))\n\t\t\treturn PTR_ERR(mnt_ns);\n\n\t\tns = to_ns_common(mnt_ns);\n\t\t/* Transfer ownership of @mnt_ns reference to @path. */\n\t\tret = path_from_stashed(&ns->stashed, nsfs_mnt, ns, &path);\n\t\tif (ret)\n\t\t\treturn ret;\n\n\t\tCLASS(get_unused_fd, fd)(O_CLOEXEC);\n\t\tif (fd < 0)\n\t\t\treturn fd;\n\n\t\tf = dentry_open(&path, O_RDONLY, current_cred());\n\t\tif (IS_ERR(f))\n\t\t\treturn PTR_ERR(f);\n\n\t\tif (uinfo) {\n\t\t\t/*\n\t\t\t * If @uinfo is passed return all information about the\n\t\t\t * mount namespace as well.\n\t\t\t */\n\t\t\tret = copy_ns_info_to_user(to_mnt_ns(ns), uinfo, usize, &kinfo);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\n\t\t/* Transfer reference of @f to caller's fdtable. */\n\t\tfd_install(fd, no_free_ptr(f));\n\t\t/* File descriptor is live so hand it off to the caller. */\n\t\treturn take_fd(fd);\n\t}\n\tdefault:\n\t\tret = -ENOTTY;\n\t}\n\n\treturn ret;\n}\n\nint ns_get_name(char *buf, size_t size, struct task_struct *task,\n\t\t\tconst struct proc_ns_operations *ns_ops)\n{\n\tstruct ns_common *ns;\n\tint res = -ENOENT;\n\tconst char *name;\n\tns = ns_ops->get(task);\n\tif (ns) {\n\t\tname = ns_ops->real_ns_name ? : ns_ops->name;\n\t\tres = snprintf(buf, size, \"%s:[%u]\", name, ns->inum);\n\t\tns_ops->put(ns);\n\t}\n\treturn res;\n}\n\nbool proc_ns_file(const struct file *file)\n{\n\treturn file->f_op == &ns_file_operations;\n}\n\n/**\n * ns_match() - Returns true if current namespace matches dev/ino provided.\n * @ns: current namespace\n * @dev: dev_t from nsfs that will be matched against current nsfs\n * @ino: ino_t from nsfs that will be matched against current nsfs\n *\n * Return: true if dev and ino matches the current nsfs.\n */\nbool ns_match(const struct ns_common *ns, dev_t dev, ino_t ino)\n{\n\treturn (ns->inum == ino) && (nsfs_mnt->mnt_sb->s_dev == dev);\n}\n\n\nstatic int nsfs_show_path(struct seq_file *seq, struct dentry *dentry)\n{\n\tstruct inode *inode = d_inode(dentry);\n\tconst struct ns_common *ns = inode->i_private;\n\tconst struct proc_ns_operations *ns_ops = ns->ops;\n\n\tseq_printf(seq, \"%s:[%lu]\", ns_ops->name, inode->i_ino);\n\treturn 0;\n}\n\nstatic const struct super_operations nsfs_ops = {\n\t.statfs = simple_statfs,\n\t.evict_inode = nsfs_evict,\n\t.show_path = nsfs_show_path,\n};\n\nstatic int nsfs_init_inode(struct inode *inode, void *data)\n{\n\tstruct ns_common *ns = data;\n\n\tinode->i_private = data;\n\tinode->i_mode |= S_IRUGO;\n\tinode->i_fop = &ns_file_operations;\n\tinode->i_ino = ns->inum;\n\treturn 0;\n}\n\nstatic void nsfs_put_data(void *data)\n{\n\tstruct ns_common *ns = data;\n\tns->ops->put(ns);\n}\n\nstatic const struct stashed_operations nsfs_stashed_ops = {\n\t.init_inode = nsfs_init_inode,\n\t.put_data = nsfs_put_data,\n};\n\nstatic int nsfs_init_fs_context(struct fs_context *fc)\n{\n\tstruct pseudo_fs_context *ctx = init_pseudo(fc, NSFS_MAGIC);\n\tif (!ctx)\n\t\treturn -ENOMEM;\n\tctx->ops = &nsfs_ops;\n\tctx->dops = &ns_dentry_operations;\n\tfc->s_fs_info = (void *)&nsfs_stashed_ops;\n\treturn 0;\n}\n\nstatic struct file_system_type nsfs = {\n\t.name = \"nsfs\",\n\t.init_fs_context = nsfs_init_fs_context,\n\t.kill_sb = kill_anon_super,\n};\n\nvoid __init nsfs_init(void)\n{\n\tnsfs_mnt = kern_mount(&nsfs);\n\tif (IS_ERR(nsfs_mnt))\n\t\tpanic(\"can't set nsfs up\\n\");\n\tnsfs_mnt->mnt_sb->s_flags &= ~SB_NOUSER;\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "00352d816aada15622fae9da72b7c749abc26539534cbe649ef4f4a172784080",
+      "scope": "whole-file",
+      "line_count": 415,
+      "authoring_source": "course/file_units/namespace_filesystem.py",
+      "sections": [
+        "전체 구성과 파일 작업",
+        "Dentry 이름과 inode 수명",
+        "Task에서 경로 얻기",
+        "Namespace 열기의 참조 소비",
+        "관련 namespace 열기",
+        "Mount 정보 복사",
+        "기본 ioctl: owner·parent·type",
+        "Owner UID와 mount ID 출력",
+        "PID 변환의 조회 방향",
+        "PID 변환 결과와 못 찾은 경로",
+        "확장 ioctl dispatch의 범위",
+        "Mount INFO 검증",
+        "이전·다음 mount namespace",
+        "순회 FD와 선택적 정보",
+        "이름 조회의 별칭",
+        "파일 종류와 식별 비교",
+        "Superblock과 inode 초기화",
+        "Stashed 자료와 파일시스템 context",
+        "파일시스템 초기화와 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/fs/nsfs.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "namespace를 파일 번호로 열면 보관 책임도 여러 손을 거칩니다. 물건을 전달할 때 누가 들고 있는지 확인하듯 객체 참조, 경로, 열린 파일, FD의 책임을 따라갑니다.",
+    "meaning": "nsfs의 참조 인계와 ioctl 분기, 실패 정리, 사용자 정보 복사의 실제 순서를 이해합니다.",
+    "exercise": "PID 변환에서 작업을 아예 못 찾는 경우와 작업은 찾았지만 결과 번호가 0인 경우를 각각 마지막 반환까지 따라가 보세요."
+  },
+  "goal": "nsfs의 참조 인계와 ioctl 분기, 실패 정리, 사용자 정보 복사의 실제 순서를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "PID 변환에서 작업을 아예 못 찾는 경우와 작업은 찾았지만 결과 번호가 0인 경우를 각각 마지막 반환까지 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "3a88ea032abbbe29fbbbab8d968d2d9def292c40d89822465a852b9bddd901e8",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 10,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

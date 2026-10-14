@@ -5,75 +5,89 @@
   "area": "RISC-V ISA · busy waiting · 인라인 어셈블리 · 컴파일러 장벽 · 조건부 컴파일",
   "track": "files",
   "kind": "kernel",
-  "intro": "대기 힌트 함수의 모든 명령과 컴파일 조건을 분석합니다.",
+  "intro": "cpu_relax는 조건부 DIV와 PAUSE·컴파일러 장벽을 제공하며 대기 조건은 호출자가 관리합니다.",
   "guide": [
-    "대기 루프의 실행 힌트와 공유 데이터 동기화, 운영체제 수면은 서로 다른 역할입니다.",
-    "툴체인 ISA 매크로와 실제 명령 인코딩, 별도의 barrier를 구별합니다."
+    "레지스터는 CPU가 값을 두는 작은 저장 공간입니다. dummy는 명령 결과를 받지만 뒤에서 사용하지 않는 변수입니다.",
+    "PAUSE는 바쁜 대기에서 CPU 실행에 주는 힌트입니다. 일정 시간 수면과 다릅니다.",
+    "컴파일러 barrier는 컴파일러의 메모리 접근 처리 제약이며 모든 하드웨어 접근을 정렬하는 full fence가 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0-only include guard 안의 !__ASSEMBLY__ 구역에서 asm/barrier.h와 asm/insn-def.h를 포함합니다. static inline void cpu_relax(void) 하나만 정의하며 외부 변수나 syscall wrapper는 없습니다."
+      "text": "라이선스와 포함 방지 안의 C용 구역에서 barrier와 명령 정의 헤더를 가져오고 static inline void cpu_relax 하나를 정의합니다. 전역 변수나 시스템 호출 연결 함수는 없습니다."
     },
     {
       "title": "조건부 나눗셈",
-      "text": "__riscv_muldiv가 정의된 경우 int dummy와 volatile asm의 div %0,%0,zero를 사용합니다. %0는 =r 출력이고 별도 C 입력 피연산자는 없습니다. 주석은 halt 대신 긴 지연의 stall을 유도하려는 목적이라고 설명합니다. 계산 결과 dummy를 반환하거나 이후 조건 판단에 쓰지 않습니다. 이 코드를 C의 0으로 나누는 표현식과 동일한 undefined behavior라고 설명하면 안 됩니다. 어셈블리 ISA 동작의 문맥입니다."
+      "text": "__riscv_muldiv가 있으면 int dummy에 div %0,%0,zero의 출력 레지스터를 연결합니다. 별도 C 입력은 없고 주석의 목적은 긴 연산 지연을 유도하는 것입니다. dummy는 반환하거나 뒤 조건에서 쓰지 않습니다. 이 어셈블리 명령을 C의 0 나눗셈 표현과 동일한 미정의 동작으로 설명하면 안 됩니다."
     },
     {
       "title": "조건의 정확한 출처",
-      "text": "분기는 CONFIG_SMP나 runtime CPU 개수 검사가 아니라 컴파일러가 제공하는 __riscv_muldiv 매크로입니다. 조건이 없으면 DIV 부분만 빠지고 뒤의 PAUSE와 barrier는 남습니다. 이 함수 자체가 CPU feature를 동적으로 탐지하는 코드가 아닙니다."
+      "text": "분기 조건은 컴파일러가 준 __riscv_muldiv이며 SMP나 실행 중 CPU 수가 아닙니다. 정의가 없으면 DIV 부분만 빠지고 PAUSE와 barrier는 남습니다. 이 함수가 CPU 기능을 동적으로 찾아내는 것은 아닙니다."
     },
     {
       "title": "PAUSE와 실제 인코딩",
-      "text": "그 다음 __asm__ __volatile__(RISCV_PAUSE)를 실행합니다. 교차 확인한 insn-def.h의 RISCV_PAUSE는 문자열 .4byte 0x100000f로 해당 명령 인코딩을 내보냅니다. 소스에 pause라는 mnemonic이 직접 없어도 명령 바이트를 포함할 수 있습니다. 주석은 instruction retirement를 줄이고 PC가 바뀐다는 전제를 설명합니다. 일정한 지연 시간이나 소비 전력 수치를 보장하는 코드는 아닙니다."
+      "text": "RISCV_PAUSE의 확인된 정의는 .4byte 0x100000f 문자열로 고정 명령 인코딩을 냅니다. pause라는 글자 대신 명령 비트를 직접 쓸 수 있습니다. 주석은 처리되는 명령 수를 줄이고 명령 위치 PC가 변한다는 전제를 말합니다. 일정한 지연 시간이나 전력 수치를 보장하지 않습니다."
     },
     {
       "title": "마지막 barrier의 역할",
-      "text": "PAUSE 뒤에 barrier()를 따로 호출합니다. 이는 컴파일러 메모리 접근 순서에 관한 장벽이며 이 파일에서 full hardware fence나 atomic lock을 구현하는 것은 아닙니다. 앞 asm에 x86 형태의 memory clobber가 적혀 있다고 가정하지 말고 별도의 barrier 호출을 읽어야 합니다."
+      "text": "PAUSE 뒤 barrier()를 따로 부릅니다. 이는 컴파일러 메모리 순서 제약이며 전체 하드웨어 장벽이나 원자 잠금 구현은 아닙니다. 앞 asm에 다른 CPU 방식의 memory clobber가 있다고 추정하지 말고 이 별도 호출을 읽어야 합니다."
     },
     {
       "title": "대기 조건과 범위",
-      "text": "함수에는 공유 플래그 읽기, 반복문, scheduler 호출, timeout이 없습니다. 호출부가 대기 조건과 올바른 동기화 규칙을 관리해야 합니다. 전체 매크로 조건과 함수 본문을 설명했으며 실제 RISC-V CPU의 stall 시간·PAUSE 지원별 성능이나 실행 결과를 측정한 것은 아닙니다."
+      "text": "이 함수에는 공유 플래그 읽기, 반복문, 스케줄러 호출, 제한 시간이 없습니다. 언제까지 기다릴지와 자료 동기화는 호출자가 마련합니다. 소스 독해는 실제 CPU의 지연 시간·PAUSE 성능 측정과 별개입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "__riscv_muldiv가 없으면 cpu_relax 전체가 사라지는가?",
+      "prompt": "__riscv_muldiv가 없으면 cpu_relax 전체가 없어지나요?",
       "options": [
+        "아니요. DIV만 빠지고 PAUSE와 barrier는 남습니다.",
+        "네. 아무 명령도 남지 않습니다."
+      ],
+      "answer": 0,
+      "explanation": "조건의 끝이 PAUSE보다 앞에 있습니다.",
+      "original_prompt": "__riscv_muldiv가 없으면 cpu_relax 전체가 사라지는가?",
+      "original_options": [
         "아니다. DIV만 빠지고 PAUSE와 barrier는 남는다",
         "그렇다. 함수에는 아무 명령도 남지 않는다"
       ],
-      "answer": 0,
-      "explanation": "전처리 #endif는 PAUSE 앞에 있습니다. 조건의 정확한 범위를 읽어야 합니다."
+      "original_explanation": "전처리 #endif는 PAUSE 앞에 있습니다. 조건의 정확한 범위를 읽어야 합니다."
     },
     {
-      "prompt": "DIV 결과 dummy를 함수가 어디에 사용하는가?",
+      "prompt": "DIV 결과 dummy는 어디에 쓰나요?",
       "options": [
+        "현재 CPU 번호로 반환합니다.",
+        "뒤에서 쓰지 않습니다. 지연용 명령의 출력입니다."
+      ],
+      "answer": 1,
+      "explanation": "함수는 void이며 dummy를 읽는 C 문장이 없습니다.",
+      "original_prompt": "DIV 결과 dummy를 함수가 어디에 사용하는가?",
+      "original_options": [
         "현재 CPU 번호로 반환한다",
         "이후 사용하지 않는다. 지연을 유도하는 명령의 출력이다"
       ],
-      "answer": 1,
-      "explanation": "반환형은 void이고 dummy를 읽는 C 문장이 없습니다. 명령의 목적과 산술 결과 사용을 구분합니다."
+      "original_explanation": "반환형은 void이고 dummy를 읽는 C 문장이 없습니다. 명령의 목적과 산술 결과 사용을 구분합니다."
     },
     {
-      "prompt": "RISCV_PAUSE가 포함 헤더에서 제공되는 형태는?",
+      "prompt": "RISCV_PAUSE는 포함 헤더에서 어떤 형태인가요?",
       "options": [
+        "고정 명령 인코딩을 내는 .4byte 문자열입니다.",
+        "getcpu 시스템 호출 함수 주소입니다."
+      ],
+      "answer": 0,
+      "explanation": "명령 이름 대신 .4byte 0x100000f로 비트를 직접 냅니다.",
+      "original_prompt": "RISCV_PAUSE가 포함 헤더에서 제공되는 형태는?",
+      "original_options": [
         "고정 명령 인코딩을 내보내는 .4byte 문자열이다",
         "getcpu 시스템 호출 함수 주소이다"
       ],
-      "answer": 0,
-      "explanation": "확인한 정의는 .4byte 0x100000f입니다. 어셈블러 mnemonic 대신 바이트 인코딩을 사용할 수 있습니다."
+      "original_explanation": "확인한 정의는 .4byte 0x100000f입니다. 어셈블러 mnemonic 대신 바이트 인코딩을 사용할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "__riscv_muldiv 조건의 끝을 찾아 PAUSE와 barrier가 조건 밖인지 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/barrier.h>\n#include <asm/insn-def.h>\n\nstatic inline void cpu_relax(void)\n{\n#ifdef __riscv_muldiv\n\tint dummy;\n\t/* In lieu of a halt instruction, induce a long-latency stall. */\n\t__asm__ __volatile__ (\"div %0, %0, zero\" : \"=r\" (dummy));\n#endif\n\n\t/*\n\t * Reduce instruction retirement.\n\t * This assumes the PC changes.\n\t */\n\t__asm__ __volatile__ (RISCV_PAUSE);\n\tbarrier();\n}\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
   "source_review": {
@@ -97,5 +111,134 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/vdso/processor.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f5511516a1f8f651",
+    "path": "arch/riscv/include/asm/vdso/processor.h",
+    "title": "RISC-V cpu_relax: 조건부 DIV와 PAUSE·컴파일러 장벽",
+    "area": "RISC-V ISA · busy waiting · 인라인 어셈블리 · 컴파일러 장벽 · 조건부 컴파일",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "대기 힌트 함수의 모든 명령과 컴파일 조건을 분석합니다.",
+    "guide": [
+      "대기 루프의 실행 힌트와 공유 데이터 동기화, 운영체제 수면은 서로 다른 역할입니다.",
+      "툴체인 ISA 매크로와 실제 명령 인코딩, 별도의 barrier를 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0-only include guard 안의 !__ASSEMBLY__ 구역에서 asm/barrier.h와 asm/insn-def.h를 포함합니다. static inline void cpu_relax(void) 하나만 정의하며 외부 변수나 syscall wrapper는 없습니다."
+      },
+      {
+        "title": "조건부 나눗셈",
+        "text": "__riscv_muldiv가 정의된 경우 int dummy와 volatile asm의 div %0,%0,zero를 사용합니다. %0는 =r 출력이고 별도 C 입력 피연산자는 없습니다. 주석은 halt 대신 긴 지연의 stall을 유도하려는 목적이라고 설명합니다. 계산 결과 dummy를 반환하거나 이후 조건 판단에 쓰지 않습니다. 이 코드를 C의 0으로 나누는 표현식과 동일한 undefined behavior라고 설명하면 안 됩니다. 어셈블리 ISA 동작의 문맥입니다."
+      },
+      {
+        "title": "조건의 정확한 출처",
+        "text": "분기는 CONFIG_SMP나 runtime CPU 개수 검사가 아니라 컴파일러가 제공하는 __riscv_muldiv 매크로입니다. 조건이 없으면 DIV 부분만 빠지고 뒤의 PAUSE와 barrier는 남습니다. 이 함수 자체가 CPU feature를 동적으로 탐지하는 코드가 아닙니다."
+      },
+      {
+        "title": "PAUSE와 실제 인코딩",
+        "text": "그 다음 __asm__ __volatile__(RISCV_PAUSE)를 실행합니다. 교차 확인한 insn-def.h의 RISCV_PAUSE는 문자열 .4byte 0x100000f로 해당 명령 인코딩을 내보냅니다. 소스에 pause라는 mnemonic이 직접 없어도 명령 바이트를 포함할 수 있습니다. 주석은 instruction retirement를 줄이고 PC가 바뀐다는 전제를 설명합니다. 일정한 지연 시간이나 소비 전력 수치를 보장하는 코드는 아닙니다."
+      },
+      {
+        "title": "마지막 barrier의 역할",
+        "text": "PAUSE 뒤에 barrier()를 따로 호출합니다. 이는 컴파일러 메모리 접근 순서에 관한 장벽이며 이 파일에서 full hardware fence나 atomic lock을 구현하는 것은 아닙니다. 앞 asm에 x86 형태의 memory clobber가 적혀 있다고 가정하지 말고 별도의 barrier 호출을 읽어야 합니다."
+      },
+      {
+        "title": "대기 조건과 범위",
+        "text": "함수에는 공유 플래그 읽기, 반복문, scheduler 호출, timeout이 없습니다. 호출부가 대기 조건과 올바른 동기화 규칙을 관리해야 합니다. 전체 매크로 조건과 함수 본문을 설명했으며 실제 RISC-V CPU의 stall 시간·PAUSE 지원별 성능이나 실행 결과를 측정한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "__riscv_muldiv가 없으면 cpu_relax 전체가 사라지는가?",
+        "options": [
+          "아니다. DIV만 빠지고 PAUSE와 barrier는 남는다",
+          "그렇다. 함수에는 아무 명령도 남지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "전처리 #endif는 PAUSE 앞에 있습니다. 조건의 정확한 범위를 읽어야 합니다."
+      },
+      {
+        "prompt": "DIV 결과 dummy를 함수가 어디에 사용하는가?",
+        "options": [
+          "현재 CPU 번호로 반환한다",
+          "이후 사용하지 않는다. 지연을 유도하는 명령의 출력이다"
+        ],
+        "answer": 1,
+        "explanation": "반환형은 void이고 dummy를 읽는 C 문장이 없습니다. 명령의 목적과 산술 결과 사용을 구분합니다."
+      },
+      {
+        "prompt": "RISCV_PAUSE가 포함 헤더에서 제공되는 형태는?",
+        "options": [
+          "고정 명령 인코딩을 내보내는 .4byte 문자열이다",
+          "getcpu 시스템 호출 함수 주소이다"
+        ],
+        "answer": 0,
+        "explanation": "확인한 정의는 .4byte 0x100000f입니다. 어셈블러 mnemonic 대신 바이트 인코딩을 사용할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/barrier.h>\n#include <asm/insn-def.h>\n\nstatic inline void cpu_relax(void)\n{\n#ifdef __riscv_muldiv\n\tint dummy;\n\t/* In lieu of a halt instruction, induce a long-latency stall. */\n\t__asm__ __volatile__ (\"div %0, %0, zero\" : \"=r\" (dummy));\n#endif\n\n\t/*\n\t * Reduce instruction retirement.\n\t * This assumes the PC changes.\n\t */\n\t__asm__ __volatile__ (RISCV_PAUSE);\n\tbarrier();\n}\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d80234368a8267bb14632a6a2ac19ece36f9e0b99c4db7e6378145ad3d06f89c",
+      "scope": "whole-file",
+      "line_count": 28,
+      "authoring_source": "course/file_units/riscv_processor_hints.py",
+      "sections": [
+        "전체 구성",
+        "조건부 나눗셈",
+        "조건의 정확한 출처",
+        "PAUSE와 실제 인코딩",
+        "마지막 barrier의 역할",
+        "대기 조건과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/vdso/processor.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "기다리는 사람이 계속 전속력으로 같은 질문을 하지 않도록 CPU에 쉬어 가는 힌트를 줍니다. 이 힌트가 잠을 재우거나 잠금을 얻어 주지는 않습니다.",
+    "meaning": "cpu_relax는 조건부 DIV와 PAUSE·컴파일러 장벽을 제공하며 대기 조건은 호출자가 관리합니다.",
+    "exercise": "__riscv_muldiv 조건의 끝을 찾아 PAUSE와 barrier가 조건 밖인지 표시하세요."
+  },
+  "goal": "cpu_relax는 조건부 DIV와 PAUSE·컴파일러 장벽을 제공하며 대기 조건은 호출자가 관리합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "__riscv_muldiv 조건의 끝을 찾아 PAUSE와 barrier가 조건 밖인지 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "aad30fa3f8c687d85581362bed482e98dd3c77407f4ba977c5cf0b882670b31a",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

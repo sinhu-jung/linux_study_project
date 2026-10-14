@@ -5,67 +5,81 @@
   "area": "CRC · 비트 연산 · 오류 검출",
   "track": "files",
   "kind": "kernel",
-  "intro": "16비트라는 이름만 같아도 CRC 알고리즘이 같지는 않습니다. 이 파일은 0x8005 다항식의 반사 방향 전이를 사용합니다.",
+  "intro": "CRC16의 반사 표와 낮은 바이트 전이를 계산합니다.",
   "guide": [
-    "crc16_table은 256개 u16 원소로 512바이트입니다. 공개 함수 crc16은 buffer를 한 바이트씩 읽고 헤더의 crc16_byte로 갱신합니다. helper는 crc의 하위 바이트와 입력을 XOR해 표를 조회하고 crc>>8과 XOR합니다.",
-    "초기 상태는 호출자가 전달합니다. 헤더 설명의 Init 0은 기본 알고리즘 설명이며 함수가 매 호출마다 0으로 덮어쓰지 않습니다. 이전 반환값을 넘겨 조각별 갱신을 이어갈 수 있습니다."
+    "표에는 u16 값 256개, 즉 512바이트가 있습니다.",
+    "함수는 전달한 crc를 매번 0으로 바꾸지 않습니다.",
+    "빈 버퍼는 입력 상태 그대로 돌려줍니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일과 공유 표",
-      "text": "SPDX·설명 주석, types/module/crc16 헤더 포함, 상수 표 정의, 표 export, crc16 함수, 함수 export, 모듈 설명·라이선스가 전부입니다. 표는 읽기 전용 전이 데이터이고 동적 초기화나 메모리 할당은 없습니다."
+      "title": "파일과 공통 표",
+      "text": "라이선스·설명, types/module/crc16 헤더 뒤 상수 표와 공개, 버퍼 함수와 공개, 모듈 설명·라이선스가 있습니다. 표는 읽기 전용 전이 자료이며 실행 중 초기화나 메모리 할당은 없습니다."
     },
     {
-      "title": "다항식과 비트 방향",
-      "text": "정방향 표기 0x8005를 반사한 비트 처리에는 0xA001을 사용합니다. 표의 각 원소는 입력 인덱스에 대해 하위 비트부터 8번 (r>>1) XOR 조건부 0xA001 전이를 한 값입니다. 모든 256개 원소를 이 독립 비트 루프로 비교할 수 있습니다."
+      "title": "비트 방향",
+      "text": "정방향 다항식 표기는 0x8005, 즉 x^16+x^15+x^2+1입니다. 낮은 비트부터 처리하는 반사 표현은 0xA001입니다. 각 인덱스에서 r을 시작해 오른쪽 이동과 이전 아래 비트에 따른 0xA001 XOR를 여덟 번 하면 표 한 칸이 됩니다. 별도 비트 루프로 256칸을 대조할 수 있습니다."
     },
     {
-      "title": "계산 예제와 경계",
-      "text": "초기 crc=0, 입력 1이면 tab[1]=0xC0C1입니다. 다음 입력 0이면 crc>>8=0xC0, 인덱스=0xC1, tab[0xC1]=0x90C1, 결과=0x9001입니다. len=0이면 초기값 그대로이며 양수 len에는 유효한 읽기 버퍼가 필요합니다."
+      "title": "두 바이트 예",
+      "text": "초기 0에 1이면 table[1]=0xC0C1입니다. 다음 0이면 위 바이트를 내린 0xC0와 table[0xC1]=0x90C1을 XOR해 0x9001입니다. 헤더의 byte 도구가 이런 갱신을 하고 본문은 바이트마다 부릅니다. 길이 0은 초기값 유지, 양수 길이는 읽을 수 있는 버퍼가 필요합니다."
     },
     {
-      "title": "CS 연결",
-      "text": "n바이트를 O(n) 시간과 O(1) 지역 상태로 순회합니다. 표 방식은 비트별 8회 전이를 메모리 조회로 바꾸는 시간·공간 절충입니다. CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다."
+      "title": "표를 쓰는 이유",
+      "text": "n바이트는 O(n) 시간과 O(1) 지역 상태입니다. 여덟 번 비트 계산을 표 조회로 바꾸는 시간·공간 절충입니다. CRC는 GF(2) 다항식 나머지이며 더하기·빼기는 자리올림 없는 XOR입니다. 암호 인증은 아니고 초기값·방향·마지막 XOR·전송 표현에 따라 값이 달라집니다. 이전 반환을 넘기면 조각별로 이어갈 수 있습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "초기 0에서 입력 [1,0]의 결과는?",
+      "prompt": "초기 0, 입력 [1,0]의 결과는?",
       "options": [
         "0x9001",
         "0xC0C1"
       ],
       "answer": 0,
-      "explanation": "첫 바이트는 0xC0C1이고 두 번째는 0x00C0 XOR tab[0xC1]=0x9001입니다. 0xC0C1은 한 바이트만 처리한 값입니다."
+      "explanation": "둘째에서 0x00C0 XOR table[0xC1]을 계산합니다.",
+      "original_prompt": "초기 0에서 입력 [1,0]의 결과는?",
+      "original_options": [
+        "0x9001",
+        "0xC0C1"
+      ],
+      "original_explanation": "첫 바이트는 0xC0C1이고 두 번째는 0x00C0 XOR tab[0xC1]=0x9001입니다. 0xC0C1은 한 바이트만 처리한 값입니다."
     },
     {
-      "prompt": "crc16 함수가 초기 상태를 매번 0으로 설정하는가?",
+      "prompt": "함수가 매번 초기 상태를 0으로 만드나요?",
       "options": [
+        "그렇다. 설명에 Init 0이라고 있다",
+        "아니다. 받은 상태를 이어 갱신한다"
+      ],
+      "answer": 1,
+      "explanation": "기본 시작값과 다음 조각의 이전 상태는 다릅니다.",
+      "original_prompt": "crc16 함수가 초기 상태를 매번 0으로 설정하는가?",
+      "original_options": [
         "그렇다. 헤더에 Init 0이라고 쓰여 있다",
         "아니다. 인자로 받은 상태를 누적한다"
       ],
-      "answer": 1,
-      "explanation": "본문은 전달받은 crc를 그대로 반복 갱신합니다. 기본 초기값과 이어 처리할 때의 이전 상태 전달을 구별해야 합니다."
+      "original_explanation": "본문은 전달받은 crc를 그대로 반복 갱신합니다. 기본 초기값과 이어 처리할 때의 이전 상태 전달을 구별해야 합니다."
     },
     {
-      "prompt": "crc16_table의 원소 데이터 크기는?",
+      "prompt": "표 원소 데이터의 크기는?",
       "options": [
-        "256 × 2 = 512바이트",
+        "256×2=512바이트",
         "256바이트"
       ],
       "answer": 0,
-      "explanation": "u16은 16비트, 즉 2바이트입니다. 256개 원소의 데이터 크기는 512바이트이며 심볼·모듈 전체 크기와는 별개입니다."
+      "explanation": "u16 하나는 두 바이트입니다. 모듈 전체 크기와는 별개입니다.",
+      "original_prompt": "crc16_table의 원소 데이터 크기는?",
+      "original_options": [
+        "256 × 2 = 512바이트",
+        "256바이트"
+      ],
+      "original_explanation": "u16은 16비트, 즉 2바이트입니다. 256개 원소의 데이터 크기는 512바이트이며 심볼·모듈 전체 크기와는 별개입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "초기 0으로 1과 0을 넣어 0xC0C1 다음 0x9001이 되는지 확인하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *      crc16.c\n */\n\n#include <linux/types.h>\n#include <linux/module.h>\n#include <linux/crc16.h>\n\n/** CRC table for the CRC-16. The poly is 0x8005 (x^16 + x^15 + x^2 + 1) */\nu16 const crc16_table[256] = {\n\t0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,\n\t0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,\n\t0xCC01, 0x0CC0, 0x0D80, 0xCD41, 0x0F00, 0xCFC1, 0xCE81, 0x0E40,\n\t0x0A00, 0xCAC1, 0xCB81, 0x0B40, 0xC901, 0x09C0, 0x0880, 0xC841,\n\t0xD801, 0x18C0, 0x1980, 0xD941, 0x1B00, 0xDBC1, 0xDA81, 0x1A40,\n\t0x1E00, 0xDEC1, 0xDF81, 0x1F40, 0xDD01, 0x1DC0, 0x1C80, 0xDC41,\n\t0x1400, 0xD4C1, 0xD581, 0x1540, 0xD701, 0x17C0, 0x1680, 0xD641,\n\t0xD201, 0x12C0, 0x1380, 0xD341, 0x1100, 0xD1C1, 0xD081, 0x1040,\n\t0xF001, 0x30C0, 0x3180, 0xF141, 0x3300, 0xF3C1, 0xF281, 0x3240,\n\t0x3600, 0xF6C1, 0xF781, 0x3740, 0xF501, 0x35C0, 0x3480, 0xF441,\n\t0x3C00, 0xFCC1, 0xFD81, 0x3D40, 0xFF01, 0x3FC0, 0x3E80, 0xFE41,\n\t0xFA01, 0x3AC0, 0x3B80, 0xFB41, 0x3900, 0xF9C1, 0xF881, 0x3840,\n\t0x2800, 0xE8C1, 0xE981, 0x2940, 0xEB01, 0x2BC0, 0x2A80, 0xEA41,\n\t0xEE01, 0x2EC0, 0x2F80, 0xEF41, 0x2D00, 0xEDC1, 0xEC81, 0x2C40,\n\t0xE401, 0x24C0, 0x2580, 0xE541, 0x2700, 0xE7C1, 0xE681, 0x2640,\n\t0x2200, 0xE2C1, 0xE381, 0x2340, 0xE101, 0x21C0, 0x2080, 0xE041,\n\t0xA001, 0x60C0, 0x6180, 0xA141, 0x6300, 0xA3C1, 0xA281, 0x6240,\n\t0x6600, 0xA6C1, 0xA781, 0x6740, 0xA501, 0x65C0, 0x6480, 0xA441,\n\t0x6C00, 0xACC1, 0xAD81, 0x6D40, 0xAF01, 0x6FC0, 0x6E80, 0xAE41,\n\t0xAA01, 0x6AC0, 0x6B80, 0xAB41, 0x6900, 0xA9C1, 0xA881, 0x6840,\n\t0x7800, 0xB8C1, 0xB981, 0x7940, 0xBB01, 0x7BC0, 0x7A80, 0xBA41,\n\t0xBE01, 0x7EC0, 0x7F80, 0xBF41, 0x7D00, 0xBDC1, 0xBC81, 0x7C40,\n\t0xB401, 0x74C0, 0x7580, 0xB541, 0x7700, 0xB7C1, 0xB681, 0x7640,\n\t0x7200, 0xB2C1, 0xB381, 0x7340, 0xB101, 0x71C0, 0x7080, 0xB041,\n\t0x5000, 0x90C1, 0x9181, 0x5140, 0x9301, 0x53C0, 0x5280, 0x9241,\n\t0x9601, 0x56C0, 0x5780, 0x9741, 0x5500, 0x95C1, 0x9481, 0x5440,\n\t0x9C01, 0x5CC0, 0x5D80, 0x9D41, 0x5F00, 0x9FC1, 0x9E81, 0x5E40,\n\t0x5A00, 0x9AC1, 0x9B81, 0x5B40, 0x9901, 0x59C0, 0x5880, 0x9841,\n\t0x8801, 0x48C0, 0x4980, 0x8941, 0x4B00, 0x8BC1, 0x8A81, 0x4A40,\n\t0x4E00, 0x8EC1, 0x8F81, 0x4F40, 0x8D01, 0x4DC0, 0x4C80, 0x8C41,\n\t0x4400, 0x84C1, 0x8581, 0x4540, 0x8701, 0x47C0, 0x4680, 0x8641,\n\t0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040\n};\nEXPORT_SYMBOL(crc16_table);\n\n/**\n * crc16 - compute the CRC-16 for the data buffer\n * @crc:\tprevious CRC value\n * @buffer:\tdata pointer\n * @len:\tnumber of bytes in the buffer\n *\n * Returns the updated CRC value.\n */\nu16 crc16(u16 crc, u8 const *buffer, size_t len)\n{\n\twhile (len--)\n\t\tcrc = crc16_byte(crc, *buffer++);\n\treturn crc;\n}\nEXPORT_SYMBOL(crc16);\n\nMODULE_DESCRIPTION(\"CRC16 calculations\");\nMODULE_LICENSE(\"GPL\");\n\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc16.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-6b12caab6f64224b",
+    "path": "lib/crc16.c",
+    "title": "CRC16 전체 구현: 0x8005 다항식과 반사 전이 표",
+    "area": "CRC · 비트 연산 · 오류 검출",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "16비트라는 이름만 같아도 CRC 알고리즘이 같지는 않습니다. 이 파일은 0x8005 다항식의 반사 방향 전이를 사용합니다.",
+    "guide": [
+      "crc16_table은 256개 u16 원소로 512바이트입니다. 공개 함수 crc16은 buffer를 한 바이트씩 읽고 헤더의 crc16_byte로 갱신합니다. helper는 crc의 하위 바이트와 입력을 XOR해 표를 조회하고 crc>>8과 XOR합니다.",
+      "초기 상태는 호출자가 전달합니다. 헤더 설명의 Init 0은 기본 알고리즘 설명이며 함수가 매 호출마다 0으로 덮어쓰지 않습니다. 이전 반환값을 넘겨 조각별 갱신을 이어갈 수 있습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 공유 표",
+        "text": "SPDX·설명 주석, types/module/crc16 헤더 포함, 상수 표 정의, 표 export, crc16 함수, 함수 export, 모듈 설명·라이선스가 전부입니다. 표는 읽기 전용 전이 데이터이고 동적 초기화나 메모리 할당은 없습니다."
+      },
+      {
+        "title": "다항식과 비트 방향",
+        "text": "정방향 표기 0x8005를 반사한 비트 처리에는 0xA001을 사용합니다. 표의 각 원소는 입력 인덱스에 대해 하위 비트부터 8번 (r>>1) XOR 조건부 0xA001 전이를 한 값입니다. 모든 256개 원소를 이 독립 비트 루프로 비교할 수 있습니다."
+      },
+      {
+        "title": "계산 예제와 경계",
+        "text": "초기 crc=0, 입력 1이면 tab[1]=0xC0C1입니다. 다음 입력 0이면 crc>>8=0xC0, 인덱스=0xC1, tab[0xC1]=0x90C1, 결과=0x9001입니다. len=0이면 초기값 그대로이며 양수 len에는 유효한 읽기 버퍼가 필요합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "n바이트를 O(n) 시간과 O(1) 지역 상태로 순회합니다. 표 방식은 비트별 8회 전이를 메모리 조회로 바꾸는 시간·공간 절충입니다. CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "초기 0에서 입력 [1,0]의 결과는?",
+        "options": [
+          "0x9001",
+          "0xC0C1"
+        ],
+        "answer": 0,
+        "explanation": "첫 바이트는 0xC0C1이고 두 번째는 0x00C0 XOR tab[0xC1]=0x9001입니다. 0xC0C1은 한 바이트만 처리한 값입니다."
+      },
+      {
+        "prompt": "crc16 함수가 초기 상태를 매번 0으로 설정하는가?",
+        "options": [
+          "그렇다. 헤더에 Init 0이라고 쓰여 있다",
+          "아니다. 인자로 받은 상태를 누적한다"
+        ],
+        "answer": 1,
+        "explanation": "본문은 전달받은 crc를 그대로 반복 갱신합니다. 기본 초기값과 이어 처리할 때의 이전 상태 전달을 구별해야 합니다."
+      },
+      {
+        "prompt": "crc16_table의 원소 데이터 크기는?",
+        "options": [
+          "256 × 2 = 512바이트",
+          "256바이트"
+        ],
+        "answer": 0,
+        "explanation": "u16은 16비트, 즉 2바이트입니다. 256개 원소의 데이터 크기는 512바이트이며 심볼·모듈 전체 크기와는 별개입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *      crc16.c\n */\n\n#include <linux/types.h>\n#include <linux/module.h>\n#include <linux/crc16.h>\n\n/** CRC table for the CRC-16. The poly is 0x8005 (x^16 + x^15 + x^2 + 1) */\nu16 const crc16_table[256] = {\n\t0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,\n\t0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,\n\t0xCC01, 0x0CC0, 0x0D80, 0xCD41, 0x0F00, 0xCFC1, 0xCE81, 0x0E40,\n\t0x0A00, 0xCAC1, 0xCB81, 0x0B40, 0xC901, 0x09C0, 0x0880, 0xC841,\n\t0xD801, 0x18C0, 0x1980, 0xD941, 0x1B00, 0xDBC1, 0xDA81, 0x1A40,\n\t0x1E00, 0xDEC1, 0xDF81, 0x1F40, 0xDD01, 0x1DC0, 0x1C80, 0xDC41,\n\t0x1400, 0xD4C1, 0xD581, 0x1540, 0xD701, 0x17C0, 0x1680, 0xD641,\n\t0xD201, 0x12C0, 0x1380, 0xD341, 0x1100, 0xD1C1, 0xD081, 0x1040,\n\t0xF001, 0x30C0, 0x3180, 0xF141, 0x3300, 0xF3C1, 0xF281, 0x3240,\n\t0x3600, 0xF6C1, 0xF781, 0x3740, 0xF501, 0x35C0, 0x3480, 0xF441,\n\t0x3C00, 0xFCC1, 0xFD81, 0x3D40, 0xFF01, 0x3FC0, 0x3E80, 0xFE41,\n\t0xFA01, 0x3AC0, 0x3B80, 0xFB41, 0x3900, 0xF9C1, 0xF881, 0x3840,\n\t0x2800, 0xE8C1, 0xE981, 0x2940, 0xEB01, 0x2BC0, 0x2A80, 0xEA41,\n\t0xEE01, 0x2EC0, 0x2F80, 0xEF41, 0x2D00, 0xEDC1, 0xEC81, 0x2C40,\n\t0xE401, 0x24C0, 0x2580, 0xE541, 0x2700, 0xE7C1, 0xE681, 0x2640,\n\t0x2200, 0xE2C1, 0xE381, 0x2340, 0xE101, 0x21C0, 0x2080, 0xE041,\n\t0xA001, 0x60C0, 0x6180, 0xA141, 0x6300, 0xA3C1, 0xA281, 0x6240,\n\t0x6600, 0xA6C1, 0xA781, 0x6740, 0xA501, 0x65C0, 0x6480, 0xA441,\n\t0x6C00, 0xACC1, 0xAD81, 0x6D40, 0xAF01, 0x6FC0, 0x6E80, 0xAE41,\n\t0xAA01, 0x6AC0, 0x6B80, 0xAB41, 0x6900, 0xA9C1, 0xA881, 0x6840,\n\t0x7800, 0xB8C1, 0xB981, 0x7940, 0xBB01, 0x7BC0, 0x7A80, 0xBA41,\n\t0xBE01, 0x7EC0, 0x7F80, 0xBF41, 0x7D00, 0xBDC1, 0xBC81, 0x7C40,\n\t0xB401, 0x74C0, 0x7580, 0xB541, 0x7700, 0xB7C1, 0xB681, 0x7640,\n\t0x7200, 0xB2C1, 0xB381, 0x7340, 0xB101, 0x71C0, 0x7080, 0xB041,\n\t0x5000, 0x90C1, 0x9181, 0x5140, 0x9301, 0x53C0, 0x5280, 0x9241,\n\t0x9601, 0x56C0, 0x5780, 0x9741, 0x5500, 0x95C1, 0x9481, 0x5440,\n\t0x9C01, 0x5CC0, 0x5D80, 0x9D41, 0x5F00, 0x9FC1, 0x9E81, 0x5E40,\n\t0x5A00, 0x9AC1, 0x9B81, 0x5B40, 0x9901, 0x59C0, 0x5880, 0x9841,\n\t0x8801, 0x48C0, 0x4980, 0x8941, 0x4B00, 0x8BC1, 0x8A81, 0x4A40,\n\t0x4E00, 0x8EC1, 0x8F81, 0x4F40, 0x8D01, 0x4DC0, 0x4C80, 0x8C41,\n\t0x4400, 0x84C1, 0x8581, 0x4540, 0x8701, 0x47C0, 0x4680, 0x8641,\n\t0x8201, 0x42C0, 0x4380, 0x8341, 0x4100, 0x81C1, 0x8081, 0x4040\n};\nEXPORT_SYMBOL(crc16_table);\n\n/**\n * crc16 - compute the CRC-16 for the data buffer\n * @crc:\tprevious CRC value\n * @buffer:\tdata pointer\n * @len:\tnumber of bytes in the buffer\n *\n * Returns the updated CRC value.\n */\nu16 crc16(u16 crc, u8 const *buffer, size_t len)\n{\n\twhile (len--)\n\t\tcrc = crc16_byte(crc, *buffer++);\n\treturn crc;\n}\nEXPORT_SYMBOL(crc16);\n\nMODULE_DESCRIPTION(\"CRC16 calculations\");\nMODULE_LICENSE(\"GPL\");\n\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "51ab2ed20206e0c06b31adb8a5e731ffcb57541226fb07fa030d81c6d421548a",
+      "scope": "whole-file",
+      "line_count": 65,
+      "authoring_source": "course/file_units/crc_fundamentals.py",
+      "sections": [
+        "전체 파일과 공유 표",
+        "다항식과 비트 방향",
+        "계산 예제와 경계",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc16.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "이전 검사값을 다음 바이트에 이어 주어 16비트 CRC를 만듭니다. 처음부터 다시 계산할 때의 초기값과 조각을 이어갈 상태를 구분합니다.",
+    "meaning": "CRC16의 반사 표와 낮은 바이트 전이를 계산합니다.",
+    "exercise": "초기 0으로 1과 0을 넣어 0xC0C1 다음 0x9001이 되는지 확인하세요."
+  },
+  "goal": "CRC16의 반사 표와 낮은 바이트 전이를 계산합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "초기 0으로 1과 0을 넣어 0xC0C1 다음 0x9001이 되는지 확인하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "f6c9a206b8e7a303a5284b8c4a009104cc5164ca2bf184e6ce4c304d1c2b4e46",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -24,7 +24,9 @@ typedef void (*swap_r_func_t)(void *,void *,int,const void *);
 typedef void (*swap_func_t)(void *,void *,int);
 typedef int (*cmp_r_func_t)(const void *,const void *,const void *);
 typedef int (*cmp_func_t)(const void *,const void *);
+#ifndef __attribute_const__
 #define __attribute_const__ __attribute__((const))
+#endif
 #ifndef __always_inline
 #define __always_inline inline __attribute__((always_inline))
 #endif

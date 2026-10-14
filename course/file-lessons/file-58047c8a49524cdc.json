@@ -5,100 +5,120 @@
   "area": "UAPI · ioctl · flexible array · ABI 유지 · 플래그 · 예약 필드",
   "track": "files",
   "kind": "kernel",
-  "intro": "사용자 공간과 공유하는 모든 명령·플래그·자료형을 분석하고 오래된 주석을 실제 구현과 대조합니다.",
+  "intro": "난수 공개 헤더는 명령과 자료 모양을 정해요. entropy 기여량, 입력 바이트 수, vDSO 상태 크기 안내는 각각 다른 숫자예요.",
   "guide": [
-    "ABI 상수가 남아 있다고 기능의 과거 의미까지 유지되는 것은 아니며, 버퍼 크기와 entropy 기여량도 서로 다른 값입니다.",
-    "ioctl 방향과 인수 표현, flexible array, 상태 조회 결과의 크기를 읽습니다."
+    "ioctl은 열린 장치 파일에 특수 요청을 보내는 통로예요. _IOR·_IOW는 사용자 관점에서 읽기·쓰기를 구분해요.",
+    "entropy count는 난수 준비에 관한 계수예요. 이름만으로 순간의 물리적 무작위성을 정확히 재는 값이라고 생각하면 안 돼요.",
+    "유연한 배열 멤버 buf[]는 구조체 뒤에 필요한 데이터가 이어지는 모양이에요. 배열 원소 타입과 길이 필드 단위는 따로 확인해요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성과 라이선스",
-      "text": "GPL-2.0 WITH Linux-syscall-note 표기와 _UAPI_LINUX_RANDOM_H guard 아래 linux/types.h, linux/ioctl.h, linux/irqnr.h를 포함합니다. 역사적 주석의 파일 이름은 include/linux/random.h이지만 실제 분석 대상은 include/uapi/linux/random.h입니다. 명령 정의와 자료형을 제공하며 함수 본문은 없습니다."
+      "title": "공개 헤더의 구성",
+      "text": "라이선스는 GPL-2.0 WITH Linux-syscall-note이고 guard 안에 types·ioctl·irqnr 헤더를 포함해요. 옛 주석 경로는 include/linux/random.h지만 대상은 include/uapi/linux/random.h예요. 명령과 구조체를 선언하며 함수 본문은 없어요."
     },
     {
-      "title": "조회·count 명령",
-      "text": "RNDGETENTCNT는 _IOR('R',0x00,int), RNDADDTOENTCNT는 _IOW('R',0x01,int)입니다. 방향 표기는 사용자 관점의 읽기·쓰기를 구분합니다. 헤더는 count의 추가·감소라고 설명하지만 v6.12 random_ioctl은 음수 ent_count를 -EINVAL로 거부합니다. RNDGETENTCNT 구현은 input_pool.init_bits를 사용자에게 쓰므로 이름만으로 매 순간의 물리적 entropy 양을 정확히 측정한다고 확대하지 않습니다."
+      "title": "count 조회와 추가",
+      "text": "GETENTCNT는 _IOR의 R·0x00·int, ADDTOENTCNT는 _IOW의 R·0x01·int예요. 옛 주석은 감소도 말하지만 원 교재가 대조한 v6.12 구현은 음수를 -EINVAL로 거절해요. 조회는 input_pool.init_bits를 출력하므로 이름만으로 실제 entropy 전체를 정밀 측정한다고 확대하면 안 돼요."
     },
     {
-      "title": "Pool 명령과 남은 ABI 번호",
-      "text": "RNDGETPOOL은 _IOR('R',0x02,int[2])이고 헤더 자체에 2.6.9-rc2에서 제거됐다고 적혀 있습니다. 확인한 v6.12 switch에도 처리 case가 없어 기본 -EINVAL입니다. RNDADDENTROPY는 _IOW('R',0x03,int[2])입니다. 숫자 정의의 존재와 현재 지원 여부는 서로 다릅니다. ioctl 전체 숫자의 인코딩은 포함된 아키텍처 ioctl 정의와 연결됩니다."
+      "title": "남아 있는 제거된 명령 번호",
+      "text": "GETPOOL은 _IOR R·0x02·int[2]이며 2.6.9-rc2에서 제거됐다는 주석이 있어요. v6.12 switch에도 없어 기본 -EINVAL이에요. ADDENTROPY는 _IOW R·0x03·int[2]예요. 숫자의 존재와 현재 지원은 다르고 전체 ioctl 인코딩은 CPU별 정의와 연결돼요."
     },
     {
-      "title": "Flexible array 입력",
-      "text": "rand_pool_info는 int entropy_count, int buf_size, __u32 buf[]입니다. buf는 유연한 배열 멤버로 구조체 뒤에 데이터가 이어집니다. 실제 random_ioctl은 앞 두 int를 읽고 두 번째 값을 byte 길이 len으로 사용해 그 뒤 데이터를 import합니다. __u32 배열 표기만 보고 buf_size가 언제나 u32 원소 개수라고 해석하면 안 됩니다. payload 길이와 entropy 기여량은 다른 필드입니다."
+      "title": "입력 길이는 바이트예요",
+      "text": "rand_pool_info는 int entropy_count, int buf_size, __u32 buf[] 순서예요. 실제 처리에서 앞 두 int를 읽고 두 번째를 뒤 데이터의 바이트 길이로 사용해요. u32 배열이라고 buf_size가 u32 개수는 아니에요. 입력 자료 길이와 entropy 기여량도 서로 다른 필드예요."
     },
     {
-      "title": "초기화 명령의 주석과 현실",
-      "text": "RNDZAPENTCNT는 _IO('R',0x04), RNDCLEARPOOL은 _IO('R',0x06)입니다. 주석은 count 초기화·pool 초기화라고 설명하지만 v6.12 구현은 두 명령 모두 CAP_SYS_ADMIN 검사 후 효과 없이 0을 반환합니다. 주석의 오래된 동작을 현재 보안 효과로 설명하면 안 됩니다. RNDRESEEDCRNG는 _IO('R',0x07)이며 실제 구현은 권한 검사 후 CRNG가 준비되지 않았으면 -ENODATA, 준비되면 crng_reseed를 호출합니다."
+      "title": "초기화라는 이름과 현재 효과",
+      "text": "ZAPENTCNT는 _IO R·0x04, CLEARPOOL은 R·0x06이에요. 옛 주석과 달리 v6.12는 둘 다 권한 확인 뒤 효과 없이 0을 반환해요. RESEEDCRNG는 R·0x07이며 권한 확인 뒤 암호용 난수 생성기 CRNG가 준비되지 않았으면 -ENODATA, 준비됐으면 재시드를 해요. 성공 상태를 옛 보안 효과로 오해하지 마세요."
     },
     {
-      "title": "권한과 선언의 한계",
-      "text": "헤더의 Superuser only 설명은 실제 구현에서 CAP_SYS_ADMIN 검사로 나타납니다. RNDADDTOENTCNT와 RNDADDENTROPY도 이 검사를 수행합니다. 매크로 정의 자체가 접근을 차단하는 것이 아니라 처리 함수가 권한을 확인합니다. 실제 ioctl을 호출하거나 시스템 RNG 상태를 변경하는 실험은 이 학습에서 수행하지 않았습니다."
+      "title": "권한은 처리 함수가 검사해요",
+      "text": "Superuser only 설명은 구현의 CAP_SYS_ADMIN 권한 검사로 나타나요. ADDTOENTCNT와 ADDENTROPY도 이를 검사해요. 매크로 자체가 접근을 차단하지는 않아요. 교재는 관련 구현 설명을 대조한 것이며 실제 ioctl로 시스템 난수 상태를 바꾸지 않았어요."
     },
     {
-      "title": "Getrandom 플래그 전체",
-      "text": "GRND_NONBLOCK=0x0001은 블록하지 않고 필요한 경우 EAGAIN을 반환하도록 하는 플래그, GRND_RANDOM=0x0002는 이 헤더 주석상 효과 없음, GRND_INSECURE=0x0004는 비암호학적 난수 바이트 반환을 허용하는 플래그입니다. 비트 정의가 모든 조합의 유효성까지 보장하지는 않습니다. 안전한 키 생성을 위해 INSECURE를 무조건 쓰라는 권고가 아닙니다."
+      "title": "getrandom의 세 플래그",
+      "text": "NONBLOCK 0x0001은 기다리지 않고 필요하면 EAGAIN, RANDOM 0x0002는 이 주석상 효과 없음, INSECURE 0x0004는 비암호학적 바이트 반환 허용이에요. 비트 선언이 모든 조합의 유효성을 보장하지는 않아요. INSECURE를 안전한 비밀키 생성에 무조건 쓰라는 뜻도 아니에요."
     },
     {
-      "title": "Opaque 상태 할당 조회 결과",
-      "text": "vgetrandom_opaque_params는 __u32 size_of_opaque_state, mmap_prot, mmap_flags, reserved[13]으로 총 16개 u32, 64바이트입니다. 앞 필드의 주석 태그는 size_per_opaque_state라고 적혀 있지만 실제 C 멤버 이름은 size_of_opaque_state입니다. 상태 영역 자체가 이 구조체 안에 들어 있는 것이 아니라 그 크기와 mmap 옵션을 알려주는 결과 구조체입니다."
+      "title": "상태 할당에 필요한 정보의 구조체",
+      "text": "opaque_params는 size_of_opaque_state·mmap_prot·mmap_flags와 reserved[13], 총 u32 16개라 64바이트예요. 주석 태그 size_per_opaque_state와 실제 멤버 이름은 달라요. 상태 자체를 담은 것이 아니라 필요한 상태 크기와 mmap 옵션을 알려 줘요. mmap은 메모리 영역을 연결하는 요청이에요."
     },
     {
-      "title": "예약 영역과 ABI 확장",
-      "text": "reserved[13]은 미래 사용을 위해 남긴 공간입니다. 조회 결과 구조체의 64바이트 크기와 실제 vgetrandom_state의 sizeof를 혼동하지 않습니다. 공통 구현의 조회 경로는 이 예약 배열을 0으로 채우지만 여기의 선언 자체는 메모리를 초기화하지 않습니다. 헤더만 포함한다고 상태 페이지가 할당되지도 않습니다."
+      "title": "예약 공간과 미래 확장",
+      "text": "reserved[13]은 나중을 위한 공간이에요. 조회 결과 64바이트와 실제 vgetrandom_state 크기는 달라요. 공통 구현의 조회 경로가 예약 칸을 0으로 채우지만 선언만으로 초기화되지는 않아요. 헤더를 포함한다고 상태 페이지가 할당되는 것도 아니에요."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "모든 ioctl 상수 7개, 두 구조체, getrandom 플래그 3개와 주석을 다뤘습니다. ABI 유지와 폐기 기능, 선언과 권한 검사, 바이트 길이와 원소 수의 구별이 핵심입니다. random.c의 관련 ioctl 부분을 교차 확인했지만 그 큰 구현 파일 전체를 완료 집계하지 않습니다."
+      "title": "대조 범위",
+      "text": "명령 일곱 개·구조체 둘·플래그 셋과 주석을 읽었어요. 원 교재의 random.c 관련 ioctl 대조 내용을 보존했지만 큰 random.c 전체를 완료한 것으로 세지 않아요. ABI 유지, 폐기 기능, 선언과 검사, 길이 단위의 차이가 핵심이에요."
     }
   ],
   "questions": [
     {
-      "prompt": "v6.12에서 RNDADDTOENTCNT에 음수 count를 주면 감소 처리하는가?",
+      "prompt": "v6.12의 ADDTOENTCNT에 음수를 주면 줄여 줄까요?",
       "options": [
+        "아니요. -EINVAL로 거절해요.",
+        "네. 옛 주석대로 언제나 감소해요."
+      ],
+      "answer": 0,
+      "explanation": "현재 동작은 실제 음수 검사로 결정돼요.",
+      "original_prompt": "v6.12에서 RNDADDTOENTCNT에 음수 count를 주면 감소 처리하는가?",
+      "original_options": [
         "아니다. 구현은 -EINVAL로 거부한다",
         "그렇다. 오래된 헤더 주석대로 항상 감소한다"
       ],
-      "answer": 0,
-      "explanation": "선언 주석과 현재 구현을 함께 읽어야 합니다. random_ioctl의 음수 검사가 실제 동작을 결정합니다."
+      "original_explanation": "선언 주석과 현재 구현을 함께 읽어야 합니다. random_ioctl의 음수 검사가 실제 동작을 결정합니다."
     },
     {
-      "prompt": "RNDCLEARPOOL 성공 반환이 v6.12에서 pool을 지웠다는 증거인가?",
+      "prompt": "CLEARPOOL 성공이 v6.12에서 풀을 지웠다는 증거일까요?",
       "options": [
+        "네. 이름에 CLEAR가 있으면 반드시 지워요.",
+        "아니요. 권한 확인 후 효과 없이 성공해요."
+      ],
+      "answer": 1,
+      "explanation": "성공 반환과 예전 부수 효과 유지는 다른 사실이에요.",
+      "original_prompt": "RNDCLEARPOOL 성공 반환이 v6.12에서 pool을 지웠다는 증거인가?",
+      "original_options": [
         "그렇다. 이름에 CLEAR가 있으므로 반드시 전체 pool을 지운다",
         "아니다. 권한 검사 후 효과 없이 성공한다"
       ],
-      "answer": 1,
-      "explanation": "확인한 구현은 RNDZAPENTCNT와 함께 No longer has any effect 경로입니다. 성공 상태와 과거 부작용의 유지 여부는 다릅니다."
+      "original_explanation": "확인한 구현은 RNDZAPENTCNT와 함께 No longer has any effect 경로입니다. 성공 상태와 과거 부작용의 유지 여부는 다릅니다."
     },
     {
-      "prompt": "rand_pool_info의 buf_size는 구현에서 어떤 단위로 쓰이는가?",
+      "prompt": "buf_size는 어떤 단위로 쓰일까요?",
       "options": [
+        "뒤 데이터의 바이트 길이예요.",
+        "뒤 u32 원소 수예요."
+      ],
+      "answer": 0,
+      "explanation": "import에 바이트 길이로 전달하므로 타입만 보고 추측하지 마세요.",
+      "original_prompt": "rand_pool_info의 buf_size는 구현에서 어떤 단위로 쓰이는가?",
+      "original_options": [
         "뒤 payload의 바이트 길이이다",
         "뒤 __u32 원소의 개수이다"
       ],
-      "answer": 0,
-      "explanation": "random_ioctl은 두 번째 int를 len으로 읽어 import_ubuf에 바이트 길이로 전달합니다. 포인터의 원소형만으로 길이 단위를 추정하지 않습니다."
+      "original_explanation": "random_ioctl은 두 번째 int를 len으로 읽어 import_ubuf에 바이트 길이로 전달합니다. 포인터의 원소형만으로 길이 단위를 추정하지 않습니다."
     },
     {
-      "prompt": "vgetrandom_opaque_params의 64바이트가 실제 난수 상태 크기인가?",
+      "prompt": "opaque_params 64바이트가 실제 상태 크기일까요?",
       "options": [
+        "네. 모든 구조의 상태는 64바이트예요.",
+        "아니요. 실제 크기는 size_of_opaque_state가 알려 줘요."
+      ],
+      "answer": 1,
+      "explanation": "이것은 상태가 아니라 할당 안내 결과예요.",
+      "original_prompt": "vgetrandom_opaque_params의 64바이트가 실제 난수 상태 크기인가?",
+      "original_options": [
         "그렇다. 모든 아키텍처 상태는 무조건 64바이트이다",
         "아니다. 실제 상태 크기는 size_of_opaque_state 필드로 알려준다"
       ],
-      "answer": 1,
-      "explanation": "이 구조체는 크기와 mmap 설정을 담는 조회 결과입니다. 내부 난수 상태 구조체와 역할이 다릅니다."
+      "original_explanation": "이 구조체는 크기와 mmap 설정을 담는 조회 결과입니다. 내부 난수 상태 구조체와 역할이 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "rand_pool_info의 두 int와 뒤 데이터 역할을 나눠 적고, 64바이트 조회 구조체와 실제 난수 상태 크기가 왜 다른지 설명해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n/*\n * include/linux/random.h\n *\n * Include file for the random number generator.\n */\n\n#ifndef _UAPI_LINUX_RANDOM_H\n#define _UAPI_LINUX_RANDOM_H\n\n#include <linux/types.h>\n#include <linux/ioctl.h>\n#include <linux/irqnr.h>\n\n/* ioctl()'s for the random number generator */\n\n/* Get the entropy count. */\n#define RNDGETENTCNT\t_IOR( 'R', 0x00, int )\n\n/* Add to (or subtract from) the entropy count.  (Superuser only.) */\n#define RNDADDTOENTCNT\t_IOW( 'R', 0x01, int )\n\n/* Get the contents of the entropy pool.  (Superuser only.) (Removed in 2.6.9-rc2.) */\n#define RNDGETPOOL\t_IOR( 'R', 0x02, int [2] )\n\n/* \n * Write bytes into the entropy pool and add to the entropy count.\n * (Superuser only.)\n */\n#define RNDADDENTROPY\t_IOW( 'R', 0x03, int [2] )\n\n/* Clear entropy count to 0.  (Superuser only.) */\n#define RNDZAPENTCNT\t_IO( 'R', 0x04 )\n\n/* Clear the entropy pool and associated counters.  (Superuser only.) */\n#define RNDCLEARPOOL\t_IO( 'R', 0x06 )\n\n/* Reseed CRNG.  (Superuser only.) */\n#define RNDRESEEDCRNG\t_IO( 'R', 0x07 )\n\nstruct rand_pool_info {\n\tint\tentropy_count;\n\tint\tbuf_size;\n\t__u32\tbuf[];\n};\n\n/*\n * Flags for getrandom(2)\n *\n * GRND_NONBLOCK\tDon't block and return EAGAIN instead\n * GRND_RANDOM\t\tNo effect\n * GRND_INSECURE\tReturn non-cryptographic random bytes\n */\n#define GRND_NONBLOCK\t0x0001\n#define GRND_RANDOM\t0x0002\n#define GRND_INSECURE\t0x0004\n\n/**\n * struct vgetrandom_opaque_params - arguments for allocating memory for vgetrandom\n *\n * @size_per_opaque_state:\tSize of each state that is to be passed to vgetrandom().\n * @mmap_prot:\t\t\tValue of the prot argument in mmap(2).\n * @mmap_flags:\t\t\tValue of the flags argument in mmap(2).\n * @reserved:\t\t\tReserved for future use.\n */\nstruct vgetrandom_opaque_params {\n\t__u32 size_of_opaque_state;\n\t__u32 mmap_prot;\n\t__u32 mmap_flags;\n\t__u32 reserved[13];\n};\n\n#endif /* _UAPI_LINUX_RANDOM_H */\n",
   "source_review": {
@@ -126,5 +146,163 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/random.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-58047c8a49524cdc",
+    "path": "include/uapi/linux/random.h",
+    "title": "난수 UAPI: ioctl 번호·getrandom 플래그·opaque 조회 구조체",
+    "area": "UAPI · ioctl · flexible array · ABI 유지 · 플래그 · 예약 필드",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "사용자 공간과 공유하는 모든 명령·플래그·자료형을 분석하고 오래된 주석을 실제 구현과 대조합니다.",
+    "guide": [
+      "ABI 상수가 남아 있다고 기능의 과거 의미까지 유지되는 것은 아니며, 버퍼 크기와 entropy 기여량도 서로 다른 값입니다.",
+      "ioctl 방향과 인수 표현, flexible array, 상태 조회 결과의 크기를 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 라이선스",
+        "text": "GPL-2.0 WITH Linux-syscall-note 표기와 _UAPI_LINUX_RANDOM_H guard 아래 linux/types.h, linux/ioctl.h, linux/irqnr.h를 포함합니다. 역사적 주석의 파일 이름은 include/linux/random.h이지만 실제 분석 대상은 include/uapi/linux/random.h입니다. 명령 정의와 자료형을 제공하며 함수 본문은 없습니다."
+      },
+      {
+        "title": "조회·count 명령",
+        "text": "RNDGETENTCNT는 _IOR('R',0x00,int), RNDADDTOENTCNT는 _IOW('R',0x01,int)입니다. 방향 표기는 사용자 관점의 읽기·쓰기를 구분합니다. 헤더는 count의 추가·감소라고 설명하지만 v6.12 random_ioctl은 음수 ent_count를 -EINVAL로 거부합니다. RNDGETENTCNT 구현은 input_pool.init_bits를 사용자에게 쓰므로 이름만으로 매 순간의 물리적 entropy 양을 정확히 측정한다고 확대하지 않습니다."
+      },
+      {
+        "title": "Pool 명령과 남은 ABI 번호",
+        "text": "RNDGETPOOL은 _IOR('R',0x02,int[2])이고 헤더 자체에 2.6.9-rc2에서 제거됐다고 적혀 있습니다. 확인한 v6.12 switch에도 처리 case가 없어 기본 -EINVAL입니다. RNDADDENTROPY는 _IOW('R',0x03,int[2])입니다. 숫자 정의의 존재와 현재 지원 여부는 서로 다릅니다. ioctl 전체 숫자의 인코딩은 포함된 아키텍처 ioctl 정의와 연결됩니다."
+      },
+      {
+        "title": "Flexible array 입력",
+        "text": "rand_pool_info는 int entropy_count, int buf_size, __u32 buf[]입니다. buf는 유연한 배열 멤버로 구조체 뒤에 데이터가 이어집니다. 실제 random_ioctl은 앞 두 int를 읽고 두 번째 값을 byte 길이 len으로 사용해 그 뒤 데이터를 import합니다. __u32 배열 표기만 보고 buf_size가 언제나 u32 원소 개수라고 해석하면 안 됩니다. payload 길이와 entropy 기여량은 다른 필드입니다."
+      },
+      {
+        "title": "초기화 명령의 주석과 현실",
+        "text": "RNDZAPENTCNT는 _IO('R',0x04), RNDCLEARPOOL은 _IO('R',0x06)입니다. 주석은 count 초기화·pool 초기화라고 설명하지만 v6.12 구현은 두 명령 모두 CAP_SYS_ADMIN 검사 후 효과 없이 0을 반환합니다. 주석의 오래된 동작을 현재 보안 효과로 설명하면 안 됩니다. RNDRESEEDCRNG는 _IO('R',0x07)이며 실제 구현은 권한 검사 후 CRNG가 준비되지 않았으면 -ENODATA, 준비되면 crng_reseed를 호출합니다."
+      },
+      {
+        "title": "권한과 선언의 한계",
+        "text": "헤더의 Superuser only 설명은 실제 구현에서 CAP_SYS_ADMIN 검사로 나타납니다. RNDADDTOENTCNT와 RNDADDENTROPY도 이 검사를 수행합니다. 매크로 정의 자체가 접근을 차단하는 것이 아니라 처리 함수가 권한을 확인합니다. 실제 ioctl을 호출하거나 시스템 RNG 상태를 변경하는 실험은 이 학습에서 수행하지 않았습니다."
+      },
+      {
+        "title": "Getrandom 플래그 전체",
+        "text": "GRND_NONBLOCK=0x0001은 블록하지 않고 필요한 경우 EAGAIN을 반환하도록 하는 플래그, GRND_RANDOM=0x0002는 이 헤더 주석상 효과 없음, GRND_INSECURE=0x0004는 비암호학적 난수 바이트 반환을 허용하는 플래그입니다. 비트 정의가 모든 조합의 유효성까지 보장하지는 않습니다. 안전한 키 생성을 위해 INSECURE를 무조건 쓰라는 권고가 아닙니다."
+      },
+      {
+        "title": "Opaque 상태 할당 조회 결과",
+        "text": "vgetrandom_opaque_params는 __u32 size_of_opaque_state, mmap_prot, mmap_flags, reserved[13]으로 총 16개 u32, 64바이트입니다. 앞 필드의 주석 태그는 size_per_opaque_state라고 적혀 있지만 실제 C 멤버 이름은 size_of_opaque_state입니다. 상태 영역 자체가 이 구조체 안에 들어 있는 것이 아니라 그 크기와 mmap 옵션을 알려주는 결과 구조체입니다."
+      },
+      {
+        "title": "예약 영역과 ABI 확장",
+        "text": "reserved[13]은 미래 사용을 위해 남긴 공간입니다. 조회 결과 구조체의 64바이트 크기와 실제 vgetrandom_state의 sizeof를 혼동하지 않습니다. 공통 구현의 조회 경로는 이 예약 배열을 0으로 채우지만 여기의 선언 자체는 메모리를 초기화하지 않습니다. 헤더만 포함한다고 상태 페이지가 할당되지도 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "모든 ioctl 상수 7개, 두 구조체, getrandom 플래그 3개와 주석을 다뤘습니다. ABI 유지와 폐기 기능, 선언과 권한 검사, 바이트 길이와 원소 수의 구별이 핵심입니다. random.c의 관련 ioctl 부분을 교차 확인했지만 그 큰 구현 파일 전체를 완료 집계하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "v6.12에서 RNDADDTOENTCNT에 음수 count를 주면 감소 처리하는가?",
+        "options": [
+          "아니다. 구현은 -EINVAL로 거부한다",
+          "그렇다. 오래된 헤더 주석대로 항상 감소한다"
+        ],
+        "answer": 0,
+        "explanation": "선언 주석과 현재 구현을 함께 읽어야 합니다. random_ioctl의 음수 검사가 실제 동작을 결정합니다."
+      },
+      {
+        "prompt": "RNDCLEARPOOL 성공 반환이 v6.12에서 pool을 지웠다는 증거인가?",
+        "options": [
+          "그렇다. 이름에 CLEAR가 있으므로 반드시 전체 pool을 지운다",
+          "아니다. 권한 검사 후 효과 없이 성공한다"
+        ],
+        "answer": 1,
+        "explanation": "확인한 구현은 RNDZAPENTCNT와 함께 No longer has any effect 경로입니다. 성공 상태와 과거 부작용의 유지 여부는 다릅니다."
+      },
+      {
+        "prompt": "rand_pool_info의 buf_size는 구현에서 어떤 단위로 쓰이는가?",
+        "options": [
+          "뒤 payload의 바이트 길이이다",
+          "뒤 __u32 원소의 개수이다"
+        ],
+        "answer": 0,
+        "explanation": "random_ioctl은 두 번째 int를 len으로 읽어 import_ubuf에 바이트 길이로 전달합니다. 포인터의 원소형만으로 길이 단위를 추정하지 않습니다."
+      },
+      {
+        "prompt": "vgetrandom_opaque_params의 64바이트가 실제 난수 상태 크기인가?",
+        "options": [
+          "그렇다. 모든 아키텍처 상태는 무조건 64바이트이다",
+          "아니다. 실제 상태 크기는 size_of_opaque_state 필드로 알려준다"
+        ],
+        "answer": 1,
+        "explanation": "이 구조체는 크기와 mmap 설정을 담는 조회 결과입니다. 내부 난수 상태 구조체와 역할이 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n/*\n * include/linux/random.h\n *\n * Include file for the random number generator.\n */\n\n#ifndef _UAPI_LINUX_RANDOM_H\n#define _UAPI_LINUX_RANDOM_H\n\n#include <linux/types.h>\n#include <linux/ioctl.h>\n#include <linux/irqnr.h>\n\n/* ioctl()'s for the random number generator */\n\n/* Get the entropy count. */\n#define RNDGETENTCNT\t_IOR( 'R', 0x00, int )\n\n/* Add to (or subtract from) the entropy count.  (Superuser only.) */\n#define RNDADDTOENTCNT\t_IOW( 'R', 0x01, int )\n\n/* Get the contents of the entropy pool.  (Superuser only.) (Removed in 2.6.9-rc2.) */\n#define RNDGETPOOL\t_IOR( 'R', 0x02, int [2] )\n\n/* \n * Write bytes into the entropy pool and add to the entropy count.\n * (Superuser only.)\n */\n#define RNDADDENTROPY\t_IOW( 'R', 0x03, int [2] )\n\n/* Clear entropy count to 0.  (Superuser only.) */\n#define RNDZAPENTCNT\t_IO( 'R', 0x04 )\n\n/* Clear the entropy pool and associated counters.  (Superuser only.) */\n#define RNDCLEARPOOL\t_IO( 'R', 0x06 )\n\n/* Reseed CRNG.  (Superuser only.) */\n#define RNDRESEEDCRNG\t_IO( 'R', 0x07 )\n\nstruct rand_pool_info {\n\tint\tentropy_count;\n\tint\tbuf_size;\n\t__u32\tbuf[];\n};\n\n/*\n * Flags for getrandom(2)\n *\n * GRND_NONBLOCK\tDon't block and return EAGAIN instead\n * GRND_RANDOM\t\tNo effect\n * GRND_INSECURE\tReturn non-cryptographic random bytes\n */\n#define GRND_NONBLOCK\t0x0001\n#define GRND_RANDOM\t0x0002\n#define GRND_INSECURE\t0x0004\n\n/**\n * struct vgetrandom_opaque_params - arguments for allocating memory for vgetrandom\n *\n * @size_per_opaque_state:\tSize of each state that is to be passed to vgetrandom().\n * @mmap_prot:\t\t\tValue of the prot argument in mmap(2).\n * @mmap_flags:\t\t\tValue of the flags argument in mmap(2).\n * @reserved:\t\t\tReserved for future use.\n */\nstruct vgetrandom_opaque_params {\n\t__u32 size_of_opaque_state;\n\t__u32 mmap_prot;\n\t__u32 mmap_flags;\n\t__u32 reserved[13];\n};\n\n#endif /* _UAPI_LINUX_RANDOM_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "7afc3eb7ff6b48ae8d1474ca0f0d53022c3a4740e43973af03b257fefcca83db",
+      "scope": "whole-file",
+      "line_count": 73,
+      "authoring_source": "course/file_units/random_state_abi.py",
+      "sections": [
+        "전체 구성과 라이선스",
+        "조회·count 명령",
+        "Pool 명령과 남은 ABI 번호",
+        "Flexible array 입력",
+        "초기화 명령의 주석과 현실",
+        "권한과 선언의 한계",
+        "Getrandom 플래그 전체",
+        "Opaque 상태 할당 조회 결과",
+        "예약 영역과 ABI 확장",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/random.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "오래된 명령 번호를 남겨도 예전 동작까지 그대로 남는 것은 아니에요. 난수 헤더에서는 이름·숫자·현재 처리 규칙을 구별하고 자료 길이도 바이트로 읽어야 해요.",
+    "meaning": "난수 공개 헤더는 명령과 자료 모양을 정해요. entropy 기여량, 입력 바이트 수, vDSO 상태 크기 안내는 각각 다른 숫자예요.",
+    "exercise": "rand_pool_info의 두 int와 뒤 데이터 역할을 나눠 적고, 64바이트 조회 구조체와 실제 난수 상태 크기가 왜 다른지 설명해 보세요."
+  },
+  "goal": "난수 공개 헤더는 명령과 자료 모양을 정해요. entropy 기여량, 입력 바이트 수, vDSO 상태 크기 안내는 각각 다른 숫자예요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "rand_pool_info의 두 int와 뒤 데이터 역할을 나눠 적고, 64바이트 조회 구조체와 실제 난수 상태 크기가 왜 다른지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "b0c1992b83ab36f0660493d182ff82761952df104aa2da387422a4846bb0674d",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

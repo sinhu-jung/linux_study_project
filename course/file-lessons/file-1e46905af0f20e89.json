@@ -5,161 +5,211 @@
   "area": "가상 메모리 · demand paging · ELF · PFN · VMA · 시간 네임스페이스",
   "track": "files",
   "kind": "kernel",
-  "intro": "커널이 vDSO 코드 이미지와 시간 데이터 페이지를 프로세스에 연결하는 전체 구현을 분석합니다.",
+  "intro": "RISC-V vDSO는 부팅 때 이미지 정보를 준비하고 실행 때 VVAR·코드 영역을 설치하며 자료 페이지는 접근 시 선택합니다.",
   "guide": [
-    "가상 주소 영역을 예약하는 작업과 실제 페이지를 fault 시 연결하는 작업은 분리할 수 있습니다.",
-    "VMA 권한, PFN 매핑, ELF 이미지 경계, 초기화 수명과 오류 경로를 연결해서 읽습니다."
+    "VMA는 프로세스의 가상 주소 구간 기록이고 PFN은 실제 메모리 페이지 번호입니다. 가상 구간 예약과 실제 페이지 연결은 다릅니다.",
+    "VVAR는 시간 등의 공유 자료, vDSO는 사용자에게 제공하는 실행 코드입니다. fault는 아직 페이지 연결이 없는 접근 등을 처리하는 경로입니다.",
+    "시간 namespace는 작업별로 시간 보기를 구분하는 영역입니다. host는 그 바탕이 되는 실제 시스템 시간 자료를 뜻합니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성과 두 enum",
-      "text": "GPL-2.0-only 파일은 ELF·메모리 관리·할당·실행 파일·오류·페이지·vDSO·time namespace·datapage·vsyscall 헤더를 포함합니다. vvar_pages는 DATA=0,TIMENS=1,NR=2이고 rv_vdso_map은 VVAR=0,VDSO=1입니다. 두 enum의 숫자가 겹쳐도 하나는 데이터 영역 안의 페이지 offset, 다른 하나는 mapping descriptor 배열의 index입니다. VVAR_SIZE는 두 페이지 크기입니다."
+      "text": "파일의 페이지 열거형은 DATA=0,TIMENS=1,NR=2입니다. 매핑 종류 열거형은 VVAR=0,VDSO=1입니다. 같은 숫자가 있어도 앞것은 자료 구간 안의 페이지 위치, 뒤것은 매핑 설명 배열의 번호입니다. VVAR_SIZE는 두 페이지이며 관련 메모리·ELF·시간 헤더를 포함합니다."
     },
     {
       "title": "공유 데이터와 이미지 메타데이터",
-      "text": "static union vdso_data_store는 __page_aligned_data에 놓이고 전역 vdso_data 포인터가 그 data 배열을 가리킵니다. __vdso_info는 name, 코드 시작·끝, 코드 페이지 수, 데이터와 코드의 vm_special_mapping 포인터를 묶습니다. native 정보와 CONFIG_COMPAT일 때 compat 정보가 있습니다. 메타데이터의 name은 이 파일에서 mapping 이름으로 읽히지 않고 실제 표시 이름은 descriptor의 [vvar]·[vdso]입니다."
+      "text": "공유 vdso_data_store는 페이지 경계에 두고 vdso_data가 내부 배열을 가리킵니다. __vdso_info는 이름·코드 시작과 끝·페이지 수·자료와 코드 매핑 설명을 묶습니다. 기본과 설정된 호환용 정보가 따로 있습니다. 화면에 보이는 이름은 이 정보의 name이 아니라 설명자의 [vvar],[vdso]입니다."
     },
     {
       "title": "코드 이동 callback",
-      "text": "vdso_mremap은 current->mm->context.vdso를 new_vma->vm_start로 갱신하고 0을 반환합니다. sm 인수는 본문에서 사용하지 않습니다. 이 함수에 코드 복사, ELF 재링크, 새로운 VVAR 위치 설정은 없습니다. 이동된 코드 주소를 mm 문맥에 기록하는 책임만 읽어야 합니다."
+      "text": "vdso_mremap은 현재 주소 공간 문맥의 vdso 주소를 새 VMA 시작으로 고치고 0을 반환합니다. sm 인자는 쓰지 않습니다. 코드를 복사하거나 ELF를 다시 연결하거나 VVAR 위치를 새로 정하는 함수가 아닙니다."
     },
     {
       "title": "부팅 이미지 검증과 페이지 수",
-      "text": "__vdso_init은 코드 시작의 4바이트가 ELF magic과 다르면 panic합니다. 전체 ELF 섹션이나 ABI를 파싱하는 검증은 아닙니다. 페이지 수는 (end-start)>>PAGE_SHIFT로 계산하며 올림 함수가 아닙니다. 앞서 이미지 생성 단계에서 경계를 페이지에 맞춘다는 계약에 의존합니다. PAGE_SIZE=4096, 이미지 경계 차이=8192라면 코드 페이지는 2개입니다."
+      "text": "부팅 초기화는 코드 시작 4바이트를 ELF magic과 비교하고 다르면 panic합니다. 모든 섹션·재배치를 검증하는 것은 아닙니다. 페이지 수는 (끝-시작)>>PAGE_SHIFT로 나누며 올림하지 않으므로 앞선 이미지 포함에서 페이지 정렬이 됐다는 약속에 의존합니다. 경계 차이 8192와 페이지 4096이면 2페이지입니다."
     },
     {
       "title": "페이지 포인터 배열 구성",
-      "text": "kcalloc(vdso_pages,sizeof(struct page *),GFP_KERNEL)로 포인터 배열을 할당하고 실패하면 panic합니다. sym_to_pfn(code_start)에서 시작해 pfn_to_page(pfn+i)를 배열에 넣은 뒤 cm->pages에 연결합니다. 여기서 각 코드 페이지를 새로 할당하거나 이미지를 사용자별로 복사하는 것은 아닙니다. 초기화 루프 시간과 포인터 배열 공간은 코드 페이지 수에 비례합니다."
+      "text": "새로 확보하는 것은 struct page 포인터 배열이며 실패하면 panic입니다. 기존 코드 시작의 PFN부터 pfn_to_page(pfn+i)를 넣어 코드 매핑 설명에 연결합니다. 코드 페이지 자체를 새로 만들거나 프로세스마다 복사하지 않습니다. 배열 공간과 준비 반복은 코드 페이지 수에 비례합니다."
     },
     {
       "title": "Namespace 데이터 접근과 교체",
-      "text": "CONFIG_TIME_NS의 arch_get_vdso_data는 전달된 vvar_page를 struct vdso_data 포인터로 cast해 반환합니다. vdso_join_timens는 task->mm에 VMA iterator를 만들고 mmap_read_lock 아래 전체 VMA를 순회합니다. native dm과 일치하면 zap_vma_pages를 호출하고 COMPAT이면 compat dm도 검사합니다. ns 인수를 직접 읽거나 여기서 새 페이지를 매핑하지 않습니다. 기존 페이지 매핑을 지워 이후 fault가 새 namespace 데이터를 찾게 하는 설계입니다. VMA 자체를 삭제하는 코드와 구분합니다."
+      "text": "시간 namespace용 arch_get_vdso_data는 받은 페이지 주소를 자료 포인터로 바꿔 반환합니다. join 함수는 mmap 읽기 잠금 아래 모든 VMA를 돌며 기본·조건부 호환 자료 매핑의 기존 페이지 연결을 zap합니다. ns를 직접 읽거나 새 페이지를 여기서 연결하지 않습니다. VMA는 남기고 다음 fault가 새 영역 자료를 고르게 합니다."
     },
     {
       "title": "첫 VVAR 페이지의 fault",
-      "text": "vvar_fault는 find_timens_vvar_page(vma)를 먼저 호출합니다. vmf->pgoff가 DATA=0이면 namespace 페이지가 있을 때 page_to_pfn(timens_page), 없으면 sym_to_pfn(vdso_data)를 선택합니다. 따라서 같은 사용자 가상 offset이 프로세스의 namespace 상태에 따라 다른 실제 페이지를 가리킵니다. 선택 후 vmf_insert_pfn(vma,vmf->address,pfn)의 반환값을 그대로 전달합니다."
+      "text": "vvar_fault는 시간 namespace 페이지를 먼저 찾습니다. offset 0이면 그 페이지가 있을 때 그 PFN을, 없으면 실제 vdso_data의 PFN을 고릅니다. 같은 가상 위치가 작업의 시간 영역에 따라 다른 실제 페이지로 이어집니다. vmf_insert_pfn으로 연결한 결과를 그대로 반환합니다."
     },
     {
       "title": "둘째 VVAR 페이지와 SIGBUS",
-      "text": "CONFIG_TIME_NS일 때 TIMENS=1 분기가 존재합니다. namespace 페이지가 없으면 VM_FAULT_SIGBUS이고, 있으면 오히려 실제 host vdso_data의 PFN을 연결합니다. namespace에서 첫 페이지는 보정 데이터, 둘째 페이지는 host 시간입니다. TIME_NS가 없으면 이 case 자체가 없고 나머지 offset과 함께 default SIGBUS로 갑니다. 두 페이지 크기의 VMA를 예약했다는 사실은 모든 페이지 접근이 성공한다는 뜻이 아닙니다."
+      "text": "TIME_NS가 켜진 offset 1은 namespace 페이지가 없으면 SIGBUS에 해당하는 fault 결과입니다. 있으면 실제 host vdso_data를 연결합니다. 즉 namespace에서는 첫 페이지가 보정 자료, 둘째가 host 자료입니다. 설정이 꺼지면 이 case가 없어서 default 실패입니다. 두 페이지 주소를 예약했다고 둘 다 언제나 접근 가능한 것은 아닙니다."
     },
     {
       "title": "Native·compat descriptor와 보호 수명",
-      "text": "rv_vdso_maps와 compat용 배열은 각각 [vvar]에 fault callback, [vdso]에 mremap callback을 지정합니다. native info는 vdso_start/end, compat info는 compat_vdso_start/end와 각 배열을 참조합니다. 두 ABI가 callback을 공유하더라도 descriptor와 코드 이미지 경계는 별개입니다. 배열과 정보에 __ro_after_init가 붙으며 초기화 중 cm->pages와 vdso_pages를 채웁니다. vdso_init은 native, 조건부 compat 순서로 초기화하고 0을 반환하며 arch_initcall로 등록됩니다."
+      "text": "기본·호환 배열은 [vvar]에 fault 함수, [vdso]에 mremap 함수를 둡니다. 함수를 공유해도 배열과 이미지 경계는 별개입니다. __ro_after_init는 초기화 뒤 읽기 전용으로 둘 자료 표시이며 초기화 중 페이지 수와 목록을 채웁니다. vdso_init은 기본 뒤 조건부 호환을 준비하고 arch_initcall로 부팅에 등록합니다."
     },
     {
       "title": "추가 매핑의 크기와 주소 확보",
-      "text": "__setup_additional_pages는 BUILD_BUG_ON(VVAR_NR_PAGES != __VVAR_PAGES)로 헤더의 페이지 수 계약을 빌드 때 검사합니다. text_len은 페이지 수를 다시 byte로 바꾸고 mapping_len=text_len+VVAR_SIZE입니다. get_unmapped_area(NULL,0,mapping_len,0,0)로 연속 주소 영역을 찾습니다. 이 호출 자체가 두 special mapping을 설치하는 것은 아닙니다. 오류값이면 ERR_PTR로 바꿔 공통 실패 처리로 갑니다."
+      "text": "설치 함수는 두 헤더의 VVAR 페이지 수가 같은지 BUILD_BUG_ON으로 빌드 때 확인합니다. 코드 페이지 수를 바이트로 바꾸고 VVAR 크기를 더해 연속 주소를 get_unmapped_area로 찾습니다. 주소를 찾는 것만으로 매핑 설치가 완료되지는 않습니다. 오류 주소값은 ERR_PTR로 바꿔 실패 경로로 갑니다."
     },
     {
       "title": "데이터와 코드의 실제 권한",
-      "text": "먼저 시작 주소에 VVAR_SIZE를 VM_READ|VM_MAYREAD|VM_PFNMAP으로 설치합니다. 성공하면 VVAR_SIZE만큼 더한 코드 주소를 mm->context.vdso에 기록하고 text_len을 VM_READ|VM_EXEC|VM_MAYREAD|VM_MAYWRITE|VM_MAYEXEC으로 설치합니다. VM_MAYWRITE가 있어도 현재 권한의 VM_WRITE는 없습니다. 코드의 현재 읽기·실행 권한과 변경 가능성 비트를 구분해야 합니다. 데이터 영역은 코드 바로 앞에 있습니다."
+      "text": "먼저 VVAR를 READ|MAYREAD|PFNMAP으로 설치합니다. 성공하면 두 페이지 뒤 주소를 context.vdso에 기록하고 코드를 READ|EXEC와 MAYREAD|MAYWRITE|MAYEXEC로 설치합니다. MAYWRITE는 변경 가능성 표시이고 현재 WRITE 권한은 없습니다. 현재 코드는 읽기·실행이며 자료 영역은 바로 앞입니다."
     },
     {
       "title": "부분 성공과 오류 처리",
-      "text": "어느 설치가 실패해도 up_fail은 context.vdso를 NULL로 바꾸고 PTR_ERR(ret)를 반환합니다. 코드 매핑 실패 전에 데이터 매핑이 이미 성공했을 수 있지만 이 helper에는 그것을 명시적으로 제거하는 rollback 호출이 없습니다. 따라서 이 함수 하나가 모든 부분 설치를 원상복구한다고 설명하면 안 됩니다. bprm과 uses_interp는 인수로 전달되지만 본문에서는 사용하지 않습니다."
+      "text": "어느 설치가 실패해도 context.vdso를 NULL로 만들고 오류를 반환합니다. 코드 설치 전에 VVAR가 성공했을 수 있지만 이 보조 함수에는 그 VVAR를 명시적으로 제거하는 되돌리기 호출이 없습니다. 전체 부분 성공이 자동 취소된다고 설명하면 안 됩니다. bprm과 uses_interp도 전달은 되지만 본문에서 쓰지 않습니다."
     },
     {
       "title": "실행 파일 진입 wrapper와 잠금",
-      "text": "arch_setup_additional_pages와 CONFIG_COMPAT의 compat_arch_setup_additional_pages는 current->mm에서 mmap_write_lock_killable을 얻습니다. 잠금 획득이 중단되면 -EINTR로 즉시 반환합니다. 획득 후 각각 native·compat info로 공통 helper를 호출하고 성공·실패 모두 mmap_write_unlock 뒤 ret를 반환합니다. namespace 교체 순회의 read lock과 새 VMA 설치의 write lock을 혼동하지 않습니다."
+      "text": "기본·호환 실행 파일 연결 함수는 mmap_write_lock_killable을 얻고 중단되면 -EINTR로 바로 반환합니다. 잠금을 얻었을 때만 맞는 이미지 정보로 공통 설치 함수를 부릅니다. 성공·실패 모두 뒤에서 쓰기 잠금을 풀고 결과를 반환합니다. 기존 페이지 연결 제거의 읽기 잠금과 새 VMA 설치의 쓰기 잠금은 다릅니다."
     },
     {
       "title": "주소 계산 예제와 검토 범위",
-      "text": "4KiB 페이지에서 코드가 2페이지이고 get_unmapped_area 결과가 B이면 전체 요청은 16KiB, 데이터 VMA는 [B,B+8192), 코드 VMA는 [B+8192,B+16384), context.vdso는 B+8192입니다. 페이지 크기는 예제의 가정이며 구현은 PAGE_SHIFT를 사용합니다. 모든 함수·descriptor·설정 분기와 실패 경로를 대조했으며 실제 RISC-V 커널 부팅이나 fault·mremap 실행을 검증한 것은 아닙니다."
+      "text": "페이지 4096, 코드 2페이지면 전체는 16384바이트입니다. 시작 B에서 자료는 [B,B+8192), 코드는 [B+8192,B+16384), context.vdso는 B+8192입니다. 구현은 PAGE_SHIFT를 쓰므로 4KiB는 예제 가정입니다. 전체 코드 대조는 실제 부팅·fault·mremap 실행 검증과 별개입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "__vdso_init의 ELF 검증 범위는?",
+      "prompt": "__vdso_init의 ELF 확인 범위는 무엇인가요?",
       "options": [
+        "시작 4바이트 magic 비교입니다.",
+        "모든 섹션과 재배치를 완전히 검증합니다."
+      ],
+      "answer": 0,
+      "explanation": "memcmp 길이가 4이므로 오류 메시지를 전체 검증으로 넓히면 안 됩니다.",
+      "original_prompt": "__vdso_init의 ELF 검증 범위는?",
+      "original_options": [
         "시작 4바이트 magic 비교",
         "모든 ELF section과 relocation의 완전한 검증"
       ],
-      "answer": 0,
-      "explanation": "memcmp는 4바이트만 비교합니다. panic 메시지의 valid ELF 표현을 전체 형식 검증으로 확대하면 안 됩니다."
+      "original_explanation": "memcmp는 4바이트만 비교합니다. panic 메시지의 valid ELF 표현을 전체 형식 검증으로 확대하면 안 됩니다."
     },
     {
-      "prompt": "vdso_pagelist 구성에서 새로 할당하는 것은?",
+      "prompt": "페이지 목록을 만들 때 새로 할당하는 것은 무엇인가요?",
       "options": [
+        "프로세스마다 vDSO 코드 전체 복사본입니다.",
+        "기존 코드 페이지를 가리킬 struct page 포인터 배열입니다."
+      ],
+      "answer": 1,
+      "explanation": "각 원소는 기존 연속 PFN에서 얻고 코드 자체는 새로 할당하지 않습니다.",
+      "original_prompt": "vdso_pagelist 구성에서 새로 할당하는 것은?",
+      "original_options": [
         "프로세스별 vDSO 코드의 완전한 복사본",
         "기존 코드 페이지들을 가리킬 struct page 포인터 배열"
       ],
-      "answer": 1,
-      "explanation": "kcalloc 대상은 포인터 배열이며 각 원소는 기존 연속 PFN을 pfn_to_page로 바꾼 값입니다."
+      "original_explanation": "kcalloc 대상은 포인터 배열이며 각 원소는 기존 연속 PFN을 pfn_to_page로 바꾼 값입니다."
     },
     {
-      "prompt": "Namespace 프로세스에서 VVAR offset 0과 1은 각각 무엇인가?",
+      "prompt": "namespace 작업의 VVAR offset 0과 1은 각각 무엇인가요?",
       "options": [
+        "namespace 보정 페이지와 host 시간 페이지입니다.",
+        "host 시간 페이지와 namespace 보정 페이지입니다."
+      ],
+      "answer": 0,
+      "explanation": "0에서 영역 전용 페이지를 고르고 1에서 실제 vdso_data를 고릅니다.",
+      "original_prompt": "Namespace 프로세스에서 VVAR offset 0과 1은 각각 무엇인가?",
+      "original_options": [
         "namespace 보정 페이지와 host 시간 페이지",
         "host 시간 페이지와 namespace 보정 페이지"
       ],
-      "answer": 0,
-      "explanation": "fault 분기는 offset 0에서 timens_page를 선택하고 offset 1에서는 실제 vdso_data를 선택합니다."
+      "original_explanation": "fault 분기는 offset 0에서 timens_page를 선택하고 offset 1에서는 실제 vdso_data를 선택합니다."
     },
     {
-      "prompt": "Namespace 페이지가 없는 경우 VVAR 둘째 페이지를 접근하면?",
+      "prompt": "namespace 페이지가 없는데 둘째 VVAR 페이지를 접근하면 어떻게 되나요?",
       "options": [
+        "첫 페이지의 host 자료를 자동 복제합니다.",
+        "해당 fault 경로가 VM_FAULT_SIGBUS를 반환합니다."
+      ],
+      "answer": 1,
+      "explanation": "설정이 있어도 페이지 부재로 실패하고 없으면 해당 case가 없어 실패합니다.",
+      "original_prompt": "Namespace 페이지가 없는 경우 VVAR 둘째 페이지를 접근하면?",
+      "original_options": [
         "첫 페이지와 같은 host 데이터를 자동으로 복제한다",
         "해당 fault 경로가 VM_FAULT_SIGBUS를 반환한다"
       ],
-      "answer": 1,
-      "explanation": "TIME_NS가 있으면 !timens_page 검사에서 실패하고 없으면 case 자체가 없어 default로 실패합니다."
+      "original_explanation": "TIME_NS가 있으면 !timens_page 검사에서 실패하고 없으면 case 자체가 없어 default로 실패합니다."
     },
     {
-      "prompt": "vdso_join_timens가 기존 페이지를 zap하는 이유는?",
+      "prompt": "join_timens가 기존 페이지 연결을 지우는 이유는 무엇인가요?",
       "options": [
+        "다음 fault에서 현재 namespace에 맞는 페이지를 연결하기 위해서입니다.",
+        "모든 코드를 디스크에서 다시 읽기 위해서입니다."
+      ],
+      "answer": 0,
+      "explanation": "자료 VMA는 유지하고 페이지 연결만 지우며 코드 재읽기는 없습니다.",
+      "original_prompt": "vdso_join_timens가 기존 페이지를 zap하는 이유는?",
+      "original_options": [
         "다음 fault에서 현재 namespace에 맞는 페이지를 다시 연결하기 위해서다",
         "모든 vDSO 코드 이미지를 디스크에서 다시 읽기 위해서다"
       ],
-      "answer": 0,
-      "explanation": "순회 대상은 데이터 special mapping입니다. VMA를 유지하면서 기존 페이지 매핑을 지우며 코드 재로딩 로직은 없습니다."
+      "original_explanation": "순회 대상은 데이터 special mapping입니다. VMA를 유지하면서 기존 페이지 매핑을 지우며 코드 재로딩 로직은 없습니다."
     },
     {
-      "prompt": "코드 VMA에 VM_MAYWRITE가 있다는 것은 현재 쓰기 가능한가?",
+      "prompt": "코드 VMA에 MAYWRITE가 있으면 현재 쓰기 가능한가요?",
       "options": [
+        "네. MAYWRITE와 WRITE는 같은 비트입니다.",
+        "아니요. 현재 권한에는 WRITE가 없습니다."
+      ],
+      "answer": 1,
+      "explanation": "현재 읽기·실행 권한과 가능성 표시를 구분합니다.",
+      "original_prompt": "코드 VMA에 VM_MAYWRITE가 있다는 것은 현재 쓰기 가능한가?",
+      "original_options": [
         "그렇다. VM_MAYWRITE와 VM_WRITE는 같은 비트다",
         "아니다. 현재 권한에는 VM_WRITE가 없다"
       ],
-      "answer": 1,
-      "explanation": "설치 플래그는 READ와 EXEC 및 MAY 계열입니다. 현재 허용 권한과 잠재적 권한 비트를 구분합니다."
+      "original_explanation": "설치 플래그는 READ와 EXEC 및 MAY 계열입니다. 현재 허용 권한과 잠재적 권한 비트를 구분합니다."
     },
     {
-      "prompt": "코드 mapping 설치가 실패하면 공통 helper가 반드시 하는 작업은?",
+      "prompt": "코드 설치가 실패하면 공통 함수가 반드시 하는 일은 무엇인가요?",
       "options": [
+        "context.vdso를 NULL로 하고 오류를 반환합니다.",
+        "성공한 VVAR를 명시적으로 해제한 뒤 성공을 반환합니다."
+      ],
+      "answer": 0,
+      "explanation": "실패 경로에는 NULL 대입과 오류 반환만 있습니다.",
+      "original_prompt": "코드 mapping 설치가 실패하면 공통 helper가 반드시 하는 작업은?",
+      "original_options": [
         "context.vdso를 NULL로 바꾸고 오류값을 반환한다",
         "이미 성공한 VVAR VMA를 명시적으로 unmap한 뒤 성공을 반환한다"
       ],
-      "answer": 0,
-      "explanation": "up_fail에는 NULL 대입과 PTR_ERR 반환만 있습니다. 외부 정리 계약을 이 함수 안의 rollback으로 꾸며서는 안 됩니다."
+      "original_explanation": "up_fail에는 NULL 대입과 PTR_ERR 반환만 있습니다. 외부 정리 계약을 이 함수 안의 rollback으로 꾸며서는 안 됩니다."
     },
     {
-      "prompt": "4KiB 페이지, 코드 2페이지, 영역 시작 B일 때 context.vdso는?",
+      "prompt": "4KiB 페이지, 코드 2페이지, 시작 B이면 context.vdso는 어디인가요?",
       "options": [
+        "B+4096입니다.",
+        "B+8192입니다."
+      ],
+      "answer": 1,
+      "explanation": "코드 앞에 VVAR 두 페이지 8KiB가 예약됩니다.",
+      "original_prompt": "4KiB 페이지, 코드 2페이지, 영역 시작 B일 때 context.vdso는?",
+      "original_options": [
         "B+4096",
         "B+8192"
       ],
-      "answer": 1,
-      "explanation": "VVAR_NR_PAGES는 2이므로 코드 앞에 8KiB를 둡니다. 한 데이터 페이지가 실제 매핑될 수 있다는 사실과 예약 영역 크기는 별개입니다."
+      "original_explanation": "VVAR_NR_PAGES는 2이므로 코드 앞에 8KiB를 둡니다. 한 데이터 페이지가 실제 매핑될 수 있다는 사실과 예약 영역 크기는 별개입니다."
     },
     {
-      "prompt": "mmap_write_lock_killable이 실패하면 wrapper는?",
+      "prompt": "mmap_write_lock_killable 실패 때 연결 함수는 어떻게 하나요?",
       "options": [
+        "-EINTR로 반환하고 설치 함수를 부르지 않습니다.",
+        "잠금 없이 설치를 계속합니다."
+      ],
+      "answer": 0,
+      "explanation": "잠금을 얻은 경우에만 설치와 뒤 잠금 해제로 진행합니다.",
+      "original_prompt": "mmap_write_lock_killable이 실패하면 wrapper는?",
+      "original_options": [
         "-EINTR를 반환하고 공통 설치 helper를 호출하지 않는다",
         "잠금 없이 설치를 계속한다"
       ],
-      "answer": 0,
-      "explanation": "잠금 검사 바로 아래에 즉시 반환이 있습니다. 획득한 경우에만 helper 실행 뒤 unlock합니다."
+      "original_explanation": "잠금 검사 바로 아래에 즉시 반환이 있습니다. 획득한 경우에만 helper 실행 뒤 unlock합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "페이지 4096바이트, 코드 2페이지, 시작 B인 경우 VVAR와 코드의 주소 범위를 그려 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (C) 2004 Benjamin Herrenschmidt, IBM Corp.\n *                    <benh@kernel.crashing.org>\n * Copyright (C) 2012 ARM Limited\n * Copyright (C) 2015 Regents of the University of California\n */\n\n#include <linux/elf.h>\n#include <linux/mm.h>\n#include <linux/slab.h>\n#include <linux/binfmts.h>\n#include <linux/err.h>\n#include <asm/page.h>\n#include <asm/vdso.h>\n#include <linux/time_namespace.h>\n#include <vdso/datapage.h>\n#include <vdso/vsyscall.h>\n\nenum vvar_pages {\n\tVVAR_DATA_PAGE_OFFSET,\n\tVVAR_TIMENS_PAGE_OFFSET,\n\tVVAR_NR_PAGES,\n};\n\nenum rv_vdso_map {\n\tRV_VDSO_MAP_VVAR,\n\tRV_VDSO_MAP_VDSO,\n};\n\n#define VVAR_SIZE  (VVAR_NR_PAGES << PAGE_SHIFT)\n\nstatic union vdso_data_store vdso_data_store __page_aligned_data;\nstruct vdso_data *vdso_data = vdso_data_store.data;\n\nstruct __vdso_info {\n\tconst char *name;\n\tconst char *vdso_code_start;\n\tconst char *vdso_code_end;\n\tunsigned long vdso_pages;\n\t/* Data Mapping */\n\tstruct vm_special_mapping *dm;\n\t/* Code Mapping */\n\tstruct vm_special_mapping *cm;\n};\n\nstatic struct __vdso_info vdso_info;\n#ifdef CONFIG_COMPAT\nstatic struct __vdso_info compat_vdso_info;\n#endif\n\nstatic int vdso_mremap(const struct vm_special_mapping *sm,\n\t\t       struct vm_area_struct *new_vma)\n{\n\tcurrent->mm->context.vdso = (void *)new_vma->vm_start;\n\n\treturn 0;\n}\n\nstatic void __init __vdso_init(struct __vdso_info *vdso_info)\n{\n\tunsigned int i;\n\tstruct page **vdso_pagelist;\n\tunsigned long pfn;\n\n\tif (memcmp(vdso_info->vdso_code_start, \"\\177ELF\", 4))\n\t\tpanic(\"vDSO is not a valid ELF object!\\n\");\n\n\tvdso_info->vdso_pages = (\n\t\tvdso_info->vdso_code_end -\n\t\tvdso_info->vdso_code_start) >>\n\t\tPAGE_SHIFT;\n\n\tvdso_pagelist = kcalloc(vdso_info->vdso_pages,\n\t\t\t\tsizeof(struct page *),\n\t\t\t\tGFP_KERNEL);\n\tif (vdso_pagelist == NULL)\n\t\tpanic(\"vDSO kcalloc failed!\\n\");\n\n\t/* Grab the vDSO code pages. */\n\tpfn = sym_to_pfn(vdso_info->vdso_code_start);\n\n\tfor (i = 0; i < vdso_info->vdso_pages; i++)\n\t\tvdso_pagelist[i] = pfn_to_page(pfn + i);\n\n\tvdso_info->cm->pages = vdso_pagelist;\n}\n\n#ifdef CONFIG_TIME_NS\nstruct vdso_data *arch_get_vdso_data(void *vvar_page)\n{\n\treturn (struct vdso_data *)(vvar_page);\n}\n\n/*\n * The vvar mapping contains data for a specific time namespace, so when a task\n * changes namespace we must unmap its vvar data for the old namespace.\n * Subsequent faults will map in data for the new namespace.\n *\n * For more details see timens_setup_vdso_data().\n */\nint vdso_join_timens(struct task_struct *task, struct time_namespace *ns)\n{\n\tstruct mm_struct *mm = task->mm;\n\tstruct vm_area_struct *vma;\n\tVMA_ITERATOR(vmi, mm, 0);\n\n\tmmap_read_lock(mm);\n\n\tfor_each_vma(vmi, vma) {\n\t\tif (vma_is_special_mapping(vma, vdso_info.dm))\n\t\t\tzap_vma_pages(vma);\n#ifdef CONFIG_COMPAT\n\t\tif (vma_is_special_mapping(vma, compat_vdso_info.dm))\n\t\t\tzap_vma_pages(vma);\n#endif\n\t}\n\n\tmmap_read_unlock(mm);\n\treturn 0;\n}\n#endif\n\nstatic vm_fault_t vvar_fault(const struct vm_special_mapping *sm,\n\t\t\t     struct vm_area_struct *vma, struct vm_fault *vmf)\n{\n\tstruct page *timens_page = find_timens_vvar_page(vma);\n\tunsigned long pfn;\n\n\tswitch (vmf->pgoff) {\n\tcase VVAR_DATA_PAGE_OFFSET:\n\t\tif (timens_page)\n\t\t\tpfn = page_to_pfn(timens_page);\n\t\telse\n\t\t\tpfn = sym_to_pfn(vdso_data);\n\t\tbreak;\n#ifdef CONFIG_TIME_NS\n\tcase VVAR_TIMENS_PAGE_OFFSET:\n\t\t/*\n\t\t * If a task belongs to a time namespace then a namespace\n\t\t * specific VVAR is mapped with the VVAR_DATA_PAGE_OFFSET and\n\t\t * the real VVAR page is mapped with the VVAR_TIMENS_PAGE_OFFSET\n\t\t * offset.\n\t\t * See also the comment near timens_setup_vdso_data().\n\t\t */\n\t\tif (!timens_page)\n\t\t\treturn VM_FAULT_SIGBUS;\n\t\tpfn = sym_to_pfn(vdso_data);\n\t\tbreak;\n#endif /* CONFIG_TIME_NS */\n\tdefault:\n\t\treturn VM_FAULT_SIGBUS;\n\t}\n\n\treturn vmf_insert_pfn(vma, vmf->address, pfn);\n}\n\nstatic struct vm_special_mapping rv_vdso_maps[] __ro_after_init = {\n\t[RV_VDSO_MAP_VVAR] = {\n\t\t.name   = \"[vvar]\",\n\t\t.fault = vvar_fault,\n\t},\n\t[RV_VDSO_MAP_VDSO] = {\n\t\t.name   = \"[vdso]\",\n\t\t.mremap = vdso_mremap,\n\t},\n};\n\nstatic struct __vdso_info vdso_info __ro_after_init = {\n\t.name = \"vdso\",\n\t.vdso_code_start = vdso_start,\n\t.vdso_code_end = vdso_end,\n\t.dm = &rv_vdso_maps[RV_VDSO_MAP_VVAR],\n\t.cm = &rv_vdso_maps[RV_VDSO_MAP_VDSO],\n};\n\n#ifdef CONFIG_COMPAT\nstatic struct vm_special_mapping rv_compat_vdso_maps[] __ro_after_init = {\n\t[RV_VDSO_MAP_VVAR] = {\n\t\t.name   = \"[vvar]\",\n\t\t.fault = vvar_fault,\n\t},\n\t[RV_VDSO_MAP_VDSO] = {\n\t\t.name   = \"[vdso]\",\n\t\t.mremap = vdso_mremap,\n\t},\n};\n\nstatic struct __vdso_info compat_vdso_info __ro_after_init = {\n\t.name = \"compat_vdso\",\n\t.vdso_code_start = compat_vdso_start,\n\t.vdso_code_end = compat_vdso_end,\n\t.dm = &rv_compat_vdso_maps[RV_VDSO_MAP_VVAR],\n\t.cm = &rv_compat_vdso_maps[RV_VDSO_MAP_VDSO],\n};\n#endif\n\nstatic int __init vdso_init(void)\n{\n\t__vdso_init(&vdso_info);\n#ifdef CONFIG_COMPAT\n\t__vdso_init(&compat_vdso_info);\n#endif\n\n\treturn 0;\n}\narch_initcall(vdso_init);\n\nstatic int __setup_additional_pages(struct mm_struct *mm,\n\t\t\t\t    struct linux_binprm *bprm,\n\t\t\t\t    int uses_interp,\n\t\t\t\t    struct __vdso_info *vdso_info)\n{\n\tunsigned long vdso_base, vdso_text_len, vdso_mapping_len;\n\tvoid *ret;\n\n\tBUILD_BUG_ON(VVAR_NR_PAGES != __VVAR_PAGES);\n\n\tvdso_text_len = vdso_info->vdso_pages << PAGE_SHIFT;\n\t/* Be sure to map the data page */\n\tvdso_mapping_len = vdso_text_len + VVAR_SIZE;\n\n\tvdso_base = get_unmapped_area(NULL, 0, vdso_mapping_len, 0, 0);\n\tif (IS_ERR_VALUE(vdso_base)) {\n\t\tret = ERR_PTR(vdso_base);\n\t\tgoto up_fail;\n\t}\n\n\tret = _install_special_mapping(mm, vdso_base, VVAR_SIZE,\n\t\t(VM_READ | VM_MAYREAD | VM_PFNMAP), vdso_info->dm);\n\tif (IS_ERR(ret))\n\t\tgoto up_fail;\n\n\tvdso_base += VVAR_SIZE;\n\tmm->context.vdso = (void *)vdso_base;\n\n\tret =\n\t   _install_special_mapping(mm, vdso_base, vdso_text_len,\n\t\t(VM_READ | VM_EXEC | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC),\n\t\tvdso_info->cm);\n\n\tif (IS_ERR(ret))\n\t\tgoto up_fail;\n\n\treturn 0;\n\nup_fail:\n\tmm->context.vdso = NULL;\n\treturn PTR_ERR(ret);\n}\n\n#ifdef CONFIG_COMPAT\nint compat_arch_setup_additional_pages(struct linux_binprm *bprm,\n\t\t\t\t       int uses_interp)\n{\n\tstruct mm_struct *mm = current->mm;\n\tint ret;\n\n\tif (mmap_write_lock_killable(mm))\n\t\treturn -EINTR;\n\n\tret = __setup_additional_pages(mm, bprm, uses_interp,\n\t\t\t\t\t\t\t&compat_vdso_info);\n\tmmap_write_unlock(mm);\n\n\treturn ret;\n}\n#endif\n\nint arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)\n{\n\tstruct mm_struct *mm = current->mm;\n\tint ret;\n\n\tif (mmap_write_lock_killable(mm))\n\t\treturn -EINTR;\n\n\tret = __setup_additional_pages(mm, bprm, uses_interp, &vdso_info);\n\tmmap_write_unlock(mm);\n\n\treturn ret;\n}\n",
   "source_review": {
@@ -191,5 +241,228 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-1e46905af0f20e89",
+    "path": "arch/riscv/kernel/vdso.c",
+    "title": "RISC-V vDSO 매핑: 부팅 초기화·VVAR fault·namespace 교체",
+    "area": "가상 메모리 · demand paging · ELF · PFN · VMA · 시간 네임스페이스",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "커널이 vDSO 코드 이미지와 시간 데이터 페이지를 프로세스에 연결하는 전체 구현을 분석합니다.",
+    "guide": [
+      "가상 주소 영역을 예약하는 작업과 실제 페이지를 fault 시 연결하는 작업은 분리할 수 있습니다.",
+      "VMA 권한, PFN 매핑, ELF 이미지 경계, 초기화 수명과 오류 경로를 연결해서 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 두 enum",
+        "text": "GPL-2.0-only 파일은 ELF·메모리 관리·할당·실행 파일·오류·페이지·vDSO·time namespace·datapage·vsyscall 헤더를 포함합니다. vvar_pages는 DATA=0,TIMENS=1,NR=2이고 rv_vdso_map은 VVAR=0,VDSO=1입니다. 두 enum의 숫자가 겹쳐도 하나는 데이터 영역 안의 페이지 offset, 다른 하나는 mapping descriptor 배열의 index입니다. VVAR_SIZE는 두 페이지 크기입니다."
+      },
+      {
+        "title": "공유 데이터와 이미지 메타데이터",
+        "text": "static union vdso_data_store는 __page_aligned_data에 놓이고 전역 vdso_data 포인터가 그 data 배열을 가리킵니다. __vdso_info는 name, 코드 시작·끝, 코드 페이지 수, 데이터와 코드의 vm_special_mapping 포인터를 묶습니다. native 정보와 CONFIG_COMPAT일 때 compat 정보가 있습니다. 메타데이터의 name은 이 파일에서 mapping 이름으로 읽히지 않고 실제 표시 이름은 descriptor의 [vvar]·[vdso]입니다."
+      },
+      {
+        "title": "코드 이동 callback",
+        "text": "vdso_mremap은 current->mm->context.vdso를 new_vma->vm_start로 갱신하고 0을 반환합니다. sm 인수는 본문에서 사용하지 않습니다. 이 함수에 코드 복사, ELF 재링크, 새로운 VVAR 위치 설정은 없습니다. 이동된 코드 주소를 mm 문맥에 기록하는 책임만 읽어야 합니다."
+      },
+      {
+        "title": "부팅 이미지 검증과 페이지 수",
+        "text": "__vdso_init은 코드 시작의 4바이트가 ELF magic과 다르면 panic합니다. 전체 ELF 섹션이나 ABI를 파싱하는 검증은 아닙니다. 페이지 수는 (end-start)>>PAGE_SHIFT로 계산하며 올림 함수가 아닙니다. 앞서 이미지 생성 단계에서 경계를 페이지에 맞춘다는 계약에 의존합니다. PAGE_SIZE=4096, 이미지 경계 차이=8192라면 코드 페이지는 2개입니다."
+      },
+      {
+        "title": "페이지 포인터 배열 구성",
+        "text": "kcalloc(vdso_pages,sizeof(struct page *),GFP_KERNEL)로 포인터 배열을 할당하고 실패하면 panic합니다. sym_to_pfn(code_start)에서 시작해 pfn_to_page(pfn+i)를 배열에 넣은 뒤 cm->pages에 연결합니다. 여기서 각 코드 페이지를 새로 할당하거나 이미지를 사용자별로 복사하는 것은 아닙니다. 초기화 루프 시간과 포인터 배열 공간은 코드 페이지 수에 비례합니다."
+      },
+      {
+        "title": "Namespace 데이터 접근과 교체",
+        "text": "CONFIG_TIME_NS의 arch_get_vdso_data는 전달된 vvar_page를 struct vdso_data 포인터로 cast해 반환합니다. vdso_join_timens는 task->mm에 VMA iterator를 만들고 mmap_read_lock 아래 전체 VMA를 순회합니다. native dm과 일치하면 zap_vma_pages를 호출하고 COMPAT이면 compat dm도 검사합니다. ns 인수를 직접 읽거나 여기서 새 페이지를 매핑하지 않습니다. 기존 페이지 매핑을 지워 이후 fault가 새 namespace 데이터를 찾게 하는 설계입니다. VMA 자체를 삭제하는 코드와 구분합니다."
+      },
+      {
+        "title": "첫 VVAR 페이지의 fault",
+        "text": "vvar_fault는 find_timens_vvar_page(vma)를 먼저 호출합니다. vmf->pgoff가 DATA=0이면 namespace 페이지가 있을 때 page_to_pfn(timens_page), 없으면 sym_to_pfn(vdso_data)를 선택합니다. 따라서 같은 사용자 가상 offset이 프로세스의 namespace 상태에 따라 다른 실제 페이지를 가리킵니다. 선택 후 vmf_insert_pfn(vma,vmf->address,pfn)의 반환값을 그대로 전달합니다."
+      },
+      {
+        "title": "둘째 VVAR 페이지와 SIGBUS",
+        "text": "CONFIG_TIME_NS일 때 TIMENS=1 분기가 존재합니다. namespace 페이지가 없으면 VM_FAULT_SIGBUS이고, 있으면 오히려 실제 host vdso_data의 PFN을 연결합니다. namespace에서 첫 페이지는 보정 데이터, 둘째 페이지는 host 시간입니다. TIME_NS가 없으면 이 case 자체가 없고 나머지 offset과 함께 default SIGBUS로 갑니다. 두 페이지 크기의 VMA를 예약했다는 사실은 모든 페이지 접근이 성공한다는 뜻이 아닙니다."
+      },
+      {
+        "title": "Native·compat descriptor와 보호 수명",
+        "text": "rv_vdso_maps와 compat용 배열은 각각 [vvar]에 fault callback, [vdso]에 mremap callback을 지정합니다. native info는 vdso_start/end, compat info는 compat_vdso_start/end와 각 배열을 참조합니다. 두 ABI가 callback을 공유하더라도 descriptor와 코드 이미지 경계는 별개입니다. 배열과 정보에 __ro_after_init가 붙으며 초기화 중 cm->pages와 vdso_pages를 채웁니다. vdso_init은 native, 조건부 compat 순서로 초기화하고 0을 반환하며 arch_initcall로 등록됩니다."
+      },
+      {
+        "title": "추가 매핑의 크기와 주소 확보",
+        "text": "__setup_additional_pages는 BUILD_BUG_ON(VVAR_NR_PAGES != __VVAR_PAGES)로 헤더의 페이지 수 계약을 빌드 때 검사합니다. text_len은 페이지 수를 다시 byte로 바꾸고 mapping_len=text_len+VVAR_SIZE입니다. get_unmapped_area(NULL,0,mapping_len,0,0)로 연속 주소 영역을 찾습니다. 이 호출 자체가 두 special mapping을 설치하는 것은 아닙니다. 오류값이면 ERR_PTR로 바꿔 공통 실패 처리로 갑니다."
+      },
+      {
+        "title": "데이터와 코드의 실제 권한",
+        "text": "먼저 시작 주소에 VVAR_SIZE를 VM_READ|VM_MAYREAD|VM_PFNMAP으로 설치합니다. 성공하면 VVAR_SIZE만큼 더한 코드 주소를 mm->context.vdso에 기록하고 text_len을 VM_READ|VM_EXEC|VM_MAYREAD|VM_MAYWRITE|VM_MAYEXEC으로 설치합니다. VM_MAYWRITE가 있어도 현재 권한의 VM_WRITE는 없습니다. 코드의 현재 읽기·실행 권한과 변경 가능성 비트를 구분해야 합니다. 데이터 영역은 코드 바로 앞에 있습니다."
+      },
+      {
+        "title": "부분 성공과 오류 처리",
+        "text": "어느 설치가 실패해도 up_fail은 context.vdso를 NULL로 바꾸고 PTR_ERR(ret)를 반환합니다. 코드 매핑 실패 전에 데이터 매핑이 이미 성공했을 수 있지만 이 helper에는 그것을 명시적으로 제거하는 rollback 호출이 없습니다. 따라서 이 함수 하나가 모든 부분 설치를 원상복구한다고 설명하면 안 됩니다. bprm과 uses_interp는 인수로 전달되지만 본문에서는 사용하지 않습니다."
+      },
+      {
+        "title": "실행 파일 진입 wrapper와 잠금",
+        "text": "arch_setup_additional_pages와 CONFIG_COMPAT의 compat_arch_setup_additional_pages는 current->mm에서 mmap_write_lock_killable을 얻습니다. 잠금 획득이 중단되면 -EINTR로 즉시 반환합니다. 획득 후 각각 native·compat info로 공통 helper를 호출하고 성공·실패 모두 mmap_write_unlock 뒤 ret를 반환합니다. namespace 교체 순회의 read lock과 새 VMA 설치의 write lock을 혼동하지 않습니다."
+      },
+      {
+        "title": "주소 계산 예제와 검토 범위",
+        "text": "4KiB 페이지에서 코드가 2페이지이고 get_unmapped_area 결과가 B이면 전체 요청은 16KiB, 데이터 VMA는 [B,B+8192), 코드 VMA는 [B+8192,B+16384), context.vdso는 B+8192입니다. 페이지 크기는 예제의 가정이며 구현은 PAGE_SHIFT를 사용합니다. 모든 함수·descriptor·설정 분기와 실패 경로를 대조했으며 실제 RISC-V 커널 부팅이나 fault·mremap 실행을 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "__vdso_init의 ELF 검증 범위는?",
+        "options": [
+          "시작 4바이트 magic 비교",
+          "모든 ELF section과 relocation의 완전한 검증"
+        ],
+        "answer": 0,
+        "explanation": "memcmp는 4바이트만 비교합니다. panic 메시지의 valid ELF 표현을 전체 형식 검증으로 확대하면 안 됩니다."
+      },
+      {
+        "prompt": "vdso_pagelist 구성에서 새로 할당하는 것은?",
+        "options": [
+          "프로세스별 vDSO 코드의 완전한 복사본",
+          "기존 코드 페이지들을 가리킬 struct page 포인터 배열"
+        ],
+        "answer": 1,
+        "explanation": "kcalloc 대상은 포인터 배열이며 각 원소는 기존 연속 PFN을 pfn_to_page로 바꾼 값입니다."
+      },
+      {
+        "prompt": "Namespace 프로세스에서 VVAR offset 0과 1은 각각 무엇인가?",
+        "options": [
+          "namespace 보정 페이지와 host 시간 페이지",
+          "host 시간 페이지와 namespace 보정 페이지"
+        ],
+        "answer": 0,
+        "explanation": "fault 분기는 offset 0에서 timens_page를 선택하고 offset 1에서는 실제 vdso_data를 선택합니다."
+      },
+      {
+        "prompt": "Namespace 페이지가 없는 경우 VVAR 둘째 페이지를 접근하면?",
+        "options": [
+          "첫 페이지와 같은 host 데이터를 자동으로 복제한다",
+          "해당 fault 경로가 VM_FAULT_SIGBUS를 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "TIME_NS가 있으면 !timens_page 검사에서 실패하고 없으면 case 자체가 없어 default로 실패합니다."
+      },
+      {
+        "prompt": "vdso_join_timens가 기존 페이지를 zap하는 이유는?",
+        "options": [
+          "다음 fault에서 현재 namespace에 맞는 페이지를 다시 연결하기 위해서다",
+          "모든 vDSO 코드 이미지를 디스크에서 다시 읽기 위해서다"
+        ],
+        "answer": 0,
+        "explanation": "순회 대상은 데이터 special mapping입니다. VMA를 유지하면서 기존 페이지 매핑을 지우며 코드 재로딩 로직은 없습니다."
+      },
+      {
+        "prompt": "코드 VMA에 VM_MAYWRITE가 있다는 것은 현재 쓰기 가능한가?",
+        "options": [
+          "그렇다. VM_MAYWRITE와 VM_WRITE는 같은 비트다",
+          "아니다. 현재 권한에는 VM_WRITE가 없다"
+        ],
+        "answer": 1,
+        "explanation": "설치 플래그는 READ와 EXEC 및 MAY 계열입니다. 현재 허용 권한과 잠재적 권한 비트를 구분합니다."
+      },
+      {
+        "prompt": "코드 mapping 설치가 실패하면 공통 helper가 반드시 하는 작업은?",
+        "options": [
+          "context.vdso를 NULL로 바꾸고 오류값을 반환한다",
+          "이미 성공한 VVAR VMA를 명시적으로 unmap한 뒤 성공을 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "up_fail에는 NULL 대입과 PTR_ERR 반환만 있습니다. 외부 정리 계약을 이 함수 안의 rollback으로 꾸며서는 안 됩니다."
+      },
+      {
+        "prompt": "4KiB 페이지, 코드 2페이지, 영역 시작 B일 때 context.vdso는?",
+        "options": [
+          "B+4096",
+          "B+8192"
+        ],
+        "answer": 1,
+        "explanation": "VVAR_NR_PAGES는 2이므로 코드 앞에 8KiB를 둡니다. 한 데이터 페이지가 실제 매핑될 수 있다는 사실과 예약 영역 크기는 별개입니다."
+      },
+      {
+        "prompt": "mmap_write_lock_killable이 실패하면 wrapper는?",
+        "options": [
+          "-EINTR를 반환하고 공통 설치 helper를 호출하지 않는다",
+          "잠금 없이 설치를 계속한다"
+        ],
+        "answer": 0,
+        "explanation": "잠금 검사 바로 아래에 즉시 반환이 있습니다. 획득한 경우에만 helper 실행 뒤 unlock합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (C) 2004 Benjamin Herrenschmidt, IBM Corp.\n *                    <benh@kernel.crashing.org>\n * Copyright (C) 2012 ARM Limited\n * Copyright (C) 2015 Regents of the University of California\n */\n\n#include <linux/elf.h>\n#include <linux/mm.h>\n#include <linux/slab.h>\n#include <linux/binfmts.h>\n#include <linux/err.h>\n#include <asm/page.h>\n#include <asm/vdso.h>\n#include <linux/time_namespace.h>\n#include <vdso/datapage.h>\n#include <vdso/vsyscall.h>\n\nenum vvar_pages {\n\tVVAR_DATA_PAGE_OFFSET,\n\tVVAR_TIMENS_PAGE_OFFSET,\n\tVVAR_NR_PAGES,\n};\n\nenum rv_vdso_map {\n\tRV_VDSO_MAP_VVAR,\n\tRV_VDSO_MAP_VDSO,\n};\n\n#define VVAR_SIZE  (VVAR_NR_PAGES << PAGE_SHIFT)\n\nstatic union vdso_data_store vdso_data_store __page_aligned_data;\nstruct vdso_data *vdso_data = vdso_data_store.data;\n\nstruct __vdso_info {\n\tconst char *name;\n\tconst char *vdso_code_start;\n\tconst char *vdso_code_end;\n\tunsigned long vdso_pages;\n\t/* Data Mapping */\n\tstruct vm_special_mapping *dm;\n\t/* Code Mapping */\n\tstruct vm_special_mapping *cm;\n};\n\nstatic struct __vdso_info vdso_info;\n#ifdef CONFIG_COMPAT\nstatic struct __vdso_info compat_vdso_info;\n#endif\n\nstatic int vdso_mremap(const struct vm_special_mapping *sm,\n\t\t       struct vm_area_struct *new_vma)\n{\n\tcurrent->mm->context.vdso = (void *)new_vma->vm_start;\n\n\treturn 0;\n}\n\nstatic void __init __vdso_init(struct __vdso_info *vdso_info)\n{\n\tunsigned int i;\n\tstruct page **vdso_pagelist;\n\tunsigned long pfn;\n\n\tif (memcmp(vdso_info->vdso_code_start, \"\\177ELF\", 4))\n\t\tpanic(\"vDSO is not a valid ELF object!\\n\");\n\n\tvdso_info->vdso_pages = (\n\t\tvdso_info->vdso_code_end -\n\t\tvdso_info->vdso_code_start) >>\n\t\tPAGE_SHIFT;\n\n\tvdso_pagelist = kcalloc(vdso_info->vdso_pages,\n\t\t\t\tsizeof(struct page *),\n\t\t\t\tGFP_KERNEL);\n\tif (vdso_pagelist == NULL)\n\t\tpanic(\"vDSO kcalloc failed!\\n\");\n\n\t/* Grab the vDSO code pages. */\n\tpfn = sym_to_pfn(vdso_info->vdso_code_start);\n\n\tfor (i = 0; i < vdso_info->vdso_pages; i++)\n\t\tvdso_pagelist[i] = pfn_to_page(pfn + i);\n\n\tvdso_info->cm->pages = vdso_pagelist;\n}\n\n#ifdef CONFIG_TIME_NS\nstruct vdso_data *arch_get_vdso_data(void *vvar_page)\n{\n\treturn (struct vdso_data *)(vvar_page);\n}\n\n/*\n * The vvar mapping contains data for a specific time namespace, so when a task\n * changes namespace we must unmap its vvar data for the old namespace.\n * Subsequent faults will map in data for the new namespace.\n *\n * For more details see timens_setup_vdso_data().\n */\nint vdso_join_timens(struct task_struct *task, struct time_namespace *ns)\n{\n\tstruct mm_struct *mm = task->mm;\n\tstruct vm_area_struct *vma;\n\tVMA_ITERATOR(vmi, mm, 0);\n\n\tmmap_read_lock(mm);\n\n\tfor_each_vma(vmi, vma) {\n\t\tif (vma_is_special_mapping(vma, vdso_info.dm))\n\t\t\tzap_vma_pages(vma);\n#ifdef CONFIG_COMPAT\n\t\tif (vma_is_special_mapping(vma, compat_vdso_info.dm))\n\t\t\tzap_vma_pages(vma);\n#endif\n\t}\n\n\tmmap_read_unlock(mm);\n\treturn 0;\n}\n#endif\n\nstatic vm_fault_t vvar_fault(const struct vm_special_mapping *sm,\n\t\t\t     struct vm_area_struct *vma, struct vm_fault *vmf)\n{\n\tstruct page *timens_page = find_timens_vvar_page(vma);\n\tunsigned long pfn;\n\n\tswitch (vmf->pgoff) {\n\tcase VVAR_DATA_PAGE_OFFSET:\n\t\tif (timens_page)\n\t\t\tpfn = page_to_pfn(timens_page);\n\t\telse\n\t\t\tpfn = sym_to_pfn(vdso_data);\n\t\tbreak;\n#ifdef CONFIG_TIME_NS\n\tcase VVAR_TIMENS_PAGE_OFFSET:\n\t\t/*\n\t\t * If a task belongs to a time namespace then a namespace\n\t\t * specific VVAR is mapped with the VVAR_DATA_PAGE_OFFSET and\n\t\t * the real VVAR page is mapped with the VVAR_TIMENS_PAGE_OFFSET\n\t\t * offset.\n\t\t * See also the comment near timens_setup_vdso_data().\n\t\t */\n\t\tif (!timens_page)\n\t\t\treturn VM_FAULT_SIGBUS;\n\t\tpfn = sym_to_pfn(vdso_data);\n\t\tbreak;\n#endif /* CONFIG_TIME_NS */\n\tdefault:\n\t\treturn VM_FAULT_SIGBUS;\n\t}\n\n\treturn vmf_insert_pfn(vma, vmf->address, pfn);\n}\n\nstatic struct vm_special_mapping rv_vdso_maps[] __ro_after_init = {\n\t[RV_VDSO_MAP_VVAR] = {\n\t\t.name   = \"[vvar]\",\n\t\t.fault = vvar_fault,\n\t},\n\t[RV_VDSO_MAP_VDSO] = {\n\t\t.name   = \"[vdso]\",\n\t\t.mremap = vdso_mremap,\n\t},\n};\n\nstatic struct __vdso_info vdso_info __ro_after_init = {\n\t.name = \"vdso\",\n\t.vdso_code_start = vdso_start,\n\t.vdso_code_end = vdso_end,\n\t.dm = &rv_vdso_maps[RV_VDSO_MAP_VVAR],\n\t.cm = &rv_vdso_maps[RV_VDSO_MAP_VDSO],\n};\n\n#ifdef CONFIG_COMPAT\nstatic struct vm_special_mapping rv_compat_vdso_maps[] __ro_after_init = {\n\t[RV_VDSO_MAP_VVAR] = {\n\t\t.name   = \"[vvar]\",\n\t\t.fault = vvar_fault,\n\t},\n\t[RV_VDSO_MAP_VDSO] = {\n\t\t.name   = \"[vdso]\",\n\t\t.mremap = vdso_mremap,\n\t},\n};\n\nstatic struct __vdso_info compat_vdso_info __ro_after_init = {\n\t.name = \"compat_vdso\",\n\t.vdso_code_start = compat_vdso_start,\n\t.vdso_code_end = compat_vdso_end,\n\t.dm = &rv_compat_vdso_maps[RV_VDSO_MAP_VVAR],\n\t.cm = &rv_compat_vdso_maps[RV_VDSO_MAP_VDSO],\n};\n#endif\n\nstatic int __init vdso_init(void)\n{\n\t__vdso_init(&vdso_info);\n#ifdef CONFIG_COMPAT\n\t__vdso_init(&compat_vdso_info);\n#endif\n\n\treturn 0;\n}\narch_initcall(vdso_init);\n\nstatic int __setup_additional_pages(struct mm_struct *mm,\n\t\t\t\t    struct linux_binprm *bprm,\n\t\t\t\t    int uses_interp,\n\t\t\t\t    struct __vdso_info *vdso_info)\n{\n\tunsigned long vdso_base, vdso_text_len, vdso_mapping_len;\n\tvoid *ret;\n\n\tBUILD_BUG_ON(VVAR_NR_PAGES != __VVAR_PAGES);\n\n\tvdso_text_len = vdso_info->vdso_pages << PAGE_SHIFT;\n\t/* Be sure to map the data page */\n\tvdso_mapping_len = vdso_text_len + VVAR_SIZE;\n\n\tvdso_base = get_unmapped_area(NULL, 0, vdso_mapping_len, 0, 0);\n\tif (IS_ERR_VALUE(vdso_base)) {\n\t\tret = ERR_PTR(vdso_base);\n\t\tgoto up_fail;\n\t}\n\n\tret = _install_special_mapping(mm, vdso_base, VVAR_SIZE,\n\t\t(VM_READ | VM_MAYREAD | VM_PFNMAP), vdso_info->dm);\n\tif (IS_ERR(ret))\n\t\tgoto up_fail;\n\n\tvdso_base += VVAR_SIZE;\n\tmm->context.vdso = (void *)vdso_base;\n\n\tret =\n\t   _install_special_mapping(mm, vdso_base, vdso_text_len,\n\t\t(VM_READ | VM_EXEC | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC),\n\t\tvdso_info->cm);\n\n\tif (IS_ERR(ret))\n\t\tgoto up_fail;\n\n\treturn 0;\n\nup_fail:\n\tmm->context.vdso = NULL;\n\treturn PTR_ERR(ret);\n}\n\n#ifdef CONFIG_COMPAT\nint compat_arch_setup_additional_pages(struct linux_binprm *bprm,\n\t\t\t\t       int uses_interp)\n{\n\tstruct mm_struct *mm = current->mm;\n\tint ret;\n\n\tif (mmap_write_lock_killable(mm))\n\t\treturn -EINTR;\n\n\tret = __setup_additional_pages(mm, bprm, uses_interp,\n\t\t\t\t\t\t\t&compat_vdso_info);\n\tmmap_write_unlock(mm);\n\n\treturn ret;\n}\n#endif\n\nint arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)\n{\n\tstruct mm_struct *mm = current->mm;\n\tint ret;\n\n\tif (mmap_write_lock_killable(mm))\n\t\treturn -EINTR;\n\n\tret = __setup_additional_pages(mm, bprm, uses_interp, &vdso_info);\n\tmmap_write_unlock(mm);\n\n\treturn ret;\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d9f1fd685f3055ad6887f8abc650f7788777ce541fa16b800f93eb4aa0a7c754",
+      "scope": "whole-file",
+      "line_count": 282,
+      "authoring_source": "course/file_units/riscv_vdso_mapping.py",
+      "sections": [
+        "전체 구성과 두 enum",
+        "공유 데이터와 이미지 메타데이터",
+        "코드 이동 callback",
+        "부팅 이미지 검증과 페이지 수",
+        "페이지 포인터 배열 구성",
+        "Namespace 데이터 접근과 교체",
+        "첫 VVAR 페이지의 fault",
+        "둘째 VVAR 페이지와 SIGBUS",
+        "Native·compat descriptor와 보호 수명",
+        "추가 매핑의 크기와 주소 확보",
+        "데이터와 코드의 실제 권한",
+        "부분 성공과 오류 처리",
+        "실행 파일 진입 wrapper와 잠금",
+        "주소 계산 예제와 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "먼저 주소 지도에 방을 예약하고, 실제로 문을 열 때 알맞은 자료 페이지를 연결합니다. 시간 영역이 바뀌면 방을 없애지 않고 연결만 지워 다음 접근에 새 자료를 찾게 합니다.",
+    "meaning": "RISC-V vDSO는 부팅 때 이미지 정보를 준비하고 실행 때 VVAR·코드 영역을 설치하며 자료 페이지는 접근 시 선택합니다.",
+    "exercise": "페이지 4096바이트, 코드 2페이지, 시작 B인 경우 VVAR와 코드의 주소 범위를 그려 보세요."
+  },
+  "goal": "RISC-V vDSO는 부팅 때 이미지 정보를 준비하고 실행 때 VVAR·코드 영역을 설치하며 자료 페이지는 접근 시 선택합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "페이지 4096바이트, 코드 2페이지, 시작 B인 경우 VVAR와 코드의 주소 범위를 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "fff9d7809e510bc623e4b9cc46a0d1f03d04c60472787d792313f0e3b230cd28",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 9,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,110 +5,142 @@
   "area": "PCI · 전원 관리 · notifier · workqueue · 비동기 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "알림 콜백,작업 큐,ready 수명과 관리형 wrapper 전체를 분석합니다.",
+  "intro": "PCI 전원 제어 코어는 알림과 작업 큐를 연결해요. 예약된 검색, 드라이버 연결, 알림 해제를 서로 다른 단계로 읽어야 해요.",
   "guide": [
-    "비동기 작업의 요청 성공은 장치 발견·바인딩 완료와 다르며 알림 해제와 작업 취소도 별개입니다.",
-    "container_of,이벤트 분기,생산자·소비자 의존 관계,작업 큐와 정리 범위를 학습합니다."
+    "비동기 작업은 요청한 자리에서 끝까지 기다리지 않고 나중에 실행하는 일이에요. schedule_work는 작업을 큐에 맡겨요.",
+    "notifier는 사건이 생길 때 호출받도록 등록하는 알림 함수예요. action은 어떤 사건인지 알려 주는 값이에요.",
+    "consumer는 공급에 의존하는 장치, supplier는 그것을 제공하는 장치예요. 여기서는 PCI 장치가 전원 제어 장치에 의존해요."
   ],
   "deep_dive": [
     {
-      "title": "알림 대상 판정",
-      "text": "GPL-2.0-only 파일은 device,export,kernel,pci,pci-pwrctl,property,slab을 포함합니다. pci_pwrctl_notify는 내장 nb에서 container_of로 pwrctl을 구하고 data를 device로 봅니다. dev_fwnode(dev)와 dev_fwnode(pwrctl->dev)가 다르면 NOTIFY_DONE입니다. 문자열 이름 비교가 아니라 펌웨어 노드 포인터 동일성 비교이며 둘 다 NULL인 경우를 별도로 거부하는 조건은 없습니다."
+      "title": "같은 펌웨어 노드를 가진 장치인지 봐요",
+      "text": "알림 함수는 구조체 안의 nb 위치로부터 container_of를 써서 전체 pwrctl을 찾아요. data는 device로 받아요. 두 dev_fwnode 포인터가 다르면 NOTIFY_DONE으로 끝나요. 이름 문자열 비교가 아니라 같은 안내도 노드를 가리키는지 보는 것이에요. 둘 다 NULL인 경우를 따로 거절하는 조건은 없어요."
     },
     {
-      "title": "장치 추가와 노드 재사용",
-      "text": "BUS_NOTIFY_ADD_DEVICE이면 dev->of_node_reused=true입니다. 주석은 같은 DT 노드를 사용하는 전원 제어 platform 장치와 나중에 생긴 PCI 장치가 핀 설정을 두 번 바인딩하지 않도록 한다고 설명합니다. 이 경로에서 OF 노드 자체를 새로 만들거나 전원을 직접 켜지는 않습니다. 같은 노드의 두 device 객체를 구분해 보는 사례입니다."
+      "title": "장치가 추가되면 노드 재사용을 표시해요",
+      "text": "ADD_DEVICE 사건에서는 of_node_reused를 true로 만들어요. 전원 제어 플랫폼 장치와 나중의 PCI 장치가 같은 장치 트리 노드를 쓰므로 핀 설정을 두 번 연결하지 않으려는 표시예요. 여기서 새 OF 노드를 만들거나 실제 전원을 켜지는 않아요. 같은 노드를 쓰더라도 두 device 객체는 별개예요."
     },
     {
-      "title": "드라이버 바인딩과 의존 링크",
-      "text": "BOUND_DRIVER이면 device_link_add(dev,pwrctl->dev,DL_FLAG_AUTOREMOVE_CONSUMER)의 결과를 pwrctl->link에 저장하고 NULL이면 로그만 남깁니다. PCI 장치가 consumer이고 전원 제어 장치가 supplier인 인수 순서입니다. UNBOUND_DRIVER이면 link가 있을 때 device_link_remove(dev,pwrctl->dev)를 호출합니다. 이후 link=NULL 대입은 이 본문에 없습니다. 모든 알림 경로는 NOTIFY_DONE이며 링크 실패를 별도 오류 반환으로 전파하지 않습니다."
+      "title": "드라이버 연결 때 의존 관계를 만들어요",
+      "text": "BOUND_DRIVER에서는 device_link_add(dev, pwrctl->dev, DL_FLAG_AUTOREMOVE_CONSUMER)를 호출해요. 앞의 PCI 장치가 소비자이고 뒤의 전원 제어 장치가 공급자예요. 결과가 NULL이면 로그만 남겨요. UNBOUND_DRIVER에서는 link가 있으면 device_link_remove를 부르지만 뒤에 link=NULL 대입은 없어요. 어느 사건이든 반환은 NOTIFY_DONE이며 링크 실패를 음수 오류로 전달하지 않아요."
     },
     {
-      "title": "작업 큐와 rescan 대상",
-      "text": "rescan_work_func는 내장 work에서 pwrctl을 복원하고 pci_lock_rescan_remove 아래 to_pci_dev(pwrctl->dev->parent)->bus를 rescan한 뒤 unlock합니다. parent가 PCI 장치라는 전제와 해당 bus가 대상이라는 점이 중요합니다. 이 함수는 parent를 검사하거나 다른 버스를 전역 검색하지 않습니다. pci_rescan_bus 반환값도 여기서 검사하지 않습니다."
+      "title": "검색 작업은 부모 PCI 장치의 버스를 봐요",
+      "text": "work 콜백은 container_of로 pwrctl을 찾고 rescan/remove 잠금을 잡아요. 잠금은 검색과 제거가 부딪히지 않도록 차례를 지키는 장치예요. pwrctl->dev의 부모를 PCI 장치로 보고 그 버스를 다시 검색한 뒤 잠금을 풀어요. 부모 종류 검사는 없고 모든 버스를 전역 검색하지도 않아요. pci_rescan_bus의 반환값도 검사하지 않아요."
     },
     {
-      "title": "초기화와 ready 요청",
-      "text": "pci_pwrctl_init은 dev를 저장하고 INIT_WORK로 콜백을 연결합니다. 전체 구조체를 memset하거나 link/nb의 모든 필드를 초기화하는 본문은 아닙니다. set_ready는 dev가 NULL이면 -ENODEV,그 외에는 nb.notifier_call을 설정하고 PCI 버스 notifier를 등록합니다. 등록 오류는 반환하고 성공하면 schedule_work 후0입니다. schedule_work의 반환값은 검사하지 않습니다. 문서도0이 발견 완료가 아니라 비동기 rescan 시작을 뜻한다고 명시합니다."
+      "title": "초기화와 준비 완료 알림",
+      "text": "init은 dev를 저장하고 work에 실행 함수를 연결할 뿐 구조체 전체를 0으로 만들지는 않아요. set_ready는 dev가 NULL이면 -ENODEV, 나머지는 알림 콜백을 설정하고 PCI 버스 알림에 등록해요. 등록 실패는 반환하고 성공하면 work를 예약한 뒤 0을 반환해요. schedule_work 반환값은 보지 않아요. 0은 장치 발견이나 드라이버 연결 완료가 아니에요."
     },
     {
-      "title": "unset의 정리 범위",
-      "text": "unset_ready는 bus_unregister_notifier만 호출합니다. 주석은 전원 제어 장치 detach 시 소비자 PCI 장치가 이미 unbind되어야 하므로 여기서 링크를 별도로 삭제할 필요가 없다고 설명합니다. 이 본문에는 cancel_work_sync,flush_work,PCI 장치 제거,전원 끄기 호출이 없습니다. notifier 해제만 보고 이미 예약한 작업이 취소되거나 완료되었다고 단정하면 안 됩니다. 완전한 수명 안전성 판단은 호출자와 장치 코어 계약도 확인해야 합니다."
+      "title": "unset은 알림만 해제해요",
+      "text": "unset_ready 본문은 bus_unregister_notifier만 호출해요. 전원 제어 장치가 분리될 때 소비자 PCI 장치는 이미 드라이버에서 떨어져 있어야 한다는 코어 약속 때문에 링크를 여기서 따로 지우지 않는다는 주석이 있어요. work 동기 취소·완료 대기·PCI 제거·전원 끄기는 이 본문에 없어요. 전체 수명 안전성은 호출자와 장치 코어도 함께 확인해야 해요."
     },
     {
-      "title": "관리형 등록과 rollback 범위",
-      "text": "devm unset 어댑터는 void *data를 pwrctl로 받아 일반 unset을 호출합니다. devm set_ready는 먼저 일반 set_ready를 실행하고 성공하면 devm_add_action_or_reset에 어댑터를 등록합니다. 등록 실패 시 어댑터가 실행되어 notifier는 해제되지만 앞서 schedule한 작업을 이 어댑터가 명시적으로 취소하지는 않습니다. 관리형이라는 이름만으로 모든 부수 효과가 자동 롤백된다고 확대하면 안 됩니다."
+      "title": "관리형 등록이 되돌리는 범위",
+      "text": "devm 어댑터는 일반 unset을 호출해요. 관리형 set_ready는 먼저 일반 set_ready를 성공시킨 뒤 devm_add_action_or_reset으로 어댑터를 등록해요. 이 등록이 실패하면 어댑터가 실행되어 알림은 해제되지만 앞서 예약한 work까지 명시적으로 취소하지는 않아요. or_reset은 지정한 함수의 동작만 실행하며 모든 부수 효과를 저절로 되돌리는 마법이 아니에요."
     },
     {
-      "title": "전체 범위와 한계",
-      "text": "notifier,rescan,init,set/unset,관리 어댑터와 wrapper의 일곱 함수,네 공개 GPL export,작성자·설명·GPL 메타데이터를 대조했습니다. 큐 예약과 실행 완료,알림 등록과 장치 수명 의존성을 관련 CS 주제로 연결했습니다. 실제 장치 전원,rescan,동시 작업 취소나 커널 빌드는 수행하지 않았습니다."
+      "title": "검토한 일곱 함수",
+      "text": "알림, 검색 작업, init, set·unset, 관리 어댑터와 도우미, 네 GPL 내보내기와 모듈 정보를 확인했어요. 예약과 완료, 알림 수명과 장치 의존 관계를 구분했어요. 실제 전원 조작이나 검색·동시 취소, 커널 빌드를 실행하지는 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "set_ready가0이면 PCI 드라이버 바인딩도 완료되었는가?",
+      "prompt": "set_ready가 0이면 PCI 드라이버 연결도 끝났을까요?",
       "options": [
+        "아니요. 나중에 할 검색 작업을 예약한 뒤 돌아와요.",
+        "네. 모든 검색과 probe가 끝날 때까지 기다려요."
+      ],
+      "answer": 0,
+      "explanation": "예약 성공과 최종 장치 발견은 별개예요.",
+      "original_prompt": "set_ready가0이면 PCI 드라이버 바인딩도 완료되었는가?",
+      "original_options": [
         "아니다. 비동기 rescan 작업을 예약한 뒤 반환한다",
         "그렇다. 모든 장치 탐색과 probe가 끝날 때까지 기다린다"
       ],
-      "answer": 0,
-      "explanation": "schedule_work 뒤 바로 반환하며 문서도 발견 완료가 아니라고 명시합니다. 비동기 요청 성공과 최종 결과를 구분해야 합니다."
+      "original_explanation": "schedule_work 뒤 바로 반환하며 문서도 발견 완료가 아니라고 명시합니다. 비동기 요청 성공과 최종 결과를 구분해야 합니다."
     },
     {
-      "prompt": "device_link_add의 consumer와 supplier는?",
+      "prompt": "의존 링크에서 소비자와 공급자는 누구일까요?",
       "options": [
+        "전원 제어 장치가 소비자이고 PCI 장치가 공급자예요.",
+        "PCI 장치가 소비자이고 전원 제어 장치가 공급자예요."
+      ],
+      "answer": 1,
+      "explanation": "인수 순서 dev, pwrctl->dev가 이 관계를 나타내요.",
+      "original_prompt": "device_link_add의 consumer와 supplier는?",
+      "original_options": [
         "전원 제어 장치가 consumer이고 PCI 장치가 supplier다",
         "PCI 장치 dev가 consumer,전원 제어 pwrctl->dev가 supplier다"
       ],
-      "answer": 1,
-      "explanation": "호출 인수의 순서가 dev,pwrctl->dev입니다. 전원 공급 준비와 장치 사용의 의존 방향을 표현합니다."
+      "original_explanation": "호출 인수의 순서가 dev,pwrctl->dev입니다. 전원 공급 준비와 장치 사용의 의존 방향을 표현합니다."
     },
     {
-      "prompt": "unset_ready가 예약된 work를 동기적으로 취소하는가?",
+      "prompt": "unset_ready가 예약된 work를 기다리며 취소할까요?",
       "options": [
+        "아니요. 본문에는 알림 해제만 있어요.",
+        "네. cancel_work_sync를 불러요."
+      ],
+      "answer": 0,
+      "explanation": "작업 큐와 알림 등록은 수명이 다른 대상이에요.",
+      "original_prompt": "unset_ready가 예약된 work를 동기적으로 취소하는가?",
+      "original_options": [
         "아니다. 본문에는 notifier 해제만 있다",
         "그렇다. cancel_work_sync를 호출한다"
       ],
-      "answer": 0,
-      "explanation": "이 파일에서 알림 등록 수명과 작업 큐 수명은 서로 다른 경로입니다. 정리 함수 이름으로 없는 동기화를 추정하면 안 됩니다."
+      "original_explanation": "이 파일에서 알림 등록 수명과 작업 큐 수명은 서로 다른 경로입니다. 정리 함수 이름으로 없는 동기화를 추정하면 안 됩니다."
     },
     {
-      "prompt": "링크 생성 실패가 notifier의 음수 오류 반환으로 전파되는가?",
+      "prompt": "링크 생성 실패가 알림 함수의 음수 오류로 전달될까요?",
       "options": [
+        "네. 항상 -ENOMEM을 줘요.",
+        "아니요. 로그를 남기고 NOTIFY_DONE을 줘요."
+      ],
+      "answer": 1,
+      "explanation": "오류 로그가 곧 오류 반환을 뜻하지는 않아요.",
+      "original_prompt": "링크 생성 실패가 notifier의 음수 오류 반환으로 전파되는가?",
+      "original_options": [
         "그렇다. 항상 -ENOMEM을 반환한다",
         "아니다. 로그 후 NOTIFY_DONE을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "link=NULL이면 dev_err를 호출하지만 최종 반환은 변하지 않습니다. 관측 로그와 호출자 오류 계약을 구분해야 합니다."
+      "original_explanation": "link=NULL이면 dev_err를 호출하지만 최종 반환은 변하지 않습니다. 관측 로그와 호출자 오류 계약을 구분해야 합니다."
     },
     {
-      "prompt": "pci_pwrctl_init이 구조체 전체를0으로 초기화하는가?",
+      "prompt": "init이 구조체 전체를 0으로 만들까요?",
       "options": [
+        "아니요. dev 저장과 work 초기화만 해요.",
+        "네. link와 알림 필드 모두를 memset해요."
+      ],
+      "answer": 0,
+      "explanation": "저장 공간의 초기 상태는 호출자의 책임도 확인해야 해요.",
+      "original_prompt": "pci_pwrctl_init이 구조체 전체를0으로 초기화하는가?",
+      "original_options": [
         "아니다. dev 저장과 work 초기화만 수행한다",
         "그렇다. link와 모든 notifier 필드를 memset한다"
       ],
-      "answer": 0,
-      "explanation": "함수 본문에 두 작업만 있습니다. 호출자의 저장소 초기화 전제와 helper가 실제 수행하는 초기화를 별도로 확인해야 합니다."
+      "original_explanation": "함수 본문에 두 작업만 있습니다. 호출자의 저장소 초기화 전제와 helper가 실제 수행하는 초기화를 별도로 확인해야 합니다."
     },
     {
-      "prompt": "관리 작업 등록 실패 시 adapter가 모든 rescan 부수 효과까지 되돌리는가?",
+      "prompt": "관리 작업 등록 실패 때 어댑터가 모든 검색 효과를 되돌릴까요?",
       "options": [
+        "네. 찾은 장치를 제거하고 work도 취소해요.",
+        "아니요. 일반 unset으로 알림만 해제해요."
+      ],
+      "answer": 1,
+      "explanation": "되돌리는 범위는 실제 어댑터 본문에 있는 일로 판단해요.",
+      "original_prompt": "관리 작업 등록 실패 시 adapter가 모든 rescan 부수 효과까지 되돌리는가?",
+      "original_options": [
         "그렇다. 이미 발견된 장치도 제거하고 work도 취소한다",
         "아니다. adapter는 일반 unset을 호출해 notifier만 해제한다"
       ],
-      "answer": 1,
-      "explanation": "or_reset은 지정한 함수를 실행할 뿐 그 함수에 없는 정리를 만들어내지 않습니다. rollback의 범위는 콜백 본문으로 판정해야 합니다."
+      "original_explanation": "or_reset은 지정한 함수를 실행할 뿐 그 함수에 없는 정리를 만들어내지 않습니다. rollback의 범위는 콜백 본문으로 판정해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "set_ready에서 예약한 work가 언제 실행되는지 화살표를 그리고, unset_ready 본문에 있는 정리와 없는 정리를 나눠 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (C) 2024 Linaro Ltd.\n */\n\n#include <linux/device.h>\n#include <linux/export.h>\n#include <linux/kernel.h>\n#include <linux/pci.h>\n#include <linux/pci-pwrctl.h>\n#include <linux/property.h>\n#include <linux/slab.h>\n\nstatic int pci_pwrctl_notify(struct notifier_block *nb, unsigned long action,\n\t\t\t     void *data)\n{\n\tstruct pci_pwrctl *pwrctl = container_of(nb, struct pci_pwrctl, nb);\n\tstruct device *dev = data;\n\n\tif (dev_fwnode(dev) != dev_fwnode(pwrctl->dev))\n\t\treturn NOTIFY_DONE;\n\n\tswitch (action) {\n\tcase BUS_NOTIFY_ADD_DEVICE:\n\t\t/*\n\t\t * We will have two struct device objects bound to two different\n\t\t * drivers on different buses but consuming the same DT node. We\n\t\t * must not bind the pins twice in this case but only once for\n\t\t * the first device to be added.\n\t\t *\n\t\t * If we got here then the PCI device is the second after the\n\t\t * power control platform device. Mark its OF node as reused.\n\t\t */\n\t\tdev->of_node_reused = true;\n\t\tbreak;\n\tcase BUS_NOTIFY_BOUND_DRIVER:\n\t\tpwrctl->link = device_link_add(dev, pwrctl->dev,\n\t\t\t\t\t       DL_FLAG_AUTOREMOVE_CONSUMER);\n\t\tif (!pwrctl->link)\n\t\t\tdev_err(pwrctl->dev, \"Failed to add device link\\n\");\n\t\tbreak;\n\tcase BUS_NOTIFY_UNBOUND_DRIVER:\n\t\tif (pwrctl->link)\n\t\t\tdevice_link_remove(dev, pwrctl->dev);\n\t\tbreak;\n\t}\n\n\treturn NOTIFY_DONE;\n}\n\nstatic void rescan_work_func(struct work_struct *work)\n{\n\tstruct pci_pwrctl *pwrctl = container_of(work, struct pci_pwrctl, work);\n\n\tpci_lock_rescan_remove();\n\tpci_rescan_bus(to_pci_dev(pwrctl->dev->parent)->bus);\n\tpci_unlock_rescan_remove();\n}\n\n/**\n * pci_pwrctl_init() - Initialize the PCI power control context struct\n *\n * @pwrctl: PCI power control data\n * @dev: Parent device\n */\nvoid pci_pwrctl_init(struct pci_pwrctl *pwrctl, struct device *dev)\n{\n\tpwrctl->dev = dev;\n\tINIT_WORK(&pwrctl->work, rescan_work_func);\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_init);\n\n/**\n * pci_pwrctl_device_set_ready() - Notify the pwrctl subsystem that the PCI\n * device is powered-up and ready to be detected.\n *\n * @pwrctl: PCI power control data.\n *\n * Returns:\n * 0 on success, negative error number on error.\n *\n * Note:\n * This function returning 0 doesn't mean the device was detected. It means,\n * that the bus rescan was successfully started. The device will get bound to\n * its PCI driver asynchronously.\n */\nint pci_pwrctl_device_set_ready(struct pci_pwrctl *pwrctl)\n{\n\tint ret;\n\n\tif (!pwrctl->dev)\n\t\treturn -ENODEV;\n\n\tpwrctl->nb.notifier_call = pci_pwrctl_notify;\n\tret = bus_register_notifier(&pci_bus_type, &pwrctl->nb);\n\tif (ret)\n\t\treturn ret;\n\n\tschedule_work(&pwrctl->work);\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_device_set_ready);\n\n/**\n * pci_pwrctl_device_unset_ready() - Notify the pwrctl subsystem that the PCI\n * device is about to be powered-down.\n *\n * @pwrctl: PCI power control data.\n */\nvoid pci_pwrctl_device_unset_ready(struct pci_pwrctl *pwrctl)\n{\n\t/*\n\t * We don't have to delete the link here. Typically, this function\n\t * is only called when the power control device is being detached. If\n\t * it is being detached then the child PCI device must have already\n\t * been unbound too or the device core wouldn't let us unbind.\n\t */\n\tbus_unregister_notifier(&pci_bus_type, &pwrctl->nb);\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_device_unset_ready);\n\nstatic void devm_pci_pwrctl_device_unset_ready(void *data)\n{\n\tstruct pci_pwrctl *pwrctl = data;\n\n\tpci_pwrctl_device_unset_ready(pwrctl);\n}\n\n/**\n * devm_pci_pwrctl_device_set_ready - Managed variant of\n * pci_pwrctl_device_set_ready().\n *\n * @dev: Device managing this pwrctl provider.\n * @pwrctl: PCI power control data.\n *\n * Returns:\n * 0 on success, negative error number on error.\n */\nint devm_pci_pwrctl_device_set_ready(struct device *dev,\n\t\t\t\t     struct pci_pwrctl *pwrctl)\n{\n\tint ret;\n\n\tret = pci_pwrctl_device_set_ready(pwrctl);\n\tif (ret)\n\t\treturn ret;\n\n\treturn devm_add_action_or_reset(dev,\n\t\t\t\t\tdevm_pci_pwrctl_device_unset_ready,\n\t\t\t\t\tpwrctl);\n}\nEXPORT_SYMBOL_GPL(devm_pci_pwrctl_device_set_ready);\n\nMODULE_AUTHOR(\"Bartosz Golaszewski <bartosz.golaszewski@linaro.org>\");\nMODULE_DESCRIPTION(\"PCI Device Power Control core driver\");\nMODULE_LICENSE(\"GPL\");\n",
   "source_review": {
@@ -134,5 +166,171 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/pwrctl/core.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-979eaf6deebff335",
+    "path": "drivers/pci/pwrctl/core.c",
+    "title": "PCI 전원 제어 코어: notifier·비동기 rescan·device link",
+    "area": "PCI · 전원 관리 · notifier · workqueue · 비동기 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "알림 콜백,작업 큐,ready 수명과 관리형 wrapper 전체를 분석합니다.",
+    "guide": [
+      "비동기 작업의 요청 성공은 장치 발견·바인딩 완료와 다르며 알림 해제와 작업 취소도 별개입니다.",
+      "container_of,이벤트 분기,생산자·소비자 의존 관계,작업 큐와 정리 범위를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "알림 대상 판정",
+        "text": "GPL-2.0-only 파일은 device,export,kernel,pci,pci-pwrctl,property,slab을 포함합니다. pci_pwrctl_notify는 내장 nb에서 container_of로 pwrctl을 구하고 data를 device로 봅니다. dev_fwnode(dev)와 dev_fwnode(pwrctl->dev)가 다르면 NOTIFY_DONE입니다. 문자열 이름 비교가 아니라 펌웨어 노드 포인터 동일성 비교이며 둘 다 NULL인 경우를 별도로 거부하는 조건은 없습니다."
+      },
+      {
+        "title": "장치 추가와 노드 재사용",
+        "text": "BUS_NOTIFY_ADD_DEVICE이면 dev->of_node_reused=true입니다. 주석은 같은 DT 노드를 사용하는 전원 제어 platform 장치와 나중에 생긴 PCI 장치가 핀 설정을 두 번 바인딩하지 않도록 한다고 설명합니다. 이 경로에서 OF 노드 자체를 새로 만들거나 전원을 직접 켜지는 않습니다. 같은 노드의 두 device 객체를 구분해 보는 사례입니다."
+      },
+      {
+        "title": "드라이버 바인딩과 의존 링크",
+        "text": "BOUND_DRIVER이면 device_link_add(dev,pwrctl->dev,DL_FLAG_AUTOREMOVE_CONSUMER)의 결과를 pwrctl->link에 저장하고 NULL이면 로그만 남깁니다. PCI 장치가 consumer이고 전원 제어 장치가 supplier인 인수 순서입니다. UNBOUND_DRIVER이면 link가 있을 때 device_link_remove(dev,pwrctl->dev)를 호출합니다. 이후 link=NULL 대입은 이 본문에 없습니다. 모든 알림 경로는 NOTIFY_DONE이며 링크 실패를 별도 오류 반환으로 전파하지 않습니다."
+      },
+      {
+        "title": "작업 큐와 rescan 대상",
+        "text": "rescan_work_func는 내장 work에서 pwrctl을 복원하고 pci_lock_rescan_remove 아래 to_pci_dev(pwrctl->dev->parent)->bus를 rescan한 뒤 unlock합니다. parent가 PCI 장치라는 전제와 해당 bus가 대상이라는 점이 중요합니다. 이 함수는 parent를 검사하거나 다른 버스를 전역 검색하지 않습니다. pci_rescan_bus 반환값도 여기서 검사하지 않습니다."
+      },
+      {
+        "title": "초기화와 ready 요청",
+        "text": "pci_pwrctl_init은 dev를 저장하고 INIT_WORK로 콜백을 연결합니다. 전체 구조체를 memset하거나 link/nb의 모든 필드를 초기화하는 본문은 아닙니다. set_ready는 dev가 NULL이면 -ENODEV,그 외에는 nb.notifier_call을 설정하고 PCI 버스 notifier를 등록합니다. 등록 오류는 반환하고 성공하면 schedule_work 후0입니다. schedule_work의 반환값은 검사하지 않습니다. 문서도0이 발견 완료가 아니라 비동기 rescan 시작을 뜻한다고 명시합니다."
+      },
+      {
+        "title": "unset의 정리 범위",
+        "text": "unset_ready는 bus_unregister_notifier만 호출합니다. 주석은 전원 제어 장치 detach 시 소비자 PCI 장치가 이미 unbind되어야 하므로 여기서 링크를 별도로 삭제할 필요가 없다고 설명합니다. 이 본문에는 cancel_work_sync,flush_work,PCI 장치 제거,전원 끄기 호출이 없습니다. notifier 해제만 보고 이미 예약한 작업이 취소되거나 완료되었다고 단정하면 안 됩니다. 완전한 수명 안전성 판단은 호출자와 장치 코어 계약도 확인해야 합니다."
+      },
+      {
+        "title": "관리형 등록과 rollback 범위",
+        "text": "devm unset 어댑터는 void *data를 pwrctl로 받아 일반 unset을 호출합니다. devm set_ready는 먼저 일반 set_ready를 실행하고 성공하면 devm_add_action_or_reset에 어댑터를 등록합니다. 등록 실패 시 어댑터가 실행되어 notifier는 해제되지만 앞서 schedule한 작업을 이 어댑터가 명시적으로 취소하지는 않습니다. 관리형이라는 이름만으로 모든 부수 효과가 자동 롤백된다고 확대하면 안 됩니다."
+      },
+      {
+        "title": "전체 범위와 한계",
+        "text": "notifier,rescan,init,set/unset,관리 어댑터와 wrapper의 일곱 함수,네 공개 GPL export,작성자·설명·GPL 메타데이터를 대조했습니다. 큐 예약과 실행 완료,알림 등록과 장치 수명 의존성을 관련 CS 주제로 연결했습니다. 실제 장치 전원,rescan,동시 작업 취소나 커널 빌드는 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "set_ready가0이면 PCI 드라이버 바인딩도 완료되었는가?",
+        "options": [
+          "아니다. 비동기 rescan 작업을 예약한 뒤 반환한다",
+          "그렇다. 모든 장치 탐색과 probe가 끝날 때까지 기다린다"
+        ],
+        "answer": 0,
+        "explanation": "schedule_work 뒤 바로 반환하며 문서도 발견 완료가 아니라고 명시합니다. 비동기 요청 성공과 최종 결과를 구분해야 합니다."
+      },
+      {
+        "prompt": "device_link_add의 consumer와 supplier는?",
+        "options": [
+          "전원 제어 장치가 consumer이고 PCI 장치가 supplier다",
+          "PCI 장치 dev가 consumer,전원 제어 pwrctl->dev가 supplier다"
+        ],
+        "answer": 1,
+        "explanation": "호출 인수의 순서가 dev,pwrctl->dev입니다. 전원 공급 준비와 장치 사용의 의존 방향을 표현합니다."
+      },
+      {
+        "prompt": "unset_ready가 예약된 work를 동기적으로 취소하는가?",
+        "options": [
+          "아니다. 본문에는 notifier 해제만 있다",
+          "그렇다. cancel_work_sync를 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "이 파일에서 알림 등록 수명과 작업 큐 수명은 서로 다른 경로입니다. 정리 함수 이름으로 없는 동기화를 추정하면 안 됩니다."
+      },
+      {
+        "prompt": "링크 생성 실패가 notifier의 음수 오류 반환으로 전파되는가?",
+        "options": [
+          "그렇다. 항상 -ENOMEM을 반환한다",
+          "아니다. 로그 후 NOTIFY_DONE을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "link=NULL이면 dev_err를 호출하지만 최종 반환은 변하지 않습니다. 관측 로그와 호출자 오류 계약을 구분해야 합니다."
+      },
+      {
+        "prompt": "pci_pwrctl_init이 구조체 전체를0으로 초기화하는가?",
+        "options": [
+          "아니다. dev 저장과 work 초기화만 수행한다",
+          "그렇다. link와 모든 notifier 필드를 memset한다"
+        ],
+        "answer": 0,
+        "explanation": "함수 본문에 두 작업만 있습니다. 호출자의 저장소 초기화 전제와 helper가 실제 수행하는 초기화를 별도로 확인해야 합니다."
+      },
+      {
+        "prompt": "관리 작업 등록 실패 시 adapter가 모든 rescan 부수 효과까지 되돌리는가?",
+        "options": [
+          "그렇다. 이미 발견된 장치도 제거하고 work도 취소한다",
+          "아니다. adapter는 일반 unset을 호출해 notifier만 해제한다"
+        ],
+        "answer": 1,
+        "explanation": "or_reset은 지정한 함수를 실행할 뿐 그 함수에 없는 정리를 만들어내지 않습니다. rollback의 범위는 콜백 본문으로 판정해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (C) 2024 Linaro Ltd.\n */\n\n#include <linux/device.h>\n#include <linux/export.h>\n#include <linux/kernel.h>\n#include <linux/pci.h>\n#include <linux/pci-pwrctl.h>\n#include <linux/property.h>\n#include <linux/slab.h>\n\nstatic int pci_pwrctl_notify(struct notifier_block *nb, unsigned long action,\n\t\t\t     void *data)\n{\n\tstruct pci_pwrctl *pwrctl = container_of(nb, struct pci_pwrctl, nb);\n\tstruct device *dev = data;\n\n\tif (dev_fwnode(dev) != dev_fwnode(pwrctl->dev))\n\t\treturn NOTIFY_DONE;\n\n\tswitch (action) {\n\tcase BUS_NOTIFY_ADD_DEVICE:\n\t\t/*\n\t\t * We will have two struct device objects bound to two different\n\t\t * drivers on different buses but consuming the same DT node. We\n\t\t * must not bind the pins twice in this case but only once for\n\t\t * the first device to be added.\n\t\t *\n\t\t * If we got here then the PCI device is the second after the\n\t\t * power control platform device. Mark its OF node as reused.\n\t\t */\n\t\tdev->of_node_reused = true;\n\t\tbreak;\n\tcase BUS_NOTIFY_BOUND_DRIVER:\n\t\tpwrctl->link = device_link_add(dev, pwrctl->dev,\n\t\t\t\t\t       DL_FLAG_AUTOREMOVE_CONSUMER);\n\t\tif (!pwrctl->link)\n\t\t\tdev_err(pwrctl->dev, \"Failed to add device link\\n\");\n\t\tbreak;\n\tcase BUS_NOTIFY_UNBOUND_DRIVER:\n\t\tif (pwrctl->link)\n\t\t\tdevice_link_remove(dev, pwrctl->dev);\n\t\tbreak;\n\t}\n\n\treturn NOTIFY_DONE;\n}\n\nstatic void rescan_work_func(struct work_struct *work)\n{\n\tstruct pci_pwrctl *pwrctl = container_of(work, struct pci_pwrctl, work);\n\n\tpci_lock_rescan_remove();\n\tpci_rescan_bus(to_pci_dev(pwrctl->dev->parent)->bus);\n\tpci_unlock_rescan_remove();\n}\n\n/**\n * pci_pwrctl_init() - Initialize the PCI power control context struct\n *\n * @pwrctl: PCI power control data\n * @dev: Parent device\n */\nvoid pci_pwrctl_init(struct pci_pwrctl *pwrctl, struct device *dev)\n{\n\tpwrctl->dev = dev;\n\tINIT_WORK(&pwrctl->work, rescan_work_func);\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_init);\n\n/**\n * pci_pwrctl_device_set_ready() - Notify the pwrctl subsystem that the PCI\n * device is powered-up and ready to be detected.\n *\n * @pwrctl: PCI power control data.\n *\n * Returns:\n * 0 on success, negative error number on error.\n *\n * Note:\n * This function returning 0 doesn't mean the device was detected. It means,\n * that the bus rescan was successfully started. The device will get bound to\n * its PCI driver asynchronously.\n */\nint pci_pwrctl_device_set_ready(struct pci_pwrctl *pwrctl)\n{\n\tint ret;\n\n\tif (!pwrctl->dev)\n\t\treturn -ENODEV;\n\n\tpwrctl->nb.notifier_call = pci_pwrctl_notify;\n\tret = bus_register_notifier(&pci_bus_type, &pwrctl->nb);\n\tif (ret)\n\t\treturn ret;\n\n\tschedule_work(&pwrctl->work);\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_device_set_ready);\n\n/**\n * pci_pwrctl_device_unset_ready() - Notify the pwrctl subsystem that the PCI\n * device is about to be powered-down.\n *\n * @pwrctl: PCI power control data.\n */\nvoid pci_pwrctl_device_unset_ready(struct pci_pwrctl *pwrctl)\n{\n\t/*\n\t * We don't have to delete the link here. Typically, this function\n\t * is only called when the power control device is being detached. If\n\t * it is being detached then the child PCI device must have already\n\t * been unbound too or the device core wouldn't let us unbind.\n\t */\n\tbus_unregister_notifier(&pci_bus_type, &pwrctl->nb);\n}\nEXPORT_SYMBOL_GPL(pci_pwrctl_device_unset_ready);\n\nstatic void devm_pci_pwrctl_device_unset_ready(void *data)\n{\n\tstruct pci_pwrctl *pwrctl = data;\n\n\tpci_pwrctl_device_unset_ready(pwrctl);\n}\n\n/**\n * devm_pci_pwrctl_device_set_ready - Managed variant of\n * pci_pwrctl_device_set_ready().\n *\n * @dev: Device managing this pwrctl provider.\n * @pwrctl: PCI power control data.\n *\n * Returns:\n * 0 on success, negative error number on error.\n */\nint devm_pci_pwrctl_device_set_ready(struct device *dev,\n\t\t\t\t     struct pci_pwrctl *pwrctl)\n{\n\tint ret;\n\n\tret = pci_pwrctl_device_set_ready(pwrctl);\n\tif (ret)\n\t\treturn ret;\n\n\treturn devm_add_action_or_reset(dev,\n\t\t\t\t\tdevm_pci_pwrctl_device_unset_ready,\n\t\t\t\t\tpwrctl);\n}\nEXPORT_SYMBOL_GPL(devm_pci_pwrctl_device_set_ready);\n\nMODULE_AUTHOR(\"Bartosz Golaszewski <bartosz.golaszewski@linaro.org>\");\nMODULE_DESCRIPTION(\"PCI Device Power Control core driver\");\nMODULE_LICENSE(\"GPL\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "498f3fedc4c6c06dab514e23b8c70c07d3b375b41d195752109c77eaf961fd09",
+      "scope": "whole-file",
+      "line_count": 157,
+      "authoring_source": "course/file_units/pci_power_control_core.py",
+      "sections": [
+        "알림 대상 판정",
+        "장치 추가와 노드 재사용",
+        "드라이버 바인딩과 의존 링크",
+        "작업 큐와 rescan 대상",
+        "초기화와 ready 요청",
+        "unset의 정리 범위",
+        "관리형 등록과 rollback 범위",
+        "전체 범위와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/pwrctl/core.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "전원을 준비한 뒤 “이제 장치를 찾아도 돼요”라고 알리면 검색 작업을 나중에 실행할 수 있어요. 접수했다는 답과 실제로 찾았다는 답은 달라요.",
+    "meaning": "PCI 전원 제어 코어는 알림과 작업 큐를 연결해요. 예약된 검색, 드라이버 연결, 알림 해제를 서로 다른 단계로 읽어야 해요.",
+    "exercise": "set_ready에서 예약한 work가 언제 실행되는지 화살표를 그리고, unset_ready 본문에 있는 정리와 없는 정리를 나눠 적어 보세요."
+  },
+  "goal": "PCI 전원 제어 코어는 알림과 작업 큐를 연결해요. 예약된 검색, 드라이버 연결, 알림 해제를 서로 다른 단계로 읽어야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "set_ready에서 예약한 work가 언제 실행되는지 화살표를 그리고, unset_ready 본문에 있는 정리와 없는 정리를 나눠 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "8ef9707735cfa24b114efbee9cae2c59f8f62f79e816f6a74a3c9f777bff09aa",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

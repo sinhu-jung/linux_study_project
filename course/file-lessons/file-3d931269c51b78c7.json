@@ -5,138 +5,170 @@
   "area": "계층 자료구조 · timerqueue · 비트 마스크 · 원자적 CAS · NUMA · hotplug · 엔디언",
   "track": "files",
   "kind": "kernel",
-  "intro": "이벤트·그룹·CPU 구조체와 상태 union, 모든 조건부 선언을 필드별로 분석합니다.",
+  "intro": "타이머 이동 구조체의 부모·이벤트·CPU 상태와 원자적 상태 묶음의 역할을 구분합니다.",
   "guide": [
-    "계층별 다음 이벤트와 활성 자식 상태를 요약하면 idle CPU의 timer 처리를 다른 CPU에 맡기는 결정을 구성할 수 있습니다.",
-    "timer migration 코드에서 hotplug 중 부모 연결, NUMA 배치, 원격 처리와 상태 전파 경쟁을 이해합니다."
+    "계층은 CPU를 작은 그룹으로, 다시 더 큰 그룹으로 묶은 구조입니다. 다음 만료와 활동 상태를 요약하면 쉬는 CPU의 타이머를 다른 CPU가 맡는 결정을 할 수 있습니다.",
+    "hotplug는 CPU가 실행 중에 들어오거나 나가는 과정이고 NUMA는 CPU마다 가까운 메모리가 다른 구조입니다. 부모 연결과 지역 배치를 만드는 시점의 규칙을 읽어야 합니다.",
+    "원자적 연산은 값을 중간에 쪼개 보지 않고 처리하는 연산입니다. 상태 한 묶음이 원자적이라고 큐·부모·모든 필드까지 동시에 바뀌는 것은 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일과 포함 전제",
-      "text": "GPL-2.0-only와 guard 뒤 그룹 용량 상수, tmigr_event/group/cpu 세 구조체, tmigr_state union, 설정별 함수 선언·stub이 있습니다. 자체 include가 없으므로 timerqueue_node, raw_spinlock_t, atomic_t, list_head와 정수 타입 등을 포함 문맥이 준비해야 합니다. 실제 migration 알고리즘은 timer_migration.c에 있습니다."
+      "text": "GPL-2.0-only와 guard 뒤 그룹 용량, 이벤트·그룹·CPU 구조체, 상태 union, 조건별 선언·stub이 있습니다. include가 없어 timerqueue_node, raw_spinlock_t, atomic_t, list_head와 정수 타입은 앞 문맥이 준비합니다. 실제 이동 알고리즘은 timer_migration.c에 있습니다."
     },
     {
       "title": "그룹 용량과 mask",
-      "text": "TMIGR_CHILDREN_PER_GROUP는 8이며 주석은 2의 거듭제곱이어야 한다고 명시합니다. 자식의 활동과 migrator를 u8 mask로 표현하는 구조와 연결됩니다. 이 헤더가 8개 초과 삽입을 자동 거부하는 코드까지 제공하는 것은 아니며 num_children과 setup 구현이 규칙을 지켜야 합니다."
+      "text": "TMIGR_CHILDREN_PER_GROUP는 8이며 주석은 2의 거듭제곱이어야 한다고 합니다. 자식 활동과 담당자를 u8, 즉 8비트 마스크로 나타내는 구조와 연결됩니다. 이 선언 자체가 아홉 번째 자식을 자동 거부하지는 않으므로 num_children과 설치 코드가 용량 규칙을 지켜야 합니다."
     },
     {
       "title": "이벤트 구조체 전체",
-      "text": "tmigr_event는 timerqueue_node nextevt, unsigned int cpu, bool ignore를 가집니다. node는 부모 큐에 넣는 이벤트, cpu는 소속 CPU입니다. ignore는 CPU나 그룹이 active이면 무시할 수 있음을 나타내는 힌트입니다. ignore=true 자체가 큐에서 물리적으로 삭제되었다는 뜻은 아닙니다."
+      "text": "tmigr_event는 부모 큐에 넣을 연결점 timerqueue_node nextevt, 소속 CPU 번호인 unsigned int cpu, bool ignore입니다. ignore는 CPU나 그룹이 활동 중일 때 이벤트를 무시할 수 있다는 힌트입니다. true를 썼다고 큐에서 노드가 실제 삭제되었다는 뜻은 아닙니다."
     },
     {
       "title": "그룹 잠금과 부모 연결",
-      "text": "tmigr_group의 lock은 이벤트 정보와 setup 중 계층 정보를 보호하는 raw spinlock입니다. parent는 CPU가 처음 online되어 새 계층이 필요할 때 연결될 수 있으며 한 번 설정되면 제거하거나 다른 부모로 바꾸지 않는다는 계약입니다. NULL에서 부모가 생길 가능성과 이미 설정된 포인터의 불변성을 구분합니다."
+      "text": "그룹 lock은 이벤트 정보와 계층 설치 정보를 보호하는 raw spinlock입니다. parent는 CPU가 처음 online될 때 새 계층이 필요하면 연결될 수 있습니다. 한 번 연결한 뒤에는 제거하거나 다른 부모로 바꾸지 않는다는 약속입니다. 처음 NULL에서 생길 수 있다는 점과 연결 뒤 고정이라는 점을 구분합니다."
     },
     {
       "title": "부모의 잠금 없는 관측",
-      "text": "주석은 전파를 중단할지 결정하는 lockless parent 관측의 최악 결과를 불필요하거나 이른 CPU 깨우기로 설명합니다. 그러나 같은 activation/deactivation/remote expiry 동작 안에서 lock 없이 parent를 여러 번 읽지 말라고 합니다. 한 동작 중 NULL과 새 포인터를 섞어 관측할 수 있기 때문입니다. 포인터가 언젠가 불변이 된다는 이유만으로 모든 반복 읽기가 안전하지는 않습니다."
+      "text": "주석은 전파를 멈출지 판단하려고 parent를 잠금 없이 볼 때 최악에는 불필요하거나 이른 CPU 깨우기가 생길 수 있다고 설명합니다. 그러나 같은 활성화·비활성화·원격 만료 동작 안에서 여러 번 읽지 말라고 합니다. 한 번은 NULL, 뒤에는 새 부모를 볼 수 있기 때문입니다. 나중에 고정되는 포인터라고 처음 연결 중의 모든 반복 읽기까지 같지는 않습니다."
     },
     {
       "title": "그룹 이벤트와 최단 만료",
-      "text": "groupevt는 그룹이 비활성일 때 부모 timerqueue에 들어가는 다음 이벤트이며 active이면 ignore가 켜집니다. events는 자식 이벤트의 timerqueue_head입니다. next_expiry는 monotonic 기준 u64 만료 시각으로 원격 처리가 필요한지 lockless로 확인하는 데 사용되며 주석은 그 판단에 신뢰할 수 있는 값이라고 설명합니다. 이것이 그룹 전체 필드의 원자적 스냅샷을 보장한다는 뜻은 아닙니다."
+      "text": "groupevt는 비활성 그룹의 다음 알림으로 부모 timerqueue에 들어가며 그룹이 활동하면 ignore가 켜집니다. events는 자식 이벤트 큐입니다. next_expiry는 monotonic 기준 u64 만료 시각으로 잠금 없이 원격 처리가 필요한지 판단하는 데 쓰며 주석은 그 판단에 믿을 수 있다고 합니다. 이 말이 그룹 전체 필드의 원자적 스냅샷을 보장하는 것은 아닙니다."
     },
     {
       "title": "그룹의 setup 필드",
-      "text": "level은 계층 레벨, numa_node는 낮은 계층을 CPU와 NUMA local하게 배치하기 위한 정보입니다. 주석상 level<tmigr_crossnode_level이면 NUMA 노드, 상위에서는 NUMA_NO_NODE입니다. num_children은 용량 관리용 unsigned int입니다. groupmask는 부모 안에서 자신의 비트인 u8로 setup 뒤 바뀌지 않아 lockless로 읽을 수 있습니다. list는 레벨별 tmigr_level_list에 연결하는 setup용 list_head입니다."
+      "text": "level은 계층 높이, numa_node는 CPU와 낮은 그룹을 가까운 메모리 쪽에 놓기 위한 설치 정보입니다. level<tmigr_crossnode_level이면 NUMA 노드이고 상위는 NUMA_NO_NODE입니다. num_children은 자식 수, groupmask는 부모 안에서 자신을 나타내는 u8 비트입니다. groupmask는 설치 뒤 바뀌지 않아 잠금 없이 읽습니다. list는 설치 때 레벨별 tmigr_level_list에 연결할 list_head입니다."
     },
     {
       "title": "그룹 상태 저장",
-      "text": "migr_state는 atomic_t이며 뒤의 tmigr_state union은 원자적으로 읽고 cmpxchg할 결합값과 개별 필드 해석을 연결합니다. 실제 저장 객체가 union 변수 하나만인 것처럼 읽으면 안 됩니다. atomic_t 한 필드가 있다고 parent와 event queue까지 같은 원자적 연산으로 바뀌는 것도 아닙니다."
+      "text": "migr_state는 atomic_t 저장값입니다. 뒤의 tmigr_state union은 이 결합값을 원자적으로 읽고 cmpxchg하는 표현과 각각의 필드로 읽는 표현을 연결합니다. cmpxchg는 예상 값과 같을 때 새 값으로 바꾸는 비교·교환입니다. 실제 저장이 union 변수 하나뿐인 것도, parent와 큐까지 같은 연산으로 바뀌는 것도 아닙니다."
     },
     {
       "title": "CPU 구조체의 상태",
-      "text": "tmigr_cpu의 lock은 해당 CPU의 migration 정보를 보호합니다. online은 단순 scheduler 활동 여부와 다르며 top-level migrator가 offline될 때 다른 online CPU로 역할을 넘기는 판단에 필요합니다. 주석은 CPU가 migration hotplug 단계에 도달하기 전에 idle할 수 있고 그때는 자신의 global timer를 처리하며 migrator로 행동하지 않아야 한다고 설명합니다. idle은 계층에서 idle인 상태, remote는 자신의 timer가 원격 만료 처리되는 상태를 나타냅니다."
+      "text": "CPU 구조체 lock은 해당 CPU의 이동 정보를 보호합니다. online은 단순히 스케줄러에서 바쁜지와 다른 상태입니다. 최상위 담당 CPU가 나가면 대기 타이머를 다른 online CPU가 맡도록 알리는 데 필요합니다. CPU가 이동 계층의 hotplug 단계 전에 idle일 수도 있는데 이때 자기 global 타이머는 직접 처리하고 다른 타이머 담당자가 되지 않아야 합니다. idle은 계층에서 쉬는 상태, remote는 자기 타이머가 다른 CPU에서 만료 처리 중임을 나타냅니다."
     },
     {
       "title": "CPU의 연결과 다음 깨우기",
-      "text": "tmgroup은 부모 그룹 포인터, groupmask는 부모 안의 u8 비트, cpuevt는 부모 큐에 들어갈 수 있는 CPU 이벤트입니다. u64 wakeup은 계층 전체가 idle이고 원격 만료 처리가 끝난 경우의 첫 timer를 저장하여 idle 경로의 timer 코드에 반환할 때 사용합니다. 일반적인 모든 CPU 깨우기 요청을 저장하는 전역 큐라고 설명하지 않습니다."
+      "text": "tmgroup은 부모 그룹, groupmask는 부모 안의 자기 u8 비트, cpuevt는 부모 큐에 넣을 수 있는 CPU 이벤트입니다. u64 wakeup은 계층 전체가 idle이고 원격 처리를 마쳤을 때 첫 타이머를 기억해 idle 경로의 타이머 코드에 돌려줍니다. 모든 CPU 깨우기 요청을 담는 전역 큐는 아닙니다."
     },
     {
       "title": "State union 전체",
-      "text": "union tmigr_state의 결합 표현은 u32 state입니다. 익명 packed 구조체는 u8 active, u8 migrator, u16 seq입니다. active는 활성 자식 비트들을, migrator는 담당 자식의 mask를 가집니다. migrator를 곧바로 CPU 번호나 자식 배열 인덱스로 읽으면 안 됩니다."
+      "text": "union tmigr_state는 같은 저장 공간을 u32 state 하나 또는 packed 구조의 u8 active, u8 migrator, u16 seq로 읽게 합니다. active는 활동 중인 여러 자식의 비트, migrator는 담당 자식의 마스크입니다. 예를 들어 담당 자식 비트가 4라고 CPU 번호 4라는 뜻은 아닙니다. 상위에서는 자식이 또 그룹일 수 있습니다."
     },
     {
       "title": "엔디언과 sequence 목적",
-      "text": "주석은 결합 state를 atomic read/cmpxchg에만 쓰고 정보 갱신은 개별 구조체 필드로 하여 엔디언에 독립적으로 유지하라고 합니다. packed는 불필요한 필드 간 배치를 피하지만 모든 플랫폼에서 active가 숫자 state의 같은 하위 비트에 있다는 선언은 아닙니다. seq는 상태 갱신마다 증가시켜 자식 그룹에서 온 갱신이 다른 순서로 전파될 때의 경쟁을 막는 데 사용됩니다. 상세 경쟁 시나리오는 구현 파일의 별도 설명 대상이며 16비트 sequence가 무한 증가하는 카운터라는 뜻은 아닙니다."
+      "text": "주석은 결합 state를 원자 읽기·cmpxchg에만 쓰고 내용을 바꿀 때는 개별 필드를 쓰라고 합니다. 엔디언은 바이트를 놓는 순서이며 packed가 그 순서를 통일하지는 않습니다. active가 숫자 state의 항상 같은 아래 8비트라고 가정하면 안 됩니다. seq는 갱신마다 늘려 자식의 변경이 순서가 바뀌어 올라오는 경쟁을 구분합니다. 자세한 예는 구현 본문을 보며 16비트 seq가 무한히 증가한다는 뜻은 아닙니다."
     },
     {
       "title": "활성 구성의 여섯 함수",
-      "text": "CONFIG_SMP와 CONFIG_NO_HZ_COMMON이 모두 정의되면 tmigr_handle_remote(void), bool tmigr_requires_handle_remote(void), tmigr_cpu_activate(void), u64 tmigr_cpu_deactivate(u64 nextevt), u64 tmigr_cpu_new_timer(u64 nextevt), u64 tmigr_quick_check(u64 nextevt)를 선언합니다. 처리·질의·활성화·다음 이벤트 전달의 반환형을 구분하며 구체적인 u64 sentinel 정책은 이 선언만으로 확정하지 않습니다."
+      "text": "CONFIG_SMP와 CONFIG_NO_HZ_COMMON이 모두 켜지면 여섯 함수를 선언합니다. tmigr_handle_remote는 void 처리, tmigr_requires_handle_remote는 bool 질의, tmigr_cpu_activate는 void 활성화입니다. tmigr_cpu_deactivate·tmigr_cpu_new_timer·tmigr_quick_check는 u64 nextevt를 받고 u64를 줍니다. 반환형을 구분하며 특정 숫자의 특별한 의미인 sentinel 정책까지 이 선언만으로 정하지 않습니다."
     },
     {
       "title": "비활성 구성의 일부 stub",
-      "text": "else에는 handle_remote와 cpu_activate의 빈 void inline, requires_handle_remote의 false 반환만 있습니다. deactivate/new_timer/quick_check의 비활성 stub은 이 헤더에 없습니다. 따라서 활성 분기의 여섯 함수를 어떤 구성에서도 전부 호출할 수 있게 만든 헤더라고 설명하면 안 됩니다."
+      "text": "비활성 else에는 tmigr_handle_remote와 tmigr_cpu_activate의 빈 void inline, tmigr_requires_handle_remote의 false만 있습니다. deactivate·new_timer·quick_check의 stub은 없습니다. 따라서 설정과 관계없이 여섯 함수를 모두 호출할 수 있게 해 준 헤더는 아닙니다."
     },
     {
       "title": "CS와 검증 범위",
-      "text": "전체 타입·필드·주석 계약·설정 분기를 설명했습니다. 계층 요약, intrusive timerqueue, 불변 setup 정보, hotplug 수명, CAS용 상태 묶음, 엔디언과 전파 순서의 구분을 학습합니다. timer_migration.c 전체 구현이나 실제 CPU hotplug·원격 만료 동작을 검증한 결과는 아닙니다."
+      "text": "타입·필드·주석의 사용 약속과 설정 조건 전체를 읽습니다. 객체 안에 큐 연결점을 넣는 방식, 고정된 설치 정보, CPU 출입 수명, 비교·교환용 상태 묶음, 바이트 순서와 변경 전파 순서가 핵심입니다. timer_migration.c 전체나 실제 CPU 출입·원격 만료 실험을 검증한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "그룹의 migrator 필드는 CPU 번호인가?",
+      "prompt": "migrator는 CPU 번호일까요?",
       "options": [
+        "아니요. 담당 자식을 나타내는 마스크입니다.",
+        "네. 전역 CPU 번호를 u8에 담습니다."
+      ],
+      "answer": 0,
+      "explanation": "주석은 child mask라고 합니다. 자식이 다른 그룹일 수도 있어 CPU 번호와 같지 않습니다.",
+      "original_prompt": "그룹의 migrator 필드는 CPU 번호인가?",
+      "original_options": [
         "아니다. 담당 자식의 mask이다",
         "그렇다. 전역 CPU 번호를 u8로 저장한다"
       ],
-      "answer": 0,
-      "explanation": "union 주석은 child mask라고 명시합니다. 상위 그룹의 자식은 또 다른 그룹일 수도 있어 CPU 번호와 같다고 볼 수 없습니다."
+      "original_explanation": "union 주석은 child mask라고 명시합니다. 상위 그룹의 자식은 또 다른 그룹일 수도 있어 CPU 번호와 같다고 볼 수 없습니다."
     },
     {
-      "prompt": "parent를 lock 없이 같은 동작에서 여러 번 읽어도 항상 같은가?",
+      "prompt": "같은 동작 중 parent를 잠금 없이 여러 번 읽으면 항상 같을까요?",
       "options": [
+        "네. 한 번 연결 뒤 고정이므로 모든 관측이 같습니다.",
+        "아니요. 설치 중 NULL에서 부모 주소로 바뀔 수 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "연결 이후 고정과 처음 연결 순간은 다릅니다. 주석이 같은 동작 안의 반복 읽기를 금합니다.",
+      "original_prompt": "parent를 lock 없이 같은 동작에서 여러 번 읽어도 항상 같은가?",
+      "original_options": [
         "그렇다. 한 번 설정되면 불변이라는 설명이 모든 관측을 보장한다",
         "아니다. setup 중 NULL에서 부모 포인터로 바뀔 수 있다"
       ],
-      "answer": 1,
-      "explanation": "설정 이후 불변과 처음 연결되는 시점은 다릅니다. 주석은 같은 action에서 반복 관측하지 말라고 명시합니다."
+      "original_explanation": "설정 이후 불변과 처음 연결되는 시점은 다릅니다. 주석은 같은 action에서 반복 관측하지 말라고 명시합니다."
     },
     {
-      "prompt": "ignore=true이면 해당 이벤트가 큐에서 반드시 삭제된 상태인가?",
+      "prompt": "ignore=true면 이벤트가 반드시 큐에서 삭제되었을까요?",
       "options": [
+        "아니요. 무시 가능 여부의 힌트입니다.",
+        "네. bool 대입이 자동으로 큐에서 지웁니다."
+      ],
+      "answer": 0,
+      "explanation": "큐 연결점과 힌트 필드는 별개입니다. 실제 삭제·선택은 구현이 해야 합니다.",
+      "original_prompt": "ignore=true이면 해당 이벤트가 큐에서 반드시 삭제된 상태인가?",
+      "original_options": [
         "아니다. 무시 가능 여부의 힌트이다",
         "그렇다. bool 대입이 timerqueue에서 자동 삭제한다"
       ],
-      "answer": 0,
-      "explanation": "큐 node와 ignore 필드는 별개입니다. 실제 제거·선택 동작은 구현이 수행합니다."
+      "original_explanation": "큐 node와 ignore 필드는 별개입니다. 실제 제거·선택 동작은 구현이 수행합니다."
     },
     {
-      "prompt": "packed state에서 active를 숫자 state의 하위 8비트로 직접 갱신해도 모든 엔디언에서 같은가?",
+      "prompt": "active를 state의 아래 8비트로 직접 바꿔도 모든 엔디언에서 같을까요?",
       "options": [
+        "네. packed는 모든 바이트 순서를 little endian으로 바꿉니다.",
+        "아니요. 주석은 개별 필드로 갱신하라고 합니다."
+      ],
+      "answer": 1,
+      "explanation": "packed는 엔디언 변환이 아닙니다. 결합값은 원자 비교에 쓰고 필드로 의미를 유지합니다.",
+      "original_prompt": "packed state에서 active를 숫자 state의 하위 8비트로 직접 갱신해도 모든 엔디언에서 같은가?",
+      "original_options": [
         "그렇다. packed는 모든 엔디언을 little endian으로 바꾼다",
         "아니다. 주석은 개별 필드로 갱신하라고 요구한다"
       ],
-      "answer": 1,
-      "explanation": "packed와 바이트 순서는 다릅니다. 결합값은 atomic 비교용이고 필드 접근으로 의미를 유지합니다."
+      "original_explanation": "packed와 바이트 순서는 다릅니다. 결합값은 atomic 비교용이고 필드 접근으로 의미를 유지합니다."
     },
     {
-      "prompt": "SMP 또는 NO_HZ_COMMON이 꺼져도 여섯 API 모두 stub이 있는가?",
+      "prompt": "SMP나 NO_HZ_COMMON이 꺼져도 여섯 API 모두 stub이 있을까요?",
       "options": [
+        "아니요. 세 개만 있습니다.",
+        "네. 선언한 모든 함수가 자동으로 빈 구현이 됩니다."
+      ],
+      "answer": 0,
+      "explanation": "else에는 handle_remote, requires_handle_remote, cpu_activate만 있습니다. 나머지 호출은 설정을 따져야 합니다.",
+      "original_prompt": "SMP 또는 NO_HZ_COMMON이 꺼져도 여섯 API 모두 stub이 있는가?",
+      "original_options": [
         "아니다. 세 개만 제공된다",
         "그렇다. 선언한 모든 함수는 자동으로 빈 구현이 된다"
       ],
-      "answer": 0,
-      "explanation": "else에는 handle_remote, requires_handle_remote, cpu_activate만 있습니다. 나머지 호출은 해당 구성 조건을 따져야 합니다."
+      "original_explanation": "else에는 handle_remote, requires_handle_remote, cpu_activate만 있습니다. 나머지 호출은 해당 구성 조건을 따져야 합니다."
     },
     {
-      "prompt": "seq는 왜 상태 갱신마다 증가시키는가?",
+      "prompt": "상태 갱신마다 seq를 늘리는 이유는 무엇일까요?",
       "options": [
+        "지난 나노초를 직접 저장하려고 합니다.",
+        "자식 갱신이 뒤바뀐 순서로 전파되는 경쟁을 구분하려고 합니다."
+      ],
+      "answer": 1,
+      "explanation": "시간은 next_expiry 같은 별도 칸에 있습니다. seq는 상태 변화의 순서를 구분하는 데 씁니다.",
+      "original_prompt": "seq는 왜 상태 갱신마다 증가시키는가?",
+      "original_options": [
         "경과한 나노초를 직접 저장하기 위해서이다",
         "자식 그룹 갱신이 다른 순서로 전파되는 경쟁을 구분하기 위해서이다"
       ],
-      "answer": 1,
-      "explanation": "주석은 상태 전파 순서 경쟁 방지를 설명합니다. 만료 시각은 next_expiry 등 다른 필드에 있습니다."
+      "original_explanation": "주석은 상태 전파 순서 경쟁 방지를 설명합니다. 만료 시각은 next_expiry 등 다른 필드에 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "tmigr_state의 active와 migrator를 비트 표시로 그려 보고, parent가 NULL에서 연결되는 동안 같은 동작 안에서 여러 번 읽으면 무엇이 달라질지 설명하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef _KERNEL_TIME_MIGRATION_H\n#define _KERNEL_TIME_MIGRATION_H\n\n/* Per group capacity. Must be a power of 2! */\n#define TMIGR_CHILDREN_PER_GROUP 8\n\n/**\n * struct tmigr_event - a timer event associated to a CPU\n * @nextevt:\tThe node to enqueue an event in the parent group queue\n * @cpu:\tThe CPU to which this event belongs\n * @ignore:\tHint whether the event could be ignored; it is set when\n *\t\tCPU or group is active;\n */\nstruct tmigr_event {\n\tstruct timerqueue_node\tnextevt;\n\tunsigned int\t\tcpu;\n\tbool\t\t\tignore;\n};\n\n/**\n * struct tmigr_group - timer migration hierarchy group\n * @lock:\t\tLock protecting the event information and group hierarchy\n *\t\t\tinformation during setup\n * @parent:\t\tPointer to the parent group. Pointer is updated when a\n *\t\t\tnew hierarchy level is added because of a CPU coming\n *\t\t\tonline the first time. Once it is set, the pointer will\n *\t\t\tnot be removed or updated. When accessing parent pointer\n *\t\t\tlock less to decide whether to abort a propagation or\n *\t\t\tnot, it is not a problem. The worst outcome is an\n *\t\t\tunnecessary/early CPU wake up. But do not access parent\n *\t\t\tpointer several times in the same 'action' (like\n *\t\t\tactivation, deactivation, check for remote expiry,...)\n *\t\t\twithout holding the lock as it is not ensured that value\n *\t\t\twill not change.\n * @groupevt:\t\tNext event of the group which is only used when the\n *\t\t\tgroup is !active. The group event is then queued into\n *\t\t\tthe parent timer queue.\n *\t\t\tIgnore bit of @groupevt is set when the group is active.\n * @next_expiry:\tBase monotonic expiry time of the next event of the\n *\t\t\tgroup; It is used for the racy lockless check whether a\n *\t\t\tremote expiry is required; it is always reliable\n * @events:\t\tTimer queue for child events queued in the group\n * @migr_state:\t\tState of the group (see union tmigr_state)\n * @level:\t\tHierarchy level of the group; Required during setup\n * @numa_node:\t\tRequired for setup only to make sure CPU and low level\n *\t\t\tgroup information is NUMA local. It is set to NUMA node\n *\t\t\tas long as the group level is per NUMA node (level <\n *\t\t\ttmigr_crossnode_level); otherwise it is set to\n *\t\t\tNUMA_NO_NODE\n * @num_children:\tCounter of group children to make sure the group is only\n *\t\t\tfilled with TMIGR_CHILDREN_PER_GROUP; Required for setup\n *\t\t\tonly\n * @groupmask:\t\tmask of the group in the parent group; is set during\n *\t\t\tsetup and will never change; can be read lockless\n * @list:\t\tList head that is added to the per level\n *\t\t\ttmigr_level_list; is required during setup when a\n *\t\t\tnew group needs to be connected to the existing\n *\t\t\thierarchy groups\n */\nstruct tmigr_group {\n\traw_spinlock_t\t\tlock;\n\tstruct tmigr_group\t*parent;\n\tstruct tmigr_event\tgroupevt;\n\tu64\t\t\tnext_expiry;\n\tstruct timerqueue_head\tevents;\n\tatomic_t\t\tmigr_state;\n\tunsigned int\t\tlevel;\n\tint\t\t\tnuma_node;\n\tunsigned int\t\tnum_children;\n\tu8\t\t\tgroupmask;\n\tstruct list_head\tlist;\n};\n\n/**\n * struct tmigr_cpu - timer migration per CPU group\n * @lock:\t\tLock protecting the tmigr_cpu group information\n * @online:\t\tIndicates whether the CPU is online; In deactivate path\n *\t\t\tit is required to know whether the migrator in the top\n *\t\t\tlevel group is to be set offline, while a timer is\n *\t\t\tpending. Then another online CPU needs to be notified to\n *\t\t\ttake over the migrator role. Furthermore the information\n *\t\t\tis required in CPU hotplug path as the CPU is able to go\n *\t\t\tidle before the timer migration hierarchy hotplug AP is\n *\t\t\treached. During this phase, the CPU has to handle the\n *\t\t\tglobal timers on its own and must not act as a migrator.\n * @idle:\t\tIndicates whether the CPU is idle in the timer migration\n *\t\t\thierarchy\n * @remote:\t\tIs set when timers of the CPU are expired remotely\n * @tmgroup:\t\tPointer to the parent group\n * @groupmask:\t\tmask of tmigr_cpu in the parent group\n * @wakeup:\t\tStores the first timer when the timer migration\n *\t\t\thierarchy is completely idle and remote expiry was done;\n *\t\t\tis returned to timer code in the idle path and is only\n *\t\t\tused in idle path.\n * @cpuevt:\t\tCPU event which could be enqueued into the parent group\n */\nstruct tmigr_cpu {\n\traw_spinlock_t\t\tlock;\n\tbool\t\t\tonline;\n\tbool\t\t\tidle;\n\tbool\t\t\tremote;\n\tstruct tmigr_group\t*tmgroup;\n\tu8\t\t\tgroupmask;\n\tu64\t\t\twakeup;\n\tstruct tmigr_event\tcpuevt;\n};\n\n/**\n * union tmigr_state - state of tmigr_group\n * @state:\tCombined version of the state - only used for atomic\n *\t\tread/cmpxchg function\n * @struct:\tSplit version of the state - only use the struct members to\n *\t\tupdate information to stay independent of endianness\n */\nunion tmigr_state {\n\tu32 state;\n\t/**\n\t * struct - split state of tmigr_group\n\t * @active:\tContains each mask bit of the active children\n\t * @migrator:\tContains mask of the child which is migrator\n\t * @seq:\tSequence counter needs to be increased when an update\n\t *\t\tto the tmigr_state is done. It prevents a race when\n\t *\t\tupdates in the child groups are propagated in changed\n\t *\t\torder. Detailed information about the scenario is\n\t *\t\tgiven in the documentation at the begin of\n\t *\t\ttimer_migration.c.\n\t */\n\tstruct {\n\t\tu8\tactive;\n\t\tu8\tmigrator;\n\t\tu16\tseq;\n\t} __packed;\n};\n\n#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON)\nextern void tmigr_handle_remote(void);\nextern bool tmigr_requires_handle_remote(void);\nextern void tmigr_cpu_activate(void);\nextern u64 tmigr_cpu_deactivate(u64 nextevt);\nextern u64 tmigr_cpu_new_timer(u64 nextevt);\nextern u64 tmigr_quick_check(u64 nextevt);\n#else\nstatic inline void tmigr_handle_remote(void) { }\nstatic inline bool tmigr_requires_handle_remote(void) { return false; }\nstatic inline void tmigr_cpu_activate(void) { }\n#endif\n\n#endif\n",
   "source_review": {
@@ -169,5 +201,206 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timer_migration.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-3d931269c51b78c7",
+    "path": "kernel/time/timer_migration.h",
+    "title": "Timer migration 계층: 자식 mask와 원자적 상태 묶음",
+    "area": "계층 자료구조 · timerqueue · 비트 마스크 · 원자적 CAS · NUMA · hotplug · 엔디언",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "이벤트·그룹·CPU 구조체와 상태 union, 모든 조건부 선언을 필드별로 분석합니다.",
+    "guide": [
+      "계층별 다음 이벤트와 활성 자식 상태를 요약하면 idle CPU의 timer 처리를 다른 CPU에 맡기는 결정을 구성할 수 있습니다.",
+      "timer migration 코드에서 hotplug 중 부모 연결, NUMA 배치, 원격 처리와 상태 전파 경쟁을 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 포함 전제",
+        "text": "GPL-2.0-only와 guard 뒤 그룹 용량 상수, tmigr_event/group/cpu 세 구조체, tmigr_state union, 설정별 함수 선언·stub이 있습니다. 자체 include가 없으므로 timerqueue_node, raw_spinlock_t, atomic_t, list_head와 정수 타입 등을 포함 문맥이 준비해야 합니다. 실제 migration 알고리즘은 timer_migration.c에 있습니다."
+      },
+      {
+        "title": "그룹 용량과 mask",
+        "text": "TMIGR_CHILDREN_PER_GROUP는 8이며 주석은 2의 거듭제곱이어야 한다고 명시합니다. 자식의 활동과 migrator를 u8 mask로 표현하는 구조와 연결됩니다. 이 헤더가 8개 초과 삽입을 자동 거부하는 코드까지 제공하는 것은 아니며 num_children과 setup 구현이 규칙을 지켜야 합니다."
+      },
+      {
+        "title": "이벤트 구조체 전체",
+        "text": "tmigr_event는 timerqueue_node nextevt, unsigned int cpu, bool ignore를 가집니다. node는 부모 큐에 넣는 이벤트, cpu는 소속 CPU입니다. ignore는 CPU나 그룹이 active이면 무시할 수 있음을 나타내는 힌트입니다. ignore=true 자체가 큐에서 물리적으로 삭제되었다는 뜻은 아닙니다."
+      },
+      {
+        "title": "그룹 잠금과 부모 연결",
+        "text": "tmigr_group의 lock은 이벤트 정보와 setup 중 계층 정보를 보호하는 raw spinlock입니다. parent는 CPU가 처음 online되어 새 계층이 필요할 때 연결될 수 있으며 한 번 설정되면 제거하거나 다른 부모로 바꾸지 않는다는 계약입니다. NULL에서 부모가 생길 가능성과 이미 설정된 포인터의 불변성을 구분합니다."
+      },
+      {
+        "title": "부모의 잠금 없는 관측",
+        "text": "주석은 전파를 중단할지 결정하는 lockless parent 관측의 최악 결과를 불필요하거나 이른 CPU 깨우기로 설명합니다. 그러나 같은 activation/deactivation/remote expiry 동작 안에서 lock 없이 parent를 여러 번 읽지 말라고 합니다. 한 동작 중 NULL과 새 포인터를 섞어 관측할 수 있기 때문입니다. 포인터가 언젠가 불변이 된다는 이유만으로 모든 반복 읽기가 안전하지는 않습니다."
+      },
+      {
+        "title": "그룹 이벤트와 최단 만료",
+        "text": "groupevt는 그룹이 비활성일 때 부모 timerqueue에 들어가는 다음 이벤트이며 active이면 ignore가 켜집니다. events는 자식 이벤트의 timerqueue_head입니다. next_expiry는 monotonic 기준 u64 만료 시각으로 원격 처리가 필요한지 lockless로 확인하는 데 사용되며 주석은 그 판단에 신뢰할 수 있는 값이라고 설명합니다. 이것이 그룹 전체 필드의 원자적 스냅샷을 보장한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "그룹의 setup 필드",
+        "text": "level은 계층 레벨, numa_node는 낮은 계층을 CPU와 NUMA local하게 배치하기 위한 정보입니다. 주석상 level<tmigr_crossnode_level이면 NUMA 노드, 상위에서는 NUMA_NO_NODE입니다. num_children은 용량 관리용 unsigned int입니다. groupmask는 부모 안에서 자신의 비트인 u8로 setup 뒤 바뀌지 않아 lockless로 읽을 수 있습니다. list는 레벨별 tmigr_level_list에 연결하는 setup용 list_head입니다."
+      },
+      {
+        "title": "그룹 상태 저장",
+        "text": "migr_state는 atomic_t이며 뒤의 tmigr_state union은 원자적으로 읽고 cmpxchg할 결합값과 개별 필드 해석을 연결합니다. 실제 저장 객체가 union 변수 하나만인 것처럼 읽으면 안 됩니다. atomic_t 한 필드가 있다고 parent와 event queue까지 같은 원자적 연산으로 바뀌는 것도 아닙니다."
+      },
+      {
+        "title": "CPU 구조체의 상태",
+        "text": "tmigr_cpu의 lock은 해당 CPU의 migration 정보를 보호합니다. online은 단순 scheduler 활동 여부와 다르며 top-level migrator가 offline될 때 다른 online CPU로 역할을 넘기는 판단에 필요합니다. 주석은 CPU가 migration hotplug 단계에 도달하기 전에 idle할 수 있고 그때는 자신의 global timer를 처리하며 migrator로 행동하지 않아야 한다고 설명합니다. idle은 계층에서 idle인 상태, remote는 자신의 timer가 원격 만료 처리되는 상태를 나타냅니다."
+      },
+      {
+        "title": "CPU의 연결과 다음 깨우기",
+        "text": "tmgroup은 부모 그룹 포인터, groupmask는 부모 안의 u8 비트, cpuevt는 부모 큐에 들어갈 수 있는 CPU 이벤트입니다. u64 wakeup은 계층 전체가 idle이고 원격 만료 처리가 끝난 경우의 첫 timer를 저장하여 idle 경로의 timer 코드에 반환할 때 사용합니다. 일반적인 모든 CPU 깨우기 요청을 저장하는 전역 큐라고 설명하지 않습니다."
+      },
+      {
+        "title": "State union 전체",
+        "text": "union tmigr_state의 결합 표현은 u32 state입니다. 익명 packed 구조체는 u8 active, u8 migrator, u16 seq입니다. active는 활성 자식 비트들을, migrator는 담당 자식의 mask를 가집니다. migrator를 곧바로 CPU 번호나 자식 배열 인덱스로 읽으면 안 됩니다."
+      },
+      {
+        "title": "엔디언과 sequence 목적",
+        "text": "주석은 결합 state를 atomic read/cmpxchg에만 쓰고 정보 갱신은 개별 구조체 필드로 하여 엔디언에 독립적으로 유지하라고 합니다. packed는 불필요한 필드 간 배치를 피하지만 모든 플랫폼에서 active가 숫자 state의 같은 하위 비트에 있다는 선언은 아닙니다. seq는 상태 갱신마다 증가시켜 자식 그룹에서 온 갱신이 다른 순서로 전파될 때의 경쟁을 막는 데 사용됩니다. 상세 경쟁 시나리오는 구현 파일의 별도 설명 대상이며 16비트 sequence가 무한 증가하는 카운터라는 뜻은 아닙니다."
+      },
+      {
+        "title": "활성 구성의 여섯 함수",
+        "text": "CONFIG_SMP와 CONFIG_NO_HZ_COMMON이 모두 정의되면 tmigr_handle_remote(void), bool tmigr_requires_handle_remote(void), tmigr_cpu_activate(void), u64 tmigr_cpu_deactivate(u64 nextevt), u64 tmigr_cpu_new_timer(u64 nextevt), u64 tmigr_quick_check(u64 nextevt)를 선언합니다. 처리·질의·활성화·다음 이벤트 전달의 반환형을 구분하며 구체적인 u64 sentinel 정책은 이 선언만으로 확정하지 않습니다."
+      },
+      {
+        "title": "비활성 구성의 일부 stub",
+        "text": "else에는 handle_remote와 cpu_activate의 빈 void inline, requires_handle_remote의 false 반환만 있습니다. deactivate/new_timer/quick_check의 비활성 stub은 이 헤더에 없습니다. 따라서 활성 분기의 여섯 함수를 어떤 구성에서도 전부 호출할 수 있게 만든 헤더라고 설명하면 안 됩니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "전체 타입·필드·주석 계약·설정 분기를 설명했습니다. 계층 요약, intrusive timerqueue, 불변 setup 정보, hotplug 수명, CAS용 상태 묶음, 엔디언과 전파 순서의 구분을 학습합니다. timer_migration.c 전체 구현이나 실제 CPU hotplug·원격 만료 동작을 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "그룹의 migrator 필드는 CPU 번호인가?",
+        "options": [
+          "아니다. 담당 자식의 mask이다",
+          "그렇다. 전역 CPU 번호를 u8로 저장한다"
+        ],
+        "answer": 0,
+        "explanation": "union 주석은 child mask라고 명시합니다. 상위 그룹의 자식은 또 다른 그룹일 수도 있어 CPU 번호와 같다고 볼 수 없습니다."
+      },
+      {
+        "prompt": "parent를 lock 없이 같은 동작에서 여러 번 읽어도 항상 같은가?",
+        "options": [
+          "그렇다. 한 번 설정되면 불변이라는 설명이 모든 관측을 보장한다",
+          "아니다. setup 중 NULL에서 부모 포인터로 바뀔 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "설정 이후 불변과 처음 연결되는 시점은 다릅니다. 주석은 같은 action에서 반복 관측하지 말라고 명시합니다."
+      },
+      {
+        "prompt": "ignore=true이면 해당 이벤트가 큐에서 반드시 삭제된 상태인가?",
+        "options": [
+          "아니다. 무시 가능 여부의 힌트이다",
+          "그렇다. bool 대입이 timerqueue에서 자동 삭제한다"
+        ],
+        "answer": 0,
+        "explanation": "큐 node와 ignore 필드는 별개입니다. 실제 제거·선택 동작은 구현이 수행합니다."
+      },
+      {
+        "prompt": "packed state에서 active를 숫자 state의 하위 8비트로 직접 갱신해도 모든 엔디언에서 같은가?",
+        "options": [
+          "그렇다. packed는 모든 엔디언을 little endian으로 바꾼다",
+          "아니다. 주석은 개별 필드로 갱신하라고 요구한다"
+        ],
+        "answer": 1,
+        "explanation": "packed와 바이트 순서는 다릅니다. 결합값은 atomic 비교용이고 필드 접근으로 의미를 유지합니다."
+      },
+      {
+        "prompt": "SMP 또는 NO_HZ_COMMON이 꺼져도 여섯 API 모두 stub이 있는가?",
+        "options": [
+          "아니다. 세 개만 제공된다",
+          "그렇다. 선언한 모든 함수는 자동으로 빈 구현이 된다"
+        ],
+        "answer": 0,
+        "explanation": "else에는 handle_remote, requires_handle_remote, cpu_activate만 있습니다. 나머지 호출은 해당 구성 조건을 따져야 합니다."
+      },
+      {
+        "prompt": "seq는 왜 상태 갱신마다 증가시키는가?",
+        "options": [
+          "경과한 나노초를 직접 저장하기 위해서이다",
+          "자식 그룹 갱신이 다른 순서로 전파되는 경쟁을 구분하기 위해서이다"
+        ],
+        "answer": 1,
+        "explanation": "주석은 상태 전파 순서 경쟁 방지를 설명합니다. 만료 시각은 next_expiry 등 다른 필드에 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n#ifndef _KERNEL_TIME_MIGRATION_H\n#define _KERNEL_TIME_MIGRATION_H\n\n/* Per group capacity. Must be a power of 2! */\n#define TMIGR_CHILDREN_PER_GROUP 8\n\n/**\n * struct tmigr_event - a timer event associated to a CPU\n * @nextevt:\tThe node to enqueue an event in the parent group queue\n * @cpu:\tThe CPU to which this event belongs\n * @ignore:\tHint whether the event could be ignored; it is set when\n *\t\tCPU or group is active;\n */\nstruct tmigr_event {\n\tstruct timerqueue_node\tnextevt;\n\tunsigned int\t\tcpu;\n\tbool\t\t\tignore;\n};\n\n/**\n * struct tmigr_group - timer migration hierarchy group\n * @lock:\t\tLock protecting the event information and group hierarchy\n *\t\t\tinformation during setup\n * @parent:\t\tPointer to the parent group. Pointer is updated when a\n *\t\t\tnew hierarchy level is added because of a CPU coming\n *\t\t\tonline the first time. Once it is set, the pointer will\n *\t\t\tnot be removed or updated. When accessing parent pointer\n *\t\t\tlock less to decide whether to abort a propagation or\n *\t\t\tnot, it is not a problem. The worst outcome is an\n *\t\t\tunnecessary/early CPU wake up. But do not access parent\n *\t\t\tpointer several times in the same 'action' (like\n *\t\t\tactivation, deactivation, check for remote expiry,...)\n *\t\t\twithout holding the lock as it is not ensured that value\n *\t\t\twill not change.\n * @groupevt:\t\tNext event of the group which is only used when the\n *\t\t\tgroup is !active. The group event is then queued into\n *\t\t\tthe parent timer queue.\n *\t\t\tIgnore bit of @groupevt is set when the group is active.\n * @next_expiry:\tBase monotonic expiry time of the next event of the\n *\t\t\tgroup; It is used for the racy lockless check whether a\n *\t\t\tremote expiry is required; it is always reliable\n * @events:\t\tTimer queue for child events queued in the group\n * @migr_state:\t\tState of the group (see union tmigr_state)\n * @level:\t\tHierarchy level of the group; Required during setup\n * @numa_node:\t\tRequired for setup only to make sure CPU and low level\n *\t\t\tgroup information is NUMA local. It is set to NUMA node\n *\t\t\tas long as the group level is per NUMA node (level <\n *\t\t\ttmigr_crossnode_level); otherwise it is set to\n *\t\t\tNUMA_NO_NODE\n * @num_children:\tCounter of group children to make sure the group is only\n *\t\t\tfilled with TMIGR_CHILDREN_PER_GROUP; Required for setup\n *\t\t\tonly\n * @groupmask:\t\tmask of the group in the parent group; is set during\n *\t\t\tsetup and will never change; can be read lockless\n * @list:\t\tList head that is added to the per level\n *\t\t\ttmigr_level_list; is required during setup when a\n *\t\t\tnew group needs to be connected to the existing\n *\t\t\thierarchy groups\n */\nstruct tmigr_group {\n\traw_spinlock_t\t\tlock;\n\tstruct tmigr_group\t*parent;\n\tstruct tmigr_event\tgroupevt;\n\tu64\t\t\tnext_expiry;\n\tstruct timerqueue_head\tevents;\n\tatomic_t\t\tmigr_state;\n\tunsigned int\t\tlevel;\n\tint\t\t\tnuma_node;\n\tunsigned int\t\tnum_children;\n\tu8\t\t\tgroupmask;\n\tstruct list_head\tlist;\n};\n\n/**\n * struct tmigr_cpu - timer migration per CPU group\n * @lock:\t\tLock protecting the tmigr_cpu group information\n * @online:\t\tIndicates whether the CPU is online; In deactivate path\n *\t\t\tit is required to know whether the migrator in the top\n *\t\t\tlevel group is to be set offline, while a timer is\n *\t\t\tpending. Then another online CPU needs to be notified to\n *\t\t\ttake over the migrator role. Furthermore the information\n *\t\t\tis required in CPU hotplug path as the CPU is able to go\n *\t\t\tidle before the timer migration hierarchy hotplug AP is\n *\t\t\treached. During this phase, the CPU has to handle the\n *\t\t\tglobal timers on its own and must not act as a migrator.\n * @idle:\t\tIndicates whether the CPU is idle in the timer migration\n *\t\t\thierarchy\n * @remote:\t\tIs set when timers of the CPU are expired remotely\n * @tmgroup:\t\tPointer to the parent group\n * @groupmask:\t\tmask of tmigr_cpu in the parent group\n * @wakeup:\t\tStores the first timer when the timer migration\n *\t\t\thierarchy is completely idle and remote expiry was done;\n *\t\t\tis returned to timer code in the idle path and is only\n *\t\t\tused in idle path.\n * @cpuevt:\t\tCPU event which could be enqueued into the parent group\n */\nstruct tmigr_cpu {\n\traw_spinlock_t\t\tlock;\n\tbool\t\t\tonline;\n\tbool\t\t\tidle;\n\tbool\t\t\tremote;\n\tstruct tmigr_group\t*tmgroup;\n\tu8\t\t\tgroupmask;\n\tu64\t\t\twakeup;\n\tstruct tmigr_event\tcpuevt;\n};\n\n/**\n * union tmigr_state - state of tmigr_group\n * @state:\tCombined version of the state - only used for atomic\n *\t\tread/cmpxchg function\n * @struct:\tSplit version of the state - only use the struct members to\n *\t\tupdate information to stay independent of endianness\n */\nunion tmigr_state {\n\tu32 state;\n\t/**\n\t * struct - split state of tmigr_group\n\t * @active:\tContains each mask bit of the active children\n\t * @migrator:\tContains mask of the child which is migrator\n\t * @seq:\tSequence counter needs to be increased when an update\n\t *\t\tto the tmigr_state is done. It prevents a race when\n\t *\t\tupdates in the child groups are propagated in changed\n\t *\t\torder. Detailed information about the scenario is\n\t *\t\tgiven in the documentation at the begin of\n\t *\t\ttimer_migration.c.\n\t */\n\tstruct {\n\t\tu8\tactive;\n\t\tu8\tmigrator;\n\t\tu16\tseq;\n\t} __packed;\n};\n\n#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON)\nextern void tmigr_handle_remote(void);\nextern bool tmigr_requires_handle_remote(void);\nextern void tmigr_cpu_activate(void);\nextern u64 tmigr_cpu_deactivate(u64 nextevt);\nextern u64 tmigr_cpu_new_timer(u64 nextevt);\nextern u64 tmigr_quick_check(u64 nextevt);\n#else\nstatic inline void tmigr_handle_remote(void) { }\nstatic inline bool tmigr_requires_handle_remote(void) { return false; }\nstatic inline void tmigr_cpu_activate(void) { }\n#endif\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "e9e9c81b3bc9866298eb5c58fda12e023041c858376b9a76cb48bab7d44c2a32",
+      "scope": "whole-file",
+      "line_count": 149,
+      "authoring_source": "course/file_units/timer_migration_types.py",
+      "sections": [
+        "전체 파일과 포함 전제",
+        "그룹 용량과 mask",
+        "이벤트 구조체 전체",
+        "그룹 잠금과 부모 연결",
+        "부모의 잠금 없는 관측",
+        "그룹 이벤트와 최단 만료",
+        "그룹의 setup 필드",
+        "그룹 상태 저장",
+        "CPU 구조체의 상태",
+        "CPU의 연결과 다음 깨우기",
+        "State union 전체",
+        "엔디언과 sequence 목적",
+        "활성 구성의 여섯 함수",
+        "비활성 구성의 일부 stub",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timer_migration.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "여러 반의 당번을 정해 쉬는 친구의 알림을 대신 챙길 수 있습니다. 타이머 이동 계층도 각 그룹의 다음 알림과 활동 중인 자식을 요약해 담당 CPU를 고릅니다.",
+    "meaning": "타이머 이동 구조체의 부모·이벤트·CPU 상태와 원자적 상태 묶음의 역할을 구분합니다.",
+    "exercise": "tmigr_state의 active와 migrator를 비트 표시로 그려 보고, parent가 NULL에서 연결되는 동안 같은 동작 안에서 여러 번 읽으면 무엇이 달라질지 설명하세요."
+  },
+  "goal": "타이머 이동 구조체의 부모·이벤트·CPU 상태와 원자적 상태 묶음의 역할을 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "tmigr_state의 active와 migrator를 비트 표시로 그려 보고, parent가 NULL에서 연결되는 동안 같은 동작 안에서 여러 번 읽으면 무엇이 달라질지 설명하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_f.json",
+    "authoring_sha256": "7c07b3572238892b86dac1ec803ce42b1d0555f7aa51c49ef34b0c43c8199724",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,58 +5,66 @@
   "area": "C 구조체 · 정수 폭 · 상태 표현 · 선언과 저장 공간",
   "track": "files",
   "kind": "kernel",
-  "intro": "장벽 추적의 중첩 깊이와 pending 상태를 저장하는 최소 구조체를 읽습니다.",
+  "intro": "두 u16 필드의 의미와 타입 정의·저장 공간·동기화가 서로 다른 일임을 이해합니다.",
   "guide": [
-    "자료형 정의는 상태의 표현을 제공하며 실제 갱신 규칙과 동기화는 사용 코드가 정합니다.",
-    "mmiowb.h의 증가·대입·초기화·감소 연산을 필드 폭과 연결합니다."
+    "nesting_count는 들어간 잠금의 깊이를 기록합니다.",
+    "mmiowb_pending은 쓰기 때의 깊이를 담으며 사용하는 쪽은 0인지 아닌지 검사합니다.",
+    "u16은 부호 없는 16비트 정수입니다. 선언만으로 잘못된 증가·감소를 막아 주지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 범위",
-      "text": "GPL-2.0·guard·linux/types.h 포함 뒤 struct mmiowb_state 하나를 정의합니다. 함수,전역 인스턴스,초기화 목록은 없습니다."
+      "title": "구조체 하나의 파일",
+      "text": "라이선스, 중복 포함 방지, linux/types.h 포함 뒤 struct mmiowb_state를 정의합니다. 함수나 실제 전역 보관함, 초기값 목록은 없습니다."
     },
     {
-      "title": "두 필드",
-      "text": "nesting_count와 mmiowb_pending은 모두 u16입니다. 첫 필드는 잠금 hook의 깊이,둘째는 쓰기 시 기록된 깊이에 사용됩니다. pending은 타입상 bool이 아니며 공통 소비 코드가 비0 여부를 검사합니다."
+      "title": "두 칸의 이름과 타입",
+      "text": "nesting_count와 mmiowb_pending은 모두 u16입니다. 첫 칸은 잠금 진입 보조 호출의 깊이, 둘째는 쓰기 때 기록한 깊이입니다. pending은 참·거짓 타입 bool이 아니지만 공통 처리 코드는 비어 있는 0인지 아닌지만 검사합니다."
     },
     {
-      "title": "폭과 수명",
-      "text": "u16의 표현 범위는0~65535입니다. 구조체 정의는 underflow·overflow를 방지하지 않으며 count0에서 감소하면 해당 폭의 변환 결과로65535가 될 수 있습니다. 선언 자체가 실제 과도한 nesting을 지원한다는 의미는 아닙니다."
+      "title": "16비트 상자의 한계",
+      "text": "u16은 0~65535를 담습니다. 구조체 선언은 범위 초과를 막지 않으므로 0에서 줄여 이 타입에 저장하면 65535가 될 수 있습니다. 따라서 이 폭이 있다는 사실이 지나치게 많은 잠금 중첩을 안전하게 지원한다는 뜻은 아닙니다."
     },
     {
-      "title": "저장과 동기화의 분리",
-      "text": "필드에 atomic_t나 잠금이 들어 있지 않습니다. per-CPU 인스턴스 또는 아키텍처 상태 배치와 호출 문맥은 별도 헤더가 정합니다. 구조체 정의만으로 여러 CPU가 같은 인스턴스를 안전하게 갱신한다고 볼 수 없습니다."
+      "title": "상태를 안전하게 쓰는 책임",
+      "text": "필드에 원자적 갱신 타입 atomic_t나 잠금은 없습니다. CPU별 실제 보관함이나 CPU 전용 상태 배치, 부르는 상황의 조건은 다른 헤더가 정합니다. 이 구조체만으로 여러 CPU가 같은 보관함을 안전하게 바꿀 수 있다고 보지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "mmiowb_pending의 타입은?",
+      "prompt": "mmiowb_pending의 타입은 무엇인가요?",
       "options": [
+        "u16입니다.",
+        "bool입니다."
+      ],
+      "answer": 0,
+      "explanation": "두 칸 모두 u16이며 pending에는 깊이도 기록합니다. 사용하는 쪽의 0 여부 검사와 자료형은 구별합니다.",
+      "original_prompt": "mmiowb_pending의 타입은?",
+      "original_options": [
         "u16이다",
         "bool이다"
       ],
-      "answer": 0,
-      "explanation": "두 필드 모두u16이며 실제 기록값은 깊이일 수 있습니다. 사용 시 비0 검사와 자료형의 표현 범위를 구분합니다."
+      "original_explanation": "두 필드 모두u16이며 실제 기록값은 깊이일 수 있습니다. 사용 시 비0 검사와 자료형의 표현 범위를 구분합니다."
     },
     {
-      "prompt": "이 헤더가 per-CPU 인스턴스를 직접 할당하는가?",
+      "prompt": "이 헤더는 CPU마다 실제 상태 보관함을 할당하나요?",
       "options": [
+        "네. 모든 CPU의 상태 배열을 초기화합니다.",
+        "아니요. 구조체 타입만 정의합니다."
+      ],
+      "answer": 1,
+      "explanation": "자료의 모양과 실제 저장 공간 생성은 다른 일입니다. 공간 선언과 배치는 사용하는 계층이 맡습니다.",
+      "original_prompt": "이 헤더가 per-CPU 인스턴스를 직접 할당하는가?",
+      "original_options": [
         "그렇다. 모든 CPU의 상태 배열을 초기화한다",
         "아니다. 구조체 타입만 정의한다"
       ],
-      "answer": 1,
-      "explanation": "실제 선언·배치는 사용 계층의 역할입니다. 타입 선언과 저장 공간 생성은 별개입니다."
+      "original_explanation": "실제 선언·배치는 사용 계층의 역할입니다. 타입 선언과 저장 공간 생성은 별개입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "두 필드의 자료형을 찾아 기록 가능한 범위를 적고 pending이 bool과 다른 점을 설명해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_MMIOWB_TYPES_H\n#define __ASM_GENERIC_MMIOWB_TYPES_H\n\n#include <linux/types.h>\n\nstruct mmiowb_state {\n\tu16\tnesting_count;\n\tu16\tmmiowb_pending;\n};\n\n#endif\t/* __ASM_GENERIC_MMIOWB_TYPES_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/mmiowb_types.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-bf004f97469605db",
+    "path": "include/asm-generic/mmiowb_types.h",
+    "title": "MMIOWB 상태 타입 전체: 두16비트 필드",
+    "area": "C 구조체 · 정수 폭 · 상태 표현 · 선언과 저장 공간",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "장벽 추적의 중첩 깊이와 pending 상태를 저장하는 최소 구조체를 읽습니다.",
+    "guide": [
+      "자료형 정의는 상태의 표현을 제공하며 실제 갱신 규칙과 동기화는 사용 코드가 정합니다.",
+      "mmiowb.h의 증가·대입·초기화·감소 연산을 필드 폭과 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 범위",
+        "text": "GPL-2.0·guard·linux/types.h 포함 뒤 struct mmiowb_state 하나를 정의합니다. 함수,전역 인스턴스,초기화 목록은 없습니다."
+      },
+      {
+        "title": "두 필드",
+        "text": "nesting_count와 mmiowb_pending은 모두 u16입니다. 첫 필드는 잠금 hook의 깊이,둘째는 쓰기 시 기록된 깊이에 사용됩니다. pending은 타입상 bool이 아니며 공통 소비 코드가 비0 여부를 검사합니다."
+      },
+      {
+        "title": "폭과 수명",
+        "text": "u16의 표현 범위는0~65535입니다. 구조체 정의는 underflow·overflow를 방지하지 않으며 count0에서 감소하면 해당 폭의 변환 결과로65535가 될 수 있습니다. 선언 자체가 실제 과도한 nesting을 지원한다는 의미는 아닙니다."
+      },
+      {
+        "title": "저장과 동기화의 분리",
+        "text": "필드에 atomic_t나 잠금이 들어 있지 않습니다. per-CPU 인스턴스 또는 아키텍처 상태 배치와 호출 문맥은 별도 헤더가 정합니다. 구조체 정의만으로 여러 CPU가 같은 인스턴스를 안전하게 갱신한다고 볼 수 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "mmiowb_pending의 타입은?",
+        "options": [
+          "u16이다",
+          "bool이다"
+        ],
+        "answer": 0,
+        "explanation": "두 필드 모두u16이며 실제 기록값은 깊이일 수 있습니다. 사용 시 비0 검사와 자료형의 표현 범위를 구분합니다."
+      },
+      {
+        "prompt": "이 헤더가 per-CPU 인스턴스를 직접 할당하는가?",
+        "options": [
+          "그렇다. 모든 CPU의 상태 배열을 초기화한다",
+          "아니다. 구조체 타입만 정의한다"
+        ],
+        "answer": 1,
+        "explanation": "실제 선언·배치는 사용 계층의 역할입니다. 타입 선언과 저장 공간 생성은 별개입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_MMIOWB_TYPES_H\n#define __ASM_GENERIC_MMIOWB_TYPES_H\n\n#include <linux/types.h>\n\nstruct mmiowb_state {\n\tu16\tnesting_count;\n\tu16\tmmiowb_pending;\n};\n\n#endif\t/* __ASM_GENERIC_MMIOWB_TYPES_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "185e7cacdd599acd804ce757c32c9a0937f9816d4e921686730ae5bf4b58bff0",
+      "scope": "whole-file",
+      "line_count": 12,
+      "authoring_source": "course/file_units/mmiowb_tracking.py",
+      "sections": [
+        "파일 범위",
+        "두 필드",
+        "폭과 수명",
+        "저장과 동기화의 분리"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/mmiowb_types.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "메모지에 “몇 겹 잠금 안인가”와 “처리할 쓰기가 있는가”를 적을 두 칸을 그립니다. 이 파일은 칸의 모양만 정하고 숫자를 바꾸는 규칙은 다른 코드가 맡습니다.",
+    "meaning": "두 u16 필드의 의미와 타입 정의·저장 공간·동기화가 서로 다른 일임을 이해합니다.",
+    "exercise": "두 필드의 자료형을 찾아 기록 가능한 범위를 적고 pending이 bool과 다른 점을 설명해 보세요."
+  },
+  "goal": "두 u16 필드의 의미와 타입 정의·저장 공간·동기화가 서로 다른 일임을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "두 필드의 자료형을 찾아 기록 가능한 범위를 적고 pending이 bool과 다른 점을 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "a02a150292717e68a5704695eab622b9a9b9c836dadb8149cd507026612b71c1",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

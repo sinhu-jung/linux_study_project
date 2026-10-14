@@ -5,6 +5,7 @@ from pathlib import Path
 from lesson_storage import load_lessons, _atomic_text
 from build_file_lessons import load_file_lessons
 from reading_support import support
+from build_syllabus import render_syllabus
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,6 +34,7 @@ def build(root=ROOT):
                 [q['prompt'], q['options'], q['answer'], q['explanation']],
                 ensure_ascii=False).encode('utf-8')).hexdigest()[:24]
     glossary, reading_audit = support(combined)
+    render_syllabus(root, combined, glossary)
     # Keep authored technical material; reading support does not certify its difficulty.
     bank = {'version': 1, 'lessons': combined, 'questions': count,
             'existing_lessons': len(lessons), 'existing_questions': sum(len(l['questions']) for l in lessons),
@@ -54,12 +56,14 @@ def build(root=ROOT):
     _atomic_text(root / 'course/easy-reading-progress.json', json.dumps({
         'objective':'모든 작성 수업의 설명과 문제를 초등학생이 이해할 수 있는 말로 개별 재작성',
         'total_lessons':len(combined),
+        'total_questions':count,
+        'remaining_questions':sum(len(l['questions']) for l in combined if not l.get('beginner')),
         'rewritten_lessons':reading_audit['introductions_and_answer_sets_rewritten'],
         'rewritten_questions':reading_audit['questions_rewritten'],
         'remaining_lessons':reading_audit['remaining_lessons_for_individual_rewrite'],
         'rewritten_ids':reading_audit['rewritten_lesson_ids'],
         'child_comprehension_tested':False,
-        'complete':False,
+        'complete':reading_audit['remaining_lessons_for_individual_rewrite']==0,
         'note':'용어 풀이만 추가한 수업은 재작성에 포함하지 않습니다. 개별 기술 정확성과 읽기 난이도 검토가 필요합니다.'
     },ensure_ascii=False,indent=2)+'\n')
     return report

@@ -5,79 +5,93 @@
   "area": "상호 배제 · 소유권 · 조건부 컴파일 · 자원 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "mutex의 사용 규칙과 빌드 설정별 구조체 표현을 선언합니다.",
+  "intro": "일반 구성과 PREEMPT_RT의 mutex 표현 차이를 알고 소유권·초기화·수명 규칙을 지킵니다.",
   "guide": [
-    "잠금 소유자 규칙은 자료구조와 API가 함께 지킵니다. PREEMPT_RT 여부에 따라 내부 구현 표현이 달라지므로 공개 API를 통해 사용해야 합니다.",
-    "mutex를 단순 메모리 복사나 memset으로 초기화하지 않습니다. 잠금이 저장된 메모리와 소유 태스크의 수명도 규칙의 일부입니다."
+    "mutex는 한 작업만 소유하는 잠금입니다. 값을 1로 둔 세마포어와 사용 규칙이 완전히 같지 않습니다.",
+    "memset으로 0을 채우거나 다른 mutex를 복사해서 초기화하면 안 됩니다. 정해진 API를 씁니다.",
+    "원자 필드가 있다고 인터럽트처럼 잠들 수 없는 곳에서 사용해도 되는 것은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0과 guard, atomic/lockdep_types/osq_lock/spinlock_types/types 포함 뒤 PREEMPT_RT 분기로 나뉩니다. 일반 분기에 의미 규칙 주석과 mutex 구조체, RT 분기에 rtmutex.h 포함과 대체 구조체가 있습니다. 이 파일은 획득·해제 함수 본문을 제공하지 않습니다."
+      "title": "설정별 두 자료 모양",
+      "text": "라이선스와 중복 포함 방지 뒤 원자 연산·잠금 진단·회전 대기 줄·스핀잠금·타입 헤더를 포함합니다. PREEMPT_RT 여부에 따라 일반 구조체 또는 rtmutex.h를 사용하는 구조체로 나뉩니다. 획득·해제 함수의 실제 명령은 이 파일에 없습니다."
     },
     {
-      "title": "소유권 규칙",
-      "text": "한 번에 한 태스크만 소유하고 소유자만 unlock할 수 있으며 반복 unlock과 재귀 잠금을 금지합니다. 소유한 채 태스크가 종료해서도 안 됩니다. 이는 count1인 세마포어의 소유자 없는 up 계약과 다르며 잠금 성공 여부를 확인하지 않은 채 unlock하는 사용도 올바르지 않습니다."
+      "title": "열쇠 주인의 규칙",
+      "text": "한 번에 한 작업만 소유하며 그 주인만 unlock할 수 있습니다. 반복 해제, 같은 잠금을 다시 얻는 재귀 획득, 소유한 채 작업 종료는 금지입니다. 세마포어의 up은 같은 소유권 계약이 아니므로 혼동하지 않습니다. 획득 성공을 확인하지 않고 해제해도 안 됩니다."
     },
     {
-      "title": "객체와 실행 문맥",
-      "text": "API로 초기화해야 하고 memset 또는 복사로 초기화하면 안 됩니다. 보유된 잠금을 담은 메모리를 free하거나 보유된 mutex를 재초기화하면 안 됩니다. 하드웨어·소프트웨어 인터럽트, tasklet·timer 문맥 사용도 금지하는 규칙을 명시합니다. 원자 필드가 들어 있다는 사실이 잠들 수 없는 문맥에서의 사용 허가가 아닙니다."
+      "title": "준비와 보관함의 수명",
+      "text": "정해진 API로 초기화하며 0으로 채우거나 복사하지 않습니다. 보유된 잠금의 메모리를 돌려주거나 잠긴 mutex를 재초기화하면 안 됩니다. 하드웨어·소프트웨어 인터럽트와 tasklet·timer 문맥에서도 사용하지 않습니다. 내부 원자 필드는 잠들 수 없는 문맥에서 사용해도 된다는 허가가 아닙니다."
     },
     {
-      "title": "일반 표현",
-      "text": "일반 mutex는 atomic_long_t owner, raw_spinlock_t wait_lock, list_head wait_list를 가집니다. MUTEX_SPIN_ON_OWNER이면 MCS spinner용 optimistic_spin_queue osq가 추가됩니다. owner의 구체적 플래그 인코딩과 낙관적 스핀 알고리즘은 이 타입 선언만으로 정의되지 않으므로 구현을 따로 확인해야 합니다."
+      "title": "일반 mutex의 칸",
+      "text": "owner는 atomic_long_t, wait_lock은 raw_spinlock_t, wait_list는 대기 줄입니다. CONFIG_MUTEX_SPIN_ON_OWNER가 켜지면 MCS 방식 회전 대기를 위한 osq가 추가됩니다. owner의 표시 비트나 낙관적 대기의 실제 방법은 타입 선언만으로 알 수 없으므로 구현을 따로 읽습니다."
     },
     {
-      "title": "진단 필드와 주석 범위",
-      "text": "DEBUG_MUTEXES이면 magic, DEBUG_LOCK_ALLOC이면 dep_map이 추가됩니다. 주석은 이름·획득 지점·소유자·재귀·교착 관련 디버깅 기능을 설명합니다. 이 구조체 파일 자체가 그 검사를 실행하는 것은 아니며 개별 디버그 함수 하나만으로 모든 기능을 보장한다고 읽지 않습니다."
+      "title": "진단용 추가 칸",
+      "text": "DEBUG_MUTEXES이면 magic 확인표, DEBUG_LOCK_ALLOC이면 dep_map 진단 지도가 있습니다. 주석은 이름·획득 지점·소유자·재귀·교착 검사도 소개합니다. 이 구조체 선언이 검사를 실행하는 것은 아니며 개별 점검 함수 하나가 모든 진단을 보장하는 것도 아닙니다."
     },
     {
-      "title": "RT 표현",
-      "text": "PREEMPT_RT에서는 rt_mutex_base rtmutex와 선택적 dep_map으로 표현합니다. 일반 분기의 owner/wait_list를 모든 빌드에 직접 접근하는 코드는 맞지 않습니다. 조건부 필드는 크기와 배치를 바꾸므로 내부 구조체를 고정된 외부 ABI처럼 취급하지 않습니다."
+      "title": "실시간 설정의 다른 표현",
+      "text": "PREEMPT_RT에서는 rt_mutex_base rtmutex와 선택적인 dep_map으로 구성합니다. 일반 구성의 owner나 wait_list를 모든 설정에서 직접 읽으면 안 됩니다. 조건에 따라 크기와 배치가 바뀌므로 외부에 고정된 자료 배치 약속처럼 취급하지 않습니다."
     },
     {
-      "title": "CS 연결",
-      "text": "상호 배제와 소유권, 잠금과 객체 수명, 잠들 수 있는 문맥, 표현을 바꾸면서 API 계약을 유지하는 추상화, 설정별 메모리 배치를 학습합니다."
+      "title": "속 모양보다 사용 약속",
+      "text": "서로 동시에 들어가지 못하게 하는 상호 배제, 소유권, 메모리 수명과 잠들 수 있는 상황을 함께 배웁니다. 내부 표현이 바뀌어도 공개 API로 사용하는 약속을 유지하는 것이 핵심입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "mutex를 소유한 태스크와 다른 태스크가 unlock해도 되는가?",
+      "prompt": "mutex를 얻지 않은 다른 작업이 대신 해제해도 되나요?",
       "options": [
+        "안 됩니다. 소유자만 해제합니다.",
+        "됩니다. 세마포어 up과 완전히 같습니다."
+      ],
+      "answer": 0,
+      "explanation": "이 헤더는 소유자 해제를 명시합니다. 두 도구를 단순한 0·1 상태로만 보면 이 차이를 놓칩니다.",
+      "original_prompt": "mutex를 소유한 태스크와 다른 태스크가 unlock해도 되는가?",
+      "original_options": [
         "안 된다. 소유자만 해제해야 한다",
         "된다. 세마포어 up과 완전히 같다"
       ],
-      "answer": 0,
-      "explanation": "이 헤더의 규칙은 소유자 해제를 명시합니다. 세마포어와 mutex를 모두 이진 상태로만 보면 이 차이를 놓치게 됩니다."
+      "original_explanation": "이 헤더의 규칙은 소유자 해제를 명시합니다. 세마포어와 mutex를 모두 이진 상태로만 보면 이 차이를 놓치게 됩니다."
     },
     {
-      "prompt": "일반 mutex의 owner 필드는 PREEMPT_RT에서도 같은 위치에 존재하는가?",
+      "prompt": "일반 mutex의 owner는 RT 설정에서도 같은 자리에 있나요?",
       "options": [
+        "네. 모든 설정의 칸과 크기는 고정입니다.",
+        "아니요. RT는 rt_mutex_base 중심의 다른 구조입니다."
+      ],
+      "answer": 1,
+      "explanation": "조건별 구조체 정의가 다르므로 공개 API를 써야 합니다. 일반 필드 직접 접근을 모든 설정에 적용하면 안 됩니다.",
+      "original_prompt": "일반 mutex의 owner 필드는 PREEMPT_RT에서도 같은 위치에 존재하는가?",
+      "original_options": [
         "그렇다. 모든 설정에서 필드와 크기가 고정된다",
         "아니다. RT 분기는 rt_mutex_base 중심의 다른 표현이다"
       ],
-      "answer": 1,
-      "explanation": "조건부 구조체 정의가 서로 다릅니다. 공개 API를 사용해야 하며 일반 분기 필드 직접 접근을 모든 설정에 적용하면 안 됩니다."
+      "original_explanation": "조건부 구조체 정의가 서로 다릅니다. 공개 API를 사용해야 하며 일반 분기 필드 직접 접근을 모든 설정에 적용하면 안 됩니다."
     },
     {
-      "prompt": "mutex 메모리를0으로 채우면 API 초기화와 같은가?",
+      "prompt": "mutex 공간에 0을 채우면 정상 초기화와 같나요?",
       "options": [
+        "아니요. memset이나 복사 초기화는 금지입니다.",
+        "네. 모든 비트가 0이면 언제나 맞습니다."
+      ],
+      "answer": 0,
+      "explanation": "대기 줄·내부 잠금·진단 자료도 올바르게 준비해야 합니다. 상태 숫자 하나를 0으로 하는 것으로 대신하지 못합니다.",
+      "original_prompt": "mutex 메모리를0으로 채우면 API 초기화와 같은가?",
+      "original_options": [
         "아니다. 문서는 memset이나 복사 초기화를 금지한다",
         "그렇다. 비트가0이면 언제나 올바른 unlocked 상태다"
       ],
-      "answer": 0,
-      "explanation": "대기 리스트·잠금·진단 구조가 함께 초기화되어야 합니다. 구조체의 한 상태값만0으로 만드는 것으로 전체 불변식을 대체할 수 없습니다."
+      "original_explanation": "대기 리스트·잠금·진단 구조가 함께 초기화되어야 합니다. 구조체의 한 상태값만0으로 만드는 것으로 전체 불변식을 대체할 수 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "일반 구조체와 RT 구조체에서 같은 이름의 owner가 있는지 비교해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_MUTEX_TYPES_H\n#define __LINUX_MUTEX_TYPES_H\n\n#include <linux/atomic.h>\n#include <linux/lockdep_types.h>\n#include <linux/osq_lock.h>\n#include <linux/spinlock_types.h>\n#include <linux/types.h>\n\n#ifndef CONFIG_PREEMPT_RT\n\n/*\n * Simple, straightforward mutexes with strict semantics:\n *\n * - only one task can hold the mutex at a time\n * - only the owner can unlock the mutex\n * - multiple unlocks are not permitted\n * - recursive locking is not permitted\n * - a mutex object must be initialized via the API\n * - a mutex object must not be initialized via memset or copying\n * - task may not exit with mutex held\n * - memory areas where held locks reside must not be freed\n * - held mutexes must not be reinitialized\n * - mutexes may not be used in hardware or software interrupt\n *   contexts such as tasklets and timers\n *\n * These semantics are fully enforced when DEBUG_MUTEXES is\n * enabled. Furthermore, besides enforcing the above rules, the mutex\n * debugging code also implements a number of additional features\n * that make lock debugging easier and faster:\n *\n * - uses symbolic names of mutexes, whenever they are printed in debug output\n * - point-of-acquire tracking, symbolic lookup of function names\n * - list of all locks held in the system, printout of them\n * - owner tracking\n * - detects self-recursing locks and prints out all relevant info\n * - detects multi-task circular deadlocks and prints out all affected\n *   locks and tasks (and only those tasks)\n */\nstruct mutex {\n\tatomic_long_t\t\towner;\n\traw_spinlock_t\t\twait_lock;\n#ifdef CONFIG_MUTEX_SPIN_ON_OWNER\n\tstruct optimistic_spin_queue osq; /* Spinner MCS lock */\n#endif\n\tstruct list_head\twait_list;\n#ifdef CONFIG_DEBUG_MUTEXES\n\tvoid\t\t\t*magic;\n#endif\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\tstruct lockdep_map\tdep_map;\n#endif\n};\n\n#else /* !CONFIG_PREEMPT_RT */\n/*\n * Preempt-RT variant based on rtmutexes.\n */\n#include <linux/rtmutex.h>\n\nstruct mutex {\n\tstruct rt_mutex_base\trtmutex;\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\tstruct lockdep_map\tdep_map;\n#endif\n};\n\n#endif /* CONFIG_PREEMPT_RT */\n\n#endif /* __LINUX_MUTEX_TYPES_H */\n",
   "source_review": {
@@ -102,5 +116,139 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/mutex_types.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f130ef2992973d48",
+    "path": "include/linux/mutex_types.h",
+    "title": "Mutex 타입 전체: 소유권 규칙과 RT별 표현",
+    "area": "상호 배제 · 소유권 · 조건부 컴파일 · 자원 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "mutex의 사용 규칙과 빌드 설정별 구조체 표현을 선언합니다.",
+    "guide": [
+      "잠금 소유자 규칙은 자료구조와 API가 함께 지킵니다. PREEMPT_RT 여부에 따라 내부 구현 표현이 달라지므로 공개 API를 통해 사용해야 합니다.",
+      "mutex를 단순 메모리 복사나 memset으로 초기화하지 않습니다. 잠금이 저장된 메모리와 소유 태스크의 수명도 규칙의 일부입니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0과 guard, atomic/lockdep_types/osq_lock/spinlock_types/types 포함 뒤 PREEMPT_RT 분기로 나뉩니다. 일반 분기에 의미 규칙 주석과 mutex 구조체, RT 분기에 rtmutex.h 포함과 대체 구조체가 있습니다. 이 파일은 획득·해제 함수 본문을 제공하지 않습니다."
+      },
+      {
+        "title": "소유권 규칙",
+        "text": "한 번에 한 태스크만 소유하고 소유자만 unlock할 수 있으며 반복 unlock과 재귀 잠금을 금지합니다. 소유한 채 태스크가 종료해서도 안 됩니다. 이는 count1인 세마포어의 소유자 없는 up 계약과 다르며 잠금 성공 여부를 확인하지 않은 채 unlock하는 사용도 올바르지 않습니다."
+      },
+      {
+        "title": "객체와 실행 문맥",
+        "text": "API로 초기화해야 하고 memset 또는 복사로 초기화하면 안 됩니다. 보유된 잠금을 담은 메모리를 free하거나 보유된 mutex를 재초기화하면 안 됩니다. 하드웨어·소프트웨어 인터럽트, tasklet·timer 문맥 사용도 금지하는 규칙을 명시합니다. 원자 필드가 들어 있다는 사실이 잠들 수 없는 문맥에서의 사용 허가가 아닙니다."
+      },
+      {
+        "title": "일반 표현",
+        "text": "일반 mutex는 atomic_long_t owner, raw_spinlock_t wait_lock, list_head wait_list를 가집니다. MUTEX_SPIN_ON_OWNER이면 MCS spinner용 optimistic_spin_queue osq가 추가됩니다. owner의 구체적 플래그 인코딩과 낙관적 스핀 알고리즘은 이 타입 선언만으로 정의되지 않으므로 구현을 따로 확인해야 합니다."
+      },
+      {
+        "title": "진단 필드와 주석 범위",
+        "text": "DEBUG_MUTEXES이면 magic, DEBUG_LOCK_ALLOC이면 dep_map이 추가됩니다. 주석은 이름·획득 지점·소유자·재귀·교착 관련 디버깅 기능을 설명합니다. 이 구조체 파일 자체가 그 검사를 실행하는 것은 아니며 개별 디버그 함수 하나만으로 모든 기능을 보장한다고 읽지 않습니다."
+      },
+      {
+        "title": "RT 표현",
+        "text": "PREEMPT_RT에서는 rt_mutex_base rtmutex와 선택적 dep_map으로 표현합니다. 일반 분기의 owner/wait_list를 모든 빌드에 직접 접근하는 코드는 맞지 않습니다. 조건부 필드는 크기와 배치를 바꾸므로 내부 구조체를 고정된 외부 ABI처럼 취급하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "상호 배제와 소유권, 잠금과 객체 수명, 잠들 수 있는 문맥, 표현을 바꾸면서 API 계약을 유지하는 추상화, 설정별 메모리 배치를 학습합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "mutex를 소유한 태스크와 다른 태스크가 unlock해도 되는가?",
+        "options": [
+          "안 된다. 소유자만 해제해야 한다",
+          "된다. 세마포어 up과 완전히 같다"
+        ],
+        "answer": 0,
+        "explanation": "이 헤더의 규칙은 소유자 해제를 명시합니다. 세마포어와 mutex를 모두 이진 상태로만 보면 이 차이를 놓치게 됩니다."
+      },
+      {
+        "prompt": "일반 mutex의 owner 필드는 PREEMPT_RT에서도 같은 위치에 존재하는가?",
+        "options": [
+          "그렇다. 모든 설정에서 필드와 크기가 고정된다",
+          "아니다. RT 분기는 rt_mutex_base 중심의 다른 표현이다"
+        ],
+        "answer": 1,
+        "explanation": "조건부 구조체 정의가 서로 다릅니다. 공개 API를 사용해야 하며 일반 분기 필드 직접 접근을 모든 설정에 적용하면 안 됩니다."
+      },
+      {
+        "prompt": "mutex 메모리를0으로 채우면 API 초기화와 같은가?",
+        "options": [
+          "아니다. 문서는 memset이나 복사 초기화를 금지한다",
+          "그렇다. 비트가0이면 언제나 올바른 unlocked 상태다"
+        ],
+        "answer": 0,
+        "explanation": "대기 리스트·잠금·진단 구조가 함께 초기화되어야 합니다. 구조체의 한 상태값만0으로 만드는 것으로 전체 불변식을 대체할 수 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_MUTEX_TYPES_H\n#define __LINUX_MUTEX_TYPES_H\n\n#include <linux/atomic.h>\n#include <linux/lockdep_types.h>\n#include <linux/osq_lock.h>\n#include <linux/spinlock_types.h>\n#include <linux/types.h>\n\n#ifndef CONFIG_PREEMPT_RT\n\n/*\n * Simple, straightforward mutexes with strict semantics:\n *\n * - only one task can hold the mutex at a time\n * - only the owner can unlock the mutex\n * - multiple unlocks are not permitted\n * - recursive locking is not permitted\n * - a mutex object must be initialized via the API\n * - a mutex object must not be initialized via memset or copying\n * - task may not exit with mutex held\n * - memory areas where held locks reside must not be freed\n * - held mutexes must not be reinitialized\n * - mutexes may not be used in hardware or software interrupt\n *   contexts such as tasklets and timers\n *\n * These semantics are fully enforced when DEBUG_MUTEXES is\n * enabled. Furthermore, besides enforcing the above rules, the mutex\n * debugging code also implements a number of additional features\n * that make lock debugging easier and faster:\n *\n * - uses symbolic names of mutexes, whenever they are printed in debug output\n * - point-of-acquire tracking, symbolic lookup of function names\n * - list of all locks held in the system, printout of them\n * - owner tracking\n * - detects self-recursing locks and prints out all relevant info\n * - detects multi-task circular deadlocks and prints out all affected\n *   locks and tasks (and only those tasks)\n */\nstruct mutex {\n\tatomic_long_t\t\towner;\n\traw_spinlock_t\t\twait_lock;\n#ifdef CONFIG_MUTEX_SPIN_ON_OWNER\n\tstruct optimistic_spin_queue osq; /* Spinner MCS lock */\n#endif\n\tstruct list_head\twait_list;\n#ifdef CONFIG_DEBUG_MUTEXES\n\tvoid\t\t\t*magic;\n#endif\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\tstruct lockdep_map\tdep_map;\n#endif\n};\n\n#else /* !CONFIG_PREEMPT_RT */\n/*\n * Preempt-RT variant based on rtmutexes.\n */\n#include <linux/rtmutex.h>\n\nstruct mutex {\n\tstruct rt_mutex_base\trtmutex;\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\tstruct lockdep_map\tdep_map;\n#endif\n};\n\n#endif /* CONFIG_PREEMPT_RT */\n\n#endif /* __LINUX_MUTEX_TYPES_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c96488bb111b8b470c993b1ee25456c4e0bb81395df0810fe67c24b65f67f5ab",
+      "scope": "whole-file",
+      "line_count": 71,
+      "authoring_source": "course/file_units/mutex_public_headers.py",
+      "sections": [
+        "전체 구성",
+        "소유권 규칙",
+        "객체와 실행 문맥",
+        "일반 표현",
+        "진단 필드와 주석 범위",
+        "RT 표현",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/mutex_types.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공용 방의 열쇠함은 기계의 설정에 따라 속 모양이 달라도 사용 규칙은 지켜야 합니다. mutex도 정해진 함수로 준비하고 얻은 사람만 돌려줘야 합니다.",
+    "meaning": "일반 구성과 PREEMPT_RT의 mutex 표현 차이를 알고 소유권·초기화·수명 규칙을 지킵니다.",
+    "exercise": "일반 구조체와 RT 구조체에서 같은 이름의 owner가 있는지 비교해 보세요."
+  },
+  "goal": "일반 구성과 PREEMPT_RT의 mutex 표현 차이를 알고 소유권·초기화·수명 규칙을 지킵니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "일반 구조체와 RT 구조체에서 같은 이름의 owner가 있는지 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "e43695d30c5bbadb14445bddb4c88aeb30a8732741be7e22e817817b9cf482e0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

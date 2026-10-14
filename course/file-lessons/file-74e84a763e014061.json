@@ -5,130 +5,162 @@
   "area": "시스템 호출 · 기능 축소 · ABI 호환 · 시간 namespace · 절대·상대 시간 · 재시작",
   "track": "files",
   "kind": "kernel",
-  "intro": "네 clock 시스템 호출과 네 구형 시간 변형의 지원 범위·namespace·재시작 상태를 분석합니다.",
+  "intro": "stub이라는 이름만 보고 전부 실패한다고 생각하면 안 돼요. 세 시계의 조회·해상도·수면과 REALTIME 설정을 남기며 사용자 자료 복사와 시간 기준 변환을 구분해요.",
   "guide": [
-    "기능을 비활성화해도 호환성을 위해 일부 인터페이스는 실제 동작하는 작은 구현으로 유지할 수 있습니다.",
-    "stub이라는 이름만으로 모든 clock 호출이 실패한다고 판단하지 않고 실제 지원 범위를 확인합니다."
+    "REALTIME은 실제 달력 시각, MONOTONIC은 경과 시간 기준, BOOTTIME은 부팅 후 시간을 다루는 시계예요.",
+    "절대 수면은 “시각 X까지”, 상대 수면은 “지금부터 길이 X만큼” 기다리는 요청이에요.",
+    "ABI는 사용자 프로그램과 커널이 자료를 주고받는 모양의 약속이에요. 구형 32비트 시간 자료는 별도 복사와 재시작 칸을 써요."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일과 선택 조건",
-      "text": "GPL-2.0과 작성 이력, syscall·timekeeping·namespace·compat 관련 include 뒤 일반 clock_settime/gettime/getres/nanosleep, CONFIG_COMPAT_32BIT_TIME 아래 구형 네 호출이 있습니다. 공통 내부 helper는 do_clock_gettime 하나입니다. Makefile에서 CONFIG_POSIX_TIMERS가 y가 아닐 때 이 파일을 선택합니다. 본문은 전부 ENOSYS를 돌려주는 빈 함수 모음이 아닙니다."
+      "title": "기능을 줄여도 실제 코드가 남아요",
+      "text": "Makefile은 POSIX_TIMERS가 y가 아닐 때 이 파일을 골라요. 일반 settime·gettime·getres·nanosleep과 COMPAT_32BIT_TIME 아래 구형 네 호출, 공통 gettime 도우미가 있어요. 전부 ENOSYS만 주는 빈 함수 모음이 아니에요."
     },
     {
-      "title": "보존하는 clock 종류",
-      "text": "주석은 CLOCK_REALTIME과 CLOCK_MONOTONIC의 최소 호환성, systemd 등의 사용을 위한 CLOCK_BOOTTIME을 설명합니다. gettime/getres/nanosleep은 이 세 ID만 받습니다. CPU time, RAW, COARSE, TAI와 alarm clock ID 등 다른 값은 이 구현의 switch에서 EINVAL입니다. 헤더에 상수가 있다는 것과 이 축소 구현이 지원한다는 것은 다릅니다."
+      "title": "세 시계만 지원해요",
+      "text": "조회·해상도·수면은 REALTIME·MONOTONIC·BOOTTIME만 받아요. 주석은 호환성과 systemd 사용 등을 이유로 들어요. CPU 시간·RAW·COARSE·TAI·alarm 등은 이 switch에서 -EINVAL이에요. 상수가 헤더에 있어도 이 축소 구현에서 지원한다는 뜻은 아니에요."
     },
     {
-      "title": "Clock settime",
-      "text": "clock_settime은 CLOCK_REALTIME만 허용하며 다른 ID는 사용자 포인터를 읽기 전에 EINVAL입니다. get_timespec64 실패는 EFAULT이고 성공하면 do_sys_settimeofday64(&new_tp,NULL)의 결과를 그대로 반환합니다. 권한과 시각 유효성 등 공통 설정 정책은 위임된 helper에서 처리합니다. monotonic을 직접 설정하거나 timezone 객체를 전달하는 경로는 없습니다."
+      "title": "시각 설정은 REALTIME만",
+      "text": "다른 ID는 사용자 포인터를 읽기 전에 -EINVAL이에요. REALTIME이면 get_timespec64로 복사하고 실패는 -EFAULT, 성공은 do_sys_settimeofday64에 넘겨 결과를 그대로 줘요. 권한과 시각 유효성은 그 공통 함수가 처리해요. monotonic 직접 설정이나 timezone 객체 전달 경로는 없어요."
     },
     {
-      "title": "내부 gettime와 namespace",
-      "text": "do_clock_gettime은 REALTIME에 ktime_get_real_ts64, MONOTONIC에 ktime_get_ts64 후 timens_add_monotonic, BOOTTIME에 ktime_get_boottime_ts64 후 timens_add_boottime을 사용합니다. 이 파일에서 realtime에는 namespace offset을 추가하지 않습니다. 성공은 0, 나머지 ID는 EINVAL입니다."
+      "title": "조회에서 namespace 시간 차이를 반영해요",
+      "text": "REALTIME은 ktime_get_real_ts64, MONOTONIC은 ktime_get_ts64 뒤 timens_add_monotonic, BOOTTIME은 ktime_get_boottime_ts64 뒤 timens_add_boottime을 써요. 이 파일의 realtime에는 namespace 차이를 더하지 않아요. 지원하면 0, 다른 ID는 -EINVAL이에요."
     },
     {
-      "title": "사용자 gettime 출력",
-      "text": "clock_gettime은 지역 timespec64에 내부 helper 결과를 받은 뒤 put_timespec64로 사용자에게 전달합니다. 지원하지 않는 clock이면 복사 단계 전에 반환하고 복사 실패는 EFAULT입니다. 사용자 버퍼를 내부 timekeeping 함수에 직접 넘기지 않고 커널 표현과 공개 ABI 표현 사이를 분리합니다."
+      "title": "커널 칸에 읽은 뒤 사용자에게 복사해요",
+      "text": "gettime은 먼저 지역 timespec64에 내부 결과를 받아요. 지원하지 않는 ID는 사용자 복사 전에 끝나고, put_timespec64 실패는 -EFAULT예요. timekeeping에 사용자 버퍼를 직접 주지 않아 내부 표현과 공개 ABI를 분리해요."
     },
     {
-      "title": "Clock getres의 실제 출력 처리",
-      "text": "clock_getres는 {tv_sec=0,tv_nsec=hrtimer_resolution}을 준비하고 지원하는 세 ID에서 put_timespec64를 호출합니다. 이 경로에는 tp가 NULL인지 확인해 복사를 생략하는 조건이 없습니다. 따라서 지원 ID라도 NULL 출력 포인터가 이 구현에서 자동 성공한다고 가정하면 안 됩니다. 해상도는 고정 TICK_NSEC를 이 파일이 직접 대입하는 것이 아니라 hrtimer_resolution 값입니다."
+      "title": "해상도 출력의 NULL 조건",
+      "text": "getres는 초 0, 나노초 hrtimer_resolution을 준비하고 세 시계에서 put_timespec64를 불러요. tp가 NULL이면 복사를 생략하는 조건은 없어요. 지원 ID라도 NULL 출력이 자동 성공한다고 가정하면 안 돼요. 고정 TICK_NSEC가 아니라 hrtimer_resolution 값을 써요."
     },
     {
-      "title": "Sleep 입력 순서",
-      "text": "clock_nanosleep은 먼저 ID를 검사하고, get_timespec64로 요청을 복사한 뒤 timespec64_valid로 비음수 초와 정상 나노초 범위를 확인합니다. 복사 실패는 EFAULT, 유효성 실패는 EINVAL입니다. strict 검사 호출은 없으며 이후 timespec64_to_ktime의 범위 처리에 따라 표현됩니다."
+      "title": "수면 요청의 검사 순서",
+      "text": "먼저 ID를 고르고 요청을 복사한 뒤 timespec64_valid로 초가 음수가 아니고 나노초가 정상 범위인지 봐요. 복사 실패는 -EFAULT, 유효성 실패는 -EINVAL이에요. 더 엄격한 strict 검사를 부르지는 않으며 이후 ktime 변환의 범위 처리도 따로 봐야 해요."
     },
     {
-      "title": "Flags의 검사 범위",
-      "text": "이 함수는 flags&TIMER_ABSTIME만 봅니다. 다른 비트가 설정되었는지 검사해 별도 EINVAL을 반환하는 코드는 이 본문에 없습니다. ABSTIME 비트가 있으면 절대 모드, 없으면 상대 모드를 선택합니다. 실제 소스 설명과 일반적인 인터페이스 기대를 구분해야 합니다."
+      "title": "flags의 어떤 비트를 볼까요",
+      "text": "이 본문은 TIMER_ABSTIME 비트만 검사해요. 다른 비트가 있다고 별도 -EINVAL로 거절하는 검사는 없어요. ABSTIME이 있으면 절대, 없으면 상대 모드예요. 일반적인 인터페이스 기대와 이 코드에 실제 있는 검사를 구분해요."
     },
     {
-      "title": "절대 시각과 남은 시간",
-      "text": "ABSTIME이면 rmtp를 NULL로 바꾸어 남은 시간 출력 포인터를 무시합니다. 상대 모드에서는 전달한 rmtp를 유지합니다. texp=timespec64_to_ktime(t) 뒤 절대 모드일 때만 timens_ktime_to_host(which_clock,texp)로 namespace 기준 시각을 host 기준으로 바꿉니다. 상대적인 길이에 namespace offset을 무조건 더하거나 빼는 것은 아닙니다."
+      "title": "절대 시각만 호스트 기준으로 돌려요",
+      "text": "절대 모드이면 남은 시간 출력 rmtp를 NULL로 만들어 무시해요. 상대 모드는 원래 포인터를 유지해요. 요청을 ktime으로 바꾼 뒤 절대 모드에만 timens_ktime_to_host를 적용해요. namespace에서 보이는 시각을 호스트 기준으로 돌리는 것이며 상대 길이에 무조건 차이를 더하거나 빼지는 않아요."
     },
     {
-      "title": "재시작 상태와 hrtimer 위임",
-      "text": "current->restart_block.fn을 do_no_restart_syscall로 설정하고 nanosleep.type을 rmtp 유무에 따라 TT_NATIVE 또는 TT_NONE으로 둔 뒤 rmtp 필드를 저장합니다. hrtimer_nanosleep에 texp, ABS/REL 모드와 clock ID를 넘겨 결과를 반환합니다. 이 파일 안에 실제 수면 루프나 signal 재시작 알고리즘이 없으므로 초기 restart fn만 보고 하위 함수의 모든 재시작 동작이 금지된다고 결론 내리지 않습니다."
+      "title": "재시작 자료를 준비하고 수면을 맡겨요",
+      "text": "restart_block.fn을 do_no_restart_syscall로 시작하고 rmtp가 있으면 TT_NATIVE, 없으면 TT_NONE으로 두며 포인터도 저장해요. hrtimer_nanosleep에 시각·ABS/REL·clock ID를 넘겨 결과를 반환해요. 실제 수면 루프와 시그널 재시작 전체는 아래 구현의 일이므로 초기 함수 값만 보고 모든 재시작을 금지한다고 결론 내리면 안 돼요."
     },
     {
-      "title": "32비트 시간 set/get/getres",
-      "text": "CONFIG_COMPAT_32BIT_TIME 아래 clock_settime32는 같은 REALTIME 제한 뒤 get_old_timespec32로 복사하여 공통 설정 helper에 위임합니다. clock_gettime32는 같은 do_clock_gettime을 사용하므로 monotonic/boottime namespace 보정도 공유합니다. clock_getres_time32는 같은 해상도 구조체를 put_old_timespec32로 출력하며 역시 NULL 검사 생략 조건이 없습니다."
+      "title": "구형 시간 설정·읽기·해상도",
+      "text": "32비트 시간 설정도 REALTIME만 받아 old_timespec32를 복사해 공통 설정 함수로 보내요. 구형 gettime도 같은 내부 함수를 써서 monotonic·boottime namespace 보정을 공유해요. 구형 getres는 같은 해상도를 put_old_timespec32로 내보내며 역시 NULL이면 생략하는 조건은 없어요."
     },
     {
-      "title": "32비트 시간 sleep",
-      "text": "clock_nanosleep_time32는 ID·복사·유효성·ABSTIME 분기와 host 시각 변환이 일반 경로와 같습니다. 차이는 구형 시간 복사 helper와 restart_block의 TT_COMPAT, compat_rmtp 필드 사용입니다. rmtp가 없거나 절대 모드이면 TT_NONE입니다. old_timespec32 포인터를 native rmtp 필드에 그대로 저장하는 구현이 아닙니다."
+      "title": "구형 수면의 다른 저장 칸",
+      "text": "구형 수면도 ID·복사·유효성·절대 모드·호스트 변환 순서는 같아요. 차이는 옛 시간 복사 도우미와 TT_COMPAT, compat_rmtp 필드예요. 포인터가 없거나 절대 모드이면 TT_NONE이에요. 구형 포인터를 native rmtp 칸에 그대로 저장하지 않아요."
     },
     {
-      "title": "CS와 검증 범위",
-      "text": "모든 함수와 설정 분기를 소스로 대조했습니다. 축소 기능의 호환성, 사용자 복사 경계, 시간 좌표계와 상대 기간의 차이, ABI별 restart 데이터, 코드에 있는 검사와 없는 검사를 구분하는 법을 학습합니다. 실제 syscall이나 namespace 수면 실험을 실행한 결과는 아닙니다."
+      "title": "확인 범위",
+      "text": "모든 함수와 설정 분기를 확인해 최소 호환 기능, 사용자 복사 경계, 시각과 기간, ABI별 재시작 자료를 설명했어요. 실제 syscall이나 namespace 수면 실험을 한 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "CONFIG_POSIX_TIMERS=n이면 이 파일의 모든 clock 호출이 ENOSYS인가?",
+      "prompt": "POSIX_TIMERS=n이면 이 파일의 모든 호출이 ENOSYS일까요?",
       "options": [
+        "아니요. 세 시계의 조회·해상도·수면 등은 실제 구현돼요.",
+        "네. stub은 언제나 빈 함수예요."
+      ],
+      "answer": 0,
+      "explanation": "지원 밖 ID는 -EINVAL이며 실제 timekeeping과 hrtimer 연결이 있어요.",
+      "original_prompt": "CONFIG_POSIX_TIMERS=n이면 이 파일의 모든 clock 호출이 ENOSYS인가?",
+      "original_options": [
         "아니다. 세 clock의 읽기·해상도·sleep 등 최소 기능을 구현한다",
         "그렇다. stub이라는 이름이면 모든 함수가 비어 있다"
       ],
-      "answer": 0,
-      "explanation": "파일 본문에는 timekeeping과 hrtimer에 연결하는 실제 구현이 있습니다. 지원하지 않는 ID에는 EINVAL을 반환합니다."
+      "original_explanation": "파일 본문에는 timekeeping과 hrtimer에 연결하는 실제 구현이 있습니다. 지원하지 않는 ID에는 EINVAL을 반환합니다."
     },
     {
-      "prompt": "clock_settime이 허용하는 clock ID는?",
+      "prompt": "settime으로 설정할 수 있는 시계는 무엇일까요?",
       "options": [
+        "MONOTONIC과 BOOTTIME도 직접 설정해요.",
+        "REALTIME만 설정해요."
+      ],
+      "answer": 1,
+      "explanation": "다른 ID는 사용자 입력을 읽기 전에 거절해요.",
+      "original_prompt": "clock_settime이 허용하는 clock ID는?",
+      "original_options": [
         "MONOTONIC과 BOOTTIME도 직접 설정할 수 있다",
         "CLOCK_REALTIME만이다"
       ],
-      "answer": 1,
-      "explanation": "ID 검사가 첫 단계이며 REALTIME이 아니면 사용자 입력을 읽기 전에 EINVAL입니다."
+      "original_explanation": "ID 검사가 첫 단계이며 REALTIME이 아니면 사용자 입력을 읽기 전에 EINVAL입니다."
     },
     {
-      "prompt": "MONOTONIC gettime과 절대 sleep의 namespace 변환 방향은?",
+      "prompt": "MONOTONIC 조회와 절대 수면의 변환은 어떻게 다를까요?",
       "options": [
+        "조회는 namespace 차이를 반영하고 절대 수면은 호스트 기준으로 바꿔요.",
+        "둘 다 무조건 같은 차이를 더해요."
+      ],
+      "answer": 0,
+      "explanation": "시각을 보여 주는 방향과 요청을 호스트로 옮기는 방향이 달라요.",
+      "original_prompt": "MONOTONIC gettime과 절대 sleep의 namespace 변환 방향은?",
+      "original_options": [
         "조회는 namespace offset을 반영하고 절대 sleep은 host 기준으로 변환한다",
         "두 경로 모두 무조건 같은 offset을 더한다"
       ],
-      "answer": 0,
-      "explanation": "조회는 timens_add_monotonic, 절대 요청은 timens_ktime_to_host입니다. 상대적인 기간에는 후자 변환을 적용하지 않습니다."
+      "original_explanation": "조회는 timens_add_monotonic, 절대 요청은 timens_ktime_to_host입니다. 상대적인 기간에는 후자 변환을 적용하지 않습니다."
     },
     {
-      "prompt": "ABSTIME 요청에서 rmtp가 주어지면 어떻게 처리하는가?",
+      "prompt": "ABSTIME 요청에 rmtp가 있으면 어떻게 할까요?",
       "options": [
+        "반드시 TT_NATIVE로 등록해 출력해요.",
+        "NULL로 바꿔 남은 시간 출력에 쓰지 않아요."
+      ],
+      "answer": 1,
+      "explanation": "그 뒤 재시작 타입도 TT_NONE이 돼요.",
+      "original_prompt": "ABSTIME 요청에서 rmtp가 주어지면 어떻게 처리하는가?",
+      "original_options": [
         "반드시 TT_NATIVE로 등록해 출력한다",
         "NULL로 바꾸어 남은 시간 출력용으로 사용하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "절대 모드 분기가 포인터를 먼저 NULL로 만든 뒤 restart type을 정합니다. 따라서 TT_NONE이 됩니다."
+      "original_explanation": "절대 모드 분기가 포인터를 먼저 NULL로 만든 뒤 restart type을 정합니다. 따라서 TT_NONE이 됩니다."
     },
     {
-      "prompt": "이 getres 구현은 tp=NULL이면 복사를 건너뛰는가?",
+      "prompt": "이 getres는 tp가 NULL이면 복사를 건너뛸까요?",
       "options": [
+        "아니요. 지원 시계에서도 복사 도우미를 불러요.",
+        "네. 모든 getres가 같은 NULL 특별 처리를 해요."
+      ],
+      "answer": 0,
+      "explanation": "이 본문에는 if(tp) 조건이 없어요.",
+      "original_prompt": "이 getres 구현은 tp=NULL이면 복사를 건너뛰는가?",
+      "original_options": [
         "아니다. 지원 clock에서도 복사 helper를 호출한다",
         "그렇다. 모든 clock_getres는 항상 같은 NULL 특별 처리를 한다"
       ],
-      "answer": 0,
-      "explanation": "이 파일에는 if(tp) 조건이 없습니다. 다른 구현의 동작을 축소 경로에 그대로 가정하지 않습니다."
+      "original_explanation": "이 파일에는 if(tp) 조건이 없습니다. 다른 구현의 동작을 축소 경로에 그대로 가정하지 않습니다."
     },
     {
-      "prompt": "구형 nanosleep의 restart 상태에서 출력 포인터 필드는?",
+      "prompt": "구형 nanosleep은 어떤 출력 칸을 저장할까요?",
       "options": [
+        "native rmtp이며 언제나 TT_NATIVE예요.",
+        "compat_rmtp이며 포인터가 있으면 TT_COMPAT예요."
+      ],
+      "answer": 1,
+      "explanation": "자료 모양에 맞는 타입과 필드를 따로 써요.",
+      "original_prompt": "구형 nanosleep의 restart 상태에서 출력 포인터 필드는?",
+      "original_options": [
         "native rmtp이며 항상 TT_NATIVE이다",
         "compat_rmtp이며 포인터가 있으면 TT_COMPAT이다"
       ],
-      "answer": 1,
-      "explanation": "타입과 포인터 필드가 ABI에 맞게 달라집니다. 두 구현의 비슷한 구조 속 차이를 확인해야 합니다."
+      "original_explanation": "타입과 포인터 필드가 ABI에 맞게 달라집니다. 두 구현의 비슷한 구조 속 차이를 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "MONOTONIC의 시각 조회와 절대 시각 수면에서 namespace 변환 방향을 화살표로 쓰고, 상대 2초 수면은 왜 같은 변환이 필요 없는지 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Dummy stubs used when CONFIG_POSIX_TIMERS=n\n *\n * Created by:  Nicolas Pitre, July 2016\n * Copyright:   (C) 2016 Linaro Limited\n */\n\n#include <linux/linkage.h>\n#include <linux/kernel.h>\n#include <linux/sched.h>\n#include <linux/errno.h>\n#include <linux/syscalls.h>\n#include <linux/ktime.h>\n#include <linux/timekeeping.h>\n#include <linux/posix-timers.h>\n#include <linux/time_namespace.h>\n#include <linux/compat.h>\n\n/*\n * We preserve minimal support for CLOCK_REALTIME and CLOCK_MONOTONIC\n * as it is easy to remain compatible with little code. CLOCK_BOOTTIME\n * is also included for convenience as at least systemd uses it.\n */\n\nSYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,\n\t\tconst struct __kernel_timespec __user *, tp)\n{\n\tstruct timespec64 new_tp;\n\n\tif (which_clock != CLOCK_REALTIME)\n\t\treturn -EINVAL;\n\tif (get_timespec64(&new_tp, tp))\n\t\treturn -EFAULT;\n\n\treturn do_sys_settimeofday64(&new_tp, NULL);\n}\n\nstatic int do_clock_gettime(clockid_t which_clock, struct timespec64 *tp)\n{\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\t\tktime_get_real_ts64(tp);\n\t\tbreak;\n\tcase CLOCK_MONOTONIC:\n\t\tktime_get_ts64(tp);\n\t\ttimens_add_monotonic(tp);\n\t\tbreak;\n\tcase CLOCK_BOOTTIME:\n\t\tktime_get_boottime_ts64(tp);\n\t\ttimens_add_boottime(tp);\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,\n\t\tstruct __kernel_timespec __user *, tp)\n{\n\tint ret;\n\tstruct timespec64 kernel_tp;\n\n\tret = do_clock_gettime(which_clock, &kernel_tp);\n\tif (ret)\n\t\treturn ret;\n\n\tif (put_timespec64(&kernel_tp, tp))\n\t\treturn -EFAULT;\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_getres, const clockid_t, which_clock, struct __kernel_timespec __user *, tp)\n{\n\tstruct timespec64 rtn_tp = {\n\t\t.tv_sec = 0,\n\t\t.tv_nsec = hrtimer_resolution,\n\t};\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tif (put_timespec64(&rtn_tp, tp))\n\t\t\treturn -EFAULT;\n\t\treturn 0;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n}\n\nSYSCALL_DEFINE4(clock_nanosleep, const clockid_t, which_clock, int, flags,\n\t\tconst struct __kernel_timespec __user *, rqtp,\n\t\tstruct __kernel_timespec __user *, rmtp)\n{\n\tstruct timespec64 t;\n\tktime_t texp;\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\tif (get_timespec64(&t, rqtp))\n\t\treturn -EFAULT;\n\tif (!timespec64_valid(&t))\n\t\treturn -EINVAL;\n\tif (flags & TIMER_ABSTIME)\n\t\trmtp = NULL;\n\tcurrent->restart_block.fn = do_no_restart_syscall;\n\tcurrent->restart_block.nanosleep.type = rmtp ? TT_NATIVE : TT_NONE;\n\tcurrent->restart_block.nanosleep.rmtp = rmtp;\n\ttexp = timespec64_to_ktime(t);\n\tif (flags & TIMER_ABSTIME)\n\t\ttexp = timens_ktime_to_host(which_clock, texp);\n\treturn hrtimer_nanosleep(texp, flags & TIMER_ABSTIME ?\n\t\t\t\t HRTIMER_MODE_ABS : HRTIMER_MODE_REL,\n\t\t\t\t which_clock);\n}\n\n#ifdef CONFIG_COMPAT_32BIT_TIME\n\nSYSCALL_DEFINE2(clock_settime32, const clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tstruct timespec64 new_tp;\n\n\tif (which_clock != CLOCK_REALTIME)\n\t\treturn -EINVAL;\n\tif (get_old_timespec32(&new_tp, tp))\n\t\treturn -EFAULT;\n\n\treturn do_sys_settimeofday64(&new_tp, NULL);\n}\n\nSYSCALL_DEFINE2(clock_gettime32, clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tint ret;\n\tstruct timespec64 kernel_tp;\n\n\tret = do_clock_gettime(which_clock, &kernel_tp);\n\tif (ret)\n\t\treturn ret;\n\n\tif (put_old_timespec32(&kernel_tp, tp))\n\t\treturn -EFAULT;\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_getres_time32, clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tstruct timespec64 rtn_tp = {\n\t\t.tv_sec = 0,\n\t\t.tv_nsec = hrtimer_resolution,\n\t};\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tif (put_old_timespec32(&rtn_tp, tp))\n\t\t\treturn -EFAULT;\n\t\treturn 0;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n}\n\nSYSCALL_DEFINE4(clock_nanosleep_time32, clockid_t, which_clock, int, flags,\n\t\tstruct old_timespec32 __user *, rqtp,\n\t\tstruct old_timespec32 __user *, rmtp)\n{\n\tstruct timespec64 t;\n\tktime_t texp;\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\tif (get_old_timespec32(&t, rqtp))\n\t\treturn -EFAULT;\n\tif (!timespec64_valid(&t))\n\t\treturn -EINVAL;\n\tif (flags & TIMER_ABSTIME)\n\t\trmtp = NULL;\n\tcurrent->restart_block.fn = do_no_restart_syscall;\n\tcurrent->restart_block.nanosleep.type = rmtp ? TT_COMPAT : TT_NONE;\n\tcurrent->restart_block.nanosleep.compat_rmtp = rmtp;\n\ttexp = timespec64_to_ktime(t);\n\tif (flags & TIMER_ABSTIME)\n\t\ttexp = timens_ktime_to_host(which_clock, texp);\n\treturn hrtimer_nanosleep(texp, flags & TIMER_ABSTIME ?\n\t\t\t\t HRTIMER_MODE_ABS : HRTIMER_MODE_REL,\n\t\t\t\t which_clock);\n}\n#endif\n",
   "source_review": {
@@ -159,5 +191,196 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/posix-stubs.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-74e84a763e014061",
+    "path": "kernel/time/posix-stubs.c",
+    "title": "POSIX timer 비활성 경로: 최소 clock syscall과 sleep",
+    "area": "시스템 호출 · 기능 축소 · ABI 호환 · 시간 namespace · 절대·상대 시간 · 재시작",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "네 clock 시스템 호출과 네 구형 시간 변형의 지원 범위·namespace·재시작 상태를 분석합니다.",
+    "guide": [
+      "기능을 비활성화해도 호환성을 위해 일부 인터페이스는 실제 동작하는 작은 구현으로 유지할 수 있습니다.",
+      "stub이라는 이름만으로 모든 clock 호출이 실패한다고 판단하지 않고 실제 지원 범위를 확인합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 선택 조건",
+        "text": "GPL-2.0과 작성 이력, syscall·timekeeping·namespace·compat 관련 include 뒤 일반 clock_settime/gettime/getres/nanosleep, CONFIG_COMPAT_32BIT_TIME 아래 구형 네 호출이 있습니다. 공통 내부 helper는 do_clock_gettime 하나입니다. Makefile에서 CONFIG_POSIX_TIMERS가 y가 아닐 때 이 파일을 선택합니다. 본문은 전부 ENOSYS를 돌려주는 빈 함수 모음이 아닙니다."
+      },
+      {
+        "title": "보존하는 clock 종류",
+        "text": "주석은 CLOCK_REALTIME과 CLOCK_MONOTONIC의 최소 호환성, systemd 등의 사용을 위한 CLOCK_BOOTTIME을 설명합니다. gettime/getres/nanosleep은 이 세 ID만 받습니다. CPU time, RAW, COARSE, TAI와 alarm clock ID 등 다른 값은 이 구현의 switch에서 EINVAL입니다. 헤더에 상수가 있다는 것과 이 축소 구현이 지원한다는 것은 다릅니다."
+      },
+      {
+        "title": "Clock settime",
+        "text": "clock_settime은 CLOCK_REALTIME만 허용하며 다른 ID는 사용자 포인터를 읽기 전에 EINVAL입니다. get_timespec64 실패는 EFAULT이고 성공하면 do_sys_settimeofday64(&new_tp,NULL)의 결과를 그대로 반환합니다. 권한과 시각 유효성 등 공통 설정 정책은 위임된 helper에서 처리합니다. monotonic을 직접 설정하거나 timezone 객체를 전달하는 경로는 없습니다."
+      },
+      {
+        "title": "내부 gettime와 namespace",
+        "text": "do_clock_gettime은 REALTIME에 ktime_get_real_ts64, MONOTONIC에 ktime_get_ts64 후 timens_add_monotonic, BOOTTIME에 ktime_get_boottime_ts64 후 timens_add_boottime을 사용합니다. 이 파일에서 realtime에는 namespace offset을 추가하지 않습니다. 성공은 0, 나머지 ID는 EINVAL입니다."
+      },
+      {
+        "title": "사용자 gettime 출력",
+        "text": "clock_gettime은 지역 timespec64에 내부 helper 결과를 받은 뒤 put_timespec64로 사용자에게 전달합니다. 지원하지 않는 clock이면 복사 단계 전에 반환하고 복사 실패는 EFAULT입니다. 사용자 버퍼를 내부 timekeeping 함수에 직접 넘기지 않고 커널 표현과 공개 ABI 표현 사이를 분리합니다."
+      },
+      {
+        "title": "Clock getres의 실제 출력 처리",
+        "text": "clock_getres는 {tv_sec=0,tv_nsec=hrtimer_resolution}을 준비하고 지원하는 세 ID에서 put_timespec64를 호출합니다. 이 경로에는 tp가 NULL인지 확인해 복사를 생략하는 조건이 없습니다. 따라서 지원 ID라도 NULL 출력 포인터가 이 구현에서 자동 성공한다고 가정하면 안 됩니다. 해상도는 고정 TICK_NSEC를 이 파일이 직접 대입하는 것이 아니라 hrtimer_resolution 값입니다."
+      },
+      {
+        "title": "Sleep 입력 순서",
+        "text": "clock_nanosleep은 먼저 ID를 검사하고, get_timespec64로 요청을 복사한 뒤 timespec64_valid로 비음수 초와 정상 나노초 범위를 확인합니다. 복사 실패는 EFAULT, 유효성 실패는 EINVAL입니다. strict 검사 호출은 없으며 이후 timespec64_to_ktime의 범위 처리에 따라 표현됩니다."
+      },
+      {
+        "title": "Flags의 검사 범위",
+        "text": "이 함수는 flags&TIMER_ABSTIME만 봅니다. 다른 비트가 설정되었는지 검사해 별도 EINVAL을 반환하는 코드는 이 본문에 없습니다. ABSTIME 비트가 있으면 절대 모드, 없으면 상대 모드를 선택합니다. 실제 소스 설명과 일반적인 인터페이스 기대를 구분해야 합니다."
+      },
+      {
+        "title": "절대 시각과 남은 시간",
+        "text": "ABSTIME이면 rmtp를 NULL로 바꾸어 남은 시간 출력 포인터를 무시합니다. 상대 모드에서는 전달한 rmtp를 유지합니다. texp=timespec64_to_ktime(t) 뒤 절대 모드일 때만 timens_ktime_to_host(which_clock,texp)로 namespace 기준 시각을 host 기준으로 바꿉니다. 상대적인 길이에 namespace offset을 무조건 더하거나 빼는 것은 아닙니다."
+      },
+      {
+        "title": "재시작 상태와 hrtimer 위임",
+        "text": "current->restart_block.fn을 do_no_restart_syscall로 설정하고 nanosleep.type을 rmtp 유무에 따라 TT_NATIVE 또는 TT_NONE으로 둔 뒤 rmtp 필드를 저장합니다. hrtimer_nanosleep에 texp, ABS/REL 모드와 clock ID를 넘겨 결과를 반환합니다. 이 파일 안에 실제 수면 루프나 signal 재시작 알고리즘이 없으므로 초기 restart fn만 보고 하위 함수의 모든 재시작 동작이 금지된다고 결론 내리지 않습니다."
+      },
+      {
+        "title": "32비트 시간 set/get/getres",
+        "text": "CONFIG_COMPAT_32BIT_TIME 아래 clock_settime32는 같은 REALTIME 제한 뒤 get_old_timespec32로 복사하여 공통 설정 helper에 위임합니다. clock_gettime32는 같은 do_clock_gettime을 사용하므로 monotonic/boottime namespace 보정도 공유합니다. clock_getres_time32는 같은 해상도 구조체를 put_old_timespec32로 출력하며 역시 NULL 검사 생략 조건이 없습니다."
+      },
+      {
+        "title": "32비트 시간 sleep",
+        "text": "clock_nanosleep_time32는 ID·복사·유효성·ABSTIME 분기와 host 시각 변환이 일반 경로와 같습니다. 차이는 구형 시간 복사 helper와 restart_block의 TT_COMPAT, compat_rmtp 필드 사용입니다. rmtp가 없거나 절대 모드이면 TT_NONE입니다. old_timespec32 포인터를 native rmtp 필드에 그대로 저장하는 구현이 아닙니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "모든 함수와 설정 분기를 소스로 대조했습니다. 축소 기능의 호환성, 사용자 복사 경계, 시간 좌표계와 상대 기간의 차이, ABI별 restart 데이터, 코드에 있는 검사와 없는 검사를 구분하는 법을 학습합니다. 실제 syscall이나 namespace 수면 실험을 실행한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CONFIG_POSIX_TIMERS=n이면 이 파일의 모든 clock 호출이 ENOSYS인가?",
+        "options": [
+          "아니다. 세 clock의 읽기·해상도·sleep 등 최소 기능을 구현한다",
+          "그렇다. stub이라는 이름이면 모든 함수가 비어 있다"
+        ],
+        "answer": 0,
+        "explanation": "파일 본문에는 timekeeping과 hrtimer에 연결하는 실제 구현이 있습니다. 지원하지 않는 ID에는 EINVAL을 반환합니다."
+      },
+      {
+        "prompt": "clock_settime이 허용하는 clock ID는?",
+        "options": [
+          "MONOTONIC과 BOOTTIME도 직접 설정할 수 있다",
+          "CLOCK_REALTIME만이다"
+        ],
+        "answer": 1,
+        "explanation": "ID 검사가 첫 단계이며 REALTIME이 아니면 사용자 입력을 읽기 전에 EINVAL입니다."
+      },
+      {
+        "prompt": "MONOTONIC gettime과 절대 sleep의 namespace 변환 방향은?",
+        "options": [
+          "조회는 namespace offset을 반영하고 절대 sleep은 host 기준으로 변환한다",
+          "두 경로 모두 무조건 같은 offset을 더한다"
+        ],
+        "answer": 0,
+        "explanation": "조회는 timens_add_monotonic, 절대 요청은 timens_ktime_to_host입니다. 상대적인 기간에는 후자 변환을 적용하지 않습니다."
+      },
+      {
+        "prompt": "ABSTIME 요청에서 rmtp가 주어지면 어떻게 처리하는가?",
+        "options": [
+          "반드시 TT_NATIVE로 등록해 출력한다",
+          "NULL로 바꾸어 남은 시간 출력용으로 사용하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "절대 모드 분기가 포인터를 먼저 NULL로 만든 뒤 restart type을 정합니다. 따라서 TT_NONE이 됩니다."
+      },
+      {
+        "prompt": "이 getres 구현은 tp=NULL이면 복사를 건너뛰는가?",
+        "options": [
+          "아니다. 지원 clock에서도 복사 helper를 호출한다",
+          "그렇다. 모든 clock_getres는 항상 같은 NULL 특별 처리를 한다"
+        ],
+        "answer": 0,
+        "explanation": "이 파일에는 if(tp) 조건이 없습니다. 다른 구현의 동작을 축소 경로에 그대로 가정하지 않습니다."
+      },
+      {
+        "prompt": "구형 nanosleep의 restart 상태에서 출력 포인터 필드는?",
+        "options": [
+          "native rmtp이며 항상 TT_NATIVE이다",
+          "compat_rmtp이며 포인터가 있으면 TT_COMPAT이다"
+        ],
+        "answer": 1,
+        "explanation": "타입과 포인터 필드가 ABI에 맞게 달라집니다. 두 구현의 비슷한 구조 속 차이를 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Dummy stubs used when CONFIG_POSIX_TIMERS=n\n *\n * Created by:  Nicolas Pitre, July 2016\n * Copyright:   (C) 2016 Linaro Limited\n */\n\n#include <linux/linkage.h>\n#include <linux/kernel.h>\n#include <linux/sched.h>\n#include <linux/errno.h>\n#include <linux/syscalls.h>\n#include <linux/ktime.h>\n#include <linux/timekeeping.h>\n#include <linux/posix-timers.h>\n#include <linux/time_namespace.h>\n#include <linux/compat.h>\n\n/*\n * We preserve minimal support for CLOCK_REALTIME and CLOCK_MONOTONIC\n * as it is easy to remain compatible with little code. CLOCK_BOOTTIME\n * is also included for convenience as at least systemd uses it.\n */\n\nSYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,\n\t\tconst struct __kernel_timespec __user *, tp)\n{\n\tstruct timespec64 new_tp;\n\n\tif (which_clock != CLOCK_REALTIME)\n\t\treturn -EINVAL;\n\tif (get_timespec64(&new_tp, tp))\n\t\treturn -EFAULT;\n\n\treturn do_sys_settimeofday64(&new_tp, NULL);\n}\n\nstatic int do_clock_gettime(clockid_t which_clock, struct timespec64 *tp)\n{\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\t\tktime_get_real_ts64(tp);\n\t\tbreak;\n\tcase CLOCK_MONOTONIC:\n\t\tktime_get_ts64(tp);\n\t\ttimens_add_monotonic(tp);\n\t\tbreak;\n\tcase CLOCK_BOOTTIME:\n\t\tktime_get_boottime_ts64(tp);\n\t\ttimens_add_boottime(tp);\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,\n\t\tstruct __kernel_timespec __user *, tp)\n{\n\tint ret;\n\tstruct timespec64 kernel_tp;\n\n\tret = do_clock_gettime(which_clock, &kernel_tp);\n\tif (ret)\n\t\treturn ret;\n\n\tif (put_timespec64(&kernel_tp, tp))\n\t\treturn -EFAULT;\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_getres, const clockid_t, which_clock, struct __kernel_timespec __user *, tp)\n{\n\tstruct timespec64 rtn_tp = {\n\t\t.tv_sec = 0,\n\t\t.tv_nsec = hrtimer_resolution,\n\t};\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tif (put_timespec64(&rtn_tp, tp))\n\t\t\treturn -EFAULT;\n\t\treturn 0;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n}\n\nSYSCALL_DEFINE4(clock_nanosleep, const clockid_t, which_clock, int, flags,\n\t\tconst struct __kernel_timespec __user *, rqtp,\n\t\tstruct __kernel_timespec __user *, rmtp)\n{\n\tstruct timespec64 t;\n\tktime_t texp;\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\tif (get_timespec64(&t, rqtp))\n\t\treturn -EFAULT;\n\tif (!timespec64_valid(&t))\n\t\treturn -EINVAL;\n\tif (flags & TIMER_ABSTIME)\n\t\trmtp = NULL;\n\tcurrent->restart_block.fn = do_no_restart_syscall;\n\tcurrent->restart_block.nanosleep.type = rmtp ? TT_NATIVE : TT_NONE;\n\tcurrent->restart_block.nanosleep.rmtp = rmtp;\n\ttexp = timespec64_to_ktime(t);\n\tif (flags & TIMER_ABSTIME)\n\t\ttexp = timens_ktime_to_host(which_clock, texp);\n\treturn hrtimer_nanosleep(texp, flags & TIMER_ABSTIME ?\n\t\t\t\t HRTIMER_MODE_ABS : HRTIMER_MODE_REL,\n\t\t\t\t which_clock);\n}\n\n#ifdef CONFIG_COMPAT_32BIT_TIME\n\nSYSCALL_DEFINE2(clock_settime32, const clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tstruct timespec64 new_tp;\n\n\tif (which_clock != CLOCK_REALTIME)\n\t\treturn -EINVAL;\n\tif (get_old_timespec32(&new_tp, tp))\n\t\treturn -EFAULT;\n\n\treturn do_sys_settimeofday64(&new_tp, NULL);\n}\n\nSYSCALL_DEFINE2(clock_gettime32, clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tint ret;\n\tstruct timespec64 kernel_tp;\n\n\tret = do_clock_gettime(which_clock, &kernel_tp);\n\tif (ret)\n\t\treturn ret;\n\n\tif (put_old_timespec32(&kernel_tp, tp))\n\t\treturn -EFAULT;\n\treturn 0;\n}\n\nSYSCALL_DEFINE2(clock_getres_time32, clockid_t, which_clock,\n\t\tstruct old_timespec32 __user *, tp)\n{\n\tstruct timespec64 rtn_tp = {\n\t\t.tv_sec = 0,\n\t\t.tv_nsec = hrtimer_resolution,\n\t};\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tif (put_old_timespec32(&rtn_tp, tp))\n\t\t\treturn -EFAULT;\n\t\treturn 0;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n}\n\nSYSCALL_DEFINE4(clock_nanosleep_time32, clockid_t, which_clock, int, flags,\n\t\tstruct old_timespec32 __user *, rqtp,\n\t\tstruct old_timespec32 __user *, rmtp)\n{\n\tstruct timespec64 t;\n\tktime_t texp;\n\n\tswitch (which_clock) {\n\tcase CLOCK_REALTIME:\n\tcase CLOCK_MONOTONIC:\n\tcase CLOCK_BOOTTIME:\n\t\tbreak;\n\tdefault:\n\t\treturn -EINVAL;\n\t}\n\n\tif (get_old_timespec32(&t, rqtp))\n\t\treturn -EFAULT;\n\tif (!timespec64_valid(&t))\n\t\treturn -EINVAL;\n\tif (flags & TIMER_ABSTIME)\n\t\trmtp = NULL;\n\tcurrent->restart_block.fn = do_no_restart_syscall;\n\tcurrent->restart_block.nanosleep.type = rmtp ? TT_COMPAT : TT_NONE;\n\tcurrent->restart_block.nanosleep.compat_rmtp = rmtp;\n\ttexp = timespec64_to_ktime(t);\n\tif (flags & TIMER_ABSTIME)\n\t\ttexp = timens_ktime_to_host(which_clock, texp);\n\treturn hrtimer_nanosleep(texp, flags & TIMER_ABSTIME ?\n\t\t\t\t HRTIMER_MODE_ABS : HRTIMER_MODE_REL,\n\t\t\t\t which_clock);\n}\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f30e41bd9343c7fe55070b88acf3da20cbe1761533f22c5c45375be42cb85fc0",
+      "scope": "whole-file",
+      "line_count": 209,
+      "authoring_source": "course/file_units/posix_timer_stubs.py",
+      "sections": [
+        "전체 파일과 선택 조건",
+        "보존하는 clock 종류",
+        "Clock settime",
+        "내부 gettime와 namespace",
+        "사용자 gettime 출력",
+        "Clock getres의 실제 출력 처리",
+        "Sleep 입력 순서",
+        "Flags의 검사 범위",
+        "절대 시각과 남은 시간",
+        "재시작 상태와 hrtimer 위임",
+        "32비트 시간 set/get/getres",
+        "32비트 시간 sleep",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/posix-stubs.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "큰 타이머 기능을 끈 작은 커널도 프로그램이 시간을 읽고 잠시 기다릴 기본 기능은 필요할 수 있어요. 이 파일은 그런 최소 기능을 실제로 구현해요.",
+    "meaning": "stub이라는 이름만 보고 전부 실패한다고 생각하면 안 돼요. 세 시계의 조회·해상도·수면과 REALTIME 설정을 남기며 사용자 자료 복사와 시간 기준 변환을 구분해요.",
+    "exercise": "MONOTONIC의 시각 조회와 절대 시각 수면에서 namespace 변환 방향을 화살표로 쓰고, 상대 2초 수면은 왜 같은 변환이 필요 없는지 설명해 보세요."
+  },
+  "goal": "stub이라는 이름만 보고 전부 실패한다고 생각하면 안 돼요. 세 시계의 조회·해상도·수면과 REALTIME 설정을 남기며 사용자 자료 복사와 시간 기준 변환을 구분해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "MONOTONIC의 시각 조회와 절대 시각 수면에서 namespace 변환 방향을 화살표로 쓰고, 상대 2초 수면은 왜 같은 변환이 필요 없는지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "c3a0a22e9d22b25fe2247e73fe237846a1ace9aa9cbffe499d64a67f3c903f29",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

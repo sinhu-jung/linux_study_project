@@ -5,58 +5,66 @@
   "area": "C 선언 · PFN · 물리 범위 · 출력 인자 · 자원 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "세 함수의 인자 단위와 반환형으로 역할을 구분합니다.",
+  "intro": "물리 바이트 범위·PFN·보호값 출력과 주소 반환을 구별합니다.",
   "guide": [
-    "주소를 만드는 함수와 캐시 속성 자원을 예약하는 함수를 같은 연산으로 취급하지 않습니다.",
-    "공통 io_mapping 헤더와 x86 iomap_32.c 사이의 인터페이스를 읽습니다."
+    "PFN은 물리 메모리 페이지의 번호입니다.",
+    "pgprot_t는 페이지 접근·캐시 속성 정보를 담는 형식입니다.",
+    "__iomem은 일반 메모리와 구별할 I/O 주소라는 코드 검사 표시입니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체",
-      "text": "GPL-2.0-or-later·guard·저작권 뒤 fs/mm/uaccess/highmem/cacheflush/tlbflush 헤더를 포함하고 세 함수만 선언합니다. 함수 본문·전역 객체·초기화 코드는 없습니다."
+      "text": "필요한 메모리·접근·캐시·TLB 헤더 뒤 함수 선언 셋이 전부입니다. 함수 본문, 전역 객체, 초기화 코드는 없습니다."
     },
     {
       "title": "Local PFN 매핑",
-      "text": "__iomap_local_pfn_prot는 unsigned long pfn과 pgprot_t를 받아 void __iomem 포인터를 반환합니다. PFN 단위와 물리 byte 주소를 구분하며 보호 속성을 인자로 받아 사용하는 인터페이스입니다."
+      "text": "local 함수는 unsigned long PFN과 pgprot_t를 받아 I/O 포인터를 돌려줍니다. 첫 수를 물리 바이트 주소와 혼동하지 않으며 보호 속성을 별도 인수로 받습니다."
     },
     {
       "title": "범위 예약과 해제",
-      "text": "iomap_create_wc는 resource_size_t base,unsigned long size,pgprot_t 출력 포인터를 받고int를 반환합니다. iomap_free는 같은 base/size를 받아void입니다. 성공·실패 코드와 보호값 출력은 주소 반환과 다르며 정확한 동작은 구현에서 확인합니다."
+      "text": "create_wc는 물리 시작과 크기, 보호값 출력 포인터를 받아 int 결과를 줍니다. free는 같은 시작·크기를 받아 반환값 없이 예약을 해제하는 연결입니다. 결과 코드와 속성 출력은 가상 주소 반환이 아닙니다."
     },
     {
       "title": "CS 연결과 범위",
-      "text": "단위가 다른 정수 인자,주소공간 주석,포인터 출력값,선언과 구현을 구분합니다. 헤더에 포함된 다른 API까지 이 파일의 구현으로 세지 않으며 이 선언만으로 매핑의 성공이나 캐시 속성을 확정하지 않습니다."
+      "text": "같은 정수라도 단위를 보고 포인터가 입력인지 출력인지 확인합니다. 포함된 모든 다른 API까지 이 헤더의 구현으로 세지 않으며 선언만으로 실제 성공과 캐시 속성이 확정되지는 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "__iomap_local_pfn_prot의 첫 인자 단위는?",
+      "prompt": "local 함수의 첫 인수 단위는 무엇인가요?",
       "options": [
+        "PFN입니다.",
+        "항상 물리 바이트 주소입니다."
+      ],
+      "answer": 0,
+      "explanation": "바이트 주소라면 알맞은 페이지 번호 변환이 먼저 필요합니다.",
+      "original_prompt": "__iomap_local_pfn_prot의 첫 인자 단위는?",
+      "original_options": [
         "PFN이다",
         "항상 물리 byte 주소이다"
       ],
-      "answer": 0,
-      "explanation": "선언의 pfn과 구현의 __kmap_local_pfn_prot 호출을 연결합니다. byte 주소라면 먼저 적절한 PFN 변환이 필요합니다."
+      "original_explanation": "선언의 pfn과 구현의 __kmap_local_pfn_prot 호출을 연결합니다. byte 주소라면 먼저 적절한 PFN 변환이 필요합니다."
     },
     {
-      "prompt": "iomap_create_wc의 prot 인자는?",
+      "prompt": "create_wc의 prot는 무엇인가요?",
       "options": [
+        "반드시 매핑된 사용자 가상 주소입니다.",
+        "pgprot_t 결과를 받을 포인터입니다."
+      ],
+      "answer": 1,
+      "explanation": "int 결과와 별개의 출력 통로이며 사용자 영역 매핑 API가 아닙니다.",
+      "original_prompt": "iomap_create_wc의 prot 인자는?",
+      "original_options": [
         "반드시 매핑된 사용자 가상주소이다",
         "pgprot_t 결과를 받는 포인터이다"
       ],
-      "answer": 1,
-      "explanation": "선언은 pgprot_t *prot이며int 반환과 별도의 출력 채널입니다. 사용자 VMA 매핑 API와 다릅니다."
+      "original_explanation": "선언은 pgprot_t *prot이며int 반환과 별도의 출력 채널입니다. 사용자 VMA 매핑 API와 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "세 함수에서 int, void, I/O 포인터 반환을 각각 찾아 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n#ifndef _ASM_X86_IOMAP_H\n#define _ASM_X86_IOMAP_H\n\n/*\n * Copyright © 2008 Ingo Molnar\n */\n\n#include <linux/fs.h>\n#include <linux/mm.h>\n#include <linux/uaccess.h>\n#include <linux/highmem.h>\n#include <asm/cacheflush.h>\n#include <asm/tlbflush.h>\n\nvoid __iomem *__iomap_local_pfn_prot(unsigned long pfn, pgprot_t prot);\n\nint iomap_create_wc(resource_size_t base, unsigned long size, pgprot_t *prot);\n\nvoid iomap_free(resource_size_t base, unsigned long size);\n\n#endif /* _ASM_X86_IOMAP_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/iomap.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8659ba524e93c483",
+    "path": "arch/x86/include/asm/iomap.h",
+    "title": "x86 I/O 매핑 선언 전체: 예약·해제·페이지 매핑의 분리",
+    "area": "C 선언 · PFN · 물리 범위 · 출력 인자 · 자원 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "세 함수의 인자 단위와 반환형으로 역할을 구분합니다.",
+    "guide": [
+      "주소를 만드는 함수와 캐시 속성 자원을 예약하는 함수를 같은 연산으로 취급하지 않습니다.",
+      "공통 io_mapping 헤더와 x86 iomap_32.c 사이의 인터페이스를 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "GPL-2.0-or-later·guard·저작권 뒤 fs/mm/uaccess/highmem/cacheflush/tlbflush 헤더를 포함하고 세 함수만 선언합니다. 함수 본문·전역 객체·초기화 코드는 없습니다."
+      },
+      {
+        "title": "Local PFN 매핑",
+        "text": "__iomap_local_pfn_prot는 unsigned long pfn과 pgprot_t를 받아 void __iomem 포인터를 반환합니다. PFN 단위와 물리 byte 주소를 구분하며 보호 속성을 인자로 받아 사용하는 인터페이스입니다."
+      },
+      {
+        "title": "범위 예약과 해제",
+        "text": "iomap_create_wc는 resource_size_t base,unsigned long size,pgprot_t 출력 포인터를 받고int를 반환합니다. iomap_free는 같은 base/size를 받아void입니다. 성공·실패 코드와 보호값 출력은 주소 반환과 다르며 정확한 동작은 구현에서 확인합니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "단위가 다른 정수 인자,주소공간 주석,포인터 출력값,선언과 구현을 구분합니다. 헤더에 포함된 다른 API까지 이 파일의 구현으로 세지 않으며 이 선언만으로 매핑의 성공이나 캐시 속성을 확정하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "__iomap_local_pfn_prot의 첫 인자 단위는?",
+        "options": [
+          "PFN이다",
+          "항상 물리 byte 주소이다"
+        ],
+        "answer": 0,
+        "explanation": "선언의 pfn과 구현의 __kmap_local_pfn_prot 호출을 연결합니다. byte 주소라면 먼저 적절한 PFN 변환이 필요합니다."
+      },
+      {
+        "prompt": "iomap_create_wc의 prot 인자는?",
+        "options": [
+          "반드시 매핑된 사용자 가상주소이다",
+          "pgprot_t 결과를 받는 포인터이다"
+        ],
+        "answer": 1,
+        "explanation": "선언은 pgprot_t *prot이며int 반환과 별도의 출력 채널입니다. 사용자 VMA 매핑 API와 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n#ifndef _ASM_X86_IOMAP_H\n#define _ASM_X86_IOMAP_H\n\n/*\n * Copyright © 2008 Ingo Molnar\n */\n\n#include <linux/fs.h>\n#include <linux/mm.h>\n#include <linux/uaccess.h>\n#include <linux/highmem.h>\n#include <asm/cacheflush.h>\n#include <asm/tlbflush.h>\n\nvoid __iomem *__iomap_local_pfn_prot(unsigned long pfn, pgprot_t prot);\n\nint iomap_create_wc(resource_size_t base, unsigned long size, pgprot_t *prot);\n\nvoid iomap_free(resource_size_t base, unsigned long size);\n\n#endif /* _ASM_X86_IOMAP_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "281c1bddd6b2ed06ebd21b15f5ca975824cde23d90b6bac0f7de8111299ee9ef",
+      "scope": "whole-file",
+      "line_count": 22,
+      "authoring_source": "course/file_units/x86_iomap.py",
+      "sections": [
+        "파일 전체",
+        "Local PFN 매핑",
+        "범위 예약과 해제",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/iomap.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "예약표를 만드는 창구와 실제 출입 주소를 받는 창구는 다릅니다. 이 헤더는 I/O 매핑의 세 창구가 받는 값과 돌려주는 값을 선언합니다.",
+    "meaning": "물리 바이트 범위·PFN·보호값 출력과 주소 반환을 구별합니다.",
+    "exercise": "세 함수에서 int, void, I/O 포인터 반환을 각각 찾아 보세요."
+  },
+  "goal": "물리 바이트 범위·PFN·보호값 출력과 주소 반환을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "세 함수에서 int, void, I/O 포인터 반환을 각각 찾아 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "a837fbd0f86d966faa25dd2d9b76bbb923f30f2667ef7e965675aa98ad405941",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

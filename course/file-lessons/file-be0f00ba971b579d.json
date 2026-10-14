@@ -5,104 +5,124 @@
   "area": "문자열 알고리즘 · 전처리 · 경계 조건",
   "track": "files",
   "kind": "kernel",
-  "intro": "패턴의 오른쪽부터 비교하고 불일치 정보를 이용해 다음 후보 위치를 건너뛰는 구현입니다.",
+  "intro": "이 Boyer–Moore 구현은 문자별 이동표와 접미사 이동표를 사용하지만 블록 사이의 일치를 놓치고 성공 후 검색 offset을 자동 갱신하지 않습니다.",
   "guide": [
-    "문자별 bad_shift와 맞은 접미사 길이별 good_shift를 계산합니다. 검색에서는 두 이동 후보 중 큰 위치를 선택합니다.",
-    "이 고정 버전은 블록 경계를 넘는 일치를 찾지 못하고 성공 시 state->offset도 갱신하지 않습니다. 공통 API의 설명만으로 KMP와 같은 반복 검색 동작을 기대하면 안 됩니다."
+    "패턴은 찾을 글자열이며 접미사는 그 끝부분입니다. shift는 후보 시작이 아니라 마지막 글자의 위치입니다.",
+    "이동표는 반복 비교를 줄이려고 미리 계산한 자료입니다. 두 규칙 중 더 멀리 안전하게 건너뛸 위치를 고릅니다.",
+    "알고리즘 이름만으로 모든 스트리밍 입력이나 다음 일치 반복이 지원된다고 가정하지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL SPDX, 작성자와 문헌 안내, 블록 경계 경고 뒤에 kernel/module/types/string/ctype/textsearch 헤더가 있습니다. ASIZE256과 비활성 DEBUGP, 사설 구조체, 역방향 비교·검색·부분 패턴 검사·전처리·초기화·조회 함수, ops와 모듈 등록·해제가 이어집니다. 마지막은 설명·GPL 라이선스와 module_init/exit입니다."
+      "title": "파일 전체",
+      "text": "GPL·저자·문헌과 블록 경계 경고 뒤 관련 헤더, 알파벳 크기 256과 비활성 DEBUGP, 자료구조와 검색·표 생성·초기화·조회가 있습니다. 마지막 ops와 모듈 등록·해제·설명·라이선스를 연결합니다."
     },
     {
-      "title": "메모리 배치",
-      "text": "ts_bm에는 pattern 포인터, patlen, 256개 unsigned int bad_shift, flexible array good_shift가 있습니다. init은 good_shift 표 공간 뒤에 패턴을 두어 한 번에 할당합니다. unsigned int인 prefix_tbl_len의 곱셈과 int 순회 변수가 있어 임의의 큰 패턴 길이를 안전하게 지원한다고 가정하면 안 됩니다. 길이0 거부는 공통 prepare의 전제입니다."
+      "title": "한 할당에 담는 자료",
+      "text": "ts_bm에는 패턴 포인터와 길이, 문자 256개용 bad_shift, 가변 길이 good_shift가 있습니다. 초기화는 good_shift 공간 뒤에 패턴을 놓습니다. unsigned 곱과 int 순회값을 쓰므로 임의의 큰 패턴까지 안전하다고 가정하지 않습니다. 길이 0 거부는 공통 prepare가 먼저 해 준다는 전제입니다."
     },
     {
-      "title": "오른쪽부터 비교",
-      "text": "matchpat에는 패턴 끝과 후보 텍스트 끝의 포인터가 전달됩니다. i를 늘리며 text-i와 pattern-i를 비교하고 첫 불일치에서 중단합니다. 반환값은 맞은 접미사의 길이이며 patlen이면 전체 일치입니다. 대소문자 무시일 때 텍스트 바이트를 toupper로 바꿉니다."
+      "title": "끝에서 앞으로 비교",
+      "text": "matchpat은 패턴 끝과 후보 끝을 받아 i만큼 뒤로 이동하며 비교합니다. 첫 불일치에서 멈춰 맞은 접미사 길이를 돌려주며 전체 길이와 같으면 성공입니다. 대소문자 무시일 때 입력 문자를 toupper로 바꿔 비교합니다."
     },
     {
-      "title": "bad_shift 전처리",
-      "text": "모든 문자 이동값을 patlen으로 시작합니다. 패턴의 마지막 문자를 제외한 위치 i마다 해당 문자 값을 patlen-1-i로 설정하므로 반복 문자는 오른쪽 위치의 값이 남습니다. 대문자로 저장한 패턴을 무시 모드에서 사용할 때는 tolower에 해당하는 표 항목도 같은 값으로 설정합니다. 검색에서는 원래 입력 바이트로 표를 조회하기 때문입니다."
+      "title": "틀린 문자 이동표",
+      "text": "모든 bad_shift를 패턴 길이로 시작하고 마지막 문자를 제외한 위치마다 끝까지 거리를 기록합니다. 반복 문자는 오른쪽 위치의 짧은 거리가 남습니다. 무시 모드에서는 소문자 표 칸에도 같은 값을 씁니다. 비교와 달리 표 조회는 원래 입력 바이트를 번호로 쓰기 때문입니다."
     },
     {
-      "title": "good_shift와 subpattern",
-      "text": "good_shift[0]은 1, 나머지는 patlen으로 초기화합니다. 뒤쪽의 길이 g인 부분 패턴과 더 왼쪽 후보를 subpattern으로 역방향 비교합니다. 후보가 패턴의 시작까지 맞거나, g개가 맞고 앞선 문자가 다른 경우를 받아들이며 이동값 patlen-j-g를 기록합니다. 후보 j는 음수가 될 수도 있지만 뒤쪽 정렬 위치에서 비교를 시작하고 y<0에서 중단하는 경계를 함께 읽어야 합니다."
+      "title": "맞은 꼬리 이동표",
+      "text": "good_shift[0]=1, 나머지는 패턴 길이로 시작합니다. subpattern은 길이 g의 끝부분과 왼쪽 후보를 역방향 비교합니다. 패턴 시작까지 맞거나 g개가 맞고 앞 문자가 다른 후보를 받아 patlen-j-g를 저장합니다. j가 음수일 수 있지만 비교 시작은 정렬된 끝 위치이고 y<0에서 멈추는 경계를 함께 읽습니다."
     },
     {
-      "title": "두 이동 후보 결합",
-      "text": "각 블록에서 shift=patlen-1로 시작합니다. i개가 맞고 불일치하면 text[shift-i]의 bad_shift를 bs로 읽습니다. 다음 shift는 max_t(int, shift-i+bs, shift+good_shift[i])입니다. 두 규칙이 배제할 수 있는 후보 범위를 활용하므로 더 큰 다음 끝 위치를 선택합니다. shift는 후보 시작이 아니라 후보의 마지막 바이트 위치입니다."
+      "title": "더 큰 다음 끝 위치 고르기",
+      "text": "블록마다 shift=patlen-1입니다. i개가 맞다가 틀리면 text[shift-i]로 bad_shift 값을 bs에 얻습니다. 다음 끝은 max(shift-i+bs, shift+good_shift[i])입니다. 둘이 배제한 후보를 이용해 큰 위치로 옮기며 shift를 시작 위치라고 읽으면 성공 주소도 틀립니다."
     },
     {
-      "title": "블록 경계에서의 누락",
-      "text": "블록이 끝나면 consumed에 text_len을 더하고 다음 블록에서 shift를 다시 patlen-1로 시작합니다. 앞 블록의 접미사나 비교 상태를 보관하지 않습니다. abc 패턴에 대해 ab와 c 두 블록이 공급되면 각 블록은 패턴보다 짧아 찾지 못합니다. 이 제한은 BM 이론 전체의 불가능성이 아니라 이 구현의 블록 공급 방식에 관한 것입니다."
+      "title": "블록을 넘는 일치를 놓침",
+      "text": "블록이 끝나면 consumed에 길이를 더하고 다음 블록의 shift를 새로 시작합니다. 이전 꼬리나 비교 상태를 보관하지 않습니다. abc에 ab와 c를 따로 공급하면 두 블록 모두 짧아 놓칩니다. 이는 이 구현의 블록 공급 방식 제한이며 BM 이론 전체가 불가능하다는 뜻은 아닙니다."
     },
     {
-      "title": "성공 반환과 검색 상태",
-      "text": "성공하면 consumed+shift-(patlen-1)을 반환합니다. kmp_find와 달리 state->offset을 바꾸는 대입이 없습니다. 따라서 같은 상태와 같은 공급자로 next를 반복하면 같은 일치를 다시 반환할 수 있습니다. 호출자가 진행 위치를 관리하지 않은 자동 반복 열거를 이 구현에 기대하면 안 됩니다. 미발견은 UINT_MAX입니다."
+      "title": "성공 결과와 진행 상태",
+      "text": "성공 위치는 consumed+shift-(patlen-1)입니다. KMP와 달리 state->offset을 바꾸는 대입이 없습니다. 같은 상태와 공급자로 next를 반복하면 같은 일치가 다시 나올 수 있어 호출자가 진행을 관리해야 합니다. 못 찾으면 UINT_MAX입니다."
     },
     {
-      "title": "초기화와 조회",
-      "text": "bm_init은 공통 할당 실패를 그대로 반환하고 flags와 길이·패턴 포인터를 설정합니다. 무시 모드에서는 패턴을 대문자로 복사하고 그 후 두 표를 계산합니다. get_pattern은 정규화되어 저장된 패턴 주소이고 get_pattern_len은 길이입니다. 원래 입력이 NUL 종료인지에 의존하지 않고 len바이트를 복사합니다."
+      "title": "초기화와 패턴 조회",
+      "text": "공통 할당 오류는 그대로 반환합니다. 성공하면 flags·길이·패턴 위치를 설정하고 무시 모드에서는 대문자로 복사한 뒤 표를 계산합니다. get_pattern은 정규화된 저장 패턴, get_pattern_len은 길이를 줍니다. NUL 종료에 의존하지 않고 len바이트를 복사합니다."
     },
     {
-      "title": "등록과 해제",
-      "text": "bm_ops는 이름 bm과 find/init/조회 함수, THIS_MODULE, 초기 리스트를 연결합니다. 별도 destroy가 없으므로 공통 설정 해제가 묶음 메모리를 정리합니다. init_bm은 등록 결과를 반환하고 exit_bm은 등록을 해제합니다. DEBUGP는 #if0 때문에 현재 빌드에서 빈 매크로입니다."
+      "title": "알고리즘 등록과 해제",
+      "text": "bm_ops는 이름 bm과 함수들, THIS_MODULE, 목록 초기값을 묶습니다. 별도 destroy가 없어 공통 설정 해제가 묶음 메모리를 정리합니다. init은 등록 결과를 반환하고 exit는 해제합니다. DEBUGP는 if 0 때문에 현재 실행 출력이 없는 빈 매크로입니다."
     },
     {
-      "title": "CS와 복잡도 해석",
-      "text": "알파벳별 배열과 접미사 표를 통한 시간·공간 교환, 역방향 비교, 두 이동 휴리스틱, 입력 분할과 결과 완전성을 연결합니다. 배열 공간은 O(256+m)입니다. 전처리에는 중첩 후보 순회와 부분 비교가 있으므로 표 이름만 보고 KMP의 선형 전처리와 같다고 단정하지 않습니다. 이 파일에 없는 최적화를 전제로 항상 선형 검색이라고 주장하지 않습니다."
+      "title": "시간·공간 해석의 범위",
+      "text": "문자표와 접미사 표는 공간을 써서 비교를 줄이는 선택이며 공간은 O(256+m)입니다. 전처리에 중첩 후보 탐색과 부분 비교가 있으므로 KMP의 선형 전처리와 같다고 단정하지 않습니다. 원문에 없는 최적화를 가정해 항상 선형 검색이라고 주장하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "shift는 후보의 어느 위치인가?",
+      "prompt": "shift는 후보의 어느 위치인가요?",
       "options": [
+        "마지막 바이트 위치입니다.",
+        "첫 바이트 위치입니다."
+      ],
+      "answer": 0,
+      "explanation": "초기값은 patlen-1이며 거기서 뒤로 비교합니다.",
+      "original_prompt": "shift는 후보의 어느 위치인가?",
+      "original_options": [
         "후보의 마지막 바이트 위치다",
         "후보의 첫 바이트 위치다"
       ],
-      "answer": 0,
-      "explanation": "초기값은 patlen-1이고 matchpat은 text[shift]에서 뒤로 비교합니다. 성공 시 시작 위치를 얻으려면 patlen-1을 빼야 합니다."
+      "original_explanation": "초기값은 patlen-1이고 matchpat은 text[shift]에서 뒤로 비교합니다. 성공 시 시작 위치를 얻으려면 patlen-1을 빼야 합니다."
     },
     {
-      "prompt": "패턴 abc, 블록 ab와 c를 이 구현으로 검색하면?",
+      "prompt": "abc를 블록 ab와 c로 받으면 어떻게 되나요?",
       "options": [
+        "이전 부분 상태를 유지해 찾습니다.",
+        "블록 경계를 넘는 일치를 놓칩니다."
+      ],
+      "answer": 1,
+      "explanation": "다음 블록에서 후보 끝을 초기화하고 이전 꼬리를 저장하지 않습니다.",
+      "original_prompt": "패턴 abc, 블록 ab와 c를 이 구현으로 검색하면?",
+      "original_options": [
         "이전 블록의 접두사 상태를 유지해 찾는다",
         "블록 경계를 넘는 일치를 놓친다"
       ],
-      "answer": 1,
-      "explanation": "블록마다 shift를 다시 초기화하고 이전 블록의 비교 상태를 저장하지 않습니다. KMP의 q 유지와 다릅니다."
+      "original_explanation": "블록마다 shift를 다시 초기화하고 이전 블록의 비교 상태를 저장하지 않습니다. KMP의 q 유지와 다릅니다."
     },
     {
-      "prompt": "성공 후 state->offset은 자동으로 일치 끝 다음이 되는가?",
+      "prompt": "성공 뒤 offset을 일치 다음으로 자동 바꾸나요?",
       "options": [
+        "아니요. 성공 경로에 갱신이 없습니다.",
+        "예. 공통 API가 언제나 대신 바꿉니다."
+      ],
+      "answer": 0,
+      "explanation": "이 구현은 위치만 반환하므로 반복 검색의 진행 계약을 확인해야 합니다.",
+      "original_prompt": "성공 후 state->offset은 자동으로 일치 끝 다음이 되는가?",
+      "original_options": [
         "아니다. 이 파일의 성공 경로에는 갱신이 없다",
         "그렇다. 공통 API가 항상 대신 갱신한다"
       ],
-      "answer": 0,
-      "explanation": "bm_find는 위치만 반환합니다. textsearch_next도 결과 반환과 finish 호출을 할 뿐 offset을 대신 증가시키지 않습니다."
+      "original_explanation": "bm_find는 위치만 반환합니다. textsearch_next도 결과 반환과 finish 호출을 할 뿐 offset을 대신 증가시키지 않습니다."
     },
     {
-      "prompt": "무시 모드에서 bad_shift의 소문자 항목도 채우는 이유는?",
+      "prompt": "무시 모드에서 소문자 bad_shift도 채우는 이유는 무엇인가요?",
       "options": [
+        "패턴을 소문자로만 저장하기 때문입니다.",
+        "표 조회가 정규화하지 않은 입력 바이트를 사용하기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "패턴은 대문자로 저장하고 실제 비교는 toupper지만 bs 조회는 원본 문자입니다.",
+      "original_prompt": "무시 모드에서 bad_shift의 소문자 항목도 채우는 이유는?",
+      "original_options": [
         "패턴을 반드시 소문자로만 저장하기 때문이다",
         "표 조회는 정규화하지 않은 입력 바이트를 사용하기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "실제 비교는 toupper를 쓰지만 bs는 text[shift-i]를 그대로 인덱스로 사용합니다. 저장 패턴은 대문자입니다."
+      "original_explanation": "실제 비교는 toupper를 쓰지만 bs는 text[shift-i]를 그대로 인덱스로 사용합니다. 저장 패턴은 대문자입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "패턴 abc와 공급 블록 ab·c를 나눠 그려 이 구현이 왜 찾지 못하는지 설명하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/ts_bm.c\t\tBoyer-Moore text search implementation\n *\n * Authors:\tPablo Neira Ayuso <pablo@eurodev.net>\n *\n * ==========================================================================\n * \n *   Implements Boyer-Moore string matching algorithm:\n *\n *   [1] A Fast String Searching Algorithm, R.S. Boyer and Moore.\n *       Communications of the Association for Computing Machinery, \n *       20(10), 1977, pp. 762-772.\n *       https://www.cs.utexas.edu/users/moore/publications/fstrpos.pdf\n *\n *   [2] Handbook of Exact String Matching Algorithms, Thierry Lecroq, 2004\n *       http://www-igm.univ-mlv.fr/~lecroq/string/string.pdf\n *\n *   Note: Since Boyer-Moore (BM) performs searches for matchings from right \n *   to left, it's still possible that a matching could be spread over \n *   multiple blocks, in that case this algorithm won't find any coincidence.\n *   \n *   If you're willing to ensure that such thing won't ever happen, use the\n *   Knuth-Pratt-Morris (KMP) implementation instead. In conclusion, choose \n *   the proper string search algorithm depending on your setting. \n *\n *   Say you're using the textsearch infrastructure for filtering, NIDS or \n *   any similar security focused purpose, then go KMP. Otherwise, if you \n *   really care about performance, say you're classifying packets to apply\n *   Quality of Service (QoS) policies, and you don't mind about possible\n *   matchings spread over multiple fragments, then go BM.\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/textsearch.h>\n\n/* Alphabet size, use ASCII */\n#define ASIZE 256\n\n#if 0\n#define DEBUGP printk\n#else\n#define DEBUGP(args, format...)\n#endif\n\nstruct ts_bm\n{\n\tu8 *\t\tpattern;\n\tunsigned int\tpatlen;\n\tunsigned int \tbad_shift[ASIZE];\n\tunsigned int\tgood_shift[];\n};\n\nstatic unsigned int matchpat(const u8 *pattern, unsigned int patlen,\n\t\t\t     const u8 *text, bool icase)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < patlen; i++) {\n\t\tu8 t = *(text-i);\n\n\t\tif (icase)\n\t\t\tt = toupper(t);\n\n\t\tif (t != *(pattern-i))\n\t\t\tbreak;\n\t}\n\n\treturn i;\n}\n\nstatic unsigned int bm_find(struct ts_config *conf, struct ts_state *state)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\tunsigned int i, text_len, consumed = state->offset;\n\tconst u8 *text;\n\tint bs;\n\tconst u8 icase = conf->flags & TS_IGNORECASE;\n\n\tfor (;;) {\n\t\tint shift = bm->patlen - 1;\n\n\t\ttext_len = conf->get_next_block(consumed, &text, conf, state);\n\n\t\tif (unlikely(text_len == 0))\n\t\t\tbreak;\n\n\t\twhile (shift < text_len) {\n\t\t\tDEBUGP(\"Searching in position %d (%c)\\n\",\n\t\t\t       shift, text[shift]);\n\n\t\t\ti = matchpat(&bm->pattern[bm->patlen-1], bm->patlen,\n\t\t\t\t     &text[shift], icase);\n\t\t\tif (i == bm->patlen) {\n\t\t\t\t/* London calling... */\n\t\t\t\tDEBUGP(\"found!\\n\");\n\t\t\t\treturn consumed + (shift-(bm->patlen-1));\n\t\t\t}\n\n\t\t\tbs = bm->bad_shift[text[shift-i]];\n\n\t\t\t/* Now jumping to... */\n\t\t\tshift = max_t(int, shift-i+bs, shift+bm->good_shift[i]);\n\t\t}\n\t\tconsumed += text_len;\n\t}\n\n\treturn UINT_MAX;\n}\n\nstatic int subpattern(u8 *pattern, int i, int j, int g)\n{\n\tint x = i+g-1, y = j+g-1, ret = 0;\n\n\twhile(pattern[x--] == pattern[y--]) {\n\t\tif (y < 0) {\n\t\t\tret = 1;\n\t\t\tbreak;\n\t\t}\n\t\tif (--g == 0) {\n\t\t\tret = pattern[i-1] != pattern[j-1];\n\t\t\tbreak;\n\t\t}\n\t}\n\n\treturn ret;\n}\n\nstatic void compute_prefix_tbl(struct ts_bm *bm, int flags)\n{\n\tint i, j, g;\n\n\tfor (i = 0; i < ASIZE; i++)\n\t\tbm->bad_shift[i] = bm->patlen;\n\tfor (i = 0; i < bm->patlen - 1; i++) {\n\t\tbm->bad_shift[bm->pattern[i]] = bm->patlen - 1 - i;\n\t\tif (flags & TS_IGNORECASE)\n\t\t\tbm->bad_shift[tolower(bm->pattern[i])]\n\t\t\t    = bm->patlen - 1 - i;\n\t}\n\n\t/* Compute the good shift array, used to match reocurrences \n\t * of a subpattern */\n\tbm->good_shift[0] = 1;\n\tfor (i = 1; i < bm->patlen; i++)\n\t\tbm->good_shift[i] = bm->patlen;\n        for (i = bm->patlen-1, g = 1; i > 0; g++, i--) {\n\t\tfor (j = i-1; j >= 1-g ; j--)\n\t\t\tif (subpattern(bm->pattern, i, j, g)) {\n\t\t\t\tbm->good_shift[g] = bm->patlen-j-g;\n\t\t\t\tbreak;\n\t\t\t}\n\t}\n}\n\nstatic struct ts_config *bm_init(const void *pattern, unsigned int len,\n\t\t\t\t gfp_t gfp_mask, int flags)\n{\n\tstruct ts_config *conf;\n\tstruct ts_bm *bm;\n\tint i;\n\tunsigned int prefix_tbl_len = len * sizeof(unsigned int);\n\tsize_t priv_size = sizeof(*bm) + len + prefix_tbl_len;\n\n\tconf = alloc_ts_config(priv_size, gfp_mask);\n\tif (IS_ERR(conf))\n\t\treturn conf;\n\n\tconf->flags = flags;\n\tbm = ts_config_priv(conf);\n\tbm->patlen = len;\n\tbm->pattern = (u8 *) bm->good_shift + prefix_tbl_len;\n\tif (flags & TS_IGNORECASE)\n\t\tfor (i = 0; i < len; i++)\n\t\t\tbm->pattern[i] = toupper(((u8 *)pattern)[i]);\n\telse\n\t\tmemcpy(bm->pattern, pattern, len);\n\tcompute_prefix_tbl(bm, flags);\n\n\treturn conf;\n}\n\nstatic void *bm_get_pattern(struct ts_config *conf)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\treturn bm->pattern;\n}\n\nstatic unsigned int bm_get_pattern_len(struct ts_config *conf)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\treturn bm->patlen;\n}\n\nstatic struct ts_ops bm_ops = {\n\t.name\t\t  = \"bm\",\n\t.find\t\t  = bm_find,\n\t.init\t\t  = bm_init,\n\t.get_pattern\t  = bm_get_pattern,\n\t.get_pattern_len  = bm_get_pattern_len,\n\t.owner\t\t  = THIS_MODULE,\n\t.list\t\t  = LIST_HEAD_INIT(bm_ops.list)\n};\n\nstatic int __init init_bm(void)\n{\n\treturn textsearch_register(&bm_ops);\n}\n\nstatic void __exit exit_bm(void)\n{\n\ttextsearch_unregister(&bm_ops);\n}\n\nMODULE_DESCRIPTION(\"Boyer-Moore text search implementation\");\nMODULE_LICENSE(\"GPL\");\n\nmodule_init(init_bm);\nmodule_exit(exit_bm);\n",
   "source_review": {
@@ -131,5 +151,168 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ts_bm.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-be0f00ba971b579d",
+    "path": "lib/ts_bm.c",
+    "title": "Boyer–Moore 전체 구현: 두 이동 표와 블록별 검색",
+    "area": "문자열 알고리즘 · 전처리 · 경계 조건",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "패턴의 오른쪽부터 비교하고 불일치 정보를 이용해 다음 후보 위치를 건너뛰는 구현입니다.",
+    "guide": [
+      "문자별 bad_shift와 맞은 접미사 길이별 good_shift를 계산합니다. 검색에서는 두 이동 후보 중 큰 위치를 선택합니다.",
+      "이 고정 버전은 블록 경계를 넘는 일치를 찾지 못하고 성공 시 state->offset도 갱신하지 않습니다. 공통 API의 설명만으로 KMP와 같은 반복 검색 동작을 기대하면 안 됩니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL SPDX, 작성자와 문헌 안내, 블록 경계 경고 뒤에 kernel/module/types/string/ctype/textsearch 헤더가 있습니다. ASIZE256과 비활성 DEBUGP, 사설 구조체, 역방향 비교·검색·부분 패턴 검사·전처리·초기화·조회 함수, ops와 모듈 등록·해제가 이어집니다. 마지막은 설명·GPL 라이선스와 module_init/exit입니다."
+      },
+      {
+        "title": "메모리 배치",
+        "text": "ts_bm에는 pattern 포인터, patlen, 256개 unsigned int bad_shift, flexible array good_shift가 있습니다. init은 good_shift 표 공간 뒤에 패턴을 두어 한 번에 할당합니다. unsigned int인 prefix_tbl_len의 곱셈과 int 순회 변수가 있어 임의의 큰 패턴 길이를 안전하게 지원한다고 가정하면 안 됩니다. 길이0 거부는 공통 prepare의 전제입니다."
+      },
+      {
+        "title": "오른쪽부터 비교",
+        "text": "matchpat에는 패턴 끝과 후보 텍스트 끝의 포인터가 전달됩니다. i를 늘리며 text-i와 pattern-i를 비교하고 첫 불일치에서 중단합니다. 반환값은 맞은 접미사의 길이이며 patlen이면 전체 일치입니다. 대소문자 무시일 때 텍스트 바이트를 toupper로 바꿉니다."
+      },
+      {
+        "title": "bad_shift 전처리",
+        "text": "모든 문자 이동값을 patlen으로 시작합니다. 패턴의 마지막 문자를 제외한 위치 i마다 해당 문자 값을 patlen-1-i로 설정하므로 반복 문자는 오른쪽 위치의 값이 남습니다. 대문자로 저장한 패턴을 무시 모드에서 사용할 때는 tolower에 해당하는 표 항목도 같은 값으로 설정합니다. 검색에서는 원래 입력 바이트로 표를 조회하기 때문입니다."
+      },
+      {
+        "title": "good_shift와 subpattern",
+        "text": "good_shift[0]은 1, 나머지는 patlen으로 초기화합니다. 뒤쪽의 길이 g인 부분 패턴과 더 왼쪽 후보를 subpattern으로 역방향 비교합니다. 후보가 패턴의 시작까지 맞거나, g개가 맞고 앞선 문자가 다른 경우를 받아들이며 이동값 patlen-j-g를 기록합니다. 후보 j는 음수가 될 수도 있지만 뒤쪽 정렬 위치에서 비교를 시작하고 y<0에서 중단하는 경계를 함께 읽어야 합니다."
+      },
+      {
+        "title": "두 이동 후보 결합",
+        "text": "각 블록에서 shift=patlen-1로 시작합니다. i개가 맞고 불일치하면 text[shift-i]의 bad_shift를 bs로 읽습니다. 다음 shift는 max_t(int, shift-i+bs, shift+good_shift[i])입니다. 두 규칙이 배제할 수 있는 후보 범위를 활용하므로 더 큰 다음 끝 위치를 선택합니다. shift는 후보 시작이 아니라 후보의 마지막 바이트 위치입니다."
+      },
+      {
+        "title": "블록 경계에서의 누락",
+        "text": "블록이 끝나면 consumed에 text_len을 더하고 다음 블록에서 shift를 다시 patlen-1로 시작합니다. 앞 블록의 접미사나 비교 상태를 보관하지 않습니다. abc 패턴에 대해 ab와 c 두 블록이 공급되면 각 블록은 패턴보다 짧아 찾지 못합니다. 이 제한은 BM 이론 전체의 불가능성이 아니라 이 구현의 블록 공급 방식에 관한 것입니다."
+      },
+      {
+        "title": "성공 반환과 검색 상태",
+        "text": "성공하면 consumed+shift-(patlen-1)을 반환합니다. kmp_find와 달리 state->offset을 바꾸는 대입이 없습니다. 따라서 같은 상태와 같은 공급자로 next를 반복하면 같은 일치를 다시 반환할 수 있습니다. 호출자가 진행 위치를 관리하지 않은 자동 반복 열거를 이 구현에 기대하면 안 됩니다. 미발견은 UINT_MAX입니다."
+      },
+      {
+        "title": "초기화와 조회",
+        "text": "bm_init은 공통 할당 실패를 그대로 반환하고 flags와 길이·패턴 포인터를 설정합니다. 무시 모드에서는 패턴을 대문자로 복사하고 그 후 두 표를 계산합니다. get_pattern은 정규화되어 저장된 패턴 주소이고 get_pattern_len은 길이입니다. 원래 입력이 NUL 종료인지에 의존하지 않고 len바이트를 복사합니다."
+      },
+      {
+        "title": "등록과 해제",
+        "text": "bm_ops는 이름 bm과 find/init/조회 함수, THIS_MODULE, 초기 리스트를 연결합니다. 별도 destroy가 없으므로 공통 설정 해제가 묶음 메모리를 정리합니다. init_bm은 등록 결과를 반환하고 exit_bm은 등록을 해제합니다. DEBUGP는 #if0 때문에 현재 빌드에서 빈 매크로입니다."
+      },
+      {
+        "title": "CS와 복잡도 해석",
+        "text": "알파벳별 배열과 접미사 표를 통한 시간·공간 교환, 역방향 비교, 두 이동 휴리스틱, 입력 분할과 결과 완전성을 연결합니다. 배열 공간은 O(256+m)입니다. 전처리에는 중첩 후보 순회와 부분 비교가 있으므로 표 이름만 보고 KMP의 선형 전처리와 같다고 단정하지 않습니다. 이 파일에 없는 최적화를 전제로 항상 선형 검색이라고 주장하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "shift는 후보의 어느 위치인가?",
+        "options": [
+          "후보의 마지막 바이트 위치다",
+          "후보의 첫 바이트 위치다"
+        ],
+        "answer": 0,
+        "explanation": "초기값은 patlen-1이고 matchpat은 text[shift]에서 뒤로 비교합니다. 성공 시 시작 위치를 얻으려면 patlen-1을 빼야 합니다."
+      },
+      {
+        "prompt": "패턴 abc, 블록 ab와 c를 이 구현으로 검색하면?",
+        "options": [
+          "이전 블록의 접두사 상태를 유지해 찾는다",
+          "블록 경계를 넘는 일치를 놓친다"
+        ],
+        "answer": 1,
+        "explanation": "블록마다 shift를 다시 초기화하고 이전 블록의 비교 상태를 저장하지 않습니다. KMP의 q 유지와 다릅니다."
+      },
+      {
+        "prompt": "성공 후 state->offset은 자동으로 일치 끝 다음이 되는가?",
+        "options": [
+          "아니다. 이 파일의 성공 경로에는 갱신이 없다",
+          "그렇다. 공통 API가 항상 대신 갱신한다"
+        ],
+        "answer": 0,
+        "explanation": "bm_find는 위치만 반환합니다. textsearch_next도 결과 반환과 finish 호출을 할 뿐 offset을 대신 증가시키지 않습니다."
+      },
+      {
+        "prompt": "무시 모드에서 bad_shift의 소문자 항목도 채우는 이유는?",
+        "options": [
+          "패턴을 반드시 소문자로만 저장하기 때문이다",
+          "표 조회는 정규화하지 않은 입력 바이트를 사용하기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "실제 비교는 toupper를 쓰지만 bs는 text[shift-i]를 그대로 인덱스로 사용합니다. 저장 패턴은 대문자입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/ts_bm.c\t\tBoyer-Moore text search implementation\n *\n * Authors:\tPablo Neira Ayuso <pablo@eurodev.net>\n *\n * ==========================================================================\n * \n *   Implements Boyer-Moore string matching algorithm:\n *\n *   [1] A Fast String Searching Algorithm, R.S. Boyer and Moore.\n *       Communications of the Association for Computing Machinery, \n *       20(10), 1977, pp. 762-772.\n *       https://www.cs.utexas.edu/users/moore/publications/fstrpos.pdf\n *\n *   [2] Handbook of Exact String Matching Algorithms, Thierry Lecroq, 2004\n *       http://www-igm.univ-mlv.fr/~lecroq/string/string.pdf\n *\n *   Note: Since Boyer-Moore (BM) performs searches for matchings from right \n *   to left, it's still possible that a matching could be spread over \n *   multiple blocks, in that case this algorithm won't find any coincidence.\n *   \n *   If you're willing to ensure that such thing won't ever happen, use the\n *   Knuth-Pratt-Morris (KMP) implementation instead. In conclusion, choose \n *   the proper string search algorithm depending on your setting. \n *\n *   Say you're using the textsearch infrastructure for filtering, NIDS or \n *   any similar security focused purpose, then go KMP. Otherwise, if you \n *   really care about performance, say you're classifying packets to apply\n *   Quality of Service (QoS) policies, and you don't mind about possible\n *   matchings spread over multiple fragments, then go BM.\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/textsearch.h>\n\n/* Alphabet size, use ASCII */\n#define ASIZE 256\n\n#if 0\n#define DEBUGP printk\n#else\n#define DEBUGP(args, format...)\n#endif\n\nstruct ts_bm\n{\n\tu8 *\t\tpattern;\n\tunsigned int\tpatlen;\n\tunsigned int \tbad_shift[ASIZE];\n\tunsigned int\tgood_shift[];\n};\n\nstatic unsigned int matchpat(const u8 *pattern, unsigned int patlen,\n\t\t\t     const u8 *text, bool icase)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < patlen; i++) {\n\t\tu8 t = *(text-i);\n\n\t\tif (icase)\n\t\t\tt = toupper(t);\n\n\t\tif (t != *(pattern-i))\n\t\t\tbreak;\n\t}\n\n\treturn i;\n}\n\nstatic unsigned int bm_find(struct ts_config *conf, struct ts_state *state)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\tunsigned int i, text_len, consumed = state->offset;\n\tconst u8 *text;\n\tint bs;\n\tconst u8 icase = conf->flags & TS_IGNORECASE;\n\n\tfor (;;) {\n\t\tint shift = bm->patlen - 1;\n\n\t\ttext_len = conf->get_next_block(consumed, &text, conf, state);\n\n\t\tif (unlikely(text_len == 0))\n\t\t\tbreak;\n\n\t\twhile (shift < text_len) {\n\t\t\tDEBUGP(\"Searching in position %d (%c)\\n\",\n\t\t\t       shift, text[shift]);\n\n\t\t\ti = matchpat(&bm->pattern[bm->patlen-1], bm->patlen,\n\t\t\t\t     &text[shift], icase);\n\t\t\tif (i == bm->patlen) {\n\t\t\t\t/* London calling... */\n\t\t\t\tDEBUGP(\"found!\\n\");\n\t\t\t\treturn consumed + (shift-(bm->patlen-1));\n\t\t\t}\n\n\t\t\tbs = bm->bad_shift[text[shift-i]];\n\n\t\t\t/* Now jumping to... */\n\t\t\tshift = max_t(int, shift-i+bs, shift+bm->good_shift[i]);\n\t\t}\n\t\tconsumed += text_len;\n\t}\n\n\treturn UINT_MAX;\n}\n\nstatic int subpattern(u8 *pattern, int i, int j, int g)\n{\n\tint x = i+g-1, y = j+g-1, ret = 0;\n\n\twhile(pattern[x--] == pattern[y--]) {\n\t\tif (y < 0) {\n\t\t\tret = 1;\n\t\t\tbreak;\n\t\t}\n\t\tif (--g == 0) {\n\t\t\tret = pattern[i-1] != pattern[j-1];\n\t\t\tbreak;\n\t\t}\n\t}\n\n\treturn ret;\n}\n\nstatic void compute_prefix_tbl(struct ts_bm *bm, int flags)\n{\n\tint i, j, g;\n\n\tfor (i = 0; i < ASIZE; i++)\n\t\tbm->bad_shift[i] = bm->patlen;\n\tfor (i = 0; i < bm->patlen - 1; i++) {\n\t\tbm->bad_shift[bm->pattern[i]] = bm->patlen - 1 - i;\n\t\tif (flags & TS_IGNORECASE)\n\t\t\tbm->bad_shift[tolower(bm->pattern[i])]\n\t\t\t    = bm->patlen - 1 - i;\n\t}\n\n\t/* Compute the good shift array, used to match reocurrences \n\t * of a subpattern */\n\tbm->good_shift[0] = 1;\n\tfor (i = 1; i < bm->patlen; i++)\n\t\tbm->good_shift[i] = bm->patlen;\n        for (i = bm->patlen-1, g = 1; i > 0; g++, i--) {\n\t\tfor (j = i-1; j >= 1-g ; j--)\n\t\t\tif (subpattern(bm->pattern, i, j, g)) {\n\t\t\t\tbm->good_shift[g] = bm->patlen-j-g;\n\t\t\t\tbreak;\n\t\t\t}\n\t}\n}\n\nstatic struct ts_config *bm_init(const void *pattern, unsigned int len,\n\t\t\t\t gfp_t gfp_mask, int flags)\n{\n\tstruct ts_config *conf;\n\tstruct ts_bm *bm;\n\tint i;\n\tunsigned int prefix_tbl_len = len * sizeof(unsigned int);\n\tsize_t priv_size = sizeof(*bm) + len + prefix_tbl_len;\n\n\tconf = alloc_ts_config(priv_size, gfp_mask);\n\tif (IS_ERR(conf))\n\t\treturn conf;\n\n\tconf->flags = flags;\n\tbm = ts_config_priv(conf);\n\tbm->patlen = len;\n\tbm->pattern = (u8 *) bm->good_shift + prefix_tbl_len;\n\tif (flags & TS_IGNORECASE)\n\t\tfor (i = 0; i < len; i++)\n\t\t\tbm->pattern[i] = toupper(((u8 *)pattern)[i]);\n\telse\n\t\tmemcpy(bm->pattern, pattern, len);\n\tcompute_prefix_tbl(bm, flags);\n\n\treturn conf;\n}\n\nstatic void *bm_get_pattern(struct ts_config *conf)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\treturn bm->pattern;\n}\n\nstatic unsigned int bm_get_pattern_len(struct ts_config *conf)\n{\n\tstruct ts_bm *bm = ts_config_priv(conf);\n\treturn bm->patlen;\n}\n\nstatic struct ts_ops bm_ops = {\n\t.name\t\t  = \"bm\",\n\t.find\t\t  = bm_find,\n\t.init\t\t  = bm_init,\n\t.get_pattern\t  = bm_get_pattern,\n\t.get_pattern_len  = bm_get_pattern_len,\n\t.owner\t\t  = THIS_MODULE,\n\t.list\t\t  = LIST_HEAD_INIT(bm_ops.list)\n};\n\nstatic int __init init_bm(void)\n{\n\treturn textsearch_register(&bm_ops);\n}\n\nstatic void __exit exit_bm(void)\n{\n\ttextsearch_unregister(&bm_ops);\n}\n\nMODULE_DESCRIPTION(\"Boyer-Moore text search implementation\");\nMODULE_LICENSE(\"GPL\");\n\nmodule_init(init_bm);\nmodule_exit(exit_bm);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "111e27a638847bc8b5cc20d1bc6f393e0a6426e4053683c27e0c25330eec01a5",
+      "scope": "whole-file",
+      "line_count": 223,
+      "authoring_source": "course/file_units/boyer_moore.py",
+      "sections": [
+        "전체 구성",
+        "메모리 배치",
+        "오른쪽부터 비교",
+        "bad_shift 전처리",
+        "good_shift와 subpattern",
+        "두 이동 후보 결합",
+        "블록 경계에서의 누락",
+        "성공 반환과 검색 상태",
+        "초기화와 조회",
+        "등록과 해제",
+        "CS와 복잡도 해석"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ts_bm.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "긴 문장에 단어를 대고 끝 글자부터 비교한 뒤, 틀린 글자와 이미 맞은 꼬리를 보고 다음 후보를 멀리 옮깁니다.",
+    "meaning": "이 Boyer–Moore 구현은 문자별 이동표와 접미사 이동표를 사용하지만 블록 사이의 일치를 놓치고 성공 후 검색 offset을 자동 갱신하지 않습니다.",
+    "exercise": "패턴 abc와 공급 블록 ab·c를 나눠 그려 이 구현이 왜 찾지 못하는지 설명하세요."
+  },
+  "goal": "이 Boyer–Moore 구현은 문자별 이동표와 접미사 이동표를 사용하지만 블록 사이의 일치를 놓치고 성공 후 검색 offset을 자동 갱신하지 않습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "패턴 abc와 공급 블록 ab·c를 나눠 그려 이 구현이 왜 찾지 못하는지 설명하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "43ad144790ab11c9db8dc17638d342ba34139001cc4a5e3103c6d77e5becb027",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

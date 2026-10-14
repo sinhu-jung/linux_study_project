@@ -5,79 +5,87 @@
   "area": "비트맵 · READ_ONCE · WRITE_ONCE · 경쟁 조건 · lost update · 외부 변수",
   "track": "files",
   "kind": "kernel",
-  "intro": "vclocks_used 외부 변수와 두 inline helper를 전체 분석합니다.",
+  "intro": "x86 시계 사용 기록을 비트로 저장하고 확인해요. 비트는 0 또는 1인 작은 표시이며, 읽기와 쓰기를 따로 한 번씩 한다고 전체 변경이 한 덩어리가 되지는 않아요.",
   "guide": [
-    "한 번의 읽기·쓰기를 보존하는 접근 매크로와 여러 연산을 하나로 묶는 원자적 갱신은 다릅니다.",
-    "비트마스크의 사용 이력을 해석하고 경쟁 갱신에서 lost update가 생기는 조건을 설명합니다."
+    "x86 시계 사용 기록을 비트로 저장하고 확인해요. 비트는 0 또는 1인 작은 표시이며, 읽기와 쓰기를 따로 한 번씩 한다고 전체 변경이 한 덩어리가 되지는 않아요."
   ],
   "deep_dive": [
     {
-      "title": "전체 인터페이스",
-      "text": "GPL-2.0 include guard 안에서 asm/vdso/clocksource.h를 포함하고 extern unsigned int vclocks_used를 선언합니다. 저장 공간을 정의하거나 0으로 초기화하는 파일은 아닙니다. 뒤에는 vclock_was_used와 vclocks_set_used 두 static inline helper만 있습니다. 자료형 bool과 접근 매크로는 포함 문맥에 의존합니다."
+      "title": "원문 읽기 1",
+      "text": "vclocks_used는 어떤 시계 방식을 사용했는지 표시하는 정수예요. extern 선언은 다른 곳에 실제 변수가 있다는 알림이에요. 이 헤더 자체가 저장 칸을 만들거나 값을 0으로 정하지는 않아요."
     },
     {
-      "title": "특정 시계의 사용 여부",
-      "text": "vclock_was_used(int vclock)는 READ_ONCE(vclocks_used) & (1U << vclock)를 bool로 반환합니다. 비트가 있으면 true, 없으면 false이며 비트마스크의 정수 크기를 그대로 외부에 반환하지 않습니다. 예를 들어 bitmap=0b1010이면 인덱스 1과 3은 true, 2는 false입니다. clock 모드 값이 비트의 인덱스 역할을 합니다."
+      "title": "원문 읽기 2",
+      "text": "vclock_was_used(vclock)는 READ_ONCE로 기록을 읽고 1U << vclock으로 만든 표시와 & 연산을 해요. <<는 1의 자리를 옮기고, &는 양쪽에 모두 있는 표시를 남겨요. 0b1010에는 오른쪽에서 세어 1번과 3번 표시가 있어요."
     },
     {
-      "title": "사용 이력 기록",
-      "text": "vclocks_set_used(unsigned int which)는 READ_ONCE로 읽은 값에 (1 << which)를 OR하고 WRITE_ONCE로 기록합니다. 기존 비트를 지우는 대입이 아니라 지정 비트를 추가하는 동작입니다. 이 파일에 이력을 지우는 helper는 없습니다. 질의는 1U, 갱신은 1을 사용하는 원본 표현의 차이도 유지해 읽어야 합니다."
+      "title": "원문 읽기 3",
+      "text": "3번을 확인하면 중간 계산 결과는 8이지만 함수의 결과 형식은 bool이에요. bool은 참 또는 거짓만 나타내므로 0이 아닌 8은 true, 즉 참으로 바뀌어요."
     },
     {
-      "title": "입력 범위는 검사하지 않는다",
-      "text": "두 helper 모두 shift 인덱스를 검증하지 않습니다. 음수나 자료형 폭 이상의 이동량을 임의로 넘겨도 안전한 범용 비트셋 API가 아닙니다. 지정된 vclock 모드 인덱스 범위에서 사용해야 하며, 큰 정수 sentinel을 무조건 시계 인덱스로 넣으면 안 됩니다. 코드가 비트를 저장한다는 사실만으로 모든 int 입력을 지원한다고 추정하지 않습니다."
+      "title": "원문 읽기 4",
+      "text": "vclocks_set_used(which)는 이전 값을 읽어 | 연산으로 해당 표시를 더한 뒤 WRITE_ONCE로 써요. |는 어느 쪽에든 있는 표시를 남겨요. 이 파일에는 표시를 지우는 함수가 없어요. 원문에서 조회는 1U, 갱신은 1을 사용한다는 차이도 그대로 읽어요."
     },
     {
-      "title": "원자적 OR가 아닌 이유",
-      "text": "WRITE_ONCE의 값 인수는 별도 READ_ONCE와 OR로 계산됩니다. CPU A와 B가 모두 0을 읽고 각각 비트 1과 2를 설정하면 A가 2를 쓴 뒤 B가 4를 써 최종값이 6이 아닌 4가 될 수 있습니다. 이 helper 본문에는 atomic_fetch_or·CAS 반복·락이 없습니다. 호출 문맥의 직렬화 등 별도 조건을 확인해야 하며 이 예시만으로 실제 호출부에 버그가 있다고 단정하지 않습니다."
+      "title": "원문 읽기 5",
+      "text": "두 CPU가 모두 이전 값 0을 읽었다고 해 보세요. 하나가 2를 쓰고 다른 하나가 4를 쓰면 마지막에는 4만 남을 수 있어요. 필요한 6이 되려면 두 변경이 서로 방해하지 않도록 부르는 쪽의 규칙이 필요해요. READ_ONCE와 WRITE_ONCE는 읽기·계산·쓰기를 통째로 원자적인 한 작업으로 만들지 않아요."
     },
     {
-      "title": "사용 여부와 활성 여부",
-      "text": "was_used라는 인터페이스와 OR 누적은 과거 사용 이력을 질의하는 형태입니다. true가 현재 선택된 clocksource라는 뜻은 아닙니다. 실제 pvclock 주소 setter는 이 질의를 경고 조건에 사용합니다. 이 파일은 현재 clocksource를 선택하거나 하드웨어를 활성화하지 않습니다."
-    },
-    {
-      "title": "CS 연결과 검증 범위",
-      "text": "전체 변수 선언과 두 함수의 연산을 다뤘습니다. 집합의 비트 표현, bool 변환, 단일 접근과 read-modify-write 원자성의 차이가 학습 핵심입니다. 예시 경쟁은 코드 구조에 따른 분석이며 실제 커널 호출부의 동시 실행 조건까지 검증한 결과는 아닙니다."
+      "title": "원문 읽기 6",
+      "text": "이 함수들은 비트 번호가 올바른지 검사하지 않아요. 음수나 정수의 비트 수 이상인 번호를 마음대로 주면 안 돼요. 정해진 시계 모드 번호를 써야 해요. 참이라는 답도 과거 사용 표시일 뿐, 지금 선택된 시계라는 뜻이나 시계를 켜는 명령은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "vclocks_used=0b1010에서 vclock_was_used(3)의 반환은?",
+      "prompt": "기록이 0b1010일 때 vclock_was_used(3)은 무엇을 돌려주나요?",
       "options": [
+        "참을 뜻하는 true예요",
+        "정수 8을 그대로 돌려줘요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 3번 표시를 골라 낸 중간 값은 8이에요. 하지만 반환형 bool은 참·거짓을 나타내므로 0이 아닌 값을 true로 바꾸어 돌려줘요.",
+      "original_prompt": "vclocks_used=0b1010에서 vclock_was_used(3)의 반환은?",
+      "original_options": [
         "true이다",
         "정수 8을 그대로 반환한다"
       ],
-      "answer": 0,
-      "explanation": "AND의 중간 결과는 8이지만 함수 반환형은 bool입니다. 0이 아닌 값이 true로 변환됩니다."
+      "original_explanation": "AND의 중간 결과는 8이지만 함수 반환형은 bool입니다. 0이 아닌 값이 true로 변환됩니다."
     },
     {
-      "prompt": "두 CPU가 vclocks_set_used를 동시에 호출해도 WRITE_ONCE만으로 서로의 비트가 보존되는가?",
+      "prompt": "두 CPU가 동시에 다른 표시를 추가할 때 WRITE_ONCE만 있으면 둘 다 반드시 남나요?",
       "options": [
+        "네. 앞의 읽기와 뒤의 쓰기를 자동으로 한 작업으로 묶어요",
+        "아니요. 읽고 계산하고 쓰는 전체 과정은 나뉘어 있어요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. 둘 다 0을 읽은 뒤 각각 2와 4를 쓰면 마지막 쓰기가 앞의 표시를 덮을 수 있어요. 실제로 동시에 불러도 되는지는 이 함수를 부르는 곳에서 순서를 어떻게 지키는지 확인해야 해요.",
+      "original_prompt": "두 CPU가 vclocks_set_used를 동시에 호출해도 WRITE_ONCE만으로 서로의 비트가 보존되는가?",
+      "original_options": [
         "그렇다. WRITE_ONCE는 앞선 READ_ONCE와 자동으로 트랜잭션을 만든다",
         "아니다. 읽기와 OR와 쓰기가 하나의 원자적 갱신은 아니다"
       ],
-      "answer": 1,
-      "explanation": "둘이 같은 이전 값을 읽으면 늦은 쓰기가 먼저 설정한 다른 비트를 잃게 할 수 있습니다. 동시 호출의 허용 여부는 호출부의 직렬화 계약을 확인해야 합니다."
+      "original_explanation": "둘이 같은 이전 값을 읽으면 늦은 쓰기가 먼저 설정한 다른 비트를 잃게 할 수 있습니다. 동시 호출의 허용 여부는 호출부의 직렬화 계약을 확인해야 합니다."
     },
     {
-      "prompt": "vclock_was_used가 true이면 해당 시계가 지금 활성 시계인가?",
+      "prompt": "vclock_was_used가 true이면 지금 쓰는 시계라고 확정할 수 있나요?",
       "options": [
+        "아니요. 과거에 썼다는 표시를 확인한 것이에요",
+        "네. true를 돌려줄 때마다 그 시계를 켜요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 이 함수는 기록에서 비트 하나를 읽어 답해요. 현재 시계를 선택하거나 하드웨어를 켜는 동작은 없어요. 사용 이력과 현재 선택은 구별해야 해요.",
+      "original_prompt": "vclock_was_used가 true이면 해당 시계가 지금 활성 시계인가?",
+      "original_options": [
         "그렇게 단정할 수 없다. 이 helper는 사용 이력 비트를 조회한다",
         "그렇다. true를 반환할 때마다 하드웨어 시계를 활성화한다"
       ],
-      "answer": 0,
-      "explanation": "질의 함수에는 선택이나 하드웨어 활성화 동작이 없습니다. 이력과 현재 상태를 구분해야 합니다."
+      "original_explanation": "질의 함수에는 선택이나 하드웨어 활성화 동작이 없습니다. 이력과 현재 상태를 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0b1010의 칸 번호를 오른쪽부터 0,1,2,3으로 적으세요. 1인 칸을 찾고, 두 사람이 각각 빈 목록에 다른 표시를 한 뒤 덮어쓰면 무엇이 사라지는지 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/* x86-specific clocksource additions */\n\n#ifndef _ASM_X86_CLOCKSOURCE_H\n#define _ASM_X86_CLOCKSOURCE_H\n\n#include <asm/vdso/clocksource.h>\n\nextern unsigned int vclocks_used;\n\nstatic inline bool vclock_was_used(int vclock)\n{\n\treturn READ_ONCE(vclocks_used) & (1U << vclock);\n}\n\nstatic inline void vclocks_set_used(unsigned int which)\n{\n\tWRITE_ONCE(vclocks_used, READ_ONCE(vclocks_used) | (1 << which));\n}\n\n#endif /* _ASM_X86_CLOCKSOURCE_H */\n",
   "source_review": {
@@ -102,5 +110,139 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/clocksource.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e85714400ba97f4d",
+    "path": "arch/x86/include/asm/clocksource.h",
+    "title": "X86 vclock 사용 이력: 비트맵과 비원자적 갱신",
+    "area": "비트맵 · READ_ONCE · WRITE_ONCE · 경쟁 조건 · lost update · 외부 변수",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "vclocks_used 외부 변수와 두 inline helper를 전체 분석합니다.",
+    "guide": [
+      "한 번의 읽기·쓰기를 보존하는 접근 매크로와 여러 연산을 하나로 묶는 원자적 갱신은 다릅니다.",
+      "비트마스크의 사용 이력을 해석하고 경쟁 갱신에서 lost update가 생기는 조건을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 인터페이스",
+        "text": "GPL-2.0 include guard 안에서 asm/vdso/clocksource.h를 포함하고 extern unsigned int vclocks_used를 선언합니다. 저장 공간을 정의하거나 0으로 초기화하는 파일은 아닙니다. 뒤에는 vclock_was_used와 vclocks_set_used 두 static inline helper만 있습니다. 자료형 bool과 접근 매크로는 포함 문맥에 의존합니다."
+      },
+      {
+        "title": "특정 시계의 사용 여부",
+        "text": "vclock_was_used(int vclock)는 READ_ONCE(vclocks_used) & (1U << vclock)를 bool로 반환합니다. 비트가 있으면 true, 없으면 false이며 비트마스크의 정수 크기를 그대로 외부에 반환하지 않습니다. 예를 들어 bitmap=0b1010이면 인덱스 1과 3은 true, 2는 false입니다. clock 모드 값이 비트의 인덱스 역할을 합니다."
+      },
+      {
+        "title": "사용 이력 기록",
+        "text": "vclocks_set_used(unsigned int which)는 READ_ONCE로 읽은 값에 (1 << which)를 OR하고 WRITE_ONCE로 기록합니다. 기존 비트를 지우는 대입이 아니라 지정 비트를 추가하는 동작입니다. 이 파일에 이력을 지우는 helper는 없습니다. 질의는 1U, 갱신은 1을 사용하는 원본 표현의 차이도 유지해 읽어야 합니다."
+      },
+      {
+        "title": "입력 범위는 검사하지 않는다",
+        "text": "두 helper 모두 shift 인덱스를 검증하지 않습니다. 음수나 자료형 폭 이상의 이동량을 임의로 넘겨도 안전한 범용 비트셋 API가 아닙니다. 지정된 vclock 모드 인덱스 범위에서 사용해야 하며, 큰 정수 sentinel을 무조건 시계 인덱스로 넣으면 안 됩니다. 코드가 비트를 저장한다는 사실만으로 모든 int 입력을 지원한다고 추정하지 않습니다."
+      },
+      {
+        "title": "원자적 OR가 아닌 이유",
+        "text": "WRITE_ONCE의 값 인수는 별도 READ_ONCE와 OR로 계산됩니다. CPU A와 B가 모두 0을 읽고 각각 비트 1과 2를 설정하면 A가 2를 쓴 뒤 B가 4를 써 최종값이 6이 아닌 4가 될 수 있습니다. 이 helper 본문에는 atomic_fetch_or·CAS 반복·락이 없습니다. 호출 문맥의 직렬화 등 별도 조건을 확인해야 하며 이 예시만으로 실제 호출부에 버그가 있다고 단정하지 않습니다."
+      },
+      {
+        "title": "사용 여부와 활성 여부",
+        "text": "was_used라는 인터페이스와 OR 누적은 과거 사용 이력을 질의하는 형태입니다. true가 현재 선택된 clocksource라는 뜻은 아닙니다. 실제 pvclock 주소 setter는 이 질의를 경고 조건에 사용합니다. 이 파일은 현재 clocksource를 선택하거나 하드웨어를 활성화하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "전체 변수 선언과 두 함수의 연산을 다뤘습니다. 집합의 비트 표현, bool 변환, 단일 접근과 read-modify-write 원자성의 차이가 학습 핵심입니다. 예시 경쟁은 코드 구조에 따른 분석이며 실제 커널 호출부의 동시 실행 조건까지 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "vclocks_used=0b1010에서 vclock_was_used(3)의 반환은?",
+        "options": [
+          "true이다",
+          "정수 8을 그대로 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "AND의 중간 결과는 8이지만 함수 반환형은 bool입니다. 0이 아닌 값이 true로 변환됩니다."
+      },
+      {
+        "prompt": "두 CPU가 vclocks_set_used를 동시에 호출해도 WRITE_ONCE만으로 서로의 비트가 보존되는가?",
+        "options": [
+          "그렇다. WRITE_ONCE는 앞선 READ_ONCE와 자동으로 트랜잭션을 만든다",
+          "아니다. 읽기와 OR와 쓰기가 하나의 원자적 갱신은 아니다"
+        ],
+        "answer": 1,
+        "explanation": "둘이 같은 이전 값을 읽으면 늦은 쓰기가 먼저 설정한 다른 비트를 잃게 할 수 있습니다. 동시 호출의 허용 여부는 호출부의 직렬화 계약을 확인해야 합니다."
+      },
+      {
+        "prompt": "vclock_was_used가 true이면 해당 시계가 지금 활성 시계인가?",
+        "options": [
+          "그렇게 단정할 수 없다. 이 helper는 사용 이력 비트를 조회한다",
+          "그렇다. true를 반환할 때마다 하드웨어 시계를 활성화한다"
+        ],
+        "answer": 0,
+        "explanation": "질의 함수에는 선택이나 하드웨어 활성화 동작이 없습니다. 이력과 현재 상태를 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/* x86-specific clocksource additions */\n\n#ifndef _ASM_X86_CLOCKSOURCE_H\n#define _ASM_X86_CLOCKSOURCE_H\n\n#include <asm/vdso/clocksource.h>\n\nextern unsigned int vclocks_used;\n\nstatic inline bool vclock_was_used(int vclock)\n{\n\treturn READ_ONCE(vclocks_used) & (1U << vclock);\n}\n\nstatic inline void vclocks_set_used(unsigned int which)\n{\n\tWRITE_ONCE(vclocks_used, READ_ONCE(vclocks_used) | (1 << which));\n}\n\n#endif /* _ASM_X86_CLOCKSOURCE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "261bc7735aab0262c83a14caed2f8e3bb4b58887edb40ea947d79e49cc787fc1",
+      "scope": "whole-file",
+      "line_count": 21,
+      "authoring_source": "course/file_units/arch_clocksource_glue.py",
+      "sections": [
+        "전체 인터페이스",
+        "특정 시계의 사용 여부",
+        "사용 이력 기록",
+        "입력 범위는 검사하지 않는다",
+        "원자적 OR가 아닌 이유",
+        "사용 여부와 활성 여부",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/clocksource.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "사용해 본 도구 옆에 표시를 남기는 목록을 떠올려 보세요. 표시가 있다는 것은 써 본 적이 있다는 뜻이지, 지금 손에 들고 있다는 뜻은 아니에요.",
+    "meaning": "x86 시계 사용 기록을 비트로 저장하고 확인해요. 비트는 0 또는 1인 작은 표시이며, 읽기와 쓰기를 따로 한 번씩 한다고 전체 변경이 한 덩어리가 되지는 않아요.",
+    "exercise": "0b1010의 칸 번호를 오른쪽부터 0,1,2,3으로 적으세요. 1인 칸을 찾고, 두 사람이 각각 빈 목록에 다른 표시를 한 뒤 덮어쓰면 무엇이 사라지는지 그려 보세요."
+  },
+  "goal": "x86 시계 사용 기록을 비트로 저장하고 확인해요. 비트는 0 또는 1인 작은 표시이며, 읽기와 쓰기를 따로 한 번씩 한다고 전체 변경이 한 덩어리가 되지는 않아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0b1010의 칸 번호를 오른쪽부터 0,1,2,3으로 적으세요. 1인 칸을 찾고, 두 사람이 각각 빈 목록에 다른 표시를 한 뒤 덮어쓰면 무엇이 사라지는지 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "a451dece466c9039affd5fbbf4509748b70745a38b7ca83d99fefe37ee08791d",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

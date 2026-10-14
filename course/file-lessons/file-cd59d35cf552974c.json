@@ -5,84 +5,104 @@
   "area": "Rust · 코드 생성 · 문자열 처리 · doctest · 테스트 어댑터",
   "track": "files",
   "kind": "kernel",
-  "intro": "rustdoc 생성 소스를 입력받아 커널 테스트 생성기가 사용할 중간 파일로 저장하는 전체 구현을 분석합니다.",
+  "intro": "정해진 글자 모양을 찾는 변환의 역할과 한계를 설명합니다.",
   "guide": [
-    "정형 metadata가 없는 도구를 연결할 때 텍스트 패턴에 의존하면 지원하는 생성 형식과 실패 조건을 명시해야 합니다.",
-    "Rust 문자열 탐색, Option 결합, 텍스트 치환과 빌드 도구의 panic을 학습합니다."
+    "rustdoc은 Rust 문서와 문서 속 예제 시험을 만드는 도구입니다.",
+    "AST는 코드의 문법 구조를 나무처럼 분석한 자료입니다.",
+    "panic은 이 빌드 도구가 처리를 계속하지 못하고 중단하는 경로입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 목적과 입력",
-      "text": "GPL-2.0 Rust 프로그램은 std::io::Read를 사용하고 main 하나를 정의합니다. stdin을 lock한 뒤 전체 입력을 String에 read_to_string하고 unwrap합니다. 주석은 rustdoc이 구조화된 metadata를 제공하지 않아 생성 소스를 추출하는 임시 방식이라고 설명합니다. UTF-8 읽기나 I/O 실패는 이 호스트 도구의 panic으로 이어집니다."
+      "text": "이 Rust 프로그램은 stdin 전체를 문자열로 읽습니다. 구조화된 시험 정보를 rustdoc이 주지 않아 생성 소스를 분석하는 임시 방법입니다. 읽기 실패나 올바른 UTF-8이 아닌 입력은 unwrap 때문에 이 도구의 panic으로 이어집니다."
     },
     {
       "title": "한 줄 안에서 함수명 찾기",
-      "text": "body.lines().find_map으로 각 줄에서 fn main() { 뒤, 그 안의 fn 뒤, () 앞 부분을 split_once로 찾습니다. 어느 조각이 없으면 ?를 통해 그 줄의 후보가 None이 됩니다. 후보 문자는 is_alphanumeric 또는 밑줄만 허용하고 처음 찾은 후보를 사용합니다. 전체 Rust AST를 파싱하는 것이 아니며 문자 판정은 단순 ASCII 집합 검사와도 다릅니다. 하나도 없으면 expect 메시지로 panic합니다."
+      "text": "각 줄에서 fn main() { 다음의 fn, 그 다음 () 앞부분을 순서대로 찾습니다. 조각이 없으면 그 줄을 건너뛰고 문자·숫자·밑줄만인 첫 후보를 사용합니다. is_alphanumeric은 단순 ASCII 검사와 다릅니다. 전체 Rust 문법을 분석하지 않으며 후보가 없으면 중단합니다."
     },
     {
       "title": "Result 이름 충돌 방지",
-      "text": "찾은 함수의 정확한 반환 서명 문자열인 Result<(), impl core::fmt::Debug>를 core::result::Result로 한정합니다. 커널 prelude의 자체 Result와 충돌을 피하려는 목적입니다. String::replace는 일치하는 문자열을 치환하며 임의 whitespace·다른 반환형·모든 Result 사용을 AST 단위로 바꾸는 기능은 아닙니다."
+      "text": "찾은 함수의 정확한 Result<(), impl core::fmt::Debug> 반환 표기를 core::result::Result로 바꿉니다. 기본으로 가져오는 커널 Result와 이름이 겹치지 않게 하는 일입니다. 글자 일치 치환이므로 임의의 공백 모양이나 모든 Result 사용을 문법에 따라 바꾸지는 않습니다."
     },
     {
       "title": "Unwrap 대신 테스트 실패",
-      "text": "생성된 함수 호출 뒤 .unwrap()을 쓰는 정확한 wrapper 문자열을 찾아 test_return_value 변수에 결과를 저장하고 assert!(...is_ok())로 바꿉니다. 의도는 커널 panic 대신 KUnit assertion 실패로 연결하는 것입니다. 실제 assertion macro 연결은 뒤 gen 도구가 제공합니다. 이 치환이 사용자 예제의 모든 unwrap을 제거한다고 말하면 안 됩니다."
+      "text": "생성된 함수 호출 결과의 .unwrap()을 찾는 정확한 포장 문자열을 결과 변수와 is_ok() assertion으로 바꿉니다. 목적은 오류가 있으면 시험 실패로 연결하는 것입니다. KUnit 매크로 연결은 다음 생성기가 하며 예제 안의 모든 unwrap이나 panic 가능성을 제거하는 변환은 아닙니다."
     },
     {
       "title": "중간 이름과 저장",
-      "text": "함수명에서 _rust_kernel_ 첫 구분자 뒤를 얻고 rust/test/doctests/kernel/{name}에 body를 씁니다. 구분자가 없거나 쓰기가 실패하면 unwrap으로 panic합니다. 디렉터리를 생성하는 명령은 없으며 빌드가 준비한 경로를 전제로 합니다. 이 단계의 name에는 원래 파일·줄·번호 표현이 남고 줄 번호를 제외한 새 테스트 이름은 gen 단계에서 생성합니다."
+      "text": "함수 이름의 _rust_kernel_ 뒤를 중간 파일 이름으로 써 rust/test/doctests/kernel 아래 저장합니다. 구분자가 없거나 쓰기가 실패하면 panic합니다. 디렉터리는 직접 만들지 않으므로 빌드가 미리 준비해야 합니다. 이 이름에는 아직 원래 파일·줄·번호 정보가 있습니다."
     },
     {
       "title": "안정성의 범위",
-      "text": "주석은 rustdoc 이름이 파일_줄_번호이며 같은 줄의 매크로 확장에서 여러 doctest가 나올 수 있어 번호가 필요하다고 설명합니다. 줄 번호가 바뀌면 CI bisection 이름이 흔들리므로 다음 단계에서 개선하려는 설계입니다. 모든 입력 추출·두 치환·저장 경로를 원본과 대조했으며 이 환경에서 rustdoc 파이프라인을 실행한 것은 아닙니다."
+      "text": "같은 줄의 매크로에서 여러 예제가 나올 수 있어 원래 이름에는 시험 번호가 필요합니다. 줄이 움직일 때 지속적 통합 검사에서 실패 원인을 좁혀 찾는 이름이 자주 달라지므로 다음 생성기가 줄 번호를 제외한 이름을 만듭니다. 이 설명은 문자열 처리 검토이며 rustdoc 전체 과정을 실행한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "함수명 탐색은 Rust 문법 전체를 AST로 해석하는가?",
+      "prompt": "함수 이름을 찾을 때 Rust 문법 전체를 분석하나요?",
       "options": [
+        "아니요. 한 줄의 글자 조각과 문자 조건을 찾습니다.",
+        "네. rustc 문법 분석기를 호출합니다."
+      ],
+      "answer": 0,
+      "explanation": "find_map과 split_once는 예상한 출력 모양을 찾는 문자열 도구입니다.",
+      "original_prompt": "함수명 탐색은 Rust 문법 전체를 AST로 해석하는가?",
+      "original_options": [
         "아니다. 한 줄의 문자열 조각과 문자 조건을 검사한다",
         "그렇다. rustc parser를 호출한다"
       ],
-      "answer": 0,
-      "explanation": "split_once와 find_map만 사용합니다. 생성 형식에 맞는 줄을 기대하는 계약입니다."
+      "original_explanation": "split_once와 find_map만 사용합니다. 생성 형식에 맞는 줄을 기대하는 계약입니다."
     },
     {
-      "prompt": "Result를 core::result::Result로 바꾸는 이유는?",
+      "prompt": "Result 앞에 core::result를 붙이는 이유는 무엇인가요?",
       "options": [
+        "모든 오류를 성공으로 바꾸기 위해서입니다.",
+        "커널에서 가져온 같은 이름과 충돌하지 않게 하기 위해서입니다."
+      ],
+      "answer": 1,
+      "explanation": "타입의 출처를 명확히 하는 것이지 오류를 지우는 일이 아닙니다.",
+      "original_prompt": "Result를 core::result::Result로 바꾸는 이유는?",
+      "original_options": [
         "모든 오류를 자동으로 성공으로 바꾸기 위해서다",
         "커널 prelude의 같은 이름과 충돌을 피하기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "반환 타입을 명확히 지정하는 치환이지 오류값을 제거하는 동작은 아닙니다."
+      "original_explanation": "반환 타입을 명확히 지정하는 치환이지 오류값을 제거하는 동작은 아닙니다."
     },
     {
-      "prompt": "이 단계에서 줄 번호 없는 최종 KUnit 이름을 만드는가?",
+      "prompt": "여기서 줄 번호 없는 최종 KUnit 이름을 만드나요?",
       "options": [
+        "아니요. 다음 gen 도구가 파일별 목록을 보고 만듭니다.",
+        "네. 모든 줄 번호를 이 단계에서 지웁니다."
+      ],
+      "answer": 0,
+      "explanation": "현재 저장 이름은 함수 이름의 뒤쪽 부분입니다.",
+      "original_prompt": "이 단계에서 줄 번호 없는 최종 KUnit 이름을 만드는가?",
+      "original_options": [
         "아니다. gen 도구에서 파일별 전체 목록을 보고 만든다",
         "그렇다. 모든 줄 번호를 여기서 삭제한다"
       ],
-      "answer": 0,
-      "explanation": "builder의 저장 이름은 함수명 suffix를 사용합니다. 파일 전체의 순서를 알아야 하는 번호 재할당은 다음 단계입니다."
+      "original_explanation": "builder의 저장 이름은 함수명 suffix를 사용합니다. 파일 전체의 순서를 알아야 하는 번호 재할당은 다음 단계입니다."
     },
     {
-      "prompt": "생성된 wrapper의 unwrap 치환 목적은?",
+      "prompt": "생성 포장의 unwrap을 바꾸는 목적은 무엇인가요?",
       "options": [
+        "예제의 모든 panic 가능성이 없어졌음을 증명하는 것입니다.",
+        "결과를 assertion으로 검사해 시험 실패로 전달하는 것입니다."
+      ],
+      "answer": 1,
+      "explanation": "정확히 일치하는 포장 부분만 바꾸므로 임의 코드 전체의 성질은 보장하지 않습니다.",
+      "original_prompt": "생성된 wrapper의 unwrap 치환 목적은?",
+      "original_options": [
         "원래 예제의 모든 panic 가능성을 증명상 제거하기",
         "결과를 assertion으로 확인해 테스트 실패로 연결하기"
       ],
-      "answer": 1,
-      "explanation": "특정 문자열만 치환합니다. 테스트 실패 경로 개선을 임의 코드 전체의 panic 제거로 확대할 수 없습니다."
+      "original_explanation": "특정 문자열만 치환합니다. 테스트 실패 경로 개선을 임의 코드 전체의 panic 제거로 확대할 수 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "반환형을 바꾸는 치환과 결과 확인을 바꾸는 치환이 각각 무엇을 해결하는지 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n//! Test builder for `rustdoc`-generated tests.\n//!\n//! This script is a hack to extract the test from `rustdoc`'s output. Ideally, `rustdoc` would\n//! have an option to generate this information instead, e.g. as JSON output.\n//!\n//! The `rustdoc`-generated test names look like `{file}_{line}_{number}`, e.g.\n//! `...path_rust_kernel_sync_arc_rs_42_0`. `number` is the \"test number\", needed in cases like\n//! a macro that expands into items with doctests is invoked several times within the same line.\n//!\n//! However, since these names are used for bisection in CI, the line number makes it not stable\n//! at all. In the future, we would like `rustdoc` to give us the Rust item path associated with\n//! the test, plus a \"test number\" (for cases with several examples per item) and generate a name\n//! from that. For the moment, we generate ourselves a new name, `{file}_{number}` instead, in\n//! the `gen` script (done there since we need to be aware of all the tests in a given file).\n\nuse std::io::Read;\n\nfn main() {\n    let mut stdin = std::io::stdin().lock();\n    let mut body = String::new();\n    stdin.read_to_string(&mut body).unwrap();\n\n    // Find the generated function name looking for the inner function inside `main()`.\n    //\n    // The line we are looking for looks like one of the following:\n    //\n    // ```\n    // fn main() { #[allow(non_snake_case)] fn _doctest_main_rust_kernel_file_rs_28_0() {\n    // fn main() { #[allow(non_snake_case)] fn _doctest_main_rust_kernel_file_rs_37_0() -> Result<(), impl core::fmt::Debug> {\n    // ```\n    //\n    // It should be unlikely that doctest code matches such lines (when code is formatted properly).\n    let rustdoc_function_name = body\n        .lines()\n        .find_map(|line| {\n            Some(\n                line.split_once(\"fn main() {\")?\n                    .1\n                    .split_once(\"fn \")?\n                    .1\n                    .split_once(\"()\")?\n                    .0,\n            )\n            .filter(|x| x.chars().all(|c| c.is_alphanumeric() || c == '_'))\n        })\n        .expect(\"No test function found in `rustdoc`'s output.\");\n\n    // Qualify `Result` to avoid the collision with our own `Result` coming from the prelude.\n    let body = body.replace(\n        &format!(\"{rustdoc_function_name}() -> Result<(), impl core::fmt::Debug> {{\"),\n        &format!(\"{rustdoc_function_name}() -> core::result::Result<(), impl core::fmt::Debug> {{\"),\n    );\n\n    // For tests that get generated with `Result`, like above, `rustdoc` generates an `unwrap()` on\n    // the return value to check there were no returned errors. Instead, we use our assert macro\n    // since we want to just fail the test, not panic the kernel.\n    //\n    // We save the result in a variable so that the failed assertion message looks nicer.\n    let body = body.replace(\n        &format!(\"}} {rustdoc_function_name}().unwrap() }}\"),\n        &format!(\"}} let test_return_value = {rustdoc_function_name}(); assert!(test_return_value.is_ok()); }}\"),\n    );\n\n    // Figure out a smaller test name based on the generated function name.\n    let name = rustdoc_function_name.split_once(\"_rust_kernel_\").unwrap().1;\n\n    let path = format!(\"rust/test/doctests/kernel/{name}\");\n\n    std::fs::write(path, body.as_bytes()).unwrap();\n}\n",
   "source_review": {
@@ -106,5 +126,143 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/rustdoc_test_builder.rs"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-cd59d35cf552974c",
+    "path": "scripts/rustdoc_test_builder.rs",
+    "title": "Rustdoc 테스트 추출: 함수명 탐색·Result 수정·파일 저장",
+    "area": "Rust · 코드 생성 · 문자열 처리 · doctest · 테스트 어댑터",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "rustdoc 생성 소스를 입력받아 커널 테스트 생성기가 사용할 중간 파일로 저장하는 전체 구현을 분석합니다.",
+    "guide": [
+      "정형 metadata가 없는 도구를 연결할 때 텍스트 패턴에 의존하면 지원하는 생성 형식과 실패 조건을 명시해야 합니다.",
+      "Rust 문자열 탐색, Option 결합, 텍스트 치환과 빌드 도구의 panic을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 목적과 입력",
+        "text": "GPL-2.0 Rust 프로그램은 std::io::Read를 사용하고 main 하나를 정의합니다. stdin을 lock한 뒤 전체 입력을 String에 read_to_string하고 unwrap합니다. 주석은 rustdoc이 구조화된 metadata를 제공하지 않아 생성 소스를 추출하는 임시 방식이라고 설명합니다. UTF-8 읽기나 I/O 실패는 이 호스트 도구의 panic으로 이어집니다."
+      },
+      {
+        "title": "한 줄 안에서 함수명 찾기",
+        "text": "body.lines().find_map으로 각 줄에서 fn main() { 뒤, 그 안의 fn 뒤, () 앞 부분을 split_once로 찾습니다. 어느 조각이 없으면 ?를 통해 그 줄의 후보가 None이 됩니다. 후보 문자는 is_alphanumeric 또는 밑줄만 허용하고 처음 찾은 후보를 사용합니다. 전체 Rust AST를 파싱하는 것이 아니며 문자 판정은 단순 ASCII 집합 검사와도 다릅니다. 하나도 없으면 expect 메시지로 panic합니다."
+      },
+      {
+        "title": "Result 이름 충돌 방지",
+        "text": "찾은 함수의 정확한 반환 서명 문자열인 Result<(), impl core::fmt::Debug>를 core::result::Result로 한정합니다. 커널 prelude의 자체 Result와 충돌을 피하려는 목적입니다. String::replace는 일치하는 문자열을 치환하며 임의 whitespace·다른 반환형·모든 Result 사용을 AST 단위로 바꾸는 기능은 아닙니다."
+      },
+      {
+        "title": "Unwrap 대신 테스트 실패",
+        "text": "생성된 함수 호출 뒤 .unwrap()을 쓰는 정확한 wrapper 문자열을 찾아 test_return_value 변수에 결과를 저장하고 assert!(...is_ok())로 바꿉니다. 의도는 커널 panic 대신 KUnit assertion 실패로 연결하는 것입니다. 실제 assertion macro 연결은 뒤 gen 도구가 제공합니다. 이 치환이 사용자 예제의 모든 unwrap을 제거한다고 말하면 안 됩니다."
+      },
+      {
+        "title": "중간 이름과 저장",
+        "text": "함수명에서 _rust_kernel_ 첫 구분자 뒤를 얻고 rust/test/doctests/kernel/{name}에 body를 씁니다. 구분자가 없거나 쓰기가 실패하면 unwrap으로 panic합니다. 디렉터리를 생성하는 명령은 없으며 빌드가 준비한 경로를 전제로 합니다. 이 단계의 name에는 원래 파일·줄·번호 표현이 남고 줄 번호를 제외한 새 테스트 이름은 gen 단계에서 생성합니다."
+      },
+      {
+        "title": "안정성의 범위",
+        "text": "주석은 rustdoc 이름이 파일_줄_번호이며 같은 줄의 매크로 확장에서 여러 doctest가 나올 수 있어 번호가 필요하다고 설명합니다. 줄 번호가 바뀌면 CI bisection 이름이 흔들리므로 다음 단계에서 개선하려는 설계입니다. 모든 입력 추출·두 치환·저장 경로를 원본과 대조했으며 이 환경에서 rustdoc 파이프라인을 실행한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "함수명 탐색은 Rust 문법 전체를 AST로 해석하는가?",
+        "options": [
+          "아니다. 한 줄의 문자열 조각과 문자 조건을 검사한다",
+          "그렇다. rustc parser를 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "split_once와 find_map만 사용합니다. 생성 형식에 맞는 줄을 기대하는 계약입니다."
+      },
+      {
+        "prompt": "Result를 core::result::Result로 바꾸는 이유는?",
+        "options": [
+          "모든 오류를 자동으로 성공으로 바꾸기 위해서다",
+          "커널 prelude의 같은 이름과 충돌을 피하기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "반환 타입을 명확히 지정하는 치환이지 오류값을 제거하는 동작은 아닙니다."
+      },
+      {
+        "prompt": "이 단계에서 줄 번호 없는 최종 KUnit 이름을 만드는가?",
+        "options": [
+          "아니다. gen 도구에서 파일별 전체 목록을 보고 만든다",
+          "그렇다. 모든 줄 번호를 여기서 삭제한다"
+        ],
+        "answer": 0,
+        "explanation": "builder의 저장 이름은 함수명 suffix를 사용합니다. 파일 전체의 순서를 알아야 하는 번호 재할당은 다음 단계입니다."
+      },
+      {
+        "prompt": "생성된 wrapper의 unwrap 치환 목적은?",
+        "options": [
+          "원래 예제의 모든 panic 가능성을 증명상 제거하기",
+          "결과를 assertion으로 확인해 테스트 실패로 연결하기"
+        ],
+        "answer": 1,
+        "explanation": "특정 문자열만 치환합니다. 테스트 실패 경로 개선을 임의 코드 전체의 panic 제거로 확대할 수 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n//! Test builder for `rustdoc`-generated tests.\n//!\n//! This script is a hack to extract the test from `rustdoc`'s output. Ideally, `rustdoc` would\n//! have an option to generate this information instead, e.g. as JSON output.\n//!\n//! The `rustdoc`-generated test names look like `{file}_{line}_{number}`, e.g.\n//! `...path_rust_kernel_sync_arc_rs_42_0`. `number` is the \"test number\", needed in cases like\n//! a macro that expands into items with doctests is invoked several times within the same line.\n//!\n//! However, since these names are used for bisection in CI, the line number makes it not stable\n//! at all. In the future, we would like `rustdoc` to give us the Rust item path associated with\n//! the test, plus a \"test number\" (for cases with several examples per item) and generate a name\n//! from that. For the moment, we generate ourselves a new name, `{file}_{number}` instead, in\n//! the `gen` script (done there since we need to be aware of all the tests in a given file).\n\nuse std::io::Read;\n\nfn main() {\n    let mut stdin = std::io::stdin().lock();\n    let mut body = String::new();\n    stdin.read_to_string(&mut body).unwrap();\n\n    // Find the generated function name looking for the inner function inside `main()`.\n    //\n    // The line we are looking for looks like one of the following:\n    //\n    // ```\n    // fn main() { #[allow(non_snake_case)] fn _doctest_main_rust_kernel_file_rs_28_0() {\n    // fn main() { #[allow(non_snake_case)] fn _doctest_main_rust_kernel_file_rs_37_0() -> Result<(), impl core::fmt::Debug> {\n    // ```\n    //\n    // It should be unlikely that doctest code matches such lines (when code is formatted properly).\n    let rustdoc_function_name = body\n        .lines()\n        .find_map(|line| {\n            Some(\n                line.split_once(\"fn main() {\")?\n                    .1\n                    .split_once(\"fn \")?\n                    .1\n                    .split_once(\"()\")?\n                    .0,\n            )\n            .filter(|x| x.chars().all(|c| c.is_alphanumeric() || c == '_'))\n        })\n        .expect(\"No test function found in `rustdoc`'s output.\");\n\n    // Qualify `Result` to avoid the collision with our own `Result` coming from the prelude.\n    let body = body.replace(\n        &format!(\"{rustdoc_function_name}() -> Result<(), impl core::fmt::Debug> {{\"),\n        &format!(\"{rustdoc_function_name}() -> core::result::Result<(), impl core::fmt::Debug> {{\"),\n    );\n\n    // For tests that get generated with `Result`, like above, `rustdoc` generates an `unwrap()` on\n    // the return value to check there were no returned errors. Instead, we use our assert macro\n    // since we want to just fail the test, not panic the kernel.\n    //\n    // We save the result in a variable so that the failed assertion message looks nicer.\n    let body = body.replace(\n        &format!(\"}} {rustdoc_function_name}().unwrap() }}\"),\n        &format!(\"}} let test_return_value = {rustdoc_function_name}(); assert!(test_return_value.is_ok()); }}\"),\n    );\n\n    // Figure out a smaller test name based on the generated function name.\n    let name = rustdoc_function_name.split_once(\"_rust_kernel_\").unwrap().1;\n\n    let path = format!(\"rust/test/doctests/kernel/{name}\");\n\n    std::fs::write(path, body.as_bytes()).unwrap();\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "106cd392bf89ee6573df268ae14623379a57d969422cebff855c7c3d2171bf59",
+      "scope": "whole-file",
+      "line_count": 72,
+      "authoring_source": "course/file_units/rustdoc_kunit_generation.py",
+      "sections": [
+        "전체 목적과 입력",
+        "한 줄 안에서 함수명 찾기",
+        "Result 이름 충돌 방지",
+        "Unwrap 대신 테스트 실패",
+        "중간 이름과 저장",
+        "안정성의 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/rustdoc_test_builder.rs"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "문서 예제를 시험으로 바꾸는 중간 작업입니다. 포장된 코드에서 시험 함수의 이름을 찾고, 실패를 커널 고장 대신 시험 실패로 전하도록 포장을 고칩니다.",
+    "meaning": "정해진 글자 모양을 찾는 변환의 역할과 한계를 설명합니다.",
+    "exercise": "반환형을 바꾸는 치환과 결과 확인을 바꾸는 치환이 각각 무엇을 해결하는지 적어 보세요."
+  },
+  "goal": "정해진 글자 모양을 찾는 변환의 역할과 한계를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "반환형을 바꾸는 치환과 결과 확인을 바꾸는 치환이 각각 무엇을 해결하는지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "2180d322806a4c001f7f7ca571ffe1534176e616b7ddc21fdd7498498be91346",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

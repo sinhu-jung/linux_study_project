@@ -5,93 +5,119 @@
   "area": "문자열·파서 · 메모리 수명·경계",
   "track": "files",
   "kind": "kernel",
-  "intro": "사용자 주소의 문자열을 커널 버퍼로 복사하면서 fault와 NUL을 다룹니다. libc strncpy와 다른 반환 규약을 갖습니다.",
+  "intro": "사용자 문자열 복사의 NUL·길이·부분 실패와 접근 경계 조건을 설명합니다.",
   "guide": [
-    "do_strncpy_from_user는 정렬 조건에 맞으면 워드 단위로 읽고 NUL이 있으면 그 뒤 같은 워드의 바이트를 마스크합니다. 워드 읽기 fault나 비효율적인 비정렬 주소에서는 바이트 단위로 전환합니다. 공개 wrapper는 fault 주입·count·사용자 주소 접근 구간을 관리합니다.",
-    "dst는 최소 count바이트의 유효 커널 저장소여야 합니다. 성공 길이는 마지막 NUL을 제외합니다. 반환 count는 count만큼 복사했지만 NUL을 확보하지 못했을 수 있는 경우이며, -EFAULT여도 일부 바이트가 이미 복사되었을 수 있습니다."
+    "워드는 CPU가 한 번에 다루기 좋은 정수 크기의 묶음입니다.",
+    "정렬은 주소가 워드 크기에 맞는 경계에 놓인 상태입니다.",
+    "fault는 사용자 주소에 접근하다 실패하는 상황이며 NUL은 문자열 끝을 나타내는 0 문자입니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체와 정렬 선택",
-      "text": "SPDX, compiler/export/fault-inject/kasan/thread/uaccess/kernel/errno/mm 및 아키텍처 byteorder/word-at-a-time 헤더, IS_UNALIGNED 설정 분기, 내부 복사 함수, 공개 함수·export가 전체입니다. 효율적 비정렬 접근 설정이 있으면 매크로는 0, 없으면 src/dst의 워드 정렬을 검사합니다."
+      "text": "헤더와 정렬 조건, 내부 복사, 공개 포장 함수로 구성됩니다. 비정렬 접근을 효율적으로 지원하면 정렬 검사 매크로는 0이고, 아니면 출발·도착 주소의 워드 경계를 검사해 바이트 경로를 선택합니다."
     },
     {
       "title": "워드 경로와 NUL 뒤 마스크",
-      "text": "max가 워드 크기 이상일 때 unsafe_get_user로 읽습니다. has_zero→prep_zero_mask→create_zero_mask→zero_bytemask로 처음 NUL 위치와 마스크를 구해 c&mask를 dst에 씁니다. NUL 뒤 같은 워드의 임의 데이터를 그대로 복사하지 않아 문자열을 opaque 바이트 키로 쓰는 BPF 사례의 차이를 줄입니다. 목적지 전체의 나머지 count바이트를 모두 0으로 채운다는 뜻은 아닙니다."
+      "text": "남은 한계가 워드 이상이면 묶음으로 읽고 0 바이트를 찾습니다. NUL이 있으면 같은 워드에서 그 뒤 바이트를 마스크로 지워 저장합니다. BPF처럼 문자열 의미 대신 바이트 전체를 키로 보는 코드에 임의의 뒷부분이 섞이지 않게 합니다. 목적지의 남은 count 전체를 0으로 채우는 것은 아닙니다."
     },
     {
       "title": "바이트 fallback과 제한",
-      "text": "워드 읽기 실패는 즉시 최종 실패가 아니라 byte_at_a_time으로 이동합니다. 필요한 짧은 문자열의 앞 바이트는 읽을 수 있는 경우를 처리할 수 있습니다. 바이트 읽기도 실패하면 -EFAULT입니다. NUL을 복사하면 그 위치 res를 길이로 반환하고, max를 다 썼을 때 res>=count면 그 길이, 주소 한계 때문에 더 일찍 끝났다면 -EFAULT입니다."
+      "text": "워드 읽기 실패는 곧바로 최종 오류가 아니라 바이트 읽기로 바뀔 수 있습니다. 바이트도 실패하면 -EFAULT입니다. NUL을 복사하면 그 위치까지의 길이를 반환합니다. 한계를 다 썼을 때 요청 count까지 왔으면 길이, 주소 공간 끝 때문에 일찍 멈췄으면 오류입니다."
     },
     {
       "title": "공개 wrapper 순서",
-      "text": "might_fault 후 should_fail_usercopy를 먼저 검사해 -EFAULT를 반환할 수 있습니다. 그 다음 count<=0이면 0입니다. masked user access 지원 경로는 begin→내부 복사→end로 처리합니다. 일반 경로는 untagged 주소가 TASK_SIZE_MAX 아래인지 확인하고 max를 주소 공간 잔여량과 count 중 작은 값으로 제한합니다."
+      "text": "공개 함수는 might_fault 뒤 시험용 실패 주입을 먼저 검사하고 그 다음 count<=0을 처리합니다. 주소를 가려 접근하는 지원 경로는 시작·내부 복사·종료 순서입니다. 일반 경로는 태그를 뗀 사용자 주소가 TASK_SIZE_MAX 아래인지 보고 남은 주소 공간과 count 중 작은 한계를 택합니다."
     },
     {
       "title": "검사와 접근 구간",
-      "text": "일반 경로는 kasan_check_write와 check_object_size로 목적지 범위를 확인한 뒤 user_read_access_begin이 성공하면 내부 함수를 호출합니다. 내부 복사 결과가 실패여도 user_read_access_end를 수행하고 반환합니다. masked 경로에는 이 일반 경로의 목적지 검사 두 줄이 같은 위치에 있지 않으므로 모든 아키텍처 경로가 문장 단위로 동일하다고 설명하지 않습니다."
+      "text": "일반 경로는 목적지 쓰기 영역과 객체 크기를 검사한 뒤 사용자 읽기 구간을 엽니다. 내부 복사가 실패해도 구간 종료를 호출합니다. masked 경로에는 같은 위치에 같은 목적지 검사 두 줄이 없으므로 CPU별 길이 모두 문장 단위로 같다고 설명하지 않습니다."
     },
     {
       "title": "CS와 안정성",
-      "text": "사용자 주소 공간 경계·fault 가능한 읽기·partial write·정렬 최적화·byte representation을 연결합니다. 커널에 확보한 결과는 이후 사용자 메모리 변경과 분리되지만 복사 순간 원본 전체가 원자적 snapshot이라는 뜻은 아닙니다. 부분 복사 실패 후 버퍼를 완성된 C 문자열로 사용하지 않아야 합니다."
+      "text": "목적지는 최소 count바이트의 유효한 커널 공간이어야 합니다. 성공 길이는 끝 NUL을 빼며 반환 count면 NUL을 못 찾았을 수 있습니다. -EFAULT여도 일부는 이미 써졌고 되돌리지 않으므로 완성 문자열로 쓰면 안 됩니다. 복사본은 이후 원본 변경과 분리되지만 복사 순간 원본 전체의 원자적 사진은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "문자열 abc와 NUL을 성공적으로 복사하면 반환 길이는?",
+      "prompt": "abc와 끝 NUL을 성공 복사하면 반환 길이는 무엇인가요?",
       "options": [
+        "3입니다.",
+        "4입니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 끝 문자까지 복사하지만 길이에는 NUL을 세지 않습니다.",
+      "original_prompt": "문자열 abc와 NUL을 성공적으로 복사하면 반환 길이는?",
+      "original_options": [
         "3",
         "4"
       ],
-      "answer": 0,
-      "explanation": "성공값은 NUL을 제외한 문자열 길이입니다. 실제 목적지에는 마지막 NUL까지 복사됩니다. strnlen_user의 NUL 포함 규약과 다릅니다."
+      "original_explanation": "성공값은 NUL을 제외한 문자열 길이입니다. 실제 목적지에는 마지막 NUL까지 복사됩니다. strnlen_user의 NUL 포함 규약과 다릅니다."
     },
     {
-      "prompt": "반환값이 count이면 항상 dst[count-1]이 NUL인가?",
+      "prompt": "반환값 count면 마지막 바이트가 반드시 NUL인가요?",
       "options": [
+        "네. 마지막을 강제로 NUL로 만듭니다.",
+        "아니요. 한계까지 읽었지만 NUL은 없을 수 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "제한 도달 때 별도로 끝 문자를 덮어 쓰지 않습니다.",
+      "original_prompt": "반환값이 count이면 항상 dst[count-1]이 NUL인가?",
+      "original_options": [
         "그렇다. 항상 마지막 바이트를 NUL로 강제한다",
         "아니다. 제한까지 복사했고 NUL이 없을 수 있다"
       ],
-      "answer": 1,
-      "explanation": "제한 도달 경로는 기존 복사 길이를 반환하며 별도로 마지막 바이트를 0으로 덮지 않습니다. 호출자는 반환값과 문자열 종료 조건을 함께 확인해야 합니다."
+      "original_explanation": "제한 도달 경로는 기존 복사 길이를 반환하며 별도로 마지막 바이트를 0으로 덮지 않습니다. 호출자는 반환값과 문자열 종료 조건을 함께 확인해야 합니다."
     },
     {
-      "prompt": "워드 단위 사용자 읽기 fault는 즉시 -EFAULT로 끝나는가?",
+      "prompt": "워드 읽기가 실패하면 즉시 최종 -EFAULT인가요?",
       "options": [
+        "아니요. 바이트 읽기로 바뀔 수 있습니다.",
+        "네. 바이트 경로는 실행하지 않습니다."
+      ],
+      "answer": 0,
+      "explanation": "필요한 짧은 앞부분은 한 바이트씩 읽을 수 있을 수 있습니다.",
+      "original_prompt": "워드 단위 사용자 읽기 fault는 즉시 -EFAULT로 끝나는가?",
+      "original_options": [
         "아니다. 바이트 단위 읽기로 fallback할 수 있다",
         "그렇다. 바이트 경로는 절대 실행하지 않는다"
       ],
-      "answer": 0,
-      "explanation": "unsafe_get_user 워드 호출의 오류 라벨이 byte_at_a_time입니다. 바이트 읽기 자체가 실패할 때 efault로 갑니다."
+      "original_explanation": "unsafe_get_user 워드 호출의 오류 라벨이 byte_at_a_time입니다. 바이트 읽기 자체가 실패할 때 efault로 갑니다."
     },
     {
-      "prompt": "-EFAULT이면 목적지에 어떤 바이트도 쓰지 않았다고 보장되는가?",
+      "prompt": "-EFAULT면 목적지는 전혀 안 바뀌었나요?",
       "options": [
+        "네. 모든 쓰기를 되돌립니다.",
+        "아니요. 일부 바이트는 이미 복사됐을 수 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "순서대로 쓴 내용을 실패 시 취소하지 않습니다.",
+      "original_prompt": "-EFAULT이면 목적지에 어떤 바이트도 쓰지 않았다고 보장되는가?",
+      "original_options": [
         "그렇다. 함수가 모든 쓰기를 롤백한다",
         "아니다. 일부가 이미 복사되었을 수 있다"
       ],
-      "answer": 1,
-      "explanation": "원문 문서에 일부 데이터가 복사되었을 수 있다고 명시되어 있습니다. 내부는 순서대로 쓰며 실패 시 이전 쓰기를 되돌리지 않습니다."
+      "original_explanation": "원문 문서에 일부 데이터가 복사되었을 수 있다고 명시되어 있습니다. 내부는 순서대로 쓰며 실패 시 이전 쓰기를 되돌리지 않습니다."
     },
     {
-      "prompt": "fault 주입이 활성화된 경우 count<=0이면 무조건 0인가?",
+      "prompt": "실패 주입이 켜져도 count<=0이면 무조건 0인가요?",
       "options": [
+        "아니요. 앞선 실패 주입 검사가 -EFAULT를 줄 수 있습니다.",
+        "네. count 검사가 맨 먼저입니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 검사 순서는 might_fault, 실패 주입, count입니다.",
+      "original_prompt": "fault 주입이 활성화된 경우 count<=0이면 무조건 0인가?",
+      "original_options": [
         "아니다. should_fail_usercopy 검사가 먼저 -EFAULT를 반환할 수 있다",
         "그렇다. count 검사가 모든 검사보다 먼저다"
       ],
-      "answer": 0,
-      "explanation": "공개 함수의 순서는 might_fault, should_fail_usercopy, count<=0입니다. 경계 규칙은 실제 제어 흐름 순서까지 읽어야 합니다."
+      "original_explanation": "공개 함수의 순서는 might_fault, should_fail_usercopy, count<=0입니다. 경계 규칙은 실제 제어 흐름 순서까지 읽어야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "abc와 끝 NUL을 복사했을 때 실제 네 바이트와 반환값 3을 구별해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/compiler.h>\n#include <linux/export.h>\n#include <linux/fault-inject-usercopy.h>\n#include <linux/kasan-checks.h>\n#include <linux/thread_info.h>\n#include <linux/uaccess.h>\n#include <linux/kernel.h>\n#include <linux/errno.h>\n#include <linux/mm.h>\n\n#include <asm/byteorder.h>\n#include <asm/word-at-a-time.h>\n\n#ifdef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS\n#define IS_UNALIGNED(src, dst)\t0\n#else\n#define IS_UNALIGNED(src, dst)\t\\\n\t(((long) dst | (long) src) & (sizeof(long) - 1))\n#endif\n\n/*\n * Do a strncpy, return length of string without final '\\0'.\n * 'count' is the user-supplied count (return 'count' if we\n * hit it), 'max' is the address space maximum (and we return\n * -EFAULT if we hit it).\n */\nstatic __always_inline long do_strncpy_from_user(char *dst, const char __user *src,\n\t\t\t\t\tunsigned long count, unsigned long max)\n{\n\tconst struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;\n\tunsigned long res = 0;\n\n\tif (IS_UNALIGNED(src, dst))\n\t\tgoto byte_at_a_time;\n\n\twhile (max >= sizeof(unsigned long)) {\n\t\tunsigned long c, data, mask;\n\n\t\t/* Fall back to byte-at-a-time if we get a page fault */\n\t\tunsafe_get_user(c, (unsigned long __user *)(src+res), byte_at_a_time);\n\n\t\t/*\n\t\t * Note that we mask out the bytes following the NUL. This is\n\t\t * important to do because string oblivious code may read past\n\t\t * the NUL. For those routines, we don't want to give them\n\t\t * potentially random bytes after the NUL in `src`.\n\t\t *\n\t\t * One example of such code is BPF map keys. BPF treats map keys\n\t\t * as an opaque set of bytes. Without the post-NUL mask, any BPF\n\t\t * maps keyed by strings returned from strncpy_from_user() may\n\t\t * have multiple entries for semantically identical strings.\n\t\t */\n\t\tif (has_zero(c, &data, &constants)) {\n\t\t\tdata = prep_zero_mask(c, data, &constants);\n\t\t\tdata = create_zero_mask(data);\n\t\t\tmask = zero_bytemask(data);\n\t\t\t*(unsigned long *)(dst+res) = c & mask;\n\t\t\treturn res + find_zero(data);\n\t\t}\n\n\t\t*(unsigned long *)(dst+res) = c;\n\n\t\tres += sizeof(unsigned long);\n\t\tmax -= sizeof(unsigned long);\n\t}\n\nbyte_at_a_time:\n\twhile (max) {\n\t\tchar c;\n\n\t\tunsafe_get_user(c,src+res, efault);\n\t\tdst[res] = c;\n\t\tif (!c)\n\t\t\treturn res;\n\t\tres++;\n\t\tmax--;\n\t}\n\n\t/*\n\t * Uhhuh. We hit 'max'. But was that the user-specified maximum\n\t * too? If so, that's ok - we got as much as the user asked for.\n\t */\n\tif (res >= count)\n\t\treturn res;\n\n\t/*\n\t * Nope: we hit the address space limit, and we still had more\n\t * characters the caller would have wanted. That's an EFAULT.\n\t */\nefault:\n\treturn -EFAULT;\n}\n\n/**\n * strncpy_from_user: - Copy a NUL terminated string from userspace.\n * @dst:   Destination address, in kernel space.  This buffer must be at\n *         least @count bytes long.\n * @src:   Source address, in user space.\n * @count: Maximum number of bytes to copy, including the trailing NUL.\n *\n * Copies a NUL-terminated string from userspace to kernel space.\n *\n * On success, returns the length of the string (not including the trailing\n * NUL).\n *\n * If access to userspace fails, returns -EFAULT (some data may have been\n * copied).\n *\n * If @count is smaller than the length of the string, copies @count bytes\n * and returns @count.\n */\nlong strncpy_from_user(char *dst, const char __user *src, long count)\n{\n\tunsigned long max_addr, src_addr;\n\n\tmight_fault();\n\tif (should_fail_usercopy())\n\t\treturn -EFAULT;\n\tif (unlikely(count <= 0))\n\t\treturn 0;\n\n\tif (can_do_masked_user_access()) {\n\t\tlong retval;\n\n\t\tsrc = masked_user_access_begin(src);\n\t\tretval = do_strncpy_from_user(dst, src, count, count);\n\t\tuser_read_access_end();\n\t\treturn retval;\n\t}\n\n\tmax_addr = TASK_SIZE_MAX;\n\tsrc_addr = (unsigned long)untagged_addr(src);\n\tif (likely(src_addr < max_addr)) {\n\t\tunsigned long max = max_addr - src_addr;\n\t\tlong retval;\n\n\t\t/*\n\t\t * Truncate 'max' to the user-specified limit, so that\n\t\t * we only have one limit we need to check in the loop\n\t\t */\n\t\tif (max > count)\n\t\t\tmax = count;\n\n\t\tkasan_check_write(dst, count);\n\t\tcheck_object_size(dst, count, false);\n\t\tif (user_read_access_begin(src, max)) {\n\t\t\tretval = do_strncpy_from_user(dst, src, count, max);\n\t\t\tuser_read_access_end();\n\t\t\treturn retval;\n\t\t}\n\t}\n\treturn -EFAULT;\n}\nEXPORT_SYMBOL(strncpy_from_user);\n",
   "source_review": {
@@ -115,5 +141,152 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/strncpy_from_user.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-9a38f0a545c40d87",
+    "path": "lib/strncpy_from_user.c",
+    "title": "사용자 문자열 복사 전체: count·주소 한계·부분 실패",
+    "area": "문자열·파서 · 메모리 수명·경계",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "사용자 주소의 문자열을 커널 버퍼로 복사하면서 fault와 NUL을 다룹니다. libc strncpy와 다른 반환 규약을 갖습니다.",
+    "guide": [
+      "do_strncpy_from_user는 정렬 조건에 맞으면 워드 단위로 읽고 NUL이 있으면 그 뒤 같은 워드의 바이트를 마스크합니다. 워드 읽기 fault나 비효율적인 비정렬 주소에서는 바이트 단위로 전환합니다. 공개 wrapper는 fault 주입·count·사용자 주소 접근 구간을 관리합니다.",
+      "dst는 최소 count바이트의 유효 커널 저장소여야 합니다. 성공 길이는 마지막 NUL을 제외합니다. 반환 count는 count만큼 복사했지만 NUL을 확보하지 못했을 수 있는 경우이며, -EFAULT여도 일부 바이트가 이미 복사되었을 수 있습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체와 정렬 선택",
+        "text": "SPDX, compiler/export/fault-inject/kasan/thread/uaccess/kernel/errno/mm 및 아키텍처 byteorder/word-at-a-time 헤더, IS_UNALIGNED 설정 분기, 내부 복사 함수, 공개 함수·export가 전체입니다. 효율적 비정렬 접근 설정이 있으면 매크로는 0, 없으면 src/dst의 워드 정렬을 검사합니다."
+      },
+      {
+        "title": "워드 경로와 NUL 뒤 마스크",
+        "text": "max가 워드 크기 이상일 때 unsafe_get_user로 읽습니다. has_zero→prep_zero_mask→create_zero_mask→zero_bytemask로 처음 NUL 위치와 마스크를 구해 c&mask를 dst에 씁니다. NUL 뒤 같은 워드의 임의 데이터를 그대로 복사하지 않아 문자열을 opaque 바이트 키로 쓰는 BPF 사례의 차이를 줄입니다. 목적지 전체의 나머지 count바이트를 모두 0으로 채운다는 뜻은 아닙니다."
+      },
+      {
+        "title": "바이트 fallback과 제한",
+        "text": "워드 읽기 실패는 즉시 최종 실패가 아니라 byte_at_a_time으로 이동합니다. 필요한 짧은 문자열의 앞 바이트는 읽을 수 있는 경우를 처리할 수 있습니다. 바이트 읽기도 실패하면 -EFAULT입니다. NUL을 복사하면 그 위치 res를 길이로 반환하고, max를 다 썼을 때 res>=count면 그 길이, 주소 한계 때문에 더 일찍 끝났다면 -EFAULT입니다."
+      },
+      {
+        "title": "공개 wrapper 순서",
+        "text": "might_fault 후 should_fail_usercopy를 먼저 검사해 -EFAULT를 반환할 수 있습니다. 그 다음 count<=0이면 0입니다. masked user access 지원 경로는 begin→내부 복사→end로 처리합니다. 일반 경로는 untagged 주소가 TASK_SIZE_MAX 아래인지 확인하고 max를 주소 공간 잔여량과 count 중 작은 값으로 제한합니다."
+      },
+      {
+        "title": "검사와 접근 구간",
+        "text": "일반 경로는 kasan_check_write와 check_object_size로 목적지 범위를 확인한 뒤 user_read_access_begin이 성공하면 내부 함수를 호출합니다. 내부 복사 결과가 실패여도 user_read_access_end를 수행하고 반환합니다. masked 경로에는 이 일반 경로의 목적지 검사 두 줄이 같은 위치에 있지 않으므로 모든 아키텍처 경로가 문장 단위로 동일하다고 설명하지 않습니다."
+      },
+      {
+        "title": "CS와 안정성",
+        "text": "사용자 주소 공간 경계·fault 가능한 읽기·partial write·정렬 최적화·byte representation을 연결합니다. 커널에 확보한 결과는 이후 사용자 메모리 변경과 분리되지만 복사 순간 원본 전체가 원자적 snapshot이라는 뜻은 아닙니다. 부분 복사 실패 후 버퍼를 완성된 C 문자열로 사용하지 않아야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "문자열 abc와 NUL을 성공적으로 복사하면 반환 길이는?",
+        "options": [
+          "3",
+          "4"
+        ],
+        "answer": 0,
+        "explanation": "성공값은 NUL을 제외한 문자열 길이입니다. 실제 목적지에는 마지막 NUL까지 복사됩니다. strnlen_user의 NUL 포함 규약과 다릅니다."
+      },
+      {
+        "prompt": "반환값이 count이면 항상 dst[count-1]이 NUL인가?",
+        "options": [
+          "그렇다. 항상 마지막 바이트를 NUL로 강제한다",
+          "아니다. 제한까지 복사했고 NUL이 없을 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "제한 도달 경로는 기존 복사 길이를 반환하며 별도로 마지막 바이트를 0으로 덮지 않습니다. 호출자는 반환값과 문자열 종료 조건을 함께 확인해야 합니다."
+      },
+      {
+        "prompt": "워드 단위 사용자 읽기 fault는 즉시 -EFAULT로 끝나는가?",
+        "options": [
+          "아니다. 바이트 단위 읽기로 fallback할 수 있다",
+          "그렇다. 바이트 경로는 절대 실행하지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "unsafe_get_user 워드 호출의 오류 라벨이 byte_at_a_time입니다. 바이트 읽기 자체가 실패할 때 efault로 갑니다."
+      },
+      {
+        "prompt": "-EFAULT이면 목적지에 어떤 바이트도 쓰지 않았다고 보장되는가?",
+        "options": [
+          "그렇다. 함수가 모든 쓰기를 롤백한다",
+          "아니다. 일부가 이미 복사되었을 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "원문 문서에 일부 데이터가 복사되었을 수 있다고 명시되어 있습니다. 내부는 순서대로 쓰며 실패 시 이전 쓰기를 되돌리지 않습니다."
+      },
+      {
+        "prompt": "fault 주입이 활성화된 경우 count<=0이면 무조건 0인가?",
+        "options": [
+          "아니다. should_fail_usercopy 검사가 먼저 -EFAULT를 반환할 수 있다",
+          "그렇다. count 검사가 모든 검사보다 먼저다"
+        ],
+        "answer": 0,
+        "explanation": "공개 함수의 순서는 might_fault, should_fail_usercopy, count<=0입니다. 경계 규칙은 실제 제어 흐름 순서까지 읽어야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/compiler.h>\n#include <linux/export.h>\n#include <linux/fault-inject-usercopy.h>\n#include <linux/kasan-checks.h>\n#include <linux/thread_info.h>\n#include <linux/uaccess.h>\n#include <linux/kernel.h>\n#include <linux/errno.h>\n#include <linux/mm.h>\n\n#include <asm/byteorder.h>\n#include <asm/word-at-a-time.h>\n\n#ifdef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS\n#define IS_UNALIGNED(src, dst)\t0\n#else\n#define IS_UNALIGNED(src, dst)\t\\\n\t(((long) dst | (long) src) & (sizeof(long) - 1))\n#endif\n\n/*\n * Do a strncpy, return length of string without final '\\0'.\n * 'count' is the user-supplied count (return 'count' if we\n * hit it), 'max' is the address space maximum (and we return\n * -EFAULT if we hit it).\n */\nstatic __always_inline long do_strncpy_from_user(char *dst, const char __user *src,\n\t\t\t\t\tunsigned long count, unsigned long max)\n{\n\tconst struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;\n\tunsigned long res = 0;\n\n\tif (IS_UNALIGNED(src, dst))\n\t\tgoto byte_at_a_time;\n\n\twhile (max >= sizeof(unsigned long)) {\n\t\tunsigned long c, data, mask;\n\n\t\t/* Fall back to byte-at-a-time if we get a page fault */\n\t\tunsafe_get_user(c, (unsigned long __user *)(src+res), byte_at_a_time);\n\n\t\t/*\n\t\t * Note that we mask out the bytes following the NUL. This is\n\t\t * important to do because string oblivious code may read past\n\t\t * the NUL. For those routines, we don't want to give them\n\t\t * potentially random bytes after the NUL in `src`.\n\t\t *\n\t\t * One example of such code is BPF map keys. BPF treats map keys\n\t\t * as an opaque set of bytes. Without the post-NUL mask, any BPF\n\t\t * maps keyed by strings returned from strncpy_from_user() may\n\t\t * have multiple entries for semantically identical strings.\n\t\t */\n\t\tif (has_zero(c, &data, &constants)) {\n\t\t\tdata = prep_zero_mask(c, data, &constants);\n\t\t\tdata = create_zero_mask(data);\n\t\t\tmask = zero_bytemask(data);\n\t\t\t*(unsigned long *)(dst+res) = c & mask;\n\t\t\treturn res + find_zero(data);\n\t\t}\n\n\t\t*(unsigned long *)(dst+res) = c;\n\n\t\tres += sizeof(unsigned long);\n\t\tmax -= sizeof(unsigned long);\n\t}\n\nbyte_at_a_time:\n\twhile (max) {\n\t\tchar c;\n\n\t\tunsafe_get_user(c,src+res, efault);\n\t\tdst[res] = c;\n\t\tif (!c)\n\t\t\treturn res;\n\t\tres++;\n\t\tmax--;\n\t}\n\n\t/*\n\t * Uhhuh. We hit 'max'. But was that the user-specified maximum\n\t * too? If so, that's ok - we got as much as the user asked for.\n\t */\n\tif (res >= count)\n\t\treturn res;\n\n\t/*\n\t * Nope: we hit the address space limit, and we still had more\n\t * characters the caller would have wanted. That's an EFAULT.\n\t */\nefault:\n\treturn -EFAULT;\n}\n\n/**\n * strncpy_from_user: - Copy a NUL terminated string from userspace.\n * @dst:   Destination address, in kernel space.  This buffer must be at\n *         least @count bytes long.\n * @src:   Source address, in user space.\n * @count: Maximum number of bytes to copy, including the trailing NUL.\n *\n * Copies a NUL-terminated string from userspace to kernel space.\n *\n * On success, returns the length of the string (not including the trailing\n * NUL).\n *\n * If access to userspace fails, returns -EFAULT (some data may have been\n * copied).\n *\n * If @count is smaller than the length of the string, copies @count bytes\n * and returns @count.\n */\nlong strncpy_from_user(char *dst, const char __user *src, long count)\n{\n\tunsigned long max_addr, src_addr;\n\n\tmight_fault();\n\tif (should_fail_usercopy())\n\t\treturn -EFAULT;\n\tif (unlikely(count <= 0))\n\t\treturn 0;\n\n\tif (can_do_masked_user_access()) {\n\t\tlong retval;\n\n\t\tsrc = masked_user_access_begin(src);\n\t\tretval = do_strncpy_from_user(dst, src, count, count);\n\t\tuser_read_access_end();\n\t\treturn retval;\n\t}\n\n\tmax_addr = TASK_SIZE_MAX;\n\tsrc_addr = (unsigned long)untagged_addr(src);\n\tif (likely(src_addr < max_addr)) {\n\t\tunsigned long max = max_addr - src_addr;\n\t\tlong retval;\n\n\t\t/*\n\t\t * Truncate 'max' to the user-specified limit, so that\n\t\t * we only have one limit we need to check in the loop\n\t\t */\n\t\tif (max > count)\n\t\t\tmax = count;\n\n\t\tkasan_check_write(dst, count);\n\t\tcheck_object_size(dst, count, false);\n\t\tif (user_read_access_begin(src, max)) {\n\t\t\tretval = do_strncpy_from_user(dst, src, count, max);\n\t\t\tuser_read_access_end();\n\t\t\treturn retval;\n\t\t}\n\t}\n\treturn -EFAULT;\n}\nEXPORT_SYMBOL(strncpy_from_user);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c5060ab0a0d80dd3f7d981a587bc97816c01d927713e037f56ab94b509ad5631",
+      "scope": "whole-file",
+      "line_count": 155,
+      "authoring_source": "course/file_units/string_boundaries.py",
+      "sections": [
+        "파일 전체와 정렬 선택",
+        "워드 경로와 NUL 뒤 마스크",
+        "바이트 fallback과 제한",
+        "공개 wrapper 순서",
+        "검사와 접근 구간",
+        "CS와 안정성"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/strncpy_from_user.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "다른 방의 글자를 옮길 때 큰 묶음으로 읽다가 경계에 걸리면 한 글자씩 다시 읽을 수 있습니다. 사용자 문자열 복사는 빠른 묶음 처리와 실패 가능한 작은 읽기를 함께 사용합니다.",
+    "meaning": "사용자 문자열 복사의 NUL·길이·부분 실패와 접근 경계 조건을 설명합니다.",
+    "exercise": "abc와 끝 NUL을 복사했을 때 실제 네 바이트와 반환값 3을 구별해 보세요."
+  },
+  "goal": "사용자 문자열 복사의 NUL·길이·부분 실패와 접근 경계 조건을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "abc와 끝 NUL을 복사했을 때 실제 네 바이트와 반환값 3을 구별해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "80000fdefebb25499b72f2801437b016f1070bbc98780b703a181a091b775f93",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

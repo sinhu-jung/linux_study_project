@@ -5,96 +5,116 @@
   "area": "컴파일러 최적화 · volatile · 원자성 · 타입 크기 · sanitizer",
   "track": "files",
   "kind": "kernel",
-  "intro": "한 번의 관찰을 표현하는 매크로의 크기 검사, volatile 접근과 검사 제외 helper를 해설합니다.",
+  "intro": "READ_ONCE와 WRITE_ONCE가 제한하는 컴파일러 동작, 크기 조건, CPU 원자성의 한계를 구별합니다.",
   "guide": [
-    "접근의 병합·재읽기를 막는 compiler 계약과 여러 CPU 사이의 순서·원자성은 구분해야 합니다.",
-    "앞서 읽은 acquire/release 구현에서 READ_ONCE와 WRITE_ONCE가 맡는 역할을 확인합니다."
+    "원자적이라는 말은 다른 실행 흐름에서 볼 때 작업이 중간에 쪼개져 보이지 않는다는 뜻입니다. 이름에 ONCE가 붙었다고 모든 크기의 접근이 원자적이지는 않습니다.",
+    "컴파일러는 코드를 기계어로 바꾸며 읽기와 쓰기를 합치거나 옮길 수 있습니다. 이 도구는 지정된 접근을 지키는 데 도움을 주지만 CPU 사이의 모든 순서를 보장하지 않습니다.",
+    "검사를 생략하는 함수도 사용할 수 있는 크기와 주소 조건은 있습니다. 검사 생략을 아무 메모리나 읽어도 된다는 허가로 생각하지 마세요."
   ],
   "deep_dive": [
     {
       "title": "주석과 파일 구조",
-      "text": "GPL-2.0, 목적 설명, guard와 비어셈블리 분기, compiler_types·KASAN·KCSAN 헤더, 크기 검사와 읽기·쓰기 매크로, 두 helper로 구성됩니다. 주석은 같은 CPU의 process와 IRQ/NMI 통신 및 별도 장벽·원자 명령과 함께 접근을 보존하는 용도를 듭니다."
+      "text": "이 GPL 헤더는 어셈블리 코드가 아닌 경우에 컴파일러 형식과 KASAN·KCSAN 검사 정의를 포함합니다. KASAN은 메모리 오류를, KCSAN은 동시에 접근하는 문제를 찾습니다. 크기 확인, 한 번 읽기·쓰기, 특별한 두 읽기 도구가 들어 있습니다. 같은 CPU의 일반 실행과 인터럽트·NMI처럼 끼어드는 실행 사이에서도 사용되며, 필요한 동기화 도구는 별도로 골라야 합니다."
     },
     {
       "title": "순서 설명의 조건",
-      "text": "주석은 compiler가 특정 순서를 인지할 때 연속 READ_ONCE/WRITE_ONCE의 순서를 보존한다고 설명하며 서로 다른 C 문장 배치를 예로 듭니다. 이것을 CPU의 acquire/release나 full barrier와 동일시하지 않습니다. 일반 접근까지 모두 고정하는 전역 compiler barrier 본문도 아닙니다."
+      "text": "컴파일러가 두 접근의 순서를 알 수 있어야 그 순서를 지킨다는 설명이 적용됩니다. 서로 다른 C 문장에 쓰는 것이 한 예입니다. 이 약속은 CPU의 acquire나 release, 즉 앞뒤 접근의 가시성을 조절하는 동기화나 전체 메모리 장벽을 대신하지 않습니다. 모든 일반 변수 접근까지 함께 고정하는 전역 장벽도 아닙니다."
     },
     {
       "title": "허용 크기",
-      "text": "compiletime_assert_rwonce_type은 __native_word(t)이거나 sizeof(t)==sizeof(long long)인지 정적 검사합니다. 주석에 struct/union도 언급되지만 public 매크로의 크기 제한은 그대로 적용됩니다. 임의 크기 구조체를 잠금 없이 통째로 원자 복사한다고 설명하면 틀립니다."
+      "text": "compiletime_assert_rwonce_type은 CPU가 자연스럽게 다루는 크기이거나 long long 크기인지 빌드 중 확인합니다. 구조체와 공용체를 언급했다고 임의로 큰 자료를 한 번에 안전하게 복사하도록 허용하는 것은 아닙니다. 허용 크기와 하드웨어 원자성은 별도 조건입니다."
     },
     {
       "title": "32비트에서64비트",
-      "text": "검사는32비트 아키텍처에서도64비트 크기를 허용합니다. 주석은 Armv7+LPAE 같은 원자 접근 사례와 둘의32비트 접근으로 쪼개질 수 있는 사례를 구분합니다. 따라서 크기 검사를 통과했다는 사실만으로 모든 아키텍처에서 torn read가 불가능함을 증명하지 못합니다."
+      "text": "32비트 CPU에서도 64비트 크기는 허용합니다. Armv7의 LPAE 지원처럼 한 번에 처리할 수 있는 경우도 있지만, 어떤 환경에서는 32비트 읽기 두 번으로 나뉩니다. 그 사이 값이 바뀌면 서로 다른 시점의 반쪽이 합쳐지는 현상이 생길 수 있습니다."
     },
     {
       "title": "읽기 확장",
-      "text": "__READ_ONCE가 없으면 &(x)를 const volatile의 __unqual_scalar_typeof(x) 포인터로 변환해 역참조합니다. READ_ONCE는 크기 검사 뒤 이를 사용합니다. 내부 __READ_ONCE를 직접 쓰면 public 크기 검사를 거치지 않으며 주석도 tearing 가능성을 경고합니다. 타입 변환은 주소 유효성을 검사하지 않습니다."
+      "text": "별도 정의가 없으면 __READ_ONCE는 대상 주소를 volatile 읽기에 맞는 형식으로 바꿔 값을 읽습니다. volatile은 해당 접근을 함부로 생략하지 못하게 하는 표시입니다. 공개 READ_ONCE는 먼저 크기를 확인합니다. 내부 __READ_ONCE를 직접 쓰면 크기 확인을 우회하며, 어느 쪽도 주소의 유효성을 자동 보장하지 않습니다."
     },
     {
       "title": "쓰기 확장",
-      "text": "__WRITE_ONCE는 &(x)를 volatile typeof(x) 포인터로 바꿔 val을 저장하는 do-while입니다. WRITE_ONCE는 먼저 같은 크기 검사를 합니다. 이 버전의 쓰기 매크로는 값 반환 식이 아니며 READ_ONCE와 WRITE_ONCE를 이어 붙여도 원자적 read-modify-write가 되지 않습니다."
+      "text": "__WRITE_ONCE는 volatile 포인터를 통해 값을 저장하는 do-while 매크로입니다. 공개 WRITE_ONCE는 먼저 크기를 확인하며 계산 결과를 돌려주는 식으로 쓰는 도구가 아닙니다. READ_ONCE로 읽고 더한 뒤 WRITE_ONCE로 쓰는 것은 두 동작이므로, 원자적 증가 연산이 되지 않습니다."
     },
     {
       "title": "검사 없는 한 word 읽기",
-      "text": "__read_once_word_nocheck는 __no_sanitize_or_inline 속성을 사용하며 unsigned long 포인터의 __READ_ONCE 결과를 반환합니다. READ_ONCE_NOCHECK는 sizeof(x)==sizeof(unsigned long)을 정적 검사하고 helper의 결과를 typeof(x)로 변환합니다. 주석은 실행 중 프로세스의 스택 unwind처럼 KASAN/KCSAN에 알리지 않고 word를 읽는 용도를 설명합니다. NOCHECK가 타입·크기 검사까지 모두 없다는 뜻은 아닙니다."
+      "text": "__read_once_word_nocheck는 unsigned long 한 개를 내부 읽기로 가져오면서 해당 검사 계측을 피하도록 표시됩니다. 실행 중인 스택을 거슬러 읽는 작업 등에 쓰입니다. 공개 READ_ONCE_NOCHECK도 크기가 unsigned long과 같은지는 확인합니다. nocheck는 크기 제한까지 없앤다는 뜻이 아닙니다."
     },
     {
       "title": "한 word씩 읽는 helper",
-      "text": "read_word_at_a_time은 __no_kasan_or_inline 속성을 사용하고 kasan_check_read(addr,1) 뒤 unsigned long 포인터를 일반 역참조합니다. 명시적 검사는1바이트이고 반환 접근은 한 word라는 차이가 핵심입니다. 이것은 READ_ONCE_NOCHECK의 별칭도 아니며 임의의 잘못된 주소·정렬·페이지 경계를 자동으로 안전하게 만드는 함수도 아닙니다."
+      "text": "read_word_at_a_time은 KASAN의 일반 자동 검사를 피하는 표시를 붙이고 kasan_check_read(addr, 1)로 1바이트를 명시적으로 확인한 뒤 unsigned long 크기를 읽습니다. 검사한 길이와 실제 읽는 길이가 다릅니다. NOCHECK의 다른 이름이 아니며 주소의 정렬, 범위, 살아 있는 객체 여부를 사용자가 고려해야 합니다."
     },
     {
       "title": "CS 연결과 제한",
-      "text": "lvalue 주소, 타입 한정자, volatile 접근, 정적 단언, compiler 최적화와 CPU 원자성의 차이, 계측 제외를 학습합니다. 실제 안전성 판단은 대상 아키텍처의 rwonce 재정의와 정렬·수명·호출 문맥까지 필요합니다. 이 파일 해설은 해당 조건의 전수 실행 검증이 아닙니다."
+      "text": "C의 값 형식과 volatile, 빌드 중 조건 확인이 실제 메모리 접근에 이어지는 예입니다. CPU별 별도 정의가 있을 수 있고 주소 정렬과 객체 수명도 중요합니다. 이 헤더만 읽었다고 모든 CPU와 실행 상황에서 접근 안전성을 실험으로 증명한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "32비트 환경에서 READ_ONCE의64비트 크기 검사를 통과하면 반드시 단일 원자 접근인가?",
+      "prompt": "32비트 CPU에서 64비트 READ_ONCE가 빌드되면 반드시 한 번에 읽나요?",
       "options": [
+        "아니요. 환경에 따라 32비트 두 번으로 나뉠 수 있습니다.",
+        "예. 크기 검사가 CPU의 새 명령을 만듭니다."
+      ],
+      "answer": 0,
+      "explanation": "허용되는 크기라고 해서 하드웨어가 한 번에 처리한다는 뜻은 아닙니다.",
+      "original_prompt": "32비트 환경에서 READ_ONCE의64비트 크기 검사를 통과하면 반드시 단일 원자 접근인가?",
+      "original_options": [
         "아니다. 아키텍처에 따라 나뉜 접근이 가능하다",
         "그렇다. 정적 검사가 CPU 명령을 새로 만든다"
       ],
-      "answer": 0,
-      "explanation": "허용 크기에는 long long이 포함되지만 주석은 원자성을 지원하는 사례와 분할 접근 사례를 구분합니다. 허용 여부와 하드웨어 보장은 별개입니다."
+      "original_explanation": "허용 크기에는 long long이 포함되지만 주석은 원자성을 지원하는 사례와 분할 접근 사례를 구분합니다. 허용 여부와 하드웨어 보장은 별개입니다."
     },
     {
-      "prompt": "READ_ONCE_NOCHECK가 허용하는 크기는?",
+      "prompt": "READ_ONCE_NOCHECK의 크기 조건은 무엇인가요?",
       "options": [
+        "크기와 관계없이 모든 배열을 허용합니다.",
+        "unsigned long과 같은 크기여야 합니다."
+      ],
+      "answer": 1,
+      "explanation": "검사 생략 경로에서도 크기 조건은 남습니다.",
+      "original_prompt": "READ_ONCE_NOCHECK가 허용하는 크기는?",
+      "original_options": [
         "모든 크기의 배열이다",
         "unsigned long과 같은 크기이다"
       ],
-      "answer": 1,
-      "explanation": "전용 compiletime_assert가 sizeof(x)==sizeof(unsigned long)을 요구합니다. NOCHECK는 sanitizer 관련 문맥이며 크기 제한 제거가 아닙니다."
+      "original_explanation": "전용 compiletime_assert가 sizeof(x)==sizeof(unsigned long)을 요구합니다. NOCHECK는 sanitizer 관련 문맥이며 크기 제한 제거가 아닙니다."
     },
     {
-      "prompt": "read_word_at_a_time의 명시적 KASAN 검사 크기와 읽기 크기는?",
+      "prompt": "read_word_at_a_time의 명시적 KASAN 검사와 실제 읽기 크기는 무엇인가요?",
       "options": [
+        "검사는 1바이트이고 읽기는 unsigned long 크기입니다.",
+        "검사와 읽기 모두 1바이트입니다."
+      ],
+      "answer": 0,
+      "explanation": "코드는 1바이트를 확인한 뒤 한 word, 즉 unsigned long 크기를 읽습니다.",
+      "original_prompt": "read_word_at_a_time의 명시적 KASAN 검사 크기와 읽기 크기는?",
+      "original_options": [
         "검사는1바이트, 읽기는 unsigned long 크기이다",
         "둘 다 항상1바이트이다"
       ],
-      "answer": 0,
-      "explanation": "kasan_check_read(addr,1) 다음 *(unsigned long *)addr를 반환합니다. 본문에 나타난 두 크기를 구별해야 합니다."
+      "original_explanation": "kasan_check_read(addr,1) 다음 *(unsigned long *)addr를 반환합니다. 본문에 나타난 두 크기를 구별해야 합니다."
     },
     {
-      "prompt": "WRITE_ONCE(x,READ_ONCE(x)+1)은 원자 증가 연산인가?",
+      "prompt": "WRITE_ONCE(x, READ_ONCE(x) + 1)은 원자적 증가인가요?",
       "options": [
+        "예. 자동으로 잠금이 생깁니다.",
+        "아니요. 읽기와 쓰기가 별도 동작입니다."
+      ],
+      "answer": 1,
+      "explanation": "다른 실행이 두 동작 사이에 끼어들 수 있어 전용 원자적 연산과 다릅니다.",
+      "original_prompt": "WRITE_ONCE(x,READ_ONCE(x)+1)은 원자 증가 연산인가?",
+      "original_options": [
         "그렇다. 두 ONCE를 합치면 자동 잠금이 생긴다",
         "아니다. 읽기와 쓰기가 분리된 연산이다"
       ],
-      "answer": 1,
-      "explanation": "각 접근의 compiler 처리를 제약할 뿐 결합된 read-modify-write를 제공하지 않습니다. 동시 실행에서 두 수행자가 같은 이전 값을 읽을 수 있습니다."
+      "original_explanation": "각 접근의 compiler 처리를 제약할 뿐 결합된 read-modify-write를 제공하지 않습니다. 동시 실행에서 두 수행자가 같은 이전 값을 읽을 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "32비트 환경에서 64비트 값을 읽는 경우와 값을 읽고 1을 더해 쓰는 경우를 따로 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Prevent the compiler from merging or refetching reads or writes. The\n * compiler is also forbidden from reordering successive instances of\n * READ_ONCE and WRITE_ONCE, but only when the compiler is aware of some\n * particular ordering. One way to make the compiler aware of ordering is to\n * put the two invocations of READ_ONCE or WRITE_ONCE in different C\n * statements.\n *\n * These two macros will also work on aggregate data types like structs or\n * unions.\n *\n * Their two major use cases are: (1) Mediating communication between\n * process-level code and irq/NMI handlers, all running on the same CPU,\n * and (2) Ensuring that the compiler does not fold, spindle, or otherwise\n * mutilate accesses that either do not require ordering or that interact\n * with an explicit memory barrier or atomic instruction that provides the\n * required ordering.\n */\n#ifndef __ASM_GENERIC_RWONCE_H\n#define __ASM_GENERIC_RWONCE_H\n\n#ifndef __ASSEMBLY__\n\n#include <linux/compiler_types.h>\n#include <linux/kasan-checks.h>\n#include <linux/kcsan-checks.h>\n\n/*\n * Yes, this permits 64-bit accesses on 32-bit architectures. These will\n * actually be atomic in some cases (namely Armv7 + LPAE), but for others we\n * rely on the access being split into 2x32-bit accesses for a 32-bit quantity\n * (e.g. a virtual address) and a strong prevailing wind.\n */\n#define compiletime_assert_rwonce_type(t)\t\t\t\t\t\\\n\tcompiletime_assert(__native_word(t) || sizeof(t) == sizeof(long long),\t\\\n\t\t\"Unsupported access size for {READ,WRITE}_ONCE().\")\n\n/*\n * Use __READ_ONCE() instead of READ_ONCE() if you do not require any\n * atomicity. Note that this may result in tears!\n */\n#ifndef __READ_ONCE\n#define __READ_ONCE(x)\t(*(const volatile __unqual_scalar_typeof(x) *)&(x))\n#endif\n\n#define READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_rwonce_type(x);\t\t\t\t\\\n\t__READ_ONCE(x);\t\t\t\t\t\t\t\\\n})\n\n#define __WRITE_ONCE(x, val)\t\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\t*(volatile typeof(x) *)&(x) = (val);\t\t\t\t\\\n} while (0)\n\n#define WRITE_ONCE(x, val)\t\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_rwonce_type(x);\t\t\t\t\\\n\t__WRITE_ONCE(x, val);\t\t\t\t\t\t\\\n} while (0)\n\nstatic __no_sanitize_or_inline\nunsigned long __read_once_word_nocheck(const void *addr)\n{\n\treturn __READ_ONCE(*(unsigned long *)addr);\n}\n\n/*\n * Use READ_ONCE_NOCHECK() instead of READ_ONCE() if you need to load a\n * word from memory atomically but without telling KASAN/KCSAN. This is\n * usually used by unwinding code when walking the stack of a running process.\n */\n#define READ_ONCE_NOCHECK(x)\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert(sizeof(x) == sizeof(unsigned long),\t\t\\\n\t\t\"Unsupported access size for READ_ONCE_NOCHECK().\");\t\\\n\t(typeof(x))__read_once_word_nocheck(&(x));\t\t\t\\\n})\n\nstatic __no_kasan_or_inline\nunsigned long read_word_at_a_time(const void *addr)\n{\n\tkasan_check_read(addr, 1);\n\treturn *(unsigned long *)addr;\n}\n\n#endif /* __ASSEMBLY__ */\n#endif\t/* __ASM_GENERIC_RWONCE_H */\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/rwonce.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-1236cd133c7eb17e",
+    "path": "include/asm-generic/rwonce.h",
+    "title": "READ_ONCE 전체: compiler 접근 보존과 원자성의 경계",
+    "area": "컴파일러 최적화 · volatile · 원자성 · 타입 크기 · sanitizer",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "한 번의 관찰을 표현하는 매크로의 크기 검사, volatile 접근과 검사 제외 helper를 해설합니다.",
+    "guide": [
+      "접근의 병합·재읽기를 막는 compiler 계약과 여러 CPU 사이의 순서·원자성은 구분해야 합니다.",
+      "앞서 읽은 acquire/release 구현에서 READ_ONCE와 WRITE_ONCE가 맡는 역할을 확인합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "주석과 파일 구조",
+        "text": "GPL-2.0, 목적 설명, guard와 비어셈블리 분기, compiler_types·KASAN·KCSAN 헤더, 크기 검사와 읽기·쓰기 매크로, 두 helper로 구성됩니다. 주석은 같은 CPU의 process와 IRQ/NMI 통신 및 별도 장벽·원자 명령과 함께 접근을 보존하는 용도를 듭니다."
+      },
+      {
+        "title": "순서 설명의 조건",
+        "text": "주석은 compiler가 특정 순서를 인지할 때 연속 READ_ONCE/WRITE_ONCE의 순서를 보존한다고 설명하며 서로 다른 C 문장 배치를 예로 듭니다. 이것을 CPU의 acquire/release나 full barrier와 동일시하지 않습니다. 일반 접근까지 모두 고정하는 전역 compiler barrier 본문도 아닙니다."
+      },
+      {
+        "title": "허용 크기",
+        "text": "compiletime_assert_rwonce_type은 __native_word(t)이거나 sizeof(t)==sizeof(long long)인지 정적 검사합니다. 주석에 struct/union도 언급되지만 public 매크로의 크기 제한은 그대로 적용됩니다. 임의 크기 구조체를 잠금 없이 통째로 원자 복사한다고 설명하면 틀립니다."
+      },
+      {
+        "title": "32비트에서64비트",
+        "text": "검사는32비트 아키텍처에서도64비트 크기를 허용합니다. 주석은 Armv7+LPAE 같은 원자 접근 사례와 둘의32비트 접근으로 쪼개질 수 있는 사례를 구분합니다. 따라서 크기 검사를 통과했다는 사실만으로 모든 아키텍처에서 torn read가 불가능함을 증명하지 못합니다."
+      },
+      {
+        "title": "읽기 확장",
+        "text": "__READ_ONCE가 없으면 &(x)를 const volatile의 __unqual_scalar_typeof(x) 포인터로 변환해 역참조합니다. READ_ONCE는 크기 검사 뒤 이를 사용합니다. 내부 __READ_ONCE를 직접 쓰면 public 크기 검사를 거치지 않으며 주석도 tearing 가능성을 경고합니다. 타입 변환은 주소 유효성을 검사하지 않습니다."
+      },
+      {
+        "title": "쓰기 확장",
+        "text": "__WRITE_ONCE는 &(x)를 volatile typeof(x) 포인터로 바꿔 val을 저장하는 do-while입니다. WRITE_ONCE는 먼저 같은 크기 검사를 합니다. 이 버전의 쓰기 매크로는 값 반환 식이 아니며 READ_ONCE와 WRITE_ONCE를 이어 붙여도 원자적 read-modify-write가 되지 않습니다."
+      },
+      {
+        "title": "검사 없는 한 word 읽기",
+        "text": "__read_once_word_nocheck는 __no_sanitize_or_inline 속성을 사용하며 unsigned long 포인터의 __READ_ONCE 결과를 반환합니다. READ_ONCE_NOCHECK는 sizeof(x)==sizeof(unsigned long)을 정적 검사하고 helper의 결과를 typeof(x)로 변환합니다. 주석은 실행 중 프로세스의 스택 unwind처럼 KASAN/KCSAN에 알리지 않고 word를 읽는 용도를 설명합니다. NOCHECK가 타입·크기 검사까지 모두 없다는 뜻은 아닙니다."
+      },
+      {
+        "title": "한 word씩 읽는 helper",
+        "text": "read_word_at_a_time은 __no_kasan_or_inline 속성을 사용하고 kasan_check_read(addr,1) 뒤 unsigned long 포인터를 일반 역참조합니다. 명시적 검사는1바이트이고 반환 접근은 한 word라는 차이가 핵심입니다. 이것은 READ_ONCE_NOCHECK의 별칭도 아니며 임의의 잘못된 주소·정렬·페이지 경계를 자동으로 안전하게 만드는 함수도 아닙니다."
+      },
+      {
+        "title": "CS 연결과 제한",
+        "text": "lvalue 주소, 타입 한정자, volatile 접근, 정적 단언, compiler 최적화와 CPU 원자성의 차이, 계측 제외를 학습합니다. 실제 안전성 판단은 대상 아키텍처의 rwonce 재정의와 정렬·수명·호출 문맥까지 필요합니다. 이 파일 해설은 해당 조건의 전수 실행 검증이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "32비트 환경에서 READ_ONCE의64비트 크기 검사를 통과하면 반드시 단일 원자 접근인가?",
+        "options": [
+          "아니다. 아키텍처에 따라 나뉜 접근이 가능하다",
+          "그렇다. 정적 검사가 CPU 명령을 새로 만든다"
+        ],
+        "answer": 0,
+        "explanation": "허용 크기에는 long long이 포함되지만 주석은 원자성을 지원하는 사례와 분할 접근 사례를 구분합니다. 허용 여부와 하드웨어 보장은 별개입니다."
+      },
+      {
+        "prompt": "READ_ONCE_NOCHECK가 허용하는 크기는?",
+        "options": [
+          "모든 크기의 배열이다",
+          "unsigned long과 같은 크기이다"
+        ],
+        "answer": 1,
+        "explanation": "전용 compiletime_assert가 sizeof(x)==sizeof(unsigned long)을 요구합니다. NOCHECK는 sanitizer 관련 문맥이며 크기 제한 제거가 아닙니다."
+      },
+      {
+        "prompt": "read_word_at_a_time의 명시적 KASAN 검사 크기와 읽기 크기는?",
+        "options": [
+          "검사는1바이트, 읽기는 unsigned long 크기이다",
+          "둘 다 항상1바이트이다"
+        ],
+        "answer": 0,
+        "explanation": "kasan_check_read(addr,1) 다음 *(unsigned long *)addr를 반환합니다. 본문에 나타난 두 크기를 구별해야 합니다."
+      },
+      {
+        "prompt": "WRITE_ONCE(x,READ_ONCE(x)+1)은 원자 증가 연산인가?",
+        "options": [
+          "그렇다. 두 ONCE를 합치면 자동 잠금이 생긴다",
+          "아니다. 읽기와 쓰기가 분리된 연산이다"
+        ],
+        "answer": 1,
+        "explanation": "각 접근의 compiler 처리를 제약할 뿐 결합된 read-modify-write를 제공하지 않습니다. 동시 실행에서 두 수행자가 같은 이전 값을 읽을 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Prevent the compiler from merging or refetching reads or writes. The\n * compiler is also forbidden from reordering successive instances of\n * READ_ONCE and WRITE_ONCE, but only when the compiler is aware of some\n * particular ordering. One way to make the compiler aware of ordering is to\n * put the two invocations of READ_ONCE or WRITE_ONCE in different C\n * statements.\n *\n * These two macros will also work on aggregate data types like structs or\n * unions.\n *\n * Their two major use cases are: (1) Mediating communication between\n * process-level code and irq/NMI handlers, all running on the same CPU,\n * and (2) Ensuring that the compiler does not fold, spindle, or otherwise\n * mutilate accesses that either do not require ordering or that interact\n * with an explicit memory barrier or atomic instruction that provides the\n * required ordering.\n */\n#ifndef __ASM_GENERIC_RWONCE_H\n#define __ASM_GENERIC_RWONCE_H\n\n#ifndef __ASSEMBLY__\n\n#include <linux/compiler_types.h>\n#include <linux/kasan-checks.h>\n#include <linux/kcsan-checks.h>\n\n/*\n * Yes, this permits 64-bit accesses on 32-bit architectures. These will\n * actually be atomic in some cases (namely Armv7 + LPAE), but for others we\n * rely on the access being split into 2x32-bit accesses for a 32-bit quantity\n * (e.g. a virtual address) and a strong prevailing wind.\n */\n#define compiletime_assert_rwonce_type(t)\t\t\t\t\t\\\n\tcompiletime_assert(__native_word(t) || sizeof(t) == sizeof(long long),\t\\\n\t\t\"Unsupported access size for {READ,WRITE}_ONCE().\")\n\n/*\n * Use __READ_ONCE() instead of READ_ONCE() if you do not require any\n * atomicity. Note that this may result in tears!\n */\n#ifndef __READ_ONCE\n#define __READ_ONCE(x)\t(*(const volatile __unqual_scalar_typeof(x) *)&(x))\n#endif\n\n#define READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_rwonce_type(x);\t\t\t\t\\\n\t__READ_ONCE(x);\t\t\t\t\t\t\t\\\n})\n\n#define __WRITE_ONCE(x, val)\t\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\t*(volatile typeof(x) *)&(x) = (val);\t\t\t\t\\\n} while (0)\n\n#define WRITE_ONCE(x, val)\t\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_rwonce_type(x);\t\t\t\t\\\n\t__WRITE_ONCE(x, val);\t\t\t\t\t\t\\\n} while (0)\n\nstatic __no_sanitize_or_inline\nunsigned long __read_once_word_nocheck(const void *addr)\n{\n\treturn __READ_ONCE(*(unsigned long *)addr);\n}\n\n/*\n * Use READ_ONCE_NOCHECK() instead of READ_ONCE() if you need to load a\n * word from memory atomically but without telling KASAN/KCSAN. This is\n * usually used by unwinding code when walking the stack of a running process.\n */\n#define READ_ONCE_NOCHECK(x)\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert(sizeof(x) == sizeof(unsigned long),\t\t\\\n\t\t\"Unsupported access size for READ_ONCE_NOCHECK().\");\t\\\n\t(typeof(x))__read_once_word_nocheck(&(x));\t\t\t\\\n})\n\nstatic __no_kasan_or_inline\nunsigned long read_word_at_a_time(const void *addr)\n{\n\tkasan_check_read(addr, 1);\n\treturn *(unsigned long *)addr;\n}\n\n#endif /* __ASSEMBLY__ */\n#endif\t/* __ASM_GENERIC_RWONCE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "40e6162e9efcc6dbface785a7797a58be8d002596c326e6f2c6fa911abc87aab",
+      "scope": "whole-file",
+      "line_count": 90,
+      "authoring_source": "course/file_units/generic_rwonce.py",
+      "sections": [
+        "주석과 파일 구조",
+        "순서 설명의 조건",
+        "허용 크기",
+        "32비트에서64비트",
+        "읽기 확장",
+        "쓰기 확장",
+        "검사 없는 한 word 읽기",
+        "한 word씩 읽는 helper",
+        "CS 연결과 제한"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/rwonce.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "선생님이 적은 값을 한 번 읽으라고 했는데, 컴파일러가 읽기를 생략하거나 합치면 곤란한 상황이 있습니다. ONCE 도구는 이런 최적화를 제한합니다.",
+    "meaning": "READ_ONCE와 WRITE_ONCE가 제한하는 컴파일러 동작, 크기 조건, CPU 원자성의 한계를 구별합니다.",
+    "exercise": "32비트 환경에서 64비트 값을 읽는 경우와 값을 읽고 1을 더해 쓰는 경우를 따로 그려 보세요."
+  },
+  "goal": "READ_ONCE와 WRITE_ONCE가 제한하는 컴파일러 동작, 크기 조건, CPU 원자성의 한계를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "32비트 환경에서 64비트 값을 읽는 경우와 값을 읽고 1을 더해 쓰는 경우를 따로 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "4e945254286953b0b6ec5d49ad372a5ffb0e94caccb75f972cee001bac8eed7b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

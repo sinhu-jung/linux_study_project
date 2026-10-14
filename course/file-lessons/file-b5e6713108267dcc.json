@@ -5,121 +5,147 @@
   "area": "스케줄링 · busy wait · 고해상도 타이머 · 인터럽트 병합 · 시간 정밀도",
   "track": "files",
   "kind": "kernel",
-  "intro": "드라이버의 지연 방법 선택을 atomic 여부, 요청 길이, 신호 중단 가능성으로 나눠 읽습니다.",
+  "intro": "커널 지연은 수면 가능한 상황인지와 시간 요구를 함께 보고 선택해요.",
   "guide": [
-    "지연은 시간 숫자만의 문제가 아니라 CPU 점유·스케줄링·전력·장치 허용 오차를 함께 결정하는 설계입니다.",
-    "Linux v6.12의 문서 지침을 delay.h 구현과 연결하며 역사적인 시간 예시를 모든 구성의 보장으로 확대하지 않습니다."
+    "busy wait는 CPU를 쓰며 기다리고 sleep은 작업을 잠시 재워 다른 작업에 기회를 줘요. 먼저 현재 코드가 잠들어도 되는지 확인해요.",
+    "수면 범위는 타이머 이벤트를 함께 처리할 여유를 주지만 실제 함수 반환 시각의 절대 상한은 아니에요. 장치가 허용하는 시간도 확인해야 해요.",
+    "이 수업은 고정 Linux v6.12 문서와 delay.h를 대조해요. 과거의 숫자 예시를 모든 장치에서 측정한 시간 보장으로 확대하지 않아요."
   ],
   "deep_dive": [
     {
       "title": "문서 목적과 범위",
-      "text": "제목·도입부는 하드웨어 지연을 다루는 드라이버 작성자가 적절한 delay를 고르는 문제를 설명합니다. 이어 atomic,non-atomic 문맥과 시간 구간별 지침,중단 가능한 수면,마지막 fsleep 선택까지 다룹니다. 이 문서는 특정 장치의 필수 대기 시간이나 레지스터 프로토콜을 규정하지 않습니다."
+      "text": "이 문서는 장치가 준비될 때까지 기다려야 하는 드라이버 작성자를 위한 도구 선택 안내예요. 수면 불가·가능 문맥, 짧고 긴 시간, 신호로 깰 수 있는 수면, fsleep을 다뤄요. 특정 장치가 몇 초를 기다려야 하는지나 레지스터 사용 순서를 정하는 문서는 아니에요."
     },
     {
       "title": "첫 질문은 실행 문맥",
-      "text": "문서는 코드가 atomic 문맥인지,그 문맥에서 정말 지연해야 하는지를 먼저 묻도록 합니다. atomic 문맥에서는 수면 API 대신 ndelay/udelay/mdelay 계열을 사용해야 한다고 설명합니다. 이 이름이 동시 접근에 대한 잠금을 제공한다는 뜻은 아니며 CPU를 점유하는 지연 방식과 원자 연산을 구별합니다."
+      "text": "첫 질문은 atomic 문맥인지, 꼭 그 안에서 기다려야 하는지예요. atomic 문맥은 여기서 잠들어 스케줄링을 넘길 수 없는 상황이에요. 필요하면 ndelay·udelay·mdelay를 쓰며, 이 지연 함수가 다른 CPU와의 접근을 막는 잠금을 제공하는 것은 아니에요."
     },
     {
       "title": "Busy wait와 정밀도",
-      "text": "문서는 jiffy에 관련된 속도 추정으로 충분한 반복을 수행하는 busy wait를 설명하고 일반적으로 udelay를 선호합니다. 비PC 장치에서 나노초 수준의 정밀도가 실제로 없을 수 있다고 명시합니다. 관련 delay.h 주석도 보정·캐시·클럭 변화로 조기 반환할 수 있음을 설명하므로 요청 시간의 절대 정확성으로 해석하지 않습니다."
+      "text": "busy wait는 속도 추정값을 이용해 반복하면서 시간을 보내요. 문서는 보통 udelay를 권하며 일부 장치는 나노초 정밀도를 내지 못한다고 알려요. delay.h도 보정값·캐시·CPU 속도 변화 때문에 일찍 반환할 수 있다고 설명해요."
     },
     {
       "title": "Mdelay의 역할과 비용",
-      "text": "mdelay는 큰 udelay 인자의 overflow를 줄이는 wrapper입니다. 문서는 일반적으로 mdelay 사용을 피하고 msleep이 가능하도록 코드를 바꾸는 방향을 권합니다. 모든 호출을 문맥 검토 없이 msleep으로 치환하라는 지시는 아니며 sleep 가능한 구조로 바꾸는 것이 선행 조건입니다."
+      "text": "mdelay는 너무 큰 udelay 계산의 정수 넘침 위험을 줄이는 wrapper예요. 문서는 가능하면 코드를 수면 가능한 구조로 바꿔 msleep을 쓰라고 권해요. 수면 불가 코드를 살피지 않고 이름만 교체하라는 뜻은 아니에요."
     },
     {
       "title": "Non-atomic의 세 메커니즘",
-      "text": "수면 가능한 문맥에서는 sleep/range 계열을 우선 고려하며 짧은 udelay busy loop,hrtimer 기반 usleep_range,jiffies·legacy timer 기반 msleep과 interruptible을 구분합니다. CPU 점유를 줄이면 스케줄러와 전력 관리에 도움이 될 수 있지만 실제 선택은 시간 요구와 문맥에 달려 있습니다."
+      "text": "수면 가능한 곳에서는 sleep이나 range 계열을 먼저 고려해요. 짧은 busy loop인 udelay, 고해상도 타이머 hrtimer를 쓰는 usleep_range, jiffy 시간 눈금과 기존 타이머를 쓰는 msleep 계열은 대기 방식이 달라요. CPU와 전력 절약도 시간 요구와 함께 판단해요."
     },
     {
       "title": "몇 마이크로초 구간",
-      "text": "문서는 대략10us보다 짧은 지연에 udelay를 제안합니다. 느린 시스템에서 hrtimer 설정 비용이 요청 시간에 비해 클 수 있다는 이유이며 정확한 임계값은 상황에 따라 평가해야 한다고 설명합니다. 모든 CPU에서10us가 측정된 성능 교차점이라는 주장이 아닙니다."
+      "text": "대략 10us보다 짧으면 udelay를 제안해요. us는 백만분의 1초이며 짧은 시간에는 타이머를 준비하는 비용 자체가 클 수 있어요. 10us가 모든 CPU에서 측정된 정확한 분기점이라는 뜻은 아니에요."
     },
     {
       "title": "중간 구간과 역사적 예시",
-      "text": "대략10us~20ms에는 usleep_range를 제안합니다.1~20ms의 msleep이 의도보다 길어질 수 있다는 설명과 과거 토론 링크가 있으며 약20ms 수면 예시를 듭니다. 이 예시를 모든 HZ·타이머 구성에서 msleep(1)이 항상20ms가 된다는 보편 법칙으로 외우면 안 됩니다. 링크의 토론 전체를 이 파일 해설에서 검증한 것으로 세지 않습니다."
+      "text": "대략 10us부터 20ms에는 usleep_range를 제안해요. 짧은 msleep이 약 20ms처럼 길어질 수 있다는 과거 예시는 경고이지, 모든 HZ 설정에서 msleep(1)이 정확히 20ms라는 법칙이 아니에요. 링크된 토론 전체를 검증했다는 주장도 아니에요."
     },
     {
       "title": "범위를 받는 이유",
-      "text": "usleep_range의 허용 범위는 다른 wakeup과 맞추거나 타이머 이벤트를 합칠 여지를 줘 불필요한 인터럽트를 줄일 수 있습니다. 넓은 범위일수록 기회가 커지지만 장치와 코드 경로가 허용하는 지연·성능 한계와 균형을 잡아야 합니다. 임의로 매우 넓은 max를 정하는 것이 언제나 올바른 최적화는 아닙니다."
+      "text": "허용 범위가 있으면 다른 깨우기와 시각을 맞춰 인터럽트를 줄일 기회가 생겨요. 범위를 넓히면 기회는 늘지만 장치의 지연 허용량과 성능을 지켜야 해요. max를 무조건 크게 하는 것이 항상 좋은 선택은 아니에요."
     },
     {
       "title": "Wakeup과 실제 실행",
-      "text": "문서의 upper-bound 인터럽트 설명은 타이머 이벤트 배치 취지입니다. 실제 태스크가 다시 CPU를 받아 함수에서 반환하는 시각까지 hard real-time 상한을 보증한다고 읽으면 안 됩니다. 타이머 만료,태스크 runnable 전환,스케줄링되어 실행하는 순간은 서로 다른 단계입니다."
+      "text": "타이머가 만료됨, 작업이 실행 가능해짐, CPU를 받아 실제 실행함은 세 단계예요. 문서의 위쪽 시간 경계 설명은 타이머 배치 취지이며 태스크가 함수에서 돌아오는 시간까지 반드시 지키는 엄격한 실시간 보장은 아니에요."
     },
     {
       "title": "큰 밀리초 구간과 중단",
-      "text": "문서는10ms 이상 큰 구간에서 msleep 또는 필요할 때 msleep_interruptible을 제안합니다. 일반 msleep은 TASK_UNINTERRUPTIBLE,interruptible은 TASK_INTERRUPTIBLE을 사용해 신호가 수면을 일찍 끝낼 수 있는지 구별합니다. interruptible이 모든 경우 정확히 요청 시간만큼 잔다고 가정하면 안 됩니다."
+      "text": "대략 10ms 이상의 큰 지연에는 msleep이나 필요하면 msleep_interruptible을 제안해요. 전자는 TASK_UNINTERRUPTIBLE, 후자는 TASK_INTERRUPTIBLE 상태를 쓰므로 후자는 신호가 수면을 일찍 끝낼 수 있어요. 단순히 더 정확한 수면이라는 뜻은 아니에요."
     },
     {
       "title": "겹치는 권고와 선언 차이",
-      "text": "문서의10us~20ms와10ms+ 권고 범위는 겹칩니다. 이는 단일한 배타적 분기표가 아니라 근사적 선택 지침입니다. 또한 문서는 msleep 인자를 unsigned long으로 적지만 이 버전의 include/linux/delay.h 실제 선언은 unsigned int이며 interruptible도 unsigned int 인자를 받습니다. 구현을 읽을 때 문서의 간략한 표기를 그대로 타입 근거로 사용하지 않습니다."
+      "text": "10us~20ms 권고와 10ms 이상 권고는 10~20ms에서 겹쳐요. 배타적인 if-else가 아닌 근사 안내예요. 문서에 적힌 msleep의 unsigned long과 달리 이 버전 delay.h의 실제 인자는 unsigned int이며 interruptible도 같아요. 정확한 형식은 선언을 확인해요."
     },
     {
       "title": "유연한 fsleep",
-      "text": "마지막 항목은 유연한 uninterruptible 지연에 fsleep을 제시합니다. 이 버전의 delay.h는10us 이하 udelay,20000us 이하 usleep_range,그 초과 msleep으로 선택합니다. 문서의 any delay는 모든 실행 문맥에서 안전하다는 뜻이 아니며 sleep 경로가 가능한 문맥이어야 합니다."
+      "text": "fsleep은 시간을 보고 방법을 고르는 도구예요. 이 버전은 10us 이하 udelay, 20000us 이하 usleep_range, 그보다 크면 msleep을 써요. 긴 경우 잠들기 때문에 모든 atomic 문맥에서 모든 입력이 안전하다는 뜻은 아니에요."
     },
     {
       "title": "CS 연결과 범위",
-      "text": "최적화 비용과 지연 요구의 비교,타이머 해상도·정확도·스케줄링 지연의 분리,인터럽트 병합,신호와 태스크 상태,문서와 구현 대조를 학습합니다. 소스 기반 해설은 특정 하드웨어의 지연 측정이나 실시간 보장 검증이 아닙니다."
+      "text": "이 문서로 대기 비용과 시간 요구, 타이머 해상도와 정확도, 스케줄링 지연, 인터럽트 합치기, 신호와 상태를 연결해 배워요. 원문 대조는 특정 하드웨어의 실제 시간을 측정하거나 실시간 한계를 검증한 실험을 대신하지 않아요."
     }
   ],
   "questions": [
     {
-      "prompt": "지연 API 선택에서 문서가 먼저 확인하라는 것은?",
+      "prompt": "지연 함수를 고르기 전에 무엇을 먼저 확인하나요?",
       "options": [
+        "atomic 문맥인지, 그곳에서 지연이 꼭 필요한지 확인해요.",
+        "요청 시간을 무조건 밀리초로 반올림해요."
+      ],
+      "answer": 0,
+      "explanation": "문맥이 잠들 수 있는지를 결정하므로 단위 계산보다 먼저 확인해요.",
+      "original_prompt": "지연 API 선택에서 문서가 먼저 확인하라는 것은?",
+      "original_options": [
         "atomic 문맥인지와 그 문맥의 지연이 필요한지이다",
         "무조건 요청 시간을 ms로 반올림하는 것이다"
       ],
-      "answer": 0,
-      "explanation": "문맥이 sleep 가능 여부를 결정합니다. 단위 변환보다 먼저 문맥과 설계 필요성을 확인해야 합니다."
+      "original_explanation": "문맥이 sleep 가능 여부를 결정합니다. 단위 변환보다 먼저 문맥과 설계 필요성을 확인해야 합니다."
     },
     {
-      "prompt": "usleep_range에 여유 범위를 주는 이유는?",
+      "prompt": "usleep_range에 여유 시간을 주는 까닭은 무엇인가요?",
       "options": [
+        "모든 상황에서 실제 실행 완료의 상한을 강제하려고 해요.",
+        "다른 깨우기와 합쳐 인터럽트를 줄일 기회를 주려고 해요."
+      ],
+      "answer": 1,
+      "explanation": "타이머 이벤트의 배치 여유이며 스케줄링 뒤 실제 반환의 절대 상한은 아니에요.",
+      "original_prompt": "usleep_range에 여유 범위를 주는 이유는?",
+      "original_options": [
         "태스크의 실행 상한을 모든 상황에서 강제로 보장하기 위해서이다",
         "다른 wakeup과 맞춰 인터럽트를 줄일 여지를 주기 위해서이다"
       ],
-      "answer": 1,
-      "explanation": "타이머 이벤트를 합칠 기회를 제공하지만 실제 재스케줄링·반환 시각의 절대 상한까지 보장하는 설명은 아닙니다."
+      "original_explanation": "타이머 이벤트를 합칠 기회를 제공하지만 실제 재스케줄링·반환 시각의 절대 상한까지 보장하는 설명은 아닙니다."
     },
     {
-      "prompt": "문서의 msleep(1~20) 관련 약20ms 예시는 모든 구성의 고정 법칙인가?",
+      "prompt": "msleep의 약 20ms 예시는 모든 설정의 고정 법칙인가요?",
       "options": [
+        "아니요. 설정과 타이머에 따라 길어질 수 있다는 경고예요.",
+        "네. 어떤 시스템에서도 정확히 20ms예요."
+      ],
+      "answer": 0,
+      "explanation": "HZ와 타이머·스케줄링 조건을 함께 봐야 해요.",
+      "original_prompt": "문서의 msleep(1~20) 관련 약20ms 예시는 모든 구성의 고정 법칙인가?",
+      "original_options": [
         "아니다. 구성과 타이머 동작에 따라 달라지는 지연 경고이다",
         "그렇다. 어떤 시스템에서도 정확히20ms이다"
       ],
-      "answer": 0,
-      "explanation": "역사적 설명을 일반적인 수치 보장으로 확대하지 않습니다. HZ와 타이머·스케줄링 조건을 구분해야 합니다."
+      "original_explanation": "역사적 설명을 일반적인 수치 보장으로 확대하지 않습니다. HZ와 타이머·스케줄링 조건을 구분해야 합니다."
     },
     {
-      "prompt": "msleep_interruptible을 일반 msleep과 구별하는 핵심은?",
+      "prompt": "msleep_interruptible의 핵심 차이는 무엇인가요?",
       "options": [
+        "언제나 시간이 더 정확해요.",
+        "신호로 수면을 일찍 끝낼 수 있어요."
+      ],
+      "answer": 1,
+      "explanation": "태스크 상태가 TASK_INTERRUPTIBLE이어서 신호에 따른 중단을 허용해요.",
+      "original_prompt": "msleep_interruptible을 일반 msleep과 구별하는 핵심은?",
+      "original_options": [
         "어떤 조건에서도 지연이 더 정확하다는 점이다",
         "신호로 수면이 일찍 끝날 수 있다는 점이다"
       ],
-      "answer": 1,
-      "explanation": "문서는 TASK_INTERRUPTIBLE과 TASK_UNINTERRUPTIBLE의 차이를 설명합니다. 단순 정밀도 향상 함수가 아닙니다."
+      "original_explanation": "문서는 TASK_INTERRUPTIBLE과 TASK_UNINTERRUPTIBLE의 차이를 설명합니다. 단순 정밀도 향상 함수가 아닙니다."
     },
     {
-      "prompt": "문서의 큰 지연 권고와 중간 지연 권고는 정확히 겹침 없는 분기인가?",
+      "prompt": "중간·큰 지연 권고는 겹침 없는 정확한 분기표인가요?",
       "options": [
+        "아니요. 10~20ms가 겹치는 근사 안내예요.",
+        "네. 문서 자체가 하나의 if-else 구현이에요."
+      ],
+      "answer": 0,
+      "explanation": "문서의 대략적 권고와 delay.h의 명시적 fsleep 경계를 구별해요.",
+      "original_prompt": "문서의 큰 지연 권고와 중간 지연 권고는 정확히 겹침 없는 분기인가?",
+      "original_options": [
         "아니다.10~20ms가 겹치는 근사 지침이다",
         "그렇다. 문서 자체가 하나의 if-else 구현이다"
       ],
-      "answer": 0,
-      "explanation": "문서의 약10us~20ms와10ms+를 구분하고 실제 fsleep의 명시적 임계값은 delay.h에서 확인해야 합니다."
+      "original_explanation": "문서의 약10us~20ms와10ms+를 구분하고 실제 fsleep의 명시적 임계값은 delay.h에서 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "atomic 문맥, 짧은 지연, 허용 범위가 있는 지연을 나눠 가능한 도구를 연결해 보세요."
   },
   "annotated": "===================================================================\ndelays - Information on the various kernel delay / sleep mechanisms\n===================================================================\n\nThis document seeks to answer the common question: \"What is the\nRightWay (TM) to insert a delay?\"\n\nThis question is most often faced by driver writers who have to\ndeal with hardware delays and who may not be the most intimately\nfamiliar with the inner workings of the Linux Kernel.\n\n\nInserting Delays\n----------------\n\nThe first, and most important, question you need to ask is \"Is my\ncode in an atomic context?\"  This should be followed closely by \"Does\nit really need to delay in atomic context?\" If so...\n\nATOMIC CONTEXT:\n\tYou must use the `*delay` family of functions. These\n\tfunctions use the jiffy estimation of clock speed\n\tand will busy wait for enough loop cycles to achieve\n\tthe desired delay:\n\n\tndelay(unsigned long nsecs)\n\tudelay(unsigned long usecs)\n\tmdelay(unsigned long msecs)\n\n\tudelay is the generally preferred API; ndelay-level\n\tprecision may not actually exist on many non-PC devices.\n\n\tmdelay is macro wrapper around udelay, to account for\n\tpossible overflow when passing large arguments to udelay.\n\tIn general, use of mdelay is discouraged and code should\n\tbe refactored to allow for the use of msleep.\n\nNON-ATOMIC CONTEXT:\n\tYou should use the `*sleep[_range]` family of functions.\n\tThere are a few more options here, while any of them may\n\twork correctly, using the \"right\" sleep function will\n\thelp the scheduler, power management, and just make your\n\tdriver better :)\n\n\t-- Backed by busy-wait loop:\n\n\t\tudelay(unsigned long usecs)\n\n\t-- Backed by hrtimers:\n\n\t\tusleep_range(unsigned long min, unsigned long max)\n\n\t-- Backed by jiffies / legacy_timers\n\n\t\tmsleep(unsigned long msecs)\n\t\tmsleep_interruptible(unsigned long msecs)\n\n\tUnlike the `*delay` family, the underlying mechanism\n\tdriving each of these calls varies, thus there are\n\tquirks you should be aware of.\n\n\n\tSLEEPING FOR \"A FEW\" USECS ( < ~10us? ):\n\t\t* Use udelay\n\n\t\t- Why not usleep?\n\t\t\tOn slower systems, (embedded, OR perhaps a speed-\n\t\t\tstepped PC!) the overhead of setting up the hrtimers\n\t\t\tfor usleep *may* not be worth it. Such an evaluation\n\t\t\twill obviously depend on your specific situation, but\n\t\t\tit is something to be aware of.\n\n\tSLEEPING FOR ~USECS OR SMALL MSECS ( 10us - 20ms):\n\t\t* Use usleep_range\n\n\t\t- Why not msleep for (1ms - 20ms)?\n\t\t\tExplained originally here:\n\t\t\t\thttps://lore.kernel.org/r/15327.1186166232@lwn.net\n\n\t\t\tmsleep(1~20) may not do what the caller intends, and\n\t\t\twill often sleep longer (~20 ms actual sleep for any\n\t\t\tvalue given in the 1~20ms range). In many cases this\n\t\t\tis not the desired behavior.\n\n\t\t- Why is there no \"usleep\" / What is a good range?\n\t\t\tSince usleep_range is built on top of hrtimers, the\n\t\t\twakeup will be very precise (ish), thus a simple\n\t\t\tusleep function would likely introduce a large number\n\t\t\tof undesired interrupts.\n\n\t\t\tWith the introduction of a range, the scheduler is\n\t\t\tfree to coalesce your wakeup with any other wakeup\n\t\t\tthat may have happened for other reasons, or at the\n\t\t\tworst case, fire an interrupt for your upper bound.\n\n\t\t\tThe larger a range you supply, the greater a chance\n\t\t\tthat you will not trigger an interrupt; this should\n\t\t\tbe balanced with what is an acceptable upper bound on\n\t\t\tdelay / performance for your specific code path. Exact\n\t\t\ttolerances here are very situation specific, thus it\n\t\t\tis left to the caller to determine a reasonable range.\n\n\tSLEEPING FOR LARGER MSECS ( 10ms+ )\n\t\t* Use msleep or possibly msleep_interruptible\n\n\t\t- What's the difference?\n\t\t\tmsleep sets the current task to TASK_UNINTERRUPTIBLE\n\t\t\twhereas msleep_interruptible sets the current task to\n\t\t\tTASK_INTERRUPTIBLE before scheduling the sleep. In\n\t\t\tshort, the difference is whether the sleep can be ended\n\t\t\tearly by a signal. In general, just use msleep unless\n\t\t\tyou know you have a need for the interruptible variant.\n\n\tFLEXIBLE SLEEPING (any delay, uninterruptible)\n\t\t* Use fsleep\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/timers/timers-howto.rst"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b5e6713108267dcc",
+    "path": "Documentation/timers/timers-howto.rst",
+    "title": "지연 선택 지침 전체: 실행 문맥과 시간 허용 범위",
+    "area": "스케줄링 · busy wait · 고해상도 타이머 · 인터럽트 병합 · 시간 정밀도",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "드라이버의 지연 방법 선택을 atomic 여부, 요청 길이, 신호 중단 가능성으로 나눠 읽습니다.",
+    "guide": [
+      "지연은 시간 숫자만의 문제가 아니라 CPU 점유·스케줄링·전력·장치 허용 오차를 함께 결정하는 설계입니다.",
+      "Linux v6.12의 문서 지침을 delay.h 구현과 연결하며 역사적인 시간 예시를 모든 구성의 보장으로 확대하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "문서 목적과 범위",
+        "text": "제목·도입부는 하드웨어 지연을 다루는 드라이버 작성자가 적절한 delay를 고르는 문제를 설명합니다. 이어 atomic,non-atomic 문맥과 시간 구간별 지침,중단 가능한 수면,마지막 fsleep 선택까지 다룹니다. 이 문서는 특정 장치의 필수 대기 시간이나 레지스터 프로토콜을 규정하지 않습니다."
+      },
+      {
+        "title": "첫 질문은 실행 문맥",
+        "text": "문서는 코드가 atomic 문맥인지,그 문맥에서 정말 지연해야 하는지를 먼저 묻도록 합니다. atomic 문맥에서는 수면 API 대신 ndelay/udelay/mdelay 계열을 사용해야 한다고 설명합니다. 이 이름이 동시 접근에 대한 잠금을 제공한다는 뜻은 아니며 CPU를 점유하는 지연 방식과 원자 연산을 구별합니다."
+      },
+      {
+        "title": "Busy wait와 정밀도",
+        "text": "문서는 jiffy에 관련된 속도 추정으로 충분한 반복을 수행하는 busy wait를 설명하고 일반적으로 udelay를 선호합니다. 비PC 장치에서 나노초 수준의 정밀도가 실제로 없을 수 있다고 명시합니다. 관련 delay.h 주석도 보정·캐시·클럭 변화로 조기 반환할 수 있음을 설명하므로 요청 시간의 절대 정확성으로 해석하지 않습니다."
+      },
+      {
+        "title": "Mdelay의 역할과 비용",
+        "text": "mdelay는 큰 udelay 인자의 overflow를 줄이는 wrapper입니다. 문서는 일반적으로 mdelay 사용을 피하고 msleep이 가능하도록 코드를 바꾸는 방향을 권합니다. 모든 호출을 문맥 검토 없이 msleep으로 치환하라는 지시는 아니며 sleep 가능한 구조로 바꾸는 것이 선행 조건입니다."
+      },
+      {
+        "title": "Non-atomic의 세 메커니즘",
+        "text": "수면 가능한 문맥에서는 sleep/range 계열을 우선 고려하며 짧은 udelay busy loop,hrtimer 기반 usleep_range,jiffies·legacy timer 기반 msleep과 interruptible을 구분합니다. CPU 점유를 줄이면 스케줄러와 전력 관리에 도움이 될 수 있지만 실제 선택은 시간 요구와 문맥에 달려 있습니다."
+      },
+      {
+        "title": "몇 마이크로초 구간",
+        "text": "문서는 대략10us보다 짧은 지연에 udelay를 제안합니다. 느린 시스템에서 hrtimer 설정 비용이 요청 시간에 비해 클 수 있다는 이유이며 정확한 임계값은 상황에 따라 평가해야 한다고 설명합니다. 모든 CPU에서10us가 측정된 성능 교차점이라는 주장이 아닙니다."
+      },
+      {
+        "title": "중간 구간과 역사적 예시",
+        "text": "대략10us~20ms에는 usleep_range를 제안합니다.1~20ms의 msleep이 의도보다 길어질 수 있다는 설명과 과거 토론 링크가 있으며 약20ms 수면 예시를 듭니다. 이 예시를 모든 HZ·타이머 구성에서 msleep(1)이 항상20ms가 된다는 보편 법칙으로 외우면 안 됩니다. 링크의 토론 전체를 이 파일 해설에서 검증한 것으로 세지 않습니다."
+      },
+      {
+        "title": "범위를 받는 이유",
+        "text": "usleep_range의 허용 범위는 다른 wakeup과 맞추거나 타이머 이벤트를 합칠 여지를 줘 불필요한 인터럽트를 줄일 수 있습니다. 넓은 범위일수록 기회가 커지지만 장치와 코드 경로가 허용하는 지연·성능 한계와 균형을 잡아야 합니다. 임의로 매우 넓은 max를 정하는 것이 언제나 올바른 최적화는 아닙니다."
+      },
+      {
+        "title": "Wakeup과 실제 실행",
+        "text": "문서의 upper-bound 인터럽트 설명은 타이머 이벤트 배치 취지입니다. 실제 태스크가 다시 CPU를 받아 함수에서 반환하는 시각까지 hard real-time 상한을 보증한다고 읽으면 안 됩니다. 타이머 만료,태스크 runnable 전환,스케줄링되어 실행하는 순간은 서로 다른 단계입니다."
+      },
+      {
+        "title": "큰 밀리초 구간과 중단",
+        "text": "문서는10ms 이상 큰 구간에서 msleep 또는 필요할 때 msleep_interruptible을 제안합니다. 일반 msleep은 TASK_UNINTERRUPTIBLE,interruptible은 TASK_INTERRUPTIBLE을 사용해 신호가 수면을 일찍 끝낼 수 있는지 구별합니다. interruptible이 모든 경우 정확히 요청 시간만큼 잔다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "겹치는 권고와 선언 차이",
+        "text": "문서의10us~20ms와10ms+ 권고 범위는 겹칩니다. 이는 단일한 배타적 분기표가 아니라 근사적 선택 지침입니다. 또한 문서는 msleep 인자를 unsigned long으로 적지만 이 버전의 include/linux/delay.h 실제 선언은 unsigned int이며 interruptible도 unsigned int 인자를 받습니다. 구현을 읽을 때 문서의 간략한 표기를 그대로 타입 근거로 사용하지 않습니다."
+      },
+      {
+        "title": "유연한 fsleep",
+        "text": "마지막 항목은 유연한 uninterruptible 지연에 fsleep을 제시합니다. 이 버전의 delay.h는10us 이하 udelay,20000us 이하 usleep_range,그 초과 msleep으로 선택합니다. 문서의 any delay는 모든 실행 문맥에서 안전하다는 뜻이 아니며 sleep 경로가 가능한 문맥이어야 합니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "최적화 비용과 지연 요구의 비교,타이머 해상도·정확도·스케줄링 지연의 분리,인터럽트 병합,신호와 태스크 상태,문서와 구현 대조를 학습합니다. 소스 기반 해설은 특정 하드웨어의 지연 측정이나 실시간 보장 검증이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "지연 API 선택에서 문서가 먼저 확인하라는 것은?",
+        "options": [
+          "atomic 문맥인지와 그 문맥의 지연이 필요한지이다",
+          "무조건 요청 시간을 ms로 반올림하는 것이다"
+        ],
+        "answer": 0,
+        "explanation": "문맥이 sleep 가능 여부를 결정합니다. 단위 변환보다 먼저 문맥과 설계 필요성을 확인해야 합니다."
+      },
+      {
+        "prompt": "usleep_range에 여유 범위를 주는 이유는?",
+        "options": [
+          "태스크의 실행 상한을 모든 상황에서 강제로 보장하기 위해서이다",
+          "다른 wakeup과 맞춰 인터럽트를 줄일 여지를 주기 위해서이다"
+        ],
+        "answer": 1,
+        "explanation": "타이머 이벤트를 합칠 기회를 제공하지만 실제 재스케줄링·반환 시각의 절대 상한까지 보장하는 설명은 아닙니다."
+      },
+      {
+        "prompt": "문서의 msleep(1~20) 관련 약20ms 예시는 모든 구성의 고정 법칙인가?",
+        "options": [
+          "아니다. 구성과 타이머 동작에 따라 달라지는 지연 경고이다",
+          "그렇다. 어떤 시스템에서도 정확히20ms이다"
+        ],
+        "answer": 0,
+        "explanation": "역사적 설명을 일반적인 수치 보장으로 확대하지 않습니다. HZ와 타이머·스케줄링 조건을 구분해야 합니다."
+      },
+      {
+        "prompt": "msleep_interruptible을 일반 msleep과 구별하는 핵심은?",
+        "options": [
+          "어떤 조건에서도 지연이 더 정확하다는 점이다",
+          "신호로 수면이 일찍 끝날 수 있다는 점이다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 TASK_INTERRUPTIBLE과 TASK_UNINTERRUPTIBLE의 차이를 설명합니다. 단순 정밀도 향상 함수가 아닙니다."
+      },
+      {
+        "prompt": "문서의 큰 지연 권고와 중간 지연 권고는 정확히 겹침 없는 분기인가?",
+        "options": [
+          "아니다.10~20ms가 겹치는 근사 지침이다",
+          "그렇다. 문서 자체가 하나의 if-else 구현이다"
+        ],
+        "answer": 0,
+        "explanation": "문서의 약10us~20ms와10ms+를 구분하고 실제 fsleep의 명시적 임계값은 delay.h에서 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "===================================================================\ndelays - Information on the various kernel delay / sleep mechanisms\n===================================================================\n\nThis document seeks to answer the common question: \"What is the\nRightWay (TM) to insert a delay?\"\n\nThis question is most often faced by driver writers who have to\ndeal with hardware delays and who may not be the most intimately\nfamiliar with the inner workings of the Linux Kernel.\n\n\nInserting Delays\n----------------\n\nThe first, and most important, question you need to ask is \"Is my\ncode in an atomic context?\"  This should be followed closely by \"Does\nit really need to delay in atomic context?\" If so...\n\nATOMIC CONTEXT:\n\tYou must use the `*delay` family of functions. These\n\tfunctions use the jiffy estimation of clock speed\n\tand will busy wait for enough loop cycles to achieve\n\tthe desired delay:\n\n\tndelay(unsigned long nsecs)\n\tudelay(unsigned long usecs)\n\tmdelay(unsigned long msecs)\n\n\tudelay is the generally preferred API; ndelay-level\n\tprecision may not actually exist on many non-PC devices.\n\n\tmdelay is macro wrapper around udelay, to account for\n\tpossible overflow when passing large arguments to udelay.\n\tIn general, use of mdelay is discouraged and code should\n\tbe refactored to allow for the use of msleep.\n\nNON-ATOMIC CONTEXT:\n\tYou should use the `*sleep[_range]` family of functions.\n\tThere are a few more options here, while any of them may\n\twork correctly, using the \"right\" sleep function will\n\thelp the scheduler, power management, and just make your\n\tdriver better :)\n\n\t-- Backed by busy-wait loop:\n\n\t\tudelay(unsigned long usecs)\n\n\t-- Backed by hrtimers:\n\n\t\tusleep_range(unsigned long min, unsigned long max)\n\n\t-- Backed by jiffies / legacy_timers\n\n\t\tmsleep(unsigned long msecs)\n\t\tmsleep_interruptible(unsigned long msecs)\n\n\tUnlike the `*delay` family, the underlying mechanism\n\tdriving each of these calls varies, thus there are\n\tquirks you should be aware of.\n\n\n\tSLEEPING FOR \"A FEW\" USECS ( < ~10us? ):\n\t\t* Use udelay\n\n\t\t- Why not usleep?\n\t\t\tOn slower systems, (embedded, OR perhaps a speed-\n\t\t\tstepped PC!) the overhead of setting up the hrtimers\n\t\t\tfor usleep *may* not be worth it. Such an evaluation\n\t\t\twill obviously depend on your specific situation, but\n\t\t\tit is something to be aware of.\n\n\tSLEEPING FOR ~USECS OR SMALL MSECS ( 10us - 20ms):\n\t\t* Use usleep_range\n\n\t\t- Why not msleep for (1ms - 20ms)?\n\t\t\tExplained originally here:\n\t\t\t\thttps://lore.kernel.org/r/15327.1186166232@lwn.net\n\n\t\t\tmsleep(1~20) may not do what the caller intends, and\n\t\t\twill often sleep longer (~20 ms actual sleep for any\n\t\t\tvalue given in the 1~20ms range). In many cases this\n\t\t\tis not the desired behavior.\n\n\t\t- Why is there no \"usleep\" / What is a good range?\n\t\t\tSince usleep_range is built on top of hrtimers, the\n\t\t\twakeup will be very precise (ish), thus a simple\n\t\t\tusleep function would likely introduce a large number\n\t\t\tof undesired interrupts.\n\n\t\t\tWith the introduction of a range, the scheduler is\n\t\t\tfree to coalesce your wakeup with any other wakeup\n\t\t\tthat may have happened for other reasons, or at the\n\t\t\tworst case, fire an interrupt for your upper bound.\n\n\t\t\tThe larger a range you supply, the greater a chance\n\t\t\tthat you will not trigger an interrupt; this should\n\t\t\tbe balanced with what is an acceptable upper bound on\n\t\t\tdelay / performance for your specific code path. Exact\n\t\t\ttolerances here are very situation specific, thus it\n\t\t\tis left to the caller to determine a reasonable range.\n\n\tSLEEPING FOR LARGER MSECS ( 10ms+ )\n\t\t* Use msleep or possibly msleep_interruptible\n\n\t\t- What's the difference?\n\t\t\tmsleep sets the current task to TASK_UNINTERRUPTIBLE\n\t\t\twhereas msleep_interruptible sets the current task to\n\t\t\tTASK_INTERRUPTIBLE before scheduling the sleep. In\n\t\t\tshort, the difference is whether the sleep can be ended\n\t\t\tearly by a signal. In general, just use msleep unless\n\t\t\tyou know you have a need for the interruptible variant.\n\n\tFLEXIBLE SLEEPING (any delay, uninterruptible)\n\t\t* Use fsleep\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "35a3fcbfb6b256b0e811fcaa1c62f1e233b92227b7c909a93c07d215b7943137",
+      "scope": "whole-file",
+      "line_count": 115,
+      "authoring_source": "course/file_units/delay_documentation.py",
+      "sections": [
+        "문서 목적과 범위",
+        "첫 질문은 실행 문맥",
+        "Busy wait와 정밀도",
+        "Mdelay의 역할과 비용",
+        "Non-atomic의 세 메커니즘",
+        "몇 마이크로초 구간",
+        "중간 구간과 역사적 예시",
+        "범위를 받는 이유",
+        "Wakeup과 실제 실행",
+        "큰 밀리초 구간과 중단",
+        "겹치는 권고와 선언 차이",
+        "유연한 fsleep",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/timers/timers-howto.rst"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "아주 잠깐 문 앞에서 기다릴지, 의자에 앉아 다른 사람에게 자리를 내줄지 먼저 정해요.",
+    "meaning": "커널 지연은 수면 가능한 상황인지와 시간 요구를 함께 보고 선택해요.",
+    "exercise": "atomic 문맥, 짧은 지연, 허용 범위가 있는 지연을 나눠 가능한 도구를 연결해 보세요."
+  },
+  "goal": "커널 지연은 수면 가능한 상황인지와 시간 요구를 함께 보고 선택해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "atomic 문맥, 짧은 지연, 허용 범위가 있는 지연을 나눠 가능한 도구를 연결해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "d09388d7cc4c552b7709e1487ec30fd46de0cb5bec02d49e36bd08e29d3e1196",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

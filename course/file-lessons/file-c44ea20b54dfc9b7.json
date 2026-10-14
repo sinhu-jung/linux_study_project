@@ -5,71 +5,85 @@
   "area": "KUnit · 테스트 대역 · C macro · 함수 포인터",
   "track": "files",
   "kind": "kernel",
-  "intro": "redirect와 activate 매크로, 해제 선언 및 설정별 범위를 분석합니다.",
+  "intro": "정적 대역 매크로의 현재 테스트 조건·return 범위·타입 검사를 이해합니다.",
   "guide": [
-    "함수 대체는 원래 함수에 삽입한 명시적 분기와 현재 테스트의 등록 상태로 동작할 수 있습니다.",
-    "매크로의 return 범위, 함수 타입 검사, task별 테스트 문맥을 학습합니다."
+    "static stub은 시험에 쓰는 대체 함수입니다. 원래 함수 시작의 redirect 매크로가 현재 테스트의 등록을 확인하여 대역을 부릅니다.",
+    "break는 매크로의 작은 do-while을 끝내지만 return은 그것을 담은 원래 함수 전체에서 돌아갑니다. 둘을 구별해야 뒤 코드가 실행되는지 알 수 있습니다.",
+    "대역과 실제 함수는 같은 함수 타입이어야 합니다. 공개 활성화 매크로가 이 타입을 검사하고 내부 구현에 주소를 전달합니다."
   ],
   "deep_dive": [
     {
-      "title": "설정 분기 전체",
-      "text": "GPL-2.0 guard에서 CONFIG_KUNIT가 비활성이면 KUNIT_STATIC_STUB_REDIRECT만 빈 do-while로 정의합니다. 활성 구역에는 test,test-bug,compiler,sched 헤더와 API가 있습니다. 비활성 구역에 activate·deactivate의 같은 형태 no-op API가 모두 제공된다고 가정하면 안 됩니다."
+      "title": "설정별로 제공하는 것",
+      "text": "GPL-2.0 보호 조건에서 KUnit이 꺼지면 redirect만 빈 do-while로 정의합니다. 켜진 쪽에는 test, test-bug, compiler, sched 헤더와 API가 있습니다. 꺼진 쪽이 활성화·해제 함수까지 모두 빈 대체 형태로 제공한다고 생각하면 안 됩니다."
     },
     {
-      "title": "현재 테스트와 대체 조회",
-      "text": "redirect 매크로는 typeof(&real_fn_name) replacement와 현재 테스트 포인터를 얻습니다. 현재 테스트가 없으면 do-while을 break해 원래 함수 본문을 계속합니다. 있으면 kunit_hooks.get_static_stub_address(current_test,&real_fn_name)를 호출합니다. 임의 함수 코드를 런타임 패치하는 구현이 아니라 함수 시작에 이 매크로가 있어야 동작합니다."
+      "title": "현재 테스트에 등록된 대역 찾기",
+      "text": "redirect는 원래 함수 포인터 타입의 replacement와 현재 테스트를 얻습니다. 테스트가 없으면 break로 매크로를 끝내고 원래 본문을 계속합니다. 있으면 hook의 주소 조회 함수에 테스트와 실제 함수 주소를 전달합니다. 원래 함수의 기계어를 자동 패치하는 방식이 아니라 이 입구 매크로가 있어야 동작합니다."
     },
     {
-      "title": "Return의 범위와 인수",
-      "text": "replacement가 있으면 return replacement(args)를 실행합니다. return은 매크로를 포함하는 원래 함수에서 반환하므로 그 아래 정상 본문은 실행되지 않습니다. 없으면 정상 본문으로 진행합니다. real_fn_name은 문자열이 아니라 함수 식별자이며 args는 전달할 인수 표현식입니다. 원래 함수를 replacement 안에서 다시 호출하면 같은 redirect가 다시 적용될 가능성을 고려해야 합니다."
+      "title": "대역을 부른 뒤 돌아가는 곳",
+      "text": "대역이 있으면 return replacement(args)이므로 원래 함수에서 곧바로 반환하고 아래 정상 본문을 건너뜁니다. 대역이 없으면 정상 코드로 갑니다. real_fn_name은 문자열이 아닌 함수 식별자이고 args는 전달할 인수 식입니다. 대역 안에서 원래 함수를 다시 부르면 같은 갈림길로 들어갈 수 있어 반복 호출을 고려해야 합니다."
     },
     {
-      "title": "활성화와 타입 검사",
-      "text": "kunit_activate_static_stub은 typecheck_fn(typeof(&replacement_addr),real_fn_addr) 뒤 __kunit_activate_static_stub을 호출합니다. 주석은 실제 함수와 대체 함수 타입이 같아야 하므로 void *를 받는 내부 helper 대신 매크로 사용을 권장합니다. 커널 함수 어디에나 prologue 없이 적용되는 범용 detour API는 아닙니다."
+      "title": "활성화 전에 타입 확인",
+      "text": "공개 활성화 매크로는 typecheck_fn으로 실제·대역 함수 타입을 확인한 뒤 내부 활성화 함수를 호출합니다. void * 인수의 내부 함수를 바로 쓰기보다 이 매크로를 쓰라고 권합니다. 입구 매크로 없이 임의의 커널 함수를 바꾸는 범용 기능이 아닙니다."
     },
     {
-      "title": "해제와 문서 예제",
-      "text": "kunit_deactivate_static_stub(test,real_fn_addr)는 외부 구현 선언입니다. 예제는 정상 함수가 0을 반환하지만 replacement가 42를 반환하고 활성화된 테스트 안에서 42를 기대합니다. 현재 테스트 문맥에서 간접 호출도 redirect될 수 있습니다. 전체 매크로·선언·예제·설정 구역을 검토했으며 실제 C 테스트 실행을 검증한 것은 아닙니다."
+      "title": "해제 선언과 숫자 예제",
+      "text": "해제 함수는 외부 구현 선언입니다. 예제에서 정상 함수는 0, 대역은 42를 반환하여 활성 테스트가 42를 기대합니다. 현재 테스트 안의 간접 호출도 이 갈림길을 통과하면 대역으로 갈 수 있습니다. 설정·매크로·선언·예제 전체를 읽는 일은 실제 C 시험을 실행해 통과한 것과 다릅니다."
     }
   ],
   "questions": [
     {
-      "prompt": "대체 함수가 있으면 원래 함수 본문도 뒤이어 실행되는가?",
+      "prompt": "대역을 부른 뒤 정상 함수 본문도 계속 실행되나요?",
       "options": [
+        "아니요, return으로 원래 함수에서 반환합니다.",
+        "네, 대역은 기록만 남깁니다."
+      ],
+      "answer": 0,
+      "explanation": "return은 do-while만 끝내는 break와 달리 포함한 함수에서 돌아갑니다.",
+      "original_prompt": "대체 함수가 있으면 원래 함수 본문도 뒤이어 실행되는가?",
+      "original_options": [
         "아니다. return replacement(args)로 원래 함수에서 반환한다",
         "그렇다. 대체 함수는 로그만 남긴다"
       ],
-      "answer": 0,
-      "explanation": "매크로 안의 return은 enclosing function에 적용됩니다. do-while 블록만 끝내는 break와 다릅니다."
+      "original_explanation": "매크로 안의 return은 enclosing function에 적용됩니다. do-while 블록만 끝내는 break와 다릅니다."
     },
     {
-      "prompt": "아무 함수나 prologue 없이 활성화만 하면 바뀌는가?",
+      "prompt": "입구 코드 없이 활성화만 하면 아무 함수나 바뀌나요?",
       "options": [
+        "네, 기계어를 자동 수정합니다.",
+        "아니요, 원래 함수에 redirect 매크로가 필요합니다."
+      ],
+      "answer": 1,
+      "explanation": "대역 조회와 호출은 매크로가 넣은 명시적인 분기입니다.",
+      "original_prompt": "아무 함수나 prologue 없이 활성화만 하면 바뀌는가?",
+      "original_options": [
         "그렇다. 기계어를 자동 패치한다",
         "아니다. 원래 함수에 redirect 매크로가 필요하다"
       ],
-      "answer": 1,
-      "explanation": "조회와 대체 호출은 매크로가 삽입한 명시적인 분기입니다."
+      "original_explanation": "조회와 대체 호출은 매크로가 삽입한 명시적인 분기입니다."
     },
     {
-      "prompt": "KUnit 비활성에서 이 헤더가 제공하는 no-op은?",
+      "prompt": "KUnit을 끈 쪽에서 빈 동작으로 제공하는 것은 무엇인가요?",
       "options": [
+        "redirect 매크로입니다.",
+        "활성화와 해제까지 모든 API입니다."
+      ],
+      "answer": 0,
+      "explanation": "비활성 구역에는 redirect 정의 하나만 있습니다.",
+      "original_prompt": "KUnit 비활성에서 이 헤더가 제공하는 no-op은?",
+      "original_options": [
         "redirect 매크로",
         "모든 activate·deactivate 함수까지 전부"
       ],
-      "answer": 0,
-      "explanation": "비활성 구역에는 redirect 정의 하나만 있습니다. 설정별 선언 범위를 확인해야 합니다."
+      "original_explanation": "비활성 구역에는 redirect 정의 하나만 있습니다. 설정별 선언 범위를 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "대역이 있을 때와 없을 때 원래 함수의 return 0에 도달하는지 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * KUnit function redirection (static stubbing) API.\n *\n * Copyright (C) 2022, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n#ifndef _KUNIT_STATIC_STUB_H\n#define _KUNIT_STATIC_STUB_H\n\n#if !IS_ENABLED(CONFIG_KUNIT)\n\n/* If CONFIG_KUNIT is not enabled, these stubs quietly disappear. */\n#define KUNIT_STATIC_STUB_REDIRECT(real_fn_name, args...) do {} while (0)\n\n#else\n\n#include <kunit/test.h>\n#include <kunit/test-bug.h>\n\n#include <linux/compiler.h> /* for {un,}likely() */\n#include <linux/sched.h> /* for task_struct */\n\n\n/**\n * KUNIT_STATIC_STUB_REDIRECT() - call a replacement 'static stub' if one exists\n * @real_fn_name: The name of this function (as an identifier, not a string)\n * @args: All of the arguments passed to this function\n *\n * This is a function prologue which is used to allow calls to the current\n * function to be redirected by a KUnit test. KUnit tests can call\n * kunit_activate_static_stub() to pass a replacement function in. The\n * replacement function will be called by KUNIT_STATIC_STUB_REDIRECT(), which\n * will then return from the function. If the caller is not in a KUnit context,\n * the function will continue execution as normal.\n *\n * Example:\n *\n * .. code-block:: c\n *\n *\tint real_func(int n)\n *\t{\n *\t\tKUNIT_STATIC_STUB_REDIRECT(real_func, n);\n *\t\treturn 0;\n *\t}\n *\n *\tint replacement_func(int n)\n *\t{\n *\t\treturn 42;\n *\t}\n *\n *\tvoid example_test(struct kunit *test)\n *\t{\n *\t\tkunit_activate_static_stub(test, real_func, replacement_func);\n *\t\tKUNIT_EXPECT_EQ(test, real_func(1), 42);\n *\t}\n *\n */\n#define KUNIT_STATIC_STUB_REDIRECT(real_fn_name, args...)\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\ttypeof(&real_fn_name) replacement;\t\t\t\t\\\n\tstruct kunit *current_test = kunit_get_current_test();\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tif (likely(!current_test))\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\treplacement = kunit_hooks.get_static_stub_address(current_test,\t\\\n\t\t\t\t\t\t\t&real_fn_name);\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tif (unlikely(replacement))\t\t\t\t\t\\\n\t\treturn replacement(args);\t\t\t\t\\\n} while (0)\n\n/* Helper function for kunit_activate_static_stub(). The macro does\n * typechecking, so use it instead.\n */\nvoid __kunit_activate_static_stub(struct kunit *test,\n\t\t\t\t  void *real_fn_addr,\n\t\t\t\t  void *replacement_addr);\n\n/**\n * kunit_activate_static_stub() - replace a function using static stubs.\n * @test: A pointer to the 'struct kunit' test context for the current test.\n * @real_fn_addr: The address of the function to replace.\n * @replacement_addr: The address of the function to replace it with.\n *\n * When activated, calls to real_fn_addr from within this test (even if called\n * indirectly) will instead call replacement_addr. The function pointed to by\n * real_fn_addr must begin with the static stub prologue in\n * KUNIT_STATIC_STUB_REDIRECT() for this to work. real_fn_addr and\n * replacement_addr must have the same type.\n *\n * The redirection can be disabled again with kunit_deactivate_static_stub().\n */\n#define kunit_activate_static_stub(test, real_fn_addr, replacement_addr) do {\t\\\n\ttypecheck_fn(typeof(&replacement_addr), real_fn_addr);\t\t\t\\\n\t__kunit_activate_static_stub(test, real_fn_addr, replacement_addr);\t\\\n} while (0)\n\n\n/**\n * kunit_deactivate_static_stub() - disable a function redirection\n * @test: A pointer to the 'struct kunit' test context for the current test.\n * @real_fn_addr: The address of the function to no-longer redirect\n *\n * Deactivates a redirection configured with kunit_activate_static_stub(). After\n * this function returns, calls to real_fn_addr() will execute the original\n * real_fn, not any previously-configured replacement.\n */\nvoid kunit_deactivate_static_stub(struct kunit *test, void *real_fn_addr);\n\n#endif\n#endif\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/static_stub.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c44ea20b54dfc9b7",
+    "path": "include/kunit/static_stub.h",
+    "title": "KUnit static stub API: 함수 시작부의 조건부 대체 호출",
+    "area": "KUnit · 테스트 대역 · C macro · 함수 포인터",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "redirect와 activate 매크로, 해제 선언 및 설정별 범위를 분석합니다.",
+    "guide": [
+      "함수 대체는 원래 함수에 삽입한 명시적 분기와 현재 테스트의 등록 상태로 동작할 수 있습니다.",
+      "매크로의 return 범위, 함수 타입 검사, task별 테스트 문맥을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "설정 분기 전체",
+        "text": "GPL-2.0 guard에서 CONFIG_KUNIT가 비활성이면 KUNIT_STATIC_STUB_REDIRECT만 빈 do-while로 정의합니다. 활성 구역에는 test,test-bug,compiler,sched 헤더와 API가 있습니다. 비활성 구역에 activate·deactivate의 같은 형태 no-op API가 모두 제공된다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "현재 테스트와 대체 조회",
+        "text": "redirect 매크로는 typeof(&real_fn_name) replacement와 현재 테스트 포인터를 얻습니다. 현재 테스트가 없으면 do-while을 break해 원래 함수 본문을 계속합니다. 있으면 kunit_hooks.get_static_stub_address(current_test,&real_fn_name)를 호출합니다. 임의 함수 코드를 런타임 패치하는 구현이 아니라 함수 시작에 이 매크로가 있어야 동작합니다."
+      },
+      {
+        "title": "Return의 범위와 인수",
+        "text": "replacement가 있으면 return replacement(args)를 실행합니다. return은 매크로를 포함하는 원래 함수에서 반환하므로 그 아래 정상 본문은 실행되지 않습니다. 없으면 정상 본문으로 진행합니다. real_fn_name은 문자열이 아니라 함수 식별자이며 args는 전달할 인수 표현식입니다. 원래 함수를 replacement 안에서 다시 호출하면 같은 redirect가 다시 적용될 가능성을 고려해야 합니다."
+      },
+      {
+        "title": "활성화와 타입 검사",
+        "text": "kunit_activate_static_stub은 typecheck_fn(typeof(&replacement_addr),real_fn_addr) 뒤 __kunit_activate_static_stub을 호출합니다. 주석은 실제 함수와 대체 함수 타입이 같아야 하므로 void *를 받는 내부 helper 대신 매크로 사용을 권장합니다. 커널 함수 어디에나 prologue 없이 적용되는 범용 detour API는 아닙니다."
+      },
+      {
+        "title": "해제와 문서 예제",
+        "text": "kunit_deactivate_static_stub(test,real_fn_addr)는 외부 구현 선언입니다. 예제는 정상 함수가 0을 반환하지만 replacement가 42를 반환하고 활성화된 테스트 안에서 42를 기대합니다. 현재 테스트 문맥에서 간접 호출도 redirect될 수 있습니다. 전체 매크로·선언·예제·설정 구역을 검토했으며 실제 C 테스트 실행을 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "대체 함수가 있으면 원래 함수 본문도 뒤이어 실행되는가?",
+        "options": [
+          "아니다. return replacement(args)로 원래 함수에서 반환한다",
+          "그렇다. 대체 함수는 로그만 남긴다"
+        ],
+        "answer": 0,
+        "explanation": "매크로 안의 return은 enclosing function에 적용됩니다. do-while 블록만 끝내는 break와 다릅니다."
+      },
+      {
+        "prompt": "아무 함수나 prologue 없이 활성화만 하면 바뀌는가?",
+        "options": [
+          "그렇다. 기계어를 자동 패치한다",
+          "아니다. 원래 함수에 redirect 매크로가 필요하다"
+        ],
+        "answer": 1,
+        "explanation": "조회와 대체 호출은 매크로가 삽입한 명시적인 분기입니다."
+      },
+      {
+        "prompt": "KUnit 비활성에서 이 헤더가 제공하는 no-op은?",
+        "options": [
+          "redirect 매크로",
+          "모든 activate·deactivate 함수까지 전부"
+        ],
+        "answer": 0,
+        "explanation": "비활성 구역에는 redirect 정의 하나만 있습니다. 설정별 선언 범위를 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * KUnit function redirection (static stubbing) API.\n *\n * Copyright (C) 2022, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n#ifndef _KUNIT_STATIC_STUB_H\n#define _KUNIT_STATIC_STUB_H\n\n#if !IS_ENABLED(CONFIG_KUNIT)\n\n/* If CONFIG_KUNIT is not enabled, these stubs quietly disappear. */\n#define KUNIT_STATIC_STUB_REDIRECT(real_fn_name, args...) do {} while (0)\n\n#else\n\n#include <kunit/test.h>\n#include <kunit/test-bug.h>\n\n#include <linux/compiler.h> /* for {un,}likely() */\n#include <linux/sched.h> /* for task_struct */\n\n\n/**\n * KUNIT_STATIC_STUB_REDIRECT() - call a replacement 'static stub' if one exists\n * @real_fn_name: The name of this function (as an identifier, not a string)\n * @args: All of the arguments passed to this function\n *\n * This is a function prologue which is used to allow calls to the current\n * function to be redirected by a KUnit test. KUnit tests can call\n * kunit_activate_static_stub() to pass a replacement function in. The\n * replacement function will be called by KUNIT_STATIC_STUB_REDIRECT(), which\n * will then return from the function. If the caller is not in a KUnit context,\n * the function will continue execution as normal.\n *\n * Example:\n *\n * .. code-block:: c\n *\n *\tint real_func(int n)\n *\t{\n *\t\tKUNIT_STATIC_STUB_REDIRECT(real_func, n);\n *\t\treturn 0;\n *\t}\n *\n *\tint replacement_func(int n)\n *\t{\n *\t\treturn 42;\n *\t}\n *\n *\tvoid example_test(struct kunit *test)\n *\t{\n *\t\tkunit_activate_static_stub(test, real_func, replacement_func);\n *\t\tKUNIT_EXPECT_EQ(test, real_func(1), 42);\n *\t}\n *\n */\n#define KUNIT_STATIC_STUB_REDIRECT(real_fn_name, args...)\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\ttypeof(&real_fn_name) replacement;\t\t\t\t\\\n\tstruct kunit *current_test = kunit_get_current_test();\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tif (likely(!current_test))\t\t\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\treplacement = kunit_hooks.get_static_stub_address(current_test,\t\\\n\t\t\t\t\t\t\t&real_fn_name);\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tif (unlikely(replacement))\t\t\t\t\t\\\n\t\treturn replacement(args);\t\t\t\t\\\n} while (0)\n\n/* Helper function for kunit_activate_static_stub(). The macro does\n * typechecking, so use it instead.\n */\nvoid __kunit_activate_static_stub(struct kunit *test,\n\t\t\t\t  void *real_fn_addr,\n\t\t\t\t  void *replacement_addr);\n\n/**\n * kunit_activate_static_stub() - replace a function using static stubs.\n * @test: A pointer to the 'struct kunit' test context for the current test.\n * @real_fn_addr: The address of the function to replace.\n * @replacement_addr: The address of the function to replace it with.\n *\n * When activated, calls to real_fn_addr from within this test (even if called\n * indirectly) will instead call replacement_addr. The function pointed to by\n * real_fn_addr must begin with the static stub prologue in\n * KUNIT_STATIC_STUB_REDIRECT() for this to work. real_fn_addr and\n * replacement_addr must have the same type.\n *\n * The redirection can be disabled again with kunit_deactivate_static_stub().\n */\n#define kunit_activate_static_stub(test, real_fn_addr, replacement_addr) do {\t\\\n\ttypecheck_fn(typeof(&replacement_addr), real_fn_addr);\t\t\t\\\n\t__kunit_activate_static_stub(test, real_fn_addr, replacement_addr);\t\\\n} while (0)\n\n\n/**\n * kunit_deactivate_static_stub() - disable a function redirection\n * @test: A pointer to the 'struct kunit' test context for the current test.\n * @real_fn_addr: The address of the function to no-longer redirect\n *\n * Deactivates a redirection configured with kunit_activate_static_stub(). After\n * this function returns, calls to real_fn_addr() will execute the original\n * real_fn, not any previously-configured replacement.\n */\nvoid kunit_deactivate_static_stub(struct kunit *test, void *real_fn_addr);\n\n#endif\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "84fa7b8218a4d7ecfbe1068168c2e2c2b7c277a2edf8a6d91142b866855f22f4",
+      "scope": "whole-file",
+      "line_count": 113,
+      "authoring_source": "course/file_units/kunit_static_stubs.py",
+      "sections": [
+        "설정 분기 전체",
+        "현재 테스트와 대체 조회",
+        "Return의 범위와 인수",
+        "활성화와 타입 검사",
+        "해제와 문서 예제"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/static_stub.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "시험 중에 원래 함수 대신 연습용 함수를 부르게 할 수 있습니다. 원래 함수 입구에 갈림길을 미리 둬야 하며 모든 코드를 자동으로 바꾸는 마법은 아닙니다.",
+    "meaning": "정적 대역 매크로의 현재 테스트 조건·return 범위·타입 검사를 이해합니다.",
+    "exercise": "대역이 있을 때와 없을 때 원래 함수의 return 0에 도달하는지 표시하세요."
+  },
+  "goal": "정적 대역 매크로의 현재 테스트 조건·return 범위·타입 검사를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "대역이 있을 때와 없을 때 원래 함수의 return 0에 도달하는지 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "dd66dea03728ac116ba9adcaaa020c591e89860369db9e861369f708094fed89",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

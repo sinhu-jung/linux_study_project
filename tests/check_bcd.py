@@ -12,7 +12,9 @@ PREFIX = r'''
 #include <stdint.h>
 #include <stdio.h>
 typedef uint8_t u8;
+#ifndef __attribute_const__
 #define __attribute_const__ __attribute__((const))
+#endif
 #define EXPORT_SYMBOL(x)
 '''
 MAIN = r'''

@@ -5,67 +5,81 @@
   "area": "커널 공통 도구 · 상태·수명·경계",
   "track": "files",
   "kind": "kernel",
-  "intro": "현재 프로세스의 스레드 수만 확인하면 다른 프로세스와 주소 공간을 공유하는 경우를 놓칠 수 있습니다.",
+  "intro": "스레드 그룹과 메모리 공간 공유를 구분하고 탐색의 관측 범위를 이해합니다.",
   "guide": [
-    "current_is_single_threaded는 signal->live가 1이 아니면 false입니다. mm_users가 1이면 true로 빠르게 반환합니다. 그 외에는 RCU 아래 다른 사용자 프로세스의 스레드들을 살펴 같은 mm을 쓰는 실행 흐름이 있는지 검사합니다.",
-    "함수는 current->mm을 역참조하므로 유효한 사용자 mm이 있는 호출 문맥을 전제로 읽습니다. 반환값은 객체에 영구적인 독점 소유권을 부여하지 않으며 호출자가 이후 상태 변화에 대한 규약을 지켜야 합니다."
+    "현재 작업에 유효한 사용자 mm이 있어야 합니다.",
+    "빠른 카운터 검사로 끝나지 않으면 다른 프로세스를 찾습니다.",
+    "참이라는 답이 미래의 영구 독점 권한은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구조와 빠른 경로",
-      "text": "SPDX·설명·출처 주석, sched/signal·task·mm 헤더와 함수 하나가 전체입니다. live!=1 검사는 같은 thread group 안의 살아 있는 실행 흐름을 먼저 확인합니다. mm_users==1은 별도의 mm 사용자 수 조건이고 두 카운터는 같은 뜻이 아닙니다."
+      "title": "빠른 검사",
+      "text": "라이선스·출처와 세 sched 헤더 뒤 함수 하나입니다. live!=1이면 같은 스레드 그룹에 살아 있는 실행 흐름이 여러 개라 false입니다. 다음 mm_users==1이면 true입니다. live와 mm_users는 각각 그룹의 실행 흐름과 주소 공간 사용을 세므로 같은 숫자 개념이 아닙니다."
     },
     {
-      "title": "RCU 탐색의 분기",
-      "text": "ret=false로 시작하고 rcu_read_lock을 잡습니다. PF_KTHREAD인 그룹과 현재 group_leader는 건너뜁니다. 각 다른 그룹에서 t->mm==mm을 만나면 found로 가서 false를 유지합니다. 다른 non-NULL mm을 만나면 그 그룹의 내부 순회를 멈춥니다. t->mm==NULL이면 smp_rmb 뒤 계속 진행하여 종료 과정과 CLONE_VM 관계의 관찰 순서를 보존하려는 원문 의도를 읽습니다."
+      "title": "RCU 아래 둘러보기",
+      "text": "ret=false로 시작하고 RCU 읽기 구간에 들어갑니다. 커널 스레드 그룹과 자기 그룹 대표는 건너뜁니다. 다른 그룹에서 같은 mm이면 found로 가며, 다른 non-NULL mm이면 그 그룹 순회를 멈춥니다. NULL이면 smp_rmb로 읽기 순서를 잡고 계속 봅니다. 종료 직전 CLONE_VM으로 만들어진 다른 공유 작업을 놓치지 않으려는 의도입니다."
     },
     {
-      "title": "모든 경로의 해제",
-      "text": "끝까지 같은 mm 사용자를 못 찾으면 ret=true로 바꿉니다. 정상 완료와 goto found 모두 같은 rcu_read_unlock을 지나 반환합니다. RCU는 탐색 중 객체 수명·접근 규약의 일부이며 일반 mutex처럼 모든 대상 필드 쓰기를 정지시키는 장치가 아닙니다."
+      "title": "공통 출구",
+      "text": "끝까지 같은 mm을 못 찾으면 true로 바꿉니다. 정상 종료와 found 모두 rcu_read_unlock을 지나갑니다. RCU는 읽는 동안 객체 수명과 접근 규칙을 지키는 도구이며 mutex처럼 모든 대상 쓰기를 멈추는 잠금은 아닙니다."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "thread group과 주소 공간의 공유 관계를 별도로 다루는 객체 모델입니다. 빠른 카운터 검사 뒤 필요할 때 전역 목록을 탐색하므로 항상 O(1)은 아닙니다. mm_users>1만으로 다른 살아 있는 사용자 실행 흐름이 있다고 즉시 결론 내리지 않고 실제 탐색을 하는 점도 중요합니다."
+      "title": "공유와 관측",
+      "text": "CLONE_VM은 다른 프로세스 관계에서도 주소 공간을 공유하게 할 수 있습니다. 그래서 mm_users>1만으로 살아 있는 다른 사용자 작업이 있다고 단정하지 않고 찾아봅니다. 목록 탐색 때문에 항상 O(1)은 아닙니다. 함수는 이후 fork·clone을 막지 않으므로 반환 뒤의 변화는 별도 호출 규약으로 다룹니다."
     }
   ],
   "questions": [
     {
-      "prompt": "live==1이지만 mm_users>1이면 바로 true인가?",
+      "prompt": "live=1, mm_users>1이면 즉시 true인가요?",
       "options": [
+        "아니다. 다른 프로세스의 공유를 찾는다",
+        "그렇다. 그룹에 하나면 주소 공간도 독점이다"
+      ],
+      "answer": 0,
+      "explanation": "그룹 밖에서도 CLONE_VM 등으로 공유할 수 있습니다.",
+      "original_prompt": "live==1이지만 mm_users>1이면 바로 true인가?",
+      "original_options": [
         "아니다. 다른 프로세스의 mm 공유를 탐색한다",
         "그렇다. thread group에 하나면 주소 공간도 독점이다"
       ],
-      "answer": 0,
-      "explanation": "CLONE_VM 등으로 서로 다른 프로세스 관계에서도 mm을 공유할 수 있습니다. 함수는 두 조건을 구별하고 추가 탐색을 수행합니다."
+      "original_explanation": "CLONE_VM 등으로 서로 다른 프로세스 관계에서도 mm을 공유할 수 있습니다. 함수는 두 조건을 구별하고 추가 탐색을 수행합니다."
     },
     {
-      "prompt": "같은 mm을 찾고 goto found하면 RCU 잠금 해제가 생략되는가?",
+      "prompt": "같은 mm을 찾아 found로 가면 RCU 해제를 빼먹나요?",
       "options": [
+        "그렇다. 일찍 찾으면 생략한다",
+        "아니다. 라벨 뒤 공통 해제를 실행한다"
+      ],
+      "answer": 1,
+      "explanation": "false를 유지한 채 공통 출구로 갑니다.",
+      "original_prompt": "같은 mm을 찾고 goto found하면 RCU 잠금 해제가 생략되는가?",
+      "original_options": [
         "그렇다. 조기 탐색 성공은 해제를 생략한다",
         "아니다. found 라벨 뒤 rcu_read_unlock이 실행된다"
       ],
-      "answer": 1,
-      "explanation": "ret=false인 채 공통 해제 지점으로 이동합니다. 조기 종료와 자원 해제를 함께 배치하는 제어 흐름입니다."
+      "original_explanation": "ret=false인 채 공통 해제 지점으로 이동합니다. 조기 종료와 자원 해제를 함께 배치하는 제어 흐름입니다."
     },
     {
-      "prompt": "반환 true가 이후에도 영구적으로 mm 독점임을 보장하는가?",
+      "prompt": "true이면 이후에도 영구히 mm을 독점하나요?",
       "options": [
+        "아니다. 이후 변화의 별도 약속이 필요하다",
+        "그렇다. 새 작업 생성을 금지한다"
+      ],
+      "answer": 0,
+      "explanation": "상태 관측과 미래 변경 금지는 다릅니다.",
+      "original_prompt": "반환 true가 이후에도 영구적으로 mm 독점임을 보장하는가?",
+      "original_options": [
         "아니다. 호출 문맥과 이후 변화에 대한 별도 계약이 필요하다",
         "그렇다. 함수가 이후 fork와 clone을 금지한다"
       ],
-      "answer": 0,
-      "explanation": "본문에는 영구 독점 잠금 획득이나 새 작업 생성 금지가 없습니다. 상태를 관찰하는 함수와 미래 상태를 제한하는 기능을 구별해야 합니다."
+      "original_explanation": "본문에는 영구 독점 잠금 획득이나 새 작업 생성 금지가 없습니다. 상태를 관찰하는 함수와 미래 상태를 제한하는 기능을 구별해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "live와 mm_users가 각각 무엇을 세는지 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/* Function to determine if a thread group is single threaded or not\n *\n * Copyright (C) 2008 Red Hat, Inc. All Rights Reserved.\n * Written by David Howells (dhowells@redhat.com)\n * - Derived from security/selinux/hooks.c\n */\n#include <linux/sched/signal.h>\n#include <linux/sched/task.h>\n#include <linux/sched/mm.h>\n\n/*\n * Returns true if the task does not share ->mm with another thread/process.\n */\nbool current_is_single_threaded(void)\n{\n\tstruct task_struct *task = current;\n\tstruct mm_struct *mm = task->mm;\n\tstruct task_struct *p, *t;\n\tbool ret;\n\n\tif (atomic_read(&task->signal->live) != 1)\n\t\treturn false;\n\n\tif (atomic_read(&mm->mm_users) == 1)\n\t\treturn true;\n\n\tret = false;\n\trcu_read_lock();\n\tfor_each_process(p) {\n\t\tif (unlikely(p->flags & PF_KTHREAD))\n\t\t\tcontinue;\n\t\tif (unlikely(p == task->group_leader))\n\t\t\tcontinue;\n\n\t\tfor_each_thread(p, t) {\n\t\t\tif (unlikely(t->mm == mm))\n\t\t\t\tgoto found;\n\t\t\tif (likely(t->mm))\n\t\t\t\tbreak;\n\t\t\t/*\n\t\t\t * t->mm == NULL. Make sure next_thread/next_task\n\t\t\t * will see other CLONE_VM tasks which might be\n\t\t\t * forked before exiting.\n\t\t\t */\n\t\t\tsmp_rmb();\n\t\t}\n\t}\n\tret = true;\nfound:\n\trcu_read_unlock();\n\n\treturn ret;\n}\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/is_single_threaded.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8ca51c3c63c775b0",
+    "path": "lib/is_single_threaded.c",
+    "title": "단일 스레드 판단 전체: 스레드 그룹과 mm 공유는 다르다",
+    "area": "커널 공통 도구 · 상태·수명·경계",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "현재 프로세스의 스레드 수만 확인하면 다른 프로세스와 주소 공간을 공유하는 경우를 놓칠 수 있습니다.",
+    "guide": [
+      "current_is_single_threaded는 signal->live가 1이 아니면 false입니다. mm_users가 1이면 true로 빠르게 반환합니다. 그 외에는 RCU 아래 다른 사용자 프로세스의 스레드들을 살펴 같은 mm을 쓰는 실행 흐름이 있는지 검사합니다.",
+      "함수는 current->mm을 역참조하므로 유효한 사용자 mm이 있는 호출 문맥을 전제로 읽습니다. 반환값은 객체에 영구적인 독점 소유권을 부여하지 않으며 호출자가 이후 상태 변화에 대한 규약을 지켜야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구조와 빠른 경로",
+        "text": "SPDX·설명·출처 주석, sched/signal·task·mm 헤더와 함수 하나가 전체입니다. live!=1 검사는 같은 thread group 안의 살아 있는 실행 흐름을 먼저 확인합니다. mm_users==1은 별도의 mm 사용자 수 조건이고 두 카운터는 같은 뜻이 아닙니다."
+      },
+      {
+        "title": "RCU 탐색의 분기",
+        "text": "ret=false로 시작하고 rcu_read_lock을 잡습니다. PF_KTHREAD인 그룹과 현재 group_leader는 건너뜁니다. 각 다른 그룹에서 t->mm==mm을 만나면 found로 가서 false를 유지합니다. 다른 non-NULL mm을 만나면 그 그룹의 내부 순회를 멈춥니다. t->mm==NULL이면 smp_rmb 뒤 계속 진행하여 종료 과정과 CLONE_VM 관계의 관찰 순서를 보존하려는 원문 의도를 읽습니다."
+      },
+      {
+        "title": "모든 경로의 해제",
+        "text": "끝까지 같은 mm 사용자를 못 찾으면 ret=true로 바꿉니다. 정상 완료와 goto found 모두 같은 rcu_read_unlock을 지나 반환합니다. RCU는 탐색 중 객체 수명·접근 규약의 일부이며 일반 mutex처럼 모든 대상 필드 쓰기를 정지시키는 장치가 아닙니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "thread group과 주소 공간의 공유 관계를 별도로 다루는 객체 모델입니다. 빠른 카운터 검사 뒤 필요할 때 전역 목록을 탐색하므로 항상 O(1)은 아닙니다. mm_users>1만으로 다른 살아 있는 사용자 실행 흐름이 있다고 즉시 결론 내리지 않고 실제 탐색을 하는 점도 중요합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "live==1이지만 mm_users>1이면 바로 true인가?",
+        "options": [
+          "아니다. 다른 프로세스의 mm 공유를 탐색한다",
+          "그렇다. thread group에 하나면 주소 공간도 독점이다"
+        ],
+        "answer": 0,
+        "explanation": "CLONE_VM 등으로 서로 다른 프로세스 관계에서도 mm을 공유할 수 있습니다. 함수는 두 조건을 구별하고 추가 탐색을 수행합니다."
+      },
+      {
+        "prompt": "같은 mm을 찾고 goto found하면 RCU 잠금 해제가 생략되는가?",
+        "options": [
+          "그렇다. 조기 탐색 성공은 해제를 생략한다",
+          "아니다. found 라벨 뒤 rcu_read_unlock이 실행된다"
+        ],
+        "answer": 1,
+        "explanation": "ret=false인 채 공통 해제 지점으로 이동합니다. 조기 종료와 자원 해제를 함께 배치하는 제어 흐름입니다."
+      },
+      {
+        "prompt": "반환 true가 이후에도 영구적으로 mm 독점임을 보장하는가?",
+        "options": [
+          "아니다. 호출 문맥과 이후 변화에 대한 별도 계약이 필요하다",
+          "그렇다. 함수가 이후 fork와 clone을 금지한다"
+        ],
+        "answer": 0,
+        "explanation": "본문에는 영구 독점 잠금 획득이나 새 작업 생성 금지가 없습니다. 상태를 관찰하는 함수와 미래 상태를 제한하는 기능을 구별해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/* Function to determine if a thread group is single threaded or not\n *\n * Copyright (C) 2008 Red Hat, Inc. All Rights Reserved.\n * Written by David Howells (dhowells@redhat.com)\n * - Derived from security/selinux/hooks.c\n */\n#include <linux/sched/signal.h>\n#include <linux/sched/task.h>\n#include <linux/sched/mm.h>\n\n/*\n * Returns true if the task does not share ->mm with another thread/process.\n */\nbool current_is_single_threaded(void)\n{\n\tstruct task_struct *task = current;\n\tstruct mm_struct *mm = task->mm;\n\tstruct task_struct *p, *t;\n\tbool ret;\n\n\tif (atomic_read(&task->signal->live) != 1)\n\t\treturn false;\n\n\tif (atomic_read(&mm->mm_users) == 1)\n\t\treturn true;\n\n\tret = false;\n\trcu_read_lock();\n\tfor_each_process(p) {\n\t\tif (unlikely(p->flags & PF_KTHREAD))\n\t\t\tcontinue;\n\t\tif (unlikely(p == task->group_leader))\n\t\t\tcontinue;\n\n\t\tfor_each_thread(p, t) {\n\t\t\tif (unlikely(t->mm == mm))\n\t\t\t\tgoto found;\n\t\t\tif (likely(t->mm))\n\t\t\t\tbreak;\n\t\t\t/*\n\t\t\t * t->mm == NULL. Make sure next_thread/next_task\n\t\t\t * will see other CLONE_VM tasks which might be\n\t\t\t * forked before exiting.\n\t\t\t */\n\t\t\tsmp_rmb();\n\t\t}\n\t}\n\tret = true;\nfound:\n\trcu_read_unlock();\n\n\treturn ret;\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "4ddd2b771c448a161ae1571799494ddd91c987d0f42e094f28b3ff441a93ff56",
+      "scope": "whole-file",
+      "line_count": 54,
+      "authoring_source": "course/file_units/core_utilities.py",
+      "sections": [
+        "전체 파일 구조와 빠른 경로",
+        "RCU 탐색의 분기",
+        "모든 경로의 해제",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/is_single_threaded.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 팀의 실행 흐름이 하나여도 다른 팀과 주소 공간을 같이 쓸 수 있습니다. 두 종류의 공유를 따로 살핍니다.",
+    "meaning": "스레드 그룹과 메모리 공간 공유를 구분하고 탐색의 관측 범위를 이해합니다.",
+    "exercise": "live와 mm_users가 각각 무엇을 세는지 적어 보세요."
+  },
+  "goal": "스레드 그룹과 메모리 공간 공유를 구분하고 탐색의 관측 범위를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "live와 mm_users가 각각 무엇을 세는지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "34353405d45a94635c98ea0a45712449fa842d51b58a0736dc670f75baef5d3f",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

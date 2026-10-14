@@ -5,63 +5,77 @@
   "area": "빌드·개발 도구·접근 정책",
   "track": "files",
   "kind": "kernel",
-  "intro": "장치 메모리와 시스템 RAM에 대한 접근 허용 결정을 작은 조건문으로 추적합니다.",
+  "intro": "devmem_is_allowed는 물리 페이지를 전용 iomem이면 거절하고, 아니면 RAM이 아닌 경우에만 이 정책 검사를 통과시킵니다.",
   "guide": [
-    "인자는 물리 페이지 번호 pfn입니다. PFN_PHYS(pfn) 주소가 exclusive iomem이면 먼저 0입니다. 그 검사를 통과하고 page_is_ram(pfn)이 거짓이면 1, RAM이면 0입니다.",
-    "이 generic helper의 1은 해당 정책 검사를 통과했다는 뜻이지 모든 사용자에게 /dev/mem 접근 권한이 생겼다는 뜻은 아닙니다. 장치 열기 권한과 다른 정책·설정은 별도입니다."
+    "PFN은 물리 페이지 번호입니다. 바이트 주소와 단위가 달라 iomem 검사 전에 PFN_PHYS로 바꿉니다.",
+    "반환 1은 이 함수의 물리 영역 정책을 통과했다는 뜻입니다. 모든 사용자의 파일 접근 권한을 바꾸지는 않습니다.",
+    "함수는 메모리를 실제로 읽거나 쓰지 않고 허용 여부를 판단합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "SPDX·generic 구현 설명·출처·저작권, mm/ioport/io 헤더, 정책 주석, 함수 하나가 전부입니다. 함수는 주소를 읽거나 쓰지 않고 허용 여부 int를 반환합니다. pfn을 바이트 주소로 변환하는 곳과 pfn 그대로 분류하는 곳이 나뉩니다."
+      "title": "한 정책 함수의 구성",
+      "text": "GPL-2.0-only와 generic 구현·유래·저작권 설명 뒤 mm·ioport·io 헤더와 함수 하나가 있습니다. iomem에는 변환한 물리 바이트 주소를 주고 RAM 분류에는 페이지 번호를 그대로 줍니다."
     },
     {
-      "title": "조건표",
-      "text": "exclusive=true이면 RAM 여부와 관계없이 0입니다. exclusive=false이고 RAM=true이면 0입니다. exclusive=false이고 RAM=false인 조합만 1입니다. 첫 조건이 거절 우선순위를 가지므로 비-RAM이라는 사실만으로 exclusive MMIO를 통과할 수 없습니다."
+      "title": "거절 우선순위",
+      "text": "exclusive이면 RAM 여부를 보기 전에 0입니다. exclusive가 아니어도 RAM이면 0입니다. 둘 다 아닌 경우만 1입니다. 비RAM 장치 영역이라도 전용 iomem이면 첫 검사에서 거절되므로 나중 조건으로 통과할 수 없습니다."
     },
     {
-      "title": "단위와 CS",
-      "text": "페이지 번호와 바이트 주소를 섞으면 잘못된 물리 구간을 검사하게 됩니다. PFN_PHYS가 필요한 이유입니다. 이 함수는 접근 제어 파이프라인의 한 단계이며 결과를 인증·인가 전체의 결론으로 확대하지 않습니다. 코드 자체의 분기는 고정 횟수지만 helper 내부 자료 검색 비용까지 단정하지 않습니다."
+      "title": "단위와 정책의 범위",
+      "text": "페이지 번호를 바이트 주소처럼 사용하면 다른 물리 영역을 검사하게 됩니다. 변환 단위를 지키고 이 함수 결과를 인증·인가 전체 결론으로 넓히지 않습니다. 본문의 분기 수는 고정되어도 호출한 도우미의 내부 검색 비용까지 고정이라고 단정하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "비-RAM이지만 exclusive iomem이면 결과는?",
+      "prompt": "비RAM이지만 exclusive iomem이면 결과는 무엇인가요?",
       "options": [
+        "첫 조건에서 거절해 0입니다.",
+        "RAM이 아니므로 무조건 1입니다."
+      ],
+      "answer": 0,
+      "explanation": "거절 후 바로 반환해 RAM 검사에 가지 않습니다.",
+      "original_prompt": "비-RAM이지만 exclusive iomem이면 결과는?",
+      "original_options": [
         "0: 먼저 exclusive 조건에서 거절",
         "1: RAM이 아니므로 항상 허용"
       ],
-      "answer": 0,
-      "explanation": "exclusive 검사가 첫 번째 조기 반환입니다. page_is_ram까지 도달하지 않아 비-RAM 여부가 이 거절을 뒤집지 못합니다."
+      "original_explanation": "exclusive 검사가 첫 번째 조기 반환입니다. page_is_ram까지 도달하지 않아 비-RAM 여부가 이 거절을 뒤집지 못합니다."
     },
     {
-      "prompt": "함수 인자 pfn은 무엇인가?",
+      "prompt": "pfn은 무엇인가요?",
       "options": [
+        "바이트 단위 가상 주소입니다.",
+        "물리 페이지 번호입니다."
+      ],
+      "answer": 1,
+      "explanation": "iomem에는 PFN_PHYS로 변환한 주소를 줍니다.",
+      "original_prompt": "함수 인자 pfn은 무엇인가?",
+      "original_options": [
         "이미 바이트 단위인 가상 주소",
         "물리 페이지 번호"
       ],
-      "answer": 1,
-      "explanation": "원문 주석과 PFN_PHYS(pfn) 변환이 물리 페이지 번호 계약을 보여줍니다. iomem 주소 검사에는 변환된 물리 바이트 주소를 사용합니다."
+      "original_explanation": "원문 주석과 PFN_PHYS(pfn) 변환이 물리 페이지 번호 계약을 보여줍니다. iomem 주소 검사에는 변환된 물리 바이트 주소를 사용합니다."
     },
     {
-      "prompt": "반환 1이면 어떤 사용자의 /dev/mem 읽기도 무조건 성공하는가?",
+      "prompt": "1이면 누구의 /dev/mem 읽기도 성공하나요?",
       "options": [
+        "아니요. 다른 접근 조건이 남을 수 있습니다.",
+        "예. 파일 권한도 자동 변경됩니다."
+      ],
+      "answer": 0,
+      "explanation": "이 함수는 사용자 승인이나 파일 권한 변경을 하지 않습니다.",
+      "original_prompt": "반환 1이면 어떤 사용자의 /dev/mem 읽기도 무조건 성공하는가?",
+      "original_options": [
         "아니다. 이 helper 이외의 접근 조건이 남을 수 있다",
         "그렇다. 파일 접근 권한도 자동 변경한다"
       ],
-      "answer": 0,
-      "explanation": "본문은 파일 권한을 바꾸거나 사용자 신원을 승인하지 않습니다. 해당 물리 구간의 generic 정책 분기 결과만 돌려줍니다."
+      "original_explanation": "본문은 파일 권한을 바꾸거나 사용자 신원을 승인하지 않습니다. 해당 물리 구간의 generic 정책 분기 결과만 돌려줍니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "exclusive와 RAM의 네 조합을 적고 false·false만 1임을 표시하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * A generic version of devmem_is_allowed.\n *\n * Based on arch/arm64/mm/mmap.c\n *\n * Copyright (C) 2020 Google, Inc.\n * Copyright (C) 2012 ARM Ltd.\n */\n\n#include <linux/mm.h>\n#include <linux/ioport.h>\n#include <linux/io.h>\n\n/*\n * devmem_is_allowed() checks to see if /dev/mem access to a certain address\n * is valid. The argument is a physical page number.  We mimic x86 here by\n * disallowing access to system RAM as well as device-exclusive MMIO regions.\n * This effectively disable read()/write() on /dev/mem.\n */\nint devmem_is_allowed(unsigned long pfn)\n{\n\tif (iomem_is_exclusive(PFN_PHYS(pfn)))\n\t\treturn 0;\n\tif (!page_is_ram(pfn))\n\t\treturn 1;\n\treturn 0;\n}\n",
   "source_review": {
@@ -82,5 +96,119 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/devmem_is_allowed.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e3632776c64457fb",
+    "path": "lib/devmem_is_allowed.c",
+    "title": "/dev/mem 정책 전체: 물리 페이지 번호와 거절 우선순위",
+    "area": "빌드·개발 도구·접근 정책",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "장치 메모리와 시스템 RAM에 대한 접근 허용 결정을 작은 조건문으로 추적합니다.",
+    "guide": [
+      "인자는 물리 페이지 번호 pfn입니다. PFN_PHYS(pfn) 주소가 exclusive iomem이면 먼저 0입니다. 그 검사를 통과하고 page_is_ram(pfn)이 거짓이면 1, RAM이면 0입니다.",
+      "이 generic helper의 1은 해당 정책 검사를 통과했다는 뜻이지 모든 사용자에게 /dev/mem 접근 권한이 생겼다는 뜻은 아닙니다. 장치 열기 권한과 다른 정책·설정은 별도입니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "SPDX·generic 구현 설명·출처·저작권, mm/ioport/io 헤더, 정책 주석, 함수 하나가 전부입니다. 함수는 주소를 읽거나 쓰지 않고 허용 여부 int를 반환합니다. pfn을 바이트 주소로 변환하는 곳과 pfn 그대로 분류하는 곳이 나뉩니다."
+      },
+      {
+        "title": "조건표",
+        "text": "exclusive=true이면 RAM 여부와 관계없이 0입니다. exclusive=false이고 RAM=true이면 0입니다. exclusive=false이고 RAM=false인 조합만 1입니다. 첫 조건이 거절 우선순위를 가지므로 비-RAM이라는 사실만으로 exclusive MMIO를 통과할 수 없습니다."
+      },
+      {
+        "title": "단위와 CS",
+        "text": "페이지 번호와 바이트 주소를 섞으면 잘못된 물리 구간을 검사하게 됩니다. PFN_PHYS가 필요한 이유입니다. 이 함수는 접근 제어 파이프라인의 한 단계이며 결과를 인증·인가 전체의 결론으로 확대하지 않습니다. 코드 자체의 분기는 고정 횟수지만 helper 내부 자료 검색 비용까지 단정하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "비-RAM이지만 exclusive iomem이면 결과는?",
+        "options": [
+          "0: 먼저 exclusive 조건에서 거절",
+          "1: RAM이 아니므로 항상 허용"
+        ],
+        "answer": 0,
+        "explanation": "exclusive 검사가 첫 번째 조기 반환입니다. page_is_ram까지 도달하지 않아 비-RAM 여부가 이 거절을 뒤집지 못합니다."
+      },
+      {
+        "prompt": "함수 인자 pfn은 무엇인가?",
+        "options": [
+          "이미 바이트 단위인 가상 주소",
+          "물리 페이지 번호"
+        ],
+        "answer": 1,
+        "explanation": "원문 주석과 PFN_PHYS(pfn) 변환이 물리 페이지 번호 계약을 보여줍니다. iomem 주소 검사에는 변환된 물리 바이트 주소를 사용합니다."
+      },
+      {
+        "prompt": "반환 1이면 어떤 사용자의 /dev/mem 읽기도 무조건 성공하는가?",
+        "options": [
+          "아니다. 이 helper 이외의 접근 조건이 남을 수 있다",
+          "그렇다. 파일 접근 권한도 자동 변경한다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 파일 권한을 바꾸거나 사용자 신원을 승인하지 않습니다. 해당 물리 구간의 generic 정책 분기 결과만 돌려줍니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * A generic version of devmem_is_allowed.\n *\n * Based on arch/arm64/mm/mmap.c\n *\n * Copyright (C) 2020 Google, Inc.\n * Copyright (C) 2012 ARM Ltd.\n */\n\n#include <linux/mm.h>\n#include <linux/ioport.h>\n#include <linux/io.h>\n\n/*\n * devmem_is_allowed() checks to see if /dev/mem access to a certain address\n * is valid. The argument is a physical page number.  We mimic x86 here by\n * disallowing access to system RAM as well as device-exclusive MMIO regions.\n * This effectively disable read()/write() on /dev/mem.\n */\nint devmem_is_allowed(unsigned long pfn)\n{\n\tif (iomem_is_exclusive(PFN_PHYS(pfn)))\n\t\treturn 0;\n\tif (!page_is_ram(pfn))\n\t\treturn 1;\n\treturn 0;\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a5e19868c38f2ada01a51de2aa5e20230c1df6895d00405009979b720688e268",
+      "scope": "whole-file",
+      "line_count": 28,
+      "authoring_source": "course/file_units/build_and_policy.py",
+      "sections": [
+        "전체 파일",
+        "조건표",
+        "단위와 CS"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/devmem_is_allowed.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "출입 검사에서 먼저 전용 구역인지 확인해 거절했다면, 뒤의 일반 분류가 그 거절을 뒤집지는 않습니다.",
+    "meaning": "devmem_is_allowed는 물리 페이지를 전용 iomem이면 거절하고, 아니면 RAM이 아닌 경우에만 이 정책 검사를 통과시킵니다.",
+    "exercise": "exclusive와 RAM의 네 조합을 적고 false·false만 1임을 표시하세요."
+  },
+  "goal": "devmem_is_allowed는 물리 페이지를 전용 iomem이면 거절하고, 아니면 RAM이 아닌 경우에만 이 정책 검사를 통과시킵니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "exclusive와 RAM의 네 조합을 적고 false·false만 1임을 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "26dfe2b3106b0bd46720f97577594f10c34d25570971cad8ab29c00de4dedf56",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

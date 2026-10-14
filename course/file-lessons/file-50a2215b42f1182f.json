@@ -5,117 +5,143 @@
   "area": "메모리 모델 · x86 명령 · 투기 실행 · 비교 플래그 · 조건부 패치",
   "track": "files",
   "kind": "kernel",
-  "intro": "32비트 대체 명령부터 nospec mask와 acquire/release까지 각 정의를 비교합니다.",
+  "intro": "x86의 컴파일러 장벽·메모리 장벽·추측 실행 제한을 함수별로 구별합니다.",
   "guide": [
-    "x86에서도 full ordering, compiler ordering, 투기 실행 제한은 동일한 기능이 아닙니다.",
-    "공통 barrier.h의 기본값이 이 아키텍처 정의와 결합되는 과정을 읽습니다. 실제 CPU 실행 및 모든 메모리 타입의 검증은 아닙니다."
+    "추측 실행은 CPU가 결과가 확정되기 전에 가능성 높은 경로를 먼저 실행하는 것입니다.",
+    "clobber는 인라인 어셈블리가 바꿀 수 있는 상태를 컴파일러에게 알리는 표시입니다.",
+    "acquire·release는 자료를 받아 쓰고 공개하는 전후 순서의 약속입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구조",
-      "text": "GPL-2.0, include guard, alternative.h와 nops.h 포함, 기본 장벽, nospec mask, DMA/SMP 장벽, acquire/release, 원자 연산·주소 공간 전환 특례 뒤 asm-generic/barrier.h를 포함합니다. 장치 통신에는 UP에서도 엄격한 순서가 필요할 수 있다는 주석이 있습니다."
+      "text": "이 헤더는 CPU 기능에 따른 명령 대체와 NOP 정의를 포함하고 기본·DMA·SMP 장벽, 마스크, acquire·release와 특례를 정의한 뒤 공통 장벽 헤더를 포함합니다. CPU가 하나여도 장치와 통신할 때 강한 순서가 필요할 수 있습니다."
     },
     {
       "title": "32비트 기본 장벽",
-      "text": "CONFIG_X86_32에서는 mb/rmb/wmb를 직접 정의합니다. ALTERNATIVE의 기본 문자열은 lock; addl $0,-4(%esp)이고 X86_FEATURE_XMM2 대체 문자열은 각각 mfence/lfence/sfence입니다. volatile asm은 memory와 cc clobber를 선언합니다. 별도의 C if문으로 매번 기능을 검사하는 형태가 아니며 실제 패치 메커니즘은 alternative 구현의 범위입니다."
+      "text": "32비트 mb·rmb·wmb의 기본은 스택 근처에 lock addl 0을 수행하는 명령입니다. XMM2 기능이면 각각 mfence·lfence·sfence로 대체하며 memory와 조건 플래그 변경을 알립니다. 호출마다 C if로 검사하는 형태가 아니라 명령 패치 방식과 연결됩니다."
     },
     {
       "title": "64비트 쪽 정의",
-      "text": "CONFIG_X86_32가 아니면 __mb/__rmb/__wmb를 각각 mfence/lfence/sfence와 memory clobber로 정의합니다. 공개 이름이 아니라 내부 이름을 제공하므로 마지막 generic 헤더의 KCSAN 래퍼와 연결됩니다. 32비트 쪽과 공개 이름을 제공하는 방식부터 다릅니다."
+      "text": "64비트 쪽은 내부 이름 __mb·__rmb·__wmb에 각각 fence를 정의합니다. 마지막 공통 헤더의 KCSAN, 즉 동시 접근 오류 진단 포장과 연결됩니다. 32비트가 공개 이름을 직접 제공하는 것과 방식이 다릅니다."
     },
     {
       "title": "인덱스 타입과 unsigned 비교",
-      "text": "array_index_mask_nospec는 typeof(idx+sz)로 __idx와 __sz 타입을 맞추고 unsigned long mask를 반환합니다. cmp %1,%2는 AT&T 피연산자 순서상 __idx에서 __sz를 뺀 비교 플래그를 만듭니다. sbb mask,mask는 carry가 있으면 모든 비트1,없으면0을 만듭니다. 즉 unsigned index<size에 대응하는 마스크이며 signed 음수 비교를 별도로 구현하지 않습니다."
+      "text": "인덱스 마스크는 idx+sz의 타입으로 두 값을 맞춥니다. cmp와 sbb는 음수 없는 비교에서 index<size이면 모든 비트 1, 아니면 0을 만듭니다. 부호 있는 음수 비교를 따로 구현하는 것은 아닙니다."
     },
     {
       "title": "마스크의 경계",
-      "text": "index==size이면 borrow가 없어0이고 index<size이면0에서 carry1을 빼 unsigned long의 모든 비트1입니다. 이 매크로는 배열을 읽거나 인덱스를 직접 수정하지 않습니다. 호출자가 반환 마스크를 사용해야 하며 단순히 호출하고 버리는 것으로 배열 접근을 안전하게 만들지 않습니다."
+      "text": "index==size면 빌림 플래그가 없어 마스크 0이고 작은 경우는 모든 비트 1입니다. 매크로 자체는 배열을 읽거나 인덱스를 고치지 않습니다. 반환 마스크를 실제 접근에 써야 하며 호출하고 버리기만 해서는 보호되지 않습니다."
     },
     {
       "title": "투기 장벽",
-      "text": "barrier_nospec는 기본 빈 문자열을 X86_FEATURE_LFENCE_RDTSC 조건에서 lfence로 대체하는 alternative 호출입니다. 항상 무조건 lfence를 출력하는 정의와 다릅니다. 이름이 비슷한 array_index_mask_nospec는 데이터 마스크를 생성하는 별도 방식입니다."
+      "text": "barrier_nospec는 기본 빈 명령을 기능 조건에 따라 lfence로 바꾸는 방식입니다. 언제나 무조건 lfence인 정의와 다릅니다. 데이터 마스크를 만드는 array_index_mask_nospec와도 별도 수단입니다."
     },
     {
       "title": "DMA와 SMP",
-      "text": "__dma_rmb와 __dma_wmb는 compiler barrier입니다. __smp_mb는 _ASM_SP로 선택한 스택 포인터 기준 -4 위치에 lock addl0을 수행하고 memory/cc를 선언합니다. __smp_rmb는 dma_rmb를 통해 계측·기본 정의와 연결되며 __smp_wmb는 barrier입니다. 일부 장벽이 compiler barrier라는 사실을 모든 x86 메모리 접근에 순서 문제가 없다는 주장으로 확장하지 않습니다."
+      "text": "DMA 읽기·쓰기 장벽은 여기서 컴파일러 장벽입니다. SMP 전체 장벽은 스택 위치의 잠금 붙은 덧셈이며 읽기 장벽은 dma_rmb, 쓰기 장벽은 컴파일러 장벽과 연결됩니다. 일부가 컴파일러 장벽이라고 모든 종류의 x86 메모리 접근에 순서 문제가 없다는 뜻은 아닙니다."
     },
     {
       "title": "저장 후 full 순서",
-      "text": "__smp_store_mb(var,value)는 xchg(&var,value)를 호출하고 이전 값을 void로 버립니다. var는 포인터 인자 자체가 아니라 주소를 취할 수 있는 저장 대상입니다. 이 파일은 xchg의 실제 크기별 구현을 담고 있지 않으므로 포함 의존 구현까지 별도로 확인해야 합니다."
+      "text": "저장 뒤 전체 순서를 맞추는 __smp_store_mb는 저장 대상 주소에 xchg를 하고 이전 값은 버립니다. var는 주소를 얻을 수 있는 실제 저장 대상입니다. 크기별 xchg 본문은 다른 구현에 있어 따로 확인해야 합니다."
     },
     {
       "title": "Release와 acquire",
-      "text": "__smp_store_release는 atomic type 검사, compiler barrier, WRITE_ONCE 순서입니다. __smp_load_acquire는 READ_ONCE 값을 저장하고 타입 검사와 compiler barrier를 거친 후 반환합니다. 이 본문에는 별도의 mfence가 없습니다. 하드웨어 메모리 모델과 compiler 제약을 조합하는 구현이며 READ_ONCE만으로 다른 아키텍처에서도 같은 순서를 얻는다는 뜻은 아닙니다."
+      "text": "release 저장은 타입 확인, 컴파일러 장벽, WRITE_ONCE 순서입니다. acquire 읽기는 READ_ONCE로 읽고 타입 확인과 장벽 뒤 값을 반환합니다. 여기에 별도 mfence는 없으며 x86 하드웨어 순서와 컴파일러 제약을 합칩니다. 다른 CPU에서도 READ_ONCE만 쓰면 같다는 뜻은 아닙니다."
     },
     {
       "title": "원자 연산 전후",
-      "text": "__smp_mb__before_atomic과 after_atomic은 빈 do-while입니다. 주석은 x86 원자 연산이 이미 필요한 직렬화 효과를 가진다는 근거를 제시합니다. 따라서 주변에 추가 명령을 넣지 않는다는 의미이지 임의의 atomic 관련 API가 전부 같은 순서 계약을 가진다는 일반 명제는 아닙니다."
+      "text": "원자 연산 앞뒤 추가 장벽 매크로는 빈 문장입니다. 해당 x86 원자 연산이 이미 필요한 순서를 제공한다는 전제라 추가 명령을 생략합니다. 이름에 atomic이 든 모든 API가 언제나 같은 약속이라는 일반화는 하지 않습니다."
     },
     {
       "title": "주소 공간 전환",
-      "text": "smp_mb__after_switch_mm도 빈 do-while입니다. 주석은 switch_mm의 CR3 쓰기가 full memory barrier를 제공한다고 설명합니다. 이 빈 매크로 자체는 CR3를 쓰거나 주소 공간을 전환하지 않습니다."
+      "text": "주소 공간 전환 뒤 장벽도 비어 있습니다. 실제 switch_mm의 CR3 쓰기가 전체 장벽을 제공한다는 근거입니다. 이 빈 매크로가 CR3를 쓰거나 주소 공간을 바꾸지는 않습니다."
     },
     {
       "title": "CS 연결",
-      "text": "전처리 구성, 기능 기반 명령 대체, 산술 플래그로 분기를 제거하는 마스크, 하드웨어 모델에 맞춘 compiler barrier, 교환 연산과 반환값 폐기를 학습합니다. 일반 RAM과 장치·특수 메모리의 순서 계약을 섞지 않고 각 API의 적용 범위를 함께 확인합니다."
+      "text": "설정 분기, 기능별 명령 대체, 플래그로 만드는 마스크와 교환 연산을 연결합니다. 일반 메모리와 장치·특수 메모리의 규칙을 섞지 말고 각 용도를 봅니다. 실제 모든 CPU와 메모리 종류를 시험한 설명은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 파일의 x86 __smp_store_release에 mfence가 직접 있는가?",
+      "prompt": "여기의 release 저장에 mfence가 직접 있나요?",
       "options": [
+        "없습니다. 타입 검사·컴파일러 장벽 뒤 WRITE_ONCE입니다.",
+        "있습니다. 매 저장 직전에 mfence입니다."
+      ],
+      "answer": 0,
+      "explanation": "x86의 순서 모델과 컴파일러 제약을 합친 방식입니다.",
+      "original_prompt": "이 파일의 x86 __smp_store_release에 mfence가 직접 있는가?",
+      "original_options": [
         "없다. 타입 검사와 compiler barrier 뒤 WRITE_ONCE이다",
         "있다. 모든 저장 직전에 mfence이다"
       ],
-      "answer": 0,
-      "explanation": "아키텍처 메모리 모델과 compiler barrier를 조합하는 구현입니다. 다른 아키텍처의 FENCE 기반 구현을 그대로 대입하면 틀립니다."
+      "original_explanation": "아키텍처 메모리 모델과 compiler barrier를 조합하는 구현입니다. 다른 아키텍처의 FENCE 기반 구현을 그대로 대입하면 틀립니다."
     },
     {
-      "prompt": "index==size일 때 nospec mask는?",
+      "prompt": "index==size의 마스크는 무엇인가요?",
       "options": [
+        "모든 비트 1입니다.",
+        "0입니다."
+      ],
+      "answer": 1,
+      "explanation": "음수 없는 비교의 빌림이 없어서 sbb 결과가 0입니다.",
+      "original_prompt": "index==size일 때 nospec mask는?",
+      "original_options": [
         "모든 비트1이다",
         "0이다"
       ],
-      "answer": 1,
-      "explanation": "cmp에서 unsigned borrow가 없으므로 sbb의 carry 입력은0입니다. 같은 레지스터에서 자신과0을 빼 결과0을 얻습니다."
+      "original_explanation": "cmp에서 unsigned borrow가 없으므로 sbb의 carry 입력은0입니다. 같은 레지스터에서 자신과0을 빼 결과0을 얻습니다."
     },
     {
-      "prompt": "32비트 mb의 XMM2 대체 문자열은?",
+      "prompt": "32비트 mb의 XMM2 대체 명령은 무엇인가요?",
       "options": [
+        "mfence입니다.",
+        "sfence입니다."
+      ],
+      "answer": 0,
+      "explanation": "mb·rmb·wmb는 각각 mfence·lfence·sfence입니다.",
+      "original_prompt": "32비트 mb의 XMM2 대체 문자열은?",
+      "original_options": [
         "mfence이다",
         "sfence이다"
       ],
-      "answer": 0,
-      "explanation": "mb/rmb/wmb의 대체 문자열은 각각 mfence/lfence/sfence입니다. 기본 문자열은 세 경우 모두 lock addl0입니다."
+      "original_explanation": "mb/rmb/wmb의 대체 문자열은 각각 mfence/lfence/sfence입니다. 기본 문자열은 세 경우 모두 lock addl0입니다."
     },
     {
-      "prompt": "__smp_store_mb는 xchg가 반환한 이전 값을 어떻게 하는가?",
+      "prompt": "store_mb는 xchg가 준 이전 값을 어떻게 하나요?",
       "options": [
+        "반드시 호출자에게 반환합니다.",
+        "void로 바꾸어 버립니다."
+      ],
+      "answer": 1,
+      "explanation": "목적은 저장과 순서이며 이전 값 전달이 아닙니다.",
+      "original_prompt": "__smp_store_mb는 xchg가 반환한 이전 값을 어떻게 하는가?",
+      "original_options": [
         "반드시 호출자에게 반환한다",
         "void 변환으로 버린다"
       ],
-      "answer": 1,
-      "explanation": "do-while 본문에서 (void)xchg(&var,value)를 수행합니다. 저장과 순서가 목적이며 이전 값은 API 결과로 노출하지 않습니다."
+      "original_explanation": "do-while 본문에서 (void)xchg(&var,value)를 수행합니다. 저장과 순서가 목적이며 이전 값은 API 결과로 노출하지 않습니다."
     },
     {
-      "prompt": "smp_mb__after_switch_mm의 빈 본문이 CR3를 쓰는가?",
+      "prompt": "빈 after_switch_mm이 CR3를 직접 쓰나요?",
       "options": [
+        "아니요. 앞선 전환의 순서 보장 때문에 추가 작업이 없습니다.",
+        "네. 빈 매크로가 CR3 쓰기로 바뀝니다."
+      ],
+      "answer": 0,
+      "explanation": "다른 연산이 제공한 장벽과 매크로 자체 동작을 나눠 봅니다.",
+      "original_prompt": "smp_mb__after_switch_mm의 빈 본문이 CR3를 쓰는가?",
+      "original_options": [
         "아니다. switch_mm의 기존 순서 보장을 전제로 추가 작업이 없다",
         "그렇다. 빈 매크로가 CR3 쓰기로 변환된다"
       ],
-      "answer": 0,
-      "explanation": "주석은 다른 연산이 제공한 장벽을 근거로 합니다. 이 매크로 자체가 주소 공간을 전환하는 것은 아닙니다."
+      "original_explanation": "주석은 다른 연산이 제공한 장벽을 근거로 합니다. 이 매크로 자체가 주소 공간을 전환하는 것은 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "index가 size보다 작을 때와 같을 때 만들어지는 마스크를 비교해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_BARRIER_H\n#define _ASM_X86_BARRIER_H\n\n#include <asm/alternative.h>\n#include <asm/nops.h>\n\n/*\n * Force strict CPU ordering.\n * And yes, this might be required on UP too when we're talking\n * to devices.\n */\n\n#ifdef CONFIG_X86_32\n#define mb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"mfence\", \\\n\t\t\t\t      X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#define rmb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"lfence\", \\\n\t\t\t\t       X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#define wmb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"sfence\", \\\n\t\t\t\t       X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#else\n#define __mb()\tasm volatile(\"mfence\":::\"memory\")\n#define __rmb()\tasm volatile(\"lfence\":::\"memory\")\n#define __wmb()\tasm volatile(\"sfence\" ::: \"memory\")\n#endif\n\n/**\n * array_index_mask_nospec() - generate a mask that is ~0UL when the\n * \tbounds check succeeds and 0 otherwise\n * @index: array element index\n * @size: number of elements in array\n *\n * Returns:\n *     0 - (index < size)\n */\n#define array_index_mask_nospec(idx,sz) ({\t\\\n\ttypeof((idx)+(sz)) __idx = (idx);\t\\\n\ttypeof(__idx) __sz = (sz);\t\t\\\n\tunsigned long __mask;\t\t\t\\\n\tasm volatile (\"cmp %1,%2; sbb %0,%0\"\t\\\n\t\t\t:\"=r\" (__mask)\t\t\\\n\t\t\t:ASM_INPUT_G (__sz),\t\\\n\t\t\t \"r\" (__idx)\t\t\\\n\t\t\t:\"cc\");\t\t\t\\\n\t__mask; })\n\n/* Prevent speculative execution past this barrier. */\n#define barrier_nospec() alternative(\"\", \"lfence\", X86_FEATURE_LFENCE_RDTSC)\n\n#define __dma_rmb()\tbarrier()\n#define __dma_wmb()\tbarrier()\n\n#define __smp_mb()\tasm volatile(\"lock; addl $0,-4(%%\" _ASM_SP \")\" ::: \"memory\", \"cc\")\n\n#define __smp_rmb()\tdma_rmb()\n#define __smp_wmb()\tbarrier()\n#define __smp_store_mb(var, value) do { (void)xchg(&var, value); } while (0)\n\n#define __smp_store_release(p, v)\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\t\t\\\n\tbarrier();\t\t\t\t\t\t\t\\\n\tWRITE_ONCE(*p, v);\t\t\t\t\t\t\\\n} while (0)\n\n#define __smp_load_acquire(p)\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\ttypeof(*p) ___p1 = READ_ONCE(*p);\t\t\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\t\t\\\n\tbarrier();\t\t\t\t\t\t\t\\\n\t___p1;\t\t\t\t\t\t\t\t\\\n})\n\n/* Atomic operations are already serializing on x86 */\n#define __smp_mb__before_atomic()\tdo { } while (0)\n#define __smp_mb__after_atomic()\tdo { } while (0)\n\n/* Writing to CR3 provides a full memory barrier in switch_mm(). */\n#define smp_mb__after_switch_mm()\tdo { } while (0)\n\n#include <asm-generic/barrier.h>\n\n#endif /* _ASM_X86_BARRIER_H */\n",
   "source_review": {
@@ -145,5 +171,182 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/barrier.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-50a2215b42f1182f",
+    "path": "arch/x86/include/asm/barrier.h",
+    "title": "x86 장벽 전체: 잠금 명령·compiler barrier·투기 제한",
+    "area": "메모리 모델 · x86 명령 · 투기 실행 · 비교 플래그 · 조건부 패치",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "32비트 대체 명령부터 nospec mask와 acquire/release까지 각 정의를 비교합니다.",
+    "guide": [
+      "x86에서도 full ordering, compiler ordering, 투기 실행 제한은 동일한 기능이 아닙니다.",
+      "공통 barrier.h의 기본값이 이 아키텍처 정의와 결합되는 과정을 읽습니다. 실제 CPU 실행 및 모든 메모리 타입의 검증은 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구조",
+        "text": "GPL-2.0, include guard, alternative.h와 nops.h 포함, 기본 장벽, nospec mask, DMA/SMP 장벽, acquire/release, 원자 연산·주소 공간 전환 특례 뒤 asm-generic/barrier.h를 포함합니다. 장치 통신에는 UP에서도 엄격한 순서가 필요할 수 있다는 주석이 있습니다."
+      },
+      {
+        "title": "32비트 기본 장벽",
+        "text": "CONFIG_X86_32에서는 mb/rmb/wmb를 직접 정의합니다. ALTERNATIVE의 기본 문자열은 lock; addl $0,-4(%esp)이고 X86_FEATURE_XMM2 대체 문자열은 각각 mfence/lfence/sfence입니다. volatile asm은 memory와 cc clobber를 선언합니다. 별도의 C if문으로 매번 기능을 검사하는 형태가 아니며 실제 패치 메커니즘은 alternative 구현의 범위입니다."
+      },
+      {
+        "title": "64비트 쪽 정의",
+        "text": "CONFIG_X86_32가 아니면 __mb/__rmb/__wmb를 각각 mfence/lfence/sfence와 memory clobber로 정의합니다. 공개 이름이 아니라 내부 이름을 제공하므로 마지막 generic 헤더의 KCSAN 래퍼와 연결됩니다. 32비트 쪽과 공개 이름을 제공하는 방식부터 다릅니다."
+      },
+      {
+        "title": "인덱스 타입과 unsigned 비교",
+        "text": "array_index_mask_nospec는 typeof(idx+sz)로 __idx와 __sz 타입을 맞추고 unsigned long mask를 반환합니다. cmp %1,%2는 AT&T 피연산자 순서상 __idx에서 __sz를 뺀 비교 플래그를 만듭니다. sbb mask,mask는 carry가 있으면 모든 비트1,없으면0을 만듭니다. 즉 unsigned index<size에 대응하는 마스크이며 signed 음수 비교를 별도로 구현하지 않습니다."
+      },
+      {
+        "title": "마스크의 경계",
+        "text": "index==size이면 borrow가 없어0이고 index<size이면0에서 carry1을 빼 unsigned long의 모든 비트1입니다. 이 매크로는 배열을 읽거나 인덱스를 직접 수정하지 않습니다. 호출자가 반환 마스크를 사용해야 하며 단순히 호출하고 버리는 것으로 배열 접근을 안전하게 만들지 않습니다."
+      },
+      {
+        "title": "투기 장벽",
+        "text": "barrier_nospec는 기본 빈 문자열을 X86_FEATURE_LFENCE_RDTSC 조건에서 lfence로 대체하는 alternative 호출입니다. 항상 무조건 lfence를 출력하는 정의와 다릅니다. 이름이 비슷한 array_index_mask_nospec는 데이터 마스크를 생성하는 별도 방식입니다."
+      },
+      {
+        "title": "DMA와 SMP",
+        "text": "__dma_rmb와 __dma_wmb는 compiler barrier입니다. __smp_mb는 _ASM_SP로 선택한 스택 포인터 기준 -4 위치에 lock addl0을 수행하고 memory/cc를 선언합니다. __smp_rmb는 dma_rmb를 통해 계측·기본 정의와 연결되며 __smp_wmb는 barrier입니다. 일부 장벽이 compiler barrier라는 사실을 모든 x86 메모리 접근에 순서 문제가 없다는 주장으로 확장하지 않습니다."
+      },
+      {
+        "title": "저장 후 full 순서",
+        "text": "__smp_store_mb(var,value)는 xchg(&var,value)를 호출하고 이전 값을 void로 버립니다. var는 포인터 인자 자체가 아니라 주소를 취할 수 있는 저장 대상입니다. 이 파일은 xchg의 실제 크기별 구현을 담고 있지 않으므로 포함 의존 구현까지 별도로 확인해야 합니다."
+      },
+      {
+        "title": "Release와 acquire",
+        "text": "__smp_store_release는 atomic type 검사, compiler barrier, WRITE_ONCE 순서입니다. __smp_load_acquire는 READ_ONCE 값을 저장하고 타입 검사와 compiler barrier를 거친 후 반환합니다. 이 본문에는 별도의 mfence가 없습니다. 하드웨어 메모리 모델과 compiler 제약을 조합하는 구현이며 READ_ONCE만으로 다른 아키텍처에서도 같은 순서를 얻는다는 뜻은 아닙니다."
+      },
+      {
+        "title": "원자 연산 전후",
+        "text": "__smp_mb__before_atomic과 after_atomic은 빈 do-while입니다. 주석은 x86 원자 연산이 이미 필요한 직렬화 효과를 가진다는 근거를 제시합니다. 따라서 주변에 추가 명령을 넣지 않는다는 의미이지 임의의 atomic 관련 API가 전부 같은 순서 계약을 가진다는 일반 명제는 아닙니다."
+      },
+      {
+        "title": "주소 공간 전환",
+        "text": "smp_mb__after_switch_mm도 빈 do-while입니다. 주석은 switch_mm의 CR3 쓰기가 full memory barrier를 제공한다고 설명합니다. 이 빈 매크로 자체는 CR3를 쓰거나 주소 공간을 전환하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "전처리 구성, 기능 기반 명령 대체, 산술 플래그로 분기를 제거하는 마스크, 하드웨어 모델에 맞춘 compiler barrier, 교환 연산과 반환값 폐기를 학습합니다. 일반 RAM과 장치·특수 메모리의 순서 계약을 섞지 않고 각 API의 적용 범위를 함께 확인합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 파일의 x86 __smp_store_release에 mfence가 직접 있는가?",
+        "options": [
+          "없다. 타입 검사와 compiler barrier 뒤 WRITE_ONCE이다",
+          "있다. 모든 저장 직전에 mfence이다"
+        ],
+        "answer": 0,
+        "explanation": "아키텍처 메모리 모델과 compiler barrier를 조합하는 구현입니다. 다른 아키텍처의 FENCE 기반 구현을 그대로 대입하면 틀립니다."
+      },
+      {
+        "prompt": "index==size일 때 nospec mask는?",
+        "options": [
+          "모든 비트1이다",
+          "0이다"
+        ],
+        "answer": 1,
+        "explanation": "cmp에서 unsigned borrow가 없으므로 sbb의 carry 입력은0입니다. 같은 레지스터에서 자신과0을 빼 결과0을 얻습니다."
+      },
+      {
+        "prompt": "32비트 mb의 XMM2 대체 문자열은?",
+        "options": [
+          "mfence이다",
+          "sfence이다"
+        ],
+        "answer": 0,
+        "explanation": "mb/rmb/wmb의 대체 문자열은 각각 mfence/lfence/sfence입니다. 기본 문자열은 세 경우 모두 lock addl0입니다."
+      },
+      {
+        "prompt": "__smp_store_mb는 xchg가 반환한 이전 값을 어떻게 하는가?",
+        "options": [
+          "반드시 호출자에게 반환한다",
+          "void 변환으로 버린다"
+        ],
+        "answer": 1,
+        "explanation": "do-while 본문에서 (void)xchg(&var,value)를 수행합니다. 저장과 순서가 목적이며 이전 값은 API 결과로 노출하지 않습니다."
+      },
+      {
+        "prompt": "smp_mb__after_switch_mm의 빈 본문이 CR3를 쓰는가?",
+        "options": [
+          "아니다. switch_mm의 기존 순서 보장을 전제로 추가 작업이 없다",
+          "그렇다. 빈 매크로가 CR3 쓰기로 변환된다"
+        ],
+        "answer": 0,
+        "explanation": "주석은 다른 연산이 제공한 장벽을 근거로 합니다. 이 매크로 자체가 주소 공간을 전환하는 것은 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_BARRIER_H\n#define _ASM_X86_BARRIER_H\n\n#include <asm/alternative.h>\n#include <asm/nops.h>\n\n/*\n * Force strict CPU ordering.\n * And yes, this might be required on UP too when we're talking\n * to devices.\n */\n\n#ifdef CONFIG_X86_32\n#define mb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"mfence\", \\\n\t\t\t\t      X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#define rmb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"lfence\", \\\n\t\t\t\t       X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#define wmb() asm volatile(ALTERNATIVE(\"lock; addl $0,-4(%%esp)\", \"sfence\", \\\n\t\t\t\t       X86_FEATURE_XMM2) ::: \"memory\", \"cc\")\n#else\n#define __mb()\tasm volatile(\"mfence\":::\"memory\")\n#define __rmb()\tasm volatile(\"lfence\":::\"memory\")\n#define __wmb()\tasm volatile(\"sfence\" ::: \"memory\")\n#endif\n\n/**\n * array_index_mask_nospec() - generate a mask that is ~0UL when the\n * \tbounds check succeeds and 0 otherwise\n * @index: array element index\n * @size: number of elements in array\n *\n * Returns:\n *     0 - (index < size)\n */\n#define array_index_mask_nospec(idx,sz) ({\t\\\n\ttypeof((idx)+(sz)) __idx = (idx);\t\\\n\ttypeof(__idx) __sz = (sz);\t\t\\\n\tunsigned long __mask;\t\t\t\\\n\tasm volatile (\"cmp %1,%2; sbb %0,%0\"\t\\\n\t\t\t:\"=r\" (__mask)\t\t\\\n\t\t\t:ASM_INPUT_G (__sz),\t\\\n\t\t\t \"r\" (__idx)\t\t\\\n\t\t\t:\"cc\");\t\t\t\\\n\t__mask; })\n\n/* Prevent speculative execution past this barrier. */\n#define barrier_nospec() alternative(\"\", \"lfence\", X86_FEATURE_LFENCE_RDTSC)\n\n#define __dma_rmb()\tbarrier()\n#define __dma_wmb()\tbarrier()\n\n#define __smp_mb()\tasm volatile(\"lock; addl $0,-4(%%\" _ASM_SP \")\" ::: \"memory\", \"cc\")\n\n#define __smp_rmb()\tdma_rmb()\n#define __smp_wmb()\tbarrier()\n#define __smp_store_mb(var, value) do { (void)xchg(&var, value); } while (0)\n\n#define __smp_store_release(p, v)\t\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\t\t\\\n\tbarrier();\t\t\t\t\t\t\t\\\n\tWRITE_ONCE(*p, v);\t\t\t\t\t\t\\\n} while (0)\n\n#define __smp_load_acquire(p)\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\ttypeof(*p) ___p1 = READ_ONCE(*p);\t\t\t\t\\\n\tcompiletime_assert_atomic_type(*p);\t\t\t\t\\\n\tbarrier();\t\t\t\t\t\t\t\\\n\t___p1;\t\t\t\t\t\t\t\t\\\n})\n\n/* Atomic operations are already serializing on x86 */\n#define __smp_mb__before_atomic()\tdo { } while (0)\n#define __smp_mb__after_atomic()\tdo { } while (0)\n\n/* Writing to CR3 provides a full memory barrier in switch_mm(). */\n#define smp_mb__after_switch_mm()\tdo { } while (0)\n\n#include <asm-generic/barrier.h>\n\n#endif /* _ASM_X86_BARRIER_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "90a2ef1a5d4801f97d3f3d27af19e9abb5a9d08917f6b34dd5975ca6c8fb7970",
+      "scope": "whole-file",
+      "line_count": 83,
+      "authoring_source": "course/file_units/x86_barriers_and_nops.py",
+      "sections": [
+        "전체 구조",
+        "32비트 기본 장벽",
+        "64비트 쪽 정의",
+        "인덱스 타입과 unsigned 비교",
+        "마스크의 경계",
+        "투기 장벽",
+        "DMA와 SMP",
+        "저장 후 full 순서",
+        "Release와 acquire",
+        "원자 연산 전후",
+        "주소 공간 전환",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/barrier.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "줄 세우기에는 여러 규칙이 있습니다. 컴파일러의 순서 바꾸기를 막는 것, CPU의 메모리 순서를 맞추는 것, 아직 확정되지 않은 길을 미리 실행하지 못하게 하는 것은 서로 다른 일입니다.",
+    "meaning": "x86의 컴파일러 장벽·메모리 장벽·추측 실행 제한을 함수별로 구별합니다.",
+    "exercise": "index가 size보다 작을 때와 같을 때 만들어지는 마스크를 비교해 보세요."
+  },
+  "goal": "x86의 컴파일러 장벽·메모리 장벽·추측 실행 제한을 함수별로 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "index가 size보다 작을 때와 같을 때 만들어지는 마스크를 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "986823833d26ca22ec6063bf1ee607cd1f4919568aa46c3f07a0a6e4ae66d878",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,88 +5,108 @@
   "area": "예약 메모리 · DMA · 장치 트리 · C 자료구조 · 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 구조체,초기화 함수 타입,선언 매크로와 모든 구성별 API를 분석합니다.",
+  "intro": "reserved_mem은 예약된 물리 메모리 구간을 설명해요. 이 헤더의 함수 선언만으로 메모리 할당이나 주소 연결이 실제 실행되지는 않아요.",
   "guide": [
-    "물리 메모리 구간의 기술과 개별 장치에 그 구간을 연결하는 동작은 별도 계층입니다.",
-    "callback 테이블,opaque private data,선택 인덱스와 오류 반환을 학습합니다."
+    "물리 주소는 실제 메모리 위치를 나타내는 주소예요. base는 시작, size는 크기를 설명해요.",
+    "콜백은 나중에 실행할 함수 주소예요. 구간 자체의 초기화와 개별 장치 연결에는 서로 다른 콜백 형식을 사용해요.",
+    "DMA는 장치가 메모리와 직접 자료를 주고받는 방식이에요. 첫 구간 wrapper는 memory-region 전체가 아니라 첫 항목을 선택해요."
   ],
   "deep_dive": [
     {
-      "title": "헤더와 예약 구간",
-      "text": "GPL-2.0 guard에서 device.h와 of.h를 포함합니다. reserved_mem은 name,fdt_node,ops,phys_addr_t base와 size,void *priv를 보관합니다. base와 size는 물리 주소·크기 표현이며 priv는 구현별 문맥 포인터입니다. size가 있다는 이유로 구조체 뒤에 그 크기의 메모리가 자동 할당되는 것은 아닙니다. of_phandle_args와 reserved_mem_ops는 전방 선언됩니다."
+      "title": "예약 구간의 설명 자료",
+      "text": "헤더 guard와 device.h, of.h 포함 뒤에 reserved_mem을 정의해요. name, fdt_node, ops, 물리 시작 주소 base, 크기 size, 구현별 추가 문맥 주소 priv를 담아요. size=4096을 적는다고 구조체 뒤에 4096바이트가 저절로 생기지는 않아요. 자료 설명과 메모리 할당은 다른 일이에요. of_phandle_args와 reserved_mem_ops는 타입 존재를 알리는 전방 선언이에요."
     },
     {
-      "title": "장치 callback과 초기화 타입",
-      "text": "reserved_mem_ops는 rmem과 device를 받는 int device_init과 void device_release 함수 포인터를 갖습니다. reservedmem_of_init_fn은 rmem 하나를 받고 int를 반환하는 별도 함수 포인터 타입입니다. 예약 구간 자체의 초기화 callback과 장치별 연결 callback의 시그니처를 구분해야 합니다."
+      "title": "두 종류의 초기화 콜백",
+      "text": "reserved_mem_ops의 device_init은 구간 rmem과 장치 dev를 받아 정수 결과를 반환해요. device_release도 둘을 받지만 반환값은 없어요. 별도 타입 reservedmem_of_init_fn은 구간 하나만 받아 정수를 반환해요. 구간을 준비하는 함수와 어떤 장치에 연결하는 함수를 같은 인자 형식으로 취급하면 안 돼요."
     },
     {
       "title": "구간 선언 매크로",
-      "text": "CONFIG_OF_RESERVED_MEM이면 RESERVEDMEM_OF_DECLARE는 _OF_DECLARE에 reservedmem,name,compat,init과 reservedmem_of_init_fn을 전달합니다. 비활성일 때도 매크로를 단순 삭제하지 않고 같은 인수로 _OF_DECLARE_STUB를 사용합니다. 실제 링커 section이나 stub 확장 내용은 of.h에서 정의되므로 이 파일의 전달 코드만으로 상세 배치를 단정하지 않습니다."
+      "text": "CONFIG_OF_RESERVED_MEM이 있으면 RESERVEDMEM_OF_DECLARE가 _OF_DECLARE에 이름·호환 문자열·초기화 함수와 타입을 넘겨요. 없을 때도 단순히 삭제되는 것이 아니라 _OF_DECLARE_STUB에 같은 정보를 넘겨요. 실제 링커 영역 배치나 대체 확장은 of.h에서 확인해야 해요. 이 파일은 그 정보를 전달하는 부분이에요."
     },
     {
-      "title": "활성 API",
-      "text": "init_by_idx는 device,node,정수 idx를 받고 init_by_name은 device,node,문자열 name을 받으며 둘 다 int입니다. device_release는 device만 받는 void 선언입니다. lookup은 device_node에서 reserved_mem *를 반환합니다. 이 헤더에는 검색 알고리즘,할당 또는 매핑 실행 본문이 없고 구현은 외부에 있습니다."
+      "title": "지원할 때의 함수 약속",
+      "text": "init_by_idx는 장치·노드·번호를, init_by_name은 장치·노드·이름을 받아 정수 결과를 돌려줘요. release는 장치만 받는 void 함수이고 lookup은 노드에 대응하는 reserved_mem 주소를 찾아요. 선언에는 검색 방법이나 실제 할당·매핑 본문이 없어요. 매핑은 장치가 쓸 주소 관계를 연결하는 작업이에요."
     },
     {
-      "title": "비지원 구성",
-      "text": "비활성 inline 두 초기화 함수는 -ENOSYS를 반환합니다. release는 빈 함수,lookup은 NULL입니다. 앞서 다른 OF helper에서 보았던 -ENODEV와 같다고 추정하면 안 됩니다. 지원이 없는 상태를 성공값 0으로 숨기는 초기화 stub도 아닙니다."
+      "title": "지원하지 않을 때",
+      "text": "기능을 빌드하지 않으면 두 초기화 함수는 -ENOSYS를 반환해 지원하지 않는 작업임을 알려요. release는 빈 동작이고 lookup은 NULL이에요. 다른 OF 함수의 -ENODEV와 똑같다고 바꾸어 읽으면 안 돼요. 초기화가 아무 일도 하지 않고 성공 0을 반환하는 구조도 아니에요."
     },
     {
-      "title": "첫 구간 wrapper",
-      "text": "of_reserved_mem_device_init은 CONFIG 분기 밖의 공통 inline입니다. dev,dev->of_node,0을 init_by_idx로 넘깁니다. 문서는 장치 노드의 memory-region 첫 항목에 따라 DMA-mapping operations를 연결한다고 설명합니다. 모든 memory-region 항목을 반복하는 함수가 아니며 dev=NULL을 별도로 방어하지 않습니다."
+      "title": "첫 번째 구간 연결",
+      "text": "공통 of_reserved_mem_device_init은 dev, dev->of_node, 0을 init_by_idx에 넘겨요. 장치 트리 memory-region의 첫 항목에 맞춰 DMA-mapping 동작을 연결하는 약속이에요. 인덱스는 0부터 세므로 0이 첫 항목이에요. 모든 항목을 순회하지 않으며 dev가 NULL인지 따로 검사하지도 않아요."
     },
     {
-      "title": "범위와 한계",
-      "text": "구조체,callback typedef,선언 매크로의 두 구성,네 API와 공통 wrapper를 모두 대조했습니다. 비활성에서도 wrapper는 같은 호출을 하므로 하위 stub의 -ENOSYS가 전달됩니다. 실제 메모리 예약·DMA 접근·장치 해제 실험은 하지 않았습니다."
+      "title": "전체 확인과 한계",
+      "text": "자료구조, 콜백 타입, 매크로의 두 설정, 네 API와 공통 wrapper를 읽었어요. 기능이 없을 때도 wrapper는 같은 하위 함수를 부르므로 -ENOSYS를 그대로 받게 돼요. 실제 메모리 예약, DMA 접근, 장치 해제 실험은 실행하지 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "공통 device_init wrapper가 선택하는 구간 인덱스는?",
+      "prompt": "공통 device_init wrapper는 어느 구간 번호를 선택하나요?",
       "options": [
+        "0, 즉 첫 구간이에요.",
+        "모든 번호를 자동으로 돌아요."
+      ],
+      "answer": 0,
+      "explanation": "호출 인자가 0으로 고정돼 있고 반복문은 없어요.",
+      "original_prompt": "공통 device_init wrapper가 선택하는 구간 인덱스는?",
+      "original_options": [
         "0",
         "모든 인덱스를 자동 순회한다"
       ],
-      "answer": 0,
-      "explanation": "호출 인수에 0이 고정되어 있습니다. memory-region 전체를 반복하는 코드가 아닙니다."
+      "original_explanation": "호출 인수에 0이 고정되어 있습니다. memory-region 전체를 반복하는 코드가 아닙니다."
     },
     {
-      "prompt": "예약 구간 초기화와 장치 초기화 callback의 인수가 같은가?",
+      "prompt": "구간 초기화와 장치 연결 초기화의 인자는 같은가요?",
       "options": [
+        "네. 둘 다 아무 인자도 없어요.",
+        "아니요. 앞은 rmem 하나, 뒤는 rmem과 device를 받아요."
+      ],
+      "answer": 1,
+      "explanation": "함수 포인터 타입을 각각 읽어야 해요.",
+      "original_prompt": "예약 구간 초기화와 장치 초기화 callback의 인수가 같은가?",
+      "original_options": [
         "그렇다. 둘 다 void 인수다",
         "아니다. 전자는 rmem 하나,후자는 rmem과 device다"
       ],
-      "answer": 1,
-      "explanation": "reservedmem_of_init_fn과 reserved_mem_ops.device_init의 선언을 구분합니다."
+      "original_explanation": "reservedmem_of_init_fn과 reserved_mem_ops.device_init의 선언을 구분합니다."
     },
     {
-      "prompt": "OF_RESERVED_MEM 비활성에서 init_by_name의 반환은?",
+      "prompt": "예약 메모리 기능이 없을 때 init_by_name은 무엇을 반환하나요?",
       "options": [
+        "-ENOSYS예요.",
+        "언제나 성공 0이에요."
+      ],
+      "answer": 0,
+      "explanation": "이 대체 함수는 지원 부재 오류를 반환해요.",
+      "original_prompt": "OF_RESERVED_MEM 비활성에서 init_by_name의 반환은?",
+      "original_options": [
         "-ENOSYS",
         "항상 0"
       ],
-      "answer": 0,
-      "explanation": "해당 stub이 지원 부재 오류를 반환합니다. 다른 OF API의 -ENODEV와 혼동하지 않습니다."
+      "original_explanation": "해당 stub이 지원 부재 오류를 반환합니다. 다른 OF API의 -ENODEV와 혼동하지 않습니다."
     },
     {
-      "prompt": "reserved_mem의 size 필드만 설정하면 메모리가 할당되는가?",
+      "prompt": "size 필드에 값을 넣으면 실제 메모리도 할당되나요?",
       "options": [
+        "네. 대입만으로 DMA 메모리를 얻어요.",
+        "아니요. 구간의 크기를 설명하는 값이에요."
+      ],
+      "answer": 1,
+      "explanation": "구조체 필드 쓰기와 실행되는 할당 함수는 달라요.",
+      "original_prompt": "reserved_mem의 size 필드만 설정하면 메모리가 할당되는가?",
+      "original_options": [
         "그렇다. 구조체 대입이 자동으로 DMA 메모리를 할당한다",
         "아니다. 구간을 기술하는 필드다"
       ],
-      "answer": 1,
-      "explanation": "자료 표현과 실행 동작을 구분해야 합니다. 헤더에 allocation 본문은 없습니다."
+      "original_explanation": "자료 표현과 실행 동작을 구분해야 합니다. 헤더에 allocation 본문은 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "기능이 켜진 경우와 꺼진 경우에 첫 구간 wrapper가 어느 함수를 어떤 인자로 부르는지 써 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __OF_RESERVED_MEM_H\n#define __OF_RESERVED_MEM_H\n\n#include <linux/device.h>\n#include <linux/of.h>\n\nstruct of_phandle_args;\nstruct reserved_mem_ops;\n\nstruct reserved_mem {\n\tconst char\t\t\t*name;\n\tunsigned long\t\t\tfdt_node;\n\tconst struct reserved_mem_ops\t*ops;\n\tphys_addr_t\t\t\tbase;\n\tphys_addr_t\t\t\tsize;\n\tvoid\t\t\t\t*priv;\n};\n\nstruct reserved_mem_ops {\n\tint\t(*device_init)(struct reserved_mem *rmem,\n\t\t\t       struct device *dev);\n\tvoid\t(*device_release)(struct reserved_mem *rmem,\n\t\t\t\t  struct device *dev);\n};\n\ntypedef int (*reservedmem_of_init_fn)(struct reserved_mem *rmem);\n\n#ifdef CONFIG_OF_RESERVED_MEM\n\n#define RESERVEDMEM_OF_DECLARE(name, compat, init)\t\t\t\\\n\t_OF_DECLARE(reservedmem, name, compat, init, reservedmem_of_init_fn)\n\nint of_reserved_mem_device_init_by_idx(struct device *dev,\n\t\t\t\t       struct device_node *np, int idx);\nint of_reserved_mem_device_init_by_name(struct device *dev,\n\t\t\t\t\tstruct device_node *np,\n\t\t\t\t\tconst char *name);\nvoid of_reserved_mem_device_release(struct device *dev);\n\nstruct reserved_mem *of_reserved_mem_lookup(struct device_node *np);\n#else\n\n#define RESERVEDMEM_OF_DECLARE(name, compat, init)\t\t\t\\\n\t_OF_DECLARE_STUB(reservedmem, name, compat, init, reservedmem_of_init_fn)\n\nstatic inline int of_reserved_mem_device_init_by_idx(struct device *dev,\n\t\t\t\t\tstruct device_node *np, int idx)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline int of_reserved_mem_device_init_by_name(struct device *dev,\n\t\t\t\t\t\t      struct device_node *np,\n\t\t\t\t\t\t      const char *name)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline void of_reserved_mem_device_release(struct device *pdev) { }\n\nstatic inline struct reserved_mem *of_reserved_mem_lookup(struct device_node *np)\n{\n\treturn NULL;\n}\n#endif\n\n/**\n * of_reserved_mem_device_init() - assign reserved memory region to given device\n * @dev:\tPointer to the device to configure\n *\n * This function assigns respective DMA-mapping operations based on the first\n * reserved memory region specified by 'memory-region' property in device tree\n * node of the given device.\n *\n * Returns error code or zero on success.\n */\nstatic inline int of_reserved_mem_device_init(struct device *dev)\n{\n\treturn of_reserved_mem_device_init_by_idx(dev, dev->of_node, 0);\n}\n\n#endif /* __OF_RESERVED_MEM_H */\n",
   "source_review": {
@@ -111,5 +131,148 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_reserved_mem.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f6f0aefc479cb1b1",
+    "path": "include/linux/of_reserved_mem.h",
+    "title": "OF 예약 메모리 계약: 물리 구간과 장치 연결 callback",
+    "area": "예약 메모리 · DMA · 장치 트리 · C 자료구조 · 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 구조체,초기화 함수 타입,선언 매크로와 모든 구성별 API를 분석합니다.",
+    "guide": [
+      "물리 메모리 구간의 기술과 개별 장치에 그 구간을 연결하는 동작은 별도 계층입니다.",
+      "callback 테이블,opaque private data,선택 인덱스와 오류 반환을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더와 예약 구간",
+        "text": "GPL-2.0 guard에서 device.h와 of.h를 포함합니다. reserved_mem은 name,fdt_node,ops,phys_addr_t base와 size,void *priv를 보관합니다. base와 size는 물리 주소·크기 표현이며 priv는 구현별 문맥 포인터입니다. size가 있다는 이유로 구조체 뒤에 그 크기의 메모리가 자동 할당되는 것은 아닙니다. of_phandle_args와 reserved_mem_ops는 전방 선언됩니다."
+      },
+      {
+        "title": "장치 callback과 초기화 타입",
+        "text": "reserved_mem_ops는 rmem과 device를 받는 int device_init과 void device_release 함수 포인터를 갖습니다. reservedmem_of_init_fn은 rmem 하나를 받고 int를 반환하는 별도 함수 포인터 타입입니다. 예약 구간 자체의 초기화 callback과 장치별 연결 callback의 시그니처를 구분해야 합니다."
+      },
+      {
+        "title": "구간 선언 매크로",
+        "text": "CONFIG_OF_RESERVED_MEM이면 RESERVEDMEM_OF_DECLARE는 _OF_DECLARE에 reservedmem,name,compat,init과 reservedmem_of_init_fn을 전달합니다. 비활성일 때도 매크로를 단순 삭제하지 않고 같은 인수로 _OF_DECLARE_STUB를 사용합니다. 실제 링커 section이나 stub 확장 내용은 of.h에서 정의되므로 이 파일의 전달 코드만으로 상세 배치를 단정하지 않습니다."
+      },
+      {
+        "title": "활성 API",
+        "text": "init_by_idx는 device,node,정수 idx를 받고 init_by_name은 device,node,문자열 name을 받으며 둘 다 int입니다. device_release는 device만 받는 void 선언입니다. lookup은 device_node에서 reserved_mem *를 반환합니다. 이 헤더에는 검색 알고리즘,할당 또는 매핑 실행 본문이 없고 구현은 외부에 있습니다."
+      },
+      {
+        "title": "비지원 구성",
+        "text": "비활성 inline 두 초기화 함수는 -ENOSYS를 반환합니다. release는 빈 함수,lookup은 NULL입니다. 앞서 다른 OF helper에서 보았던 -ENODEV와 같다고 추정하면 안 됩니다. 지원이 없는 상태를 성공값 0으로 숨기는 초기화 stub도 아닙니다."
+      },
+      {
+        "title": "첫 구간 wrapper",
+        "text": "of_reserved_mem_device_init은 CONFIG 분기 밖의 공통 inline입니다. dev,dev->of_node,0을 init_by_idx로 넘깁니다. 문서는 장치 노드의 memory-region 첫 항목에 따라 DMA-mapping operations를 연결한다고 설명합니다. 모든 memory-region 항목을 반복하는 함수가 아니며 dev=NULL을 별도로 방어하지 않습니다."
+      },
+      {
+        "title": "범위와 한계",
+        "text": "구조체,callback typedef,선언 매크로의 두 구성,네 API와 공통 wrapper를 모두 대조했습니다. 비활성에서도 wrapper는 같은 호출을 하므로 하위 stub의 -ENOSYS가 전달됩니다. 실제 메모리 예약·DMA 접근·장치 해제 실험은 하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "공통 device_init wrapper가 선택하는 구간 인덱스는?",
+        "options": [
+          "0",
+          "모든 인덱스를 자동 순회한다"
+        ],
+        "answer": 0,
+        "explanation": "호출 인수에 0이 고정되어 있습니다. memory-region 전체를 반복하는 코드가 아닙니다."
+      },
+      {
+        "prompt": "예약 구간 초기화와 장치 초기화 callback의 인수가 같은가?",
+        "options": [
+          "그렇다. 둘 다 void 인수다",
+          "아니다. 전자는 rmem 하나,후자는 rmem과 device다"
+        ],
+        "answer": 1,
+        "explanation": "reservedmem_of_init_fn과 reserved_mem_ops.device_init의 선언을 구분합니다."
+      },
+      {
+        "prompt": "OF_RESERVED_MEM 비활성에서 init_by_name의 반환은?",
+        "options": [
+          "-ENOSYS",
+          "항상 0"
+        ],
+        "answer": 0,
+        "explanation": "해당 stub이 지원 부재 오류를 반환합니다. 다른 OF API의 -ENODEV와 혼동하지 않습니다."
+      },
+      {
+        "prompt": "reserved_mem의 size 필드만 설정하면 메모리가 할당되는가?",
+        "options": [
+          "그렇다. 구조체 대입이 자동으로 DMA 메모리를 할당한다",
+          "아니다. 구간을 기술하는 필드다"
+        ],
+        "answer": 1,
+        "explanation": "자료 표현과 실행 동작을 구분해야 합니다. 헤더에 allocation 본문은 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __OF_RESERVED_MEM_H\n#define __OF_RESERVED_MEM_H\n\n#include <linux/device.h>\n#include <linux/of.h>\n\nstruct of_phandle_args;\nstruct reserved_mem_ops;\n\nstruct reserved_mem {\n\tconst char\t\t\t*name;\n\tunsigned long\t\t\tfdt_node;\n\tconst struct reserved_mem_ops\t*ops;\n\tphys_addr_t\t\t\tbase;\n\tphys_addr_t\t\t\tsize;\n\tvoid\t\t\t\t*priv;\n};\n\nstruct reserved_mem_ops {\n\tint\t(*device_init)(struct reserved_mem *rmem,\n\t\t\t       struct device *dev);\n\tvoid\t(*device_release)(struct reserved_mem *rmem,\n\t\t\t\t  struct device *dev);\n};\n\ntypedef int (*reservedmem_of_init_fn)(struct reserved_mem *rmem);\n\n#ifdef CONFIG_OF_RESERVED_MEM\n\n#define RESERVEDMEM_OF_DECLARE(name, compat, init)\t\t\t\\\n\t_OF_DECLARE(reservedmem, name, compat, init, reservedmem_of_init_fn)\n\nint of_reserved_mem_device_init_by_idx(struct device *dev,\n\t\t\t\t       struct device_node *np, int idx);\nint of_reserved_mem_device_init_by_name(struct device *dev,\n\t\t\t\t\tstruct device_node *np,\n\t\t\t\t\tconst char *name);\nvoid of_reserved_mem_device_release(struct device *dev);\n\nstruct reserved_mem *of_reserved_mem_lookup(struct device_node *np);\n#else\n\n#define RESERVEDMEM_OF_DECLARE(name, compat, init)\t\t\t\\\n\t_OF_DECLARE_STUB(reservedmem, name, compat, init, reservedmem_of_init_fn)\n\nstatic inline int of_reserved_mem_device_init_by_idx(struct device *dev,\n\t\t\t\t\tstruct device_node *np, int idx)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline int of_reserved_mem_device_init_by_name(struct device *dev,\n\t\t\t\t\t\t      struct device_node *np,\n\t\t\t\t\t\t      const char *name)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline void of_reserved_mem_device_release(struct device *pdev) { }\n\nstatic inline struct reserved_mem *of_reserved_mem_lookup(struct device_node *np)\n{\n\treturn NULL;\n}\n#endif\n\n/**\n * of_reserved_mem_device_init() - assign reserved memory region to given device\n * @dev:\tPointer to the device to configure\n *\n * This function assigns respective DMA-mapping operations based on the first\n * reserved memory region specified by 'memory-region' property in device tree\n * node of the given device.\n *\n * Returns error code or zero on success.\n */\nstatic inline int of_reserved_mem_device_init(struct device *dev)\n{\n\treturn of_reserved_mem_device_init_by_idx(dev, dev->of_node, 0);\n}\n\n#endif /* __OF_RESERVED_MEM_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "cf9c1b655cea9728de682407ab56582bb39a039efdd02974a72bddd07113d820",
+      "scope": "whole-file",
+      "line_count": 83,
+      "authoring_source": "course/file_units/of_reserved_interface.py",
+      "sections": [
+        "헤더와 예약 구간",
+        "장치 callback과 초기화 타입",
+        "구간 선언 매크로",
+        "활성 API",
+        "비지원 구성",
+        "첫 구간 wrapper",
+        "범위와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_reserved_mem.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "운동장 일부를 특정 반이 쓰도록 표시하는 것과 그 반에 사용 규칙을 알려 주는 것은 별개예요. 예약 메모리도 구간 설명과 장치 연결이 나뉘어요.",
+    "meaning": "reserved_mem은 예약된 물리 메모리 구간을 설명해요. 이 헤더의 함수 선언만으로 메모리 할당이나 주소 연결이 실제 실행되지는 않아요.",
+    "exercise": "기능이 켜진 경우와 꺼진 경우에 첫 구간 wrapper가 어느 함수를 어떤 인자로 부르는지 써 보세요."
+  },
+  "goal": "reserved_mem은 예약된 물리 메모리 구간을 설명해요. 이 헤더의 함수 선언만으로 메모리 할당이나 주소 연결이 실제 실행되지는 않아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "기능이 켜진 경우와 꺼진 경우에 첫 구간 wrapper가 어느 함수를 어떤 인자로 부르는지 써 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "cb6b0f43ef16528c9c83739acb13d62406182cdf93c7205d0837719b05c496c0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

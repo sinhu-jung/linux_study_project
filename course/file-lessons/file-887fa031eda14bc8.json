@@ -5,79 +5,93 @@
   "area": "시스템 호출 ABI · shared memory · namespace · 포인터 산술 · 페이지 크기",
   "track": "files",
   "kind": "kernel",
-  "intro": "난수 syscall helper와 namespace별 공유 데이터 주소 선택을 전체 분석합니다.",
+  "intro": "getrandom 헤더는 ARM64 시스템 호출 인수 레지스터와 time namespace에서 실제 RNG 자료 페이지를 찾는 주소 계산을 제공합니다.",
   "guide": [
-    "가상 주소의 첫 페이지가 namespace용으로 바뀌어도 난수 공유 데이터는 실제 vvar 페이지에서 찾아야 합니다.",
-    "x0·x1·x2·x8의 전달 규약과 페이지 단위 포인터 이동을 설명합니다."
+    "레지스터는 CPU 안의 작은 저장 칸입니다. 시스템 호출 약속에 맞춰 버퍼 주소, 길이, 옵션, 호출 번호를 정해진 칸에 넣습니다.",
+    "time namespace는 작업별 시간 관점을 제공하는 기능입니다. 시간용 페이지 배치가 달라져도 RNG 자료는 실제 공용 vvar 페이지에서 찾아야 합니다.",
+    "주소를 얻는 함수는 난수 생성 자체나 페이지 할당을 수행하지 않습니다. 미리 유효하게 연결된 자료라는 전제가 있습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성과 가시성",
-      "text": "GPL-2.0 include guard 안의 !__ASSEMBLY__ 구역에서 asm/unistd.h, asm/vdso/vsyscall.h, vdso/datapage.h를 포함합니다. getrandom_syscall과 __arch_get_vdso_rng_data 두 always_inline 함수를 정의합니다. 별도 난수 생성 루프나 ChaCha 구현은 없습니다."
+      "title": "파일의 구성",
+      "text": "GPL-2.0과 중복 포함 방지 아래 C 전용 구간에서 unistd.h, vsyscall.h, datapage.h를 포함합니다. getrandom_syscall과 __arch_get_vdso_rng_data라는 항상 인라인 도우미 두 개를 정의합니다. ChaCha나 별도의 난수 생성 반복문은 없습니다."
     },
     {
-      "title": "Syscall 레지스터 연결",
-      "text": "getrandom_syscall은 buffer를 x0, size_t len을 x1, unsigned int flags를 x2, __NR_getrandom을 x8에 연결합니다. x0의 long ret를 출력으로 받는 asm volatile svc #0에 memory clobber를 지정하고 결과를 ssize_t로 반환합니다. C 문서 주석은 기록한 바이트 수 또는 음수 오류라고 설명합니다. 여기서는 libc errno를 설정하거나 항상 len 바이트가 반환된다고 보장하지 않습니다."
+      "title": "시스템 호출에 값을 싣기",
+      "text": "buffer는 x0, len은 x1, flags는 x2, __NR_getrandom은 x8에 둡니다. svc #0을 실행하고 x0의 long 결과를 ssize_t로 돌려줍니다. 결과는 기록한 바이트 수 또는 음수 오류이며 항상 요청 길이와 같다는 보장은 없습니다. 여기서 libc의 errno를 설정하지도 않습니다."
     },
     {
-      "title": "메모리 효과와 책임",
-      "text": "memory clobber는 버퍼에 대한 syscall의 메모리 효과를 컴파일러에 알립니다. 사용자 버퍼의 크기 검사나 flags 해석을 이 helper가 직접 구현한다는 뜻은 아닙니다. 입력 포인터와 길이를 그대로 시스템 호출로 전달하며 opaque state 인수는 없습니다."
+      "title": "메모리 변경을 컴파일러에 알리기",
+      "text": "asm volatile과 memory clobber는 이 호출의 메모리 효과를 컴파일러가 고려하도록 합니다. 버퍼가 바뀔 수 있다는 약속이지 이 함수가 버퍼 길이나 flags 의미를 직접 검사한다는 뜻은 아닙니다. 주소와 길이를 그대로 전달하며 opaque state 인수는 없습니다."
     },
     {
-      "title": "기본 RNG 데이터 주소",
-      "text": "__arch_get_vdso_rng_data는 기본적으로 &_vdso_rng_data를 const vdso_rng_data *로 반환합니다. 데이터 객체를 읽는 주소를 얻는 함수이며 여기서 키를 생성하거나 generation을 증가시키지 않습니다. 페이지가 이미 유효하게 매핑되어 있다는 호출 문맥이 필요합니다."
+      "title": "기본 난수 자료 위치",
+      "text": "기본 반환값은 &_vdso_rng_data입니다. const vdso_rng_data 포인터로 자료 위치를 알려 주며 이 함수가 키를 만들거나 generation을 올리지 않습니다. 실제 페이지가 이미 연결되어 유효해야 그 주소로 읽을 수 있습니다."
     },
     {
-      "title": "Time namespace의 두 페이지",
-      "text": "주석은 task가 time namespace에 속하면 VVAR_DATA_PAGE_OFFSET 쪽이 namespace 전용 페이지이고 VVAR_TIMENS_PAGE_OFFSET 쪽이 실제 vvar 페이지라고 설명합니다. RNG 데이터는 실제 페이지에 있으므로 clock namespace용 첫 페이지의 같은 위치를 그대로 읽으면 안 됩니다. 시간 데이터의 namespace 선택과 난수 데이터의 소유 위치는 구별해야 합니다."
+      "title": "namespace에서 두 페이지 구별",
+      "text": "시간 namespace에 속하면 VVAR_DATA_PAGE_OFFSET의 첫 페이지는 namespace 전용이고 VVAR_TIMENS_PAGE_OFFSET에는 실제 vvar 페이지가 놓입니다. RNG 정보는 실제 페이지에 있으므로 첫 페이지의 같은 위치를 그대로 읽으면 안 됩니다. 사용자 출력 버퍼 크기 이야기가 아니라 공유 메타데이터의 위치 이야기입니다."
     },
     {
-      "title": "조건과 주소 계산",
-      "text": "IS_ENABLED(CONFIG_TIME_NS)와 _vdso_data->clock_mode==VDSO_CLOCKMODE_TIMENS가 모두 참이면 (void *)&_vdso_rng_data + VVAR_TIMENS_PAGE_OFFSET * (1UL << CONFIG_PAGE_SHIFT)를 반환합니다. 포함된 ARM64 정의에서 그 offset은 1이므로 한 페이지 뒤입니다. GNU C의 void 포인터 산술은 여기서 바이트 거리로 사용됩니다. PAGE_SHIFT=12인 예에서는 4096바이트를 더하지만 코드는 페이지 크기를 4096으로 고정하지 않습니다."
+      "title": "조건부로 한 페이지 더하기",
+      "text": "CONFIG_TIME_NS가 켜지고 clock_mode가 TIMENS인 두 조건이 모두 맞으면 난수 자료 주소에 VVAR_TIMENS_PAGE_OFFSET × (1UL << CONFIG_PAGE_SHIFT)를 더합니다. ARM64의 오프셋은 1이므로 한 페이지입니다. GNU C의 void 포인터 계산은 바이트 단위이며 PAGE_SHIFT가 12이면 4096바이트지만 모든 설정이 4096으로 고정된 것은 아닙니다."
     },
     {
-      "title": "단락 평가와 검증 범위",
-      "text": "&& 조건은 namespace 설정이 꺼졌을 때 뒤 clock_mode 접근을 평가하지 않는 논리를 갖습니다. 이 파일에 페이지 할당·매핑·namespace 변경 동기화 루프는 없습니다. 전체 함수와 조건·레지스터·주소 계산을 분석했으며 실제 namespace 환경의 난수 syscall과 매핑 실행 시험을 수행한 결과는 아닙니다."
+      "title": "조건 검사와 검증의 범위",
+      "text": "&&는 앞 조건이 거짓이면 뒤 clock_mode 조건을 평가하지 않습니다. 이 파일에 페이지 할당, 매핑, namespace 변경을 보호하는 반복문은 없습니다. 두 함수의 레지스터와 주소 계산을 읽은 것이며 실제 namespace 난수 호출과 매핑 실행 시험 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "getrandom syscall에서 flags와 syscall 번호는 각각 어느 레지스터인가?",
+      "prompt": "flags와 시스템 호출 번호는 각각 어느 레지스터인가요?",
       "options": [
+        "flags는 x2, 번호는 x8입니다.",
+        "flags는 x8, 번호는 x2입니다."
+      ],
+      "answer": 0,
+      "explanation": "x0와 x1은 버퍼와 길이이며 결과는 x0로 받습니다.",
+      "original_prompt": "getrandom syscall에서 flags와 syscall 번호는 각각 어느 레지스터인가?",
+      "original_options": [
         "flags는 x2, 번호는 x8이다",
         "flags는 x8, 번호는 x2이다"
       ],
-      "answer": 0,
-      "explanation": "앞의 x0와 x1은 buffer와 len입니다. 결과는 x0로 받으며 syscall 번호는 별도 x8에 전달합니다."
+      "original_explanation": "앞의 x0와 x1은 buffer와 len입니다. 결과는 x0로 받으며 syscall 번호는 별도 x8에 전달합니다."
     },
     {
-      "prompt": "time namespace 모드에서 RNG getter가 한 페이지 뒤를 반환하는 이유는?",
+      "prompt": "시간 namespace에서 RNG 자료 주소를 한 페이지 옮기는 이유는 무엇인가요?",
       "options": [
+        "사용자 난수 버퍼가 항상 두 페이지여야 하기 때문입니다.",
+        "난수 정보가 namespace 첫 페이지가 아니라 실제 vvar 페이지에 있기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "이동하는 것은 출력 버퍼가 아니라 공유 자료를 읽을 주소입니다.",
+      "original_prompt": "time namespace 모드에서 RNG getter가 한 페이지 뒤를 반환하는 이유는?",
+      "original_options": [
         "난수 버퍼가 항상 두 페이지 크기여야 하기 때문이다",
         "RNG 정보가 namespace용 첫 페이지가 아니라 실제 vvar 페이지에 있기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "이동 대상은 사용자 출력 버퍼가 아니라 공유 RNG 메타데이터 주소입니다. namespace의 페이지 배치 계약을 따릅니다."
+      "original_explanation": "이동 대상은 사용자 출력 버퍼가 아니라 공유 RNG 메타데이터 주소입니다. namespace의 페이지 배치 계약을 따릅니다."
     },
     {
-      "prompt": "이 getter가 항상 4096바이트를 더하는가?",
+      "prompt": "getter는 항상 4096바이트를 더하나요?",
       "options": [
+        "아니요. 조건을 만족할 때 설정된 페이지 크기를 더합니다.",
+        "예. 모든 ARM64에서 상수 4096을 더합니다."
+      ],
+      "answer": 0,
+      "explanation": "기본 경로는 이동하지 않고, 조건부 경로도 PAGE_SHIFT로 크기를 계산합니다.",
+      "original_prompt": "이 getter가 항상 4096바이트를 더하는가?",
+      "original_options": [
         "아니다. 조건이 참일 때 CONFIG_PAGE_SHIFT에 따른 페이지 크기를 더한다",
         "그렇다. 모든 ARM64 빌드에서 상수 4096을 사용한다"
       ],
-      "answer": 0,
-      "explanation": "식은 1UL << CONFIG_PAGE_SHIFT이며 기본 경로에서는 아예 주소 이동을 하지 않습니다. 설정과 런타임 모드 조건을 함께 봐야 합니다."
+      "original_explanation": "식은 1UL << CONFIG_PAGE_SHIFT이며 기본 경로에서는 아예 주소 이동을 하지 않습니다. 설정과 런타임 모드 조건을 함께 봐야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "x0·x1·x2·x8에 담는 값과 namespace일 때 한 페이지 이동을 그림으로 적으세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\n#ifndef __ASM_VDSO_GETRANDOM_H\n#define __ASM_VDSO_GETRANDOM_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/unistd.h>\n#include <asm/vdso/vsyscall.h>\n#include <vdso/datapage.h>\n\n/**\n * getrandom_syscall - Invoke the getrandom() syscall.\n * @buffer:\tDestination buffer to fill with random bytes.\n * @len:\tSize of @buffer in bytes.\n * @flags:\tZero or more GRND_* flags.\n * Returns:\tThe number of random bytes written to @buffer, or a negative value indicating an error.\n */\nstatic __always_inline ssize_t getrandom_syscall(void *_buffer, size_t _len, unsigned int _flags)\n{\n\tregister void *buffer asm (\"x0\") = _buffer;\n\tregister size_t len asm (\"x1\") = _len;\n\tregister unsigned int flags asm (\"x2\") = _flags;\n\tregister long ret asm (\"x0\");\n\tregister long nr asm (\"x8\") = __NR_getrandom;\n\n\tasm volatile(\n\t\"       svc #0\\n\"\n\t: \"=r\" (ret)\n\t: \"r\" (buffer), \"r\" (len), \"r\" (flags), \"r\" (nr)\n\t: \"memory\");\n\n\treturn ret;\n}\n\nstatic __always_inline const struct vdso_rng_data *__arch_get_vdso_rng_data(void)\n{\n\t/*\n\t * The RNG data is in the real VVAR data page, but if a task belongs to a time namespace\n\t * then VVAR_DATA_PAGE_OFFSET points to the namespace-specific VVAR page and VVAR_TIMENS_\n\t * PAGE_OFFSET points to the real VVAR page.\n\t */\n\tif (IS_ENABLED(CONFIG_TIME_NS) && _vdso_data->clock_mode == VDSO_CLOCKMODE_TIMENS)\n\t\treturn (void *)&_vdso_rng_data + VVAR_TIMENS_PAGE_OFFSET * (1UL << CONFIG_PAGE_SHIFT);\n\treturn &_vdso_rng_data;\n}\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_GETRANDOM_H */\n",
   "source_review": {
@@ -102,5 +116,139 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/getrandom.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-887fa031eda14bc8",
+    "path": "arch/arm64/include/asm/vdso/getrandom.h",
+    "title": "ARM64 난수 hook: SVC ABI와 time namespace의 실제 RNG 페이지",
+    "area": "시스템 호출 ABI · shared memory · namespace · 포인터 산술 · 페이지 크기",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "난수 syscall helper와 namespace별 공유 데이터 주소 선택을 전체 분석합니다.",
+    "guide": [
+      "가상 주소의 첫 페이지가 namespace용으로 바뀌어도 난수 공유 데이터는 실제 vvar 페이지에서 찾아야 합니다.",
+      "x0·x1·x2·x8의 전달 규약과 페이지 단위 포인터 이동을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 가시성",
+        "text": "GPL-2.0 include guard 안의 !__ASSEMBLY__ 구역에서 asm/unistd.h, asm/vdso/vsyscall.h, vdso/datapage.h를 포함합니다. getrandom_syscall과 __arch_get_vdso_rng_data 두 always_inline 함수를 정의합니다. 별도 난수 생성 루프나 ChaCha 구현은 없습니다."
+      },
+      {
+        "title": "Syscall 레지스터 연결",
+        "text": "getrandom_syscall은 buffer를 x0, size_t len을 x1, unsigned int flags를 x2, __NR_getrandom을 x8에 연결합니다. x0의 long ret를 출력으로 받는 asm volatile svc #0에 memory clobber를 지정하고 결과를 ssize_t로 반환합니다. C 문서 주석은 기록한 바이트 수 또는 음수 오류라고 설명합니다. 여기서는 libc errno를 설정하거나 항상 len 바이트가 반환된다고 보장하지 않습니다."
+      },
+      {
+        "title": "메모리 효과와 책임",
+        "text": "memory clobber는 버퍼에 대한 syscall의 메모리 효과를 컴파일러에 알립니다. 사용자 버퍼의 크기 검사나 flags 해석을 이 helper가 직접 구현한다는 뜻은 아닙니다. 입력 포인터와 길이를 그대로 시스템 호출로 전달하며 opaque state 인수는 없습니다."
+      },
+      {
+        "title": "기본 RNG 데이터 주소",
+        "text": "__arch_get_vdso_rng_data는 기본적으로 &_vdso_rng_data를 const vdso_rng_data *로 반환합니다. 데이터 객체를 읽는 주소를 얻는 함수이며 여기서 키를 생성하거나 generation을 증가시키지 않습니다. 페이지가 이미 유효하게 매핑되어 있다는 호출 문맥이 필요합니다."
+      },
+      {
+        "title": "Time namespace의 두 페이지",
+        "text": "주석은 task가 time namespace에 속하면 VVAR_DATA_PAGE_OFFSET 쪽이 namespace 전용 페이지이고 VVAR_TIMENS_PAGE_OFFSET 쪽이 실제 vvar 페이지라고 설명합니다. RNG 데이터는 실제 페이지에 있으므로 clock namespace용 첫 페이지의 같은 위치를 그대로 읽으면 안 됩니다. 시간 데이터의 namespace 선택과 난수 데이터의 소유 위치는 구별해야 합니다."
+      },
+      {
+        "title": "조건과 주소 계산",
+        "text": "IS_ENABLED(CONFIG_TIME_NS)와 _vdso_data->clock_mode==VDSO_CLOCKMODE_TIMENS가 모두 참이면 (void *)&_vdso_rng_data + VVAR_TIMENS_PAGE_OFFSET * (1UL << CONFIG_PAGE_SHIFT)를 반환합니다. 포함된 ARM64 정의에서 그 offset은 1이므로 한 페이지 뒤입니다. GNU C의 void 포인터 산술은 여기서 바이트 거리로 사용됩니다. PAGE_SHIFT=12인 예에서는 4096바이트를 더하지만 코드는 페이지 크기를 4096으로 고정하지 않습니다."
+      },
+      {
+        "title": "단락 평가와 검증 범위",
+        "text": "&& 조건은 namespace 설정이 꺼졌을 때 뒤 clock_mode 접근을 평가하지 않는 논리를 갖습니다. 이 파일에 페이지 할당·매핑·namespace 변경 동기화 루프는 없습니다. 전체 함수와 조건·레지스터·주소 계산을 분석했으며 실제 namespace 환경의 난수 syscall과 매핑 실행 시험을 수행한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "getrandom syscall에서 flags와 syscall 번호는 각각 어느 레지스터인가?",
+        "options": [
+          "flags는 x2, 번호는 x8이다",
+          "flags는 x8, 번호는 x2이다"
+        ],
+        "answer": 0,
+        "explanation": "앞의 x0와 x1은 buffer와 len입니다. 결과는 x0로 받으며 syscall 번호는 별도 x8에 전달합니다."
+      },
+      {
+        "prompt": "time namespace 모드에서 RNG getter가 한 페이지 뒤를 반환하는 이유는?",
+        "options": [
+          "난수 버퍼가 항상 두 페이지 크기여야 하기 때문이다",
+          "RNG 정보가 namespace용 첫 페이지가 아니라 실제 vvar 페이지에 있기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "이동 대상은 사용자 출력 버퍼가 아니라 공유 RNG 메타데이터 주소입니다. namespace의 페이지 배치 계약을 따릅니다."
+      },
+      {
+        "prompt": "이 getter가 항상 4096바이트를 더하는가?",
+        "options": [
+          "아니다. 조건이 참일 때 CONFIG_PAGE_SHIFT에 따른 페이지 크기를 더한다",
+          "그렇다. 모든 ARM64 빌드에서 상수 4096을 사용한다"
+        ],
+        "answer": 0,
+        "explanation": "식은 1UL << CONFIG_PAGE_SHIFT이며 기본 경로에서는 아예 주소 이동을 하지 않습니다. 설정과 런타임 모드 조건을 함께 봐야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\n#ifndef __ASM_VDSO_GETRANDOM_H\n#define __ASM_VDSO_GETRANDOM_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/unistd.h>\n#include <asm/vdso/vsyscall.h>\n#include <vdso/datapage.h>\n\n/**\n * getrandom_syscall - Invoke the getrandom() syscall.\n * @buffer:\tDestination buffer to fill with random bytes.\n * @len:\tSize of @buffer in bytes.\n * @flags:\tZero or more GRND_* flags.\n * Returns:\tThe number of random bytes written to @buffer, or a negative value indicating an error.\n */\nstatic __always_inline ssize_t getrandom_syscall(void *_buffer, size_t _len, unsigned int _flags)\n{\n\tregister void *buffer asm (\"x0\") = _buffer;\n\tregister size_t len asm (\"x1\") = _len;\n\tregister unsigned int flags asm (\"x2\") = _flags;\n\tregister long ret asm (\"x0\");\n\tregister long nr asm (\"x8\") = __NR_getrandom;\n\n\tasm volatile(\n\t\"       svc #0\\n\"\n\t: \"=r\" (ret)\n\t: \"r\" (buffer), \"r\" (len), \"r\" (flags), \"r\" (nr)\n\t: \"memory\");\n\n\treturn ret;\n}\n\nstatic __always_inline const struct vdso_rng_data *__arch_get_vdso_rng_data(void)\n{\n\t/*\n\t * The RNG data is in the real VVAR data page, but if a task belongs to a time namespace\n\t * then VVAR_DATA_PAGE_OFFSET points to the namespace-specific VVAR page and VVAR_TIMENS_\n\t * PAGE_OFFSET points to the real VVAR page.\n\t */\n\tif (IS_ENABLED(CONFIG_TIME_NS) && _vdso_data->clock_mode == VDSO_CLOCKMODE_TIMENS)\n\t\treturn (void *)&_vdso_rng_data + VVAR_TIMENS_PAGE_OFFSET * (1UL << CONFIG_PAGE_SHIFT);\n\treturn &_vdso_rng_data;\n}\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_GETRANDOM_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "9276edd34925928d315f57d26f3249ec3767d4214b0217ea31130872463fec31",
+      "scope": "whole-file",
+      "line_count": 50,
+      "authoring_source": "course/file_units/arm64_vdso_random_entry.py",
+      "sections": [
+        "전체 구성과 가시성",
+        "Syscall 레지스터 연결",
+        "메모리 효과와 책임",
+        "기본 RNG 데이터 주소",
+        "Time namespace의 두 페이지",
+        "조건과 주소 계산",
+        "단락 평가와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/getrandom.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 건물의 첫 안내판이 개인용으로 바뀌면 공용 난수 안내는 뒤쪽의 실제 안내판에서 찾아야 합니다.",
+    "meaning": "getrandom 헤더는 ARM64 시스템 호출 인수 레지스터와 time namespace에서 실제 RNG 자료 페이지를 찾는 주소 계산을 제공합니다.",
+    "exercise": "x0·x1·x2·x8에 담는 값과 namespace일 때 한 페이지 이동을 그림으로 적으세요."
+  },
+  "goal": "getrandom 헤더는 ARM64 시스템 호출 인수 레지스터와 time namespace에서 실제 RNG 자료 페이지를 찾는 주소 계산을 제공합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "x0·x1·x2·x8에 담는 값과 namespace일 때 한 페이지 이동을 그림으로 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "8890e39d6576937f9fc65ade4f9a9b6e350eed4db2e11925d2191005482bcf4f",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

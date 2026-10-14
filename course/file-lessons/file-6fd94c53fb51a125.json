@@ -5,134 +5,166 @@
   "area": "동시성 · 참조 계수 · RCU · 원자 연산 · 메모리 순서",
   "track": "files",
   "kind": "kernel",
-  "intro": "RCU 관리 객체의 참조 계수에서 빠른 원자 가감 이후의 경계 상태를 처리하는 두 함수와 설계 설명입니다.",
+  "intro": "rcuref 느린 경로는 마지막 참조 후보 NOREF와 해제 확정 DEAD를 구분하고, 비교 교환 성공으로 정리 담당을 한 번 정해요.",
   "guide": [
-    "NOREF는 마지막 감소 직후의 중간 상태이고 DEAD는 새 참조를 거절하는 확정 상태입니다. 둘 사이의 비교 교환 성공 여부가 이번 호출자의 회수 권한을 결정합니다.",
-    "RCU로 객체 메모리의 유효성을 먼저 보장하는 사용처에 적용합니다. 일반 포인터의 수명을 get 하나로 보장하거나 포화 값을 정확한 참조 개수로 해석하면 안 됩니다."
+    "비교 교환은 현재 값이 예상한 값과 같을 때만 새 값으로 바꾸는 원자 연산이에요. 그사이 다른 CPU가 바꿨다면 실패할 수 있어요.",
+    "포화는 너무 커진 참조 수를 더 이상 정확히 세지 않고 특별 상태로 붙잡는 선택이에요. 조기 해제를 막는 대신 메모리가 남을 수 있어요.",
+    "grace period는 기존 RCU 독자가 끝나 회수해도 되는 때를 기다리는 기간이에요. 카운터의 원자성만으로 이 메모리 수명까지 해결하지는 못해요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성과 경계",
-      "text": "GPL-2.0-only 표시, 설계·경쟁·메모리 순서에 관한 긴 주석, export.h와 rcuref.h 포함, get_slowpath와 put_slowpath 및 각각의 EXPORT_SYMBOL_GPL이 전부입니다. 빠른 원자 가감, 상태 상수, 선점 보호 wrapper는 include/linux/rcuref.h에 있습니다. 이 파일의 slowpath를 참조 증가·감소 없이 독립 호출하는 일반 API로 해석하지 않습니다."
+      "title": "두 느린 함수와 설계 설명",
+      "text": "긴 설계·경쟁·메모리 순서 주석 뒤 헤더를 포함하고 get_slowpath와 put_slowpath를 GPL 심볼로 공개해요. 빠른 원자 가감과 상태 상수, 선점 보호는 rcuref.h에 있어요. 먼저 증가·감소하지 않고 이 느린 경로를 일반 함수처럼 따로 호출하는 사용법이 아니에요."
     },
     {
-      "title": "알고리즘 선택",
-      "text": "도입부는 atomic_inc_not_zero의 비교 교환 재시도 루프가 N개 동시 연산의 경합에서 O(N²) 양상을 보인다고 설명하고, 무조건 원자 가감 뒤 부호 검사로 정상 경로를 짧게 만드는 접근을 제시합니다. 이는 해당 경합 모델에 관한 설계 설명이지 모든 하드웨어와 작업 부하에서 측정한 시간 복잡도나 성능 보증이 아닙니다."
+      "title": "왜 먼저 가감하나요",
+      "text": "도입부는 비교 교환 재시도 방식이 동시에 N개가 경쟁하는 모델에서 O(N²) 양상을 보일 수 있다고 설명해요. 먼저 원자 가감을 하고 부호를 보는 방식은 흔한 정상 경로를 짧게 해요. 이는 설계 모델의 설명이지 모든 기계와 작업에서 측정한 성능 보장은 아니에요."
     },
     {
-      "title": "상태 공간",
-      "text": "유효 저장값은 0부터0x7fffffff이며 실제 참조 수보다1 작습니다. 포화 영역은 0x80000000부터0xbfffffff이고 복원 중심은0xa0000000입니다. 해제 영역은0xc0000000 이상이며 중심 DEAD는0xe0000000, 마지막 감소의 NOREF는0xffffffff입니다. 원문 도표의 0x8000000 표기는 자릿수가 빠져 있으므로 실제 헤더 상수와 unsigned 비교를 기준으로 읽습니다."
+      "title": "숫자 공간의 세 구역",
+      "text": "유효 저장값은 0~0x7fffffff이며 실제 참조 수보다 1 작아요. 포화 구역은 0x80000000~0xbfffffff이고 중심은 0xa0000000이에요. 해제 구역은 0xc0000000 이상이며 DEAD=0xe0000000, NOREF=0xffffffff예요. 원문 도표의 0x8000000은 자릿수가 빠진 표기여서 실제 헤더 상수와 unsigned 비교를 기준으로 읽어요."
     },
     {
-      "title": "넓은 영역을 쓰는 이유",
-      "text": "빠른 경로가 먼저 증가·감소하므로 이미 포화 또는 DEAD인 값도 잠시 중심에서 벗어납니다. 넓은 영역 안에서 느린 경로가 중심으로 되돌려 이 변화를 흡수합니다. 정상 개수를 계속 정확히 추적하는 방식과 다르며 유한한 영역이므로 무한히 많은 중첩 연산에 대한 수학적 무제한 보장으로 확대하지 않습니다."
+      "title": "넓은 특별 구역이 변화 흡수",
+      "text": "빠른 경로가 무조건 가감하므로 이미 포화·DEAD여도 잠시 중심에서 벗어날 수 있어요. 느린 경로는 같은 구역의 중심으로 돌려놓아요. 더 이상 정상 참조 수를 정확히 세는 방식은 아니에요. 넓어도 유한한 공간이므로 무한히 많은 중첩 연산까지 보장한다고 말하지 않아요."
     },
     {
-      "title": "get: 해제 영역",
-      "text": "get_slowpath는 unsigned cnt로 atomic_read합니다. cnt가 RELEASED 이상이면 DEAD를 atomic_set하고 false를 반환합니다. 이미 수행된 증가를 정확히1 빼는 것이 아니라 해제 영역 중심으로 복원합니다. DEAD 확정 이후 get이 DEAD+1을 만든 경우도 여기에 해당하며 객체를 되살리지 못합니다."
+      "title": "get이 해제 구역을 읽으면",
+      "text": "값을 unsigned로 다시 읽어 RELEASED 이상이면 DEAD로 설정하고 false예요. 앞서 더한 1을 정확히 빼는 대신 구역 중심으로 돌려요. DEAD 확정 후 get이 DEAD+1을 만들었어도 새 참조로 인정하지 않아요."
     },
     {
-      "title": "get: 포화와 재관측",
-      "text": "해제 영역이 아니고 MAXREF보다 크면 WARN_ONCE로 포화를 알리고 SATURATED로 복원한 뒤 true를 반환합니다. WARN_ONCE는 경고 출력을 제한하는 것이며 조건이 참인 이후 호출에서 복원문을 영구 생략하라는 뜻이 아닙니다. 느린 경로 진입 계기와 재읽기 사이에 값이 바뀌어 유효 영역을 관측했다면 복원 없이 true가 됩니다."
+      "title": "get이 포화나 유효 값을 읽으면",
+      "text": "해제 구역이 아니고 MAXREF를 넘으면 경고하고 SATURATED로 복원한 뒤 true예요. WARN_ONCE는 경고 출력 횟수를 제한할 뿐 다음 호출의 복원문을 영원히 건너뛰라는 뜻이 아니에요. 느린 경로 진입 후 다시 읽기 전에 값이 바뀌어 유효 구역이면 복원 없이 true가 돼요."
     },
     {
-      "title": "put: 마지막 참조 후보",
-      "text": "put_slowpath도 값을 다시 읽고 먼저 cnt==NOREF인지 검사합니다. NOREF도 수치상 RELEASED 이상이므로 이 검사를 뒤로 옮기면 정상적인 마지막 put을 불균형 put으로 오판합니다. NOREF이면 atomic_try_cmpxchg_release로 NOREF에서 DEAD로 한 번 전환을 시도합니다."
+      "title": "put은 NOREF를 먼저 봐요",
+      "text": "put도 값을 다시 읽고 먼저 NOREF인지 확인해요. NOREF는 수치상 RELEASED 이상이지만 정상적인 마지막 감소의 특별 상태예요. 일반 해제 구역 검사부터 하면 불균형 put으로 잘못 분류해요. NOREF이면 비교 교환으로 DEAD 전환을 한 번 시도해요."
     },
     {
-      "title": "비교 교환 실패",
-      "text": "비교 교환 실패 시 재시도하지 않고 false입니다. 경쟁 get이 NOREF를0으로 올렸거나 그 참조의 put이 이미 DEAD로 확정했을 수 있습니다. 둘 다 이번 호출자가 객체를 파괴해서는 안 되는 상황입니다. 실패를 무조건 오류나 진행 실패로 보고 DEAD가 될 때까지 재시도하면 회수 권한의 의미를 훼손합니다."
+      "title": "전환 실패는 재시도하지 않아요",
+      "text": "경쟁 get이 NOREF를 0으로 올렸거나 그 참조의 put이 이미 DEAD로 확정했으면 비교 교환이 실패할 수 있어요. 둘 다 이번 호출자가 파괴하면 안 되는 경우라 바로 false예요. 무조건 DEAD가 될 때까지 재시도하면 다른 쪽의 정리 권한을 침범해요."
     },
     {
-      "title": "비교 교환 성공과 순서",
-      "text": "NOREF에서 DEAD 전환에 성공한 호출만 smp_acquire__after_ctrl_dep를 실행하고 true를 반환합니다. 헤더의 감소는 release이며 이 성공 경로가 acquire 정렬을 추가합니다. 이 함수는 kfree나 RCU callback을 실행하지 않습니다. true는 호출자가 해당 객체의 RCU 회수 규칙에 따라 정리를 진행할 수 있다는 신호입니다."
+      "title": "전환 성공 뒤의 acquire 순서",
+      "text": "NOREF→DEAD 성공 호출만 smp_acquire__after_ctrl_dep를 거쳐 true를 반환해요. 헤더의 release 감소에 최종 성공 경로의 acquire 정렬을 더해 뒤의 파괴가 필요한 접근 뒤에 오게 해요. 이 함수는 kfree나 RCU 회수 콜백을 실행하지 않아요. 호출자가 객체의 회수 규칙에 맞게 정리하라는 신호예요."
     },
     {
-      "title": "put: 불균형과 포화",
-      "text": "NOREF가 아닌데 RELEASED 이상이면 WARN_ONCE로 불균형 put을 경고하고 DEAD로 복원한 뒤 false입니다. 그보다 낮지만 MAXREF를 넘는 경우에는 SATURATED로 복원하고 false입니다. 재읽기 값이 유효 영역이어도 마지막 반환은 false입니다. 포화 시 get은 성공을 허용하지만 put은 파괴 권한을 주지 않아 메모리를 누수시키는 쪽으로 넘침 피해를 막습니다."
+      "title": "불균형 put과 포화 put",
+      "text": "NOREF가 아닌데 RELEASED 이상이면 참조 반납 균형이 잘못됐다고 경고하고 DEAD로 복원해 false예요. 해제 구역보다 아래지만 MAXREF를 넘으면 SATURATED로 복원하고 false예요. 유효 구역을 다시 읽어도 false예요. 포화 get은 true지만 put은 파괴 권한을 주지 않아 넘침으로 너무 일찍 해제하는 피해를 막아요."
     },
     {
-      "title": "두 CPU의 참조 재획득",
-      "text": "저장0에서 T1의 put이 NOREF로 감소한 직후 T2 get이1을 더하면 unsigned 순환으로0이 되어 성공할 수 있습니다. T1의 NOREF→DEAD 비교 교환은 실패하고 false를 반환합니다. T2가 그 참조를 put하여 NOREF→DEAD 전환에 성공하면 T2만 정리를 맡습니다. DEAD 확정 전의 재획득과 확정 후 실패를 구분해야 합니다."
+      "title": "두 CPU의 재획득 예시",
+      "text": "저장 0에서 T1 put이 NOREF로 낮춘 직후 T2 get이 1을 더하면 unsigned 순환으로 0이 되어 성공할 수 있어요. T1은 예상값 NOREF가 아니므로 실패해 false예요. 나중에 T2가 반납하고 NOREF→DEAD를 성공시키면 T2가 정리를 맡아요. DEAD 확정 전 재획득과 확정 후 실패는 달라요."
     },
     {
-      "title": "느린 put 자체의 수명",
-      "text": "T1이 NOREF로 감소한 뒤 멈춘 동안 T2가 재획득·마지막 put·RCU 해제 예약까지 진행하고 grace period가 끝나면 T1의 뒤늦은 비교 교환이 해제된 메모리를 만질 수 있습니다. 그래서 put 처리 중 회수를 막는 문맥이 필요합니다. 일반 put wrapper의 선점 금지 또는 rcusafe 호출자가 제공하는 적절한 보호는 이 구간을 지키며 다른 CPU의 참조 연산 자체를 금지하는 잠금은 아닙니다."
+      "title": "느린 put 자체도 살아 있는 메모리가 필요해요",
+      "text": "T1이 감소 후 멈춘 동안 T2가 재획득·최종 반납·회수 예약을 끝내고 grace period까지 지나면 T1의 뒤늦은 비교 교환이 해제된 메모리를 만질 수 있어요. 그래서 put 처리 중 회수가 끝나지 않는 문맥이 필요해요. 일반 wrapper의 선점 금지나 rcusafe 호출자의 보호가 이 틈을 지켜요. 다른 CPU의 참조 연산 자체를 막는 잠금은 아니에요."
     },
     {
-      "title": "획득과 공개의 분리",
-      "text": "get의 원자 증가는 relaxed이고 객체 내용을 읽기 위한 순서는 포인터를 얻는 잠금 획득이나 RCU 의존적 읽기 같은 외부 절차가 제공합니다. 성공 여부의 제어 의존성은 이후 저장과 관계가 있습니다. 이를 모든 후속 읽기를 정렬하는 독립 acquire 연산과 동등하다고 간주하지 않습니다. 참조 계수에 접근하기 전 객체 메모리도 유효해야 합니다."
+      "title": "get과 객체 공개 순서",
+      "text": "get의 증가는 relaxed예요. 객체 내용을 읽는 순서는 포인터를 얻을 때의 잠금 획득이나 RCU 의존적 읽기 같은 바깥 절차가 제공해요. 성공 여부의 제어 의존성은 이후 저장과 관련돼요. 이를 모든 읽기를 정렬하는 acquire와 같다고 보지 않아요. 참조 카운터에 접근하기 전 메모리도 유효해야 해요."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "편향된 정수 표현, 상태 기계, 비교 교환을 통한 단일 회수 권한 결정, 경합 중 재관측, 포화 산술의 안전성 선택, RCU 수명과 메모리 순서를 함께 학습합니다. 파일의 주석과 두 구현을 대응해 해설했으며 이 수업의 소스 일치 검사는 모든 CPU 인터리빙을 실행하거나 커널 메모리 모델로 증명한 검사가 아닙니다."
+      "title": "검토한 범위",
+      "text": "치우친 카운터, 상태 구역, 비교 교환으로 정리 담당 정하기, 재관측과 포화의 선택을 배워요. 긴 주석과 두 구현을 서로 대조한 설명이에요. 모든 CPU 실행 순서 조합을 실제 시험하거나 커널 메모리 모델로 증명한 검사는 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "저장0에서 마지막 put이 NOREF로 만든 뒤 경쟁 get이 먼저0으로 복원했다. 원래 put의 비교 교환 실패 후 행동은?",
+      "prompt": "T2 get이 먼저 NOREF를 0으로 올려 T1 비교 교환이 실패하면 T1은 어떻게 하나요?",
       "options": [
+        "false를 반환하고 객체를 파괴하지 않아요.",
+        "성공할 때까지 반복해 반드시 DEAD로 만들어요."
+      ],
+      "answer": 0,
+      "explanation": "확정 전의 유효한 재획득이므로 이번 T1에는 정리 권한이 없어요. 재시도하지 않아요.",
+      "original_prompt": "저장0에서 마지막 put이 NOREF로 만든 뒤 경쟁 get이 먼저0으로 복원했다. 원래 put의 비교 교환 실패 후 행동은?",
+      "original_options": [
         "false를 반환하고 객체를 파괴하지 않는다",
         "성공할 때까지 반복해 무조건 DEAD로 만든다"
       ],
-      "answer": 0,
-      "explanation": "경쟁 get은 확정 전의 유효한 재획득입니다. NOREF를 기대한 비교 교환이 실패하면 이번 put은 정리 권한이 없으므로 재시도 없이 false를 반환합니다."
+      "original_explanation": "경쟁 get은 확정 전의 유효한 재획득입니다. NOREF를 기대한 비교 교환이 실패하면 이번 put은 정리 권한이 없으므로 재시도 없이 false를 반환합니다."
     },
     {
-      "prompt": "put_slowpath에서 cnt==NOREF를 RELEASED 이상 검사보다 먼저 하는 이유는?",
+      "prompt": "NOREF를 RELEASED 이상 검사보다 먼저 보는 까닭은 무엇인가요?",
       "options": [
+        "두 비교는 언제 바꿔도 같기 때문이에요.",
+        "NOREF도 그 수치 범위 안이지만 정상 마지막 감소의 특별 상태라서예요."
+      ],
+      "answer": 1,
+      "explanation": "0xffffffff는 0xc0000000보다 커요. 일반 범위부터 보면 올바른 마지막 put을 잘못 분류해요.",
+      "original_prompt": "put_slowpath에서 cnt==NOREF를 RELEASED 이상 검사보다 먼저 하는 이유는?",
+      "original_options": [
         "두 비교는 순서를 바꾸어도 언제나 같은 결과이기 때문이다",
         "NOREF도 해제 영역 수치 범위에 있지만 정상 마지막 감소의 특별한 상태이기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "NOREF는0xffffffff이고 RELEASED는0xc0000000입니다. 범위 검사부터 하면 정상 마지막 put이 불균형 경고 경로에 들어가 DEAD 전환 성공과 true 반환을 얻지 못합니다."
+      "original_explanation": "NOREF는0xffffffff이고 RELEASED는0xc0000000입니다. 범위 검사부터 하면 정상 마지막 put이 불균형 경고 경로에 들어가 DEAD 전환 성공과 true 반환을 얻지 못합니다."
     },
     {
-      "prompt": "이미 DEAD인 계수에 get이 증가를 수행했을 때 느린 경로는?",
+      "prompt": "이미 DEAD인 값에 get이 1을 더한 뒤 느린 경로는 어떻게 하나요?",
       "options": [
+        "DEAD로 복원하고 false를 줘요.",
+        "증가했으니 새 참조를 인정해 true를 줘요."
+      ],
+      "answer": 0,
+      "explanation": "DEAD+1도 해제 구역이에요. 유효한 참조 수로 읽지 않아요.",
+      "original_prompt": "이미 DEAD인 계수에 get이 증가를 수행했을 때 느린 경로는?",
+      "original_options": [
         "DEAD 중심으로 복원하고 false를 반환한다",
         "증가했으므로 새 참조1을 인정하고 true를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "DEAD+1은 여전히 RELEASED 이상입니다. get_slowpath는 이 영역을 유효 참조 수로 해석하지 않고 DEAD로 복원하며 획득 실패를 반환합니다."
+      "original_explanation": "DEAD+1은 여전히 RELEASED 이상입니다. get_slowpath는 이 영역을 유효 참조 수로 해석하지 않고 DEAD로 복원하며 획득 실패를 반환합니다."
     },
     {
-      "prompt": "포화 상태에서 get과 put의 반환 의미는?",
+      "prompt": "포화 상태의 get과 put 결과는 무엇인가요?",
       "options": [
+        "get은 false, put은 true여서 즉시 회수해요.",
+        "get은 true, put은 false여서 파괴를 막아요."
+      ],
+      "answer": 1,
+      "explanation": "정확한 수 추적 대신 SATURATED를 유지해 조기 해제를 막는 선택이에요.",
+      "original_prompt": "포화 상태에서 get과 put의 반환 의미는?",
+      "original_options": [
         "get은 false, put은 true로 즉시 메모리를 회수한다",
         "get은 true, put은 false로 객체 파괴를 막는다"
       ],
-      "answer": 1,
-      "explanation": "포화 시 정확한 참조 수 추적을 포기하고 SATURATED 중심으로 복원합니다. get은 성공을 허용하지만 put은 마지막 참조의 파괴 권한을 주지 않아 넘침에 따른 조기 해제를 막습니다."
+      "original_explanation": "포화 시 정확한 참조 수 추적을 포기하고 SATURATED 중심으로 복원합니다. get은 성공을 허용하지만 put은 마지막 참조의 파괴 권한을 주지 않아 넘침에 따른 조기 해제를 막습니다."
     },
     {
-      "prompt": "왜 원자적 비교 교환만으로 put 전체의 메모리 수명 문제가 해결되지 않는가?",
+      "prompt": "왜 원자 비교 교환만으로 전체 put의 수명 문제가 해결되지 않나요?",
       "options": [
+        "그 연산 전에 다른 CPU가 회수를 끝내면 대상 메모리부터 사라질 수 있어요.",
+        "원자 연산은 모든 CPU를 막으므로 보호가 더 필요 없어요."
+      ],
+      "answer": 0,
+      "explanation": "원자성은 유효한 메모리에서의 계산 약속이에요. 해제된 메모리에 접근할 권한은 아니에요.",
+      "original_prompt": "왜 원자적 비교 교환만으로 put 전체의 메모리 수명 문제가 해결되지 않는가?",
+      "original_options": [
         "비교 교환 전에 다른 CPU가 회수를 끝내면 그 원자 연산의 대상 메모리부터 유효하지 않을 수 있다",
         "원자 연산은 다른 CPU의 어떠한 동작도 차단하므로 추가 보호가 필요 없다"
       ],
-      "answer": 0,
-      "explanation": "T1의 마지막 감소와 느린 비교 교환 사이에 T2가 재획득·해제할 수 있습니다. T1이 멈춘 동안 RCU 회수가 끝나는 일을 방지해야 하며 원자성은 이미 해제된 메모리에 접근할 권한을 만들지 않습니다."
+      "original_explanation": "T1의 마지막 감소와 느린 비교 교환 사이에 T2가 재획득·해제할 수 있습니다. T1이 멈춘 동안 RCU 회수가 끝나는 일을 방지해야 하며 원자성은 이미 해제된 메모리에 접근할 권한을 만들지 않습니다."
     },
     {
-      "prompt": "put_slowpath의 acquire 정렬은 어느 경로에 추가되는가?",
+      "prompt": "acquire 정렬을 추가하는 경로는 어디인가요?",
       "options": [
+        "포화 값을 본 모든 get 경로예요.",
+        "NOREF→DEAD 비교 교환 성공 뒤 true 반환 전이에요."
+      ],
+      "answer": 1,
+      "explanation": "성공 경로에 smp_acquire__after_ctrl_dep가 있어요. 실패는 곧바로 false예요.",
+      "original_prompt": "put_slowpath의 acquire 정렬은 어느 경로에 추가되는가?",
+      "original_options": [
         "포화 값을 관측한 모든 get 경로",
         "NOREF에서 DEAD로 비교 교환에 성공한 뒤 true를 반환하기 전"
       ],
-      "answer": 1,
-      "explanation": "성공한 atomic_try_cmpxchg_release 뒤에 smp_acquire__after_ctrl_dep가 있습니다. 실패는 false로 곧바로 돌아가며 relaxed get의 공개 순서를 이 장벽이 대신 제공하는 것도 아닙니다."
+      "original_explanation": "성공한 atomic_try_cmpxchg_release 뒤에 smp_acquire__after_ctrl_dep가 있습니다. 실패는 false로 곧바로 돌아가며 relaxed get의 공개 순서를 이 장벽이 대신 제공하는 것도 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "T1이 NOREF로 낮춘 사이 T2가 get하여 0으로 올리는 그림을 그리고, T1의 비교 교환이 실패하면 왜 정리하지 않는지 말해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n\n/*\n * rcuref - A scalable reference count implementation for RCU managed objects\n *\n * rcuref is provided to replace open coded reference count implementations\n * based on atomic_t. It protects explicitely RCU managed objects which can\n * be visible even after the last reference has been dropped and the object\n * is heading towards destruction.\n *\n * A common usage pattern is:\n *\n * get()\n *\trcu_read_lock();\n *\tp = get_ptr();\n *\tif (p && !atomic_inc_not_zero(&p->refcnt))\n *\t\tp = NULL;\n *\trcu_read_unlock();\n *\treturn p;\n *\n * put()\n *\tif (!atomic_dec_return(&->refcnt)) {\n *\t\tremove_ptr(p);\n *\t\tkfree_rcu((p, rcu);\n *\t}\n *\n * atomic_inc_not_zero() is implemented with a try_cmpxchg() loop which has\n * O(N^2) behaviour under contention with N concurrent operations.\n *\n * rcuref uses atomic_add_negative_relaxed() for the fast path, which scales\n * better under contention.\n *\n * Why not refcount?\n * =================\n *\n * In principle it should be possible to make refcount use the rcuref\n * scheme, but the destruction race described below cannot be prevented\n * unless the protected object is RCU managed.\n *\n * Theory of operation\n * ===================\n *\n * rcuref uses an unsigned integer reference counter. As long as the\n * counter value is greater than or equal to RCUREF_ONEREF and not larger\n * than RCUREF_MAXREF the reference is alive:\n *\n * ONEREF   MAXREF               SATURATED             RELEASED      DEAD    NOREF\n * 0        0x7FFFFFFF 0x8000000 0xA0000000 0xBFFFFFFF 0xC0000000 0xE0000000 0xFFFFFFFF\n * <---valid --------> <-------saturation zone-------> <-----dead zone----->\n *\n * The get() and put() operations do unconditional increments and\n * decrements. The result is checked after the operation. This optimizes\n * for the fast path.\n *\n * If the reference count is saturated or dead, then the increments and\n * decrements are not harmful as the reference count still stays in the\n * respective zones and is always set back to STATURATED resp. DEAD. The\n * zones have room for 2^28 racing operations in each direction, which\n * makes it practically impossible to escape the zones.\n *\n * Once the last reference is dropped the reference count becomes\n * RCUREF_NOREF which forces rcuref_put() into the slowpath operation. The\n * slowpath then tries to set the reference count from RCUREF_NOREF to\n * RCUREF_DEAD via a cmpxchg(). This opens a small window where a\n * concurrent rcuref_get() can acquire the reference count and bring it\n * back to RCUREF_ONEREF or even drop the reference again and mark it DEAD.\n *\n * If the cmpxchg() succeeds then a concurrent rcuref_get() will result in\n * DEAD + 1, which is inside the dead zone. If that happens the reference\n * count is put back to DEAD.\n *\n * The actual race is possible due to the unconditional increment and\n * decrements in rcuref_get() and rcuref_put():\n *\n *\tT1\t\t\t\tT2\n *\tget()\t\t\t\tput()\n *\t\t\t\t\tif (atomic_add_negative(-1, &ref->refcnt))\n *\t\tsucceeds->\t\t\tatomic_cmpxchg(&ref->refcnt, NOREF, DEAD);\n *\n *\tatomic_add_negative(1, &ref->refcnt);\t<- Elevates refcount to DEAD + 1\n *\n * As the result of T1's add is negative, the get() goes into the slow path\n * and observes refcnt being in the dead zone which makes the operation fail.\n *\n * Possible critical states:\n *\n *\tContext Counter\tReferences\tOperation\n *\tT1\t0\t1\t\tinit()\n *\tT2\t1\t2\t\tget()\n *\tT1\t0\t1\t\tput()\n *\tT2     -1\t0\t\tput() tries to mark dead\n *\tT1\t0\t1\t\tget()\n *\tT2\t0\t1\t\tput() mark dead fails\n *\tT1     -1\t0\t\tput() tries to mark dead\n *\tT1    DEAD\t0\t\tput() mark dead succeeds\n *\tT2    DEAD+1\t0\t\tget() fails and puts it back to DEAD\n *\n * Of course there are more complex scenarios, but the above illustrates\n * the working principle. The rest is left to the imagination of the\n * reader.\n *\n * Deconstruction race\n * ===================\n *\n * The release operation must be protected by prohibiting a grace period in\n * order to prevent a possible use after free:\n *\n *\tT1\t\t\t\tT2\n *\tput()\t\t\t\tget()\n *\t// ref->refcnt = ONEREF\n *\tif (!atomic_add_negative(-1, &ref->refcnt))\n *\t\treturn false;\t\t\t\t<- Not taken\n *\n *\t// ref->refcnt == NOREF\n *\t--> preemption\n *\t\t\t\t\t// Elevates ref->refcnt to ONEREF\n *\t\t\t\t\tif (!atomic_add_negative(1, &ref->refcnt))\n *\t\t\t\t\t\treturn true;\t\t\t<- taken\n *\n *\t\t\t\t\tif (put(&p->ref)) { <-- Succeeds\n *\t\t\t\t\t\tremove_pointer(p);\n *\t\t\t\t\t\tkfree_rcu(p, rcu);\n *\t\t\t\t\t}\n *\n *\t\tRCU grace period ends, object is freed\n *\n *\tatomic_cmpxchg(&ref->refcnt, NOREF, DEAD);\t<- UAF\n *\n * This is prevented by disabling preemption around the put() operation as\n * that's in most kernel configurations cheaper than a rcu_read_lock() /\n * rcu_read_unlock() pair and in many cases even a NOOP. In any case it\n * prevents the grace period which keeps the object alive until all put()\n * operations complete.\n *\n * Saturation protection\n * =====================\n *\n * The reference count has a saturation limit RCUREF_MAXREF (INT_MAX).\n * Once this is exceedded the reference count becomes stale by setting it\n * to RCUREF_SATURATED, which will cause a memory leak, but it prevents\n * wrap arounds which obviously cause worse problems than a memory\n * leak. When saturation is reached a warning is emitted.\n *\n * Race conditions\n * ===============\n *\n * All reference count increment/decrement operations are unconditional and\n * only verified after the fact. This optimizes for the good case and takes\n * the occasional race vs. a dead or already saturated refcount into\n * account. The saturation and dead zones are large enough to accomodate\n * for that.\n *\n * Memory ordering\n * ===============\n *\n * Memory ordering rules are slightly relaxed wrt regular atomic_t functions\n * and provide only what is strictly required for refcounts.\n *\n * The increments are fully relaxed; these will not provide ordering. The\n * rationale is that whatever is used to obtain the object to increase the\n * reference count on will provide the ordering. For locked data\n * structures, its the lock acquire, for RCU/lockless data structures its\n * the dependent load.\n *\n * rcuref_get() provides a control dependency ordering future stores which\n * ensures that the object is not modified when acquiring a reference\n * fails.\n *\n * rcuref_put() provides release order, i.e. all prior loads and stores\n * will be issued before. It also provides a control dependency ordering\n * against the subsequent destruction of the object.\n *\n * If rcuref_put() successfully dropped the last reference and marked the\n * object DEAD it also provides acquire ordering.\n */\n\n#include <linux/export.h>\n#include <linux/rcuref.h>\n\n/**\n * rcuref_get_slowpath - Slowpath of rcuref_get()\n * @ref:\tPointer to the reference count\n *\n * Invoked when the reference count is outside of the valid zone.\n *\n * Return:\n *\tFalse if the reference count was already marked dead\n *\n *\tTrue if the reference count is saturated, which prevents the\n *\tobject from being deconstructed ever.\n */\nbool rcuref_get_slowpath(rcuref_t *ref)\n{\n\tunsigned int cnt = atomic_read(&ref->refcnt);\n\n\t/*\n\t * If the reference count was already marked dead, undo the\n\t * increment so it stays in the middle of the dead zone and return\n\t * fail.\n\t */\n\tif (cnt >= RCUREF_RELEASED) {\n\t\tatomic_set(&ref->refcnt, RCUREF_DEAD);\n\t\treturn false;\n\t}\n\n\t/*\n\t * If it was saturated, warn and mark it so. In case the increment\n\t * was already on a saturated value restore the saturation\n\t * marker. This keeps it in the middle of the saturation zone and\n\t * prevents the reference count from overflowing. This leaks the\n\t * object memory, but prevents the obvious reference count overflow\n\t * damage.\n\t */\n\tif (WARN_ONCE(cnt > RCUREF_MAXREF, \"rcuref saturated - leaking memory\"))\n\t\tatomic_set(&ref->refcnt, RCUREF_SATURATED);\n\treturn true;\n}\nEXPORT_SYMBOL_GPL(rcuref_get_slowpath);\n\n/**\n * rcuref_put_slowpath - Slowpath of __rcuref_put()\n * @ref:\tPointer to the reference count\n *\n * Invoked when the reference count is outside of the valid zone.\n *\n * Return:\n *\tTrue if this was the last reference with no future references\n *\tpossible. This signals the caller that it can safely schedule the\n *\tobject, which is protected by the reference counter, for\n *\tdeconstruction.\n *\n *\tFalse if there are still active references or the put() raced\n *\twith a concurrent get()/put() pair. Caller is not allowed to\n *\tdeconstruct the protected object.\n */\nbool rcuref_put_slowpath(rcuref_t *ref)\n{\n\tunsigned int cnt = atomic_read(&ref->refcnt);\n\n\t/* Did this drop the last reference? */\n\tif (likely(cnt == RCUREF_NOREF)) {\n\t\t/*\n\t\t * Carefully try to set the reference count to RCUREF_DEAD.\n\t\t *\n\t\t * This can fail if a concurrent get() operation has\n\t\t * elevated it again or the corresponding put() even marked\n\t\t * it dead already. Both are valid situations and do not\n\t\t * require a retry. If this fails the caller is not\n\t\t * allowed to deconstruct the object.\n\t\t */\n\t\tif (!atomic_try_cmpxchg_release(&ref->refcnt, &cnt, RCUREF_DEAD))\n\t\t\treturn false;\n\n\t\t/*\n\t\t * The caller can safely schedule the object for\n\t\t * deconstruction. Provide acquire ordering.\n\t\t */\n\t\tsmp_acquire__after_ctrl_dep();\n\t\treturn true;\n\t}\n\n\t/*\n\t * If the reference count was already in the dead zone, then this\n\t * put() operation is imbalanced. Warn, put the reference count back to\n\t * DEAD and tell the caller to not deconstruct the object.\n\t */\n\tif (WARN_ONCE(cnt >= RCUREF_RELEASED, \"rcuref - imbalanced put()\")) {\n\t\tatomic_set(&ref->refcnt, RCUREF_DEAD);\n\t\treturn false;\n\t}\n\n\t/*\n\t * This is a put() operation on a saturated refcount. Restore the\n\t * mean saturation value and tell the caller to not deconstruct the\n\t * object.\n\t */\n\tif (cnt > RCUREF_MAXREF)\n\t\tatomic_set(&ref->refcnt, RCUREF_SATURATED);\n\treturn false;\n}\nEXPORT_SYMBOL_GPL(rcuref_put_slowpath);\n",
   "source_review": {
@@ -164,5 +196,201 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rcuref.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-6fd94c53fb51a125",
+    "path": "lib/rcuref.c",
+    "title": "Rcuref 구현 전체: 마지막 참조 경쟁, 포화와 회수 권한",
+    "area": "동시성 · 참조 계수 · RCU · 원자 연산 · 메모리 순서",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "RCU 관리 객체의 참조 계수에서 빠른 원자 가감 이후의 경계 상태를 처리하는 두 함수와 설계 설명입니다.",
+    "guide": [
+      "NOREF는 마지막 감소 직후의 중간 상태이고 DEAD는 새 참조를 거절하는 확정 상태입니다. 둘 사이의 비교 교환 성공 여부가 이번 호출자의 회수 권한을 결정합니다.",
+      "RCU로 객체 메모리의 유효성을 먼저 보장하는 사용처에 적용합니다. 일반 포인터의 수명을 get 하나로 보장하거나 포화 값을 정확한 참조 개수로 해석하면 안 됩니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 경계",
+        "text": "GPL-2.0-only 표시, 설계·경쟁·메모리 순서에 관한 긴 주석, export.h와 rcuref.h 포함, get_slowpath와 put_slowpath 및 각각의 EXPORT_SYMBOL_GPL이 전부입니다. 빠른 원자 가감, 상태 상수, 선점 보호 wrapper는 include/linux/rcuref.h에 있습니다. 이 파일의 slowpath를 참조 증가·감소 없이 독립 호출하는 일반 API로 해석하지 않습니다."
+      },
+      {
+        "title": "알고리즘 선택",
+        "text": "도입부는 atomic_inc_not_zero의 비교 교환 재시도 루프가 N개 동시 연산의 경합에서 O(N²) 양상을 보인다고 설명하고, 무조건 원자 가감 뒤 부호 검사로 정상 경로를 짧게 만드는 접근을 제시합니다. 이는 해당 경합 모델에 관한 설계 설명이지 모든 하드웨어와 작업 부하에서 측정한 시간 복잡도나 성능 보증이 아닙니다."
+      },
+      {
+        "title": "상태 공간",
+        "text": "유효 저장값은 0부터0x7fffffff이며 실제 참조 수보다1 작습니다. 포화 영역은 0x80000000부터0xbfffffff이고 복원 중심은0xa0000000입니다. 해제 영역은0xc0000000 이상이며 중심 DEAD는0xe0000000, 마지막 감소의 NOREF는0xffffffff입니다. 원문 도표의 0x8000000 표기는 자릿수가 빠져 있으므로 실제 헤더 상수와 unsigned 비교를 기준으로 읽습니다."
+      },
+      {
+        "title": "넓은 영역을 쓰는 이유",
+        "text": "빠른 경로가 먼저 증가·감소하므로 이미 포화 또는 DEAD인 값도 잠시 중심에서 벗어납니다. 넓은 영역 안에서 느린 경로가 중심으로 되돌려 이 변화를 흡수합니다. 정상 개수를 계속 정확히 추적하는 방식과 다르며 유한한 영역이므로 무한히 많은 중첩 연산에 대한 수학적 무제한 보장으로 확대하지 않습니다."
+      },
+      {
+        "title": "get: 해제 영역",
+        "text": "get_slowpath는 unsigned cnt로 atomic_read합니다. cnt가 RELEASED 이상이면 DEAD를 atomic_set하고 false를 반환합니다. 이미 수행된 증가를 정확히1 빼는 것이 아니라 해제 영역 중심으로 복원합니다. DEAD 확정 이후 get이 DEAD+1을 만든 경우도 여기에 해당하며 객체를 되살리지 못합니다."
+      },
+      {
+        "title": "get: 포화와 재관측",
+        "text": "해제 영역이 아니고 MAXREF보다 크면 WARN_ONCE로 포화를 알리고 SATURATED로 복원한 뒤 true를 반환합니다. WARN_ONCE는 경고 출력을 제한하는 것이며 조건이 참인 이후 호출에서 복원문을 영구 생략하라는 뜻이 아닙니다. 느린 경로 진입 계기와 재읽기 사이에 값이 바뀌어 유효 영역을 관측했다면 복원 없이 true가 됩니다."
+      },
+      {
+        "title": "put: 마지막 참조 후보",
+        "text": "put_slowpath도 값을 다시 읽고 먼저 cnt==NOREF인지 검사합니다. NOREF도 수치상 RELEASED 이상이므로 이 검사를 뒤로 옮기면 정상적인 마지막 put을 불균형 put으로 오판합니다. NOREF이면 atomic_try_cmpxchg_release로 NOREF에서 DEAD로 한 번 전환을 시도합니다."
+      },
+      {
+        "title": "비교 교환 실패",
+        "text": "비교 교환 실패 시 재시도하지 않고 false입니다. 경쟁 get이 NOREF를0으로 올렸거나 그 참조의 put이 이미 DEAD로 확정했을 수 있습니다. 둘 다 이번 호출자가 객체를 파괴해서는 안 되는 상황입니다. 실패를 무조건 오류나 진행 실패로 보고 DEAD가 될 때까지 재시도하면 회수 권한의 의미를 훼손합니다."
+      },
+      {
+        "title": "비교 교환 성공과 순서",
+        "text": "NOREF에서 DEAD 전환에 성공한 호출만 smp_acquire__after_ctrl_dep를 실행하고 true를 반환합니다. 헤더의 감소는 release이며 이 성공 경로가 acquire 정렬을 추가합니다. 이 함수는 kfree나 RCU callback을 실행하지 않습니다. true는 호출자가 해당 객체의 RCU 회수 규칙에 따라 정리를 진행할 수 있다는 신호입니다."
+      },
+      {
+        "title": "put: 불균형과 포화",
+        "text": "NOREF가 아닌데 RELEASED 이상이면 WARN_ONCE로 불균형 put을 경고하고 DEAD로 복원한 뒤 false입니다. 그보다 낮지만 MAXREF를 넘는 경우에는 SATURATED로 복원하고 false입니다. 재읽기 값이 유효 영역이어도 마지막 반환은 false입니다. 포화 시 get은 성공을 허용하지만 put은 파괴 권한을 주지 않아 메모리를 누수시키는 쪽으로 넘침 피해를 막습니다."
+      },
+      {
+        "title": "두 CPU의 참조 재획득",
+        "text": "저장0에서 T1의 put이 NOREF로 감소한 직후 T2 get이1을 더하면 unsigned 순환으로0이 되어 성공할 수 있습니다. T1의 NOREF→DEAD 비교 교환은 실패하고 false를 반환합니다. T2가 그 참조를 put하여 NOREF→DEAD 전환에 성공하면 T2만 정리를 맡습니다. DEAD 확정 전의 재획득과 확정 후 실패를 구분해야 합니다."
+      },
+      {
+        "title": "느린 put 자체의 수명",
+        "text": "T1이 NOREF로 감소한 뒤 멈춘 동안 T2가 재획득·마지막 put·RCU 해제 예약까지 진행하고 grace period가 끝나면 T1의 뒤늦은 비교 교환이 해제된 메모리를 만질 수 있습니다. 그래서 put 처리 중 회수를 막는 문맥이 필요합니다. 일반 put wrapper의 선점 금지 또는 rcusafe 호출자가 제공하는 적절한 보호는 이 구간을 지키며 다른 CPU의 참조 연산 자체를 금지하는 잠금은 아닙니다."
+      },
+      {
+        "title": "획득과 공개의 분리",
+        "text": "get의 원자 증가는 relaxed이고 객체 내용을 읽기 위한 순서는 포인터를 얻는 잠금 획득이나 RCU 의존적 읽기 같은 외부 절차가 제공합니다. 성공 여부의 제어 의존성은 이후 저장과 관계가 있습니다. 이를 모든 후속 읽기를 정렬하는 독립 acquire 연산과 동등하다고 간주하지 않습니다. 참조 계수에 접근하기 전 객체 메모리도 유효해야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "편향된 정수 표현, 상태 기계, 비교 교환을 통한 단일 회수 권한 결정, 경합 중 재관측, 포화 산술의 안전성 선택, RCU 수명과 메모리 순서를 함께 학습합니다. 파일의 주석과 두 구현을 대응해 해설했으며 이 수업의 소스 일치 검사는 모든 CPU 인터리빙을 실행하거나 커널 메모리 모델로 증명한 검사가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "저장0에서 마지막 put이 NOREF로 만든 뒤 경쟁 get이 먼저0으로 복원했다. 원래 put의 비교 교환 실패 후 행동은?",
+        "options": [
+          "false를 반환하고 객체를 파괴하지 않는다",
+          "성공할 때까지 반복해 무조건 DEAD로 만든다"
+        ],
+        "answer": 0,
+        "explanation": "경쟁 get은 확정 전의 유효한 재획득입니다. NOREF를 기대한 비교 교환이 실패하면 이번 put은 정리 권한이 없으므로 재시도 없이 false를 반환합니다."
+      },
+      {
+        "prompt": "put_slowpath에서 cnt==NOREF를 RELEASED 이상 검사보다 먼저 하는 이유는?",
+        "options": [
+          "두 비교는 순서를 바꾸어도 언제나 같은 결과이기 때문이다",
+          "NOREF도 해제 영역 수치 범위에 있지만 정상 마지막 감소의 특별한 상태이기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "NOREF는0xffffffff이고 RELEASED는0xc0000000입니다. 범위 검사부터 하면 정상 마지막 put이 불균형 경고 경로에 들어가 DEAD 전환 성공과 true 반환을 얻지 못합니다."
+      },
+      {
+        "prompt": "이미 DEAD인 계수에 get이 증가를 수행했을 때 느린 경로는?",
+        "options": [
+          "DEAD 중심으로 복원하고 false를 반환한다",
+          "증가했으므로 새 참조1을 인정하고 true를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "DEAD+1은 여전히 RELEASED 이상입니다. get_slowpath는 이 영역을 유효 참조 수로 해석하지 않고 DEAD로 복원하며 획득 실패를 반환합니다."
+      },
+      {
+        "prompt": "포화 상태에서 get과 put의 반환 의미는?",
+        "options": [
+          "get은 false, put은 true로 즉시 메모리를 회수한다",
+          "get은 true, put은 false로 객체 파괴를 막는다"
+        ],
+        "answer": 1,
+        "explanation": "포화 시 정확한 참조 수 추적을 포기하고 SATURATED 중심으로 복원합니다. get은 성공을 허용하지만 put은 마지막 참조의 파괴 권한을 주지 않아 넘침에 따른 조기 해제를 막습니다."
+      },
+      {
+        "prompt": "왜 원자적 비교 교환만으로 put 전체의 메모리 수명 문제가 해결되지 않는가?",
+        "options": [
+          "비교 교환 전에 다른 CPU가 회수를 끝내면 그 원자 연산의 대상 메모리부터 유효하지 않을 수 있다",
+          "원자 연산은 다른 CPU의 어떠한 동작도 차단하므로 추가 보호가 필요 없다"
+        ],
+        "answer": 0,
+        "explanation": "T1의 마지막 감소와 느린 비교 교환 사이에 T2가 재획득·해제할 수 있습니다. T1이 멈춘 동안 RCU 회수가 끝나는 일을 방지해야 하며 원자성은 이미 해제된 메모리에 접근할 권한을 만들지 않습니다."
+      },
+      {
+        "prompt": "put_slowpath의 acquire 정렬은 어느 경로에 추가되는가?",
+        "options": [
+          "포화 값을 관측한 모든 get 경로",
+          "NOREF에서 DEAD로 비교 교환에 성공한 뒤 true를 반환하기 전"
+        ],
+        "answer": 1,
+        "explanation": "성공한 atomic_try_cmpxchg_release 뒤에 smp_acquire__after_ctrl_dep가 있습니다. 실패는 false로 곧바로 돌아가며 relaxed get의 공개 순서를 이 장벽이 대신 제공하는 것도 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n\n/*\n * rcuref - A scalable reference count implementation for RCU managed objects\n *\n * rcuref is provided to replace open coded reference count implementations\n * based on atomic_t. It protects explicitely RCU managed objects which can\n * be visible even after the last reference has been dropped and the object\n * is heading towards destruction.\n *\n * A common usage pattern is:\n *\n * get()\n *\trcu_read_lock();\n *\tp = get_ptr();\n *\tif (p && !atomic_inc_not_zero(&p->refcnt))\n *\t\tp = NULL;\n *\trcu_read_unlock();\n *\treturn p;\n *\n * put()\n *\tif (!atomic_dec_return(&->refcnt)) {\n *\t\tremove_ptr(p);\n *\t\tkfree_rcu((p, rcu);\n *\t}\n *\n * atomic_inc_not_zero() is implemented with a try_cmpxchg() loop which has\n * O(N^2) behaviour under contention with N concurrent operations.\n *\n * rcuref uses atomic_add_negative_relaxed() for the fast path, which scales\n * better under contention.\n *\n * Why not refcount?\n * =================\n *\n * In principle it should be possible to make refcount use the rcuref\n * scheme, but the destruction race described below cannot be prevented\n * unless the protected object is RCU managed.\n *\n * Theory of operation\n * ===================\n *\n * rcuref uses an unsigned integer reference counter. As long as the\n * counter value is greater than or equal to RCUREF_ONEREF and not larger\n * than RCUREF_MAXREF the reference is alive:\n *\n * ONEREF   MAXREF               SATURATED             RELEASED      DEAD    NOREF\n * 0        0x7FFFFFFF 0x8000000 0xA0000000 0xBFFFFFFF 0xC0000000 0xE0000000 0xFFFFFFFF\n * <---valid --------> <-------saturation zone-------> <-----dead zone----->\n *\n * The get() and put() operations do unconditional increments and\n * decrements. The result is checked after the operation. This optimizes\n * for the fast path.\n *\n * If the reference count is saturated or dead, then the increments and\n * decrements are not harmful as the reference count still stays in the\n * respective zones and is always set back to STATURATED resp. DEAD. The\n * zones have room for 2^28 racing operations in each direction, which\n * makes it practically impossible to escape the zones.\n *\n * Once the last reference is dropped the reference count becomes\n * RCUREF_NOREF which forces rcuref_put() into the slowpath operation. The\n * slowpath then tries to set the reference count from RCUREF_NOREF to\n * RCUREF_DEAD via a cmpxchg(). This opens a small window where a\n * concurrent rcuref_get() can acquire the reference count and bring it\n * back to RCUREF_ONEREF or even drop the reference again and mark it DEAD.\n *\n * If the cmpxchg() succeeds then a concurrent rcuref_get() will result in\n * DEAD + 1, which is inside the dead zone. If that happens the reference\n * count is put back to DEAD.\n *\n * The actual race is possible due to the unconditional increment and\n * decrements in rcuref_get() and rcuref_put():\n *\n *\tT1\t\t\t\tT2\n *\tget()\t\t\t\tput()\n *\t\t\t\t\tif (atomic_add_negative(-1, &ref->refcnt))\n *\t\tsucceeds->\t\t\tatomic_cmpxchg(&ref->refcnt, NOREF, DEAD);\n *\n *\tatomic_add_negative(1, &ref->refcnt);\t<- Elevates refcount to DEAD + 1\n *\n * As the result of T1's add is negative, the get() goes into the slow path\n * and observes refcnt being in the dead zone which makes the operation fail.\n *\n * Possible critical states:\n *\n *\tContext Counter\tReferences\tOperation\n *\tT1\t0\t1\t\tinit()\n *\tT2\t1\t2\t\tget()\n *\tT1\t0\t1\t\tput()\n *\tT2     -1\t0\t\tput() tries to mark dead\n *\tT1\t0\t1\t\tget()\n *\tT2\t0\t1\t\tput() mark dead fails\n *\tT1     -1\t0\t\tput() tries to mark dead\n *\tT1    DEAD\t0\t\tput() mark dead succeeds\n *\tT2    DEAD+1\t0\t\tget() fails and puts it back to DEAD\n *\n * Of course there are more complex scenarios, but the above illustrates\n * the working principle. The rest is left to the imagination of the\n * reader.\n *\n * Deconstruction race\n * ===================\n *\n * The release operation must be protected by prohibiting a grace period in\n * order to prevent a possible use after free:\n *\n *\tT1\t\t\t\tT2\n *\tput()\t\t\t\tget()\n *\t// ref->refcnt = ONEREF\n *\tif (!atomic_add_negative(-1, &ref->refcnt))\n *\t\treturn false;\t\t\t\t<- Not taken\n *\n *\t// ref->refcnt == NOREF\n *\t--> preemption\n *\t\t\t\t\t// Elevates ref->refcnt to ONEREF\n *\t\t\t\t\tif (!atomic_add_negative(1, &ref->refcnt))\n *\t\t\t\t\t\treturn true;\t\t\t<- taken\n *\n *\t\t\t\t\tif (put(&p->ref)) { <-- Succeeds\n *\t\t\t\t\t\tremove_pointer(p);\n *\t\t\t\t\t\tkfree_rcu(p, rcu);\n *\t\t\t\t\t}\n *\n *\t\tRCU grace period ends, object is freed\n *\n *\tatomic_cmpxchg(&ref->refcnt, NOREF, DEAD);\t<- UAF\n *\n * This is prevented by disabling preemption around the put() operation as\n * that's in most kernel configurations cheaper than a rcu_read_lock() /\n * rcu_read_unlock() pair and in many cases even a NOOP. In any case it\n * prevents the grace period which keeps the object alive until all put()\n * operations complete.\n *\n * Saturation protection\n * =====================\n *\n * The reference count has a saturation limit RCUREF_MAXREF (INT_MAX).\n * Once this is exceedded the reference count becomes stale by setting it\n * to RCUREF_SATURATED, which will cause a memory leak, but it prevents\n * wrap arounds which obviously cause worse problems than a memory\n * leak. When saturation is reached a warning is emitted.\n *\n * Race conditions\n * ===============\n *\n * All reference count increment/decrement operations are unconditional and\n * only verified after the fact. This optimizes for the good case and takes\n * the occasional race vs. a dead or already saturated refcount into\n * account. The saturation and dead zones are large enough to accomodate\n * for that.\n *\n * Memory ordering\n * ===============\n *\n * Memory ordering rules are slightly relaxed wrt regular atomic_t functions\n * and provide only what is strictly required for refcounts.\n *\n * The increments are fully relaxed; these will not provide ordering. The\n * rationale is that whatever is used to obtain the object to increase the\n * reference count on will provide the ordering. For locked data\n * structures, its the lock acquire, for RCU/lockless data structures its\n * the dependent load.\n *\n * rcuref_get() provides a control dependency ordering future stores which\n * ensures that the object is not modified when acquiring a reference\n * fails.\n *\n * rcuref_put() provides release order, i.e. all prior loads and stores\n * will be issued before. It also provides a control dependency ordering\n * against the subsequent destruction of the object.\n *\n * If rcuref_put() successfully dropped the last reference and marked the\n * object DEAD it also provides acquire ordering.\n */\n\n#include <linux/export.h>\n#include <linux/rcuref.h>\n\n/**\n * rcuref_get_slowpath - Slowpath of rcuref_get()\n * @ref:\tPointer to the reference count\n *\n * Invoked when the reference count is outside of the valid zone.\n *\n * Return:\n *\tFalse if the reference count was already marked dead\n *\n *\tTrue if the reference count is saturated, which prevents the\n *\tobject from being deconstructed ever.\n */\nbool rcuref_get_slowpath(rcuref_t *ref)\n{\n\tunsigned int cnt = atomic_read(&ref->refcnt);\n\n\t/*\n\t * If the reference count was already marked dead, undo the\n\t * increment so it stays in the middle of the dead zone and return\n\t * fail.\n\t */\n\tif (cnt >= RCUREF_RELEASED) {\n\t\tatomic_set(&ref->refcnt, RCUREF_DEAD);\n\t\treturn false;\n\t}\n\n\t/*\n\t * If it was saturated, warn and mark it so. In case the increment\n\t * was already on a saturated value restore the saturation\n\t * marker. This keeps it in the middle of the saturation zone and\n\t * prevents the reference count from overflowing. This leaks the\n\t * object memory, but prevents the obvious reference count overflow\n\t * damage.\n\t */\n\tif (WARN_ONCE(cnt > RCUREF_MAXREF, \"rcuref saturated - leaking memory\"))\n\t\tatomic_set(&ref->refcnt, RCUREF_SATURATED);\n\treturn true;\n}\nEXPORT_SYMBOL_GPL(rcuref_get_slowpath);\n\n/**\n * rcuref_put_slowpath - Slowpath of __rcuref_put()\n * @ref:\tPointer to the reference count\n *\n * Invoked when the reference count is outside of the valid zone.\n *\n * Return:\n *\tTrue if this was the last reference with no future references\n *\tpossible. This signals the caller that it can safely schedule the\n *\tobject, which is protected by the reference counter, for\n *\tdeconstruction.\n *\n *\tFalse if there are still active references or the put() raced\n *\twith a concurrent get()/put() pair. Caller is not allowed to\n *\tdeconstruct the protected object.\n */\nbool rcuref_put_slowpath(rcuref_t *ref)\n{\n\tunsigned int cnt = atomic_read(&ref->refcnt);\n\n\t/* Did this drop the last reference? */\n\tif (likely(cnt == RCUREF_NOREF)) {\n\t\t/*\n\t\t * Carefully try to set the reference count to RCUREF_DEAD.\n\t\t *\n\t\t * This can fail if a concurrent get() operation has\n\t\t * elevated it again or the corresponding put() even marked\n\t\t * it dead already. Both are valid situations and do not\n\t\t * require a retry. If this fails the caller is not\n\t\t * allowed to deconstruct the object.\n\t\t */\n\t\tif (!atomic_try_cmpxchg_release(&ref->refcnt, &cnt, RCUREF_DEAD))\n\t\t\treturn false;\n\n\t\t/*\n\t\t * The caller can safely schedule the object for\n\t\t * deconstruction. Provide acquire ordering.\n\t\t */\n\t\tsmp_acquire__after_ctrl_dep();\n\t\treturn true;\n\t}\n\n\t/*\n\t * If the reference count was already in the dead zone, then this\n\t * put() operation is imbalanced. Warn, put the reference count back to\n\t * DEAD and tell the caller to not deconstruct the object.\n\t */\n\tif (WARN_ONCE(cnt >= RCUREF_RELEASED, \"rcuref - imbalanced put()\")) {\n\t\tatomic_set(&ref->refcnt, RCUREF_DEAD);\n\t\treturn false;\n\t}\n\n\t/*\n\t * This is a put() operation on a saturated refcount. Restore the\n\t * mean saturation value and tell the caller to not deconstruct the\n\t * object.\n\t */\n\tif (cnt > RCUREF_MAXREF)\n\t\tatomic_set(&ref->refcnt, RCUREF_SATURATED);\n\treturn false;\n}\nEXPORT_SYMBOL_GPL(rcuref_put_slowpath);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "9184ffe8f22c8f2b27f61dee4f53f146826894400a0ac4e9cefdc48fa3d9a5a7",
+      "scope": "whole-file",
+      "line_count": 281,
+      "authoring_source": "course/file_units/rcuref_implementation.py",
+      "sections": [
+        "전체 구성과 경계",
+        "알고리즘 선택",
+        "상태 공간",
+        "넓은 영역을 쓰는 이유",
+        "get: 해제 영역",
+        "get: 포화와 재관측",
+        "put: 마지막 참조 후보",
+        "비교 교환 실패",
+        "비교 교환 성공과 순서",
+        "put: 불균형과 포화",
+        "두 CPU의 참조 재획득",
+        "느린 put 자체의 수명",
+        "획득과 공개의 분리",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/rcuref.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "마지막 사람이 나간 듯해도 문을 완전히 닫기 전에 누군가 다시 들어올 수 있어요. 문 닫기를 확정한 담당자만 정리를 맡아요.",
+    "meaning": "rcuref 느린 경로는 마지막 참조 후보 NOREF와 해제 확정 DEAD를 구분하고, 비교 교환 성공으로 정리 담당을 한 번 정해요.",
+    "exercise": "T1이 NOREF로 낮춘 사이 T2가 get하여 0으로 올리는 그림을 그리고, T1의 비교 교환이 실패하면 왜 정리하지 않는지 말해 보세요."
+  },
+  "goal": "rcuref 느린 경로는 마지막 참조 후보 NOREF와 해제 확정 DEAD를 구분하고, 비교 교환 성공으로 정리 담당을 한 번 정해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "T1이 NOREF로 낮춘 사이 T2가 get하여 0으로 올리는 그림을 그리고, T1의 비교 교환이 실패하면 왜 정리하지 않는지 말해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "94a479a141a01ecd31084d6a9cec44d7ca6ba1ffcd1f5524bc41e84df2340096",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

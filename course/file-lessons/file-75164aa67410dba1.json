@@ -5,58 +5,66 @@
   "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 변환 함수의 선언과 BASE64_CHARS 계산식을 제공합니다.",
+  "intro": "Base64 헤더의 BASE64_CHARS는 데이터 문자 수를 계산하며 실제 인코더의 패딩 포함 출력 크기와 항상 같지 않습니다.",
   "guide": [
-    "BASE64_CHARS(nbytes)는 ceil(4*nbytes/3)을 계산합니다. lib/base64.c의 패딩 포함 출력 크기와 항상 같지는 않습니다.",
-    "매크로 이름만 보고 인코더 출력 버퍼를 할당하면 안 됩니다. 비음수 길이 n에 대해 패딩 포함 크기는 4*ceil(n/3)이며 종료 문자와 산술 범위도 따로 고려합니다."
+    "올림을 어디에서 하는지가 식의 의미를 바꿉니다. ceil(4n/3)과 4×ceil(n/3)은 다릅니다.",
+    "함수의 len은 입력 길이이며 출력 버퍼 용량을 알려 주는 인수가 아닙니다.",
+    "버퍼 할당에는 실제 구현의 패딩 정책과 별도 NUL 공간, 정수 범위까지 함께 고려해야 합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구성",
-      "text": "GPL SPDX와 fs/crypto/fname.c 유래 주석, _LINUX_BASE64_H guard, linux/types.h 포함, BASE64_CHARS 매크로, encode/decode 선언 두 개와 endif가 전부입니다. DIV_ROUND_UP 정의를 이 파일 안에 직접 제공하지 않으므로 해당 정의가 보이는 포함 문맥이 필요합니다."
+      "title": "헤더의 구성",
+      "text": "GPL·유래 주석·guard 뒤 types.h, BASE64_CHARS, encode·decode 선언이 있습니다. DIV_ROUND_UP의 정의를 직접 제공하지 않으므로 그 이름이 보이는 포함 문맥이 필요합니다."
     },
     {
-      "title": "두 길이 식 비교",
-      "text": "매크로는 DIV_ROUND_UP((nbytes)*4,3)입니다. n=1이면 2, n=2이면 3, n=3이면 4입니다. 하지만 구현의 출력은 이 세 경우 모두 4바이트입니다. 6비트 표현에 필요한 문자 수와 4문자 묶음에 맞춘 패딩 포함 길이를 구분해야 합니다."
+      "title": "서로 다른 두 올림 식",
+      "text": "매크로는 DIV_ROUND_UP(nbytes*4,3)입니다. 1이면 2, 2이면 3, 3이면 4글자입니다. 그러나 패딩을 붙이는 인코더는 세 경우 모두 4바이트를 씁니다. 6비트 내용을 나타내는 글자 수와 네 글자 묶음으로 맞춘 출력 길이를 구별해야 합니다."
     },
     {
-      "title": "타입과 용량",
-      "text": "encode는 const u8 * 입력과 char * 출력을, decode는 const char * 입력과 u8 * 출력을 받습니다. 둘 다 int len과 int 반환형을 쓰고 출력 용량 인자가 없습니다. 타입만으로 버퍼 충분성이나 길이 비음수 조건을 보장하지 않습니다. (nbytes)*4의 타입별 오버플로에도 주의합니다."
+      "title": "포인터 형식과 길이 계약",
+      "text": "encode는 u8 입력과 char 출력, decode는 char 입력과 u8 출력을 받습니다. 둘 다 int len과 int 결과이며 출력 용량은 받지 않습니다. 형식만으로 길이가 음수가 아니거나 공간이 충분하다는 보장은 없고 nbytes*4의 자료형별 오버플로도 고려합니다."
     },
     {
-      "title": "CS 연결",
-      "text": "선언과 구현의 계약 대조, 단위 환산과 올림 위치, 텍스트와 바이너리 포인터, API의 누락된 용량 정보를 학습합니다. 헤더의 간단한 크기 식도 실제 호출 대상의 패딩 정책과 맞춰 검토해야 합니다."
+      "title": "선언을 구현과 맞추기",
+      "text": "텍스트와 바이너리, 단위 변환과 올림 위치를 연결해 읽습니다. 매크로 이름이 크기 계산처럼 보여도 실제 호출할 인코더의 패딩 정책과 비교해야 안전한 공간을 정할 수 있습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "BASE64_CHARS(2)와 인코더의 실제 출력 길이는?",
+      "prompt": "BASE64_CHARS(2)와 실제 인코딩 길이는 각각 얼마인가요?",
       "options": [
+        "3과 4입니다.",
+        "둘 다 3입니다."
+      ],
+      "answer": 0,
+      "explanation": "데이터 세 글자 뒤에 = 하나를 추가합니다.",
+      "original_prompt": "BASE64_CHARS(2)와 인코더의 실제 출력 길이는?",
+      "original_options": [
         "각각 3과 4다",
         "둘 다 3이다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 ceil(8/3)=3입니다. 인코더는 데이터 문자 세 개 뒤에 = 하나를 추가합니다."
+      "original_explanation": "매크로는 ceil(8/3)=3입니다. 인코더는 데이터 문자 세 개 뒤에 = 하나를 추가합니다."
     },
     {
-      "prompt": "출력 용량이 부족하면 함수가 용량 인자로 감지할 수 있는가?",
+      "prompt": "출력 공간 부족을 용량 인수로 감지할 수 있나요?",
       "options": [
+        "예. len이 출력 용량입니다.",
+        "아니요. 용량 인수가 없어 호출자가 확보해야 합니다."
+      ],
+      "answer": 1,
+      "explanation": "len은 입력 크기이고 출력 주소만 받습니다.",
+      "original_prompt": "출력 용량이 부족하면 함수가 용량 인자로 감지할 수 있는가?",
+      "original_options": [
         "그렇다. len은 출력 용량이다",
         "아니다. 용량 인자가 없으므로 호출자가 확보해야 한다"
       ],
-      "answer": 1,
-      "explanation": "len은 입력 길이입니다. 출력 포인터만 전달되므로 필요한 저장 공간을 호출 전에 계산해야 합니다."
+      "original_explanation": "len은 입력 길이입니다. 출력 포인터만 전달되므로 필요한 저장 공간을 호출 전에 계산해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "입력 1·2·3바이트에 매크로 결과 2·3·4와 실제 출력 4·4·4를 나란히 적으세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * base64 encoding, lifted from fs/crypto/fname.c.\n */\n\n#ifndef _LINUX_BASE64_H\n#define _LINUX_BASE64_H\n\n#include <linux/types.h>\n\n#define BASE64_CHARS(nbytes)   DIV_ROUND_UP((nbytes) * 4, 3)\n\nint base64_encode(const u8 *src, int len, char *dst);\nint base64_decode(const char *src, int len, u8 *dst);\n\n#endif /* _LINUX_BASE64_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/base64.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-75164aa67410dba1",
+    "path": "include/linux/base64.h",
+    "title": "Base64 헤더 전체: 길이 매크로와 구현의 차이",
+    "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 변환 함수의 선언과 BASE64_CHARS 계산식을 제공합니다.",
+    "guide": [
+      "BASE64_CHARS(nbytes)는 ceil(4*nbytes/3)을 계산합니다. lib/base64.c의 패딩 포함 출력 크기와 항상 같지는 않습니다.",
+      "매크로 이름만 보고 인코더 출력 버퍼를 할당하면 안 됩니다. 비음수 길이 n에 대해 패딩 포함 크기는 4*ceil(n/3)이며 종료 문자와 산술 범위도 따로 고려합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구성",
+        "text": "GPL SPDX와 fs/crypto/fname.c 유래 주석, _LINUX_BASE64_H guard, linux/types.h 포함, BASE64_CHARS 매크로, encode/decode 선언 두 개와 endif가 전부입니다. DIV_ROUND_UP 정의를 이 파일 안에 직접 제공하지 않으므로 해당 정의가 보이는 포함 문맥이 필요합니다."
+      },
+      {
+        "title": "두 길이 식 비교",
+        "text": "매크로는 DIV_ROUND_UP((nbytes)*4,3)입니다. n=1이면 2, n=2이면 3, n=3이면 4입니다. 하지만 구현의 출력은 이 세 경우 모두 4바이트입니다. 6비트 표현에 필요한 문자 수와 4문자 묶음에 맞춘 패딩 포함 길이를 구분해야 합니다."
+      },
+      {
+        "title": "타입과 용량",
+        "text": "encode는 const u8 * 입력과 char * 출력을, decode는 const char * 입력과 u8 * 출력을 받습니다. 둘 다 int len과 int 반환형을 쓰고 출력 용량 인자가 없습니다. 타입만으로 버퍼 충분성이나 길이 비음수 조건을 보장하지 않습니다. (nbytes)*4의 타입별 오버플로에도 주의합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "선언과 구현의 계약 대조, 단위 환산과 올림 위치, 텍스트와 바이너리 포인터, API의 누락된 용량 정보를 학습합니다. 헤더의 간단한 크기 식도 실제 호출 대상의 패딩 정책과 맞춰 검토해야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "BASE64_CHARS(2)와 인코더의 실제 출력 길이는?",
+        "options": [
+          "각각 3과 4다",
+          "둘 다 3이다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 ceil(8/3)=3입니다. 인코더는 데이터 문자 세 개 뒤에 = 하나를 추가합니다."
+      },
+      {
+        "prompt": "출력 용량이 부족하면 함수가 용량 인자로 감지할 수 있는가?",
+        "options": [
+          "그렇다. len은 출력 용량이다",
+          "아니다. 용량 인자가 없으므로 호출자가 확보해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "len은 입력 길이입니다. 출력 포인터만 전달되므로 필요한 저장 공간을 호출 전에 계산해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * base64 encoding, lifted from fs/crypto/fname.c.\n */\n\n#ifndef _LINUX_BASE64_H\n#define _LINUX_BASE64_H\n\n#include <linux/types.h>\n\n#define BASE64_CHARS(nbytes)   DIV_ROUND_UP((nbytes) * 4, 3)\n\nint base64_encode(const u8 *src, int len, char *dst);\nint base64_decode(const char *src, int len, u8 *dst);\n\n#endif /* _LINUX_BASE64_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "cd07e5d78daf4923682d9ec784cf07955904fe4e8d2469db79f74924ed55c85e",
+      "scope": "whole-file",
+      "line_count": 16,
+      "authoring_source": "course/file_units/binary_text.py",
+      "sections": [
+        "전체 파일 구성",
+        "두 길이 식 비교",
+        "타입과 용량",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/base64.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "필요한 글자 수만 센 값과 빈칸 표시까지 붙여 포장한 길이는 다를 수 있습니다.",
+    "meaning": "Base64 헤더의 BASE64_CHARS는 데이터 문자 수를 계산하며 실제 인코더의 패딩 포함 출력 크기와 항상 같지 않습니다.",
+    "exercise": "입력 1·2·3바이트에 매크로 결과 2·3·4와 실제 출력 4·4·4를 나란히 적으세요."
+  },
+  "goal": "Base64 헤더의 BASE64_CHARS는 데이터 문자 수를 계산하며 실제 인코더의 패딩 포함 출력 크기와 항상 같지 않습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "입력 1·2·3바이트에 매크로 결과 2·3·4와 실제 출력 4·4·4를 나란히 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "59815aa777d197b8205dc4e9eb05b83932adb920534d6e7f89c823c1eb175a55",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

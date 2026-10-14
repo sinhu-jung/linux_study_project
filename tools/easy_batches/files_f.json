@@ -1,0 +1,3577 @@
+{
+  "file-9e9649ec7588c9b4": {
+    "story": "긴 문장에서 찾던 글자들이 중간까지 맞았다면 그 정보를 기억해 다시 처음부터 비교하지 않을 수 있어요. 입력이 두 조각으로 나뉘어 와도 기억을 이어 가요.",
+    "meaning": "KMP의 접두사 표, 블록 사이 상태와 다음 검색의 시작 위치를 이해해요.",
+    "exercise": "ababaca의 표를 구하고, ab와 c 두 블록에서 abc를 찾는 상태 q를 따라가세요.",
+    "guide": [
+      "접두사는 맨 앞부분, 접미사는 맨 뒷부분이에요. KMP의 prefix_tbl은 지금까지 본 패턴 부분에서 자기 전체를 제외하고 앞뒤가 같은 가장 긴 길이를 저장해요.",
+      "불일치하면 맞춘 길이 q를 이 표가 알려 주는 더 짧은 길이로 줄여 현재 입력 문자를 다시 비교해요. 입력 위치 자체를 뒤로 되돌리지는 않아요.",
+      "공통 prepare가 길이 0을 거절하고 공통 할당이 메모리를 0으로 채운다는 전제가 있어요. 이 파일의 init만 아무 조건 없이 독립 호출해도 된다는 뜻은 아니에요."
+    ],
+    "goal": "KMP의 접두사 표, 블록 사이 상태와 다음 검색의 시작 위치를 이해해요.",
+    "deep_dive": [
+      {
+        "title": "전체 파일 구조",
+        "text": "파일은 GPL 사용 조건을 나타내는 SPDX, 작성자와 알고리즘 설명으로 시작해요. 필요한 module·types·string·ctype·textsearch 헤더 다음에 KMP 전용 자료와 검색·표 계산·초기화·조회 함수가 있어요. kmp_ops가 함수들을 연결하고 모듈 시작·종료 함수가 공통 등록·해제를 호출해요. 끝의 설명과 라이선스도 파일 구성의 일부예요."
+      },
+      {
+        "title": "사설 데이터의 메모리 배치",
+        "text": "전용 구조체 ts_kmp에는 패턴 주소와 길이, 끝에 길이가 정해지지 않은 prefix_tbl[]이 있어요. 이를 flexible array라 해요. 구조체+표+패턴만큼 한 번에 확보하고 패턴을 표 바로 뒤에 놓아요. 별도 자원을 따로 만들지 않아 destroy callback도 없어요. 다만 prefix_tbl_len 계산이 unsigned int 곱셈이어서 어떤 거대한 길이도 넘침 없이 안전하다고 보장하는 것은 아니에요."
+      },
+      {
+        "title": "접두사 표 계산",
+        "text": "compute_prefix_tbl은 두 번째 문자 위치 q=1부터 시작해요. pattern[k]와 pattern[q]가 다르면 k=prefix_tbl[k-1]로 더 짧은 앞부분을 살펴보고 같으면 k를 하나 늘려 표에 적어요. ababaca는 0,0,1,2,3,0,1이에요. 첫 칸은 여기서 직접 쓰지 않지만 alloc_ts_config의 kzalloc이 전체를 0으로 만들므로 0이에요."
+      },
+      {
+        "title": "대소문자 무시의 일관성",
+        "text": "TS_IGNORECASE는 영문 대소문자를 구별하지 않는 옵션이에요. 표 계산 때 양쪽을 toupper로 비교하고 저장 패턴도 대문자로 바꿔요. 검색 때는 입력만 대문자로 바꿔 비교하므로 표와 실제 검색의 같음 규칙이 맞아요. 이는 커널의 바이트 문자 분류이며 모든 언어의 유니코드 정규화나 지역별 규칙을 처리한다는 뜻은 아니에요."
+      },
+      {
+        "title": "검색 상태 q",
+        "text": "q는 패턴 맨 앞에서 지금까지 맞춘 문자 수예요. 불일치하면 prefix_tbl[q-1]로 줄이고 같은 입력 문자를 다시 보며, 맞으면 하나 늘려 패턴 길이에 닿는지 확인해요. 한 문자에서 여러 번 줄어도 전체 감소는 앞서 증가한 만큼과 연결돼요. 패턴 길이 m, 입력 길이 n이면 준비 시간 O(m), 검색 O(n), 표 공간 O(m)이에요. O(n)은 입력 길이에 비례하는 규모라는 뜻이에요."
+      },
+      {
+        "title": "블록 경계를 넘는 이유",
+        "text": "q=0 초기화는 블록을 받는 바깥 반복 전에 한 번만 해요. 한 블록을 읽으면 consumed를 그 길이만큼 늘리고 q는 유지해요. 첫 블록 ab, 다음 c에서 abc를 찾을 수 있는 이유예요. get_next_block이 길이 0을 주면 입력이 끝나 UINT_MAX라는 미발견 표식을 반환해요."
+      },
+      {
+        "title": "성공 위치와 다음 검색",
+        "text": "찾으면 state->offset에 consumed+i+1, 즉 일치 끝 다음 위치를 적고 시작 위치 offset-pattern_len을 반환해요. 다음 kmp_find는 이 offset과 q=0에서 새로 시작해요. ababa에서 첫 aba를 찾으면 offset은 3이라 위치 2의 겹친 aba를 자동으로 다시 찾지 않아요. 실패 때는 offset을 별도로 바꾸지 않아요."
+      },
+      {
+        "title": "초기화와 오류",
+        "text": "kmp_init은 계산한 크기로 alloc_ts_config를 호출하고 IS_ERR이면 오류 포인터를 그대로 반환해요. 성공하면 flags와 길이, 표, 패턴 주소와 복사 데이터를 준비해요. 패턴은 길이로 다루므로 끝에 NUL이 있는 문자열만 지원하는 것은 아니에요. get_pattern은 저장 주소, get_pattern_len은 길이를 알려 줘요."
+      },
+      {
+        "title": "등록과 수명",
+        "text": "kmp_ops 이름은 kmp이고 owner=THIS_MODULE은 코드를 제공한 모듈이에요. list는 LIST_HEAD_INIT으로 준비해요. init_kmp은 textsearch_register 결과를 반환하고 exit_kmp은 unregister해요. 설정 메모리와 알고리즘 모듈의 사용 참조는 공통 textsearch 코드가 함께 관리하므로 이 파일만으로 수명 전체를 설명하지 않아요."
+      },
+      {
+        "title": "CS 연결",
+        "text": "이 예는 불일치 후 갈 길을 알려 주는 실패 함수, 필요할 때 상태 전이를 계산하는 방식, 조각 입력의 상태 유지, 유연 배열 배치와 callback 교체를 연결해요. callback은 나중에 부를 함수를 등록한 것이에요. 원본과 설명을 대조하는 검토는 실제 커널의 모든 동시 실행과 메모리 실패를 실행 시험한 것과는 달라요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ababaca의 접두사 표는 무엇인가요?",
+        "options": [
+          "0,0,1,2,3,0,1이에요.",
+          "0,1,2,3,4,5,6이에요."
+        ],
+        "explanation": "ababa의 앞뒤에 같은 가장 긴 진부분은 aba라 3이에요. c를 붙이면 후보가 없어 0, 마지막 a는 길이 1이에요."
+      },
+      {
+        "prompt": "입력이 다음 블록으로 바뀌면 q를 다시 0으로 만드나요?",
+        "options": [
+          "네. 각 블록을 독립해서 찾아요.",
+          "아니요. 앞에서 맞춘 길이를 유지해 경계를 넘어 찾아요."
+        ],
+        "explanation": "q는 블록 반복문 전에 한 번 초기화돼요. 블록 사이에도 유지돼 ab와 c를 이어 abc로 찾을 수 있어요."
+      },
+      {
+        "prompt": "ababa에서 aba를 찾고 바로 next를 부르면 위치 2의 겹친 aba도 찾나요?",
+        "options": [
+          "아니요. 첫 일치 끝 다음인 위치 3부터 시작해요.",
+          "네. 모든 겹친 일치를 자동으로 나열해요."
+        ],
+        "explanation": "성공하면 다음 offset은 3이고 새 호출의 q는 0이에요. 겹친 일치 전체를 나열하는 계약이 아니에요."
+      },
+      {
+        "prompt": "prefix_tbl[0]을 직접 대입하지 않아도 0인 이유는 무엇인가요?",
+        "options": [
+          "C의 flexible array 문법이 자동으로 0을 만들어요.",
+          "공통 할당 함수가 kzalloc으로 메모리를 0 초기화해요."
+        ],
+        "explanation": "동적 배열 문법 자체는 0 초기화를 보장하지 않아요. textsearch.h의 공통 할당 구현이 그 전제를 제공해요."
+      }
+    ]
+  },
+  "file-a30c564600efa3b0": {
+    "story": "검색 방법을 바꾸어 끼우고 입력 조각을 가져오는 담당자도 따로 정하면 같은 틀로 여러 검색을 할 수 있어요. 공통 설정과 한 번의 진행 상태를 나눠 보관해요.",
+    "meaning": "textsearch의 함수 연결표, 검색별 상태와 정렬된 사설 메모리를 이해해요.",
+    "exercise": "find→next→알고리즘 find→finish 순서를 적고 offset과 cb 중 무엇이 초기화되는지 표시하세요.",
+    "guide": [
+      "재사용할 설정은 ts_config, 각 검색의 진행 위치와 임시 기록은 ts_state예요. 알고리즘은 ts_ops의 함수 포인터로 연결해 갈아 끼워요.",
+      "get_next_block은 다음 입력 조각의 주소와 길이를 주고 길이 0으로 끝을 알려요. finish는 검색 한 번 뒤 남은 공급자 작업을 정리하고 destroy는 설정 전체 수명을 끝내는 역할이에요.",
+      "공유 설정과 검색별 상태를 구분하고 callback이 가리킨 데이터가 필요한 동안 살아 있으며 동시에 써도 되는지 호출자가 보장해야 해요."
+    ],
+    "goal": "textsearch의 함수 연결표, 검색별 상태와 정렬된 사설 메모리를 이해해요.",
+    "deep_dive": [
+      {
+        "title": "전체 선언",
+        "text": "헤더는 SPDX 사용 조건과 중복 포함을 막는 guard로 시작해 types·list·kernel·err·slab을 포함해요. module과 config의 전방 선언 뒤 TS_AUTOLOAD=1, TS_IGNORECASE=2와 state·ops·config 구조체가 있어요. 검색·조회 inline 네 개, 공통 외부 API 다섯 개, 사설 메모리의 정렬·할당·조회 함수가 이어져요. inline은 짧은 함수 구현을 헤더에 제공하는 방식이에요."
+      },
+      {
+        "title": "검색별 상태",
+        "text": "ts_state에는 다음 검색 시작점인 unsigned int offset과 char cb[48]이 있어요. cb는 입력 공급자가 여러 get_next_block 호출 사이 기억할 정보를 넣는 48바이트 공간이에요. textsearch_find는 offset만 0으로 만들고 cb 전체를 지우지 않아요. 필요한 cb 필드는 공급자가 초기화해야 해요."
+      },
+      {
+        "title": "전략과 수명 정보",
+        "text": "전략 표 ts_ops에는 이름과 init/find/destroy/get_pattern/get_pattern_len 함수 포인터, owner 모듈과 연결 목록 노드가 있어요. 함수 포인터는 실행할 함수 주소예요. 공통 코드는 같은 인터페이스로 KMP 같은 여러 알고리즘을 사용할 수 있어요. 추가 자원이 없는 알고리즘은 선택 사항인 destroy가 없을 수 있어요."
+      },
+      {
+        "title": "데이터 공급 콜백",
+        "text": "config에는 ops·flags와 함께 get_next_block·finish가 있어요. 공급자는 이미 읽은 양 consumed에 맞는 다음 데이터 주소를 *dst에 넣고 길이를 반환하며 0으로 종료해요. consumed=0은 새 검색이고 cb에 지속 정보를 둘 수 있어요. 입력이 여러 조각이어도 알고리즘은 필요한 맞춤 상태를 따로 이어 갈 수 있어요."
+      },
+      {
+        "title": "inline 호출 순서",
+        "text": "textsearch_next는 ops->find 결과를 저장하고 finish가 있으면 성공·미발견과 관계없이 부른 뒤 저장한 결과를 반환해요. find는 offset=0 다음 next를 호출해요. get_pattern과 get_pattern_len은 해당 ops 함수를 그대로 불러요. UINT_MAX는 위치가 아니라 미발견 표식이에요."
+      },
+      {
+        "title": "8바이트 경계와 0 초기화",
+        "text": "TS_PRIV_ALIGN은 길이를 8의 배수로 올려 정렬해요. alloc_ts_config는 정렬된 config 크기+payload를 kzalloc해 모두 0으로 만들고 실패하면 ERR_PTR(-ENOMEM)을 반환해요. ts_config_priv는 config를 바이트 포인터로 바꾸고 같은 정렬 크기를 더해 전용 데이터 시작을 찾아요. 이 함수가 모든 정렬 요구나 크기 덧셈 넘침을 검사하지는 않아요."
+      },
+      {
+        "title": "CS 연결",
+        "text": "공통 틀에 알고리즘을 끼우는 전략 패턴, 함수 포인터, 공유 설정과 개별 진행 상태, 외부 입력 공급, 오류 포인터와 자원 소유권을 연결해 읽어요. finish는 한 검색 호출 뒤 정리이고 destroy는 config 자체를 없애는 정리예요. 이름이 비슷한 종료 작업도 수명 범위가 달라요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "textsearch_find는 cb[48]도 모두 0으로 지우나요?",
+        "options": [
+          "아니요. offset만 0으로 해요.",
+          "네. ts_state 전체를 초기화해요."
+        ],
+        "explanation": "구현은 offset=0 뒤 next를 부를 뿐이에요. cb 준비는 입력 공급자가 책임져요."
+      },
+      {
+        "prompt": "못 찾았어도 finish callback을 호출하나요?",
+        "options": [
+          "아니요. 찾았을 때만 호출해요.",
+          "네. 함수가 있으면 검색 결과와 관계없이 호출해요."
+        ],
+        "explanation": "next는 결과를 저장하고 finish가 있는지만 검사해요. 성공값인지로 분기하지 않아요."
+      },
+      {
+        "prompt": "alloc_ts_config 실패는 NULL로만 표현하나요?",
+        "options": [
+          "아니요. ERR_PTR(-ENOMEM)을 반환해요.",
+          "네. kzalloc 결과를 그대로 반환해요."
+        ],
+        "explanation": "kzalloc의 NULL을 오류 포인터로 바꾸므로 호출자는 IS_ERR 방식의 계약을 따라야 해요."
+      }
+    ]
+  },
+  "file-c043ddbc2b159ef5": {
+    "story": "검색 방법을 이름표로 등록해 두고 필요할 때 빌려 쓰는 공통 창구예요. 방법을 찾는 것과 그 코드가 사라지지 않게 사용권을 얻는 것은 별도 일이에요.",
+    "meaning": "textsearch의 등록·RCU 조회·모듈 참조와 설정 정리 순서를 이해해요.",
+    "exercise": "알고리즘 조회 성공 뒤 init 실패 경로와 성공 뒤 destroy 경로의 모듈 참조를 비교하세요.",
+    "guide": [
+      "목록 변경은 spinlock으로 한 번에 한 작성자만 하게 하고 조회는 RCU로 읽어요. 선택한 알고리즘은 모듈 참조를 얻어 설정이 살아 있는 동안 코드를 유지해요.",
+      "prepare로 만든 설정을 사용하고 destroy로 돌려줘요. 각 검색의 진행 상태 ts_state는 따로 제공해야 해요.",
+      "별도 상태를 쓴다고 공유 config의 입력 callback을 동시에 마음대로 바꾸어도 안전한 것은 아니에요. 함수 포인터와 데이터 수명이 안정된 계약이 필요해요."
+    ],
+    "goal": "textsearch의 등록·RCU 조회·모듈 참조와 설정 정리 순서를 이해해요.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 문서",
+        "text": "파일 첫 문서에는 SPDX와 작성자, 소개, 문자 그림으로 그린 구조, 사용 순서와 chicken 검색 예제가 있어요. 헤더 다음에는 전역 ops 목록·잠금, 조회·등록·해제, 연속 입력 어댑터와 prepare·destroy 및 export가 있어요. 문서의 finish 단계는 실제 호출자인 헤더의 next wrapper와 함께 읽어야 해요."
+      },
+      {
+        "title": "이름 조회와 모듈 참조",
+        "text": "lookup_ts_algo는 RCU 읽기 구간에서 strcmp로 이름을 비교해요. 이름이 맞아도 try_module_get(owner)로 모듈 사용 참조를 얻어야 반환하고 실패하면 NULL이에요. RCU는 목록을 읽는 동안, 모듈 참조는 찾은 뒤 사용하는 동안의 수명을 지켜요. 이름 찾기만으로 코드 수명이 확보되지는 않아요."
+      },
+      {
+        "title": "등록 검증과 중복",
+        "text": "register는 name과 find/init/get_pattern/get_pattern_len 함수가 빠지면 -EINVAL이에요. destroy는 선택 사항이에요. 잠금 안에서 같은 이름이면 -EEXIST로 거절하고 없으면 list_add_tail_rcu로 끝에 추가해요. ops 포인터 자체는 유효하다는 전제이며 NULL ops를 알아서 방어하는 함수가 아니에요."
+      },
+      {
+        "title": "등록 해제의 범위",
+        "text": "unregister는 이름 문자열이 아니라 등록 때의 ops 포인터와 같은 항목을 찾아요. 잠금 안에서 list_del_rcu로 빼고 없으면 -ENOENT예요. 여기에는 synchronize_rcu나 객체 메모리 해제가 없어요. 반환하자마자 임의로 ops 공간을 재사용해도 된다고 생각하지 말고 모듈·RCU 수명 규칙을 확인해야 해요."
+      },
+      {
+        "title": "연속 데이터 어댑터",
+        "text": "연속 입력용 ts_linear_state는 len과 data를 state->cb 안에 놓아요. get_linear_data는 consumed<len이면 data+consumed 주소와 남은 길이를 주고 아니면 0이에요. find_continuous는 config의 공급 함수를 이것으로 정하고 cb의 두 필드를 쓴 다음 find를 불러요. len은 바이트 수여서 중간 NUL도 검색 입력에 포함될 수 있어요."
+      },
+      {
+        "title": "공유 설정의 전제",
+        "text": "소개 문서는 각각 ts_state를 주면 같은 설정을 반복·병렬 사용한다고 설명해요. 하지만 find_continuous는 conf->get_next_block을 직접 써요. 서로 다른 공급 방식으로 공유 설정을 동시에 바꾸는 사용까지 안전하다는 뜻은 아니에요. 진행 상태 분리뿐 아니라 callback과 입력 데이터도 필요한 동안 안정적이어야 해요."
+      },
+      {
+        "title": "prepare와 자동 로딩",
+        "text": "prepare는 패턴 길이 0을 먼저 ERR_PTR(-EINVAL)로 거절해요. 이름이 없을 때 CONFIG_MODULES 지원과 TS_AUTOLOAD가 모두 있어야 request_module(\"ts_%s\",algo)를 요청하고 다시 조회해요. 그래도 없으면 -ENOENT예요. NFS 같은 원격 파일시스템의 모듈 로딩이 현재 문맥과 서로 기다리는 교착을 일으킬 수 있어 항상 자동 로딩하지 않아요."
+      },
+      {
+        "title": "초기화 실패와 성공의 소유권",
+        "text": "조회 성공 후 ops->init을 실행해요. 오류 포인터면 오류 번호를 보관하고 module_put으로 먼저 얻은 모듈 참조를 반환해요. 성공하면 conf->ops를 채워 설정을 반환하고 참조를 유지해요. 패턴 데이터 형식이 알고리즘마다 다를 수 있다는 문서 경고도 있어 이름만 바꾸면 모든 패턴이 호환된다고 보장하지 않아요."
+      },
+      {
+        "title": "destroy의 순서",
+        "text": "destroy는 conf->ops가 있으면 선택적인 알고리즘 destroy를 먼저 부르고 module_put을 해요. 마지막에 공통 설정 메모리를 kfree해요. 알고리즘 추가 자원과 공통 메모리 정리는 서로 다른 단계예요. 오류 포인터를 그대로 이 함수에 넘겨도 된다는 계약은 없어요."
+      },
+      {
+        "title": "CS 연결",
+        "text": "이 파일은 플러그인 등록소, 읽기와 변경의 동기화 차이, 모듈 사용권, 연속 입력을 공통 공급자로 바꾸는 어댑터와 두 단계 정리를 보여 줘요. 문서·헤더·알고리즘의 경계를 함께 읽은 설명이며 실제 RCU 경쟁이나 모듈 로딩을 실행해 전부 시험했다는 뜻은 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "같은 이름의 다른 ops가 이미 등록돼 있으면 어떻게 하나요?",
+        "options": [
+          "-EEXIST를 반환해요.",
+          "기존 항목을 자동 교체해요."
+        ],
+        "explanation": "잠금 안의 이름 비교에서 오류 경로로 가며 옛 항목을 지우거나 바꾸지 않아요."
+      },
+      {
+        "prompt": "unregister는 무엇을 기준으로 대상을 찾나요?",
+        "options": [
+          "이름만 같으면 다른 구조체도 제거해요.",
+          "등록했던 ops 포인터와 같은지 확인해요."
+        ],
+        "explanation": "삭제 조건은 o==ops예요. 등록의 이름 중복 검사와 해제 대상 식별 기준이 달라요."
+      },
+      {
+        "prompt": "알고리즘 init 실패 때 먼저 얻은 모듈 참조는 어떻게 하나요?",
+        "options": [
+          "module_put으로 돌려줘요.",
+          "실패해도 영원히 유지해요."
+        ],
+        "explanation": "성공한 설정만 참조를 유지해 destroy 때 반환해요. 실패는 오류 경로에서 돌려줘요."
+      },
+      {
+        "prompt": "알고리즘을 못 찾으면 모듈 자동 로딩을 언제나 시도하나요?",
+        "options": [
+          "네. 이름이 없으면 무조건 요청해요.",
+          "아니요. 모듈 지원과 TS_AUTOLOAD 조건이 필요해요."
+        ],
+        "explanation": "호출 문맥에 따라 로딩이 교착을 만들 수 있어서 필요한 조건을 명시적으로 검사해요."
+      }
+    ]
+  },
+  "file-3bba15514f85e82a": {
+    "story": "학교 전체 시계를 맞추는 일과 지금 CPU가 한 일을 기록하는 일은 달라요. 시간 눈금을 넘기지 않는 CPU도 자기 사용 기록은 남겨요.",
+    "meaning": "legacy tick의 전역 시간·CPU 집계 조건과 잠금 범위를 이해해요.",
+    "exercise": "ticks가 0과 3일 때 호출되는 함수들을 표시하고 update_wall_time의 잠금 밖 위치를 찾으세요.",
+    "guide": [
+      "전역 시간 진행은 ticks가 0이 아닐 때만 해요. CPU별 프로세스 시간과 profiling은 그 조건 밖에서 한 번씩 실행해요.",
+      "이 함수는 공통 clockevents로 전환하지 않은 플랫폼용이에요. tick은 타이머의 시간 눈금이고 인자는 지난 호출 이후 경과한 눈금 수예요.",
+      "호출자는 인터럽트가 꺼진 상태를 보장해야 해요. raw spinlock 사용만으로 이 호출 전제가 저절로 충족되지는 않아요."
+    ],
+    "goal": "legacy tick의 전역 시간·CPU 집계 조건과 잠금 범위를 이해해요.",
+    "deep_dive": [
+      {
+        "title": "전체 구성과 대상",
+        "text": "파일에는 GPL-2.0 표시와 여러 CPU 아키텍처의 코드를 모았다는 설명, irq·profile·timekeeper_internal·tick-internal 헤더와 legacy_timer_tick 하나가 있어요. generic clockevents는 공통 타이머 사건 처리 틀이에요. 그것을 쓰지 않는 플랫폼을 위해 Makefile의 LEGACY_TIMER_TICK 설정이 이 파일을 선택해요."
+      },
+      {
+        "title": "호출자 전제",
+        "text": "인자 ticks는 마지막 호출 뒤 흐른 tick 수예요. 주석은 인터럽트 비활성 상태로 호출하라고 명시해요. 본문에는 local_irq_disable이 없으므로 호출자가 이 상태를 준비해야 해요. raw_spin_lock이 다른 CPU의 동시 변경을 막는 것과 현재 CPU 인터럽트를 미리 끄는 계약은 별개예요."
+      },
+      {
+        "title": "전역 시간 갱신 보호",
+        "text": "ticks가 0이 아니면 jiffies_lock을 잡고 jiffies_seq 쓰기 구간을 연 뒤 do_timer(ticks)를 불러요. 이어 seqcount 구간을 닫고 잠금을 풀어요. jiffies는 커널 시간 눈금 계수예요. 잠금은 작성자끼리 순서를 맞추고 seqcount는 읽는 쪽이 중간 변경을 알아차려 일관된 값을 얻도록 도와요. 둘은 같은 역할의 불필요한 중복이 아니에요."
+      },
+      {
+        "title": "Wall time 갱신 위치",
+        "text": "update_wall_time은 if(ticks) 안이지만 jiffies_lock을 푼 뒤 호출해요. 따라서 함수 전체가 같은 잠금 안에서 실행되는 것은 아니에요. ticks=3을 do_timer에 한 번 전달하는 것과 뒤 함수들을 세 번 반복 호출하는 것도 달라요. 이 본문에는 그런 반복문이 없어요."
+      },
+      {
+        "title": "Ticks가 0이어도 하는 일",
+        "text": "if 밖의 update_process_times(user_mode(get_irq_regs()))와 profile_tick(CPU_PROFILING)은 항상 한 번씩 호출해요. 앞 함수는 인터럽트 당시 레지스터 문맥에서 사용자 모드였는지 얻어 집계하고 뒤 함수는 CPU 사용 관찰을 해요. ticks=0은 이 CPU가 전역 시계 진행을 맡지 않는 경우이지 전체 함수가 아무 일도 안 한다는 뜻이 아니에요."
+      },
+      {
+        "title": "검증 범위",
+        "text": "이 설명은 파일 전체 분기와 호출 순서를 다뤄요. do_timer·update_wall_time·update_process_times의 내부 구현이 이 짧은 파일에 모두 있는 것은 아니에요. 원문 읽기와 호출 조건 검토이며 실제 타이머 인터럽트를 만들거나 시간을 바꾸는 실행 시험은 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ticks=0이면 프로세스 시간 집계도 건너뛰나요?",
+        "options": [
+          "아니요. 프로세스 집계와 profiling은 실행해요.",
+          "네. 즉시 반환해요."
+        ],
+        "explanation": "두 호출은 if(ticks) 밖에 있어 전역 시간 진행 참여와 별도로 실행돼요."
+      },
+      {
+        "prompt": "update_wall_time을 jiffies_lock을 잡은 채 부르나요?",
+        "options": [
+          "네. 모든 뒤 집계도 같은 잠금 안이에요.",
+          "아니요. 잠금을 푼 뒤 불러요."
+        ],
+        "explanation": "write_seqcount_end와 raw_spin_unlock 다음에 호출해요. 함수 호출과 잠금 경계를 함께 봐야 해요."
+      },
+      {
+        "prompt": "인터럽트가 꺼진 상태는 누가 준비해야 하나요?",
+        "options": [
+          "호출자가 보장해야 해요.",
+          "이 함수가 언제나 local_irq_disable을 해요."
+        ],
+        "explanation": "주석의 호출 조건이며 본문에는 인터럽트를 끄는 호출이 없어요."
+      }
+    ]
+  },
+  "file-42d30a10aec693c9": {
+    "story": "알람이 한 번 울릴 모드로 바꾸는 것과 실제로 몇 시에 울릴지 정하는 것은 달라요. 더는 알람이 필요 없다는 특별한 값도 따로 있어요.",
+    "meaning": "oneshot 타이머의 장치 상태·소프트웨어 모드·만료 시각을 구분해요.",
+    "exercise": "KTIME_MAX, 일반 expires, resume의 세 경로에서 상태와 예약 함수를 비교하세요.",
+    "guide": [
+      "oneshot은 다음 사건을 한 번씩 예약하는 방식이에요. 장치가 이를 지원하는지, tick 소프트웨어가 그 모드인지, 다음 만료 시각이 무엇인지는 서로 다른 정보예요.",
+      "KTIME_MAX는 이 함수에서 아주 먼 시각의 실제 알람이 아니라 더 예약할 사건이 없다는 표식으로 사용돼요. 장치를 ONESHOT_STOPPED로 멈춰요.",
+      "전환 검사는 switch 함수가 하고 모든 helper가 반복하지는 않아요. 어떤 함수는 오류를 전달하고 resume/setup은 void라 결과를 반환하지 않는 차이도 확인해요."
+    ],
+    "goal": "oneshot 타이머의 장치 상태·소프트웨어 모드·만료 시각을 구분해요.",
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0과 저작권, 관련 헤더 다음에 program_event·resume_oneshot·setup_oneshot·switch_to_oneshot·mode_active·조건부 init_highres 여섯 함수가 있어요. 현재 CPU의 tick_cpu_device 또는 인자로 받은 장치를 조작해요. 타이머 대기줄 자체의 삽입·삭제까지 구현한 파일은 아니에요."
+      },
+      {
+        "title": "이벤트가 없다는 sentinel",
+        "text": "program_event는 현재 CPU의 evtdev를 얻어요. expires가 KTIME_MAX이면 ONESHOT_STOPPED로 상태를 바꾸고 dev->next_event에도 KTIME_MAX를 저장한 뒤 0을 반환해요. sentinel은 이런 특별한 뜻을 나타내는 값이에요. 최대 시각까지 하드웨어를 실제 예약하는 경로가 아니에요."
+      },
+      {
+        "title": "정지 장치의 재개와 예약",
+        "text": "일반 expires이면 장치가 oneshot stopped인지 보고 필요하면 ONESHOT으로 돌려요. 이어 clockevents_program_event(dev,expires,force)의 결과를 그대로 반환해요. force는 호출자가 준 그대로이며 무조건 true로 바꾸지 않아요. 이 wrapper 안에는 dev가 NULL인지 확인하는 검사도 없어요."
+      },
+      {
+        "title": "Resume의 의미",
+        "text": "resume_oneshot은 현재 CPU 장치를 ONESHOT으로 바꾸고 ktime_get()으로 읽은 현재 시각에 force=true로 예약해요. 옛 next_event를 읽어 되살리는 동작이 아니에요. 반환형 void라 하위 예약 함수의 결과를 호출자에게 전달하지 않아요."
+      },
+      {
+        "title": "새 장치 설정",
+        "text": "setup_oneshot은 인자로 받은 newdev에 event_handler, 즉 이벤트 때 부를 함수를 저장하고 ONESHOT 상태로 바꾼 뒤 받은 next_event를 force=true로 예약해요. 역시 void예요. 이 본문은 현재 CPU의 tick_device.mode를 직접 바꾸거나 ONESHOT 기능 비트를 검사하지 않아요."
+      },
+      {
+        "title": "모드 전환의 유효성 검사",
+        "text": "switch_to_oneshot은 현재 CPU 장치가 없거나 ONESHOT 기능이 없거나 functional하지 않으면 로그와 -EINVAL이에요. functional은 장치가 실제 동작 가능한지 보는 조건이에요. 로그는 장치 없음, 동작 불가, oneshot 미지원 순으로 구분하며 기능과 동작이 모두 문제이면 동작 불가를 먼저 설명해요."
+      },
+      {
+        "title": "성공 전환의 순서",
+        "text": "검사에 성공하면 td->mode를 ONESHOT으로, dev->event_handler를 받은 handler로 바꾸고 장치 상태를 ONESHOT으로 전환해요. 이어 broadcast 전환을 호출하고 0을 반환해요. broadcast는 다른 CPU에 타이머 사건을 전달하는 처리와 관련돼요. 여기에는 구체적 만료 시각을 clockevents_program_event로 예약하는 호출이 없어요."
+      },
+      {
+        "title": "로컬 모드 조회",
+        "text": "mode_active는 local_irq_save로 인터럽트 상태를 저장하고 끈 동안 현재 CPU mode가 ONESHOT인지 비교해요. 이후 local_irq_restore로 원상태를 복구해요. 주석이 시스템의 nohz/highres를 설명해도 실제 읽는 것은 현재 CPU 필드 하나예요. 전체 CPU 순회나 장치 기능 비트 검사가 아니에요."
+      },
+      {
+        "title": "Highres 진입",
+        "text": "CONFIG_HIGH_RES_TIMERS가 있을 때만 init_highres를 정의해요. highres는 더 세밀한 시각의 타이머 처리예요. 이 wrapper는 switch_to_oneshot(hrtimer_interrupt)의 결과를 그대로 줘요. 호출자가 인터럽트를 꺼야 하며 자체 disable이나 새 장치 할당은 없어요."
+      },
+      {
+        "title": "호출자 책임과 결과 전달",
+        "text": "유효 장치 검사는 switch에 있고 다른 helper들에 똑같이 있지 않아요. program_event·switch·init_highres는 int 결과를 전달하지만 resume·setup은 void예요. 상태 변경 도중 모든 실패에서 이전 대입까지 전부 되돌리는 거래형 rollback 코드도 없어요. 각 호출 문맥과 하위 함수 계약을 함께 봐야 해요."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "이 파일로 ONESHOT과 STOPPED 상태, 특별한 KTIME_MAX, CPU별 정보와 시스템 설명의 차이, 인터럽트 보호, callback 교체와 예약을 배워요. 전체 소스를 읽은 설명이며 실제 장치를 highres로 바꾸거나 인터럽트를 발생시켜 시험한 결과는 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "program_event의 expires가 KTIME_MAX이면 어떻게 하나요?",
+        "options": [
+          "장치를 ONESHOT_STOPPED로 바꾸고 next_event도 KTIME_MAX로 해요.",
+          "그 먼 시각까지 하드웨어 알람을 반드시 예약해요."
+        ],
+        "explanation": "특별한 값 분기는 일반 예약 호출 없이 0으로 끝나요. 값이 제어 상태를 나타내요."
+      },
+      {
+        "prompt": "switch_to_oneshot이 다음 알람의 정확한 시각도 직접 예약하나요?",
+        "options": [
+          "네. 언제나 현재 시각을 예약해요.",
+          "아니요. 모드·handler·장치 상태와 broadcast를 바꿔요."
+        ],
+        "explanation": "구체적 예약은 program_event·resume·setup의 역할이에요. 전환 성공과 예약 완료를 구분해요."
+      },
+      {
+        "prompt": "mode_active는 모든 CPU의 모드를 조사하나요?",
+        "options": [
+          "아니요. 인터럽트를 보호하며 현재 CPU 모드를 읽어요.",
+          "네. 시스템 CPU 목록 전체를 돌아요."
+        ],
+        "explanation": "__this_cpu_read 한 번의 대상은 현재 CPU예요."
+      },
+      {
+        "prompt": "resume_oneshot이 예약할 때 사용하는 시각과 force는 무엇인가요?",
+        "options": [
+          "옛 next_event와 false예요.",
+          "ktime_get() 현재 시각과 true예요."
+        ],
+        "explanation": "옛 예약 복원이 아니라 현재 시각을 새로 읽어 강제 예약을 요청해요."
+      },
+      {
+        "prompt": "init_highres가 전달하는 이벤트 handler는 무엇인가요?",
+        "options": [
+          "hrtimer_interrupt예요.",
+          "NULL이고 나중에 항상 자동 생성해요."
+        ],
+        "explanation": "조건부 wrapper가 해당 함수 주소를 직접 전달하고 전환 결과를 반환해요."
+      }
+    ]
+  },
+  "file-17cce471f06413cb": {
+    "story": "CPU가 쉬는 중인지, 시간 눈금을 멈췄는지, 실제 쉰 시간을 세는 중인지는 같은 질문이 아니에요. 그래서 서로 다른 표시와 시간 기록을 둬요.",
+    "meaning": "tick_sched의 상태 비트·시각·횟수·누적량과 조건부 함수를 구분해요.",
+    "exercise": "INIDLE·STOPPED·IDLE_ACTIVE를 따로 설명하고 idle_calls와 idle_sleeptime의 단위를 비교하세요.",
+    "guide": [
+      "idle은 CPU가 실행할 일이 없어 쉬는 상태예요. idle 진입, tick 중단과 실제 수면 시간 집계를 하나의 상태로 합쳐 생각하면 안 돼요.",
+      "이 헤더는 상태 구조와 선언을 정해요. 이름이 비슷한 last_tick_jiffies와 last_jiffies도 실제 목적이 달라요.",
+      "atomic이나 seqcount 멤버 하나가 구조체 전체를 자동 보호하지는 않아요. 지원이 없는 함수 stub도 항상 성공하는 것은 아니므로 본문 반환을 확인해요."
+    ],
+    "goal": "tick_sched의 상태 비트·시각·횟수·누적량과 조건부 함수를 구분해요.",
+    "deep_dive": [
+      {
+        "title": "파일 전체와 포함 문맥",
+        "text": "GPL-2.0과 중복 포함 guard, hrtimer 헤더 뒤에 장치 모드, tick_device, 상태 비트 여섯 개, tick_sched와 함수 선언·stub이 있어요. stub은 기능이 꺼졌을 때 대신 제공하는 짧은 함수예요. 실제 idle 진입·이탈 알고리즘이나 CPU별 객체 저장소 자체를 여기서 정의하지는 않아요."
+      },
+      {
+        "title": "Tick 장치 모드",
+        "text": "enum의 PERIODIC은 0, ONESHOT은 1이에요. periodic은 정기 눈금, oneshot은 다음 사건을 한 번씩 예약하는 모드예요. tick_device는 evtdev 장치 포인터와 mode만 보관해요. 고해상도 타이머 대기줄이나 이벤트 함수 구현을 이 구조체 안에 직접 담지는 않아요."
+      },
+      {
+        "title": "Idle 관련 세 비트",
+        "text": "INIDLE=BIT(0)은 tick idle 모드, STOPPED=BIT(1)은 idle tick 중단, IDLE_ACTIVE=BIT(2)는 실제 idle 시간 집계 활성 표시예요. IRQ 처리 중에는 IDLE_ACTIVE가 풀릴 수 있어요. BIT(n)은 n번 자리 비트 하나를 켠 값이에요. idle 진입이 항상 tick 중단이라거나 INIDLE과 ACTIVE가 같다는 뜻은 아니에요."
+      },
+      {
+        "title": "나머지 상태 비트",
+        "text": "DO_TIMER_LAST=BIT(3)은 쉬기 전 마지막 do_timer 담당 CPU였다는 뜻, NOHZ=BIT(4)는 NO_HZ 활성, HIGHRES=BIT(5)는 고해상도 tick 모드예요. NO_HZ는 불필요한 정기 tick을 줄이는 기능이에요. flags는 unsigned long이며 실제 비트 켜기·끄기는 이 헤더가 아니라 tick-sched.c에서 확인해야 해요."
+      },
+      {
+        "title": "Jiffies 정체 감지 필드",
+        "text": "stalled_jiffies는 unsigned int로 tick 사이 발견한 시간 눈금 정체를 세어요. last_tick_jiffies는 unsigned long으로 마지막 tick 때 본 jiffies를 기억해요. 뒤의 last_jiffies와는 목적이 달라요. 구조체만 보고 몇 번 정체하면 조치하는지나 복구 정책까지 알 수는 없어요."
+      },
+      {
+        "title": "Tick 처리 필드 전체",
+        "text": "sched_timer는 고해상도 모드에서 정기 tick을 예약할 hrtimer예요. ktime_t last_tick은 nohz 수면 때문에 타이머를 바꾸기 전 만료 시각으로, 깨어나 원래 시간축을 이어 가는 기준이에요. next_tick은 dynticks의 다음 tick, idle_jiffies는 idle 진입 눈금, idle_waketime은 idle이 끊긴 시각이에요. unsigned int got_idle_tick은 idle 중 타이머 함수 실행 표시예요. 주석의 inidle 상태는 현재 별도 멤버가 아니라 flags에 있어요."
+      },
+      {
+        "title": "Idle 진입과 일관성",
+        "text": "idle_sleeptime_seq는 값 일관성을 검사할 seqcount_t이고 idle_entrytime은 ktime_t 진입 시각이에요. seqcount는 쓰는 동안 바뀐 번호를 독자가 확인해 재시도할 수 있게 해요. 멤버가 있다는 것만으로 모든 필드가 자동 보호되거나 독자가 잠금을 잡는 것은 아니며 실제 begin/end와 retry 범위를 구현에서 봐야 해요."
+      },
+      {
+        "title": "다음 만료 계산 상태",
+        "text": "last_jiffies는 다음 사건을 마지막 계산할 때의 기준 눈금이에요. u64 timer_expires_base는 monotonic, 즉 뒤로 가지 않는 시간 기준이고 timer_expires는 tick 중단 때 예상 만료예요. u64 next_timer와 ktime_t idle_expires는 각각 다음 타이머 만료와 idle의 다음 tick을 적는 디버그 정보예요. 관찰용 값만이 실제 장치 예약 상태의 유일한 기준이라고 가정하지 마세요."
+      },
+      {
+        "title": "Idle 횟수와 기간",
+        "text": "unsigned long idle_calls는 전체 idle 호출 수, idle_sleeps는 그중 scheduler tick을 멈춘 호출 수예요. ktime_t idle_exittime은 종료 순간, idle_sleeptime은 tick 중단 idle 수면의 누적 시간, iowait_sleeptime은 그중 처리할 I/O가 남았던 수면 합이에요. 횟수와 기간, 한 시각과 누적량을 구분하세요."
+      },
+      {
+        "title": "Full dynticks와 clock 변경",
+        "text": "atomic_t tick_dep_mask는 누군가 tick을 필요로 할 때 표시하는 의존성 비트 집합이에요. check_clocks는 clocksource 변경 알림을 담는 unsigned long이에요. clocksource는 시간을 읽을 기준 장치예요. atomic 멤버의 연산 보장이 주변 시각 필드까지 한 묶음으로 만들어 주지는 않아요. 각 비트 의미와 알림을 소비하는 코드는 여기 없어요."
+      },
+      {
+        "title": "공통 함수 선언",
+        "text": "tick_get_tick_sched(int cpu)는 CPU 상태 포인터를 얻는 외부 선언, tick_setup_sched_timer(bool hrtimer)는 타이머를 설정하는 외부 선언이에요. 본문이 없으므로 CPU 번호 검사·포인터 수명·bool에 따른 모든 분기를 이 헤더만으로 보장하지 마세요."
+      },
+      {
+        "title": "Oneshot 종료 분기",
+        "text": "CONFIG_TICK_ONESHOT이면 tick_sched_timer_dying(int cpu)를 선언하고 아니면 몸체가 빈 void inline을 제공해요. 기능이 꺼져도 같은 호출 코드를 유지할 수 있지만 실제 타이머 정리는 하지 않아요. 그래도 함수 인자 표현식의 관측 가능한 부작용은 C 함수 호출 평가 규칙을 따라요. 인자를 통째로 없애는 빈 매크로와 같지 않아요."
+      },
+      {
+        "title": "Broadcast 비활성은 성공이 아님",
+        "text": "CONFIG_GENERIC_CLOCKEVENTS_BROADCAST이면 __tick_broadcast_oneshot_control을 외부 int 함수로 선언해요. 아니면 stub이 -EBUSY를 반환해 요청을 받아들이지 않아요. 기능이 없는 모든 stub이 0을 반환한다는 규칙은 없으므로 각각 확인해야 해요."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "모든 필드와 설정 분기를 통해 상태의 여러 측면을 별도 비트로 저장하는 이유, 횟수·기간·시각의 구분, 자료형과 동시성 계약의 차이, 실패 stub을 배워요. 이 설명은 tick-sched.c 전체 실행이나 실제 CPU idle 시간을 측정해 검증한 결과는 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "INIDLE과 IDLE_ACTIVE는 언제나 같은 뜻인가요?",
+        "options": [
+          "아니요. IRQ 처리 중 IDLE_ACTIVE는 풀릴 수 있어요.",
+          "네. 같은 비트에 이름만 다르게 붙였어요."
+        ],
+        "explanation": "각각 BIT(0)과 BIT(2)이며 주석이 인터럽트 처리 동안의 차이를 설명해요."
+      },
+      {
+        "prompt": "idle_calls와 idle_sleeps는 어떻게 다른가요?",
+        "options": [
+          "같은 시간을 초와 나노초로 각각 저장해요.",
+          "전체 idle 호출과 tick을 멈춘 idle 호출을 각각 세어요."
+        ],
+        "explanation": "둘 다 횟수예요. 실제 누적 수면 시간은 별도 ktime_t 필드에 있어요."
+      },
+      {
+        "prompt": "last_tick_jiffies와 last_jiffies는 같은 목적의 복제인가요?",
+        "options": [
+          "아니요. 정체 관찰과 다음 이벤트 계산 기준으로 목적이 달라요.",
+          "네. 두 값은 언제나 같아야 해요."
+        ],
+        "explanation": "이름이 비슷해도 주석과 필드 묶음이 다른 역할을 정해요."
+      },
+      {
+        "prompt": "broadcast 기능이 꺼졌을 때 control stub은 무엇을 반환하나요?",
+        "options": [
+          "0이에요.",
+          "-EBUSY예요."
+        ],
+        "explanation": "이 stub은 요청을 성공 처리하지 않아요. 본문의 반환값을 따라야 해요."
+      },
+      {
+        "prompt": "atomic_t tick_dep_mask가 있으니 tick_sched 전체 읽기도 원자적인가요?",
+        "options": [
+          "아니요. 여러 필드의 일관성은 별도 계약이 필요해요.",
+          "네. atomic 멤버 하나면 전체 구조체도 atomic이에요."
+        ],
+        "explanation": "atomic의 보장은 해당 객체의 지원 연산에 관한 것이며 모든 시각·계수를 한 번에 읽는 보장이 아니에요."
+      }
+    ]
+  },
+  "file-ada172032dfffca4": {
+    "story": "시간을 초와 남은 나노초 두 칸으로 적는 것과 나노초 하나의 큰 숫자로 적는 것은 담을 수 있는 범위가 달라요. 모양 정리와 입력 검사는 별개예요.",
+    "meaning": "timespec64의 정상화·유효성·경계 포화와 정수 넘침의 차이를 이해해요.",
+    "exercise": "같은 초에서 나노초 100과 20을 비교하고, (-1초,5억 나노초)의 검사 결과를 설명하세요.",
+    "guide": [
+      "1초는 10억 나노초예요. tv_sec와 tv_nsec를 나누어 적는 표현에서 남은 나노초는 보통 0..999999999로 정리해요.",
+      "정규화는 넘친 나노초를 초로 옮겨 모양을 맞추는 일이고, valid는 API가 받는 값인지 검사해요. 음수 초를 가진 정규화 표현도 이 valid에는 거절돼요.",
+      "s64 나노초 하나로 바꿀 때는 훨씬 좁은 범위를 써요. 경계값으로 제한하는 포화, 모든 산술 overflow 검사, 입력 검증을 같은 기능으로 보지 마세요."
+    ],
+    "goal": "timespec64의 정상화·유효성·경계 포화와 정수 넘침의 차이를 이해해요.",
+    "deep_dive": [
+      {
+        "title": "전체 구성과 자료형",
+        "text": "GPL-2.0과 guard, math64·vDSO 시간 헤더 뒤 time64_t를 부호 있는 __s64, timeu64_t를 부호 없는 __u64로 정해요. UAPI time.h도 포함해요. timespec64는 64비트 초 tv_sec와 long 나노초 tv_nsec예요. itimerspec64는 반복 간격 it_interval과 현재 값 it_value 두 timespec64를 가져요. 이름의 64가 모든 필드를 64비트로 고정한다는 뜻은 아니에요."
+      },
+      {
+        "title": "시간 범위 상수",
+        "text": "PSEC_PER_NSEC=1000L은 나노초 하나의 피코초 수예요. TIME64_MAX/MIN과 KTIME_MAX/MIN은 같은 s64 최댓값·최솟값 숫자지만 단위와 용도가 달라요. KTIME_SEC_MAX/MIN은 KTIME 한계를 NSEC_PER_SEC로 나눈 초 경계이며 음수 정수 나눗셈도 0 방향으로 잘라요. s64 초 전체 범위를 s64 나노초 하나에 담을 수는 없어요."
+      },
+      {
+        "title": "시각 설정의 여유",
+        "text": "TIME_UPTIME_SEC_MAX는 30×365일을 초로 바꾼 여유량이에요. TIME_SETTOD_SEC_MAX는 KTIME_SEC_MAX에서 이를 빼 시계를 설정한 뒤 오랫동안 계속 실행할 여지를 남겨요. 실제 달력 윤년을 계산해 정확히 30년 뒤 날짜를 구하는 함수가 아니에요."
+      },
+      {
+        "title": "동등성과 비교",
+        "text": "equal은 초와 나노초 두 필드가 모두 같은지 봐요. compare는 초가 다르면 -1 또는 1, 초가 같으면 나노초 차이를 줘요. 예를 들어 100과 20이면 80이므로 부호로 순서를 판단해요. 정상 나노초 범위를 전제로 하며 잘못된 큰 값의 뺄셈이나 비정규화 입력을 자동으로 고치지 않아요."
+      },
+      {
+        "title": "더하기와 빼기",
+        "text": "add와 sub는 초끼리, 나노초끼리 더하거나 뺀 뒤 set_normalized_timespec64로 넘겨요. 나노초가 1초를 넘으면 초로 올리고 음수면 초에서 빌려 모양을 맞춰요. 정상화 구현은 파일 밖에 있어요. 그 호출 전에 이미 하는 초 덧셈·뺄셈의 넘침을 이 inline이 검사하지는 않아요."
+      },
+      {
+        "title": "일반 유효성",
+        "text": "valid는 tv_sec<0을 거절해요. tv_nsec를 unsigned long으로 바꿔 10억 이상인지 확인하므로 음수 나노초도 거절해요. 허용 범위는 0..999999999예요. (-1초,5억 나노초)는 수학적으로 -0.5초를 정규화해 적은 값일 수 있지만 이 API 입력 검사는 통과하지 못해요."
+      },
+      {
+        "title": "엄격 검사와 시각 설정 검사",
+        "text": "valid_strict는 일반 valid 뒤 초가 KTIME_SEC_MAX 이상이면 거절해요. valid_settod는 TIME_SETTOD_SEC_MAX 이상이면 거절해요. 둘 다 >=라 경계와 같은 초도 안 돼요. 경계 초에서 나노초까지 계산해 일부만 허용하는 방식이 아니에요."
+      },
+      {
+        "title": "나노초 변환의 포화",
+        "text": "to_ns는 초가 KTIME_SEC_MAX 이상이면 곧바로 KTIME_MAX, KTIME_SEC_MIN 이하이면 KTIME_MIN을 반환해요. 사이에서만 초×10억+나노초를 계산해요. 경계 초가 같으면 나노초를 안 보고 제한하므로 정확한 총합의 overflow 때만 포화하는 함수와 달라요. tv_nsec 검증이나 모든 잘못된 덧셈까지 안전하게 처리하지는 않아요."
+      },
+      {
+        "title": "외부 변환과 안전한 덧셈 선언",
+        "text": "ns_to_timespec64는 s64 나노초를 두 칸 표현으로 바꾸는 외부 선언이에요. add_safe도 외부 선언이며 주석은 양수 두 입력을 전제로 넘침 때 TIME64_MAX로 제한한다고 해요. 실제 반환형은 구조체라 주석만으로 넘침 때 모든 필드 값을 단정하지 말고 그 함수 본문을 확인해야 해요."
+      },
+      {
+        "title": "나노초의 제자리 추가",
+        "text": "add_ns는 기존 tv_nsec+ns를 __iter_div_u64_rem으로 나눠 몫을 초에 더하고 나머지를 tv_nsec에 넣어요. ns는 u64이며 같은 지역 변수를 나머지 출력으로 재사용해요. x86-64 vDSO에서는 외부 커널 함수를 부를 수 없어 __always_inline을 요구해요. 음수 ns 인터페이스가 아니며 합산이나 초 증가의 넘침 검사도 없어요."
+      },
+      {
+        "title": "반복 나눗셈의 비용",
+        "text": "이 vDSO helper는 남은 값이 제수보다 작아질 때까지 빼는 반복 나눗셈이에요. 처리 비용은 넘어가는 초 수에 비례하며 몫의 반환 폭도 u32예요. 임의로 거대한 u64 나노초도 고정 시간에 나누는 일반 CPU 명령이라고 생각하지 말고 사용 범위와 문맥을 지켜요."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "유효한 입력인지, 표현을 정규화했는지, 경계에서 제한했는지, 산술 넘침을 검출했는지는 네 가지 다른 질문이에요. 이 자료는 헤더 전체의 선언과 구현을 나눠 읽어요. 외부 함수까지 모두 실행 시험했거나 별도 전체 파일 학습으로 처리했다는 뜻은 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "compare는 항상 -1,0,1 중 하나만 주나요?",
+        "options": [
+          "아니요. 초가 같으면 나노초 차이를 줘요.",
+          "네. 모든 경로가 세 값 중 하나예요."
+        ],
+        "explanation": "같은 초에서 나노초 100-20은 80이에요. 호출자는 결과의 부호를 봐야 해요."
+      },
+      {
+        "prompt": "tv_sec=-1,tv_nsec=500000000은 valid를 통과하나요?",
+        "options": [
+          "네. 정규화돼 있으면 모두 허용해요.",
+          "아니요. 음수 초를 거절해요."
+        ],
+        "explanation": "수학적으로 -0.5초를 잘 적은 표현일 수 있지만 API 입력 정책은 음수 초를 별도 거절해요."
+      },
+      {
+        "prompt": "초가 KTIME_SEC_MAX와 같으면 to_ns는 어떻게 하나요?",
+        "options": [
+          "나노초를 안 보고 KTIME_MAX를 반환해요.",
+          "항상 두 필드를 정확히 곱하고 더해요."
+        ],
+        "explanation": "조건은 >=예요. 경계 초의 일부 총합이 표현 가능해도 보수적으로 한계값을 반환해요."
+      },
+      {
+        "prompt": "add가 정상화를 부르면 초 덧셈 넘침도 자동으로 검출하나요?",
+        "options": [
+          "네. 이미 잃은 상위 비트까지 복구해요.",
+          "아니요. 초 덧셈은 호출 전에 하며 별도 검사가 없어요."
+        ],
+        "explanation": "표현 정리와 산술 범위 보호는 달라요. add_safe라는 별도 함수의 조건도 구별해야 해요."
+      },
+      {
+        "prompt": "add_ns를 어떤 큰 ns에도 고정 비용 연산이라고 할 수 있나요?",
+        "options": [
+          "아니요. 부르는 helper는 반복 뺄셈을 해요.",
+          "네. div라는 이름이면 언제나 CPU 명령 한 번이에요."
+        ],
+        "explanation": "알고리즘은 실제 helper 본문이 정해요. 큰 몫은 반복이 많고 u32 몫 범위도 고려해야 해요."
+      }
+    ]
+  },
+  "file-5e2281561153e25e": {
+    "story": "초를 나노초로 쓰면 숫자는 커지지만 시계가 더 정확해지는 것은 아니에요. 단위 변환 배율과 측정 정확도를 구별해요.",
+    "meaning": "시간 단위 상수의 방향과 정수 리터럴 폭을 이해해요.",
+    "exercise": "2밀리초를 나노초로 바꾸고 정수 나눗셈에서 남는 작은 단위가 어떻게 되는지 설명하세요.",
+    "guide": [
+      "상수 이름 A_PER_B는 B 한 개에 A가 몇 개 들어 있는지 뜻해요. 작은 단위의 개수로 바꿀 때 곱하고 큰 단위로 바꿀 때 나눠요.",
+      "밀리초와 마이크로초를 혼동하면 결과가 천 배 틀릴 수 있어요. 계산마다 현재 숫자의 단위를 함께 적어 보세요.",
+      "L과 LL은 C 정수의 자료형 접미사예요. 넓은 상수를 쓰는 것만으로 모든 뒤 계산의 overflow까지 막아 주지는 않아요."
+    ],
+    "goal": "시간 단위 상수의 방향과 정수 리터럴 폭을 이해해요.",
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "이 파일은 GPL-2.0, 중복 포함 guard, timespec 변환 배율이라는 주석과 #define 여덟 개가 전부예요. 함수·구조체·잠금 코드는 없어요. 헤더를 포함하면 이름 붙은 상수를 쓸 수 있을 뿐 어떤 시간 변수를 자동으로 변환하지는 않아요."
+      },
+      {
+        "title": "천 배씩 바뀌는 세 단위",
+        "text": "MSEC_PER_SEC, USEC_PER_MSEC, NSEC_PER_USEC는 모두 1000L이에요. 1초=1000밀리초, 1밀리초=1000마이크로초, 1마이크로초=1000나노초예요. 작은 칸으로 세면 개수가 늘어나므로 곱하고, 큰 칸으로 묶으면 나눠요."
+      },
+      {
+        "title": "직접 변환 배율",
+        "text": "NSEC_PER_MSEC와 USEC_PER_SEC는 백만, NSEC_PER_SEC는 10억이에요. 분모 이름의 단위 하나에 분자 단위가 들어 있는 수예요. 2밀리초는 2×NSEC_PER_MSEC=2000000나노초예요. NSEC_PER_USEC를 곱하면 2000이 되어 천 배 작고 단위가 맞지 않아요."
+      },
+      {
+        "title": "더 작은 단위와 리터럴 폭",
+        "text": "PSEC_PER_SEC는 1000000000000LL, FSEC_PER_SEC는 1000000000000000LL이에요. 피코초는 1초의 10^12분의 1, 펨토초는 10^15분의 1이에요. 앞 상수는 L, 큰 둘은 LL이라 32비트 long에도 들어가지 않는 수를 long long으로 표현해요. 하지만 여기에 다른 큰 값을 곱하는 모든 연산이 자동 안전한 것은 아니에요."
+      },
+      {
+        "title": "정밀도와 단위의 구분",
+        "text": "정수 나눗셈으로 큰 단위에 묶으면 남은 작은 단위는 버려질 수 있어요. 그리고 값을 펨토초로 표현해 숫자 자릿수를 늘려도 실제 시계의 분해능이나 측정 정확도는 높아지지 않아요. 이 파일은 배율을 정의하며 하드웨어 오차를 보장하는 자료가 아니에요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "2밀리초를 나노초로 바꾸는 식은 무엇인가요?",
+        "options": [
+          "2*NSEC_PER_MSEC예요.",
+          "2*NSEC_PER_USEC예요."
+        ],
+        "explanation": "밀리초 하나는 백만 나노초예요. 마이크로초 기준 배율을 쓰면 단위가 맞지 않아요."
+      },
+      {
+        "prompt": "PSEC_PER_SEC의 LL 접미사와 관련된 설명은 무엇인가요?",
+        "options": [
+          "언제나 소수 계산을 해야 한다는 표시예요.",
+          "32비트 long에 안 들어가는 큰 상수의 정수 폭이에요."
+        ],
+        "explanation": "LL은 long long 정수 리터럴이에요. 상수를 표현할 폭을 주지만 뒤 곱셈의 넘침 검사까지 하지는 않아요."
+      }
+    ]
+  },
+  "file-a0b6c100f51f64fa": {
+    "story": "큰 수를 계산할 도구가 부족하면 수를 작은 조각으로 나누어 계산할 수 있습니다. 이 파일은 반복해서 빼는 나눗셈과, 32비트 조각을 합치는 곱셈을 준비합니다.",
+    "meaning": "시간을 바꿔 적을 때 쓰는 정수 계산을 읽고, 입력 한계와 컴파일 조건에 따라 다른 계산 길을 고르는 까닭을 설명합니다.",
+    "exercise": "17에서 5를 계속 빼 몫과 나머지를 적고, a=2^32+3, mul=2, b=4, shift=1인 곱셈 결과를 조각별로 계산하세요.",
+    "guide": [
+      "helper는 다른 코드가 가져다 쓰는 작은 도우미 함수입니다. 여기서는 사용할 기계 명령이나 외부 도우미에 제약이 있을 때 반복 뺄셈이나 고정 크기 조각 계산을 사용합니다.",
+      "몫이 작으면 반복 뺄셈이 짧게 끝납니다. 그러나 0으로 나누기, 너무 큰 몫, 잘못된 결과 저장 주소를 이 함수가 검사해 주지는 않습니다.",
+      "비트는 0 또는 1을 담는 자리입니다. 128비트 계산 지원 여부에 따라 곱셈 방법이 바뀌므로, 한쪽에서 가능한 입력을 다른 쪽도 모두 처리한다고 생각하면 안 됩니다."
+    ],
+    "goal": "시간을 바꿔 적을 때 쓰는 정수 계산을 읽고, 입력 한계와 컴파일 조건에 따라 다른 계산 길을 고르는 까닭을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 외부 전제",
+        "text": "파일에는 GPL-2.0 이용 조건 표시, 중복 포함을 막는 guard, 반복 나눗셈 함수, 조건에 따른 곱셈 함수들이 있습니다. 타입을 정의하는 헤더를 여기서 불러오지 않으므로, 포함하는 쪽에서 u64(부호 없는 64비트 수), u32(부호 없는 32비트 수), bool(참·거짓), inline 관련 이름을 미리 준비해야 합니다."
+      },
+      {
+        "title": "반복 나눗셈의 본문",
+        "text": "__iter_div_u64_rem은 dividend에서 divisor를 더 뺄 수 없을 때까지 빼고, 뺀 횟수를 ret에 셉니다. 남은 수는 remainder가 가리키는 곳에 쓰고 ret을 돌려줍니다. 17에서 5를 세 번 빼면 2가 남으므로 몫 3, 나머지 2입니다. 반복 횟수는 숫자를 담는 자리 수보다 실제 몫 크기에 비례합니다."
+      },
+      {
+        "title": "빈 asm의 의도",
+        "text": "asm의 명령 문자열은 비어 있지만 \"+rm\"은 dividend를 읽고 쓸 값이라고 컴파일러에 알립니다. 컴파일러는 C를 기계 명령으로 바꾸는 도구이며, 이 표시의 목적은 반복문을 나머지 연산으로 바꾸는 최적화를 막는 것입니다. 메모리 변경 표시인 memory clobber나 CPU 메모리 장벽은 없으므로, 다른 CPU와 작업 순서를 맞춰 주는 코드는 아닙니다."
+      },
+      {
+        "title": "나눗셈의 입력 한계",
+        "text": "divisor가 0이면 아무리 빼도 dividend가 줄지 않아 반복이 끝나지 않습니다. 몫이 u32의 최대값을 넘으면 ret은 범위를 돌아 작은 값이 되는 래핑이 생깁니다. remainder가 쓸 수 있는 주소인지도 검사하지 않습니다. 따라서 올바른 양의 제수와 저장 주소, 작은 몫을 보장하는 문맥에서 쓰는 도우미입니다."
+      },
+      {
+        "title": "128비트 경로 선택",
+        "text": "CONFIG_ARCH_SUPPORTS_INT128이라는 아키텍처 지원 설정과 __SIZEOF_INT128__라는 컴파일러 지원 표시가 모두 있어야 128비트 길을 고릅니다. 같은 이름의 매크로가 이미 있으면 기본 함수는 만들지 않습니다. a를 unsigned __int128로 넓힌 뒤 a*mul+b를 계산하고 오른쪽으로 shift자리 옮긴 다음 u64로 줄입니다. 줄일 때 최대값에 붙잡아 두는 포화 처리는 없으므로 결과가 크면 윗자리는 사라집니다."
+      },
+      {
+        "title": "대체 경로의 32비트 곱",
+        "text": "128비트 길을 쓸 수 없고 다른 구현도 없으면 mul_u32_u32는 먼저 a를 u64로 넓혀 b와 곱합니다. 두 부호 없는 32비트 수의 곱은 64비트에 담깁니다. 뒤의 자기 이름 매크로는 계산을 한 번 더 하라는 뜻이 아니라, 전처리 단계에서 이 함수가 준비되었다고 표시하는 이름표입니다."
+      },
+      {
+        "title": "하위 곱과 덧셈 carry",
+        "text": "a를 위쪽 32자리 ah와 아래쪽 32자리 al로 나눕니다. __builtin_add_overflow는 al*mul+b를 계산해 아래 64자리를 ret에 담고 그 위로 넘친 올림수(carry)가 있는지 ovf에 기억합니다. ret을 오른쪽으로 옮긴 뒤, 올림수가 있고 shift가 0이 아니면 1ULL<<(64-shift)를 더해 결과 안으로 내려올 올림수 자리를 되살립니다. shift가 0이면 그 올림수는 반환하는 u64 밖에 있으므로 더하지 않습니다."
+      },
+      {
+        "title": "상위 곱의 기여",
+        "text": "ah가 0이 아니면 ah*mul을 32-shift자리 왼쪽으로 옮겨 더합니다. a=al+ah*2^32로 쪼갠 수를 다시 합치는 계산입니다. shift 범위를 실행 중에 검사하지 않으며 두 구현에서 함께 안전하게 쓸 범위는 0부터 32까지로 생각할 수 있습니다. 32를 넘거나 64 이상인 값을 대체 구현에 넣으면 실행되는 분기와 이동식에 따라 잘못된 동작이 생길 수 있습니다. 128비트 구현 하나의 넓은 범위를 공통 약속으로 삼지 않습니다."
+      },
+      {
+        "title": "작은 예와 비용",
+        "text": "a=2^32+3, mul=2, b=4, shift=1이면 아래 조각은 (3*2+4)>>1=5, 위 조각은 (1*2)<<31=2^32이므로 합은 2^32+5입니다. 곱셈은 정해진 개수의 계산으로 끝납니다. 반면 반복 나눗셈은 몫만큼 빼야 하므로 둘의 실행 비용을 같다고 설명하지 않습니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "여기서는 파일 안의 조건별 갈림길과 계산식을 읽었습니다. 아키텍처가 먼저 제공한 대체 구현의 본문이나 컴파일러가 실제 만든 모든 기계 명령까지 검사한 것은 아닙니다. 특히 빈 asm만 보고 보안을 위한 장벽이나, 여러 CPU에서 쪼개지지 않는 원자적 실행이 보장된다고 판단하면 안 됩니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "17을 5씩 반복해서 빼는 함수는 어떤 결과를 줄까요?",
+        "options": [
+          "몫은 3이고 나머지는 2입니다.",
+          "몫은 2이고 나머지는 3입니다."
+        ],
+        "explanation": "17→12→7→2로 세 번 뺐습니다. 뺀 횟수가 몫이고 남은 2가 나머지입니다."
+      },
+      {
+        "prompt": "반복문 안의 빈 asm이 하는 일은 무엇일까요?",
+        "options": [
+          "모든 CPU의 메모리 접근을 한 줄로 세우는 장벽입니다.",
+          "컴파일러가 이 반복문을 특정 다른 연산으로 바꾸지 못하게 하는 표시입니다."
+        ],
+        "explanation": "명령 문자열도 비어 있고 memory clobber도 없습니다. 피연산자 표시로 나머지 연산으로의 변환을 막으려는 코드이지 CPU 동기화 장벽이 아닙니다."
+      },
+      {
+        "prompt": "기본 128비트 계산 길을 고르려면 무엇이 필요할까요?",
+        "options": [
+          "아키텍처 지원 설정과 컴파일러의 128비트 지원 표시가 모두 필요합니다.",
+          "64비트 CPU라면 다른 조건 없이 고릅니다."
+        ],
+        "explanation": "두 매크로가 모두 정의되어야 합니다. 또한 같은 이름의 대체 매크로가 이미 있으면 기본 함수 정의를 건너뜁니다."
+      },
+      {
+        "prompt": "조각별 곱셈에서 덧셈이 64비트를 넘었는지 기억하는 까닭은 무엇일까요?",
+        "options": [
+          "넘쳤으면 언제나 오류 코드를 돌려주려고 합니다.",
+          "오른쪽으로 옮긴 뒤 결과 안에 들어올 올림수 비트를 복원하려고 합니다."
+        ],
+        "explanation": "ovf는 실패를 반환하기 위한 값이 아닙니다. shift가 0이 아닐 때 1ULL<<(64-shift)를 더할지 결정합니다."
+      }
+    ]
+  },
+  "file-7350877e3e72ed15": {
+    "story": "같은 숫자 1000이라도 1000원과 1000개는 뜻이 다릅니다. 시간도 담는 통의 크기와 그 숫자의 단위를 함께 읽어야 합니다.",
+    "meaning": "옛 32비트 시간 구조체에서 초의 저장 범위와 나노초·마이크로초 단위를 구분합니다.",
+    "exercise": "두 구조체의 tv_sec와 소수 필드를 표로 적고, 1000나노초를 마이크로초로 바꿔 보세요.",
+    "guide": [
+      "ABI는 프로그램들이 데이터를 주고받을 때 지키는 저장 모양의 약속입니다. 초를 몇 비트로 담는지와 소수 부분을 어떤 단위로 담는지는 각각 별도의 약속입니다.",
+      "old_time32_t는 64비트 커널에서도 부호 있는 32비트입니다. 옛 프로그램과 맞추는 코드에서 쓰는 표현을 새 시간 인터페이스의 넓은 표현으로 착각하지 않습니다.",
+      "old_timespec32는 나노초, old_timeval32는 마이크로초를 사용합니다. 저장 모양이 비슷해도 숫자만 그대로 옮기면 시간이 달라질 수 있습니다."
+    ],
+    "goal": "옛 32비트 시간 구조체에서 초의 저장 범위와 나노초·마이크로초 단위를 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체와 포함 전제",
+        "text": "GPL-2.0 표시와 중복 포함을 막는 guard 안에는 타입에 별명을 붙이는 typedef 하나와 구조체 두 개가 있습니다. 별도 헤더를 불러오지 않으므로 s32가 부호 있는 32비트 수라는 정의는 포함하는 쪽에서 준비해야 합니다. 이 파일에는 값을 검사하거나 단위를 바꾸는 함수·매크로가 없습니다."
+      },
+      {
+        "title": "초의 표현 폭",
+        "text": "old_time32_t는 s32의 다른 이름입니다. 커널이 64비트여도 이 초 필드는 부호 있는 32비트로 남습니다. 1970년 시작점인 Unix epoch부터 센 절대 시각으로 쓰면, 2038년에 최대 양수 초를 지난 시각을 같은 양수 범위로 담지 못합니다. 이 파일이 시간의 시작점을 더해 주거나 넘친 횟수를 추적해 해결하는 것은 아닙니다."
+      },
+      {
+        "title": "두 구조체의 차이",
+        "text": "old_timespec32에는 old_time32_t tv_sec(초)와 s32 tv_nsec(나노초)가 있습니다. old_timeval32에는 같은 초 타입의 tv_sec와 s32 tv_usec(마이크로초)가 있습니다. 1마이크로초는 1000나노초이므로 같은 바이트를 다른 구조체로 읽으면 소수 부분의 단위가 1000배 달라집니다."
+      },
+      {
+        "title": "폭과 유효성은 별개",
+        "text": "s32는 담을 수 있는 수의 범위만 정합니다. tv_nsec가 보통 쓰는 0부터 999999999까지인지, tv_usec가 0부터 999999까지인지는 자동으로 확인되지 않습니다. 선언에는 검사나 초와 소수 부분을 알맞게 고치는 정규화가 없으므로, 이 값을 받는 API가 의미와 허용 범위를 확인해야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "64비트 커널에서 old_time32_t는 몇 비트일까요?",
+        "options": [
+          "여전히 부호 있는 32비트입니다.",
+          "자동으로 부호 있는 64비트가 됩니다."
+        ],
+        "explanation": "별명이 가리키는 타입이 s32로 정해져 있습니다. 컴퓨터의 long 크기에 따라 늘어나지 않아 옛 데이터 전달 약속을 유지합니다."
+      },
+      {
+        "prompt": "tv_nsec=1000을 tv_usec=1000으로 그대로 옮기면 시간이 같을까요?",
+        "options": [
+          "두 필드가 s32이므로 같습니다.",
+          "하나는 1마이크로초이고 다른 하나는 1000마이크로초라 다릅니다."
+        ],
+        "explanation": "나노초를 마이크로초로 바꾸려면 1000으로 나눕니다. 저장 자리 수가 같아도 단위까지 같아지는 것은 아닙니다."
+      }
+    ]
+  },
+  "file-24637c1c5ff8dcc5": {
+    "story": "오래된 게임기가 쓰던 저장 형식을 새 기계에서도 읽으려면 번역하는 입구가 필요합니다. 옛 시간 자료형도 남겨 두되, 커널 안에서는 더 넓게 시간을 담을 수 있게 옮깁니다.",
+    "meaning": "옛 32비트 시간 형식과 새 내부 형식 사이에서 필드의 크기, 단위, 사용자 메모리 방향을 확인합니다.",
+    "exercise": "get_old_timex32와 put_old_timex32의 첫 인자가 어디를 가리키는지 표시하고, old_timex32 끝의 이름 없는 필드를 세어 보세요.",
+    "guide": [
+      "ABI는 데이터를 주고받는 모양의 약속입니다. 옛 프로그램과의 약속을 유지하는 것과 새 코드에서 옛 형식을 선택하는 것은 다릅니다. 새 코드는 time64_t와 timespec64 기반 인터페이스를 씁니다.",
+      "32비트 초 표현은 절대 시각을 담을 때 2038년 한계가 있습니다. 이 파일은 옛 timer(시간이 되면 알리는 장치), 파일 시각, 시계 조정 자료를 새 내부 표현으로 옮기는 경계를 선언합니다.",
+      "__user가 붙은 포인터는 사용자 프로그램 쪽 메모리 주소입니다. 커널 안의 주소처럼 단순 대입하지 말고, 각 함수의 입력·출력 순서와 실제 복사 구현을 확인해야 합니다."
+    ],
+    "goal": "옛 32비트 시간 형식과 새 내부 형식 사이에서 필드의 크기, 단위, 사용자 메모리 방향을 확인합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일의 의도",
+        "text": "guard는 중복 포함을 막습니다. 주석은 옛 time_t 기반 인터페이스가 32비트 아키텍처에서 2038년에 범위를 넘으므로 새 코드는 time64_t와 timespec64를 쓰라고 안내합니다. 옮기는 작업 뒤 더 쓰지 않는 옛 인터페이스는 없애라는 지침도 있습니다. time64.h, timex.h, vdso/time32.h를 불러오지만 변환 함수가 실제로 실행할 본문은 이 파일에 없습니다."
+      },
+      {
+        "title": "구형 timer와 파일 시각",
+        "text": "old_itimerspec32는 old_timespec32 두 개를 담습니다. it_interval은 반복 간격, it_value는 타이머 값을 담는 자리입니다. old_utimbuf32의 actime은 접근 시각, modtime은 수정 시각이며 둘 다 old_time32_t로 초를 담고 나노초 자리는 없습니다. 이 그릇을 선언하는 것만으로 타이머가 시작되거나 파일 시각이 바뀌지는 않습니다."
+      },
+      {
+        "title": "Old timex의 기본 필드",
+        "text": "old_timex32에서 modes(조정 항목 선택)는 u32이고, offset(시각 차이), freq(주파수 조정), maxerror(최대 오차), esterror(추정 오차), status(상태), constant(조정 상수), precision(정밀도), tolerance(허용 범위)는 s32입니다. u32는 부호 없는 32비트, s32는 부호 있는 32비트입니다. time은 old_timeval32입니다. 이 폭은 옛 저장 모양의 일부이며 조정 단위나 상태 정책을 모두 여기서 정하지는 않습니다. 예를 들어 freq를 이름만 보고 정수 Hz라고 단정하지 않습니다."
+      },
+      {
+        "title": "Old timex의 나머지 필드",
+        "text": "그다음 tick, ppsfreq, jitter, shift, stabil, jitcnt, calcnt, errcnt, stbcnt, tai는 모두 s32입니다. 이들은 tick 주기, 초마다 오는 기준 신호(PPS)의 주파수와 흔들림, 이동·안정도 값, 관련 횟수, 국제원자시(TAI) 관련 값을 담는 이름들입니다. 구체적인 단위·정책은 사용하는 코드를 봅니다. 끝의 이름 없는 s32:32 비트필드는 4개+4개+3개, 총 11개입니다. 저장 모양에 남겨 둔 공간이지 이름으로 접근하는 새 상태 변수가 아니며 자동으로 0이 되는 것도 아닙니다."
+      },
+      {
+        "title": "Timespec과 timer 복사 선언",
+        "text": "get_old_timespec32는 timespec64 결과 주소를 먼저, const void __user 입력 주소를 뒤에 받습니다. put_old_timespec32는 const timespec64 입력 주소를 먼저, void __user 출력 주소를 뒤에 받습니다. itimerspec 버전은 커널의 itimerspec64와 사용자의 old_itimerspec32 주소를 명시합니다. 반환형은 int입니다. const는 해당 입력을 바꾸지 않는다는 표시이고, __user는 사용자 메모리 경계이므로 일반 커널 포인터 대입으로 복사를 대신할 수 없습니다."
+      },
+      {
+        "title": "Timex 변환 선언의 인자 순서",
+        "text": "__kernel_timex는 이름을 먼저 알리는 전방 선언 뒤 함수 인자에 사용됩니다. get_old_timex32는 커널 결과 주소가 먼저이고 옛 사용자 입력 주소가 뒤입니다. put_old_timex32는 반대로 옛 사용자 출력 주소가 먼저이고 const 커널 입력 주소가 뒤입니다. put_old_timespec32의 순서를 그대로 외워 적용하면 틀립니다. 각 선언을 읽고, 범위 넘침이나 복사 오류를 어떻게 처리하는지는 별도 함수 본문에서 확인합니다."
+      },
+      {
+        "title": "나노초에서 구형 timeval로",
+        "text": "ns_to_kernel_old_timeval은 부호 있는 64비트 나노초인 s64 nsec를 받아 __kernel_old_timeval 값을 돌려준다고 선언합니다. 반환형은 old_timeval32가 아닙니다. 이름에 old가 함께 있어도 한쪽은 고정 32비트이고 다른 쪽은 아키텍처의 옛 kernel long 표현을 따르므로, 서로 같은 그릇으로 취급하지 않습니다."
+      },
+      {
+        "title": "학습 경계",
+        "text": "이 파일에서 확인한 것은 호환성을 위한 자료형과 함수의 사용 약속입니다. 함수 본문까지 검토했다고 셀 수는 없습니다. 핵심은 옛 데이터 전달 약속을 지키면서 내부 표현으로 옮기고, 타입·단위·인자 순서와 앞으로 담아야 할 시간 범위를 함께 설계하는 것입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "새 시간 코드를 만들 때 이 옛 time32 형식을 기본으로 선택해야 할까요?",
+        "options": [
+          "아니요. 주석은 time64_t와 timespec64 기반의 대체 형식을 쓰라고 합니다.",
+          "네. 옛 프로그램과 맞으니 모든 새 코드에 권장합니다."
+        ],
+        "explanation": "옛 프로그램 지원 때문에 남겨 둔 형식입니다. 새 사용을 권장하지 않으며 더 이상 쓰지 않는 옛 인터페이스는 제거하라고 안내합니다."
+      },
+      {
+        "prompt": "old_timex32 끝의 이름 없는 s32:32는 몇 개일까요?",
+        "options": [
+          "하나이며 32바이트 배열입니다.",
+          "열한 개입니다."
+        ],
+        "explanation": "원본에 4개, 4개, 3개가 있습니다. :32는 각 비트필드의 폭을 뜻하며 배열의 길이가 아닙니다."
+      },
+      {
+        "prompt": "put_old_timex32의 첫 인자는 어떤 주소일까요?",
+        "options": [
+          "결과를 쓸 옛 사용자 공간 구조체 주소입니다.",
+          "읽을 const 커널 __kernel_timex 주소입니다."
+        ],
+        "explanation": "첫 인자는 old_timex32 __user *입니다. 다른 put 함수와 인자 순서가 같다고 추측하지 말고 선언을 확인합니다."
+      },
+      {
+        "prompt": "ns_to_kernel_old_timeval이 돌려주는 타입은 old_timeval32일까요?",
+        "options": [
+          "네. old라는 말이 들어간 timeval은 모두 같습니다.",
+          "아니요. __kernel_old_timeval입니다."
+        ],
+        "explanation": "고정 32비트 표현과 __kernel_long_t 기반 표현은 별개입니다. 이름 일부보다 실제 타입 정의와 저장 약속을 확인합니다."
+      }
+    ]
+  },
+  "file-7989f3e0d462b348": {
+    "story": "택배 상자의 크기가 같아도 안에 든 물건은 다를 수 있습니다. 시간 구조체도 전체 크기만 보지 말고 각 칸의 크기와 단위를 확인해야 합니다.",
+    "meaning": "사용자 프로그램에 공개하는 여섯 시간 구조체의 필드 타입과 단위를 비교하고, 커널 내부 구조체와 구분합니다.",
+    "exercise": "여섯 구조체에서 초·나노초·마이크로초 필드를 찾아 적고, __kernel_timespec과 내부 timespec64의 tv_nsec 타입을 비교하세요.",
+    "guide": [
+      "UAPI는 사용자 프로그램과 커널 사이에 공개한 약속입니다. 각 필드가 몇 비트이고 어떤 단위인지를 명확히 해야 양쪽이 같은 데이터를 같은 뜻으로 읽습니다.",
+      "사용자 메모리의 __kernel_timespec과 내부 timespec64는 이름이 비슷해도 다른 형식입니다. 특히 long이 32비트일 때 tv_nsec의 폭이 다를 수 있습니다.",
+      "나노초는 10억분의 1초, 마이크로초는 100만분의 1초입니다. 64비트 필드라고 언제나 나노초인 것은 아니며, 선언만으로 범위 검사나 복사가 실행되지도 않습니다."
+    ],
+    "goal": "사용자 프로그램에 공개하는 여섯 시간 구조체의 필드 타입과 단위를 비교하고, 커널 내부 구조체와 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체와 라이선스",
+        "text": "파일은 GPL-2.0 WITH Linux-syscall-note 이용 조건 표시, 중복 포함을 막는 guard, linux/types.h 포함 뒤 여섯 구조체를 정의합니다. 사용자 프로그램과 커널 사이에서 사용할 데이터 모양을 정할 뿐, 값을 바꾸거나 올바른 범위인지 검사하는 함수는 없습니다."
+      },
+      {
+        "title": "새 timespec과 timer",
+        "text": "__kernel_timespec의 tv_sec는 __kernel_time64_t로 초를 담고 tv_nsec는 long long으로 나노초를 담습니다. __kernel_itimerspec은 이 구조체 두 개를 반복 주기 it_interval과 만료 값 it_value로 가집니다. 커널 내부 timespec64의 tv_nsec는 long이므로, 특히 long이 32비트인 환경에서 두 형식의 필드 폭이 같다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "구형 timeval의 제한",
+        "text": "__kernel_old_timeval의 tv_sec와 tv_usec는 둘 다 __kernel_long_t이며 초와 마이크로초를 담습니다. 주석은 과거 timeval로 절대 시각이 아닌 기간을 전달하던 구조체 안에 넣기 위한 옛 형식이라고 설명하며 새 사용자를 추가하지 말라고 합니다. 여기서 사용자 코드가 컴파일되지 않으면 2038년 안전성이 없어 다른 인터페이스로 바꿔야 할 가능성을 지적합니다. old라는 이름만으로 언제나 32비트라고 단정하지 않습니다."
+      },
+      {
+        "title": "매크로를 이용한 대체 지점",
+        "text": "__kernel_old_timeval 구조체는 같은 이름의 매크로가 없을 때만 정의됩니다. 매크로는 컴파일 전에 이름을 바꾸거나 조건을 고르는 전처리 도구입니다. #ifndef는 이 매크로의 존재를 볼 뿐 C의 struct 이름표가 이미 있는지를 검색하지 않습니다. 다른 문맥의 매크로 기반 대체를 허용하는 부분입니다."
+      },
+      {
+        "title": "구형 timespec과 interval timer",
+        "text": "__kernel_old_timespec은 __kernel_old_time_t tv_sec와 long tv_nsec로 초·나노초를 담습니다. __kernel_old_itimerval은 __kernel_old_timeval 두 개를 it_interval(간격)과 it_value(현재 값)에 담습니다. itimerspec과 itimerval의 필드 이름은 비슷하지만 속의 소수 단위는 각각 나노초와 마이크로초이므로 그대로 섞어 읽지 않습니다."
+      },
+      {
+        "title": "소켓 timeval",
+        "text": "소켓, 즉 프로그램의 통신 창구에서 쓰는 __kernel_sock_timeval은 tv_sec와 tv_usec가 모두 __s64입니다. 부호 있는 고정 64비트 칸이지만 소수 단위는 여전히 마이크로초입니다. 새 timespec과 폭이 비슷하다고 나노초로 해석하면 시간이 1000배 어긋납니다."
+      },
+      {
+        "title": "구조체와 정책의 차이",
+        "text": "이 구조체 선언들은 소수 부분이 음수이거나 범위를 넘는 것을 막지 않습니다. 정렬을 위한 빈 공간인 패딩을 0으로 채우거나 사용자 메모리를 복사하지도 않습니다. 실제 syscall(프로그램이 커널에 요청하는 입구)이나 드라이버가 검사·변환 정책을 적용합니다. 이 선언을 읽은 것만으로 모든 아키텍처의 실제 크기와 정렬까지 측정했다고 말할 수는 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "공개 형식 __kernel_timespec의 tv_nsec 타입은 무엇일까요?",
+        "options": [
+          "long long입니다.",
+          "언제나 커널 내부와 같은 long입니다."
+        ],
+        "explanation": "공개 ABI와 내부 timespec64는 별개입니다. long이 32비트인 환경에서는 특히 필드 폭 차이를 확인해야 합니다."
+      },
+      {
+        "prompt": "__kernel_sock_timeval의 tv_usec는 무슨 단위일까요?",
+        "options": [
+          "64비트 필드이므로 나노초입니다.",
+          "마이크로초입니다."
+        ],
+        "explanation": "담는 수의 폭은 __s64, 단위는 마이크로초입니다. 두 성질은 따로 정해집니다."
+      },
+      {
+        "prompt": "#ifndef __kernel_old_timeval은 무엇을 확인할까요?",
+        "options": [
+          "같은 이름의 전처리 매크로가 정의되었는지 확인합니다.",
+          "C 컴파일러에 같은 구조체 이름표가 있는지 확인합니다."
+        ],
+        "explanation": "전처리기는 C의 타입 목록을 검색하지 않습니다. 매크로 이름과 구조체 이름표를 구분해야 이 대체 조건을 바르게 읽습니다."
+      }
+    ]
+  },
+  "file-33e97f2a0ef5257d": {
+    "story": "도서관에서 책을 치워도 그 책 번호를 곧바로 다른 책에 주면 옛 목록이 엉킬 수 있습니다. 시계 번호도 기능이 사라졌다고 함부로 다시 쓰지 않습니다.",
+    "meaning": "공개 시간 헤더의 구조체와 시계 번호를 읽고, 숫자 식별자·비트 연산·실제 지원 기능을 구분합니다.",
+    "exercise": "CLOCKS_MASK의 정의에 0과 1을 넣어 계산하고, CLOCK_SGI_CYCLE 옆 주석과 MAX_CLOCKS를 비교하세요.",
+    "guide": [
+      "ABI는 커널과 프로그램이 주고받는 약속입니다. 여기에 정한 번호는 오래된 프로그램도 기억할 수 있으므로 기능을 없앤 뒤에도 재사용하면 안 되는 경우가 있습니다.",
+      "ID는 종류를 가리키는 번호이고 비트 집합은 각 자리를 켜서 여러 항목을 표시하는 방식입니다. 이름에 MASK가 있다고 식을 보지 않고 1<<ID 방식이라고 생각하면 안 됩니다.",
+      "헤더는 데이터 모양과 상수를 정합니다. 이름이 정의되어 있다는 사실만으로 그 시계를 실제 조회하거나 타이머를 만들 수 있다는 보장은 없습니다."
+    ],
+    "goal": "공개 시간 헤더의 구조체와 시계 번호를 읽고, 숫자 식별자·비트 연산·실제 지원 기능을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 WITH Linux-syscall-note 표시와 중복 포함 방지 guard 뒤에 types.h와 time_types.h를 불러옵니다. 사용자 공간용 옛 구조체 네 개, timezone, 간격 타이머 번호, 시계 번호와 관련 상수, TIMER_ABSTIME을 정의합니다. 시계를 읽거나 타이머를 만드는 실행 함수는 없습니다."
+      },
+      {
+        "title": "사용자 공간 조건부 정의",
+        "text": "__KERNEL__이 없을 때, 즉 커널 빌드용 표시가 없을 때 timespec, timeval, itimerspec, itimerval을 정의합니다. timespec만 _STRUCT_TIMESPEC도 확인하고 그 매크로를 설정해 중복 정의를 막습니다. 커널 빌드에 같은 옛 구조체를 그대로 내보내는 형태가 아닙니다. 사용자 C 라이브러리의 time.h와 아무 고려 없이 함께 포함해도 된다는 약속도 아닙니다."
+      },
+      {
+        "title": "구형 구조체 전체 필드",
+        "text": "옛 timespec은 __kernel_old_time_t tv_sec(초)와 long tv_nsec(나노초), timeval은 같은 초 타입과 __kernel_suseconds_t tv_usec(마이크로초)를 가집니다. itimerspec은 timespec 두 개를 it_interval(주기)과 it_value(만료 값)에 담습니다. itimerval은 timeval 두 개를 같은 이름으로 담되 간격과 현재 값을 뜻합니다. 1마이크로초=1000나노초이므로 두 형식의 단위를 섞지 않습니다."
+      },
+      {
+        "title": "Timezone 구조체",
+        "text": "timezone의 두 필드는 int입니다. tz_minuteswest는 그리니치 기준에서 서쪽 방향으로 몇 분 차이인지, tz_dsttime은 일광절약시간(DST) 보정 종류를 나타낸다고 주석에 적혀 있습니다. 지역 이름이나 과거의 시간대 변경 규칙을 담는 자료는 아닙니다. 이 정의는 __KERNEL__ 조건문 바깥에 있습니다."
+      },
+      {
+        "title": "Interval timer ID",
+        "text": "간격 타이머 식별자는 ITIMER_REAL=0, ITIMER_VIRTUAL=1, ITIMER_PROF=2입니다. 이 파일은 번호표만 정하므로 시간을 어떤 방식으로 세고 어떤 신호를 보내는지, syscall 요청을 어떻게 처리하는지는 다른 구현·인터페이스 자료를 봐야 합니다. 시계 번호와 숫자가 같아도 다른 번호 목록이므로 서로 바꿔 넣지 않습니다."
+      },
+      {
+        "title": "Clock ID 0부터 6",
+        "text": "시계 번호는 CLOCK_REALTIME=0(실제 시각), CLOCK_MONOTONIC=1(단조 시계), CLOCK_PROCESS_CPUTIME_ID=2(프로세스 CPU 시간), CLOCK_THREAD_CPUTIME_ID=3(스레드 CPU 시간), CLOCK_MONOTONIC_RAW=4(가공을 줄인 단조 시계), CLOCK_REALTIME_COARSE=5, CLOCK_MONOTONIC_COARSE=6입니다. COARSE는 더 거친 시간 눈금을 뜻합니다. 이런 이름들은 시계 종류의 ID이며, 헤더만으로 각각의 실제 눈금 크기나 하드웨어 지원 여부가 보장되지는 않습니다."
+      },
+      {
+        "title": "Clock ID 7부터 11과 예약",
+        "text": "이어 CLOCK_BOOTTIME=7(부팅 기준), CLOCK_REALTIME_ALARM=8, CLOCK_BOOTTIME_ALARM=9(알람용 종류), CLOCK_SGI_CYCLE=10, CLOCK_TAI=11(국제원자시 계열)입니다. SGI_CYCLE의 드라이버는 제거되었지만 번호 10을 다른 용도로 재사용하지 못하도록 자리만 남겼다고 주석이 설명합니다. 상수 정의가 남았다고 해당 시계가 작동한다고 판단하지 않습니다."
+      },
+      {
+        "title": "상한과 마스크 이름",
+        "text": "MAX_CLOCKS=16은 상한을 나타내는 수이지 이름 붙은 시계가 16개 있다는 뜻이 아닙니다. CLOCKS_MASK는 CLOCK_REALTIME|CLOCK_MONOTONIC, 즉 0|1=1입니다. |는 두 수의 각 비트 중 하나라도 1이면 결과를 1로 하는 연산입니다. CLOCKS_MONO도 CLOCK_MONOTONIC이므로 1입니다. 이 식은 모든 시계마다 1<<ID를 만들어 합친 지원 목록이 아닙니다."
+      },
+      {
+        "title": "절대 시각 플래그",
+        "text": "TIMER_ABSTIME=0x01은 POSIX 간격 타이머 설정에서 절대 시각을 가리키는 플래그입니다. 절대 시각은 지금부터 몇 초라는 간격 대신 특정 시점을 말합니다. 다만 어떤 호출·시계에서 이 플래그를 허용하고 어떻게 처리하는지는 그 구현을 봐야 합니다. 이 상수 하나가 모든 timeout 인자의 뜻을 자동으로 바꾸지는 않습니다."
+      },
+      {
+        "title": "CS와 검증 경계",
+        "text": "핵심은 조건에 따라 공개되는 정의, long 기반 옛 저장 약속, 번호 재사용 금지, 매크로 이름과 실제 계산식의 차이입니다. 파일 안의 모든 상수와 선언을 읽는 범위이며 연결된 모든 syscall의 실행 본문까지 검토한 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CLOCK_SGI_CYCLE 번호가 남아 있으면 드라이버도 있을까요?",
+        "options": [
+          "아니요. 드라이버는 제거되었고 번호 재사용을 막으려고 남겼습니다.",
+          "네. 상수가 있으면 모든 커널에서 조회에 성공합니다."
+        ],
+        "explanation": "공개 번호는 프로그램과의 약속이라 구현이 사라진 뒤에도 남을 수 있습니다. 주석이 바로 이 이유를 설명합니다."
+      },
+      {
+        "prompt": "이 파일의 CLOCKS_MASK를 계산하면 얼마일까요?",
+        "options": [
+          "모든 시계 비트를 켠 65535입니다.",
+          "1입니다."
+        ],
+        "explanation": "실제 식은 CLOCK_REALTIME|CLOCK_MONOTONIC이고 값은 0|1=1입니다. 이름만으로 식을 추측하지 않습니다."
+      },
+      {
+        "prompt": "옛 timespec 정의에 추가로 있는 중복 방지 매크로는 무엇일까요?",
+        "options": [
+          "_STRUCT_TIMESPEC입니다.",
+          "C가 모든 구조체마다 자동으로 만드는 이름 검사입니다."
+        ],
+        "explanation": "__KERNEL__이 없는 쪽 정의 안에서 timespec에는 _STRUCT_TIMESPEC 검사도 있습니다. 명시한 전처리 조건이지 일반적인 C 타입 검색 기능이 아닙니다."
+      },
+      {
+        "prompt": "MAX_CLOCKS가 16이면 이 헤더가 시계 이름 16개를 정의할까요?",
+        "options": [
+          "네. 0부터 15까지 모두 이름이 있습니다.",
+          "아니요. 상한과 실제로 나열한 이름 수는 다릅니다."
+        ],
+        "explanation": "이 파일은 0부터 11까지 이름을 나열하며 10은 빈자리를 지키는 번호입니다. 상한만 보고 기능 수를 세면 안 됩니다."
+      }
+    ]
+  },
+  "file-80cb6e2014679a0f": {
+    "story": "전등 스위치 하나를 켜려면 먼저 전선이 연결되어 있어야 하듯, 커널 기능에도 먼저 필요한 기능이 있습니다. Kconfig는 그 연결과 기본 선택을 적은 규칙표입니다.",
+    "meaning": "시간 기능 설정에서 의존 조건, 함께 켜는 기능, 기본값, 실제 실행 조건의 차이를 설명합니다.",
+    "exercise": "NO_HZ_FULL에서 depends on과 select를 각각 찾아 묶고, nohz_full 부팅 인자가 없을 때의 동작도 적어 보세요.",
+    "guide": [
+      "Kconfig는 최종 설정 파일 .config 자체가 아니라 그것을 고르는 규칙입니다. bool은 켬·끔, tristate는 끔·커널에 포함·모듈 선택을 표현합니다. 기능들은 독립된 체크박스가 아니라 연결된 관계입니다.",
+      "tick은 CPU 작업을 주기적으로 살피는 시간 알림입니다. tickless는 필요할 때 이 알림을 멈추는 방식이며, 설정을 켰다고 모든 CPU에서 항상 알림이 사라지는 것은 아닙니다.",
+      "depends on은 필요한 조건, select는 함께 켜도록 하는 선택, default는 기본값입니다. 빌드에 코드를 포함하는 조건과 하드웨어·부팅 인자·실행 중 작업 조건을 따로 읽습니다."
+    ],
+    "goal": "시간 기능 설정에서 의존 조건, 함께 켜는 기능, 기본값, 실제 실행 조건의 차이를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 숨겨진 설정",
+        "text": "GPL-2.0-only 표시 뒤에는 아키텍처가 고를 bool 설정, KUnit 테스트와 실행 상태 추적 설정, GENERIC_CLOCKEVENTS 조건 안의 Timers subsystem 메뉴가 있습니다. 화면에 보이는 질문인 prompt가 없는 bool도 다른 설정의 select나 기본값으로 켜질 수 있습니다. 이 파일은 결과표 .config가 아니라 결과를 정하는 규칙표입니다."
+      },
+      {
+        "title": "Clocksource 아키텍처 스위치",
+        "text": "clocksource는 시간을 재는 기준입니다. CLOCKSOURCE_WATCHDOG는 이 기준이 불안정한지 감시하고, ARCH_CLOCKSOURCE_DATA는 아키텍처의 추가 자료, ARCH_CLOCKSOURCE_INIT는 등록 때 추가 초기화, CLOCKSOURCE_VALIDATE_LAST_CYCLE은 마지막 cycle(시계 계수값) 갱신을 기준으로 검증하는 능력과 관계된 bool입니다. GENERIC_TIME_VSYSCALL도 시간 유지용 prompt 없는 bool입니다. 실제 감시 주기나 아키텍처 자료구조의 본문은 여기서 만들지 않습니다."
+      },
+      {
+        "title": "Clockevents와 broadcast",
+        "text": "clockevent는 정해진 때 알림을 내는 장치입니다. GENERIC_CLOCKEVENTS는 def_bool !LEGACY_TIMER_TICK으로 옛 tick을 쓰지 않을 때 기본으로 켭니다. ARCH_HAS_TICK_BROADCAST는 특정 드라이버에 매이지 않고 여러 CPU에 알림을 전달하는 능력입니다. GENERIC_CLOCKEVENTS_BROADCAST는 GENERIC_CLOCKEVENTS에, GENERIC_CLOCKEVENTS_BROADCAST_IDLE은 앞의 BROADCAST에 의존합니다. MIN_ADJUST는 장치의 최소 재설정 시간을 자동 조정하고 GENERIC_CMOS_UPDATE는 CMOS 시계 갱신을 위한 별도 bool입니다."
+      },
+      {
+        "title": "POSIX CPU timer와 legacy tick",
+        "text": "HAVE_POSIX_CPU_TIMERS_TASK_WORK는 CPU 타이머를 인터럽트 안 대신 task_work라는 작업 처리 경로에서 다룰 능력입니다. POSIX_CPU_TIMERS_TASK_WORK는 POSIX_TIMERS와 이 능력이 있을 때 default y입니다. 조건부 기본값은 depends on 제한과 다릅니다. LEGACY_TIMER_TICK은 공통 clockevent 틀이 없는 플랫폼의 옛 도우미이며 새 플랫폼은 공통 틀을 쓰라고 설명합니다."
+      },
+      {
+        "title": "KUnit 설정과 실제 연결",
+        "text": "TIME_KUNIT_TEST는 커널 안 테스트 도구 KUNIT에 의존하는 tristate입니다. 모든 테스트를 고르는 KUNIT_ALL_TESTS가 아닐 때 선택 질문을 보이고 기본값은 KUNIT_ALL_TESTS입니다. help에는 RTC 라이브러리 테스트라고 쓰여 있지만 이 디렉터리 Makefile은 time_test.o를 연결하고 해당 소스는 time64_to_tm 날짜 변환 범위를 검사합니다. 따라서 도움말 한 단어가 아닌 빌드 연결과 소스를 함께 확인합니다."
+      },
+      {
+        "title": "Context tracking의 기본층",
+        "text": "CONTEXT_TRACKING은 실행 상태를 추적하는 내부 bool입니다. CONTEXT_TRACKING_IDLE은 이를 select하여 CPU가 쉬는 idle 상태를 RCU 대신 추적합니다. RCU는 여러 실행 흐름이 공유 자료를 안전하게 읽고 바꾸도록 돕는 방식입니다. 이 두 설정은 뒤의 GENERIC_CLOCKEVENTS 조건 바깥이며, 메뉴 안의 사용자 상태 추적 설정과 위치가 다릅니다."
+      },
+      {
+        "title": "메뉴 조건과 내부 oneshot",
+        "text": "GENERIC_CLOCKEVENTS가 켜져야 Timers subsystem 메뉴 규칙이 적용됩니다. TICK_ONESHOT은 tick용 내부 스위치이며 NO_HZ_COMMON과 HIGH_RES_TIMERS가 선택합니다. oneshot은 다음 한 번의 알림 시점을 예약하는 방식입니다. 일반 clockevent 장치의 oneshot 지원 자체는 이 tick 스위치와 독립적이라고 주석이 구분합니다. NO_HZ_COMMON은 bool이며 TICK_ONESHOT을 select합니다."
+      },
+      {
+        "title": "Tick 처리 choice",
+        "text": "Timer tick handling의 choice는 HZ_PERIODIC, NO_HZ_IDLE, NO_HZ_FULL 중 모드를 고르는 묶음입니다. 옛 NO_HZ가 켜져 있으면 기본 선택은 NO_HZ_IDLE입니다. HZ_PERIODIC은 필요 여부와 관계없이 일정 주기로 알리고, NO_HZ_IDLE은 CPU가 쉴 때 필요한 경우에만 알리며 NO_HZ_COMMON을 선택합니다. 이는 전력 절약에 도움이 됩니다. choice를 서로 다른 모드를 마음대로 동시에 켜는 목록으로 읽지 않습니다."
+      },
+      {
+        "title": "Full dynticks의 의존성과 선택",
+        "text": "NO_HZ_FULL은 여러 CPU를 지원하는 SMP, 사용자 상태 추적 능력 HAVE_CONTEXT_TRACKING_USER, 일반 CPU 시간 집계 능력 HAVE_VIRT_CPU_ACCOUNTING_GEN에 의존합니다. 직접 select하는 것은 NO_HZ_COMMON, RCU_NOCB_CPU(RCU 후속 작업을 옮길 지원), VIRT_CPU_ACCOUNTING_GEN(CPU 시간 집계), IRQ_WORK(인터럽트 관련 미룬 작업), CPU_ISOLATION(CPU 격리)입니다. 시간 유지를 위해 적어도 한 CPU는 주기적으로 동작해야 한다는 주석도 있습니다. 여기에 없는 항목까지 직접 선택한다고 덧붙이지 않습니다."
+      },
+      {
+        "title": "Full dynticks의 실행 조건",
+        "text": "full dynticks는 CPU에서 일이 실행 중이어도 가능한 때 tick을 멈추려는 방식입니다. 보통 한 작업만 실행하고 그 작업이 대부분 사용자 공간에 머물며 커널 활동이 적을수록 유리합니다. nohz_full 부팅 인자에 대상 CPU 범위를 지정해야 하며 없으면 NO_HZ_IDLE처럼 동작합니다. syscall, 예외, 인터럽트 등 사용자·커널 전환에는 추가 비용이 있습니다. 빌드에서 y를 고른 것만으로 모든 tick이 늘 사라지지는 않습니다."
+      },
+      {
+        "title": "사용자 context 추적",
+        "text": "CONTEXT_TRACKING_USER는 HAVE_CONTEXT_TRACKING_USER에 의존하고 CONTEXT_TRACKING을 선택하여 사용자·커널 전환을 추적합니다. RCU가 읽기 작업이 쉬는 긴 구간을 알아보고 tick 없이 CPU 시간을 집계하도록 돕습니다. CONTEXT_TRACKING_USER_FORCE는 USER에 의존하며 !NO_HZ_FULL이면 기본 y입니다. full dynticks 조건을 아직 다 갖추지 않은 아키텍처의 뒷단 구현을 시험하려고 모든 CPU에서 추적을 강제합니다. 개발할 때만 Y를 고르라는 설명이며 실제 운영에서는 원치 않는 추가 비용이 생깁니다."
+      },
+      {
+        "title": "구형 NO_HZ와 고해상도",
+        "text": "NO_HZ는 옛 설정 파일과의 호환성을 위한 bool로, 앞의 choice 기본값에 연결됩니다. HIGH_RES_TIMERS는 더 촘촘한 시간 알림 지원이며 TICK_ONESHOT을 select합니다. 하지만 하드웨어가 이를 제공하지 못하면 커널 이미지 크기만 늘어난다는 help가 있습니다. 설정 가능과 실제 장치 능력은 별개입니다."
+      },
+      {
+        "title": "Watchdog 허용 skew",
+        "text": "CLOCKSOURCE_WATCHDOG_MAX_SKEW_US는 감시 시 허용하는 시계 차이입니다. CLOCKSOURCE_WATCHDOG에 의존하는 정수 설정이며 범위는 50~1000, 기본은 125마이크로초입니다. 배경 설명은 반초 감시 간격과 네트워크 시간 맞춤인 NTP의 최대 주파수 변화 100만분의 500을 듭니다. 이 값은 테스트를 기다리는 holdoff 초나 나노초 단위 uncertainty_margin과 단위도 역할도 다릅니다."
+      },
+      {
+        "title": "검증 범위와 CS 연결",
+        "text": "이 자료는 파일 안 모든 설정 이름과 choice·menu·if 경계를 읽습니다. 다른 Kconfig 파일에서 들어오는 모든 선택과 아키텍처 조건까지 풀어 실제 .config를 생성한 결과는 아닙니다. 의존 관계, 기본값과 강제 선택의 차이, 빌드·실행 조건, 옛 설정 호환성의 역할을 구분하는 것이 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "NO_HZ_FULL을 y로 빌드하면 nohz_full 부팅 인자 없이도 모든 CPU가 full dynticks일까요?",
+        "options": [
+          "아니요. 도움말은 그 인자가 없으면 NO_HZ_IDLE처럼 동작한다고 합니다.",
+          "네. 빌드 설정만으로 모든 CPU의 tick이 항상 없어집니다."
+        ],
+        "explanation": "대상 CPU 지정과 실행 중 작업 조건이 따로 필요합니다. 지원 코드를 넣은 것과 실제 tick을 멈출 조건은 다릅니다."
+      },
+      {
+        "prompt": "TICK_ONESHOT만이 모든 oneshot clockevent 장치를 지원하는 스위치일까요?",
+        "options": [
+          "네. 꺼져 있으면 어떤 oneshot 장치도 있을 수 없습니다.",
+          "아니요. 주석은 tick 기능의 내부 스위치라고 구분합니다."
+        ],
+        "explanation": "한 번씩 예약하는 장치의 지원과 tick 동작 모드는 별개라고 주석에 명시되어 있습니다."
+      },
+      {
+        "prompt": "시계 감시에서 허용하는 maximum skew의 기본값은 무엇일까요?",
+        "options": [
+          "125마이크로초입니다.",
+          "125초입니다."
+        ],
+        "explanation": "설정 이름의 US와 설명의 단위를 함께 봅니다. 시작 지연 시간이나 나노초 여유값과 다른 설정입니다."
+      },
+      {
+        "prompt": "TIME_KUNIT_TEST가 실제 만드는 대상을 어디서 확인할까요?",
+        "options": [
+          "도움말의 RTC라는 말만 보면 충분합니다.",
+          "Makefile의 time_test.o 연결과 그 소스를 함께 확인합니다."
+        ],
+        "explanation": "이 버전은 도움말과 실제 날짜 변환 테스트 내용에 차이가 있습니다. 빌드 대상과 본문을 대조합니다."
+      },
+      {
+        "prompt": "default y if와 depends on은 같은 규칙일까요?",
+        "options": [
+          "아니요. 조건부 기본값과 의존 조건 제한은 다릅니다.",
+          "네. 두 키워드는 완전히 같은 뜻입니다."
+        ],
+        "explanation": "POSIX_CPU_TIMERS_TASK_WORK는 조건부 default를 사용합니다. 설정 관계를 읽을 때 실제 키워드가 무엇인지 확인해야 합니다."
+      }
+    ]
+  },
+  "file-f437012fdd360c60": {
+    "story": "요리할 때 메뉴에 따라 필요한 재료가 달라집니다. 이 Makefile은 시간 기능 설정에 따라 어떤 소스 조각을 커널에 넣을지 적은 재료 목록입니다.",
+    "meaning": "공통 객체와 조건부 객체의 연결을 읽고, 중첩 조건과 기능을 끈 경우의 대체 구현을 확인합니다.",
+    "exercise": "tick-broadcast-hrtimer.o와 timer_migration.o를 둘러싼 바깥 조건과 안쪽 조건을 각각 찾아 적으세요.",
+    "guide": [
+      "Kbuild는 커널을 만드는 빌드 체계입니다. .o 객체 파일은 소스를 컴파일한 조각이며 Makefile은 설정에 따라 이 조각을 고릅니다.",
+      "stub은 기능을 쓸 수 없는 경우에도 필요한 입구를 제공하는 대체 구현입니다. POSIX_TIMERS를 껐을 때는 posix-stubs.o의 동작을 따로 읽어야 합니다.",
+      "바깥 ifeq 안에 있는 줄은 그 조건부터 만족해야 적용됩니다. 수정한 소스나 테스트 한 개가 성공한 것만으로 모든 설정 조합이 검증된 것은 아닙니다."
+    ],
+    "goal": "공통 객체와 조건부 객체의 연결을 읽고, 중첩 조건과 기능을 끈 경우의 대체 구현을 확인합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 공통 객체",
+        "text": "GPL-2.0 표시 뒤 공통 obj-y에는 time.o, timer.o, hrtimer.o, timekeeping.o, ntp.o, clocksource.o, jiffies.o, timer_list.o, timeconv.o, timecounter.o, alarmtimer.o가 있습니다. 이 디렉터리가 빌드되는 문맥에서 기본으로 연결하는 객체들입니다. 파일 자체는 실행 함수가 아니라 Kbuild에 주는 목록입니다."
+      },
+      {
+        "title": "POSIX timer 대체 경로",
+        "text": "CONFIG_POSIX_TIMERS가 정확히 y이면 posix-timers.o, posix-cpu-timers.o, posix-clock.o, itimer.o를 공통 목록에 더합니다. 그 외에는 posix-stubs.o를 더합니다. 기능을 끈 경우에도 관련 요청 입구가 대체 코드로 남을 수 있으므로 전부 사라진다고 추측하지 말고 stub 본문을 확인합니다."
+      },
+      {
+        "title": "Clockevents와 broadcast 중첩",
+        "text": "CONFIG_GENERIC_CLOCKEVENTS는 clockevents.o와 tick-common.o를 고릅니다. CONFIG_GENERIC_CLOCKEVENTS_BROADCAST가 y인 블록 안에서는 tick-broadcast.o를 obj-y에 더하고, 그 안에서 CONFIG_TICK_ONESHOT에 따라 tick-broadcast-hrtimer.o를 고릅니다. 따라서 뒤 파일은 ONESHOT만 켜서는 안 되고 여러 CPU로 알림을 전달하는 BROADCAST 바깥 조건도 필요합니다."
+      },
+      {
+        "title": "Sched clock과 tick 모드",
+        "text": "CONFIG_GENERIC_SCHED_CLOCK은 sched_clock.o, CONFIG_TICK_ONESHOT은 tick-oneshot.o와 tick-sched.o, CONFIG_LEGACY_TIMER_TICK은 tick-legacy.o에 연결됩니다. sched_clock은 작업 시간 측정용 시계이고 tick은 주기적인 시간 알림입니다. 이름이 비슷해도 파일을 고르는 조건은 다릅니다."
+      },
+      {
+        "title": "SMP timer migration",
+        "text": "CONFIG_SMP가 y인 조건문 안에서 CONFIG_NO_HZ_COMMON이 timer_migration.o를 고릅니다. SMP는 여러 CPU 지원이며 timer migration은 타이머 처리 위치를 옮기는 기능입니다. NO_HZ_COMMON만 켜고 SMP 조건을 만족하지 못하면 해당 줄은 적용되지 않습니다. 두 조건을 함께 읽습니다."
+      },
+      {
+        "title": "vDSO·debugfs·namespace",
+        "text": "CONFIG_HAVE_GENERIC_VDSO는 vsyscall.o, CONFIG_DEBUG_FS는 timekeeping_debug.o, CONFIG_TIME_NS는 namespace.o를 고릅니다. vDSO는 일부 커널 정보를 사용자 쪽에서 빠르게 읽게 돕고, debugfs는 디버그용 파일 창구이며, 시간 namespace는 시간 관점을 나누는 기능입니다. 실제 조건 이름 HAVE_GENERIC_VDSO를 비슷한 GENERIC_TIME_VSYSCALL로 바꾸어 읽지 않습니다. 각 소스 안의 #ifdef는 이 파일 단위 선택과 별개의 조건입니다."
+      },
+      {
+        "title": "테스트 객체 세 개",
+        "text": "CONFIG_TEST_UDELAY는 test_udelay.o, CONFIG_TEST_CLOCKSOURCE_WATCHDOG는 clocksource-wdtest.o, CONFIG_TIME_KUNIT_TEST는 time_test.o를 선택합니다. obj-$(CONFIG_...)는 설정값 y면 커널 내장, m이면 따로 불러오는 모듈 대상으로 연결될 수 있습니다. 다만 실제로 m 선택이 가능한지는 해당 Kconfig의 타입과 의존 조건을 확인해야 합니다."
+      },
+      {
+        "title": "파일에 없는 생성 규칙",
+        "text": "같은 디렉터리에 timeconst.bc가 있어도 여기에는 그것을 실행하는 recipe, 즉 실행 명령이 없습니다. 여기서 generated/timeconst.h를 만든다고 말하려면 다른 빌드 규칙을 찾아야 합니다. 파일이 옆에 놓여 있다는 것만으로 실행 명령을 추측하지 않습니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "이 수업은 모든 객체 선택 줄과 ifeq·else·endif의 경계를 읽습니다. 교재 학습 프로그램을 빌드한 것은 각 커널 설정 조합을 실제 컴파일한 것과 다릅니다. 여러 구성의 조합표, stub 대체, 바깥·안쪽 조건을 함께 만족하는 관계, 파일 전체 선택과 함수 내부 조건의 차이가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "POSIX_TIMERS가 y가 아니면 어느 객체를 연결할까요?",
+        "options": [
+          "posix-stubs.o를 연결합니다.",
+          "posix-timers.o를 언제나 그대로 연결합니다."
+        ],
+        "explanation": "ifeq와 else가 실제 타이머 구현과 대체 stub을 나눕니다. 비활성 경로에도 읽어 볼 소스가 있습니다."
+      },
+      {
+        "prompt": "TICK_ONESHOT만 켜면 tick-broadcast-hrtimer.o가 추가될까요?",
+        "options": [
+          "네. 바깥 ifeq는 안쪽 obj-CONFIG 줄에 영향을 주지 않습니다.",
+          "아니요. 바깥 BROADCAST=y 조건도 필요합니다."
+        ],
+        "explanation": "선택 줄 자체가 broadcast 조건문 안에 있습니다. 두 조건을 함께 만족해야 합니다."
+      },
+      {
+        "prompt": "timer_migration.o를 고르는 조건은 무엇일까요?",
+        "options": [
+          "SMP=y와 NO_HZ_COMMON 선택이 함께 필요합니다.",
+          "DEBUG_FS만 필요합니다."
+        ],
+        "explanation": "여러 CPU 조건인 SMP ifeq 안에서 NO_HZ_COMMON에 따라 객체를 추가합니다."
+      },
+      {
+        "prompt": "이 Makefile에는 timeconst.bc를 실행하는 명령이 있을까요?",
+        "options": [
+          "있습니다. 같은 디렉터리의 .bc는 모두 자동 실행됩니다.",
+          "없습니다. 생성 명령은 다른 빌드 규칙에서 찾아야 합니다."
+        ],
+        "explanation": "실제 본문에는 객체 선택만 있습니다. 같은 폴더에 있다는 사실이 실행 규칙을 대신하지 않습니다."
+      }
+    ]
+  },
+  "file-02033dd1d20d3d7f": {
+    "story": "시간 값을 전달하는 일은 택배를 받아 내용물을 검사하고 알맞은 상자에 다시 넣는 일과 비슷합니다. 복사에 성공했는지, 숫자가 올바른지, 시계를 바꿀 권한이 있는지는 따로 확인해야 합니다.",
+    "meaning": "시간 시스템 호출과 변환 함수의 입력·출력, 검사 순서, 반올림, 범위 넘침과 옛 형식 복사를 본문으로 구분합니다.",
+    "exercise": "-1나노초의 timespec 표현을 계산하고, settimeofday의 1000000마이크로초 입력이 어느 검사에서 거절되는지 따라가세요.",
+    "guide": [
+      "시스템 호출은 사용자 프로그램이 커널에 일을 요청하는 입구입니다. 시간 값을 읽는 일, 바꿀 권한을 확인하는 일, 단위를 바꾸는 일, 사용자 메모리에 복사하는 일은 서로 다른 책임입니다.",
+      "jiffies는 커널의 시간 눈금을 세는 단위이고 HZ는 초당 눈금 수입니다. 단위를 바꾸는 함수마다 올림·버림·최대값 제한 규칙이 다르므로 비슷한 이름만 보고 같다고 생각하지 않습니다.",
+      "호환 ABI는 옛 프로그램이 기억하는 저장 모양입니다. 넓은 값을 좁은 칸에 넣거나 두 부분을 순서대로 복사할 때 범위 오류를 검사하는지, 실패 전에 일부가 바뀔 수 있는지까지 읽습니다."
+    ],
+    "goal": "시간 시스템 호출과 변환 함수의 입력·출력, 검사 순서, 반올림, 범위 넘침과 옛 형식 복사를 본문으로 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체 지도",
+        "text": "GPL-2.0 표시, 수정 이력, 헤더 포함 뒤에는 sys_tz, time/stime와 32비트형, get/settimeofday와 호환형, adjtimex와 옛 timex 변환이 있습니다. 이후에는 jiffies·달력·나노초 변환, timespec 덧셈, 새·옛 사용자 구조체 복사가 이어집니다. generated/timeconst.h나 timekeeping.h에서 가져오는 상수·기능은 이 파일이 직접 구현한 것으로 세지 않습니다."
+      },
+      {
+        "title": "전역 timezone",
+        "text": "sys_tz는 여러 함수가 함께 쓰는 전역 timezone 구조체입니다. 정적 저장 기간을 가지므로 처음 값은 0이며 EXPORT_SYMBOL로 다른 커널 코드에 공개합니다. gettimeofday가 선택적으로 시간대 정보를 내보내거나 시각 설정 경로가 이를 바꿉니다. 지역별 서머타임 이력 데이터베이스를 관리하는 것은 아닙니다."
+      },
+      {
+        "title": "구형 time 시스템 호출",
+        "text": "__ARCH_WANT_SYS_TIME 조건의 time은 ktime_get_real_seconds로 얻은 초를 __kernel_old_time_t로 줄입니다. tloc이 NULL, 즉 주소 없음이 아니면 put_user로 그곳에도 씁니다. 쓰기 실패는 -EFAULT(사용자 메모리 접근 오류), 성공 경로는 force_successful_syscall_return으로 성공 반환을 표시한 뒤 초를 반환합니다. 좁은 옛 타입 범위를 넘었는지는 별도로 검사하지 않습니다."
+      },
+      {
+        "title": "Stime의 실제 오류 처리",
+        "text": "같은 조건의 stime은 사용자 주소에서 초를 읽고 나노초는 0으로 둡니다. 읽기 실패는 -EFAULT, security_settime64 권한·보안 검사 실패는 그 오류를 반환합니다. 그러나 마지막 do_settimeofday64의 결과는 버리고 0을 반환합니다. 따라서 모든 내부 설정 오류가 그대로 사용자에게 전달된다고 말하면 틀립니다."
+      },
+      {
+        "title": "Time32와 stime32 설정",
+        "text": "32비트 변형에는 CONFIG_COMPAT_32BIT_TIME과 __ARCH_WANT_SYS_TIME32가 둘 다 필요합니다. time32는 초를 old_time32_t로 줄이고 선택적으로 사용자에게 쓴 뒤 성공 반환을 처리합니다. stime32는 초를 읽고 나노초 0, 보안 검사 뒤 시각 설정을 호출하지만 그 반환값은 버립니다. 이 조건은 일반 호환 gettimeofday의 CONFIG_COMPAT 조건과 다릅니다."
+      },
+      {
+        "title": "Gettimeofday의 두 선택 출력",
+        "text": "gettimeofday는 tv 주소가 있으면 ktime_get_real_ts64로 시간을 읽고 초와 tv_nsec/1000인 마이크로초를 각각 put_user로 씁니다. tz 주소가 있으면 sys_tz 전체를 copy_to_user로 복사합니다. 어느 복사가 실패해도 -EFAULT이고 둘 다 NULL이면 0입니다. 앞부분을 이미 쓴 뒤 뒷부분에서 실패할 수 있으므로 오류가 나면 사용자 버퍼가 전혀 바뀌지 않았다고 보장하지 않습니다."
+      },
+      {
+        "title": "공통 시각 설정의 선행 검사",
+        "text": "do_sys_settimeofday64는 먼저 tv가 있으면 timespec64_valid_settod로 검사하고 잘못된 값에는 -EINVAL(올바르지 않은 인자)을 반환합니다. 다음에는 tv와 tz를 security_settime64에 보내 오류를 그대로 전달합니다. tz가 있으면 tz_minuteswest가 -900~900분, 즉 ±15시간인지 확인합니다. tz_dsttime의 범위는 이 파일에서 별도 검사하지 않습니다."
+      },
+      {
+        "title": "첫 timezone 설정과 clock warp",
+        "text": "올바른 tz를 받으면 sys_tz에 저장하고 update_vsyscall_tz로 관련 정보를 갱신합니다. static firsttime은 처음 tz를 처리할 때만 1에서 0으로 바뀝니다. 그 첫 호출에 tv가 없을 때 timekeeping_warp_clock으로 지역 시각 기준의 시계를 UTC 기준에 맞추는 처리를 합니다. tv만 주면 첫 기회가 남고, 처음부터 tv와 tz를 함께 주면 기회는 쓰지만 warp는 하지 않습니다."
+      },
+      {
+        "title": "설정의 부분 효과",
+        "text": "tz를 처리한 다음 tv가 있으면 do_settimeofday64의 결과를 반환합니다. 그래서 뒤의 시각 설정이 실패하더라도 앞서 바꾼 timezone과 vsyscall 정보는 여기서 되돌리지 않습니다. 이를 rollback, 즉 되돌리기가 없다고 말합니다. stime과 달리 이 공통 함수는 마지막 설정 오류를 반환합니다. 한 번의 요청이라고 모든 변경이 함께 성공하거나 모두 취소되는 것은 아닙니다."
+      },
+      {
+        "title": "Settimeofday의 단위 검사",
+        "text": "settimeofday는 tv가 있으면 사용자 초와 마이크로초를 읽습니다. 마이크로초가 음수이거나 USEC_PER_SEC보다 크면 거부합니다. 조건이 >라 정확히 1000000은 이 검사만 통과하지만, 1000배 하여 1000000000나노초가 되면 공통 함수의 검사에서 거부됩니다. 따라서 백만 마이크로초를 허용하는 API는 아닙니다. tz도 있으면 지역 변수로 복사한 뒤 선택된 두 주소를 공통 함수에 보냅니다."
+      },
+      {
+        "title": "Compat get/settimeofday",
+        "text": "CONFIG_COMPAT의 호환 get/settimeofday는 old_timeval32를 써 같은 흐름을 수행합니다. get은 초와 마이크로초를 각 칸에 쓰고, set은 사용자 값을 읽어 나노초로 바꿔 공통 설정 함수를 부릅니다. get에서 초를 작은 칸으로 줄일 때 2038년 범위를 넘는지 따로 오류를 내지는 않습니다. 저장 폭과 검사 범위는 따로 확인합니다."
+      },
+      {
+        "title": "64비트 adjtimex",
+        "text": "CONFIG_64BIT의 adjtimex는 사용자 __kernel_timex 전체를 커널로 복사하고 do_adjtimex로 시계 조정을 요청한 뒤 결과 구조체를 다시 복사합니다. 입력 복사 실패는 -EFAULT입니다. 조정 결과가 무엇이든 출력 복사를 시도하고 그 복사가 실패하면 조정 결과 대신 -EFAULT를 반환합니다. 실제 네트워크 시간 맞춤인 NTP 알고리즘 자체는 이 함수에 있지 않습니다."
+      },
+      {
+        "title": "구형 timex 입력 변환",
+        "text": "CONFIG_COMPAT_32BIT_TIME의 get_old_timex32는 목적 __kernel_timex 전체를 memset으로 0으로 채운 뒤 사용자 old_timex32를 복사합니다. modes(조정 항목), offset(시각 차이), freq(주파수 조정), maxerror·esterror(오차), status(상태), constant·precision·tolerance(조정·정밀도·허용값), time의 초·마이크로초, tick, ppsfreq, jitter, shift, stabil, jitcnt, calcnt, errcnt, stbcnt를 명시적으로 옮깁니다. 뒤 필드들은 기준 신호와 흔들림·안정도·횟수에 관한 값입니다. 국제원자시 관련 tai는 옮기지 않아 0으로 남습니다."
+      },
+      {
+        "title": "구형 timex 출력과 syscall",
+        "text": "put_old_timex32는 지역 old 구조체 전체를 0으로 채운 뒤 앞의 필드들과 tai까지 대입하고 사용자에게 복사합니다. 이름 없는 예약 공간도 0인 채 나가며 좁은 필드 대입에 별도 범위 검사는 없습니다. adjtimex_time32는 get→do_adjtimex→put 순서입니다. get 실패면 중단하고 put 실패면 조정 결과보다 복사 오류를 반환합니다. tai 입력과 출력 처리는 서로 대칭이 아닙니다."
+      },
+      {
+        "title": "Jiffies에서 밀리초로",
+        "text": "jiffies_to_msecs는 HZ≤1000이고 1000이 HZ로 나누어떨어지면 j에 1000/HZ를 곱합니다. HZ>1000이면서 1000의 배수이면 (j+비율-1)/비율로 올림합니다. 그 외에는 32비트 long에서 미리 생성한 곱셈·비트 이동과 올림 항을, 64비트에서 DIV_ROUND_UP을 씁니다. 반환형은 unsigned int입니다. 중간값 폭도 중요하며 모든 큰 입력을 최대값에 붙잡는 포화 함수는 아닙니다."
+      },
+      {
+        "title": "Jiffies에서 마이크로초로",
+        "text": "jiffies_to_usecs는 HZ가 초당 마이크로초 수인 1000000보다 크면 BUILD_BUG_ON으로 빌드를 막습니다. 1000000이 HZ로 나누어떨어지면 상수 곱, 아니면 32비트에서 생성된 곱·비트 이동, 64비트에서 분자 곱 후 분모 나눗셈을 합니다. msecs 함수의 올림 보정이 여기에도 있다고 덧붙이면 안 됩니다. 반환형은 unsigned int입니다."
+      },
+      {
+        "title": "Mktime의 달력 입력",
+        "text": "mktime64는 1980 같은 보통 연도, 1~12월, 1부터 세는 일과 시·분·초를 unsigned int로 받습니다. 월을 0부터, 연도를 1900부터 세는 struct tm과 다릅니다. 월에서 2를 빼 1·2월을 전년도 끝에 놓고, year/4-year/100+year/400으로 윤년을 반영합니다. 월·일 항과 year*365에서 719499를 빼 일수를 얻은 뒤 24, 60, 60을 차례로 곱하고 시·분·초를 더합니다."
+      },
+      {
+        "title": "Mktime의 허용 표현과 범위",
+        "text": "주석에 따르면 sec=60은 다음 초와 같게 처리하고 24:00:00은 다음 날 자정으로 계산합니다. 윤초, 즉 시계 맞춤을 위해 더하는 1초에 별도 Unix 초 번호를 만들지는 않습니다. 일반 날짜 검사나 모든 unsigned 입력의 넘침 방지가 없고 year·mon 중간값도 unsigned입니다. 아무 숫자나 넣어 달력 유효성을 검증하는 도구는 아닙니다. 주석의 역사 설명도 외부 자료를 검증한 사실로 확대하지 않습니다."
+      },
+      {
+        "title": "나노초에서 구형 timeval",
+        "text": "ns_to_kernel_old_timeval은 먼저 ns_to_timespec64로 초와 나노초를 나눕니다. 초는 그대로, 정규화한 0 이상 나노초는 1000으로 나누어 마이크로초에 넣습니다. -1나노초는 (-1초,999999999나노초)를 거쳐 (-1초,999999마이크로초), 즉 -1마이크로초가 됩니다. 전체 -1을 단순히 1000으로 나누어 0 쪽으로 버리는 것과 다르며 작은 정밀도는 잃습니다."
+      },
+      {
+        "title": "Timespec 정규화",
+        "text": "정규화는 같은 시간을 정해진 모양으로 고치는 일입니다. set_normalized_timespec64는 nsec≥10억이면 10억을 빼고 sec를 늘리며, nsec<0이면 10억을 더하고 sec를 줄입니다. 결과 나노초는 0 이상 1초 미만입니다. 빈 asm은 반복문을 나머지 연산으로 바꾸는 컴파일러 최적화를 막으려는 표시이지 메모리 장벽이 아닙니다. 반복 비용은 옮겨야 할 초 수에 비례하며 초 범위 넘침은 별도 검사하지 않습니다."
+      },
+      {
+        "title": "S64 나노초의 분해",
+        "text": "ns_to_timespec64는 {0,0}으로 시작합니다. 양수는 div_u64_rem으로 몫을 초, 나머지를 나노초로 씁니다. 음수는 -nsec-1을 나눈 뒤 초=-몫-1, 나노초=NSEC_PER_SEC-rem-1로 만듭니다. 0은 그대로입니다. -1나노초는 {-1,999999999}, -10억나노초는 {-1,0}입니다. 최솟값까지 다루는 이 커널의 정수 계산 문맥을 일반 C에서 언제나 안전한 부호 반전 공식이라고 옮기지 않습니다."
+      },
+      {
+        "title": "밀리초·마이크로초 timeout 변환",
+        "text": "__msecs_to_jiffies는 unsigned m을 int로 해석했을 때 음수면 무한 대기 표시에 쓰는 MAX_JIFFY_OFFSET을 반환하고, 아니면 _msecs_to_jiffies에 맡깁니다. 상수인지 고르는 코드는 이 본문에 없으므로 긴 주석과 구분합니다. __usecs_to_jiffies는 u가 jiffies_to_usecs(MAX_JIFFY_OFFSET)보다 크면 최대값을, 아니면 _usecs_to_jiffies 결과를 줍니다. @u 주석의 milliseconds는 실제 함수 단위인 마이크로초와 다릅니다."
+      },
+      {
+        "title": "Timespec과 jiffies 왕복",
+        "text": "timespec64_to_jiffies는 초를 u64에 담고 나노초에 TICK_NSEC-1을 더해 다음 눈금으로 올림을 준비합니다. 초가 MAX_SEC_IN_JIFFIES 이상이면 그 상한으로 고정하고 나노초는 0으로 둡니다. SEC/NSEC_CONVERSION과 비트 이동으로 변환합니다. 음수 초도 u64로 바뀌면 큰 값이 되어 제한되므로 음수 기간을 자연스럽게 보존하지 않습니다. 반대 함수는 (u64)jiffies*TICK_NSEC를 나누어 초·나머지를 얻으며 곱셈 넘침은 별도 검사하지 않습니다."
+      },
+      {
+        "title": "Jiffies와 사용자 clock_t",
+        "text": "USER_HZ는 사용자에게 보여 주는 clock_t 눈금이고 HZ는 커널 눈금이라 같다고 가정하지 않습니다. jiffies_to_clock_t는 TICK_NSEC와 NSEC_PER_SEC/USER_HZ의 정수 관계가 맞으면 비율로 곱하거나 나누고, 아니면 u64 나노초 중간값을 나눕니다. clock_t_to_jiffies는 HZ가 USER_HZ의 배수일 때 x≥~0UL/비율이면 unsigned long 최댓값 ~0UL로 제한하고 아니면 곱합니다. 일반 경우 ~0UL/HZ*USER_HZ 경계를 확인한 뒤 (u64)x*HZ/USER_HZ를 계산합니다."
+      },
+      {
+        "title": "64비트 jiffies에서 clock 단위",
+        "text": "jiffies_64_to_clock_t도 tick 길이의 정수 관계에 따라 나뉩니다. HZ<USER_HZ이면 x*USER_HZ를 HZ로 나누고, 크면 HZ/USER_HZ로 나누며, 같으면 x 그대로입니다. 일반 길은 x*TICK_NSEC를 사용자 눈금 길이로 나눕니다. 주석도 긴 기간에서 중간 곱이 넘칠 수 있음을 인정합니다. 일반 jiffies 함수와 코드·최대값 처리 규칙이 똑같지는 않습니다."
+      },
+      {
+        "title": "나노초에서 clock 단위",
+        "text": "nsec_to_clock_t는 10억이 USER_HZ로 나누어떨어지면 x를 한 눈금의 나노초로 나눕니다. USER_HZ가 512의 배수면 x*USER_HZ/512를 10억/512로 나눕니다. 나머지 경우 x*9를, 반올림한 분모 (9*10억+USER_HZ/2)/USER_HZ로 나눕니다. 주석은 USER_HZ≤1024에서 상대 오차 최대 5.7e-8과 약 64.99년 뒤 중간 곱 넘침 등을 설명합니다. 조건 있는 공식 설명이지 모든 설정·입력에서 오차가 없다는 보장이 아닙니다."
+      },
+      {
+        "title": "64비트 jiffies에서 나노초·밀리초",
+        "text": "jiffies64_to_nsecs는 10억이 HZ로 나누어떨어지면 상수 곱, 아니면 HZ_TO_NSEC_NUM/DEN 비율로 변환합니다. jiffies64_to_msecs는 HZ≤1000이고 나누어떨어지면 상수 곱, 아니면 HZ_TO_MSEC_NUM/DEN을 씁니다. 분자·분모로 나타내는 비율을 유리수라고 합니다. 이 일반 경로에는 jiffies_to_msecs의 DIV_ROUND_UP이 없으므로 단순히 결과 비트 수만 넓힌 같은 올림 함수가 아닙니다."
+      },
+      {
+        "title": "스케줄러용 나노초 변환",
+        "text": "nsecs_to_jiffies64는 10억%HZ=0이면 나눗셈, HZ%512=0이면 n*HZ/512를 10억/512로 나눕니다. 나머지는 n*9와 반올림한 분모를 씁니다. CPU 작업 순서를 고르는 스케줄러용이며 장치 대기 제한 시간처럼 MAX_JIFFY_OFFSET으로 붙잡지 않는다고 주석이 명시합니다. nsecs_to_jiffies는 그 결과를 unsigned long으로 줄일 뿐이므로 32비트에서 큰 결과가 잘릴 수 있고 별도 포화가 없습니다."
+      },
+      {
+        "title": "안전한 timespec 덧셈",
+        "text": " timespec64_add_safe는 두 입력이 0 이상이고 이미 정규화되어 있다고 가정합니다. 왼쪽 초를 timeu64_t로 바꾸어 초끼리 더하고 나노초 합과 함께 정규화합니다. 결과 초가 어느 입력 초보다 작으면 범위 넘침으로 보고 {TIME64_MAX,0}으로 바꿉니다. 최대 초뿐 아니라 나노초를 0으로 둔다는 점도 중요합니다. 음수나 제멋대로 된 소수 필드까지 모두 보호하는 함수는 아닙니다."
+      },
+      {
+        "title": "새 timespec 입력 복사",
+        "text": "get_timespec64는 사용자 __kernel_timespec 전체를 지역 변수에 복사하고 실패하면 -EFAULT입니다. 초를 옮긴 뒤 호환 syscall이면 나노초에 0xFFFFFFFFUL 마스크를 적용하여 위쪽 32비트의 패딩, 즉 빈 공간을 지웁니다. 32비트 모드에서는 long으로 대입할 때 높은 비트가 버려집니다. 복사·표현 변환을 할 뿐 tv_nsec<10억 같은 시간 유효성 검사는 하지 않습니다."
+      },
+      {
+        "title": "새 timespec 출력 복사",
+        "text": "put_timespec64는 두 필드를 대입한 __kernel_timespec 지역 변수를 만들고 전체를 copy_to_user로 보냅니다. 실패는 -EFAULT, 성공은 0입니다. 정규화하거나 설정 가능한 시각 범위를 검사하지 않으므로 호출자가 필요한 정책을 적용해야 합니다. 공개 구조체로 변환한 것과 내부 구조체 바이트를 무조건 그대로 복사한 것은 다릅니다."
+      },
+      {
+        "title": "구형 timespec의 내부 helper",
+        "text": "__get_old_timespec32는 사용자 old_timespec32를 지역 변수로 복사한 뒤 두 s32 필드를 넓은 timespec64에 옮깁니다. __put_old_timespec32는 두 값을 좁은 지역 구조체 필드에 넣고 사용자에게 복사합니다. 두 방향 모두 시간 유효성이나 줄일 때의 범위 넘침을 검사하지 않으며 복사 실패에만 -EFAULT를 반환합니다."
+      },
+      {
+        "title": "X32 예외를 가진 공개 wrapper",
+        "text": "공개 get_old_timespec32와 put_old_timespec32는 COMPAT_USE_64BIT_TIME이면 내부 timespec64 전체 크기를 직접 copy_from/to_user합니다. 그렇지 않으면 앞의 고정 32비트 내부 함수를 부릅니다. X32 같은 호환 예외 때문에 공개 주소 인자가 void __user입니다. 이름에 32가 있어도 모든 경로가 old_timespec32의 두 칸만 읽고 쓰는 것은 아닙니다."
+      },
+      {
+        "title": "새 interval timer 복사",
+        "text": "get_itimerspec64와 put_itimerspec64는 새 timespec 복사 함수로 it_interval(반복 간격)을 먼저 처리합니다. 성공하면 it_value(타이머 값)를 처리합니다. 두 번째가 실패하더라도 먼저 복사한 간격을 되돌리지 않습니다. 같은 구조체 안의 두 값이라고 통째로 함께 성공·취소되는 원자적 복사는 아닙니다."
+      },
+      {
+        "title": "구형 interval timer 복사",
+        "text": "옛 get_old_itimerspec32와 put_old_itimerspec32는 공개 old timespec 함수를 거치지 않고 __get/__put_old_timespec32를 직접 두 번 부릅니다. ||는 앞이 참이면 뒤를 하지 않는 단락 평가이므로 간격 복사가 실패하면 값 복사를 건너뛰고 -EFAULT입니다. 성공은 0이며 값 검사나 되돌리기는 없습니다. COMPAT_USE_64BIT_TIME 예외가 이 경로에도 자동 적용된다고 추측하면 안 됩니다."
+      },
+      {
+        "title": "심볼 공개와 검증 범위",
+        "text": "sys_tz와 여러 전통 변환은 일반 EXPORT_SYMBOL로 공개합니다. nsecs_to_jiffies와 새·옛 timespec/itimerspec 공개 복사 도우미는 GPL 조건의 EXPORT_SYMBOL_GPL입니다. nsec_to_clock_t와 timespec64_add_safe에는 이 파일에서 export 표시가 없습니다. 본문과 조건별 갈림길을 읽었지만 실제 시스템 시계를 바꾸거나 모든 HZ 조합·ABI에서 시험을 통과했다고 주장하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "처음 timezone을 설정할 때 tv도 함께 주면 clock warp가 실행될까요?",
+        "options": [
+          "아니요. firsttime은 쓰지만 warp는 tv가 없을 때만 합니다.",
+          "네. 첫 tz 입력이면 언제나 warp합니다."
+        ],
+        "explanation": "tz 블록은 firsttime을 0으로 바꾼 뒤 !tv를 확인합니다. tv만 설정하는 호출은 firsttime을 바꾸지 않습니다."
+      },
+      {
+        "prompt": "settimeofday에 tv_usec=1000000을 주면 허용될까요?",
+        "options": [
+          "네. 첫 검사가 >이므로 전체 호출도 성공합니다.",
+          "아니요. 나노초로 바꾼 뒤 공통 검사에서 거절됩니다."
+        ],
+        "explanation": "1000배하면 1000000000나노초입니다. 이는 timespec64_valid_settod에서 올바르지 않으므로 검사 흐름 끝까지 따라가야 합니다."
+      },
+      {
+        "prompt": "stime은 do_settimeofday64의 오류를 그대로 반환할까요?",
+        "options": [
+          "아니요. 그 결과를 버리고 0을 반환합니다.",
+          "네. 다른 공통 설정 도우미와 완전히 같습니다."
+        ],
+        "explanation": "사용자 읽기와 보안 검사 오류는 반환하지만 마지막 설정 결과는 저장하지 않습니다."
+      },
+      {
+        "prompt": "옛 timex의 tai는 입력과 출력에서 모두 복사될까요?",
+        "options": [
+          "네. 두 방향은 완전히 같습니다.",
+          "아니요. 입력 목적에서는 0으로 남고 출력에는 복사됩니다."
+        ],
+        "explanation": "get은 전체를 0으로 채운 뒤 tai를 대입하지 않습니다. put에는 tai 대입이 있습니다."
+      },
+      {
+        "prompt": "-1나노초를 ns_to_timespec64로 바꾸면 무엇일까요?",
+        "options": [
+          "초는 -1, 나노초는 999999999입니다.",
+          "초는 0, 나노초는 -1입니다."
+        ],
+        "explanation": "더 이른 정수 초에서 앞으로 간 양을 소수 부분에 담습니다. 정규화된 나노초는 0 이상입니다."
+      },
+      {
+        "prompt": "timespec64_add_safe가 범위 넘침을 발견하면 어떤 값을 만들까요?",
+        "options": [
+          "초 TIME64_MAX, 나노초 999999999입니다.",
+          "초 TIME64_MAX, 나노초 0입니다."
+        ],
+        "explanation": "본문이 두 필드를 각각 TIME64_MAX와 0으로 대입합니다. 짧은 요약만 보고 최대 소수 부분이라고 추측하지 않습니다."
+      },
+      {
+        "prompt": "nsecs_to_jiffies64는 큰 입력을 MAX_JIFFY_OFFSET으로 제한하는 대기 시간 변환일까요?",
+        "options": [
+          "아니요. 스케줄러용이며 그 최대값 제한 규칙을 쓰지 않습니다.",
+          "네. jiffies 변환은 전부 같은 제한을 씁니다."
+        ],
+        "explanation": "주석이 밀리초·마이크로초 timeout용 변환과의 차이를 명시합니다. 단위가 같아도 목적과 경계 규칙이 다릅니다."
+      },
+      {
+        "prompt": "get_timespec64가 0을 반환하면 시간 값의 범위까지 확인된 것일까요?",
+        "options": [
+          "네. 나노초 범위와 음수 초를 모두 검사합니다.",
+          "아니요. 복사와 저장 모양 변환이 성공했다는 뜻입니다."
+        ],
+        "explanation": "여기에는 timespec64_valid 호출이 없습니다. 값 검사는 이를 사용하는 API가 따로 해야 합니다."
+      },
+      {
+        "prompt": "옛 itimerspec 복사는 COMPAT_USE_64BIT_TIME 분기가 있는 공개 함수를 사용할까요?",
+        "options": [
+          "아니요. 고정 32비트 내부 함수를 직접 사용합니다.",
+          "네. 두 경로가 자동으로 같은 크기를 복사합니다."
+        ],
+        "explanation": "실제 호출 이름은 __get/__put_old_timespec32입니다. 밑줄 두 개가 붙은 내부 함수와 공개 함수를 구분합니다."
+      },
+      {
+        "prompt": "jiffies_to_msecs와 jiffies64_to_msecs의 일반 경로는 같은 반올림을 할까요?",
+        "options": [
+          "네. 결과 비트 수만 다르고 식은 같습니다.",
+          "아니요. 앞 함수에는 올림 보정이 있고 뒤 함수는 비율 나눗셈을 합니다."
+        ],
+        "explanation": "앞은 DIV_ROUND_UP 또는 비트 이동 전 보정 항을, 뒤는 div_u64를 씁니다. 실제 계산식을 확인해야 합니다."
+      }
+    ]
+  },
+  "file-514afa2248c27348": {
+    "story": "여러 교실이 같은 시계를 보되 각자 시작 시간을 다르게 표시할 수 있습니다. 시간 namespace는 이런 별도 시간 관점을 만들면서 누가 사용 중인지와 언제 보정을 바꿀 수 있는지도 관리합니다.",
+    "meaning": "시간 namespace의 생성·공유·첫 참여·해제와 시간 보정 검사를 객체 수명 및 잠금 순서와 연결해 설명합니다.",
+    "exercise": "복제 중 페이지를 얻은 뒤 inode 번호 할당이 실패한 경로와, offset 두 개 중 둘째가 잘못된 경로를 따라가세요.",
+    "guide": [
+      "namespace는 다른 실행 환경과 구분한 관점이고 offset은 기준 시간에 더할 차이입니다. 별도 시간 관점에는 숫자 덧셈뿐 아니라 객체 소유자, 참조 수, 메모리 매핑과 변경 제한이 필요합니다.",
+      "참조 수는 같은 객체를 사용하는 곳이 몇 군데인지 셉니다. 자원을 얻다가 실패하면 이미 얻은 자원만 역순으로 돌려주고, 마지막 사용자가 떠날 때 객체를 해제합니다.",
+      "mutex는 한 번에 한 실행 흐름만 들어가게 하는 잠금입니다. 여러 보정값은 전부 먼저 검사하고 잠금 안에서 반영하여, 뒤 입력 오류 때문에 앞 값만 바뀌는 일을 막습니다."
+    ],
+    "goal": "시간 namespace의 생성·공유·첫 참여·해제와 시간 보정 검사를 객체 수명 및 잠금 순서와 연결해 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 파일은 시간·사용자 namespace, task·signal, clocksource, seq_file, proc namespace, 메모리·자격·오류 및 vDSO 데이터 인터페이스를 불러옵니다. 작은 내부 함수와 외부 호출 함수, proc 동작표 두 개, init_time_ns 객체가 있습니다. 사용자 문자열 해석이나 아키텍처별 가상 메모리 영역(VMA) 설치 본문은 여기 밖에 있습니다."
+      },
+      {
+        "title": "Namespace 시간에서 host 시간으로",
+        "text": "do_timens_ktime_to_host는 namespace 시각을 호스트 기준으로 돌립니다. MONOTONIC에는 monotonic, BOOTTIME과 BOOTTIME_ALARM에는 boottime 보정을 timespec64_to_ktime으로 바꿔 씁니다. 다른 clockid면 tim 그대로입니다. tim<offset이면 이미 지난 절대 시점으로 보아 0, 아니면 offset을 뺀 뒤 KTIME_MAX 초과를 제한합니다. 같은 단위에서 보정 20, 시각 12는 0이고 35는 15입니다. 모든 부호 있는 산술을 일반적으로 안전하게 포화시키는 API로 확대하지 않습니다."
+      },
+      {
+        "title": "Namespace 개수 회계",
+        "text": "inc_time_namespaces는 받은 user namespace, 현재 실행자의 유효 사용자 번호 current_euid(), UCOUNT_TIME_NAMESPACES로 inc_ucount를 부릅니다. dec_time_namespaces는 같은 종류의 개수 회계를 줄입니다. 이는 사용자별 namespace 소비량이며, 한 객체를 여러 곳이 쓰는 ns_common 참조 수와 다릅니다."
+      },
+      {
+        "title": "복제의 자원 획득 순서",
+        "text": "clone_time_ns는 먼저 개수 회계를 늘리고 실패하면 기본 오류 -ENOSPC(자원 한도 부족)를 씁니다. 이어 GFP_KERNEL_ACCOUNT로 객체 메모리를 얻고 참조 수를 1로 둡니다. VVAR 페이지는 GFP_KERNEL_ACCOUNT|__GFP_ZERO로 얻어 명시적으로 0으로 채웁니다. 메모리·페이지 실패는 -ENOMEM입니다. 다음 ns_alloc_inum으로 식별용 inode 번호를 얻으며 그 오류는 보존합니다. kmalloc 객체 전체까지 저절로 0이 되는 것은 아닙니다."
+      },
+      {
+        "title": "복제 성공과 역순 회수",
+        "text": "성공하면 ucounts, 동작표 timens_operations, get_user_ns로 얻은 소유자 참조, 원본 offsets를 저장하고 frozen_offsets=false로 시작합니다. 원본이 동결 상태라도 새 객체는 아닙니다. inode 번호 실패면 페이지→객체→개수 회계 순으로 회수합니다. 페이지 실패면 객체→회계, 객체 실패면 회계만 되돌립니다. 마지막은 포인터 자리에 오류를 담는 ERR_PTR(err)입니다. 소유자 참조는 실패 가능 단계 뒤에 얻으므로 이 실패 경로에서 put_user_ns는 하지 않습니다."
+      },
+      {
+        "title": "복사 또는 공유",
+        "text": "copy_time_ns는 CLONE_NEWTIME 표시가 없으면 기존 old_ns의 참조만 늘려 같은 객체를 반환하고, 있으면 clone_time_ns로 새 객체를 만듭니다. 문서상 대상은 자식에게 줄 timens_for_children입니다. 이 함수만 호출한다고 현재 task의 time_ns가 바뀌거나 현재 보이는 시간이 즉시 이동하지 않습니다."
+      },
+      {
+        "title": "Offset 표현과 VVAR 슬롯 채우기",
+        "text": "offset_from_ts는 초·나노초를 timens_offset의 sec·nsec에 옮깁니다. timens_setup_vdso_data는 seq=1, clock_mode=TIMENS를 기록합니다. MONOTONIC, MONOTONIC_RAW, MONOTONIC_COARSE에는 monotonic 보정을, BOOTTIME과 BOOTTIME_ALARM에는 boottime 보정을 씁니다. REALTIME·TAI 등의 칸은 여기서 쓰지 않아 새 VVAR 페이지의 초기 0이 중요합니다. RAW라는 이름이어도 namespace 보정이 항상 0인 것은 아닙니다."
+      },
+      {
+        "title": "홀수 seq의 의도와 페이지 배치 주석",
+        "text": "VVAR는 사용자 쪽의 빠른 시간 읽기에 제공하는 자료 페이지이고 vDSO는 이를 읽는 도움 코드입니다. 여기서 홀수 seq=1과 TIMENS 모드는 읽는 쪽을 namespace 처리 경로로 보내는 표식입니다. 무조건 작성자가 갱신 중이라는 뜻만은 아닙니다. 주석은 VVAR·PVCLOCK·HVCLOCK·TIMENS의 순서를 바꾸는 예를 들지만 모든 아키텍처에 이 네 페이지를 실제 설치하는 C 코드는 아닙니다. 실제 개수·배치는 아키텍처 구현을 봅니다."
+      },
+      {
+        "title": "현재 mm의 VVAR 조회",
+        "text": "find_timens_vvar_page는 vma의 메모리 공간이 current->mm와 같으면 현재 task namespace의 vvar_page를 반환합니다. 아니면 경고 WARN을 내고 NULL입니다. 다른 task의 nsproxy를 찾아 대신 반환하지 않습니다. PFNMAP·IO 표시와 special mapping의 access 콜백 부재가 원격 메모리 접근을 제한한다는 배경 주석이 있습니다. 이 작은 함수 하나가 모든 원격 접근을 막는 범용 권한 검사는 아닙니다."
+      },
+      {
+        "title": "첫 참여의 VVAR 초기화",
+        "text": "offset_lock은 여러 보정 작성자와 namespace 참여 작업이 겹치지 않게 하는 전역 mutex입니다. timens_set_vvar_page는 초기 namespace이거나 이미 frozen이면 빠르게 끝납니다. 아니면 잠금을 얻고 frozen을 다시 확인합니다. 기다리는 사이 다른 task가 먼저 초기화했을 수 있기 때문입니다. 처음이면 true로 바꾸고 page_address와 arch_get_vdso_data로 얻은 자료의 CS_BASES개 슬롯을 채웁니다. task 인자는 본문에서 쓰지 않습니다. bool 자체가 잠금은 아닙니다."
+      },
+      {
+        "title": "해제와 포함 구조체 역변환",
+        "text": "free_time_ns는 개수 회계, 소유자 참조, inode 번호, VVAR 페이지, 객체 메모리 순으로 해제합니다. 여기서 참조 수를 직접 줄이는 것은 아니며 헤더의 put_time_ns가 마지막 참조에서 부릅니다. to_time_ns는 container_of로 안쪽 ns_common의 주소에서 그것을 품은 time_namespace 주소를 찾습니다. 새 객체를 만들거나 복사하지 않습니다."
+      },
+      {
+        "title": "현재 namespace와 자식용 namespace의 get",
+        "text": "timens_get과 timens_for_children_get은 task_lock을 잡고 task->nsproxy를 읽습니다. 있으면 각각 현재 time_ns 또는 자식용 time_ns_for_children을 선택하고 get_time_ns로 참조를 얻은 뒤 잠금을 풉니다. 결과는 내장 &ns->ns 또는 NULL입니다. 잠금 해제 전에 참조를 확보해야 객체가 살아 있습니다. timens_put은 바깥 객체로 되찾아 put_time_ns를, timens_owner는 소유자 포인터 반환을 합니다."
+      },
+      {
+        "title": "Commit의 두 단계",
+        "text": "timens_commit은 먼저 timens_set_vvar_page로 초기화와 동결을 하고, 이어 vdso_join_timens로 사용자 VVAR 매핑 전환을 요청합니다. 객체에 들어갈 자료를 준비하는 일과 기존 주소 매핑을 바꾸는 일은 두 단계입니다. 함수는 void이며 vdso_join_timens의 int 반환값을 검사하거나 돌려주지 않습니다."
+      },
+      {
+        "title": "Namespace 설치 조건과 두 참조",
+        "text": "timens_install은 현재 실행이 단일 스레드가 아니면 -EUSERS입니다. 대상 ns->user_ns와 nsset->cred->user_ns 양쪽에서 CAP_SYS_ADMIN 관리 권한이 있어야 하며 아니면 -EPERM입니다. 성공 시 새 참조를 얻고 옛 참조를 놓아 time_ns를 바꾼 뒤 자식용 필드에도 같은 순서를 합니다. 같은 객체를 두 칸이 각각 보유하므로 참조를 두 번 얻습니다. 여기서 timens_commit을 직접 부르지는 않습니다."
+      },
+      {
+        "title": "Fork에서 자식용 상태 적용",
+        "text": "fork로 자식을 만드는 timens_on_fork는 자식용 객체를 대상으로 잡습니다. 현재 time_ns와 같으면 생성 과정에서 이미 참조가 늘었다는 주석대로 바로 끝납니다. 다르면 대상 참조를 얻고 옛 현재 참조를 놓은 뒤 포인터를 바꾸고 timens_commit을 부릅니다. 자식용 객체를 또 복제하는 것이 아니라 준비한 것을 현재 필드에 적용합니다."
+      },
+      {
+        "title": "Proc 출력의 대상과 형식",
+        "text": "show_offset은 BOOTTIME을 boottime, MONOTONIC을 monotonic, 나머지를 unknown으로 표시하고 이름·초·나노초를 정해진 칸 폭으로 출력합니다. proc_timens_show_offsets는 자식용 namespace를 얻으므로 현재 시간과 다른 값이 보일 수 있습니다. 객체가 없으면 아무것도 출력하지 않고, 있으면 monotonic→boottime 순서로 쓴 뒤 참조를 놓습니다. 이 출력 함수에는 offset_lock 획득이 없습니다."
+      },
+      {
+        "title": "입력 설정의 대상과 권한",
+        "text": "proc_timens_set_offset도 자식용 namespace를 사용합니다. 없으면 -ESRCH(대상 없음), file_ns_capable(file,소유자,CAP_SYS_TIME)이 거짓이면 참조를 놓고 -EPERM(권한 부족)입니다. namespace 설치의 CAP_SYS_ADMIN과 시간 보정 설정의 CAP_SYS_TIME은 다른 검사입니다. file을 받는 권한 도우미를 현재 task만 확인하는 단순 조건으로 바꾸어 읽지 않습니다."
+      },
+      {
+        "title": "전체 입력의 사전 검증",
+        "text": "첫 반복문은 MONOTONIC이면 ktime_get_ts64, BOOTTIME이면 ktime_get_boottime_ts64로 호스트 현재 시각을 읽고 다른 시계 번호는 -EINVAL입니다. offset 초가 ±KTIME_SEC_MAX 밖이면 -ERANGE(범위 오류)입니다. 현재 시각과 보정을 더한 초가 음수이거나 KTIME_SEC_MAX/2보다 커도 같은 오류입니다. 경계와 같은 값은 이 비교만으로 거절되지 않습니다. 항목마다 시각을 새로 읽으므로 모두 같은 순간을 찍은 값은 아닙니다."
+      },
+      {
+        "title": "입력 파싱과 함수 계약 구분",
+        "text": "이 함수 자체는 문자열을 해석하거나 noffsets의 최대 개수, 나노초가 0 이상 1초 미만인지 직접 검사하지 않습니다. 원문에서 교차 확인한 fs/proc/base.c 호출부가 초·나노초를 읽고 나노초 범위를 검사해 넘깁니다. 따라서 아무 내부 입력을 넣어도 여기서 모든 검증이 끝난다고 말하면 안 됩니다. 호출부 일부 확인을 그 파일 전체 학습 완료로 세지도 않습니다."
+      },
+      {
+        "title": "동결 검사와 일괄 반영",
+        "text": "모든 입력이 첫 검사 루프를 통과해야 offset_lock을 얻습니다. frozen_offsets면 -EACCES로 변경하지 않습니다. 아니라면 err=0 뒤 두 번째 루프에서 각 시계의 offset에 값을 대입합니다. 이 아래에서는 오류를 보고하지 않는다고 주석이 적혀 있습니다. 첫 값이 맞아도 둘째가 틀리면 사전 검사에서 끝나 첫 값도 저장되지 않습니다. 다만 잠금 없는 모든 읽는 쪽에 여러 필드를 한 순간에 읽는 원자적 스냅샷까지 주는 것은 아닙니다."
+      },
+      {
+        "title": "중복 항목·복잡도·종료 경로",
+        "text": "두 번째 루프는 같은 clockid의 중복을 거절하지 않으므로 모두 유효하다면 마지막 대입 값이 남습니다. 입력 n개를 두 번 도는 비용은 O(n), 즉 개수에 비례하며 추가 지역 공간은 O(1), 일정량입니다. 잠금을 얻은 길은 out_unlock에서 풀고 공통 out에서 참조를 놓은 뒤 err를 반환합니다. 잠금을 얻기 전 실패는 unlock하지 않도록 종료 라벨을 나눕니다."
+      },
+      {
+        "title": "두 proc namespace operation 테이블",
+        "text": "proc 동작표 timens_operations는 이름 time, 종류 CLONE_NEWTIME, 조회 함수 timens_get을 연결합니다. timens_for_children_operations는 이름 time_for_children, 실제 이름 time, 같은 종류, 조회 함수 timens_for_children_get을 연결합니다. 참조 해제 put, 설치 install, 소유자 owner는 같은 콜백을 씁니다. 표시 이름과 읽는 필드가 다르지만 별도 CLONE 표시를 쓰는 것은 아닙니다."
+      },
+      {
+        "title": "초기 namespace와 검토 범위",
+        "text": "초기 init_time_ns는 참조 수 3, 소유자 init_user_ns, 고정 PROC_TIME_INIT_INO, timens_operations, frozen_offsets=true로 시작합니다. 정적 객체에서 따로 지정하지 않은 필드는 0이므로 offsets는 0, vvar_page는 NULL입니다. 새 clone의 참조 수 1과 구분합니다. 함수·표·오류 경로를 원본과 읽어 비교한 것이며 실제 커널에서 namespace 생성·setns·원격 메모리 접근 실험을 한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "BOOTTIME_ALARM을 호스트 시간으로 바꿀 때 어느 보정을 쓸까요?",
+        "options": [
+          "boottime 보정입니다.",
+          "monotonic 보정입니다."
+        ],
+        "explanation": "switch에서 BOOTTIME과 BOOTTIME_ALARM을 같은 길로 묶습니다. 지원하지 않는 다른 시계는 tim 그대로입니다."
+      },
+      {
+        "prompt": "copy_time_ns에 CLONE_NEWTIME이 없으면 어떻게 할까요?",
+        "options": [
+          "항상 새 VVAR 페이지를 만듭니다.",
+          "기존 객체의 참조 수를 늘리고 같은 객체를 줍니다."
+        ],
+        "explanation": "새 페이지는 clone 경로에서만 만듭니다. 공유는 객체를 새로 복제하지 않습니다."
+      },
+      {
+        "prompt": "복제 중 ns_alloc_inum이 실패하면 무엇부터 회수할까요?",
+        "options": [
+          "VVAR 페이지, 객체 메모리, namespace 개수 회계 순입니다.",
+          "소유자 참조만 놓고 나머지는 남깁니다."
+        ],
+        "explanation": "실패 라벨은 page→object→count 순으로 내려갑니다. 소유자 참조는 아직 얻기 전입니다."
+      },
+      {
+        "prompt": "원본이 frozen 상태이면 새 복제 객체는 어떨까요?",
+        "options": [
+          "동결 상태까지 그대로 복사합니다.",
+          "보정값은 복사하지만 frozen_offsets=false로 시작합니다."
+        ],
+        "explanation": "값 상속과 수정 가능 상태 상속은 다릅니다. false를 명시적으로 대입합니다."
+      },
+      {
+        "prompt": "namespace VVAR의 MONOTONIC_RAW 보정은 무엇일까요?",
+        "options": [
+          "monotonic 보정과 같습니다.",
+          "항상 0으로 만듭니다."
+        ],
+        "explanation": "MONOTONIC, RAW, COARSE 세 칸에 같은 값을 씁니다. 이름만으로 보정이 없다고 추측하지 않습니다."
+      },
+      {
+        "prompt": "잠금을 얻은 뒤 frozen_offsets를 다시 확인하는 이유는 무엇일까요?",
+        "options": [
+          "mutex를 얻으면 bool이 자동으로 false가 되기 때문입니다.",
+          "잠금을 기다리는 동안 다른 task가 먼저 초기화했을 수 있기 때문입니다."
+        ],
+        "explanation": "바깥 확인은 빠른 종료용이고 안쪽 확인은 동시에 초기화하려는 경쟁을 처리합니다."
+      },
+      {
+        "prompt": "현재 namespace와 자식용 namespace가 다르면 proc은 어느 보정을 보여 줄까요?",
+        "options": [
+          "자식용 namespace 보정입니다.",
+          "두 보정값을 더한 값입니다."
+        ],
+        "explanation": "proc_timens_show_offsets는 timens_for_children_get으로 대상을 얻습니다."
+      },
+      {
+        "prompt": "설치 성공 경로가 같은 대상 참조를 두 번 얻는 이유는 무엇일까요?",
+        "options": [
+          "참조 수가 홀수여야 VVAR를 읽을 수 있기 때문입니다.",
+          "time_ns와 time_ns_for_children이 각각 참조를 보유하기 때문입니다."
+        ],
+        "explanation": "객체 참조 수와 VVAR seq는 다른 상태입니다. 각 포인터의 새 참조를 따로 확보합니다."
+      },
+      {
+        "prompt": "첫 offset은 맞지만 두 번째 clockid가 틀리면 어떻게 될까요?",
+        "options": [
+          "사전 검사에서 -EINVAL이 나므로 첫 값도 저장하지 않습니다.",
+          "첫 값은 저장하고 두 번째 오류만 반환합니다."
+        ],
+        "explanation": "대입은 모든 입력의 검사 뒤에 합니다. 검증 단계와 반영 단계를 나눈 효과입니다."
+      },
+      {
+        "prompt": "권한과 입력은 맞지만 이미 동결된 namespace의 보정을 바꾸려 하면 어떤 오류일까요?",
+        "options": [
+          "-EPERM입니다.",
+          "-EACCES입니다."
+        ],
+        "explanation": "권한 부족은 앞의 EPERM이고 동결 상태는 잠금 안에서 EACCES로 구분합니다."
+      },
+      {
+        "prompt": "같은 clockid를 두 번 주고 둘 다 올바른 값이면 무엇이 남을까요?",
+        "options": [
+          "마지막 항목의 값이 남습니다.",
+          "항상 중복 오류 -EEXIST가 납니다."
+        ],
+        "explanation": "별도 중복 검사 없이 배열 순서대로 같은 칸에 대입합니다."
+      },
+      {
+        "prompt": "초기 namespace와 새 clone의 참조 수는 각각 얼마일까요?",
+        "options": [
+          "1과 3입니다.",
+          "3과 1입니다."
+        ],
+        "explanation": "초기 객체는 REFCOUNT_INIT(3), clone은 refcount_set으로 1을 둡니다."
+      }
+    ]
+  },
+  "file-ed2491753aa8d7c7": {
+    "story": "같은 리모컨 버튼도 기능이 없는 기계에서는 다른 결과를 낼 수 있습니다. 시간 namespace 헤더도 설정을 켠 함수와 끈 대체 함수를 하나씩 읽어야 합니다.",
+    "meaning": "시간 보정 구조체와 참조 수, 현재 task의 변환, 기능을 끈 stub의 서로 다른 반환 약속을 설명합니다.",
+    "exercise": "CONFIG_TIME_NS가 켜졌을 때와 꺼졌을 때 get_time_ns·copy_time_ns·timens_ktime_to_host의 결과를 비교하세요.",
+    "guide": [
+      "namespace는 실행 환경에 별도로 보이는 관점이고 offset은 시간에 더하거나 뺄 차이입니다. 여기에는 monotonic과 boottime 두 종류 보정이 있습니다.",
+      "참조 수는 객체 사용자가 남아 있는 동안 해제를 막는 수명 장치입니다. offset의 동시 변경을 모두 막는 잠금과는 다릅니다.",
+      "stub은 기능이 꺼졌을 때 대신 쓰는 작은 구현입니다. 어떤 것은 입력 그대로, 어떤 것은 NULL이나 오류를 주므로 전부 같은 동작이라고 묶지 않습니다."
+    ],
+    "goal": "시간 보정 구조체와 참조 수, 현재 task의 변환, 기능을 끈 stub의 서로 다른 반환 약속을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "헤더와 외부 타입",
+        "text": "GPL-2.0 표시와 중복 포함 방지 guard 안에서 sched, nsproxy, ns_common, err, time64 헤더를 불러옵니다. user_namespace와 vm_area_struct는 이름을 먼저 알리는 전방 선언이고 init_user_ns·init_time_ns는 다른 곳의 객체를 쓰겠다는 extern 선언입니다. 여기서 객체 메모리를 만들거나 초기화하지 않습니다."
+      },
+      {
+        "title": "시간 보정 데이터",
+        "text": "timens_offsets는 timespec64 monotonic과 boottime 두 칸입니다. 각 칸은 초·나노초로 시간 차이를 담습니다. realtime 보정 칸은 없습니다. 시계별 보정을 분리한 구조이므로 모든 clockid에 무조건 같은 값을 쓰는 것으로 읽지 않습니다."
+      },
+      {
+        "title": "Namespace 객체의 상태",
+        "text": "time_namespace는 소유자 user_ns, 자원 개수 회계 ucounts, 공통 namespace 정보 ns, 보정 offsets, VVAR 페이지 vvar_page, 동결 표시 frozen_offsets를 담습니다. 주석은 task가 참여한 뒤에는 보정을 못 바꾸게 한다고 설명하지만 실제 거절 코드는 밖에 있습니다. __randomize_layout 때문에 모든 빌드에서 같은 바이트 위치라고 가정하면 안 됩니다. vvar_page는 사용자 주소가 아닌 struct page 메타데이터 포인터입니다."
+      },
+      {
+        "title": "수명과 생성 API",
+        "text": "TIME_NS가 켜져 있으면 get_time_ns는 참조 수를 늘리고 같은 객체를 줍니다. put_time_ns는 하나 줄인 결과가 0일 때만 free_time_ns로 해제합니다. copy_time_ns는 flags, user_ns, old_ns를 받는 외부 선언이며 공유·복제 방식은 여기서 구현하지 않습니다. 활성 get/put에는 NULL 검사도 없습니다. 참조 수는 수명 관리이지 모든 offset 접근을 잠그는 mutex는 아닙니다."
+      },
+      {
+        "title": "참여와 VVAR 선언",
+        "text": "vdso_join_timens(task,ns)는 int, timens_commit(tsk,ns)는 void를 반환한다고 선언합니다. timens_on_fork와 find_timens_vvar_page도 선언되어 있습니다. VVAR는 사용자 공간에서 빠르게 시간을 읽도록 제공하는 자료 페이지이며 이 함수들은 그 매핑과 task 상태를 연결하는 접점입니다. 실제 전환 순서나 메모리 fault 처리 본문은 여기 없습니다."
+      },
+      {
+        "title": "Proc 인터페이스",
+        "text": "proc_timens_show_offsets는 task와 순서대로 내용을 출력하는 seq_file을 받습니다. 설정 요청 한 개는 proc_timens_offset의 int clockid와 timespec64 val로 표현합니다. proc_timens_set_offset은 file, task, 요청 배열 주소, 개수 n을 받고 int를 줍니다. 이 선언만으로 권한이나 시계 번호 검사가 끝났다고 볼 수 없습니다. 이 API와 요청 구조체는 TIME_NS 활성 구역에 있습니다."
+      },
+      {
+        "title": "현재 task의 보정 더하기",
+        "text": "timens_add_monotonic과 timens_add_boottime은 current->nsproxy->time_ns->offsets에서 현재 task의 해당 차이를 찾습니다. timespec64_add로 더한 결과를 *ts에 다시 써 입력 값을 제자리에서 바꿉니다. 별도 결과 객체를 반환하거나 임의 namespace를 인자로 받지 않습니다. 초기 namespace인지 따로 검사하는 분기도 없습니다."
+      },
+      {
+        "title": "Boottime의 두 추가 변환",
+        "text": "timens_add_boottime_ns는 boottime 보정을 timespec64_to_ns로 바꾸어 u64 nsec에 더하고 u64로 반환합니다. timens_sub_boottime은 timespec64_sub로 *ts에서 보정을 뺍니다. 넘침·부족·최대값 제한 검사는 없습니다. ns 함수는 부호 없는 입력·출력과 부호 있는 차이를 함께 계산하므로 C의 타입 변환과 호출 조건을 봐야 합니다. 음수 보정을 항상 0으로 잘라 주는 것은 아닙니다."
+      },
+      {
+        "title": "Ktime를 host 시간으로",
+        "text": "do_timens_ktime_to_host는 외부 구현 선언입니다. inline 도우미 timens_ktime_to_host는 현재 namespace 주소가 &init_time_ns면 tim 그대로를 반환합니다. 아니면 clockid, tim, 해당 offsets 주소를 외부 함수에 보냅니다. 어떤 시계에 어느 보정을 쓰는지는 외부 본문 책임이며 이 도우미 자체에 switch가 있지는 않습니다."
+      },
+      {
+        "title": "설정 비활성: 생성과 참조 계약",
+        "text": "TIME_NS가 꺼지면 copy_time_ns는 CLONE_NEWTIME 요청이 있을 때 ERR_PTR(-EINVAL)을, 없을 때 old_ns를 반환합니다. ERR_PTR은 포인터 형식으로 전한 오류이지 실제 객체 주소가 아닙니다. get_time_ns는 입력을 돌려주는 대신 NULL을 주고 put_time_ns는 아무것도 하지 않습니다. 모든 stub이 입력 그대로인 함수라고 묶을 수 없습니다."
+      },
+      {
+        "title": "설정 비활성: 참여·조회·산술",
+        "text": "비활성 vdso_join_timens는 0을 주고 timens_commit·timens_on_fork는 일을 하지 않습니다. find_timens_vvar_page는 NULL입니다. timespec 주소를 받는 add_monotonic·add_boottime·sub_boottime은 값을 그대로 두고, add_boottime_ns는 nsec, timens_ktime_to_host는 tim을 그대로 반환합니다. 이 구역에는 free_time_ns, proc API, do_timens_ktime_to_host의 같은 모양 stub이 따로 없습니다."
+      },
+      {
+        "title": "설정 바깥 선언과 검토 범위",
+        "text": "마지막 arch_get_vdso_data(void *vvar_page)는 CONFIG_TIME_NS 조건 밖에 선언됩니다. 그렇다고 모든 빌드에 같은 구현·호출이 있다고 증명되는 것은 아닙니다. 여기서는 타입, 외부 선언, 활성 inline과 비활성 stub을 읽었습니다. 실제 namespace 생성·권한·허용 보정 범위는 헤더 밖 본문을 추가로 확인해야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "timens_offsets가 직접 담는 두 보정은 무엇일까요?",
+        "options": [
+          "monotonic과 boottime입니다.",
+          "realtime과 CPU 사용 시간입니다."
+        ],
+        "explanation": "원본의 두 멤버가 timespec64 monotonic, boottime입니다. 없는 필드를 추측하지 않습니다."
+      },
+      {
+        "prompt": "TIME_NS가 켜져 있을 때 put_time_ns는 언제 객체를 해제할까요?",
+        "options": [
+          "호출할 때마다 무조건 해제합니다.",
+          "참조 수를 하나 줄인 결과가 0일 때입니다."
+        ],
+        "explanation": "다른 사용자의 참조가 남으면 객체를 유지합니다. refcount_dec_and_test가 참일 때만 해제합니다."
+      },
+      {
+        "prompt": "timens_add_monotonic은 누구의 namespace를 사용할까요?",
+        "options": [
+          "현재 task의 nsproxy에 있는 시간 namespace입니다.",
+          "호출 인자로 따로 받은 namespace입니다."
+        ],
+        "explanation": "인자는 timespec64 주소 하나입니다. namespace는 current에서 찾습니다."
+      },
+      {
+        "prompt": "TIME_NS가 꺼져 있을 때 get_time_ns(ns)는 무엇을 줄까요?",
+        "options": [
+          "항상 입력 ns를 줍니다.",
+          "NULL을 줍니다."
+        ],
+        "explanation": "켜진 구현은 참조를 늘린 뒤 ns를 주지만 꺼진 stub은 NULL입니다. 이름만 보고 같은 결과로 외우지 않습니다."
+      },
+      {
+        "prompt": "TIME_NS가 꺼진 상태에서 CLONE_NEWTIME을 요청하면 copy_time_ns 결과는 무엇일까요?",
+        "options": [
+          "오류 포인터 ERR_PTR(-EINVAL)입니다.",
+          "old_ns와 구분 없는 성공 결과입니다."
+        ],
+        "explanation": "새 시간 namespace 생성 요청은 지원하지 않는다고 알립니다. 표시가 없는 경우에만 old_ns를 반환합니다."
+      },
+      {
+        "prompt": "활성 timens_ktime_to_host가 곧바로 tim을 반환하는 조건은 무엇일까요?",
+        "options": [
+          "clockid가 음수일 때입니다.",
+          "현재 namespace가 init_time_ns 객체일 때입니다."
+        ],
+        "explanation": "이 도우미의 직접 조건은 객체 주소 비교입니다. 시계별 처리는 다른 namespace일 때 외부 함수에 맡깁니다."
+      },
+      {
+        "prompt": "frozen_offsets를 선언한 것만으로 헤더가 모든 변경을 막을까요?",
+        "options": [
+          "아니요. 주석에 의도가 있고 실제 거절 구현은 다른 곳에 있습니다.",
+          "네. bool 선언이 모든 대입을 자동 차단합니다."
+        ],
+        "explanation": "일반 bool은 참·거짓을 담는 칸입니다. 제한을 실제 적용하려면 그 상태를 검사하는 코드가 있어야 합니다."
+      }
+    ]
+  },
+  "file-824e522e86815d56": {
+    "story": "빠른 계산기로 만든 달력이 맞는지 확인하려면 다른 방식으로 만든 달력과 비교하면 좋습니다. 이 테스트는 쉬운 윤년·월말 규칙으로 하루씩 넘기며 빠른 날짜 변환을 확인합니다.",
+    "meaning": "독립적인 기대값을 만드는 방법과 16만 년 날짜 테스트가 실제로 검사하는 필드·경계를 설명합니다.",
+    "exercise": "1900년과 2000년의 2월 마지막 날을 구하고, 12월 31일 뒤 yday가 어떻게 바뀌는지 추적하세요.",
+    "guide": [
+      "테스트 오라클은 무엇이 정답인지 알려 주는 기준입니다. 검사 대상의 빠른 산술식을 그대로 베끼지 않고 쉬운 달력 규칙으로 기대값을 만들면 같은 실수를 함께 할 위험이 줄어듭니다.",
+      "긴 범위를 반복해도 비교하지 않은 칸은 검증되지 않습니다. 이 테스트는 연도·월·일·연중 날짜만 비교하며 요일·시·분·초는 직접 비교하지 않습니다.",
+      "반복문의 <=는 양 끝을 포함합니다. 또 모든 입력이 하루 단위이며 offset이 0이므로 다른 시간 보정이나 하루 안의 나머지 초는 따로 시험해야 합니다."
+    ],
+    "goal": "독립적인 기대값을 만드는 방법과 16만 년 날짜 테스트가 실제로 검사하는 필드·경계를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "LGPL-2.1+ 표시, KUnit과 time 헤더 뒤에 윤년 is_leap, 월말 last_day_of_month, 하루 이동 advance_date, 날짜 범위 테스트가 있습니다. 이어 case 배열, suite 등록, 모듈 설명과 GPL 문자열이 있습니다. SPDX와 MODULE_LICENSE는 서로 다른 위치의 메타데이터이므로 원문의 하나를 다른 하나로 고쳐 읽지 않습니다."
+      },
+      {
+        "title": "독립적인 윤년 모델",
+        "text": "is_leap은 4로 나누어떨어지고, 100으로 나누어떨어지지 않거나 400으로 나누어떨어지는 해를 윤년으로 봅니다. 예를 들어 1900은 평년, 2000은 윤년입니다. timeconv.c의 큰 상수 곱·비트 분할을 복제하지 않고 보통 그레고리력 규칙을 사용하여 기대값과 검사 대상이 같은 버그를 공유할 위험을 줄입니다."
+      },
+      {
+        "title": "월말 계산",
+        "text": "last_day_of_month의 월은 1부터 셉니다. 2월이면 28에 윤년 여부 0 또는 1을 더하고, 4·6·9·11월은 30, 나머지는 31입니다. 모든 입력을 검사하는 함수는 아니라 0월이나 13월도 마지막 길의 31이 됩니다. 다만 이 테스트의 정상적인 하루 이동은 그런 월을 만들지 않습니다."
+      },
+      {
+        "title": "일반 날짜와 월말 전이",
+        "text": "advance_date는 월말이 아니면 mday와 yday를 하나씩 늘립니다. 월말이면 mday=1로 돌리고, 12월이 아니면 month와 yday를 늘립니다. 12월 말이면 month=1, yday=0으로 돌려 연도를 늘립니다. 달의 날짜는 1부터지만 yday는 그해 첫날을 0으로 세므로 기준이 다릅니다."
+      },
+      {
+        "title": "범위의 계산",
+        "text": "그레고리력 400년은 정확히 146097일입니다. total_secs=80000/400*146097*86400으로 8만 년의 초를 계산하며, 기대 날짜는 year=1970-80000, month=1, mdday=1, yday=0입니다. 윤년을 빼고 80000*365일로 근사하면 기준부터 틀려집니다."
+      },
+      {
+        "title": "양 끝을 포함한 일별 순회",
+        "text": "secs는 -total_secs에서 +total_secs까지 <= 조건으로 하루 86400초씩 늘어납니다. 58438800개의 날짜 간격에서 양 끝을 포함하여 58438801곳을 검사합니다. 계산상 -78030년 1월 1일부터 81970년 1월 1일까지입니다. 그레고리력 규칙을 과거로 연장한 계산이지 각 지역이 실제로 어떤 옛 달력을 썼는지 확인하는 시험은 아닙니다."
+      },
+      {
+        "title": "실제 assertion 대상",
+        "text": "매번 time64_to_tm(secs,0,&result)를 호출합니다. 연도는 year-1900과 tm_year, 월은 month-1과 tm_mon, 날짜는 mdday와 tm_mday, 연중 날짜는 yday와 tm_yday를 비교합니다. 비교 뒤 advance_date로 하루를 넘깁니다. tm_hour·tm_min·tm_sec·tm_wday는 직접 검사하는 assertion이 없습니다."
+      },
+      {
+        "title": "실패 메시지와 assert",
+        "text": "days=div_s64(secs,86400)는 실패 메시지에 보여 줄 일수입니다. FAIL_MSG는 기대 연·월·일·연중 날짜와 이 일수를 출력합니다. KUNIT_ASSERT_EQ_MSG는 같아야 한다는 단언 검사로, 실패하면 단순 기록만 남기고 계속하는 것이 아니라 해당 테스트를 멈춥니다. 실패 뒤 남은 날짜까지 모두 조사한 결과표는 아닙니다."
+      },
+      {
+        "title": "등록과 느린 테스트",
+        "text": "case 배열에는 KUNIT_CASE_SLOW(time64_to_tm_test_date_range) 하나와 빈 종료 항목이 있습니다. suite 이름은 time_test_cases이며 이 배열을 연결해 kunit_test_suite로 등록합니다. 수천만 날짜를 돌기 때문에 느린 테스트로 표시했습니다. 이 소스를 읽거나 교재 앱을 빌드한 것만으로 실제 KUnit을 실행한 것은 아닙니다."
+      },
+      {
+        "title": "넓은 범위와 빠진 차원",
+        "text": "음수 epoch(1970년 기준점 이전), 넓은 연도 범위, 윤년·월말·연말과 날짜 네 칸을 폭넓게 검사합니다. 하지만 offset은 늘 0이고 입력은 하루의 정수 배수입니다. 따라서 하루 안의 초, 음수 나머지 정규화, 0이 아닌 보정, 요일·시분초는 추가 시험이 필요합니다. 16만 년이라는 넓이가 모든 time64_t 입력과 출력을 보장하지는 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "기대 날짜는 어떻게 만들까요?",
+        "options": [
+          "쉬운 윤년·월말 규칙으로 하루씩 넘깁니다.",
+          "검사 대상 time64_to_tm을 다시 불러 그 결과를 그대로 씁니다."
+        ],
+        "explanation": "별도 상태 이동 모델을 사용합니다. 같은 빠른 공식을 베끼지 않아 독립적인 비교가 됩니다."
+      },
+      {
+        "prompt": "58438800개 간격의 양 끝을 모두 검사하면 지점은 몇 개일까요?",
+        "options": [
+          "58438800개입니다.",
+          "58438801개입니다."
+        ],
+        "explanation": "간격보다 지점이 하나 많습니다. <=라 시작과 끝이 모두 포함됩니다."
+      },
+      {
+        "prompt": "이 테스트는 tm_wday의 잘못된 요일을 직접 잡을까요?",
+        "options": [
+          "아니요. 요일 비교 검사가 없습니다.",
+          "네. struct tm 전체를 바이트 단위로 비교합니다."
+        ],
+        "explanation": "실제 검사는 연도·월·월일·연중 날짜 네 개입니다. 구조체의 다른 칸이 자동 비교되지는 않습니다."
+      },
+      {
+        "prompt": "긴 날짜 범위를 통과하면 offset 보정도 검증된 것일까요?",
+        "options": [
+          "네. 연도 범위가 크면 모든 offset도 포함됩니다.",
+          "아니요. 모든 호출의 offset은 0입니다."
+        ],
+        "explanation": "연도 범위를 넓히는 것과 보정값을 바꾸는 것은 다른 입력 차원입니다."
+      },
+      {
+        "prompt": "12월 31일 뒤 다음 날의 yday는 무엇일까요?",
+        "options": [
+          "0으로 돌아갑니다.",
+          "전년의 마지막 값에서 계속 늘어납니다."
+        ],
+        "explanation": "새해 첫날의 연중 날짜는 0입니다. 월·일은 1이고 연도는 하나 늘어납니다."
+      }
+    ]
+  },
+  "file-94a7e6278eb925f5": {
+    "story": "달리기 시간을 재면 출발·도착 버튼을 누르는 시간도 조금 섞입니다. udelay 측정도 기다림 코드뿐 아니라 시계 읽기와 중간 방해의 영향을 함께 읽어야 합니다.",
+    "meaning": "지연 테스트의 설정 입력과 실행 시점, 통계 단위, 너무 짧은 지연 판정과 숫자 범위 한계를 구분합니다.",
+    "exercise": "usecs=100일 때 기대 나노초와 허용 오차를 계산하고, show 함수에서 usecs=0과 음수의 길을 각각 따라가세요.",
+    "guide": [
+      "udelay는 마이크로초 단위로 짧게 기다리는 함수입니다. 이 테스트는 요청보다 너무 빨리 끝나는지를 세며, 늦게 끝난 경우까지 같은 실패로 세지는 않습니다.",
+      "debugfs는 커널 디버그용 파일 창구입니다. 쓰기는 설정을 저장하고 읽을 때 show가 실행되어 측정합니다. 맨 위의 오래된 안내보다 실제 분기를 기준으로 읽습니다.",
+      "mutex는 설정 두 값을 함께 읽고 쓸 때만 사용합니다. 측정 전체가 잠기는 것은 아니며, 측정에 사용하는 int 범위를 벗어나면 통계도 믿을 수 없습니다."
+    ],
+    "goal": "지연 테스트의 설정 입력과 실행 시점, 통계 단위, 너무 짧은 지연 판정과 숫자 범위 한계를 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체와 기본 상태",
+        "text": "GPL-2.0 표시와 설명 뒤 debugfs, delay, ktime, module, uaccess를 포함합니다. 기본 반복은 100, 파일 이름은 udelay_test, 전역 잠금과 usecs=0·iterations=100을 둡니다. 전체는 측정 함수, show·open·write, 파일 동작표, 모듈 시작·끝과 메타데이터로 구성됩니다."
+      },
+      {
+        "title": "측정 한 회",
+        "text": "한 번 측정할 때 ktime_get_ns로 시각을 읽고 udelay(usecs) 뒤 다시 읽어 차이를 int time_passed에 넣습니다. 시계 읽기 자체의 비용, 인터럽트(갑자기 들어오는 처리), 선점(다른 작업에 CPU를 내줌)도 차이에 들어갈 수 있습니다. 여기서는 인터럽트나 선점을 끄지 않으므로 udelay 본체만 완벽히 떼어 잰 값은 아닙니다."
+      },
+      {
+        "title": "허용 오차의 단위",
+        "text": "allowed_error_ns=usecs*5입니다. 요청은 usecs*1000나노초이므로 0.5%까지 빠른 실행을 허용합니다. 예를 들어 100마이크로초 요청에 오차 500나노초입니다. (time_passed+allowed_error_ns)/1000<usecs이면 실패 횟수를 늘립니다. 너무 늦게 끝났다는 이유는 이 실패 조건에 들어가지 않으며 평균이 길어도 짧은 개별 시행의 실패는 남습니다."
+      },
+      {
+        "title": "통계와 출력",
+        "text": "첫 시행으로 min·max를 시작하고 이후 최솟값·최댓값을 갱신합니다. u64 sum에 측정값을 더하고 do_div(avg,iters)로 정수 평균을 구합니다. 출력 앞은 요청 마이크로초와 반복 수, 뒤 exp·allowed·min·avg·max는 나노초입니다. 실패가 있으면 FAIL 개수를 붙이고 줄바꿈 뒤 0을 반환합니다. 측정 실패 횟수가 함수의 음수 오류 반환으로 바뀌지는 않습니다."
+      },
+      {
+        "title": "좁은 중간값의 한계",
+        "text": "시각 차이의 원래 타입은 s64지만 time_passed, min·max, 허용 오차 계산은 int입니다. 큰 요청이나 긴 중단이 이 폭을 넘으면 정상 통계라고 볼 수 없습니다. WARN_ON(time_passed<0)은 경고할 뿐 그 뒤 합산을 계속하며 값을 고치지 않습니다. show는 양의 반복 수를 요구하지만 write는 합리적인 최대 지연·반복값까지 제한하지 않습니다."
+      },
+      {
+        "title": "설정의 일관된 스냅샷",
+        "text": "show는 mutex 안에서 전역 usecs·iterations를 지역 변수에 함께 복사하고 잠금을 푼 뒤 측정합니다. 스냅샷은 그 순간의 설정 쌍을 복사해 둔 값이라는 뜻입니다. 다른 write가 도중에 전역 설정을 바꿔도 진행 중인 지역값은 바뀌지 않습니다. 하지만 긴 측정 전체를 한 줄로 세우지는 않으므로 여러 측정이 반드시 서로 배제되는 것은 아닙니다."
+      },
+      {
+        "title": "Show의 세 경로",
+        "text": "usecs>0이고 iters>0이어야 측정합니다. usecs=0이면 ktime_get_ts64의 시각과 loops_per_jiffy(시간 눈금당 반복 기준)로 머리말·사용법을 출력합니다. usecs가 음수이거나 양수 usecs에 반복 수가 0 이하이면 측정·사용법 출력 없이 0입니다. 맨 위 주석의 0이나 음수면 여러 테스트를 한다는 설명은 이 실제 본문과 맞지 않습니다."
+      },
+      {
+        "title": "사용자 입력의 길이와 복사",
+        "text": "write의 임시 문자열 상자는 char lbuf[32]입니다. count≥32이면 -EINVAL(잘못된 입력), 사용자 복사 실패면 -EFAULT입니다. 복사 뒤 lbuf[count]에 문자열 끝 NUL을 넣어 최대 31바이트만 받습니다. sscanf가 첫 정수조차 읽지 못하면 -EINVAL입니다."
+      },
+      {
+        "title": "입력 문법과 기본 반복 수",
+        "text": "sscanf의 %d %d가 정수 하나를 읽으면 반복은 기본 100입니다. 둘을 읽으면 입력을 그대로 씁니다. 뒤에 남는 문자열, 양수 여부, 최대 지연값을 별도로 검사하지 않습니다. 해석 성공 뒤 mutex 안에서 전역 두 값을 함께 바꾸고 받은 바이트 수 count를 반환합니다. write 자체가 기다림 실험을 실행하지는 않습니다."
+      },
+      {
+        "title": "파일 연산 연결",
+        "text": "open은 single_open에 udelay_test_show와 inode->i_private를 연결합니다. file_operations는 owner=THIS_MODULE, open=전용 open, read=seq_read, write=전용 write, llseek=seq_lseek, release=single_release입니다. 콜백은 나중에 해당 동작 때 부르는 함수입니다. 측정은 show가 실행될 때 일어나 설정 문자열 저장과 시점이 다릅니다."
+      },
+      {
+        "title": "Debugfs 생성과 권한",
+        "text": "모듈 시작 함수는 mutex 안에서 debugfs_create_file을 부릅니다. mode는 S_IRUSR로 소유자의 읽기 비트뿐이고 부모·개별 데이터는 NULL입니다. write 함수와 쓰기 사용법이 있어도 생성 권한에 쓰기 비트가 자동으로 붙지 않습니다. 모든 사용자에게 쓰기 권한을 주었다고 설명하면 틀립니다. 생성 결과를 검사하지 않고 시작 함수는 0을 반환합니다."
+      },
+      {
+        "title": "해제와 모듈 메타데이터",
+        "text": "끝 함수는 mutex 안에서 debugfs_lookup_and_remove로 이름 udelay_test와 부모 NULL에 해당하는 파일을 찾아 지웁니다. module_init·module_exit가 시작·끝을 연결하고 설명·작성자·MODULE_LICENSE(\"GPL\")를 둡니다. 이 파일은 별도의 측정 결과 데이터베이스를 남기지 않습니다."
+      },
+      {
+        "title": "검증 범위와 CS 연결",
+        "text": "측정기 자신의 숫자 폭, 최소 지연 중심 판정, 평균과 개별 실패의 차이, 설정 쌍 복사, 권한 비트와 함수 연결의 차이가 핵심입니다. 전체 소스를 읽어 설명한 것이며 실제 모듈을 올리거나 CPU가 계속 도는 긴 busy wait를 실행한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "100마이크로초를 요청하면 얼마나 빠른 오차를 허용할까요?",
+        "options": [
+          "500나노초입니다.",
+          "50000나노초입니다."
+        ],
+        "explanation": "100*5=500입니다. 요청 100000나노초의 0.5%입니다."
+      },
+      {
+        "prompt": "요청보다 훨씬 늦게 끝나면 그 이유만으로 fail_count가 늘까요?",
+        "options": [
+          "네. 빠르거나 늦은 0.5% 오차를 모두 실패로 셉니다.",
+          "아니요. 기준보다 짧게 끝난 시행을 셉니다."
+        ],
+        "explanation": "늦은 지연은 최댓값·평균에 나타날 수 있지만 실패 조건은 보정한 시간이 요청보다 작은지입니다."
+      },
+      {
+        "prompt": "usecs=0을 저장하고 읽으면 여러 길이의 지연을 자동 시험할까요?",
+        "options": [
+          "아니요. 머리말과 사용법을 출력합니다.",
+          "네. 상단 주석처럼 모든 지연 길이를 시험합니다."
+        ],
+        "explanation": "실제 show는 0에서 안내를 출력하고 음수에서는 측정하지 않습니다. 오래된 주석과 본문을 구분합니다."
+      },
+      {
+        "prompt": "반복 측정 내내 mutex를 잡고 있을까요?",
+        "options": [
+          "네. 모든 udelay를 같은 잠금 안에서 실행합니다.",
+          "아니요. 설정을 복사한 뒤 측정 전에 풉니다."
+        ],
+        "explanation": "같은 순간의 설정 쌍을 얻는 것과 측정 전체를 직렬화하는 것은 다릅니다."
+      },
+      {
+        "prompt": "debugfs 파일 생성 mode에 쓰기 비트가 있을까요?",
+        "options": [
+          "아니요. S_IRUSR만 전달합니다.",
+          "네. write 함수가 있으면 자동 추가됩니다."
+        ],
+        "explanation": "접근 권한 비트와 파일 동작 함수는 별개입니다. 사용법만 보고 쓰기 권한까지 있다고 추측하지 않습니다."
+      },
+      {
+        "prompt": "측정 실패가 있으면 single 함수는 음수 오류를 줄까요?",
+        "options": [
+          "네. 첫 실패에서 EINVAL로 중단합니다.",
+          "아니요. FAIL 개수를 출력하고 0을 줍니다."
+        ],
+        "explanation": "판정 실패는 결과 글의 일부입니다. 함수 반환 상태와 별도로 관리합니다."
+      }
+    ]
+  },
+  "file-94f64d7c20a12d8b": {
+    "story": "작은 계수기가 255 다음에 0으로 돌아가도 자주 읽으면 얼마나 흘렀는지 셀 수 있습니다. 장치 숫자를 읽는 도구와 그 숫자로 시간을 쌓는 공책은 따로 필요합니다.",
+    "meaning": "cyclecounter의 장치 읽기와 timecounter의 누적 상태를 나누고, 소수 나머지 보존과 주기보다 빠른 관측 조건을 설명합니다.",
+    "exercise": "mult=3, shift=2, mask=3에서 한 tick씩 네 번 계산하며 정수 결과와 frac를 적으세요.",
+    "guide": [
+      "cyclecounter는 하드웨어 계수기에서 현재 tick, 즉 장치 눈금을 읽는 공통 틀입니다. timecounter는 마지막 눈금과 누적 나노초·소수 나머지를 기억합니다.",
+      "고정 소수점은 정수를 크게 확대해 계산한 뒤 2의 거듭제곱으로 나누어 소수를 표현하는 방법입니다. 남은 frac를 다음 계산에 더해 작은 시간이 계속 사라지는 일을 줄입니다.",
+      "하드웨어가 숫자 범위를 한 바퀴 돌기 전에 다시 읽어야 합니다. 누적 결과가 64비트로 넓다고 장치의 놓친 여러 회전까지 알아낼 수는 없습니다."
+    ],
+    "goal": "cyclecounter의 장치 읽기와 timecounter의 누적 상태를 나누고, 소수 나머지 보존과 주기보다 빠른 관측 조건을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 선언 구조",
+        "text": "GPL-2.0-or-later 표시, clocksource.h에서 옮겨 왔다는 주석, 중복 포함 방지와 types 헤더 뒤에 CYCLECOUNTER_MASK, 구조체 두 개, inline 두 개, init·read·cyc2time 선언이 있습니다. 이 헤더가 특정 장치를 초기화하거나 타이머 인터럽트를 등록하지는 않습니다."
+      },
+      {
+        "title": "하드웨어 폭 마스크",
+        "text": "CYCLECOUNTER_MASK(bits)는 bits<64이면 (1ULL<<bits)-1, 아니면 u64로 바꾼 -1을 줍니다. 8비트는 255, 64비트는 모든 자리가 1입니다. 조건 덕분에 64에서 잘못된 1ULL<<64 계산을 하지 않습니다. 0이면 마스크 0이며 음수 같은 잘못된 폭을 검사하는 함수는 아닙니다. bits가 여러 번 등장하므로 값을 바꾸는 표현식을 인자로 쓰지 않습니다."
+      },
+      {
+        "title": "Cyclecounter의 네 필드",
+        "text": "cyclecounter의 read는 const cyclecounter 주소를 받아 u64 눈금을 돌려주는 콜백입니다. mask는 장치가 쓰는 아래 비트 자리, mult는 나노초로 바꿀 때 곱하는 분자, shift는 2^shift로 나눌 지수입니다. 이 구조에는 마지막 눈금이나 누적 시간이 없습니다. 읽기 방법만 감싸는 틀이며 특정 장치 read에 필요한 잠금은 구현자와 사용자가 정합니다."
+      },
+      {
+        "title": "Timecounter의 다섯 필드",
+        "text": " timecounter의 cc는 기반 계수기, cycle_last는 마지막 읽은 눈금, nsec는 누적 나노초, mask는 소수 나머지를 남길 비트 자리, frac는 남겨 둔 소수 나노초입니다. cc->mask는 장치 숫자가 한 바퀴 도는 계산에, tc->mask는 고정 소수점 나머지에 씁니다. 두 mask 이름은 같아도 역할이 다릅니다."
+      },
+      {
+        "title": "소수점 보존 변환",
+        "text": "cyclecounter_cyc2ns는 ns=cycles*mult+*frac를 계산하고 *frac=ns&mask로 아래쪽 나머지를 남긴 뒤 ns>>shift를 줍니다. mask가 shift에 맞는다는 전제에서 결과는 정수 나노초, 나머지는 다음 계산에 보탤 조각입니다. mult=3, shift=2, mask=3이면 한 눈금이 3/4나노초입니다. 네 번 결과는 0,1,1,1이고 frac는 3,2,1,0이라 합계 3나노초가 됩니다. 매번 버리면 모두 0이 됩니다."
+      },
+      {
+        "title": "정수 산술의 전제",
+        "text": "중간 계산은 u64이며 넘침 검사나 최대값 포화가 없습니다. 호출자가 mult·shift와 한 번에 바꿀 cycles 크기를 알맞게 정해야 합니다. shift가 u32라고 아무 큰 값이나 가능한 것은 아니고, 구현의 1ULL<<shift와 오른쪽 이동이 유효한 범위여야 합니다. 실수 자료형으로 계산하는 부동 소수점과 달리 정수 기반의 고정 소수점입니다."
+      },
+      {
+        "title": "시각 보정",
+        "text": "timecounter_adjtime는 nsec에 부호 있는 s64 delta만 더합니다. 보통 범위의 음수는 시각을 뒤로 옮기지만 nsec가 u64라 0 아래로 내리면 0에 멈추지 않고 큰 수로 돌아가는 래핑이 생길 수 있습니다. cycle_last와 frac는 그대로이며 자체 잠금도 없습니다. 누적 시간이 증가한다는 구조체 설명이 수동 뒤로 보정까지 금지하는 단조성 보장은 아닙니다."
+      },
+      {
+        "title": "초기화와 읽기 계약",
+        "text": "init은 준비된 장치 계수기와 임의의 시작 나노초를 연결합니다. read는 시작값에 그 뒤 지난 시간을 더한 시각을 줍니다. 장치 초기화, 동시에 읽는 작업의 순서 맞추기, 장치 회전 주기보다 자주 읽기는 사용자 책임입니다. u64 나노초가 약 585년까지 담긴다는 설명은 장치를 585년마다 읽어도 된다는 뜻이 아닙니다."
+      },
+      {
+        "title": "과거 tick 변환 계약",
+        "text": "cyc2time는 저장한 기준 주변의 장치 눈금을 같은 시간축으로 바꾸며 과거 눈금도 처리합니다. mask+1 주기의 반주기 안이라는 조건이 있습니다. 정확히 반바퀴 떨어지면 과거인지 미래인지 눈금만으로 알 수 없고 이 구현은 과거로 고릅니다. 아주 오래 저장한 눈금이 몇 번째 회전의 값이었는지는 이 API만으로 복원하지 못합니다."
+      },
+      {
+        "title": "검증과 학습 연결",
+        "text": "이 자료는 API 역할과 구현에 이어지는 호출 조건을 설명한 것이며 장치 주파수 보정이나 실제 정확도를 측정한 결과는 아닙니다. 두 마스크의 차이, 나머지를 모아 정밀도를 지키는 방법, epoch라는 시간 기준점 선택, 누적 증가와 수동 보정의 차이가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "cc->mask와 tc->mask는 같은 뜻일까요?",
+        "options": [
+          "아니요. 하나는 장치 폭, 다른 하나는 소수 나머지 폭입니다.",
+          "네. 둘 다 장치 레지스터의 비트 수만 뜻합니다."
+        ],
+        "explanation": "장치 tick 차이에는 cc->mask, frac 저장에는 tc->mask를 씁니다. 숫자가 우연히 같아도 역할은 다릅니다."
+      },
+      {
+        "prompt": "mult=3, shift=2에서 frac를 남기며 한 tick씩 네 번 바꾼 합은 얼마일까요?",
+        "options": [
+          "0나노초입니다.",
+          "3나노초입니다."
+        ],
+        "explanation": "3/4나노초를 네 번 더합니다. 정수 결과는 0,1,1,1이고 남는 조각을 보존해 합이 3입니다."
+      },
+      {
+        "prompt": "timecounter_adjtime는 마지막 tick과 frac도 초기화할까요?",
+        "options": [
+          "아니요. nsec에 delta만 더합니다.",
+          "네. 장치를 다시 읽어 전부 초기화합니다."
+        ],
+        "explanation": "본문은 한 줄의 nsec += delta입니다. 다른 상태를 바꾸거나 잠금을 잡지 않습니다."
+      },
+      {
+        "prompt": "64비트 나노초가 넓으면 장치 계수기를 오랫동안 읽지 않아도 될까요?",
+        "options": [
+          "네. 585년마다 읽어도 모든 tick을 복원합니다.",
+          "아니요. 장치가 한 바퀴 도는 주기보다 자주 읽어야 합니다."
+        ],
+        "explanation": "결과 저장 폭과 관측 간격은 다릅니다. 여러 회전을 놓치면 마스크 차이만으로 회전 수를 알 수 없습니다."
+      }
+    ]
+  },
+  "file-f04488af90e63778": {
+    "story": "원형 운동장의 위치만 보고 지난 거리를 알려면 너무 오래 눈을 떼면 안 됩니다. 이 코드는 장치 눈금을 자주 읽어 시간을 쌓고, 따로 받은 눈금은 가까운 과거·미래 중 하나로 해석합니다.",
+    "meaning": "누적 읽기와 별도 타임스탬프 환산의 상태 변경·관측 범위·정확한 반주기 처리를 구분합니다.",
+    "exercise": "mask=255, 마지막 눈금250, 기준1000나노초, 눈금당1나노초에서 5·245·122를 각각 환산하세요.",
+    "guide": [
+      "모듈러 차이는 숫자가 끝에서 0으로 돌아가는 원형 차이입니다. 누적 read는 앞으로 지난 양을, cyc2time는 저장 기준 주변의 가까운 방향을 계산합니다.",
+      "나머지 frac를 사용하는 고정 소수점은 1나노초보다 작은 조각을 보존합니다. 앞쪽 변환은 더하고 뒤쪽 거리는 기준점 나머지를 빼는 차이가 있습니다.",
+      "일반 읽기는 상태를 갱신하지만 별도 환산은 저장 상태를 바꾸지 않습니다. 따라서 환산만 자주 한다고 장치 회전을 추적하는 읽기를 대신할 수 없습니다."
+    ],
+    "goal": "누적 읽기와 별도 타임스탬프 환산의 상태 변경·관측 범위·정확한 반주기 처리를 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 공개 범위",
+        "text": "라이선스와 clocksource 기반이라는 주석, export·timecounter 헤더 뒤에 init, 내부 read_delta, read, 내부 cc_cyc2ns_backwards, cyc2time가 있습니다. init·read·cyc2time는 EXPORT_SYMBOL_GPL로 공개합니다. 내부 두 함수는 이 파일에서 쓰는 static 도우미이지 별도 공개 API가 아닙니다."
+      },
+      {
+        "title": "초기화 순서",
+        "text": "init은 cc를 저장하고 cc->read(cc)로 현재 눈금을 읽어 cycle_last에 넣습니다. nsec는 start_tstamp, 소수 mask는 (1ULL<<shift)-1, frac는 0입니다. read 콜백이 준비되어 있고 shift가 유효해야 합니다. 포인터나 이동 범위를 검사해 오류를 주는 함수는 아닙니다."
+      },
+      {
+        "title": "증분 읽기",
+        "text": "read_delta는 현재 장치를 한 번 읽어 (cycle_now-cycle_last)&cc->mask로 지난 눈금을 구합니다. cyclecounter_cyc2ns로 나노초를 바꾸는 동안 tc->frac도 갱신합니다. cycle_last를 현재 값으로 옮기고 나노초 증분을 반환합니다. 그러므로 읽기라는 이름이지만 저장 상태가 바뀝니다."
+      },
+      {
+        "title": "래핑 예제와 샘플링 조건",
+        "text": "8비트 장치에서 250 다음에 5를 읽으면 한 주기 미만 경과 조건에서 차이는 11눈금입니다. 정확히 256눈금 뒤 같은 숫자라면 차이가 0이므로 한 바퀴를 놓친 사실을 알 수 없습니다. 숫자 경계를 한 번만 넘었다고 해도 총 경과가 한 주기 이상이면 모호합니다. 주석을 느슨하게 외우지 말고 헤더의 한 회전보다 자주 읽기 조건을 지켜야 합니다."
+      },
+      {
+        "title": "첫 호출 주석과 실제 코드",
+        "text": "read_delta의 옛 주석에는 첫 호출이 초기화하며 결과가 정해지지 않는다고 쓰여 있습니다. 실제 본문은 첫 호출을 구분하지 않습니다. 올바른 timecounter_init이 cycle_last·nsec·frac를 이미 준비하므로 첫 read도 초기화 뒤 지난 시간을 계산합니다. 초기화 없이 읽어도 알아서 준비된다는 뜻으로 설명하면 안 됩니다."
+      },
+      {
+        "title": "누적 시각 읽기",
+        "text": "timecounter_read는 read_delta가 준 지난 나노초에 기존 tc->nsec를 더하고 다시 저장한 뒤 반환합니다. 별도의 기준점 epoch를 만들거나 실제 시각인 wall clock과 자동으로 맞추지 않습니다. 기준은 init의 시작값과 이후 보정이 정합니다. 동시 호출을 막는 잠금은 여기 없습니다."
+      },
+      {
+        "title": "역방향 변환 helper",
+        "text": "cc_cyc2ns_backwards는 ((cycles*mult)-frac)>>shift입니다. 앞쪽 변환의 frac 덧셈과 달리 기준에 남은 소수 조각을 빼서 과거 거리에 반영합니다. frac는 값으로 받아 바꾸지 않습니다. mask 인자는 선언만 있고 계산에 쓰지 않습니다. u64 곱·뺄셈에 넘침이나 부족 검사도 없습니다."
+      },
+      {
+        "title": "과거와 미래 선택",
+        "text": "cyc2time는 (cycle_tstamp-cycle_last)&cc->mask를 delta로 구합니다. delta>mask/2이면 너무 먼 미래 대신 가까운 과거로 보고 반대 방향 차이의 환산값을 nsec에서 뺍니다. 아니면 앞쪽 변환값을 더합니다. mask=255이면 0~127은 미래 쪽, 128~255는 과거 쪽이므로 정확한 반바퀴 128은 과거로 고릅니다."
+      },
+      {
+        "title": "구체적인 시각 환산",
+        "text": "mask=255, cycle_last=250, nsec=1000, mult=1, shift=0, frac=0이라고 합시다. 눈금5는 앞으로11이라 1011나노초입니다. 245는 앞쪽 차이251이라 과거5로 보아 995나노초입니다. 122는 반주기128이라 과거를 골라 872나노초입니다. 실제로 미래128 뒤였는지는 같은 숫자만으로 구분할 수 없습니다."
+      },
+      {
+        "title": "환산은 상태를 진행시키지 않음",
+        "text": "cyc2time는 const tc를 받고 nsec·frac를 지역 변수에 복사합니다. 앞쪽 변환에도 지역 frac 주소만 줍니다. cycle_last·tc->nsec·tc->frac를 바꾸거나 장치를 다시 읽지 않습니다. 여러 번 환산해도 누적 기준이 새 눈금으로 이동하지 않으므로 timecounter_read를 대신해 회전 추적을 해 주지 않습니다."
+      },
+      {
+        "title": "설계의 구분과 검증 범위",
+        "text": "read_delta의 조건은 앞으로 지난 양이 한 주기 미만인 것입니다. cyc2time가 과거·미래를 고르는 조건은 기준 주변 반주기로 더 좁습니다. 둘을 같은 제한으로 외우지 않습니다. 전체 소스와 정수 예제를 읽은 자료이며 장치의 실제 속도 오차인 드리프트나 여러 CPU의 동시 실행을 시험한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "8비트 계수기가 250에서 5가 되면 추적 가능한 경과는 얼마일까요?",
+        "options": [
+          "한 주기 미만으로 읽었다는 조건에서 11눈금입니다.",
+          "언제나 정확히 261눈금입니다."
+        ],
+        "explanation": "원형 차이는 11이지만 267처럼 여러 회전 뒤에도 같은 관측이 나옵니다. 읽기 간격 조건이 필요합니다."
+      },
+      {
+        "prompt": "init 뒤 첫 read 결과는 언제나 버려야 할까요?",
+        "options": [
+          "네. 첫 read는 무조건 정의되지 않습니다.",
+          "아니요. 초기화 뒤 지난 양을 시작값에 더합니다."
+        ],
+        "explanation": "옛 도우미 주석과 달리 init에서 마지막 눈금과 나머지를 준비합니다. 첫 읽기만 따로 처리하는 분기는 없습니다."
+      },
+      {
+        "prompt": "mask=255에서 앞쪽 delta가 128이면 어느 방향일까요?",
+        "options": [
+          "과거 방향입니다.",
+          "미래 방향입니다."
+        ],
+        "explanation": "정수 mask/2는127이고 128>127입니다. 정확히 반주기는 방향이 모호하지만 구현은 과거를 고릅니다."
+      },
+      {
+        "prompt": "cyc2time를 자주 부르면 read 없이 회전 추적 상태가 갱신될까요?",
+        "options": [
+          "네. 매번 cycle_last를 새 눈금으로 옮깁니다.",
+          "아니요. 저장 상태를 읽어 환산만 합니다."
+        ],
+        "explanation": "tc는 const이고 frac도 지역 복사입니다. 장치 read를 호출하지 않으므로 누적 상태가 진행되지 않습니다."
+      },
+      {
+        "prompt": "역방향 도우미는 mask 인자를 실제 계산에 쓸까요?",
+        "options": [
+          "아니요. 이 버전에서는 사용하지 않습니다.",
+          "네. 결과를 반드시 mask와 AND합니다."
+        ],
+        "explanation": "본문 식은 ((cycles*mult)-frac)>>shift입니다. 인자 이름만 보고 정방향처럼 나머지를 갱신한다고 추측하지 않습니다."
+      }
+    ]
+  },
+  "file-e11ba4f69e88f452": {
+    "story": "잠든 시간을 하나씩 적는 대신 1초 미만, 1~2초, 2~4초 상자에 횟수를 넣으면 적은 공간으로 경향을 볼 수 있습니다. 대신 각 시간의 정확한 길이는 사라집니다.",
+    "meaning": "수면 시간 히스토그램의 구간 선택·출력과 숫자 폭·동시 접근의 한계를 설명합니다.",
+    "exercise": "0.999초, 1초, 3.5초, 4초가 들어갈 bin을 구하고 같은 bin만으로 정확한 총시간을 알 수 없는 이유를 말해 보세요.",
+    "guide": [
+      "히스토그램은 값을 구간별로 모아 횟수를 세는 표입니다. 구간 크기를 두 배씩 늘리면 넓은 시간 범위를 32칸으로 요약할 수 있습니다.",
+      "분류에는 정수 초만 씁니다. 예를 들어 3.5초는 2초 이상 4초 미만 칸이며 나노초 부분을 읽어 구간을 더 세밀하게 나누지는 않습니다.",
+      "각 count는 그 구간에 들어온 횟수입니다. 대표 시간이나 상한을 곱해도 정확한 총 수면 시간은 아니며, 이 파일에는 동시 갱신을 보호하는 잠금도 없습니다."
+    ],
+    "goal": "수면 시간 히스토그램의 구간 선택·출력과 숫자 폭·동시 접근의 한계를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "GPL-2.0+ 표시와 suspend(시스템 수면) 시간 추적 설명, 헤더 포함 뒤 NUM_BINS=32와 unsigned int sleep_time_bin[32]를 0으로 둡니다. 출력 show, 출력 동작표 생성, 늦은 초기화, 시간 집계 함수가 있습니다. 매 표본의 목록이나 정확한 총 수면 시간 저장값은 없습니다."
+      },
+      {
+        "title": "구간 선택 알고리즘",
+        "text": "집계는 fls(t->tv_sec)와 31 중 작은 값을 bin 번호로 고릅니다. 보통의 0 이상 32비트 값에서 fls(0)=0이고, 양수에서는 가장 높은 1비트의 위치를 1부터 셉니다. 따라서 0초는 bin0, 1초는 bin1, 2~3초는 bin2, 4~7초는 bin3입니다. 범위를 두 배씩 키우며 32칸으로 요약합니다."
+      },
+      {
+        "title": "나노초와 초 경계",
+        "text": "구간을 고를 때 tv_nsec는 사용하지 않습니다. 정규화된 비음수 시간이라면 0.999초는 bin0, 1.000초는 bin1, 2.000초는 bin2입니다. 출력의 1 - 2는 보통 1초 이상 2초 미만으로 읽습니다. 양 끝을 모두 포함한다고 읽으면 경계가 두 구간에 겹칩니다."
+      },
+      {
+        "title": "상한 구간과 입력 폭",
+        "text": "min으로 인덱스를31에 제한하여 fls 결과32도 마지막 칸에 합칩니다. 마지막 라벨은 2^30부터2^31처럼 보여도 합쳐진 더 큰 값을 정확히 모두 나타내지는 않습니다. 호출은 64비트용 fls64가 아니라 fls이므로 tv_sec가 time64_t라고 임의 64비트 초를 정확히 분류하지 않습니다. 음수·매우 큰 입력 검사도 없습니다."
+      },
+      {
+        "title": "계수 갱신",
+        "text": "선택한 sleep_time_bin[bin]을 하나 늘립니다. 각 원소는 unsigned int이며 넘침 검사·최대값 제한·잠금·원자적 연산이 이 파일에 없습니다. 두 CPU가 제멋대로 동시에 호출해도 정확한 총계를 보장한다고 확대하면 안 됩니다. show도 전체 배열을 한 순간의 스냅샷으로 묶어 읽지는 않습니다."
+      },
+      {
+        "title": "시간 디버그 로그",
+        "text": "횟수를 늘린 뒤 pm_deferred_pr_dbg에 초와 tv_nsec/NSEC_PER_MSEC를 줍니다. 소수 부분은 세 자리 밀리초이고 더 작은 나노초는 버립니다. 각 호출에서 횟수는 늘지만 디버그 글이 언제나 화면에 즉시 출력된다는 정책까지 이 호출문만으로 보장되지는 않습니다."
+      },
+      {
+        "title": "Show의 출력",
+        "text": "show는 time (secs), count 머리말과 구분선을 쓴 뒤 bin0~31을 돕니다. 횟수가0이면 건너뜁니다. 아래 경계는 bin0에서0, 나머지는1<<(bin-1), 위 경계는1<<bin이고 %u로 출력합니다. 빈 줄이 생략된다고 그 시간 범위 자체가 없는 것은 아닙니다."
+      },
+      {
+        "title": "파일 등록과 수명",
+        "text": "DEFINE_SHOW_ATTRIBUTE는 show와 연결할 파일 동작표를 만듭니다. 초기화는 루트 debugfs에 sleep_time을 0444(읽기 권한)와 private data NULL로 만들고 결과 검사 없이0을 줍니다. late_initcall로 늦은 초기화 단계에 연결합니다. 이 파일에는 쓰기·통계 초기화·삭제 명령이나 module_exit가 없습니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "한 표본을 한 구간으로 압축하면 구간 안의 자세한 값은 사라집니다. 횟수에 대표값을 곱한 것은 추정이지 정확한 합계가 아닙니다. 이 자료는 전체 소스 설명이며 실제 suspend 실험이나 모든 동시 호출 문맥을 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "정상 입력3.5초는 어느 칸에 들어갈까요?",
+        "options": [
+          "bin2, 즉2초 이상4초 미만입니다.",
+          "bin3, 즉4초 이상8초 미만입니다."
+        ],
+        "explanation": "정수 초3의 fls가2입니다. 소수0.5초는 구간 선택에 쓰지 않습니다."
+      },
+      {
+        "prompt": "횟수0인 칸도 항상 보일까요?",
+        "options": [
+          "네. 늘32줄을 모두 출력합니다.",
+          "아니요. show가 건너뜁니다."
+        ],
+        "explanation": "모든 칸을 방문하지만0이면 continue합니다. 구간 수와 출력 줄 수는 다릅니다."
+      },
+      {
+        "prompt": "이 표만으로 정확한 총 수면 시간을 알 수 있을까요?",
+        "options": [
+          "아니요. 구간 안의 각 시간을 저장하지 않습니다.",
+          "네. count에 구간 상한을 곱하면 정확합니다."
+        ],
+        "explanation": "같은 칸에 다른 길이가 섞입니다. 경계와 횟수는 요약값입니다."
+      },
+      {
+        "prompt": "tv_sec가64비트면 분류도 자동으로64비트일까요?",
+        "options": [
+          "네. 어떤 함수를 호출하는지는 중요하지 않습니다.",
+          "아니요. 실제로는 fls64가 아닌 fls를 부릅니다."
+        ],
+        "explanation": "원래 변수 타입과 호출 API의 폭은 구분합니다. min은 배열 인덱스 상한만 제한합니다."
+      }
+    ]
+  },
+  "file-b51c38d07a782363": {
+    "story": "시계 바늘이 끝을 넘어 처음으로 갔다고 뒤로 간 것은 아닙니다. 이 도우미는 원형 눈금 차이를 계산하고, 설정에 따라 너무 큰 차이는 뒤로 움직인 것처럼 보아 버립니다.",
+    "meaning": "순환 계수기의 마스크 차이와 반주기 검사, 빈 매크로의 인자 생략을 구분합니다.",
+    "exercise": "mask=255에서 250→5와10→9의 차이를 계산하고 검증 설정 유무에 따라 결과를 비교하세요.",
+    "guide": [
+      "마스크는 필요한 비트 자리만 남기는 값입니다. 순환 차이는 (now-last)&mask로 계산하여 숫자가 끝에서0으로 돌아간 경우를 처리합니다.",
+      "반주기 이상 차이는 앞으로 오래 지난 것인지 뒤로 조금 간 것인지 추가 정보 없이 모호합니다. 검증 설정은 이런 큰 차이를0으로 바꾸는 정책입니다.",
+      "기능을 끈 빈 매크로는 인자까지 없애므로 함수처럼 먼저 인자를 계산하지 않습니다. 꼭 해야 할 일을 디버그 전용 인자에 넣지 않습니다."
+    ],
+    "goal": "순환 계수기의 마스크 차이와 반주기 검사, 빈 매크로의 인자 생략을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0 표시와 중복 방지 guard, clocksource·spinlock·time 헤더 뒤 디버그 선언 조건, clocksource_delta 조건, timekeeper_lock 외부 선언이 있습니다. 공유 timekeeper 객체나 장치 시계를 직접 읽는 콜백을 구현하는 파일은 아닙니다."
+      },
+      {
+        "title": "Debugfs가 활성일 때",
+        "text": "CONFIG_DEBUG_FS가 켜지면 tk_debug_account_sleep_time(const timespec64*)를 외부 함수로 선언합니다. 실제 집계는 timekeeping_debug.c에 있습니다. 이 헤더가 디버그 파일을 만들거나 통계를 직접 바꾸지는 않습니다."
+      },
+      {
+        "title": "비활성 stub의 평가",
+        "text": "DEBUG_FS가 꺼지면 tk_debug_account_sleep_time(x)는 빈 매크로입니다. 치환 뒤 아무것도 남지 않아 인자 식도 계산하지 않습니다. 예를 들어 f()를 주어도 f는 실행되지 않습니다. 주소를 계산한 뒤 빈 함수를 부르는 것과 다릅니다. 반드시 실행할 부작용을 인자에 넣으면 설정에 따라 프로그램 행동이 달라집니다."
+      },
+      {
+        "title": "검증 없는 순환 차이",
+        "text": "CLOCKSOURCE_VALIDATE_LAST_CYCLE이 없으면 clocksource_delta는 (now-last)&mask입니다. 8비트 mask255에서 last250, now5는11입니다. 한 바퀴 이상 놓쳤는지 실제로 뒤로 움직였는지까지 이 차이 하나로 구분하지는 못합니다."
+      },
+      {
+        "title": "검증 분기의 비트 조건",
+        "text": "검증이 있으면 같은 ret을 구한 뒤 ret&~(mask>>1)이0이 아니면0을 줍니다. >>1은 오른쪽 한 자리 이동, ~는 비트 반전입니다. 아래쪽 비트가 연속으로1인 정상 mask에서는 ret이 이미 그 범위 안이므로 가장 높은 유효 비트가 켜졌는지를 검사하는 식입니다. 불연속적인 임의 mask에서도 같다고 일반화하지 않습니다."
+      },
+      {
+        "title": "반주기 경계 예제",
+        "text": "mask255에서는 차이0~127은 유지하고128~255는0으로 바뀝니다. last10, now9의 원형 차이255도0이며 정확히 반주기128도0입니다. 뒤로 간 듯한 큰 차이를 제외하는 규칙이지 실제200눈금이 흘렀다는 별도 증거를 되살리는 기능은 아닙니다. 검증을 끄면 같은 입력에 원래 원형 차이를 줍니다."
+      },
+      {
+        "title": "공유 잠금의 선언",
+        "text": "extern raw_spinlock_t timekeeper_lock은 다른 곳의 잠금 객체를 쓰겠다는 선언입니다. 주석은 일부 외부 코드가 timekeeper 외부의 VDSO 갱신 순서를 맞추는 데도 사용한다고 설명합니다. 이 파일이 객체를 정의하거나 clocksource_delta 안에서 잠금을 잡지는 않습니다. 이름을 선언했다고 모든 함수 호출이 자동 직렬화되는 것은 아닙니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "모든 ifdef 조건과 식을 읽은 범위이며 전체 시간 유지 코드의 호출 간격이나 하드웨어 정책까지 보장하는 자료는 아닙니다. 원형 거리·반주기 방향 가정·매크로 인자 미실행·선언과 정의의 차이가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "mask255이고 검증을 켰을 때 차이128은 무엇이 될까요?",
+        "options": [
+          "0으로 반환합니다.",
+          "128을 그대로 반환합니다."
+        ],
+        "explanation": "mask>>1은127이고128의 최상위 유효 비트가 검사에 걸립니다. 반주기도 제외합니다."
+      },
+      {
+        "prompt": "mask255, last250, now5의 차이는 검증을 켜도 무엇일까요?",
+        "options": [
+          "now가 작으니 무조건0입니다.",
+          "11입니다."
+        ],
+        "explanation": "숫자의 단순 대소가 아닌 원형 차이를 씁니다.11은 가장 높은 유효 비트가 꺼져 있어 정상 회전으로 유지합니다."
+      },
+      {
+        "prompt": "DEBUG_FS가 꺼진 빈 매크로에 f()를 주면 f가 실행될까요?",
+        "options": [
+          "아니요. 인자도 치환 과정에서 없어집니다.",
+          "네. 모든 매크로 인자는 먼저 계산합니다."
+        ],
+        "explanation": "함수 호출과 매크로 치환은 다릅니다. 반드시 필요한 동작을 디버그 전용 인자에 넣으면 안 됩니다."
+      },
+      {
+        "prompt": "timekeeper_lock의 extern 선언이 delta 계산을 자동으로 잠글까요?",
+        "options": [
+          "네. 같은 헤더 함수는 모두 자동으로 잠금을 씁니다.",
+          "아니요. delta 함수에는 잠금을 잡는 코드가 없습니다."
+        ],
+        "explanation": "객체를 알리는 선언과 실제 획득·해제 코드는 별개입니다."
+      }
+    ]
+  },
+  "file-a23032e152705efb": {
+    "story": "서로 다른 부서가 함께 일하려면 연락할 창구와 함께 보관할 정보가 필요합니다. 이 헤더는 시간 유지 코드와 타이머 코드가 주고받는 함수·공유 잠금의 약속을 모읍니다.",
+    "meaning": "내부 시간 인터페이스의 상태 포인터, 조건별 대체 함수와 공유 객체 선언을 구분합니다.",
+    "exercise": "sched_clock_suspend의 두 설정 경로를 비교하고 cwsseq와 세 offset 포인터가 왜 이전 상태를 필요로 하는지 설명하세요.",
+    "guide": [
+      "포인터는 값을 둔 곳의 주소입니다. 포인터 인자라고 매번 새 값을 전부 채우는 것은 아니며, 이전 상태를 읽고 필요할 때 갱신하는 입출력 약속도 있습니다.",
+      "offset은 한 종류 시간에서 다른 종류 시간으로 바꿀 때의 차이입니다. sequence는 변경 순서 번호로, 보관한 차이를 다시 받아야 하는지 판단하는 데 쓰입니다.",
+      "이것은 kernel/time 안의 내부 API입니다. 외부 함수 선언, 설정을 끈 대체 구현, 공유 잠금 이름을 알려 줄 뿐 호출 순서를 자동으로 정하지 않습니다."
+    ],
+    "goal": "내부 시간 인터페이스의 상태 포인터, 조건별 대체 함수와 공유 객체 선언을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 포함 문맥",
+        "text": "GPL-2.0과 중복 포함 방지 guard 뒤 내부 인터페이스 설명, 함수 선언·조건별 inline, extern 객체 두 개, CS_NAME_LEN이 있습니다. 자체 include가 없어 ktime_t, u64, raw_spinlock_t, seqcount_raw_spinlock_t 등은 포함하는 문맥이 준비해야 합니다. 사용자 프로그램과의 공개 ABI 헤더가 아닙니다."
+      },
+      {
+        "title": "현재 시간과 offset 인터페이스",
+        "text": "ktime_get_update_offsets_now는 unsigned int *cwsseq와 ktime_t 주소 세 개 offs_real·offs_boot·offs_tai를 받고 ktime_t를 줍니다. 원문이 대조한 구현은 monotonic 현재값을 반환하며 clock_was_set_seq가 달라졌을 때 저장 순서 번호와 실제 시각·부팅·TAI 기준 차이를 갱신합니다. 이 포인터를 매번 무조건 처음부터 채우는 출력 전용 칸이라고 가정하면 안 됩니다."
+      },
+      {
+        "title": "Offset 갱신의 예외와 일관성",
+        "text": "해당 구현은 seqcount라는 변경 번호로 읽는 중 갱신이 있었는지 살피며 필요하면 다시 읽습니다. 윤초 삽입 경계를 넘으면 offs_real에 추가 보정할 수도 있습니다. 그래서 순서 번호가 같으면 어떤 출력도 절대로 안 바뀐다는 요약도 틀립니다. 이 헤더에는 사용 형식만 있으며 관련 본문 일부 대조를 timekeeping.c 전체 완료로 세지 않습니다."
+      },
+      {
+        "title": "고해상도와 최대 지연 선언",
+        "text": "고해상도 타이머에 쓸 수 있는지 묻는 timekeeping_valid_for_hres는 int, 얼마나 갱신을 미룰 수 있는지 묻는 timekeeping_max_deferment는 u64입니다. 관련 구현은 현재 clocksource의 VALID_FOR_HRES 비트 값과 max_idle_ns를 일관되게 읽습니다. 앞 함수의 참은 꼭 숫자 1이 아니며 뒤 값의 단위는 나노초입니다. 이름만으로 실제 전체 시스템의 타이머 정확도를 측정한다고 해석하지 않습니다."
+      },
+      {
+        "title": "Timekeeping 수명과 warp",
+        "text": "외부 선언 timekeeping_warp_clock은 void, timekeeping_suspend는 int, timekeeping_resume는 void입니다. warp는 시계 기준을 옮기고 suspend·resume은 수면·복귀 경로의 접점입니다. 이동량이나 상태 저장 본문은 여기에 없습니다. 초기 timezone 처리 같은 호출자가 필요한 때 이 인터페이스를 씁니다."
+      },
+      {
+        "title": "Sched clock 설정 분기",
+        "text": "CONFIG_GENERIC_SCHED_CLOCK이 켜지면 sched_clock_suspend와 resume를 int·void 외부 함수로 선언합니다. 꺼지면 suspend는 아무 일 없이 0을, resume는 빈 inline을 제공합니다. 이렇게 하면 공통 호출 코드를 유지할 수 있습니다. 반환 0만 보고 실제 하드웨어 상태를 저장했다고 결론 내리지는 않습니다."
+      },
+      {
+        "title": "Tick 갱신의 분리",
+        "text": "update_process_times(int user), do_timer(unsigned long ticks), update_wall_time(void)는 따로 선언합니다. 첫 함수에는 CPU가 사용자 문맥에서 일했는지, 둘째에는 지난 tick 수를 전달하며, 셋째는 실제 시각 갱신 접점입니다. 인자부터 다르며 이 헤더가 특정 순서로 호출하거나 통째로 잠그지 않습니다."
+      },
+      {
+        "title": "공유 잠금과 상수",
+        "text": "jiffies_lock은 외부 raw_spinlock_t 잠금, jiffies_seq는 외부 seqcount_raw_spinlock_t 변경 번호 객체입니다. extern 선언이므로 여기서 새 저장 공간을 만드는 것은 아닙니다. CS_NAME_LEN은 32라는 길이 상수일 뿐 문자열을 어떻게 복사하고 끝내고 자를지까지 정하지 않습니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "모든 선언과 inline 대체 함수 두 개를 읽는 범위입니다. 이름만 나온 외부 구현의 모든 알고리즘이나 호출 순서까지 완료한 것으로 세지 않습니다. 상태를 함께 주고받는 약속, 설정별 대체·반환 의미, 선언과 정의의 차이가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "offset 포인터는 매번 새 값으로 전부 채워진다고 생각해도 될까요?",
+        "options": [
+          "아니요. 순서 번호 기반 갱신과 윤초 보정을 함께 이해해야 합니다.",
+          "네. 포인터는 언제나 모든 호출에서 완전히 초기화됩니다."
+        ],
+        "explanation": "관련 구현은 저장한 변경 번호를 비교하며 윤초 보정도 합니다. 주소 인자라는 형식만으로 초기화 정책을 추측하지 않습니다."
+      },
+      {
+        "prompt": "GENERIC_SCHED_CLOCK이 꺼져 있으면 sched_clock_suspend는 무엇을 할까요?",
+        "options": [
+          "외부 함수가 없어 반드시 링크 오류가 납니다.",
+          "아무 작업 없이 0을 반환합니다."
+        ],
+        "explanation": "비활성 inline이 제공되어 공통 호출 형식을 유지합니다."
+      },
+      {
+        "prompt": "timekeeping_valid_for_hres의 참은 꼭 1일까요?",
+        "options": [
+          "아니요. 관련 구현은 flag 비트 값을 줍니다.",
+          "네. int는 bool과 같아 0과 1만 가능합니다."
+        ],
+        "explanation": "보통 0인지 0이 아닌지로 읽습니다. 실제 반환식과 타입을 함께 봅니다."
+      },
+      {
+        "prompt": "extern jiffies_lock은 헤더를 포함할 때마다 잠금을 만들까요?",
+        "options": [
+          "네. include마다 별도 잠금이 생깁니다.",
+          "아니요. 다른 곳에 정의한 객체를 알리는 선언입니다."
+        ],
+        "explanation": "공유 객체의 이름을 알리는 것과 저장 공간 정의는 다릅니다. 실제 잠금 호출도 필요합니다."
+      }
+    ]
+  },
+  "file-ebc24650128a27b4": {
+    "story": "시계를 정밀하게 맞추려면 1초보다 훨씬 작은 조각과 시계가 빨리 가는 정도까지 다뤄야 합니다. 이 헤더는 그런 NTP 작업을 시간 유지 코드가 부르는 창구입니다.",
+    "meaning": "NTP 내부 함수의 작은 시간 단위, 윤초 특수값, const 입력과 조건부 CMOS 알림을 설명합니다.",
+    "exercise": "ntp_tick_length의 단위를 보통 나노초와 비교하고 두 CMOS 관련 설정 중 하나만 켠 경우 어떤 선언을 쓰는지 확인하세요.",
+    "guide": [
+      "NTP는 시각을 정밀하게 맞추는 체계입니다. 위상은 기준과의 시각 차이, 주파수는 시계가 흐르는 빠르기이며 초 정수 하나로 모든 조정을 표현하지는 않습니다.",
+      "고정 소수점 값은 작은 단위를 정수 개수로 센 것입니다. u64라는 저장 폭만 보고 숫자 자체가 나노초라고 판단하지 말고 ns/2^NTP_SCALE_SHIFT 단위를 읽습니다.",
+      "CMOS·RTC는 하드웨어 시계와 관련된 장치입니다. 알림 함수가 외부 구현인지 빈 inline인지 설정으로 나뉘며, 빈 함수도 인자의 관측 가능한 부작용은 유지합니다."
+    ],
+    "goal": "NTP 내부 함수의 작은 시간 단위, 윤초 특수값, const 입력과 조건부 CMOS 알림을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 타입 전제",
+        "text": "GPL-2.0과 중복 방지 guard 뒤 NTP 관련 외부 함수 일곱 개, 조건별 ntp_notify_cmos_timer 선언 또는 inline이 있습니다. 자체 include는 없으므로 u64·ktime_t·time64_t·s32·bool과 관련 구조체는 앞 문맥이 준비해야 합니다. NTP가 상태를 옮기는 알고리즘이나 PPS 관측값을 거르는 필터 본문은 없습니다."
+      },
+      {
+        "title": "초기화와 초기 상태 복원",
+        "text": "ntp_init과 ntp_clear는 인자도 반환값도 없는 외부 함수입니다. 이름이 비슷하다고 같은 일을 하거나 사용자 시각을 0으로 만드는 함수로 단정하지 않습니다. 어떤 상태를 초기화·정리하는지는 ntp.c 본문에서 확인해야 합니다."
+      },
+      {
+        "title": "분수 tick 길이",
+        "text": "ntp_tick_length는 u64를 반환하지만 단위는 ns/2^NTP_SCALE_SHIFT입니다. 1나노초보다 작은 조각을 몇 개 담았는지 나타내므로 실제 나노초로 읽으려면 확대 비율을 고려합니다. 예를 들어 단위를 1/4나노초로 정했다면 값 8은 2나노초라는 식입니다. 실제 NTP_SCALE_SHIFT 정의는 여기 없고 관련 구현은 저장한 tick_length를 그대로 줍니다."
+      },
+      {
+        "title": "다음 윤초와 초 경계 처리",
+        "text": "ntp_get_next_leap는 ktime_t, second_overflow는 time64_t secs를 받아 int를 반환합니다. 원문에서 대조한 next_leap는 실제 시각 CLOCK_REALTIME 기준이며 TIME_INS 상태와 STA_INS 표시가 모두 있을 때 예정 초를 ktime으로 바꾸고 아니면 KTIME_MAX입니다. KTIME_MAX는 여기서 해당 예정 삽입이 없다는 특수 표식일 수 있습니다. 윤초 삽입·삭제를 모두 같은 식으로 반환한다고 확대하지 않으며 second_overflow 전체 상태 처리도 헤더에는 없습니다."
+      },
+      {
+        "title": "Adjtimex 내부 인자",
+        "text": "__do_adjtimex는 조정 구조체 __kernel_timex *txc, 현재 시각 const timespec64 *ts, s32 *time_tai, 감사 기록 audit_ntp_data *ad를 받아 int를 줍니다. TAI는 국제원자시 관련 값이고 감사 데이터는 조정 기록에 쓰는 정보입니다. const ts는 이 인터페이스로 수정하지 않는 입력이고 나머지 포인터는 const가 아닙니다. 그렇다고 모든 모드에서 모든 칸을 반드시 쓴다는 뜻은 아닙니다."
+      },
+      {
+        "title": "PPS의 두 관측값",
+        "text": "__hardpps는 const timespec64 *phase_ts와 *raw_ts를 받는 void 함수입니다. PPS는 초마다 오는 기준 신호이며 위상 기준 관측과 가공을 줄인 raw 관측을 따로 전달합니다. 이 파일에는 장치에서 두 값을 읽는 코드나 필터 계산식이 없습니다. const는 입력 객체를 이 인터페이스로 바꾸지 않는다는 표시입니다."
+      },
+      {
+        "title": "CMOS 알림의 OR 조건",
+        "text": "CONFIG_GENERIC_CMOS_UPDATE 또는 CONFIG_RTC_SYSTOHC 중 하나라도 정의되면 ntp_notify_cmos_timer(bool offset_set)는 외부 함수입니다. 둘 다 없을 때 같은 인자의 빈 inline이 됩니다. ||는 둘 중 하나라는 OR이지 둘 다 필요한 AND가 아닙니다. 빈 매크로와 달리 함수에 f()를 인자로 주면 관측 가능한 f의 부작용은 언어 규칙대로 유지해야 합니다."
+      },
+      {
+        "title": "알림 인자와 관련 구현 경계",
+        "text": "원문이 대조한 ntp.c 일부에서는 offset_set이 true면 sync_hrtimer를 취소합니다. 동기화된 상태이고 타이머가 기다리는 중이 아니면 work를 처리 대기열에 넣습니다. 따라서 이름만 보고 곧바로 CMOS에 직접 쓰는 함수라고 설명하지 않습니다. 이 일부 대조는 ntp.c의 모든 상태·작업자·동기화 알고리즘을 검증한 것이 아닙니다."
+      },
+      {
+        "title": "학습 범위",
+        "text": "전체 선언과 조건별 대체를 읽은 범위입니다. 정수 고정 소수점의 단위, 시간 기준, sentinel이라는 특별한 표식값, const 입력, OR 조건, 비활성 inline의 인자 계산이 핵심입니다. NTP 서버와 통신하거나 실제 하드웨어 시계를 조정한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ntp_tick_length 결과 숫자를 그대로 정수 나노초로 읽어도 될까요?",
+        "options": [
+          "아니요. 단위는 ns/2^NTP_SCALE_SHIFT입니다.",
+          "네. u64이면 단위는 언제나 나노초입니다."
+        ],
+        "explanation": "저장 폭과 시간 확대 비율은 별개입니다. 주석의 단위를 먼저 확인합니다."
+      },
+      {
+        "prompt": "CMOS 알림 외부 구현은 언제 선택할까요?",
+        "options": [
+          "두 설정이 동시에 켜져야만 합니다.",
+          "GENERIC_CMOS_UPDATE 또는 RTC_SYSTOHC 중 하나가 켜지면 됩니다."
+        ],
+        "explanation": "전처리 조건은 ||입니다. 둘 다 없을 때만 빈 inline입니다."
+      },
+      {
+        "prompt": "빈 알림 inline에 f()를 주면 부작용도 항상 사라질까요?",
+        "options": [
+          "아니요. 함수 인자 계산의 관측 가능한 부작용은 유지해야 합니다.",
+          "네. 빈 함수는 빈 매크로와 같습니다."
+        ],
+        "explanation": "컴파일러가 관측 가능한 동작을 함부로 지울 수는 없습니다. 인자까지 없애는 매크로와 다릅니다."
+      },
+      {
+        "prompt": "next_leap가 KTIME_MAX면 그 먼 시각에 실제 윤초가 예약되었다는 뜻일까요?",
+        "options": [
+          "네. 언제나 유효한 미래 달력 시각입니다.",
+          "아니요. 해당 조건의 예정 삽입 윤초가 없다는 특수 표식입니다."
+        ],
+        "explanation": "TIME_INS와 STA_INS 조건이 아니면 KTIME_MAX를 줍니다. 실제 타임스탬프와 특수값을 구분합니다."
+      }
+    ]
+  },
+  "file-d2b40dd54db4f64d": {
+    "story": "벽에 시계 모양 그림이 있다고 시간이 흐르는 것은 아닙니다. 공통 get_cycles도 이름은 시간 계수기를 읽는 함수지만 기본 구현은 늘 0만 줍니다.",
+    "meaning": "장치 계수기가 없는 기본 대체 구현과 선택적 부팅 보정 기능 표시를 구분합니다.",
+    "exercise": "get_cycles를 두 번 호출한 차이를 본문대로 계산하고 ARCH_HAS_READ_CURRENT_TIMER의 실제 전처리 명령을 찾으세요.",
+    "guide": [
+      "fallback은 특별한 구현이 없을 때 쓰는 기본 대체입니다. 인터페이스가 존재한다는 사실과 실제 증가하는 시간원이 있다는 사실은 다릅니다.",
+      "cycles_t가 unsigned long이어도 값이 자동 증가하지 않습니다. 이 기본 함수의 0은 측정 시각이나 errno 오류값이 아니라 실제 계수기를 제공하지 않는 본문 결과입니다.",
+      "실제 TIME 레지스터나 CLINT 장치를 읽는 RISC-V timex와 비교하면 공통 틀과 장치별 구현의 차이를 볼 수 있습니다."
+    ],
+    "goal": "장치 계수기가 없는 기본 대체 구현과 선택적 부팅 보정 기능 표시를 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "GPL-2.0과 중복 포함 방지 guard 뒤에는 cycles_t 별칭, 조건부 get_cycles 기본 함수, 보정 관련 주석과 기능 매크로 해제가 있습니다. 하드웨어를 읽거나 값을 주기적으로 늘리거나 타이머를 초기화하는 코드는 없습니다."
+      },
+      {
+        "title": "타입과 상수 반환",
+        "text": "cycles_t는 unsigned long의 별명입니다. get_cycles 매크로가 없을 때 같은 이름의 inline 함수를 만들어 항상 0을 반환합니다. 이는 부팅 후 시간이 실제로 0이라는 측정도, errno 형식의 실패값도 아닙니다. 장치 계수기를 제공하지 않는 기본 대체 구현입니다."
+      },
+      {
+        "title": "전처리 검사의 범위",
+        "text": "#ifndef get_cycles는 같은 이름의 매크로가 정의되어 있는지 봅니다. C 함수 선언 목록을 컴파일러처럼 검색하지 않습니다. 다른 아키텍처가 자기 이름의 get_cycles 매크로를 두어 구현이 준비되었다고 표시할 수 있습니다. cycles_t typedef는 이 조건 바깥이라 별도로 정의됩니다."
+      },
+      {
+        "title": "현재 timer 기능 해제",
+        "text": "ARCH_HAS_READ_CURRENT_TIMER는 조건 없이 #undef로 해제합니다. 주석은 아키텍처가 read_current_timer와 이 기능 표시를 구현하면 부팅 때 비용이 큰 지연 반복 보정을 피할 수 있다고 권합니다. 하지만 이 파일이 그 함수를 구현하거나 기능을 켜지는 않습니다. 앞서 같은 매크로가 정의되었어도 포함 순서상 여기서는 해제됩니다."
+      },
+      {
+        "title": "CS 연결과 사용 범위",
+        "text": "기본 대체의 뜻, 정수 타입과 실제 시간원, 매크로로 구현 유무 알리기, 선택적 능력과 부팅 비용이 핵심입니다. 항상 0인 값을 증가하는 계수기로 여겨 양수 차이가 날 때까지 기다리면 진행할 수 없습니다. 함수 이름만으로 시간원이 있다고 판단하지 말아야 하며, 이 파일 검토만으로 모든 호출자의 대응까지 확인한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "기본 get_cycles는 부를 때마다 증가할까요?",
+        "options": [
+          "아니요. 항상 0입니다.",
+          "네. unsigned long이 자동으로 늘어납니다."
+        ],
+        "explanation": "실제 본문은 return 0뿐입니다. 타입이나 이름이 계수기를 만들어 주지는 않습니다."
+      },
+      {
+        "prompt": "#ifndef get_cycles는 무엇을 확인할까요?",
+        "options": [
+          "모든 C 함수 선언 중 그 이름이 있는지 확인합니다.",
+          "전처리 매크로가 정의되었는지 확인합니다."
+        ],
+        "explanation": "전처리기는 C 함수 목록을 찾지 않습니다. 매크로로 구현 존재를 표시하는 방식과 연결됩니다."
+      },
+      {
+        "prompt": "이 파일은 ARCH_HAS_READ_CURRENT_TIMER를 어떻게 할까요?",
+        "options": [
+          "해제합니다.",
+          "항상 켭니다."
+        ],
+        "explanation": "실제 명령은 #undef입니다. 주석의 구현 권장과 현재 기본 구현은 구분해야 합니다."
+      }
+    ]
+  },
+  "file-c34a0f6455546bf7": {
+    "story": "장치의 주소를 적은 쪽지를 받았다고 장치가 설치된 것은 아닙니다. CLINT 헤더도 시간 레지스터 주소가 다른 곳에 준비되어 있다고 알리는 계약입니다.",
+    "meaning": "CLINT 시간 포인터 선언과 실제 MMIO 준비를 나누고, ISA 보장과 장치별 추가 전제를 설명합니다.",
+    "exercise": "clint_time_val의 extern·u64·__iomem이 각각 무엇을 말하고 무엇을 보장하지 않는지 적으세요.",
+    "guide": [
+      "MMIO는 장치 레지스터를 메모리 주소처럼 읽고 쓰는 방식입니다. 일반 RAM과 접근 규칙이 같다고 가정하면 안 됩니다.",
+      "ISA는 CPU 명령과 기본 동작의 약속입니다. 특정 장치의 주소 배치·읽기 순서에는 ISA만으로 정하지 않은 추가 약속이 있을 수 있습니다.",
+      "RISC-V timex.h가 clint_time_val을 직접 읽으려면 드라이버가 준비한 포인터와 플랫폼 접근 조건이 맞아야 합니다. 헤더의 extern만으로 그 준비가 끝나지 않습니다."
+    ],
+    "goal": "CLINT 시간 포인터 선언과 실제 MMIO 준비를 나누고, ISA 보장과 장치별 추가 전제를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "파일 범위",
+        "text": "GPL-2.0-only·저작권·중복 방지 guard 뒤 linux/types.h와 asm/mmio.h를 포함합니다. CONFIG_RISCV_M_MODE 안의 설명과 extern u64 __iomem *clint_time_val이 전체입니다. 실제 매핑 설치·변수 저장 공간·읽기쓰기 함수·초기화 루틴은 없습니다."
+      },
+      {
+        "title": "드라이버와 직접 접근",
+        "text": "주석은 이 포인터가 CLINT 드라이버에 있지만 MMIO 타이머 접근의 추가 비용을 피하려고 timex.h에서 직접 사용한다고 설명합니다. CLINT는 이 경로가 가정하는 지역 인터럽트·타이머 장치입니다. extern 선언은 드라이버를 불러오거나 레지스터 주소를 자동 초기화하지 않습니다."
+      },
+      {
+        "title": "ISA의 보장과 추가 전제",
+        "text": "주석상 mtime은 일정한 주파수, 즉 일정한 속도로 늘어나는 64비트 메모리 매핑 레지스터입니다. 그러나 사용하는 데 필요한 순서 제약과 메모리 배치는 ISA만으로 정해지지 않을 수 있습니다. 일반 이름 riscv_mtime 대신 clint_time_val이라고 하여 CLINT 관련 추가 조건에 기대고 있음을 드러냅니다."
+      },
+      {
+        "title": "타입과 구성",
+        "text": "u64는 가리키는 값의 논리적 64비트 폭, __iomem은 입출력 장치 주소공간 표시입니다. 그 포인터 타입만으로 32비트 CPU가 64비트를 한 번에 쪼개짐 없이 읽는 원자 접근이 보장되지는 않습니다. 가장 높은 권한의 M-mode 설정이 아니면 이 선언도 없으며 timex.h의 다른 모드 길은 TIME CSR, 즉 CPU 제어·상태 레지스터를 사용합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "선언과 저장 공간, 공유 포인터 수명, MMIO와 RAM, CPU 기본 약속과 장치 통합 조건, 빠른 직접 접근의 전제가 핵심입니다. 이 헤더를 읽은 것을 CLINT 드라이버 전체나 실제 장치의 64비트 접근 순서를 실행 검증한 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "extern clint_time_val이 MMIO 매핑을 만들까요?",
+        "options": [
+          "아니요. 주소를 담는 외부 심벌을 선언할 뿐입니다.",
+          "네. 헤더를 포함하면 자동 매핑됩니다."
+        ],
+        "explanation": "저장 공간과 초기화는 다른 구현이 맡습니다. 준비된 주소를 사용하는 시점도 중요합니다."
+      },
+      {
+        "prompt": "왜 일반 riscv_mtime 대신 clint_time_val이라고 이름 붙였을까요?",
+        "options": [
+          "레지스터가 32비트이기 때문입니다.",
+          "ISA 밖의 배치·순서 가정도 필요함을 알리기 위해서입니다."
+        ],
+        "explanation": "주석은 mtime을 64비트라 설명하면서 추가 플랫폼 조건을 구분합니다."
+      },
+      {
+        "prompt": "u64 __iomem 포인터는 한 번의 원자적 64비트 읽기를 보장할까요?",
+        "options": [
+          "아니요. 실제 읽기 함수와 CPU·장치 약속을 확인해야 합니다.",
+          "네. 타입이 실제 버스 동작까지 강제합니다."
+        ],
+        "explanation": "RISC-V timex의 32비트 길은 두 조각과 재검사를 사용합니다. 값의 폭과 접근 방법은 다릅니다."
+      }
+    ]
+  },
+  "file-3d931269c51b78c7": {
+    "story": "여러 반의 당번을 정해 쉬는 친구의 알림을 대신 챙길 수 있습니다. 타이머 이동 계층도 각 그룹의 다음 알림과 활동 중인 자식을 요약해 담당 CPU를 고릅니다.",
+    "meaning": "타이머 이동 구조체의 부모·이벤트·CPU 상태와 원자적 상태 묶음의 역할을 구분합니다.",
+    "exercise": "tmigr_state의 active와 migrator를 비트 표시로 그려 보고, parent가 NULL에서 연결되는 동안 같은 동작 안에서 여러 번 읽으면 무엇이 달라질지 설명하세요.",
+    "guide": [
+      "계층은 CPU를 작은 그룹으로, 다시 더 큰 그룹으로 묶은 구조입니다. 다음 만료와 활동 상태를 요약하면 쉬는 CPU의 타이머를 다른 CPU가 맡는 결정을 할 수 있습니다.",
+      "hotplug는 CPU가 실행 중에 들어오거나 나가는 과정이고 NUMA는 CPU마다 가까운 메모리가 다른 구조입니다. 부모 연결과 지역 배치를 만드는 시점의 규칙을 읽어야 합니다.",
+      "원자적 연산은 값을 중간에 쪼개 보지 않고 처리하는 연산입니다. 상태 한 묶음이 원자적이라고 큐·부모·모든 필드까지 동시에 바뀌는 것은 아닙니다."
+    ],
+    "goal": "타이머 이동 구조체의 부모·이벤트·CPU 상태와 원자적 상태 묶음의 역할을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 포함 전제",
+        "text": "GPL-2.0-only와 guard 뒤 그룹 용량, 이벤트·그룹·CPU 구조체, 상태 union, 조건별 선언·stub이 있습니다. include가 없어 timerqueue_node, raw_spinlock_t, atomic_t, list_head와 정수 타입은 앞 문맥이 준비합니다. 실제 이동 알고리즘은 timer_migration.c에 있습니다."
+      },
+      {
+        "title": "그룹 용량과 mask",
+        "text": "TMIGR_CHILDREN_PER_GROUP는 8이며 주석은 2의 거듭제곱이어야 한다고 합니다. 자식 활동과 담당자를 u8, 즉 8비트 마스크로 나타내는 구조와 연결됩니다. 이 선언 자체가 아홉 번째 자식을 자동 거부하지는 않으므로 num_children과 설치 코드가 용량 규칙을 지켜야 합니다."
+      },
+      {
+        "title": "이벤트 구조체 전체",
+        "text": "tmigr_event는 부모 큐에 넣을 연결점 timerqueue_node nextevt, 소속 CPU 번호인 unsigned int cpu, bool ignore입니다. ignore는 CPU나 그룹이 활동 중일 때 이벤트를 무시할 수 있다는 힌트입니다. true를 썼다고 큐에서 노드가 실제 삭제되었다는 뜻은 아닙니다."
+      },
+      {
+        "title": "그룹 잠금과 부모 연결",
+        "text": "그룹 lock은 이벤트 정보와 계층 설치 정보를 보호하는 raw spinlock입니다. parent는 CPU가 처음 online될 때 새 계층이 필요하면 연결될 수 있습니다. 한 번 연결한 뒤에는 제거하거나 다른 부모로 바꾸지 않는다는 약속입니다. 처음 NULL에서 생길 수 있다는 점과 연결 뒤 고정이라는 점을 구분합니다."
+      },
+      {
+        "title": "부모의 잠금 없는 관측",
+        "text": "주석은 전파를 멈출지 판단하려고 parent를 잠금 없이 볼 때 최악에는 불필요하거나 이른 CPU 깨우기가 생길 수 있다고 설명합니다. 그러나 같은 활성화·비활성화·원격 만료 동작 안에서 여러 번 읽지 말라고 합니다. 한 번은 NULL, 뒤에는 새 부모를 볼 수 있기 때문입니다. 나중에 고정되는 포인터라고 처음 연결 중의 모든 반복 읽기까지 같지는 않습니다."
+      },
+      {
+        "title": "그룹 이벤트와 최단 만료",
+        "text": "groupevt는 비활성 그룹의 다음 알림으로 부모 timerqueue에 들어가며 그룹이 활동하면 ignore가 켜집니다. events는 자식 이벤트 큐입니다. next_expiry는 monotonic 기준 u64 만료 시각으로 잠금 없이 원격 처리가 필요한지 판단하는 데 쓰며 주석은 그 판단에 믿을 수 있다고 합니다. 이 말이 그룹 전체 필드의 원자적 스냅샷을 보장하는 것은 아닙니다."
+      },
+      {
+        "title": "그룹의 setup 필드",
+        "text": "level은 계층 높이, numa_node는 CPU와 낮은 그룹을 가까운 메모리 쪽에 놓기 위한 설치 정보입니다. level<tmigr_crossnode_level이면 NUMA 노드이고 상위는 NUMA_NO_NODE입니다. num_children은 자식 수, groupmask는 부모 안에서 자신을 나타내는 u8 비트입니다. groupmask는 설치 뒤 바뀌지 않아 잠금 없이 읽습니다. list는 설치 때 레벨별 tmigr_level_list에 연결할 list_head입니다."
+      },
+      {
+        "title": "그룹 상태 저장",
+        "text": "migr_state는 atomic_t 저장값입니다. 뒤의 tmigr_state union은 이 결합값을 원자적으로 읽고 cmpxchg하는 표현과 각각의 필드로 읽는 표현을 연결합니다. cmpxchg는 예상 값과 같을 때 새 값으로 바꾸는 비교·교환입니다. 실제 저장이 union 변수 하나뿐인 것도, parent와 큐까지 같은 연산으로 바뀌는 것도 아닙니다."
+      },
+      {
+        "title": "CPU 구조체의 상태",
+        "text": "CPU 구조체 lock은 해당 CPU의 이동 정보를 보호합니다. online은 단순히 스케줄러에서 바쁜지와 다른 상태입니다. 최상위 담당 CPU가 나가면 대기 타이머를 다른 online CPU가 맡도록 알리는 데 필요합니다. CPU가 이동 계층의 hotplug 단계 전에 idle일 수도 있는데 이때 자기 global 타이머는 직접 처리하고 다른 타이머 담당자가 되지 않아야 합니다. idle은 계층에서 쉬는 상태, remote는 자기 타이머가 다른 CPU에서 만료 처리 중임을 나타냅니다."
+      },
+      {
+        "title": "CPU의 연결과 다음 깨우기",
+        "text": "tmgroup은 부모 그룹, groupmask는 부모 안의 자기 u8 비트, cpuevt는 부모 큐에 넣을 수 있는 CPU 이벤트입니다. u64 wakeup은 계층 전체가 idle이고 원격 처리를 마쳤을 때 첫 타이머를 기억해 idle 경로의 타이머 코드에 돌려줍니다. 모든 CPU 깨우기 요청을 담는 전역 큐는 아닙니다."
+      },
+      {
+        "title": "State union 전체",
+        "text": "union tmigr_state는 같은 저장 공간을 u32 state 하나 또는 packed 구조의 u8 active, u8 migrator, u16 seq로 읽게 합니다. active는 활동 중인 여러 자식의 비트, migrator는 담당 자식의 마스크입니다. 예를 들어 담당 자식 비트가 4라고 CPU 번호 4라는 뜻은 아닙니다. 상위에서는 자식이 또 그룹일 수 있습니다."
+      },
+      {
+        "title": "엔디언과 sequence 목적",
+        "text": "주석은 결합 state를 원자 읽기·cmpxchg에만 쓰고 내용을 바꿀 때는 개별 필드를 쓰라고 합니다. 엔디언은 바이트를 놓는 순서이며 packed가 그 순서를 통일하지는 않습니다. active가 숫자 state의 항상 같은 아래 8비트라고 가정하면 안 됩니다. seq는 갱신마다 늘려 자식의 변경이 순서가 바뀌어 올라오는 경쟁을 구분합니다. 자세한 예는 구현 본문을 보며 16비트 seq가 무한히 증가한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "활성 구성의 여섯 함수",
+        "text": "CONFIG_SMP와 CONFIG_NO_HZ_COMMON이 모두 켜지면 여섯 함수를 선언합니다. tmigr_handle_remote는 void 처리, tmigr_requires_handle_remote는 bool 질의, tmigr_cpu_activate는 void 활성화입니다. tmigr_cpu_deactivate·tmigr_cpu_new_timer·tmigr_quick_check는 u64 nextevt를 받고 u64를 줍니다. 반환형을 구분하며 특정 숫자의 특별한 의미인 sentinel 정책까지 이 선언만으로 정하지 않습니다."
+      },
+      {
+        "title": "비활성 구성의 일부 stub",
+        "text": "비활성 else에는 tmigr_handle_remote와 tmigr_cpu_activate의 빈 void inline, tmigr_requires_handle_remote의 false만 있습니다. deactivate·new_timer·quick_check의 stub은 없습니다. 따라서 설정과 관계없이 여섯 함수를 모두 호출할 수 있게 해 준 헤더는 아닙니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "타입·필드·주석의 사용 약속과 설정 조건 전체를 읽습니다. 객체 안에 큐 연결점을 넣는 방식, 고정된 설치 정보, CPU 출입 수명, 비교·교환용 상태 묶음, 바이트 순서와 변경 전파 순서가 핵심입니다. timer_migration.c 전체나 실제 CPU 출입·원격 만료 실험을 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "migrator는 CPU 번호일까요?",
+        "options": [
+          "아니요. 담당 자식을 나타내는 마스크입니다.",
+          "네. 전역 CPU 번호를 u8에 담습니다."
+        ],
+        "explanation": "주석은 child mask라고 합니다. 자식이 다른 그룹일 수도 있어 CPU 번호와 같지 않습니다."
+      },
+      {
+        "prompt": "같은 동작 중 parent를 잠금 없이 여러 번 읽으면 항상 같을까요?",
+        "options": [
+          "네. 한 번 연결 뒤 고정이므로 모든 관측이 같습니다.",
+          "아니요. 설치 중 NULL에서 부모 주소로 바뀔 수 있습니다."
+        ],
+        "explanation": "연결 이후 고정과 처음 연결 순간은 다릅니다. 주석이 같은 동작 안의 반복 읽기를 금합니다."
+      },
+      {
+        "prompt": "ignore=true면 이벤트가 반드시 큐에서 삭제되었을까요?",
+        "options": [
+          "아니요. 무시 가능 여부의 힌트입니다.",
+          "네. bool 대입이 자동으로 큐에서 지웁니다."
+        ],
+        "explanation": "큐 연결점과 힌트 필드는 별개입니다. 실제 삭제·선택은 구현이 해야 합니다."
+      },
+      {
+        "prompt": "active를 state의 아래 8비트로 직접 바꿔도 모든 엔디언에서 같을까요?",
+        "options": [
+          "네. packed는 모든 바이트 순서를 little endian으로 바꿉니다.",
+          "아니요. 주석은 개별 필드로 갱신하라고 합니다."
+        ],
+        "explanation": "packed는 엔디언 변환이 아닙니다. 결합값은 원자 비교에 쓰고 필드로 의미를 유지합니다."
+      },
+      {
+        "prompt": "SMP나 NO_HZ_COMMON이 꺼져도 여섯 API 모두 stub이 있을까요?",
+        "options": [
+          "아니요. 세 개만 있습니다.",
+          "네. 선언한 모든 함수가 자동으로 빈 구현이 됩니다."
+        ],
+        "explanation": "else에는 handle_remote, requires_handle_remote, cpu_activate만 있습니다. 나머지 호출은 설정을 따져야 합니다."
+      },
+      {
+        "prompt": "상태 갱신마다 seq를 늘리는 이유는 무엇일까요?",
+        "options": [
+          "지난 나노초를 직접 저장하려고 합니다.",
+          "자식 갱신이 뒤바뀐 순서로 전파되는 경쟁을 구분하려고 합니다."
+        ],
+        "explanation": "시간은 next_expiry 같은 별도 칸에 있습니다. seq는 상태 변화의 순서를 구분하는 데 씁니다."
+      }
+    ]
+  },
+  "file-2735e72a5a2028c1": {
+    "story": "예약표를 시간순으로 꽂아 두고 맨 앞 예약을 따로 표시하면 다음 순서를 빨리 찾을 수 있습니다. 이 구조체는 그런 정렬용 정보이지 알림을 직접 울리는 장치는 아닙니다.",
+    "meaning": "타이머 큐 노드의 만료 키와 트리 연결, 맨 앞 노드 캐시를 설명합니다.",
+    "exercise": "큐에 꽂힌 예약의 expires만 바꾸면 왜 위치가 틀릴 수 있는지 10초·20초·30초 예로 설명하세요.",
+    "guide": [
+      "각 timerqueue_node는 트리 연결점 rb_node와 만료 시간 ktime_t expires를 가집니다. 큐 머리는 rb_root_cached를 보관합니다.",
+      "레드블랙 트리는 값의 순서를 유지하면서 찾기·추가·삭제가 지나치게 느려지지 않게 균형을 잡는 자료구조입니다. 만료가 가장 빠른 맨 왼쪽 노드를 따로 기억합니다.",
+      "이 타입만으로 시간이 되면 함수가 실행되지는 않습니다. 시간값 설정과 실제 만료 처리 정책은 사용하는 코드가 맡습니다."
+    ],
+    "goal": "타이머 큐 노드의 만료 키와 트리 연결, 맨 앞 노드 캐시를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 내용",
+        "text": "GPL 표시, 중복 포함 방지 guard, rbtree_types·types 헤더 뒤 timerqueue_node와 timerqueue_head를 정의하고 끝납니다. 외부 함수나 실제 정렬 코드는 없습니다."
+      },
+      {
+        "title": "침입형 노드",
+        "text": "node는 트리 연결 정보를 객체 안에 넣은 침입형 노드입니다. expires가 정렬에 사용하는 키입니다. 예를 들어 30초 위치에 있는 노드를 expires=5초로만 바꾸면 트리 자리는 그대로라 순서가 틀릴 수 있습니다. 제거한 뒤 수정·재삽입하는 등 자료구조 위치도 관리해야 합니다."
+      },
+      {
+        "title": "최소값 캐시",
+        "text": "head의 rb_root_cached는 전체 트리 루트와 가장 왼쪽 노드의 캐시를 함께 담는 타입입니다. 캐시는 자주 찾는 결과를 기억해 빨리 꺼내는 장치입니다. 여기서는 가장 이른 만료를 반복 조회하기 좋지만, 삽입·삭제 때 캐시도 일관되게 고치는 API와 함께 써야 합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "객체 안의 연결점, 연결 중 정렬 키를 함부로 바꾸지 않는 규칙, 순서를 담는 우선순위 큐와 실제 실행을 고르는 코드의 차이, 최솟값 캐시가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "expires가 있으면 구조체가 자동으로 콜백을 실행할까요?",
+        "options": [
+          "아니요. 시간순 정렬용 데이터입니다.",
+          "네. 만료 시간이 되면 구조체가 실행합니다."
+        ],
+        "explanation": "함수 포인터나 실행 코드가 없습니다. 실제 만료 처리는 위에서 사용하는 코드가 맡습니다."
+      },
+      {
+        "prompt": "연결된 노드의 expires만 바꾸면 순서도 자동 복구될까요?",
+        "options": [
+          "네. 필드 대입이 트리 재정렬을 부릅니다.",
+          "아니요. 트리 위치도 다시 관리해야 합니다."
+        ],
+        "explanation": "보통 필드 대입은 트리 회전이나 재삽입을 실행하지 않습니다. 정렬 키와 자료구조 연산을 함께 관리합니다."
+      }
+    ]
+  },
+  "file-04445115287b298f": {
+    "story": "예약표의 맨 앞 카드를 보는 것과 꺼내는 것은 다릅니다. timerqueue_getnext는 가장 빠른 예약을 보여 주고, 초기화 도우미는 연결 표식만 준비합니다.",
+    "meaning": "최소 만료 조회·노드 표식·큐 머리 초기화의 범위와 소속 검사의 한계를 설명합니다.",
+    "exercise": "timerqueue_init 뒤 expires가 자동으로 0이 되는지 확인하고, node_queued에 head 인자가 없는 이유를 생각해 보세요.",
+    "guide": [
+      "큐의 가장 빠른 만료는 rb_first_cached로 기억해 둔 왼쪽 끝에서 얻습니다. 매번 트리를 내려가 찾지 않으며 노드를 제거하지도 않습니다.",
+      "RB_EMPTY_NODE는 미연결 상태 표식입니다. 만료 시각 expires를 정하는 일과 노드 표식을 초기화하는 일은 별개입니다.",
+      "동시에 큐를 만지는 순서는 호출자가 보호해야 합니다. queued 검사는 특정 큐의 주인을 찾는 검색이 아니라 연결 표식 확인입니다."
+    ],
+    "goal": "최소 만료 조회·노드 표식·큐 머리 초기화의 범위와 소속 검사의 한계를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "라이선스 표시와 중복 방지 guard 뒤 rbtree와 timerqueue_types를 포함합니다. 추가 add·삭제 del·후속 iterate_next의 외부 선언 세 개, getnext·init·node_queued·init_head inline 네 개가 전체입니다."
+      },
+      {
+        "title": "최소값 조회",
+        "text": "getnext는 rb_first_cached로 저장한 왼쪽 끝을 읽고 rb_entry_safe로 그 연결점을 품은 timerqueue_node를 찾습니다. 빈 큐면 NULL을 안전하게 NULL로 돌려주어 잘못된 바깥 객체 주소를 계산하지 않습니다. 매번 왼쪽 가지를 따라 탐색하지 않고, 찾은 노드를 큐에서 꺼내지도 않습니다."
+      },
+      {
+        "title": "노드 초기화 범위",
+        "text": "init은 RB_CLEAR_NODE만 하여 연결되지 않았다는 표식을 만듭니다. expires에 현재 시각이나 0을 쓰지 않으므로 만료값은 따로 정해야 합니다. node_queued는 !RB_EMPTY_NODE를 보며, 정상적으로 초기화·삽입·삭제한 노드라는 약속 아래 사용합니다."
+      },
+      {
+        "title": "헤드 초기화와 소유권",
+        "text": "init_head는 RB_ROOT_CACHED를 대입해 빈 루트와 캐시를 만듭니다. 이미 든 노드를 순회해 안전하게 해제하는 clear가 아닙니다. node_queued에는 head 인자가 없어 어느 큐에 속했는지 판별할 수 없습니다. 다른 큐에 붙은 노드도 연결 표식만 확인합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "캐시된 최소 조회는 노드 수와 무관한 O(1) 비용입니다. NULL에 안전한 포함 객체 변환, 상태 표식과 실제 소속의 차이, 초기화와 자원 정리의 차이가 핵심입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "timerqueue_init이 expires를 0으로 만들까요?",
+        "options": [
+          "아니요. rb_node의 미연결 표식만 만듭니다.",
+          "네. 구조체 전체를 지웁니다."
+        ],
+        "explanation": "본문은 RB_CLEAR_NODE 하나입니다. 시간값은 별도로 정합니다."
+      },
+      {
+        "prompt": "빈 큐에서 getnext는 무엇을 줄까요?",
+        "options": [
+          "항상 잘못된 객체 주소를 줍니다.",
+          "NULL을 줍니다."
+        ],
+        "explanation": "rb_entry_safe는 빈 포인터를 바깥 객체처럼 계산하지 않습니다."
+      },
+      {
+        "prompt": "node_queued만으로 특정 head 소속인지 알 수 있을까요?",
+        "options": [
+          "없습니다. head 인자가 없습니다.",
+          "있습니다. 모든 조상 노드를 따라 찾습니다."
+        ],
+        "explanation": "실제로는 미연결 표식만 봅니다. 어느 큐인지 찾는 로직은 없습니다."
+      }
+    ]
+  },
+  "file-9ca8e1b60f9ee8b9": {
+    "story": "시간순 예약표에 새 카드를 꽂았다고 언제나 맨 앞이 바뀌지는 않습니다. 추가 함수의 false는 실패가 아니라 맨 앞이 안 바뀌었다는 뜻일 수 있습니다.",
+    "meaning": "타이머 큐의 비교·삽입·삭제·순회와 서로 다른 bool 반환 의미를 설명합니다.",
+    "exercise": "10초 예약 뒤 20초 예약을 더할 때 add 결과와 마지막 예약을 지울 때 del 결과를 각각 예상하세요.",
+    "guide": [
+      "작은 expires를 왼쪽에 놓는 균형 트리로 만료 순서를 관리합니다. 추가의 참은 새 최소값, 삭제의 참은 삭제 뒤 큐가 남았다는 뜻입니다.",
+      "라이브러리는 자체 잠금을 잡지 않습니다. 읽기·쓰기 모두 호출자가 순서를 맞춰 동시 변경 경쟁을 막아야 합니다.",
+      "WARN_ON_ONCE는 잘못된 연결 상태를 알리는 경고입니다. 자동으로 삽입·삭제를 중단하는 검사로 생각하면 안 됩니다."
+    ],
+    "goal": "타이머 큐의 비교·삽입·삭제·순회와 서로 다른 bool 반환 의미를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL 표시, 타이머 큐 설명과 외부 직렬화 경고, bug·timerqueue·rbtree·export 헤더 뒤 노드 변환 매크로, 비교 도우미, add·del·iterate_next와 GPL export가 있습니다. 시계를 읽거나 시간이 된 콜백을 부르는 코드는 없습니다."
+      },
+      {
+        "title": "비교 함수",
+        "text": "__node_2_tq는 rb_entry로 트리 연결점을 품은 timerqueue_node를 얻습니다. __timerqueue_less는 a의 expires가 b보다 작은지만 비교합니다. 같으면 false이며 주소나 별도 ID를 비교하지 않습니다. 같은 만료값을 거절하는 중복 검사도 아닙니다."
+      },
+      {
+        "title": "추가와 새 최소값",
+        "text": "add는 이미 연결된 노드에 WARN_ON_ONCE를 낸 뒤에도 rb_add_cached를 부릅니다. 하위 함수는 less면 왼쪽, 아니면 오른쪽으로 가며 오른쪽에 가면 새 왼쪽 끝이 아니라는 표시를 합니다. 새 최소면 노드 주소, 아니면 NULL을 주어 bool 결과는 새 최소인지가 됩니다. 예를 들어 10초 뒤에 20초를 더하면 false여도 정상 삽입입니다."
+      },
+      {
+        "title": "같은 만료값의 처리",
+        "text": "같은 expires는 < 비교가 false라 오른쪽 길로 들어갑니다. 기존 최소와 같은 시각의 새 노드는 기존 왼쪽 끝을 대신하는 새 최소로 보고하지 않습니다. 균형을 위한 트리 회전도 중위 순서, 즉 왼쪽→자기→오른쪽 순서를 유지합니다. 이 규칙이 시간값을 유일하게 만드는 것은 아닙니다."
+      },
+      {
+        "title": "삭제 반환값의 다른 의미",
+        "text": "del은 미연결 노드면 경고한 뒤 rb_erase_cached로 제거하고 RB_CLEAR_NODE로 표식을 되돌립니다. 반환은 !RB_EMPTY_ROOT로 삭제 뒤 남은 큐가 있는지입니다. 마지막 노드를 정상 삭제하면 false입니다. 삭제 대상이 최소였는지나 성공 여부를 말하지 않으며 노드 메모리를 해제하거나 expires를 지우지도 않습니다."
+      },
+      {
+        "title": "후속 노드 순회",
+        "text": "iterate_next는 입력 NULL이면 NULL, 아니면 rb_next로 순서상 다음 연결점을 얻어 바깥 객체 또는 NULL을 줍니다. 큐를 바꾸지 않는 순회용입니다. 이미 삭제한 노드에서 다음을 찾거나 다른 실행 흐름이 자유롭게 트리를 바꿔도 안전하다고 가정하지 않습니다. 삭제하며 처리하려면 다음 위치와 객체 수명을 따로 관리해야 합니다."
+      },
+      {
+        "title": "비용과 동기화",
+        "text": "균형 트리 삽입·삭제는 O(log n), 즉 노드가 늘어도 트리 높이에 비례하는 비용이며 최소 캐시 조회는 O(1)입니다. 후속 한 개를 찾을 때 높이만큼 이동할 수 있지만 전체 순회는 연결을 따라 선형 처리할 수 있습니다. 잠금·RCU·객체 참조 확보가 없으므로 읽기만 한다고 동시 접근이 자동 안전하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증",
+        "text": "최솟값과 캐시 유지, 엄격한 < 비교와 중복 키, API별 bool 의미, 경고와 실행 중단 검사의 차이가 핵심입니다. 원문은 같은 시각 삽입을 rbtree.h의 rb_add_cached까지 대조한 설명입니다. 실제 타이머 인터럽트나 경쟁 실행을 시험한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "add가 false면 삽입 실패일까요?",
+        "options": [
+          "아니요. 새 최소가 아니어도 정상 삽입될 수 있습니다.",
+          "네. 노드를 넣지 않았다는 뜻입니다."
+        ],
+        "explanation": "반환은 새 왼쪽 끝을 만들었는지입니다. 메모리 할당 실패 상태가 아닙니다."
+      },
+      {
+        "prompt": "마지막 노드를 지운 del의 결과는 무엇일까요?",
+        "options": [
+          "true입니다.",
+          "false입니다."
+        ],
+        "explanation": "삭제 뒤 큐가 남았는지 묻는 결과라 빈 큐는 false입니다. 삭제 실패라는 뜻은 아닙니다."
+      },
+      {
+        "prompt": "기존 최소와 같은 expires를 더하면 새 최소로 보고할까요?",
+        "options": [
+          "아니요. 같은 값은 오른쪽 길로 갑니다.",
+          "네. 같은 값은 늘 왼쪽으로 넣습니다."
+        ],
+        "explanation": "엄격한 < 비교에서 같은 값은 false이며 오른쪽 이동 시 leftmost 표시가 false가 됩니다."
+      },
+      {
+        "prompt": "WARN_ON_ONCE가 중복 삽입을 안전하게 막을까요?",
+        "options": [
+          "네. 즉시 false로 반환합니다.",
+          "아니요. 경고 뒤 삽입 호출이 계속됩니다."
+        ],
+        "explanation": "진단 경고일 뿐 그 조건의 조기 반환이 없습니다. 호출자는 연결 상태 약속을 지켜야 합니다."
+      }
+    ]
+  },
+  "file-b526d3f9ab54c1b5": {
+    "story": "같은 교복을 입었다고 같은 학생은 아닙니다. Clang도 GCC와 호환되는 이름표를 보여 줄 수 있어 더 구체적인 이름표부터 확인해야 합니다.",
+    "meaning": "컴파일러 전처리로 종류를 찾고 버전을 비교용 정수로 바꾸는 shell 흐름을 설명합니다.",
+    "exercise": "13.0.1과5.1.0을 식에 넣고 현재 버전이 최소 버전과 같을 때 비교 결과를 확인하세요.",
+    "guide": [
+      "컴파일러는 소스를 기계 코드로 바꾸는 도구이고 전처리는 그 전에 매크로·조건을 처리하는 단계입니다. 이 검사는 전처리 결과만 읽습니다.",
+      "Clang을 먼저, GCC를 다음에 확인합니다. 호환 이름표만 보고 종류를 고르면 실제 도구를 잘못 알아볼 수 있습니다.",
+      "버전은 글자 순서 대신 major*10000+minor*100+patch로 비교합니다. 여러 단어의 명령 인자는 \"$@\"로 전달하며 문자열을 eval하지 않습니다."
+    ],
+    "goal": "컴파일러 전처리로 종류를 찾고 버전을 비교용 정수로 바꾸는 shell 흐름을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "입력과 probe",
+        "text": "#!/bin/sh, GPL-2.0과 set -e 뒤 get_c_compiler_info를 정의합니다. heredoc은 여러 줄의 입력 글을 만드는 방식이며 C 전처리 코드를 \"$@\" -E -P -x c -로 보냅니다. -E는 전처리만, -P는 줄 위치 표시 제거, -x c는 C 입력, 마지막 -는 표준 입력을 뜻합니다. 도구의 오류 글은 버립니다. 완성한 커널 프로그램을 실행하는 검사는 아닙니다."
+      },
+      {
+        "title": "Clang 우선 검사",
+        "text": "__clang__부터 확인하여 Clang과 major·minor·patchlevel을 출력합니다. 그다음 __GNUC__이면 GCC와 세 버전 값을, 둘 다 아니면 unknown을 씁니다. Clang도 GCC 호환 매크로를 줄 수 있으므로 순서를 바꾸면 오인할 수 있습니다. --version의 배포판 문장을 직접 해석하는 방식은 아닙니다."
+      },
+      {
+        "title": "원래 명령과 새 위치 인수",
+        "text": "orig_args에 원래 인수 표현을 보관하고 probe 결과를 set --로 새 위치 인수에 나누어 name=$1로 읽습니다. \"$@\"는 각 인자를 지켜 전달하므로 ccache와 gcc를 따로 준 명령도 호출합니다. 한 문자열을 eval로 다시 실행하는 구조는 아닙니다. 명령 치환이 set의 인자이므로 set -e 하나만으로 모든 probe 실패가 즉시 전달된다고 확대하지 않습니다."
+      },
+      {
+        "title": "최소 버전 선택과 알 수 없는 도구",
+        "text": "같은 스크립트 디렉터리의 min-tool-version.sh에서 GCC는 gcc, Clang은 llvm 최소 기준을 받습니다. version은 $2.$3.$4로 만듭니다. 다른 이름이면 원래 명령과 unknown C compiler를 표준 오류(stderr)에 쓰고 상태1로 끝납니다. 이 매크로 판별 범위와 모든 컴파일러의 실제 지원 가능성은 별개입니다."
+      },
+      {
+        "title": "수치 버전 표현",
+        "text": "get_canonical_version은 IFS=.로 점을 구분자로 정해 세 값을 나누고 10000*첫째+100*둘째+셋째를 계산합니다. 13.0.1은130001, 5.1.0은50100입니다. 주석의5~6자리는 그 버전 범위의 설명이지 printf로 자릿수를 고정한 것이 아닙니다. probe가 세 값을 준다는 약속이며 링커 스크립트처럼 빠진 필드를0으로 채우는 코드는 없습니다."
+      },
+      {
+        "title": "경계 비교와 반환",
+        "text": "현재 정수가 최소 정수보다 작다는 -lt 조건이면 현재·최소 버전을 오류 블록으로 stderr에 쓰고1로 끝납니다. 같은 값은 허용합니다. 통과하면 도구 이름과 정수 버전을 공백으로 나누어 stdout에 씁니다. 이것은 모든 커널 설정이 컴파일되는지 확인하는 전체 빌드가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "왜 Clang을 GCC 매크로보다 먼저 검사할까요?",
+        "options": [
+          "Clang도 GCC 호환 매크로를 줄 수 있어서입니다.",
+          "GCC는 전처리를 못 해서입니다."
+        ],
+        "explanation": "더 구체적인 식별을 먼저 합니다. __GNUC__만 있다고 곧바로 GCC로 판단하면 안 됩니다."
+      },
+      {
+        "prompt": "13.0.1의 비교용 정수는 무엇일까요?",
+        "options": [
+          "1301입니다.",
+          "130001입니다."
+        ],
+        "explanation": "13*10000+0*100+1입니다. 단순 글자 연결과는 다릅니다."
+      },
+      {
+        "prompt": "현재 버전이 최소와 같으면 어떻게 될까요?",
+        "options": [
+          "통과합니다.",
+          "반드시 실패합니다."
+        ],
+        "explanation": "거절 조건은 더 작다는 -lt입니다. 같은 경계는 포함합니다."
+      },
+      {
+        "prompt": "이 probe가 컴파일러에 요청하는 핵심 작업은 무엇일까요?",
+        "options": [
+          "완성한 커널 이미지 실행입니다.",
+          "표준 입력 C 코드의 전처리입니다."
+        ],
+        "explanation": "-E -P -x c -로 버전 매크로를 얻습니다. 다른 CPU용 컴파일러가 만든 프로그램을 호스트에서 실행할 필요가 없습니다."
+      }
+    ]
+  },
+  "file-5e8413991ffb4b53": {
+    "story": "버전 이름 뒤의 배포판 꼬리표까지 버전 숫자로 읽으면 비교가 틀릴 수 있습니다. 이 스크립트는 링커의 첫 안내 줄에서 종류와 숫자를 골라 정리합니다.",
+    "meaning": "링커 첫 줄의 토큰 분석, GNU gold 거절, 접미사·누락 필드 처리와 최소 버전 비교를 설명합니다.",
+    "exercise": "2.34-4.fc32와2.35.1.20201116을 정리하고 각각 비교용 숫자가 무엇인지 계산하세요.",
+    "guide": [
+      "링커는 컴파일한 여러 조각을 하나로 연결하는 도구입니다. 이 검사는 BFD·LLD·gold의 정해진 출력 모양을 나누어 읽습니다.",
+      "IFS는 shell이 글을 나누는 구분자입니다. 먼저 줄바꿈으로 출력 첫 줄을 고르고, 그 줄을 공백 토큰으로 나누어 도구 이름을 찾습니다.",
+      "숫자와 점 뒤의 배포판 꼬리를 제거하고 빠진 둘째·셋째 버전은0으로 봅니다. 도구 종류 지원과 최소 버전 충족은 별도 조건입니다."
+    ],
+    "goal": "링커 첫 줄의 토큰 분석, GNU gold 거절, 접미사·누락 필드 처리와 최소 버전 비교를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 입력과 첫 줄",
+        "text": "#!/bin/sh, GPL-2.0, set -e를 사용합니다. orig_args로 원래 인수를 보관한 뒤 IFS를 줄바꿈으로 바꾸고 LC_ALL=C \"$@\" --version 결과를 위치 인수로 나눕니다. LC_ALL=C는 출력 언어 환경을 일정하게 합니다. 다시 IFS를 공백으로 두고 첫 줄 $1만 나눕니다. 전체 모든 줄에서 무작정 LLD를 찾지는 않으며 명령 치환 실패와 set의 종료 상태도 구분해야 합니다."
+      },
+      {
+        "title": "GNU BFD와 gold",
+        "text": "첫 두 단어가 GNU ld면 마지막 단어를 version으로 고르고 최소 기준은 binutils, 결과 이름은 BFD, 설명 이름은 GNU ld입니다. GNU gold이면 커널 본체를 연결하지 못해 지원하지 않는다는 오류를 쓰고1로 끝납니다. gold가 binutils 계열이어도 BFD와 같은 통과 길로 보내지 않습니다."
+      },
+      {
+        "title": "LLD 토큰 탐색",
+        "text": "나머지는 인수가 하나보다 많고 첫 토큰이 LLD가 아닌 동안 shift로 앞 토큰을 버립니다. LLD를 찾으면 바로 다음 값을 버전으로, llvm을 최소 기준으로 씁니다. 못 찾으면 원래 명령과 unknown linker를 stderr에 쓰고1입니다. 첫 줄 앞에 배포판 이름이 있어도 찾을 수 있지만 모든 임의 문장을 이해하는 해석기는 아닙니다."
+      },
+      {
+        "title": "배포판 접미사 제거",
+        "text": "${version%%[!0-9.]*}는 숫자·점이 아닌 첫 문자부터 뒤를 잘라 냅니다. 2.34-4.fc32는2.34가 됩니다. 처음부터 숫자가 아니면 빈 결과가 될 수 있으며 자세한 형식 검사는 없습니다. 시험판 버전의 우선순위나 부호까지 해석하는 일반 semantic version 도구가 아닙니다."
+      },
+      {
+        "title": "누락 구성요소와 추가 날짜",
+        "text": "점으로 나눈 버전을 10000*첫째+100*둘째+셋째로 계산합니다. 둘째·셋째가 없거나 비면0이고 넷째부터는 무시합니다. 따라서2.35.1.20201116은23501, 2.35는23500입니다. 첫째까지 아무 기본값으로 대체하는 코드는 아닙니다."
+      },
+      {
+        "title": "최소 버전과 출력",
+        "text": "같은 디렉터리 min-tool-version.sh의 최소값과 현재값을 -lt로 비교합니다. 오래되면 현재·최소 진단 후1, 아니면 BFD 또는 LLD와 정수를 출력합니다. 도구를 업그레이드하거나 선택을 바꾸지는 않습니다. 함수·세 도구 분기·정리·검사를 읽은 것이며 실제 도구별 실행 검증 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "GNU gold의 버전이 아주 높으면 어떻게 할까요?",
+        "options": [
+          "지원하지 않는다고 종료합니다.",
+          "BFD로 이름을 바꾸어 통과합니다."
+        ],
+        "explanation": "버전 비교 전에 별도 거절합니다. 도구 종류와 버전은 다른 조건입니다."
+      },
+      {
+        "prompt": "2.35.1.20201116의 정규화 숫자는 무엇일까요?",
+        "options": [
+          "2350120201116입니다.",
+          "23501입니다."
+        ],
+        "explanation": "넷째 날짜 표시는 무시하고 앞 세 구성요소만 계산합니다."
+      },
+      {
+        "prompt": "2.34-4.fc32에서 비교할 버전 부분은 무엇일까요?",
+        "options": [
+          "2.34입니다.",
+          "4.fc32입니다."
+        ],
+        "explanation": "숫자·점 아닌 첫 문자 뒤를 제거합니다. 배포판 패키지 릴리스 번호를 patch로 쓰지 않습니다."
+      },
+      {
+        "prompt": "LLD는 어디서 찾을까요?",
+        "options": [
+          "파일시스템의 모든 링커 실행 파일입니다.",
+          "첫 --version 출력 줄의 공백 토큰입니다."
+        ],
+        "explanation": "첫 줄을 다시 나눈 토큰에서 찾습니다. 설치 도구 목록을 탐색하는 스크립트가 아닙니다."
+      }
+    ]
+  },
+  "file-0d8da9f0efdb0cb8": {
+    "story": "놀이기구 안내판의 최소 키와 내 키를 재는 것은 다른 일입니다. 이 스크립트는 도구를 실행해 버전을 재지 않고 해당 소스가 요구하는 최소 기준만 알려 줍니다.",
+    "meaning": "고정 Linux v6.12의 최소 도구 표와 ARCH·SRCARCH 예외를 구분합니다.",
+    "exercise": "gcc의 parisc64 조건과 llvm의 s390·loongarch 조건에서 읽는 환경 변수와 출력 버전을 적으세요.",
+    "guide": [
+      "최소 버전은 이 고정 소스와 대상 아키텍처의 정책입니다. 오늘 설치된 버전이나 최신 커널의 요구사항으로 일반화하지 않습니다.",
+      "case는 입력 도구 이름별 갈림길입니다. 먼저 인수가 정확히 하나인지 확인하고 지원하지 않는 이름은 오류로 끝냅니다.",
+      "GCC 예외는 ARCH, LLVM 예외는 SRCARCH를 봅니다. 비슷한 변수 이름이지만 실제 코드의 선택 기준을 그대로 읽어야 합니다."
+    ],
+    "goal": "고정 Linux v6.12의 최소 도구 표와 ARCH·SRCARCH 예외를 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "입력 개수와 범위",
+        "text": "#!/bin/sh, GPL-2.0-only와 set -e 뒤 인수가 정확히 하나인지 봅니다. 아니면 사용법을 stderr에 쓰고 상태 1입니다. 주석은 최소 버전을 높이면 Documentation/process/changes.rst도 갱신하라고 합니다. 아래 수치는 고정 Linux v6.12 원본의 정책이지 모든 최신 커널의 공통 기준이 아닙니다."
+      },
+      {
+        "title": "Binutils와 GCC",
+        "text": "binutils는 2.25.0입니다. gcc는 ARCH가 정확히 parisc64일 때 12.0.0, 나머지는 5.1.0입니다. 이 분기는 SRCARCH가 아닌 ARCH를 읽습니다. 실제 gcc를 실행하거나 설치를 확인하지 않고 기준 글자만 출력합니다."
+      },
+      {
+        "title": "LLVM의 세 경로",
+        "text": "llvm은 SRCARCH=s390이면 15.0.0, loongarch이면 18.0.0, 그 외에는 13.0.1입니다. if·elif·else이므로 예외는 해당 아키텍처에만 적용됩니다. cc-version은 이 기준을 Clang에, ld-version은 LLD에 사용합니다."
+      },
+      {
+        "title": "Rust와 bindgen·알 수 없는 이름",
+        "text": "rustc는 1.78.0, bindgen은 0.65.1입니다. 다른 이름은 unknown tool을 쓰고 1로 끝납니다. 결과는 점으로 나눈 버전 문자열이며 정규화 정수 계산은 하지 않습니다. 다섯 도구와 아키텍처 예외를 읽은 것으로 실제 도구 묶음의 설치 상태를 검사한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "GCC의 parisc64 예외는 무엇을 읽을까요?",
+        "options": [
+          "ARCH입니다.",
+          "SRCARCH입니다."
+        ],
+        "explanation": "GCC는 ARCH, LLVM은 SRCARCH입니다. 변수 이름을 구분합니다."
+      },
+      {
+        "prompt": "이 v6.12 원본에서 loongarch의 LLVM 최소 버전은 무엇일까요?",
+        "options": [
+          "다른 곳과 모두 같은 13.0.1입니다.",
+          "18.0.0입니다."
+        ],
+        "explanation": "SRCARCH=loongarch인 별도 elif가 있습니다. 고정 원본 기준의 값입니다."
+      },
+      {
+        "prompt": "지원 도구 이름을 주면 스크립트가 하는 일은 무엇일까요?",
+        "options": [
+          "요구 최소값을 골라 출력합니다.",
+          "도구를 실행해 설치 버전과 비교합니다."
+        ],
+        "explanation": "현재 버전을 재는 것은 다른 probe의 일입니다. 이 파일은 정책 값을 제공합니다."
+      }
+    ]
+  },
+  "file-817c0e54444488f1": {
+    "story": "이름표 상자를 크게 만들면서 옛 상자 모양도 남겨 두면 오래된 프로그램이 계속 읽을 수 있습니다. UTS 사용자 구조체는 이름 정보를 세 세대의 고정 배열로 나눠 둡니다.",
+    "meaning": "oldold·old·new UTS 구조체의 필드·배열 길이와 문자열 종료 공간을 비교합니다.",
+    "exercise": "각 구조체의 배열 수와 길이를 곱하고, 새 구조체에 추가된 필드를 찾아 보세요.",
+    "guide": [
+      "ABI는 프로그램과 커널이 데이터 모양을 약속하는 방식입니다. 옛 구조체를 유지하고 새 구조체를 따로 만들면 기존 프로그램의 저장 배치를 지킬 수 있습니다.",
+      "char 배열은 문자를 담을 바이트 공간입니다. 끝을 나타내는 NUL 한 칸이 필요하지만 배열 선언만으로 종료 문자가 저절로 써지지는 않습니다.",
+      "new_utsname은 다섯 기존 이름 정보에 domainname을 더합니다. 커널 내부의 소유권 자료가 아니라 사용자에게 보낼 이름 값 자체입니다."
+    ],
+    "goal": "oldold·old·new UTS 구조체의 필드·배열 길이와 문자열 종료 공간을 비교합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 WITH Linux-syscall-note와 guard 안에 길이 상수 두 개, 구조체 세 개가 있습니다. 외부 헤더 포함·함수·할당·문자열 복사는 없습니다. 사용자 공간과 함께 읽는 데이터 배치를 선언합니다."
+      },
+      {
+        "title": "가장 오래된 구조체",
+        "text": "__OLD_UTS_LEN은 8이고 oldold_utsname은 sysname(운영체제 이름), nodename(호스트 이름), release(릴리스), version(빌드 버전), machine(기계 종류)의 char[9] 다섯 칸입니다. 배열에는 상수 대신 숫자 9를 직접 씁니다. 8바이트 문자와 끝 표시 공간을 담을 수 있지만 선언이 NUL을 쓰지는 않습니다."
+      },
+      {
+        "title": "이전 확장 구조체",
+        "text": "__NEW_UTS_LEN은 64이고 old_utsname은 같은 다섯 필드를 char[65]로 둡니다. old라고 항상 9바이트 칸은 아닙니다. char 배열만 있어 보통 Linux C ABI에서 oldold는 5*9=45바이트, old는 5*65=325바이트입니다."
+      },
+      {
+        "title": "현재 구조체와 domainname",
+        "text": "new_utsname은 기존 다섯 필드 뒤 domainname을 추가하고 길이를 모두 __NEW_UTS_LEN+1로 씁니다. 6*65=390바이트입니다. nodename과 domainname은 다른 칸이며 이 선언만으로 DNS 설정이나 네트워크 주소가 바뀌지 않습니다. 포인터나 가변 배열 대신 문자 값 자체를 담습니다."
+      },
+      {
+        "title": "검토 범위",
+        "text": "상수와 모든 필드의 순서·길이를 읽었습니다. 각 syscall이 얼마를 복사하는지, 호환 아키텍처가 값을 어떻게 바꾸는지는 다른 구현에서 확인합니다. 배열 공간만으로 실제 글의 길이나 NUL 종료 상태가 보장되지는 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "old_utsname과 new_utsname의 필드 차이는 무엇일까요?",
+        "options": [
+          "new에 domainname이 추가됩니다.",
+          "new에서 machine이 없어집니다."
+        ],
+        "explanation": "기존 다섯 필드를 유지하고 여섯째를 더합니다. 각각 65바이트입니다."
+      },
+      {
+        "prompt": "new_utsname 배열 총 크기는 얼마일까요?",
+        "options": [
+          "384바이트입니다.",
+          "390바이트입니다."
+        ],
+        "explanation": "끝 공간을 포함해 칸마다 65바이트이므로 6*65=390입니다."
+      },
+      {
+        "prompt": "char[65]만 선언하면 NUL도 자동으로 써질까요?",
+        "options": [
+          "아니요. 초기화·복사 코드가 해야 합니다.",
+          "네. char 배열은 언제나 자동 종료됩니다."
+        ],
+        "explanation": "크기는 공간을 제공할 뿐 내용을 만들어 주지는 않습니다."
+      }
+    ]
+  },
+  "file-b64aa51222a0f36e": {
+    "story": "서랍 주소를 안다고 그 서랍을 빌린 사람 수가 늘지는 않습니다. UTS 헤더도 이름 데이터 주소 얻기, 사용 참조 확보, 데이터 잠금을 별도로 다룹니다.",
+    "meaning": "UTS namespace의 내부 상태와 사용자 이름 구조체, 참조 관리와 조건별 stub을 구분합니다.",
+    "exercise": "utsname()과 get_uts_ns() 본문을 비교하여 어느 쪽이 참조 수를 바꾸는지 확인하세요.",
+    "guide": [
+      "UTS namespace는 실행 환경별 호스트·도메인 이름 관점입니다. 내부 객체에는 사용자에게 보일 name 외에도 소유자·자원 회계·공통 namespace 정보가 있습니다.",
+      "참조 수는 객체가 언제 해제될지 관리하고 잠금은 이름의 동시 읽기·쓰기를 조정합니다. 포인터를 얻는 함수가 둘을 자동으로 수행하지는 않습니다.",
+      "UTS_NS를 끈 경우 새 격리 요청은 오류가 됩니다. PROC_SYSCTL 통지 설정은 별개이므로 서로 같은 기능 스위치로 읽지 않습니다."
+    ],
+    "goal": "UTS namespace의 내부 상태와 사용자 이름 구조체, 참조 관리와 조건별 stub을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "포함과 proc 항목 enum",
+        "text": "GPL-2.0과 guard 안에서 sched·nsproxy·ns_common·err·UAPI utsname을 포함합니다. uts_proc enum은 ARCH, OSTYPE, OSRELEASE, VERSION, HOSTNAME, DOMAINNAME 순서로 0부터 셉니다. 이 번호 목록은 new_utsname의 메모리 필드 순서가 아니므로 바이트 위치처럼 쓰면 안 됩니다."
+      },
+      {
+        "title": "UTS 객체 전체",
+        "text": "uts_namespace는 new_utsname name, 소유자 user_ns, 개수 회계 ucounts, 공통 정보 ns를 담고 __randomize_layout 표시가 있습니다. init_user_ns와 init_uts_ns는 extern 선언입니다. 사용자 ABI 자료는 name 부분이며 소유자나 참조 수까지 uname 결과로 복사하는 구조가 아닙니다."
+      },
+      {
+        "title": "활성 설정의 수명 API",
+        "text": "CONFIG_UTS_NS가 켜지면 get_uts_ns는 count를 하나 늘리고 void를 반환합니다. put_uts_ns는 감소 뒤 0이면 free_uts_ns를 부릅니다. copy_utsname·free_uts_ns·uts_ns_init의 본문은 외부에 있습니다. 활성 get/put은 NULL을 검사하지 않으며 참조 수가 name의 동시 수정을 잠그는 것도 아닙니다."
+      },
+      {
+        "title": "비활성 설정",
+        "text": "꺼진 경우 get·put·init은 빈 함수입니다. copy_utsname은 CLONE_NEWUTS가 있으면 오류 포인터 ERR_PTR(-EINVAL), 없으면 old_ns 그대로를 줍니다. 참조를 늘리지 않으며 지원하지 않는 새 격리를 성공으로 가장하지 않습니다. 다른 표시가 있다는 이유만으로 모두 거절하는 코드는 아닙니다."
+      },
+      {
+        "title": "Sysctl 통지 설정",
+        "text": "CONFIG_PROC_SYSCTL이 켜지면 uts_proc_notify(enum uts_proc)를 외부 선언하고 아니면 빈 inline입니다. sysctl은 커널 설정 정보를 읽고 쓰는 창구이며 이 통지 조건은 UTS_NS 복제 지원 조건과 다른 구역입니다."
+      },
+      {
+        "title": "현재 값과 초기 값 접근",
+        "text": "utsname()은 현재 task의 &current->nsproxy->uts_ns->name, init_utsname()은 &init_uts_ns.name을 줍니다. 새 복사본을 만들거나 get_uts_ns를 부르지 않고 내부 주소만 제공합니다. 마지막 uts_sem은 읽기·쓰기 세마포어라는 잠금의 extern 선언입니다. getter 자체가 잠그지 않으므로 동기화는 사용하는 문맥에서 확인해야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "UTS_NS가 꺼져 있는데 CLONE_NEWUTS를 요청하면 무엇을 줄까요?",
+        "options": [
+          "ERR_PTR(-EINVAL)입니다.",
+          "항상 init_uts_ns를 새 객체처럼 줍니다."
+        ],
+        "explanation": "stub도 요청 표시를 확인해 지원하지 않는 새 격리를 명시적으로 거절합니다."
+      },
+      {
+        "prompt": "utsname()은 참조 수를 늘릴까요?",
+        "options": [
+          "네. get_uts_ns를 부릅니다.",
+          "아니요. 현재 객체의 name 주소만 줍니다."
+        ],
+        "explanation": "본문은 주소 계산뿐입니다. 접근과 수명 참조 확보는 다릅니다."
+      },
+      {
+        "prompt": "UTS_PROC_ARCH=0이면 name 첫 칸이 machine이라는 뜻일까요?",
+        "options": [
+          "아니요. enum 번호와 구조체 배치는 별개입니다.",
+          "네. enum은 바이트 위치입니다."
+        ],
+        "explanation": "사용자 구조체 첫 필드는 sysname입니다. 항목 분류 번호를 메모리 순서로 읽지 않습니다."
+      },
+      {
+        "prompt": "활성 put_uts_ns가 마지막 참조를 놓으면 무엇을 부를까요?",
+        "options": [
+          "uts_proc_notify입니다.",
+          "free_uts_ns입니다."
+        ],
+        "explanation": "refcount_dec_and_test가 참이면 해제합니다. 설정 통지와 객체 수명 관리는 다릅니다."
+      }
+    ]
+  },
+  "file-0e4f8603ef816c43": {
+    "story": "이름표를 복제하려면 읽는 동안 원본이 바뀌지 않게 하고, 새 상자를 만들다가 실패하면 받은 재료를 돌려줘야 합니다. UTS 복제는 이름 복사와 객체 수명을 함께 준비합니다.",
+    "meaning": "UTS namespace의 회계·할당·복제·설치·해제와 usercopy 허용 구역을 설명합니다.",
+    "exercise": "새 inode 번호 할당이 실패한 경우 무엇을 돌려주는지, 같은 namespace를 다시 설치할 때 왜 get을 먼저 하는지 추적하세요.",
+    "guide": [
+      "복제는 문자열 한 개 복사가 아니라 이름 전체를 일관되게 읽고 새 객체의 개수 회계·번호·참조를 준비하는 절차입니다.",
+      "read semaphore는 이름을 읽는 동안 작성자와 충돌하지 않게 하는 읽기 잠금입니다. 참조 수와 사용자별 자원 개수는 별개의 관리 장치입니다.",
+      "설치 때는 새 객체 참조를 먼저 얻고 옛 참조를 놓습니다. 같은 객체로 교체할 때도 중간에 해제되지 않게 순서를 지킵니다."
+    ],
+    "goal": "UTS namespace의 회계·할당·복제·설치·해제와 usercopy 허용 구역을 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성과 cache",
+        "text": "GPL-2.0-only와 export·uts·utsname·err·slab·cred·user namespace·proc namespace·task 헤더가 있습니다. uts_ns_cache는 같은 크기 객체를 빠르게 할당하는 slab 캐시 포인터이고 __ro_after_init로 초기화 뒤 읽기 전용입니다. create_uts_ns는 GFP_KERNEL로 객체를 얻으면 참조 수만 1로 둡니다. 전체를 0으로 채우는 할당은 아닙니다."
+      },
+      {
+        "title": "개수 회계와 복제 시작",
+        "text": "inc_uts_namespaces는 소유자 user namespace, 현재 유효 사용자 번호, UCOUNT_UTS_NAMESPACES로 개수 회계를 얻고 dec는 같은 종류를 줄입니다. clone은 회계 실패에 -ENOSPC, 객체 실패에 -ENOMEM을 씁니다. 다음 ns_alloc_inum의 번호 할당 오류는 그대로 보존합니다. 함수 위의 짧은 ENOMEM 주석만 보고 모든 실패를 같다고 말하지 않습니다."
+      },
+      {
+        "title": "성공 설정과 이름 복사",
+        "text": "번호를 얻으면 ucounts와 utsns_operations를 연결합니다. uts_sem의 down_read 안에서 old_ns->name 전체를 memcpy하고 get_user_ns로 소유자 참조를 얻은 뒤 up_read합니다. nodename만이 아니라 new_utsname 전체를 복제합니다. 원본을 읽는 작업이므로 읽기 잠금이며 실제 hostname 변경 syscall 본문은 여기 없습니다."
+      },
+      {
+        "title": "실패 자원 회수",
+        "text": "번호 할당 실패면 slab 객체를 돌려주고 개수 회계를 줄입니다. 객체 실패면 회계만 줄이고, 회계 실패면 곧바로 ERR_PTR(err)입니다. 소유자 참조는 실패 가능한 준비 뒤에 얻으므로 이 실패 라벨에 put_user_ns가 없습니다. 얻지 않은 자원을 돌려주지 않고 얻은 것만 역순으로 회수합니다."
+      },
+      {
+        "title": "공유와 복제의 임시 참조",
+        "text": "copy_utsname은 old_ns가 없는 잘못된 조건을 BUG_ON으로 확인한 뒤 먼저 참조를 얻습니다. CLONE_NEWUTS가 없으면 늘어난 참조와 함께 같은 객체를 줍니다. 있으면 복제를 시도하고 성공·실패 모두에서 old_ns를 put한 뒤 결과를 줍니다. 실패 시 기존 사용자의 참조를 빼앗는 것이 아니라 이 함수가 잠시 늘린 것을 균형 있게 놓습니다."
+      },
+      {
+        "title": "해제와 공통 객체 변환",
+        "text": "free_uts_ns는 개수 회계 감소, 소유자 참조 놓기, inode 번호 해제, slab 반환 순입니다. 참조 수 감소는 헤더의 put 담당입니다. to_uts_ns는 container_of로 안쪽 ns_common에서 바깥 uts_namespace 주소를 되찾습니다. 새 공통 객체를 할당하거나 데이터를 복사하는 변환이 아닙니다."
+      },
+      {
+        "title": "Task에서 참조 얻기",
+        "text": "utsns_get은 task_lock 안에서 nsproxy가 있는지 보고 uts_ns를 선택해 참조를 얻은 뒤 잠금을 풉니다. 결과는 &ns->ns 또는 NULL입니다. 포인터를 확인한 동안 수명 참조까지 확보해 객체가 사라지는 일을 막습니다. utsns_put은 바깥 객체로 되찾아 put_uts_ns에 맡깁니다."
+      },
+      {
+        "title": "설치 권한과 교체 순서",
+        "text": "utsns_install은 대상 소유자와 nsset->cred->user_ns 둘 다 CAP_SYS_ADMIN 관리 권한이 있는지 봅니다. 하나라도 없으면 -EPERM입니다. 통과하면 새 참조 get→준비 proxy의 옛 참조 put→포인터 대입 순입니다. 같은 객체를 다시 설치할 때도 먼저 수명을 확보하는 순서가 중요합니다. 준비 중인 nsset을 바꾸며 현재 task 전체 proxy를 직접 전환하지 않습니다."
+      },
+      {
+        "title": "Owner와 operation 테이블",
+        "text": "utsns_owner는 소유자 주소를 줍니다. 동작표 utsns_operations는 name=uts, type=CLONE_NEWUTS, get·put·install·owner를 연결합니다. real_ns_name과 get_parent는 지정하지 않아 NULL입니다. 없는 부모 조회 콜백을 가정하면 namespace 파일의 PARENT 요청 동작도 잘못 이해하게 됩니다."
+      },
+      {
+        "title": "Usercopy cache 초기화",
+        "text": "uts_ns_init은 kmem_cache_create_usercopy에 전체 객체 크기, 정렬값 0, SLAB_PANIC|SLAB_ACCOUNT를 줍니다. 사용자 복사 허용 부분은 name의 offsetof 위치에서 name의 sizeof_field 길이뿐입니다. 마지막 생성자 ctor는 NULL입니다. 객체 전체를 사용자 자료로 허용하지 않습니다. offsetof를 써 구조체 배치가 달라져도 실제 name 위치를 따릅니다."
+      },
+      {
+        "title": "검토 범위",
+        "text": "회계·생성·복제·공유·해제·조회·설치·소유자·동작표·캐시 초기화를 모두 읽습니다. 이름 동시 접근 잠금, 객체 수명 참조, 사용자별 자원 회계는 다른 장치입니다. 실제 clone·setns나 일부러 할당을 실패시키는 실험을 실행한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "namespace 개수 회계를 얻지 못하면 clone 오류는 무엇일까요?",
+        "options": [
+          "-ENOSPC입니다.",
+          "항상 -ENOMEM입니다."
+        ],
+        "explanation": "처음 err는 ENOSPC이고 회계 성공 뒤 ENOMEM으로 바뀝니다. 실제 분기를 봅니다."
+      },
+      {
+        "prompt": "이름 memcpy를 보호하는 것은 무엇일까요?",
+        "options": [
+          "uts_sem의 쓰기 잠금입니다.",
+          "uts_sem의 읽기 잠금입니다."
+        ],
+        "explanation": "기존 이름을 읽어 새 객체에 복사하므로 down_read와 up_read를 사용합니다."
+      },
+      {
+        "prompt": "NEWUTS 표시가 없으면 copy_utsname은 무엇을 줄까요?",
+        "options": [
+          "참조를 하나 늘린 기존 객체입니다.",
+          "항상 새 독립 객체입니다."
+        ],
+        "explanation": "표시 검사 전 get을 합니다. 공유 길은 그 참조를 결과 계약으로 넘깁니다."
+      },
+      {
+        "prompt": "설치에서 get과 옛 put의 순서는 무엇일까요?",
+        "options": [
+          "옛 참조를 먼저 놓고 새 객체를 사용합니다.",
+          "새 참조를 얻고 옛 참조를 놓습니다."
+        ],
+        "explanation": "같은 객체를 다시 설치해도 중간에 해제되지 않게 먼저 보유합니다."
+      },
+      {
+        "prompt": "UTS cache의 사용자 복사 허용 부분은 무엇일까요?",
+        "options": [
+          "name 필드 구역입니다.",
+          "소유자·회계를 포함한 전체 객체입니다."
+        ],
+        "explanation": "위치와 길이를 name으로 지정합니다. 공개 데이터와 내부 소유권 정보는 다릅니다."
+      },
+      {
+        "prompt": "utsns_operations에는 get_parent가 있을까요?",
+        "options": [
+          "네. 항상 init_uts_ns를 줍니다.",
+          "아니요. 지정하지 않아 NULL입니다."
+        ],
+        "explanation": "실제 연결은 get·put·install·owner뿐입니다. 없는 계층 기능을 추측하지 않습니다."
+      }
+    ]
+  },
+  "file-faaf186f65d4e85a": {
+    "story": "원본 글을 복사해 고친 뒤 다시 붙이면 잠금 시간을 줄일 수 있습니다. 하지만 두 사람이 같은 옛 글을 고치면 나중에 붙인 글이 앞사람의 수정을 덮을 수 있습니다.",
+    "meaning": "UTS sysctl의 현재 namespace 주소 계산, 임시 문자열 처리, 부분 쓰기 경쟁과 통지 순서를 설명합니다.",
+    "exercise": "두 writer가 같은 문자열의 다른 부분을 고치는 예를 그리고, proc_dostring 오류 뒤 write 분기가 실행되는지 본문에서 확인하세요.",
+    "guide": [
+      "sysctl은 커널 설정을 읽고 쓰는 창구입니다. 테이블은 초기 UTS 객체의 필드 주소를 기준으로 기록하지만 실제 접근은 현재 task의 namespace에 맞춥니다.",
+      "잠금 아래 65바이트를 복사한 뒤 잠금 밖에서 문자열을 처리하고, 쓰기면 다시 잠금 아래 붙입니다. 각 복사 보호와 전체 읽기·수정·쓰기의 원자성은 다릅니다.",
+      "함수의 오류 반환과 부수 동작 여부는 별개입니다. 후속 분기가 r==0인지 write만 보는지 실제 조건을 확인해야 합니다."
+    ],
+    "goal": "UTS sysctl의 현재 namespace 주소 계산, 임시 문자열 처리, 부분 쓰기 경쟁과 통지 순서를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 구성과 설정 분기",
+        "text": "GPL-2.0-only 파일은 export·uts·utsname·random·sysctl·wait·rwsem을 포함합니다. CONFIG_PROC_SYSCTL이면 get_uts와 문자열 도우미를 만들고 아니면 proc_do_uts_string을 NULL 매크로로 둡니다. 항목표·poll 객체·등록 함수는 조건 밖이므로 비활성이라고 파일 전체가 사라지지는 않습니다."
+      },
+      {
+        "title": "현재 namespace 필드 주소 계산",
+        "text": "get_uts는 table->data에서 init_uts_ns 시작 주소를 빼 필드의 상대 바이트 위치를 얻습니다. 그 위치를 현재 task의 uts_ns 시작 주소에 더합니다. 초기 객체는 위치를 알아내는 기준일 뿐 실제 대상은 현재 객체입니다. 숫자를 고정해서 쓰지 않지만 테이블이 같은 구조체 안의 올바른 필드를 가리킨다는 약속에 의존합니다."
+      },
+      {
+        "title": "지역 ctl_table과 65바이트 버퍼",
+        "text": "문자열 도우미는 원본 ctl_table을 지역 uts_table에 통째로 복사하고 data만 char tmp_data[65]로 바꿉니다. 원본 공유 테이블의 포인터를 task마다 고치지 않습니다. 길이·권한 같은 설정은 복사한 채 기존 proc_dostring을 임시 버퍼에 재사용합니다."
+      },
+      {
+        "title": "읽기와 쓰기 모두 기존 값 복사",
+        "text": "uts_sem의 읽기 잠금 아래 현재 필드 65바이트를 tmp_data로 옮기고 풉니다. write 요청도 부분 쓰기에서 바꾸지 않을 부분을 남겨야 하므로 먼저 읽습니다. 그다음 잠금 없이 proc_dostring을 불러 r에 결과를 저장합니다. 사용자 문자열 처리 내내 잠금을 잡지는 않습니다."
+      },
+      {
+        "title": "쓰기 후속 처리와 반환 순서",
+        "text": "write이면 임시 버퍼를 add_device_randomness에 주고 쓰기 잠금 아래 전체 65바이트를 현재 필드에 돌려쓴 뒤 잠금을 풀고 poll 통지를 합니다. 조건은 write뿐이고 r==0 확인이 없습니다. 마지막에 r을 반환하므로 문자열 함수가 오류여도 후속 복사·통지가 무조건 생략되지는 않습니다. randomness 호출이 특정 엔트로피 비트 수, 즉 일정한 새 무작위성 양을 보장한다고 확대하지 않습니다."
+      },
+      {
+        "title": "부분 쓰기 경합",
+        "text": "주석은 잠금을 놓는 사이 같은 항목의 0 아닌 위치에 두 writer가 쓰면 부정확할 수 있다고 설명합니다. 둘이 같은 옛 문자열을 복사해 각자 일부를 고친 뒤 전체를 돌려쓰면 나중 버퍼가 먼저 변경한 부분을 덮을 수 있습니다. 쓰기 잠금은 각 복사 순간만 보호하며 처음 읽기부터 끝 쓰기까지 하나로 묶지 않습니다."
+      },
+      {
+        "title": "여섯 테이블 항목과 순서",
+        "text": "표의 순서는 arch→machine, ostype→sysname, osrelease→release, version→version, hostname→nodename, domainname→domainname입니다. data는 초기 객체의 해당 배열, maxlen은 그 sizeof입니다. 앞 네 항목은 0444, 뒤 둘은 0644이며 같은 handler입니다. 주석은 표를 바꾸면 enum uts_proc도 같은 순서로 맞추라고 합니다."
+      },
+      {
+        "title": "Poll 객체와 외부 통지",
+        "text": "hostname_poll과 domainname_poll은 static DEFINE_CTL_TABLE_POLL로 만들고 뒤 두 항목에만 연결합니다. poll은 변경을 기다리는 쪽에 알리는 장치입니다. CONFIG_PROC_SYSCTL의 uts_proc_notify는 enum을 그대로 배열 index로 사용하고 통지합니다. 범위 검사·문자열 검색은 없으므로 호출자가 올바른 항목을 줘야 합니다. 이 정적 poll 객체를 namespace마다 새로 만든다고 추측하지 않습니다."
+      },
+      {
+        "title": "등록과 검토 범위",
+        "text": "utsname_sysctl_init은 register_sysctl(\"kernel\",표)를 부르고 결과 검사 없이 0입니다. device_initcall로 초기화에 연결합니다. 전체 항목·조건·도우미·등록을 읽은 범위이며 실제 사용자 권한 세부 정책과 문자열 해석은 다른 구현 책임입니다. 실제 부분 쓰기 경쟁을 측정한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "테이블이 init_uts_ns를 가리키면 모두 초기 이름만 읽을까요?",
+        "options": [
+          "아니요. 상대 필드 위치를 현재 UTS 객체에 적용합니다.",
+          "네. namespace는 무시합니다."
+        ],
+        "explanation": "기준 주소와 실제 접근 대상을 구분합니다. get_uts가 상대 위치를 옮깁니다."
+      },
+      {
+        "prompt": "write도 먼저 기존 문자열을 읽는 이유는 무엇일까요?",
+        "options": [
+          "문자열 handler를 부르지 않으려고 합니다.",
+          "부분 쓰기에서 바꾸지 않는 부분을 남기려고 합니다."
+        ],
+        "explanation": "임시 복사본을 proc_dostring이 처리합니다. 읽기·쓰기 모두 먼저 복사합니다."
+      },
+      {
+        "prompt": "proc_dostring이 오류면 후속 write 처리는 언제나 생략될까요?",
+        "options": [
+          "아니요. 조건은 r이 아니라 write만 봅니다.",
+          "네. if (r==0)이 있습니다."
+        ],
+        "explanation": "실제 코드는 if (write)입니다. 오류와 부수 동작 없음은 같은 말이 아닙니다."
+      },
+      {
+        "prompt": "쓰기 잠금이 있어도 부분 변경이 덮이는 이유는 무엇일까요?",
+        "options": [
+          "rwsem에는 쓰기 잠금이 없기 때문입니다.",
+          "처음 읽은 뒤 최종 쓰기까지 잠금을 유지하지 않기 때문입니다."
+        ],
+        "explanation": "개별 복사만 보호하며 사이에 지역 버퍼를 처리합니다. 전체 절차의 원자성과 다릅니다."
+      },
+      {
+        "prompt": "uts_proc_notify는 항목을 어떻게 찾을까요?",
+        "options": [
+          "enum을 배열 index로 바로 씁니다.",
+          "이름 문자열을 해시 검색합니다."
+        ],
+        "explanation": "범위 검사 없이 table[proc]를 쓰므로 enum과 표 순서를 맞춰야 합니다."
+      },
+      {
+        "prompt": "hostname과 앞 네 항목의 mode는 어떻게 다를까요?",
+        "options": [
+          "모두 0777입니다.",
+          "hostname은 0644, 앞 네 항목은 0444입니다."
+        ],
+        "explanation": "hostname·domainname에만 0644와 poll 포인터가 있습니다. 실제 접근 정책 전체를 이 숫자만으로 설명하지 않습니다."
+      }
+    ]
+  },
+  "file-32008a22abb9c5db": {
+    "story": "이름표에 빈칸이 있으면 기본 글을 채우되 이미 쓴 이름은 지우지 않을 수 있습니다. 이 헤더도 미리 정의되지 않은 UTS 이름에만 기본값을 줍니다.",
+    "meaning": "빌드 때의 기본 문자열 매크로와 실행 중 namespace 이름 변경을 구분합니다.",
+    "exercise": "UTS_SYSNAME만 미리 정의한 경우 나머지 두 #ifndef가 어떻게 처리되는지 따라가세요.",
+    "guide": [
+      "전처리 매크로는 코드를 만들기 전에 이름을 다른 토큰으로 바꾸는 규칙입니다. 실행 중 객체 데이터를 고치는 함수와는 다릅니다.",
+      "세 #ifndef는 각각 독립적입니다. 이미 정한 값은 남기고 미정의 항목만 기본값으로 채웁니다.",
+      "호스트 이름은 CONFIG_DEFAULT_HOSTNAME 설정을 참조합니다. 이 파일에 항상 localhost라는 값을 고정한 것은 아닙니다."
+    ],
+    "goal": "빌드 때의 기본 문자열 매크로와 실행 중 namespace 이름 변경을 구분합니다.",
+    "deep_dive": [
+      {
+        "title": "헤더 전체",
+        "text": "GPL-2.0과 중복 방지 guard 안에는 uname이 돌려줄 기본값이라는 설명과 세 조건부 매크로뿐입니다. 함수·객체·외부 include가 없습니다. release·version·machine의 기본값은 여기서 정하지 않습니다."
+      },
+      {
+        "title": "세 기본값과 독립 조건",
+        "text": "UTS_SYSNAME이 없으면 문자열 Linux, UTS_NODENAME이 없으면 CONFIG_DEFAULT_HOSTNAME, UTS_DOMAINNAME이 없으면 문자열 (none)을 정의합니다. 세 조건은 독립적이므로 하나가 이미 있어도 나머지 기본값은 공급됩니다. UTS_NODENAME은 설정 이름 글자를 따옴표로 저장하는 것이 아니라 그 매크로 값을 참조합니다."
+      },
+      {
+        "title": "초기값과 실행 중 변경",
+        "text": "주석은 nodename을 sethostname, domainname을 setdomainname으로 설정한다고 설명합니다. 그러나 이 헤더가 syscall을 실행하거나 현재 namespace 이름을 직접 바꾸지는 않습니다. 실행 중 바뀌는 것은 UTS 객체의 자료이고 매크로는 빌드 때 치환 규칙입니다. 이 세 정의와 전체 guard를 읽는 범위입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "UTS_NODENAME의 기본 정의는 무엇일까요?",
+        "options": [
+          "CONFIG_DEFAULT_HOSTNAME입니다.",
+          "언제나 문자열 localhost입니다."
+        ],
+        "explanation": "빌드 설정 매크로를 참조합니다. 실제 설정값은 이 파일에서 고정하지 않습니다."
+      },
+      {
+        "prompt": "UTS_SYSNAME이 이미 있으면 어떻게 할까요?",
+        "options": [
+          "무조건 Linux로 덮습니다.",
+          "유지하고 기본 정의를 건너뜁니다."
+        ],
+        "explanation": "#ifndef는 없을 때만 적용됩니다. 다른 두 조건과도 독립적입니다."
+      }
+    ]
+  },
+  "file-cd2fd407d67ba2e5": {
+    "story": "목록 끝을 알리는 표시와 특별 통로로 가라는 표시는 다릅니다. vDSO clock mode도 일반 시계 모드의 끝과 시간 namespace를 나타내는 큰 특수값을 구분합니다.",
+    "meaning": "공통 clock mode enum의 아키텍처 확장과 MAX·TIMENS의 다른 의미를 설명합니다.",
+    "exercise": "GENERIC_GETTIMEOFDAY가 꺼졌을 때 enum 값을 계산하고 TIMENS가 일반 배열 칸 번호가 아닌 이유를 말해 보세요.",
+    "guide": [
+      "vDSO는 일부 커널 정보를 사용자 쪽에서 빠르게 읽는 도움 코드입니다. 공유 자료의 clock_mode는 하드웨어 경로나 namespace 시간 경로를 고르는 표식입니다.",
+      "enum은 이름에 정수 값을 붙이는 목록입니다. 아키텍처별 모드 이름은 조건부 헤더의 매크로가 넣으므로 모든 플랫폼에서 같은 목록은 아닙니다.",
+      "sentinel은 보통 값과 구분되는 특별 표식입니다. TIMENS=INT_MAX를 지원 시계 개수나 일반 배열의 마지막 번호로 해석하지 않습니다."
+    ],
+    "goal": "공통 clock mode enum의 아키텍처 확장과 MAX·TIMENS의 다른 의미를 설명합니다.",
+    "deep_dive": [
+      {
+        "title": "전체 파일과 의존성",
+        "text": "GPL-2.0과 guard, vdso/limits.h, 조건부 아키텍처 헤더, enum vdso_clock_mode가 전체입니다. 장치 계수기를 읽거나 모드 유효성을 검사하는 실행 함수는 없습니다. C enum을 __ASSEMBLY__ 조건으로 감싸는 별도 분기도 없습니다."
+      },
+      {
+        "title": "기본값과 아키텍처 확장",
+        "text": "첫 열거자 VDSO_CLOCKMODE_NONE은 자동으로 0입니다. CONFIG_GENERIC_GETTIMEOFDAY가 있으면 asm/vdso/clocksource.h를 포함하고 VDSO_ARCH_CLOCKMODES를 enum 안에 펼칩니다. 구체적인 하드웨어 이름·값은 아키텍처의 매크로 내용에 달려 있어 모든 플랫폼이 같은 목록이라고 가정하지 않습니다."
+      },
+      {
+        "title": "일반 모드 끝과 비활성 구성",
+        "text": "VDSO_CLOCKMODE_MAX는 아키텍처 모드 뒤에 옵니다. GENERIC_GETTIMEOFDAY가 없으면 NONE 다음이라 1입니다. 이름이 MAX라고 유효한 하드웨어 시계 한 종류로 자동 해석하지 않습니다. 실제 개수 계산이나 인덱스 검사는 사용하는 코드를 봐야 합니다."
+      },
+      {
+        "title": "Namespace 특수값",
+        "text": "VDSO_CLOCKMODE_TIMENS는 INT_MAX를 명시합니다. 시간 namespace용 vDSO를 나타내는 표식이지 일반 모드 뒤의 연속 배열 칸을 크게 늘리려는 값이 아닙니다. 이 값까지 배열을 확장하거나 일반 MAX 범위 검사만으로 모든 의미를 설명하면 안 됩니다. 관련 datapage 약속에서는 seq=1과 함께 namespace 처리 길을 알립니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "모든 include·조건·열거자를 읽었습니다. limits 헤더의 INT_MAX를 가져다 쓰지만 그 파일을 새로 작성한 것으로 중복 집계하지 않습니다. 각 아키텍처 모드 본문이나 사용자 읽기 코드의 모든 갈림길까지 검증한 자료는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "GENERIC_GETTIMEOFDAY가 없으면 NONE과 MAX는 각각 얼마일까요?",
+        "options": [
+          "0과 1입니다.",
+          "둘 다 INT_MAX입니다."
+        ],
+        "explanation": "아키텍처 모드가 빠지면 첫 0 다음은 1입니다. TIMENS만 큰 값을 명시합니다."
+      },
+      {
+        "prompt": "모든 아키텍처 모드 이름을 공통 파일이 직접 나열할까요?",
+        "options": [
+          "네. 모든 플랫폼의 하드웨어 이름을 같게 고정합니다.",
+          "아니요. 조건부 아키텍처 헤더의 매크로가 제공합니다."
+        ],
+        "explanation": "플랫폼별 목록을 전처리로 삽입합니다. 공통 틀과 구체 이름을 구분합니다."
+      },
+      {
+        "prompt": "TIMENS=INT_MAX는 일반 clock 배열의 마지막 번호일까요?",
+        "options": [
+          "아니요. namespace 경로의 특수값입니다.",
+          "네. INT_MAX개 시계를 지원한다는 뜻입니다."
+        ],
+        "explanation": "큰 명시값은 일반 모드와 구분하는 이름표입니다. 크기를 지원 개수로 읽지 않습니다."
+      }
+    ]
+  }
+}

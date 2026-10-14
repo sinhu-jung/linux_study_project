@@ -5,125 +5,151 @@
   "area": "상호 배제 · 낙관적 스핀 · 캐시 일관성 · 객체 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "mutex의 목적, 빠른 획득과 스핀·수면 경로, 소유권 규칙, 인터페이스와 공간 비용을 설명하는 설계 문서입니다.",
+  "intro": "mutex의 빠른 획득·짧은 회전 대기·수면 대기와 소유권 및 메모리 수명 규칙을 함께 이해합니다.",
   "guide": [
-    "상호 배제 상태와 메모리 수명은 다른 문제입니다. mutex 내부 소유권이 넘어갔더라도 이전 unlock 함수가 구조체 접근을 끝냈다는 보장은 없습니다.",
-    "잠금 알고리즘의 비용과 사용 계약을 이해하는 데 사용합니다. 문서의 개괄·과거 크기 예시를 현재 모든 설정의 정확한 구현 사실로 확대하지 않습니다."
+    "mutex는 한 작업만 소유하며 소유자만 해제하는 잠금입니다. 기다릴 때 잠들 수도 있고 잠깐 반복 검사할 수도 있습니다.",
+    "문서의 크기 수치와 인터페이스 목록은 설명 예시입니다. 현재 헤더와 설정에 따라 다른 점을 확인합니다.",
+    "잠금은 자신이 들어 있는 메모리의 수명을 자동 연장하지 않습니다. unlock 함수가 돌아올 때까지 구조체를 유지해야 합니다."
   ],
   "deep_dive": [
     {
-      "title": "문서 전체 구성",
-      "text": "제목과 작성·수정자, mutex 소개, Implementation의 세 경로, Semantics, Interfaces, Disadvantages, 사용 권고로 구성됩니다. 소개는2006년 도입과 이진 세마포어 대체 목적을 설명하고 외부 기사 링크를 출처로 둡니다. 이 수업은 저장소 문서 원문을 다루며 외부 기사 전체를 학습 완료로 세지 않습니다."
+      "title": "문서의 지도",
+      "text": "제목과 작성·수정자 뒤 소개, 세 구현 경로, 사용 규칙, 인터페이스, 단점과 권고가 이어집니다. 소개는 2006년에 값 하나인 세마포어를 대체하려 도입했다고 설명하고 외부 기사 링크를 출처로 둡니다. 여기서는 저장소 문서를 읽으며 그 외부 기사 전체까지 확인 완료로 세지 않습니다."
     },
     {
-      "title": "표현과 owner",
-      "text": "문서는 owner 원자 변수에 소유 태스크 포인터와 하위3비트 상태를 넣는 일반 mutex를 설명합니다. 정렬로 확보되는 비트를 활용하는 포인터 태깅이며 owner 전체가0인지와 포인터 부분에 소유자가 있는지는 구별해야 합니다. v6.12 구조체 정의는 포함된 mutex_types.h에 있고 PREEMPT_RT에서는 rtmutex 기반으로 달라지므로 이 표현을 모든 설정에 적용하지 않습니다."
+      "title": "소유자 주소에 작은 표시 붙이기",
+      "text": "문서는 owner 원자 변수에 소유 작업 주소와 낮은 세 비트의 상태를 함께 담는 일반 mutex를 설명합니다. 정렬된 주소의 빈 비트를 작은 이름표로 쓰는 포인터 태깅입니다. 주소 부분이 비어 있는 것과 owner 전체가 0인 것은 다릅니다. v6.12 타입은 mutex_types.h에 있고 PREEMPT_RT에서는 rtmutex 기반이라 모든 설정이 이 모양은 아닙니다."
     },
     {
-      "title": "빠른 경로",
-      "text": "문서의 fastpath는 owner가0UL인 경우 현재 태스크로 cmpxchg하여 획득합니다. 부가 상태 비트도0이어야 하는 조건이므로 단순히 포인터 부분만 비었다고 빠른 획득이 성립하는 것은 아닙니다. 실패는 다른 처리 경로로 이동할 이유이지 객체를 사용해도 된다는 신호가 아닙니다."
+      "title": "즉시 얻는 빠른 길",
+      "text": "fastpath는 owner 전체가 0UL일 때 cmpxchg로 현재 작업 주소로 바꿉니다. cmpxchg는 예상한 옛 값과 같을 때만 한 번에 교환하는 연산입니다. 상태 비트도 모두 0이어야 하므로 주소 부분만 비었다고 충분하지 않습니다. 실패하면 다른 길로 가야 하며 보호 자료를 사용해도 된다는 뜻이 아닙니다."
     },
     {
-      "title": "중간 경로의 판단",
-      "text": "optimistic spinning은 소유자가 실행 중이고 현재 태스크가 재스케줄되어야 하지 않는 동안 짧게 획득을 시도하는 아이디어입니다. 소유자가 곧 해제할 가능성이 있으면 즉시 수면·깨우기에 드는 비용을 줄일 수 있습니다. need_resched를 단순한 모든 태스크 우선순위 직접 비교 함수로 해석하거나 스핀이 항상 유리하다고 일반화하지 않습니다."
+      "title": "곧 풀릴 것으로 보고 잠깐 기다리기",
+      "text": "낙관적 스핀은 주인이 실행 중이고 현재 작업이 다시 스케줄될 필요가 없을 동안 짧게 반복해 획득을 시도합니다. 곧 열쇠를 줄 가능성이 있으면 재우고 깨우는 비용을 아낄 수 있습니다. need_resched를 모든 작업의 우선순위를 직접 비교하는 함수로 단순화하지 않으며 이 방법이 언제나 빠르다고 하지 않습니다."
     },
     {
-      "title": "MCS 계열 큐",
-      "text": "문서는 MCS 계열 큐로 spinner를 직렬화하고 각 CPU가 지역 변수에서 기다려 공유 캐시라인의 잦은 이동을 줄이는 원리를 설명합니다. mutex용 변형은 재스케줄이 필요하면 큐에서 빠져나올 수 있다는 특징이 있습니다. 큐 수준의 공정성 설명이 전체 mutex 호출의 완료 순서까지 엄격하게 보장한다는 뜻은 아닙니다."
+      "title": "회전 대기자도 줄 세우기",
+      "text": "MCS 계열 줄은 반복 검사하는 사람을 차례로 경쟁하게 하고 각 CPU가 가까운 지역 변수에서 기다리게 합니다. 여러 CPU 사이에 같은 캐시 줄이 자주 오가는 비용을 줄입니다. mutex용 변형은 다시 스케줄될 때 줄에서 빠질 수 있습니다. 이 줄의 공정성이 모든 mutex 호출의 완료 순서를 엄격히 보장하는 것은 아닙니다."
     },
     {
-      "title": "수면 경로와 혼합 전략",
-      "text": "획득에 실패하면 대기 큐에 들어가 unlock 경로의 깨우기를 기다립니다. 문서는 기본 대기의 TASK_UNINTERRUPTIBLE을 설명하지만 공개 API에는 interruptible 등 다른 상태도 있습니다. 잠들 수 있는 mutex가 경합 상황에 따라 스핀도 하는 혼합 전략이라는 점과, 특정 작업 부하에서의 성능 개선이 모든 경우의 보증이 아니라는 점을 구분합니다."
+      "title": "얻지 못하면 잠들기",
+      "text": "계속 획득하지 못하면 대기 줄에 들어가 해제 경로가 깨울 때까지 잠듭니다. 문서는 기본 TASK_UNINTERRUPTIBLE 상태를 설명하지만 공개 함수에는 신호로 중단할 수 있는 interruptible 등도 있습니다. 잠들 수 있는 잠금이 짧게 반복 검사도 하는 혼합 방식이며 특정 작업에서 빠르다는 결과가 모든 작업의 성능 보증은 아닙니다."
     },
     {
-      "title": "사용 규칙 전체",
-      "text": "한 태스크만 소유, 소유자만 해제, 반복 해제·재귀 잠금 금지, API 초기화, 잠금을 소유한 채 태스크 종료 금지, 보유된 잠금 메모리 해제·재초기화 금지, IRQ·tasklet·timer 문맥 사용 금지를 열거합니다. count1인 세마포어와 외형이 비슷해도 소유권 계약이 다릅니다."
+      "title": "사용자가 지킬 규칙",
+      "text": "한 작업만 소유하고 그 소유자만 해제해야 합니다. 반복 해제와 같은 작업의 재귀 잠금은 금지이며 정해진 API로 초기화합니다. 보유한 채 작업을 끝내거나 잠금 메모리를 해제·재초기화하면 안 됩니다. 하드웨어·소프트웨어 인터럽트, tasklet·timer 같은 잠들 수 없는 문맥에서도 쓰지 않습니다. 값 1인 세마포어와 닮았어도 소유권 규칙은 다릅니다."
     },
     {
-      "title": "진단 기능",
-      "text": "문서는 이름·획득 지점·소유자 기록과 재귀·순환 교착 검출 등의 디버깅 기능을 설명합니다. 진단은 설정과 관련 구현 전체에 의존합니다. mutex-debug.c의 단일 검사만으로 이 기능 전부가 실행되거나 경고가 없으면 모든 오류가 부재한다고 주장하지 않습니다."
+      "title": "진단 기능의 조건",
+      "text": "문서는 잠금 이름·획득 위치·소유자 기록과 재귀 잠금·여러 작업의 순환 교착 검출을 설명합니다. 교착은 서로 상대가 풀기를 기다려 더 진행하지 못하는 상태입니다. 이 기능은 설정과 관련 코드 전체에 달려 있습니다. mutex-debug.c 검사 하나가 전부를 수행하거나 경고가 없으면 모든 오류가 없다고 하지 않습니다."
     },
     {
-      "title": "unlock 반환까지의 수명",
-      "text": "mutex는 자신을 담은 메모리에 암묵적 참조를 제공하지 않습니다. mutex_unlock은 내부적으로 잠금을 풀고도 구조체를 더 만질 수 있습니다. 다른 CPU가 그 mutex를 획득했다고 이전 unlock 호출자가 더 이상 접근하지 않는다고 가정하면 안 되며, 호출자는 mutex_unlock이 반환할 때까지 메모리 생존을 보장해야 합니다."
+      "title": "unlock이 돌아올 때까지 살려 두기",
+      "text": "mutex는 자신이 담긴 메모리에 자동 참조를 잡아 주지 않습니다. mutex_unlock은 내부 잠금을 풀고도 구조체를 더 만질 수 있습니다. 다음 CPU가 열쇠를 얻었다고 이전 호출자가 보관함 사용을 끝냈다고 가정하면 안 됩니다. 호출자는 unlock이 반환할 때까지 그 메모리를 살려 둬야 합니다."
     },
     {
-      "title": "spinlock·completion 비교의 범위",
-      "text": "문서는 spin_unlock과 completion_done의 내부 잠금 해제 뒤 접근 계약을 비교합니다. 이 비교를 모든 미래 호출자까지 종료시키는 보증으로 읽으면 안 됩니다. 특히 completion_done은 모든 대기자의 완료를 검사하지 않으므로 이전 수업에서 다룬 관측·수명 제한도 함께 유지해야 합니다."
+      "title": "다른 도구와 비교할 때의 한계",
+      "text": "문서는 spin_unlock과 completion_done의 내부 잠금 해제 뒤 접근 약속을 비교합니다. 이것을 미래의 모든 호출자까지 끝났다는 보장으로 넓히지 않습니다. 특히 completion_done은 모든 대기자의 실행 완료를 검사하지 않으므로 완료 표시 관찰과 객체 수명의 제한을 함께 고려합니다."
     },
     {
-      "title": "인터페이스 목록",
-      "text": "DEFINE_MUTEX, mutex_init, lock/nested/trylock, interruptible/nested, atomic_dec_and_mutex_lock, unlock, is_locked를 소개합니다. 이것이 v6.12 헤더의 killable·IO·guard를 포함한 모든 API 목록은 아닙니다. 문서의 is_locked int 예시와 달리 현재 비RT 헤더 선언은 bool이므로 실제 형식은 헤더를 기준으로 합니다."
+      "title": "문서의 함수 목록 읽기",
+      "text": "DEFINE_MUTEX, mutex_init, lock·nested·trylock, interruptible·nested, atomic_dec_and_mutex_lock, unlock, is_locked를 소개합니다. v6.12의 killable·IO·범위 정리 도구 guard까지 다 적은 목록은 아닙니다. 문서 is_locked 예시는 int지만 현재 비RT 헤더는 bool이므로 정확한 타입은 헤더에서 확인합니다."
     },
     {
-      "title": "원자 감소 helper 설명 대조",
-      "text": "문서는 atomic_dec_and_mutex_lock을 interruptible 획득이라는 소제목 아래 놓지만 v6.12 mutex.c의 해당 함수는 mutex_lock을 호출합니다. count가1이 아니면 atomic_add_unless로 줄이고0을 반환하며, 마지막 후보면 잠근 뒤 atomic_dec_and_test를 수행합니다.0에 도달한 성공은 잠금 보유와1, 아니면 잠금을 풀고0입니다. 문서 제목만으로 신호 중단 가능한 함수라고 설명하지 않습니다."
+      "title": "감소와 마지막 사용자 잠금",
+      "text": "문서는 atomic_dec_and_mutex_lock을 interruptible 제목 아래 두지만 v6.12 구현은 일반 mutex_lock을 부릅니다. 값이 1이 아니면 atomic_add_unless로 줄이고 0을 반환합니다. 마지막 후보이면 잠근 뒤 atomic_dec_and_test로 감소를 검사해 0이 됐을 때 잠금을 보유한 채 1을, 아니면 잠금을 풀고 0을 반환합니다. 제목만 보고 신호로 중단 가능한 함수라고 하면 안 됩니다."
     },
     {
-      "title": "공간 비용과 권고",
-      "text": "문서는 x86-64에서 mutex32·semaphore24·rwsem40바이트라는 예시로 캐시·메모리 비용을 설명합니다. 실제 크기는 아키텍처와 설정에 따라 달라져 이 수치를 모든 v6.12 빌드의 sizeof로 보장하지 않습니다. 마지막 mutex 우선 권고도 앞서 제시한 소유권·수면 문맥과 임계구역 조건을 만족하는 사용처에서 읽어야 합니다."
+      "title": "차지하는 공간과 사용 권고",
+      "text": "문서의 x86-64 예시는 mutex 32, semaphore 24, rwsem 40바이트로 캐시와 메모리 비용을 설명합니다. 실제 크기는 CPU와 설정마다 다르므로 모든 v6.12 빌드의 고정값이 아닙니다. mutex를 우선 쓰라는 권고도 앞의 소유권·잠들 수 있는 문맥·보호 구역 조건에 맞는 사용처에서 읽습니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "포인터 태깅, 비교 교환, 캐시라인 경합, MCS 대기, 스핀과 수면의 비용 선택, 소유권과 객체 수명의 분리를 학습합니다. 문서와 관련 API 일부를 대조했으며 mutex.c 전체를 이 수업만으로 학습 완료 처리하지 않습니다."
+      "title": "상태와 수명 함께 보기",
+      "text": "주소 비트 활용, 비교 교환, 캐시 줄 경쟁, MCS 대기, 회전과 수면의 비용, 소유권과 메모리 수명의 차이를 배웁니다. 문서와 관련 함수 일부를 대조한 범위이며 이 수업만으로 mutex.c 전체를 확인 완료 처리하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "다른 CPU가 mutex를 획득했으면 이전 mutex_unlock의 구조체 접근도 끝났는가?",
+      "prompt": "다음 CPU가 잠금을 얻으면 이전 unlock도 구조체 사용을 끝냈나요?",
       "options": [
+        "보장할 수 없습니다. unlock 반환까지 구조체를 살려 둬야 합니다.",
+        "네. 소유권이 바뀌면 이전 함수 실행도 전부 끝납니다."
+      ],
+      "answer": 0,
+      "explanation": "내부 해제 후에도 mutex_unlock이 구조체를 만질 수 있습니다. 잠금 상태와 함수의 실행 수명은 다릅니다.",
+      "original_prompt": "다른 CPU가 mutex를 획득했으면 이전 mutex_unlock의 구조체 접근도 끝났는가?",
+      "original_options": [
         "그렇다고 보장할 수 없다. unlock 반환까지 객체가 살아 있어야 한다",
         "그렇다. 소유권 변경 순간 모든 이전 함수 실행이 끝난다"
       ],
-      "answer": 0,
-      "explanation": "문서는 내부 해제 뒤에도 mutex_unlock이 구조체를 접근할 수 있다고 명시합니다. 잠금 상태 전이와 함수 실행 수명을 구분해야 합니다."
+      "original_explanation": "문서는 내부 해제 뒤에도 mutex_unlock이 구조체를 접근할 수 있다고 명시합니다. 잠금 상태 전이와 함수 실행 수명을 구분해야 합니다."
     },
     {
-      "prompt": "낙관적 스핀에서 MCS 계열 큐를 쓰는 주요 목적은?",
+      "prompt": "낙관적 스핀에서 MCS 계열 줄을 사용하는 주된 이유는?",
       "options": [
+        "대기자의 모든 메모리를 영원히 고정하려고 씁니다.",
+        "공유 캐시 줄 경쟁을 줄이고 반복 검사자의 경쟁을 조절합니다."
+      ],
+      "answer": 1,
+      "explanation": "가까운 변수에서 기다리게 해 캐시 줄이 CPU 사이를 오가는 비용을 줄입니다. 메모리 수명 고정과는 다른 목적입니다.",
+      "original_prompt": "낙관적 스핀에서 MCS 계열 큐를 쓰는 주요 목적은?",
+      "original_options": [
         "대기자의 모든 메모리를 영구히 고정하기 위해",
         "공유 캐시라인 경합을 줄이고 spinner 경쟁을 조절하기 위해"
       ],
-      "answer": 1,
-      "explanation": "문서는 지역 변수 스핀과 공유 캐시라인 이동 감소를 설명합니다. 객체 수명 고정과는 다른 알고리즘 목적입니다."
+      "original_explanation": "문서는 지역 변수 스핀과 공유 캐시라인 이동 감소를 설명합니다. 객체 수명 고정과는 다른 알고리즘 목적입니다."
     },
     {
-      "prompt": "문서의 x86-64 mutex32바이트를 모든 빌드의 고정 크기로 사용해도 되는가?",
+      "prompt": "문서의 mutex 32바이트를 모든 빌드의 고정 크기로 써도 되나요?",
       "options": [
+        "안 됩니다. CPU와 설정에 따른 구조체를 확인해야 합니다.",
+        "됩니다. 공개 함수가 모든 구성에서 32바이트를 보장합니다."
+      ],
+      "answer": 0,
+      "explanation": "RT·진단·스핀 설정에 따라 필드가 달라집니다. 비용 예시를 고정 자료 배치 약속으로 보지 않습니다.",
+      "original_prompt": "문서의 x86-64 mutex32바이트를 모든 빌드의 고정 크기로 사용해도 되는가?",
+      "original_options": [
         "안 된다. 설정과 아키텍처에 따른 구조체 차이를 확인해야 한다",
         "된다. 공개 API가 모든 구성에서32바이트를 보장한다"
       ],
-      "answer": 0,
-      "explanation": "현재 타입 헤더는 RT와 여러 디버그·스핀 설정에 따라 다른 필드를 가집니다. 문서의 비용 예시를 고정 ABI로 취급하면 안 됩니다."
+      "original_explanation": "현재 타입 헤더는 RT와 여러 디버그·스핀 설정에 따라 다른 필드를 가집니다. 문서의 비용 예시를 고정 ABI로 취급하면 안 됩니다."
     },
     {
-      "prompt": "atomic_dec_and_mutex_lock은 문서 소제목만 보고 interruptible 함수라고 판단해도 되는가?",
+      "prompt": "문서 소제목만 보고 atomic_dec_and_mutex_lock이 interruptible이라고 판단해도 되나요?",
       "options": [
+        "됩니다. 문서 분류와 코드는 다를 수 없습니다.",
+        "안 됩니다. 현재 구현은 일반 mutex_lock을 씁니다."
+      ],
+      "answer": 1,
+      "explanation": "마지막 후보에서 실제로 부르는 함수는 mutex_lock입니다. 문서의 부정확한 제목을 그대로 전하지 않습니다.",
+      "original_prompt": "atomic_dec_and_mutex_lock은 문서 소제목만 보고 interruptible 함수라고 판단해도 되는가?",
+      "original_options": [
         "된다. 문서 분류와 실제 코드가 다를 수 없다",
         "안 된다. 현재 구현은 mutex_lock을 사용한다"
       ],
-      "answer": 1,
-      "explanation": "현재 함수 본문은 마지막 후보에서 일반 mutex_lock을 호출합니다. 구현 대조를 통해 문서의 부정확한 소제목을 그대로 전파하지 않아야 합니다."
+      "original_explanation": "현재 함수 본문은 마지막 후보에서 일반 mutex_lock을 호출합니다. 구현 대조를 통해 문서의 부정확한 소제목을 그대로 전파하지 않아야 합니다."
     },
     {
-      "prompt": "owner의 포인터 부분만 비었으면 문서의 fastpath 비교 교환 조건을 만족하는가?",
+      "prompt": "owner의 주소 부분만 비어 있으면 빠른 획득 조건을 만족하나요?",
       "options": [
+        "아니요. 전체 0UL 비교라 상태 비트도 0이어야 합니다.",
+        "네. 빠른 경로는 상태 비트를 무시합니다."
+      ],
+      "answer": 0,
+      "explanation": "낮은 세 비트의 표시도 owner에 들어 있습니다. 순수 주소와 표시까지 든 정수 전체를 구별합니다.",
+      "original_prompt": "owner의 포인터 부분만 비었으면 문서의 fastpath 비교 교환 조건을 만족하는가?",
+      "original_options": [
         "아니다.0UL 비교이므로 부가 상태 비트도0이어야 한다",
         "그렇다. 상태 비트는 fastpath에서 무시한다"
       ],
-      "answer": 0,
-      "explanation": "문서는 하위3비트 상태와 전체0 비교를 명시합니다. 태그가 포함된 정수 표현과 순수 포인터를 구분해야 합니다."
+      "original_explanation": "문서는 하위3비트 상태와 전체0 비교를 명시합니다. 태그가 포함된 정수 표현과 순수 포인터를 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "다른 CPU가 잠금을 얻은 시점과 이전 mutex_unlock이 반환한 시점을 나누어 보관함을 언제까지 살려 둬야 하는지 설명해 보세요."
   },
   "annotated": "=======================\nGeneric Mutex Subsystem\n=======================\n\nstarted by Ingo Molnar <mingo@redhat.com>\n\nupdated by Davidlohr Bueso <davidlohr@hp.com>\n\nWhat are mutexes?\n-----------------\n\nIn the Linux kernel, mutexes refer to a particular locking primitive\nthat enforces serialization on shared memory systems, and not only to\nthe generic term referring to 'mutual exclusion' found in academia\nor similar theoretical text books. Mutexes are sleeping locks which\nbehave similarly to binary semaphores, and were introduced in 2006[1]\nas an alternative to these. This new data structure provided a number\nof advantages, including simpler interfaces, and at that time smaller\ncode (see Disadvantages).\n\n[1] https://lwn.net/Articles/164802/\n\nImplementation\n--------------\n\nMutexes are represented by 'struct mutex', defined in include/linux/mutex.h\nand implemented in kernel/locking/mutex.c. These locks use an atomic variable\n(->owner) to keep track of the lock state during its lifetime.  Field owner\nactually contains `struct task_struct *` to the current lock owner and it is\ntherefore NULL if not currently owned. Since task_struct pointers are aligned\nto at least L1_CACHE_BYTES, low bits (3) are used to store extra state (e.g.,\nif waiter list is non-empty).  In its most basic form it also includes a\nwait-queue and a spinlock that serializes access to it. Furthermore,\nCONFIG_MUTEX_SPIN_ON_OWNER=y systems use a spinner MCS lock (->osq), described\nbelow in (ii).\n\nWhen acquiring a mutex, there are three possible paths that can be\ntaken, depending on the state of the lock:\n\n(i) fastpath: tries to atomically acquire the lock by cmpxchg()ing the owner with\n    the current task. This only works in the uncontended case (cmpxchg() checks\n    against 0UL, so all 3 state bits above have to be 0). If the lock is\n    contended it goes to the next possible path.\n\n(ii) midpath: aka optimistic spinning, tries to spin for acquisition\n     while the lock owner is running and there are no other tasks ready\n     to run that have higher priority (need_resched). The rationale is\n     that if the lock owner is running, it is likely to release the lock\n     soon. The mutex spinners are queued up using MCS lock so that only\n     one spinner can compete for the mutex.\n\n     The MCS lock (proposed by Mellor-Crummey and Scott) is a simple spinlock\n     with the desirable properties of being fair and with each cpu trying\n     to acquire the lock spinning on a local variable. It avoids expensive\n     cacheline bouncing that common test-and-set spinlock implementations\n     incur. An MCS-like lock is specially tailored for optimistic spinning\n     for sleeping lock implementation. An important feature of the customized\n     MCS lock is that it has the extra property that spinners are able to exit\n     the MCS spinlock queue when they need to reschedule. This further helps\n     avoid situations where MCS spinners that need to reschedule would continue\n     waiting to spin on mutex owner, only to go directly to slowpath upon\n     obtaining the MCS lock.\n\n\n(iii) slowpath: last resort, if the lock is still unable to be acquired,\n      the task is added to the wait-queue and sleeps until woken up by the\n      unlock path. Under normal circumstances it blocks as TASK_UNINTERRUPTIBLE.\n\nWhile formally kernel mutexes are sleepable locks, it is path (ii) that\nmakes them more practically a hybrid type. By simply not interrupting a\ntask and busy-waiting for a few cycles instead of immediately sleeping,\nthe performance of this lock has been seen to significantly improve a\nnumber of workloads. Note that this technique is also used for rw-semaphores.\n\nSemantics\n---------\n\nThe mutex subsystem checks and enforces the following rules:\n\n    - Only one task can hold the mutex at a time.\n    - Only the owner can unlock the mutex.\n    - Multiple unlocks are not permitted.\n    - Recursive locking/unlocking is not permitted.\n    - A mutex must only be initialized via the API (see below).\n    - A task may not exit with a mutex held.\n    - Memory areas where held locks reside must not be freed.\n    - Held mutexes must not be reinitialized.\n    - Mutexes may not be used in hardware or software interrupt\n      contexts such as tasklets and timers.\n\nThese semantics are fully enforced when CONFIG DEBUG_MUTEXES is enabled.\nIn addition, the mutex debugging code also implements a number of other\nfeatures that make lock debugging easier and faster:\n\n    - Uses symbolic names of mutexes, whenever they are printed\n      in debug output.\n    - Point-of-acquire tracking, symbolic lookup of function names,\n      list of all locks held in the system, printout of them.\n    - Owner tracking.\n    - Detects self-recursing locks and prints out all relevant info.\n    - Detects multi-task circular deadlocks and prints out all affected\n      locks and tasks (and only those tasks).\n\nMutexes - and most other sleeping locks like rwsems - do not provide an\nimplicit reference for the memory they occupy, which reference is released\nwith mutex_unlock().\n\n[ This is in contrast with spin_unlock() [or completion_done()], which\n  APIs can be used to guarantee that the memory is not touched by the\n  lock implementation after spin_unlock()/completion_done() releases\n  the lock. ]\n\nmutex_unlock() may access the mutex structure even after it has internally\nreleased the lock already - so it's not safe for another context to\nacquire the mutex and assume that the mutex_unlock() context is not using\nthe structure anymore.\n\nThe mutex user must ensure that the mutex is not destroyed while a\nrelease operation is still in progress - in other words, callers of\nmutex_unlock() must ensure that the mutex stays alive until mutex_unlock()\nhas returned.\n\nInterfaces\n----------\nStatically define the mutex::\n\n   DEFINE_MUTEX(name);\n\nDynamically initialize the mutex::\n\n   mutex_init(mutex);\n\nAcquire the mutex, uninterruptible::\n\n   void mutex_lock(struct mutex *lock);\n   void mutex_lock_nested(struct mutex *lock, unsigned int subclass);\n   int  mutex_trylock(struct mutex *lock);\n\nAcquire the mutex, interruptible::\n\n   int mutex_lock_interruptible_nested(struct mutex *lock,\n\t\t\t\t       unsigned int subclass);\n   int mutex_lock_interruptible(struct mutex *lock);\n\nAcquire the mutex, interruptible, if dec to 0::\n\n   int atomic_dec_and_mutex_lock(atomic_t *cnt, struct mutex *lock);\n\nUnlock the mutex::\n\n   void mutex_unlock(struct mutex *lock);\n\nTest if the mutex is taken::\n\n   int mutex_is_locked(struct mutex *lock);\n\nDisadvantages\n-------------\n\nUnlike its original design and purpose, 'struct mutex' is among the largest\nlocks in the kernel. E.g: on x86-64 it is 32 bytes, where 'struct semaphore'\nis 24 bytes and rw_semaphore is 40 bytes. Larger structure sizes mean more CPU\ncache and memory footprint.\n\nWhen to use mutexes\n-------------------\n\nUnless the strict semantics of mutexes are unsuitable and/or the critical\nregion prevents the lock from being shared, always prefer them to any other\nlocking primitive.\n",
   "source_review": {
@@ -155,5 +181,192 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/locking/mutex-design.rst"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-d8672f92ba68688d",
+    "path": "Documentation/locking/mutex-design.rst",
+    "title": "Mutex 설계 문서 전체: 세 획득 경로와 unlock의 객체 수명",
+    "area": "상호 배제 · 낙관적 스핀 · 캐시 일관성 · 객체 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "mutex의 목적, 빠른 획득과 스핀·수면 경로, 소유권 규칙, 인터페이스와 공간 비용을 설명하는 설계 문서입니다.",
+    "guide": [
+      "상호 배제 상태와 메모리 수명은 다른 문제입니다. mutex 내부 소유권이 넘어갔더라도 이전 unlock 함수가 구조체 접근을 끝냈다는 보장은 없습니다.",
+      "잠금 알고리즘의 비용과 사용 계약을 이해하는 데 사용합니다. 문서의 개괄·과거 크기 예시를 현재 모든 설정의 정확한 구현 사실로 확대하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "문서 전체 구성",
+        "text": "제목과 작성·수정자, mutex 소개, Implementation의 세 경로, Semantics, Interfaces, Disadvantages, 사용 권고로 구성됩니다. 소개는2006년 도입과 이진 세마포어 대체 목적을 설명하고 외부 기사 링크를 출처로 둡니다. 이 수업은 저장소 문서 원문을 다루며 외부 기사 전체를 학습 완료로 세지 않습니다."
+      },
+      {
+        "title": "표현과 owner",
+        "text": "문서는 owner 원자 변수에 소유 태스크 포인터와 하위3비트 상태를 넣는 일반 mutex를 설명합니다. 정렬로 확보되는 비트를 활용하는 포인터 태깅이며 owner 전체가0인지와 포인터 부분에 소유자가 있는지는 구별해야 합니다. v6.12 구조체 정의는 포함된 mutex_types.h에 있고 PREEMPT_RT에서는 rtmutex 기반으로 달라지므로 이 표현을 모든 설정에 적용하지 않습니다."
+      },
+      {
+        "title": "빠른 경로",
+        "text": "문서의 fastpath는 owner가0UL인 경우 현재 태스크로 cmpxchg하여 획득합니다. 부가 상태 비트도0이어야 하는 조건이므로 단순히 포인터 부분만 비었다고 빠른 획득이 성립하는 것은 아닙니다. 실패는 다른 처리 경로로 이동할 이유이지 객체를 사용해도 된다는 신호가 아닙니다."
+      },
+      {
+        "title": "중간 경로의 판단",
+        "text": "optimistic spinning은 소유자가 실행 중이고 현재 태스크가 재스케줄되어야 하지 않는 동안 짧게 획득을 시도하는 아이디어입니다. 소유자가 곧 해제할 가능성이 있으면 즉시 수면·깨우기에 드는 비용을 줄일 수 있습니다. need_resched를 단순한 모든 태스크 우선순위 직접 비교 함수로 해석하거나 스핀이 항상 유리하다고 일반화하지 않습니다."
+      },
+      {
+        "title": "MCS 계열 큐",
+        "text": "문서는 MCS 계열 큐로 spinner를 직렬화하고 각 CPU가 지역 변수에서 기다려 공유 캐시라인의 잦은 이동을 줄이는 원리를 설명합니다. mutex용 변형은 재스케줄이 필요하면 큐에서 빠져나올 수 있다는 특징이 있습니다. 큐 수준의 공정성 설명이 전체 mutex 호출의 완료 순서까지 엄격하게 보장한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "수면 경로와 혼합 전략",
+        "text": "획득에 실패하면 대기 큐에 들어가 unlock 경로의 깨우기를 기다립니다. 문서는 기본 대기의 TASK_UNINTERRUPTIBLE을 설명하지만 공개 API에는 interruptible 등 다른 상태도 있습니다. 잠들 수 있는 mutex가 경합 상황에 따라 스핀도 하는 혼합 전략이라는 점과, 특정 작업 부하에서의 성능 개선이 모든 경우의 보증이 아니라는 점을 구분합니다."
+      },
+      {
+        "title": "사용 규칙 전체",
+        "text": "한 태스크만 소유, 소유자만 해제, 반복 해제·재귀 잠금 금지, API 초기화, 잠금을 소유한 채 태스크 종료 금지, 보유된 잠금 메모리 해제·재초기화 금지, IRQ·tasklet·timer 문맥 사용 금지를 열거합니다. count1인 세마포어와 외형이 비슷해도 소유권 계약이 다릅니다."
+      },
+      {
+        "title": "진단 기능",
+        "text": "문서는 이름·획득 지점·소유자 기록과 재귀·순환 교착 검출 등의 디버깅 기능을 설명합니다. 진단은 설정과 관련 구현 전체에 의존합니다. mutex-debug.c의 단일 검사만으로 이 기능 전부가 실행되거나 경고가 없으면 모든 오류가 부재한다고 주장하지 않습니다."
+      },
+      {
+        "title": "unlock 반환까지의 수명",
+        "text": "mutex는 자신을 담은 메모리에 암묵적 참조를 제공하지 않습니다. mutex_unlock은 내부적으로 잠금을 풀고도 구조체를 더 만질 수 있습니다. 다른 CPU가 그 mutex를 획득했다고 이전 unlock 호출자가 더 이상 접근하지 않는다고 가정하면 안 되며, 호출자는 mutex_unlock이 반환할 때까지 메모리 생존을 보장해야 합니다."
+      },
+      {
+        "title": "spinlock·completion 비교의 범위",
+        "text": "문서는 spin_unlock과 completion_done의 내부 잠금 해제 뒤 접근 계약을 비교합니다. 이 비교를 모든 미래 호출자까지 종료시키는 보증으로 읽으면 안 됩니다. 특히 completion_done은 모든 대기자의 완료를 검사하지 않으므로 이전 수업에서 다룬 관측·수명 제한도 함께 유지해야 합니다."
+      },
+      {
+        "title": "인터페이스 목록",
+        "text": "DEFINE_MUTEX, mutex_init, lock/nested/trylock, interruptible/nested, atomic_dec_and_mutex_lock, unlock, is_locked를 소개합니다. 이것이 v6.12 헤더의 killable·IO·guard를 포함한 모든 API 목록은 아닙니다. 문서의 is_locked int 예시와 달리 현재 비RT 헤더 선언은 bool이므로 실제 형식은 헤더를 기준으로 합니다."
+      },
+      {
+        "title": "원자 감소 helper 설명 대조",
+        "text": "문서는 atomic_dec_and_mutex_lock을 interruptible 획득이라는 소제목 아래 놓지만 v6.12 mutex.c의 해당 함수는 mutex_lock을 호출합니다. count가1이 아니면 atomic_add_unless로 줄이고0을 반환하며, 마지막 후보면 잠근 뒤 atomic_dec_and_test를 수행합니다.0에 도달한 성공은 잠금 보유와1, 아니면 잠금을 풀고0입니다. 문서 제목만으로 신호 중단 가능한 함수라고 설명하지 않습니다."
+      },
+      {
+        "title": "공간 비용과 권고",
+        "text": "문서는 x86-64에서 mutex32·semaphore24·rwsem40바이트라는 예시로 캐시·메모리 비용을 설명합니다. 실제 크기는 아키텍처와 설정에 따라 달라져 이 수치를 모든 v6.12 빌드의 sizeof로 보장하지 않습니다. 마지막 mutex 우선 권고도 앞서 제시한 소유권·수면 문맥과 임계구역 조건을 만족하는 사용처에서 읽어야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "포인터 태깅, 비교 교환, 캐시라인 경합, MCS 대기, 스핀과 수면의 비용 선택, 소유권과 객체 수명의 분리를 학습합니다. 문서와 관련 API 일부를 대조했으며 mutex.c 전체를 이 수업만으로 학습 완료 처리하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "다른 CPU가 mutex를 획득했으면 이전 mutex_unlock의 구조체 접근도 끝났는가?",
+        "options": [
+          "그렇다고 보장할 수 없다. unlock 반환까지 객체가 살아 있어야 한다",
+          "그렇다. 소유권 변경 순간 모든 이전 함수 실행이 끝난다"
+        ],
+        "answer": 0,
+        "explanation": "문서는 내부 해제 뒤에도 mutex_unlock이 구조체를 접근할 수 있다고 명시합니다. 잠금 상태 전이와 함수 실행 수명을 구분해야 합니다."
+      },
+      {
+        "prompt": "낙관적 스핀에서 MCS 계열 큐를 쓰는 주요 목적은?",
+        "options": [
+          "대기자의 모든 메모리를 영구히 고정하기 위해",
+          "공유 캐시라인 경합을 줄이고 spinner 경쟁을 조절하기 위해"
+        ],
+        "answer": 1,
+        "explanation": "문서는 지역 변수 스핀과 공유 캐시라인 이동 감소를 설명합니다. 객체 수명 고정과는 다른 알고리즘 목적입니다."
+      },
+      {
+        "prompt": "문서의 x86-64 mutex32바이트를 모든 빌드의 고정 크기로 사용해도 되는가?",
+        "options": [
+          "안 된다. 설정과 아키텍처에 따른 구조체 차이를 확인해야 한다",
+          "된다. 공개 API가 모든 구성에서32바이트를 보장한다"
+        ],
+        "answer": 0,
+        "explanation": "현재 타입 헤더는 RT와 여러 디버그·스핀 설정에 따라 다른 필드를 가집니다. 문서의 비용 예시를 고정 ABI로 취급하면 안 됩니다."
+      },
+      {
+        "prompt": "atomic_dec_and_mutex_lock은 문서 소제목만 보고 interruptible 함수라고 판단해도 되는가?",
+        "options": [
+          "된다. 문서 분류와 실제 코드가 다를 수 없다",
+          "안 된다. 현재 구현은 mutex_lock을 사용한다"
+        ],
+        "answer": 1,
+        "explanation": "현재 함수 본문은 마지막 후보에서 일반 mutex_lock을 호출합니다. 구현 대조를 통해 문서의 부정확한 소제목을 그대로 전파하지 않아야 합니다."
+      },
+      {
+        "prompt": "owner의 포인터 부분만 비었으면 문서의 fastpath 비교 교환 조건을 만족하는가?",
+        "options": [
+          "아니다.0UL 비교이므로 부가 상태 비트도0이어야 한다",
+          "그렇다. 상태 비트는 fastpath에서 무시한다"
+        ],
+        "answer": 0,
+        "explanation": "문서는 하위3비트 상태와 전체0 비교를 명시합니다. 태그가 포함된 정수 표현과 순수 포인터를 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "=======================\nGeneric Mutex Subsystem\n=======================\n\nstarted by Ingo Molnar <mingo@redhat.com>\n\nupdated by Davidlohr Bueso <davidlohr@hp.com>\n\nWhat are mutexes?\n-----------------\n\nIn the Linux kernel, mutexes refer to a particular locking primitive\nthat enforces serialization on shared memory systems, and not only to\nthe generic term referring to 'mutual exclusion' found in academia\nor similar theoretical text books. Mutexes are sleeping locks which\nbehave similarly to binary semaphores, and were introduced in 2006[1]\nas an alternative to these. This new data structure provided a number\nof advantages, including simpler interfaces, and at that time smaller\ncode (see Disadvantages).\n\n[1] https://lwn.net/Articles/164802/\n\nImplementation\n--------------\n\nMutexes are represented by 'struct mutex', defined in include/linux/mutex.h\nand implemented in kernel/locking/mutex.c. These locks use an atomic variable\n(->owner) to keep track of the lock state during its lifetime.  Field owner\nactually contains `struct task_struct *` to the current lock owner and it is\ntherefore NULL if not currently owned. Since task_struct pointers are aligned\nto at least L1_CACHE_BYTES, low bits (3) are used to store extra state (e.g.,\nif waiter list is non-empty).  In its most basic form it also includes a\nwait-queue and a spinlock that serializes access to it. Furthermore,\nCONFIG_MUTEX_SPIN_ON_OWNER=y systems use a spinner MCS lock (->osq), described\nbelow in (ii).\n\nWhen acquiring a mutex, there are three possible paths that can be\ntaken, depending on the state of the lock:\n\n(i) fastpath: tries to atomically acquire the lock by cmpxchg()ing the owner with\n    the current task. This only works in the uncontended case (cmpxchg() checks\n    against 0UL, so all 3 state bits above have to be 0). If the lock is\n    contended it goes to the next possible path.\n\n(ii) midpath: aka optimistic spinning, tries to spin for acquisition\n     while the lock owner is running and there are no other tasks ready\n     to run that have higher priority (need_resched). The rationale is\n     that if the lock owner is running, it is likely to release the lock\n     soon. The mutex spinners are queued up using MCS lock so that only\n     one spinner can compete for the mutex.\n\n     The MCS lock (proposed by Mellor-Crummey and Scott) is a simple spinlock\n     with the desirable properties of being fair and with each cpu trying\n     to acquire the lock spinning on a local variable. It avoids expensive\n     cacheline bouncing that common test-and-set spinlock implementations\n     incur. An MCS-like lock is specially tailored for optimistic spinning\n     for sleeping lock implementation. An important feature of the customized\n     MCS lock is that it has the extra property that spinners are able to exit\n     the MCS spinlock queue when they need to reschedule. This further helps\n     avoid situations where MCS spinners that need to reschedule would continue\n     waiting to spin on mutex owner, only to go directly to slowpath upon\n     obtaining the MCS lock.\n\n\n(iii) slowpath: last resort, if the lock is still unable to be acquired,\n      the task is added to the wait-queue and sleeps until woken up by the\n      unlock path. Under normal circumstances it blocks as TASK_UNINTERRUPTIBLE.\n\nWhile formally kernel mutexes are sleepable locks, it is path (ii) that\nmakes them more practically a hybrid type. By simply not interrupting a\ntask and busy-waiting for a few cycles instead of immediately sleeping,\nthe performance of this lock has been seen to significantly improve a\nnumber of workloads. Note that this technique is also used for rw-semaphores.\n\nSemantics\n---------\n\nThe mutex subsystem checks and enforces the following rules:\n\n    - Only one task can hold the mutex at a time.\n    - Only the owner can unlock the mutex.\n    - Multiple unlocks are not permitted.\n    - Recursive locking/unlocking is not permitted.\n    - A mutex must only be initialized via the API (see below).\n    - A task may not exit with a mutex held.\n    - Memory areas where held locks reside must not be freed.\n    - Held mutexes must not be reinitialized.\n    - Mutexes may not be used in hardware or software interrupt\n      contexts such as tasklets and timers.\n\nThese semantics are fully enforced when CONFIG DEBUG_MUTEXES is enabled.\nIn addition, the mutex debugging code also implements a number of other\nfeatures that make lock debugging easier and faster:\n\n    - Uses symbolic names of mutexes, whenever they are printed\n      in debug output.\n    - Point-of-acquire tracking, symbolic lookup of function names,\n      list of all locks held in the system, printout of them.\n    - Owner tracking.\n    - Detects self-recursing locks and prints out all relevant info.\n    - Detects multi-task circular deadlocks and prints out all affected\n      locks and tasks (and only those tasks).\n\nMutexes - and most other sleeping locks like rwsems - do not provide an\nimplicit reference for the memory they occupy, which reference is released\nwith mutex_unlock().\n\n[ This is in contrast with spin_unlock() [or completion_done()], which\n  APIs can be used to guarantee that the memory is not touched by the\n  lock implementation after spin_unlock()/completion_done() releases\n  the lock. ]\n\nmutex_unlock() may access the mutex structure even after it has internally\nreleased the lock already - so it's not safe for another context to\nacquire the mutex and assume that the mutex_unlock() context is not using\nthe structure anymore.\n\nThe mutex user must ensure that the mutex is not destroyed while a\nrelease operation is still in progress - in other words, callers of\nmutex_unlock() must ensure that the mutex stays alive until mutex_unlock()\nhas returned.\n\nInterfaces\n----------\nStatically define the mutex::\n\n   DEFINE_MUTEX(name);\n\nDynamically initialize the mutex::\n\n   mutex_init(mutex);\n\nAcquire the mutex, uninterruptible::\n\n   void mutex_lock(struct mutex *lock);\n   void mutex_lock_nested(struct mutex *lock, unsigned int subclass);\n   int  mutex_trylock(struct mutex *lock);\n\nAcquire the mutex, interruptible::\n\n   int mutex_lock_interruptible_nested(struct mutex *lock,\n\t\t\t\t       unsigned int subclass);\n   int mutex_lock_interruptible(struct mutex *lock);\n\nAcquire the mutex, interruptible, if dec to 0::\n\n   int atomic_dec_and_mutex_lock(atomic_t *cnt, struct mutex *lock);\n\nUnlock the mutex::\n\n   void mutex_unlock(struct mutex *lock);\n\nTest if the mutex is taken::\n\n   int mutex_is_locked(struct mutex *lock);\n\nDisadvantages\n-------------\n\nUnlike its original design and purpose, 'struct mutex' is among the largest\nlocks in the kernel. E.g: on x86-64 it is 32 bytes, where 'struct semaphore'\nis 24 bytes and rw_semaphore is 40 bytes. Larger structure sizes mean more CPU\ncache and memory footprint.\n\nWhen to use mutexes\n-------------------\n\nUnless the strict semantics of mutexes are unsuitable and/or the critical\nregion prevents the lock from being shared, always prefer them to any other\nlocking primitive.\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "e953f9a58c2666ed7f4c871bbfaf64b67d11730d9992bcc9a0e5d0228233131f",
+      "scope": "whole-file",
+      "line_count": 170,
+      "authoring_source": "course/file_units/mutex_design_document.py",
+      "sections": [
+        "문서 전체 구성",
+        "표현과 owner",
+        "빠른 경로",
+        "중간 경로의 판단",
+        "MCS 계열 큐",
+        "수면 경로와 혼합 전략",
+        "사용 규칙 전체",
+        "진단 기능",
+        "unlock 반환까지의 수명",
+        "spinlock·completion 비교의 범위",
+        "인터페이스 목록",
+        "원자 감소 helper 설명 대조",
+        "공간 비용과 권고",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/locking/mutex-design.rst"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공용 방의 열쇠를 넘겼다고 이전 사람이 열쇠 보관함에서 손을 뗀 것까지 보장되지는 않습니다. mutex도 소유권이 넘어가는 순간과 함수가 자료 사용을 끝내는 순간이 다릅니다.",
+    "meaning": "mutex의 빠른 획득·짧은 회전 대기·수면 대기와 소유권 및 메모리 수명 규칙을 함께 이해합니다.",
+    "exercise": "다른 CPU가 잠금을 얻은 시점과 이전 mutex_unlock이 반환한 시점을 나누어 보관함을 언제까지 살려 둬야 하는지 설명해 보세요."
+  },
+  "goal": "mutex의 빠른 획득·짧은 회전 대기·수면 대기와 소유권 및 메모리 수명 규칙을 함께 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "다른 CPU가 잠금을 얻은 시점과 이전 mutex_unlock이 반환한 시점을 나누어 보관함을 언제까지 살려 둬야 하는지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "0df5e8af6dd007e2e174c684298e16b4fe811a8371b857fd30e8ca8063ceae99",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

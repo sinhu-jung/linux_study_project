@@ -5,87 +5,101 @@
   "area": "동기화 · 대기 큐 · 스케줄링 · 객체 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "완료 신호를 기다리는 스레드들이 공유하는 상태와 초기화·대기·알림 API를 선언합니다.",
+  "intro": "completion의 상태와 대기 줄, 초기화 종류와 함수 반환형을 구분합니다.",
   "guide": [
-    "done과 단순 대기 큐를 묶어 완료 통지를 저장합니다. 처음 초기화와 재사용을 위한 상태 초기화는 서로 다른 작업입니다.",
-    "대기 API는 잠들 수 있으므로 적절한 실행 문맥과 객체 수명을 확보해야 합니다. 스택 선언 매크로가 비동기 작업 종료를 자동 보장하지 않습니다."
+    "done은 알림 상태이고 wait는 기다리는 실행 흐름들의 줄입니다.",
+    "잠드는 대기는 잠들어도 되는 곳에서만 호출합니다.",
+    "스택 상자는 비동기 작업이 다 쓰기 전에 사라지면 안 됩니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0, guard와 저작권, swait.h 포함, completion 구조체, map 및 acquire/release helper, 초기화 매크로와 LOCKDEP 분기, init/reinit inline, 대기·관측·완료 함수 선언으로 구성됩니다. 실제 스케줄링과 done 소비는 kernel/sched/completion.c에 있습니다."
+      "title": "파일 지도",
+      "text": "GPL-2.0, 중복 포함 방지와 저작권, swait 헤더 뒤 completion 구조체가 나옵니다. map·acquire/release 도구, 초기화 매크로와 LOCKDEP 분기, init/reinit, 대기·관측·알림 함수 선언으로 이어집니다. 실제 잠들기와 알림 소비는 completion.c에 있습니다."
     },
     {
-      "title": "상태 자료구조",
-      "text": "completion은 unsigned int done과 swait_queue_head wait로 구성됩니다. 주석은 대기 스레드를 FIFO로 큐에 넣는다고 설명합니다. done은 스레드 수나 완료시각 필드가 아니며 구체적인 누적 신호와 전체 완료 표식 의미는 구현이 정합니다."
+      "title": "두 칸의 상태",
+      "text": "unsigned int done과 swait_queue_head wait로 이루어집니다. 주석은 기다리는 스레드를 먼저 온 순서인 FIFO로 세운다고 합니다. done은 스레드 수나 끝난 시각이 아닙니다. 쌓인 알림과 전체 완료 표시는 실제 구현에서 정합니다."
     },
     {
       "title": "정적 초기화",
-      "text": "COMPLETION_INITIALIZER(work)는 done0과 work.wait를 가리키는 swait 초기화식을 만듭니다. DECLARE_COMPLETION은 이를 사용해 구조체를 선언·초기화합니다. 단순한0 메모리 채우기만으로 대기 큐 초기화가 모두 대체되는 것은 아닙니다."
+      "text": "COMPLETION_INITIALIZER는 done=0과 자기 work.wait를 연결한 대기 큐 초기화식을 만듭니다. DECLARE_COMPLETION은 이 식으로 선언과 초기화를 함께 합니다. 메모리를 전부 0으로 채우는 것만으로 큐 준비까지 대신할 수 없습니다."
     },
     {
-      "title": "스택과 lockdep",
-      "text": "CONFIG_LOCKDEP가 켜지면 ONSTACK 변형은 statement expression에서 init_completion을 실행하는 비상수 초기화를 사용합니다. 꺼져 있으면 DECLARE_COMPLETION으로 매핑됩니다. ONSTACK_MAP도 해당 분기를 따르지만 이 버전의 init_completion_map(x,m)은 init_completion(x)으로 정의되어 map 인자를 실질적으로 사용하지 않습니다."
+      "title": "스택과 잠금 검사",
+      "text": "LOCKDEP는 잠금 사용을 점검하는 기능입니다. 켜지면 ONSTACK은 값 있는 문장 블록에서 init_completion을 실행하고, 꺼지면 일반 DECLARE_COMPLETION으로 이어집니다. ONSTACK_MAP도 같은 분기를 따르지만 이 버전의 init_completion_map은 map 인수를 실제로 쓰지 않고 init_completion만 부릅니다."
     },
     {
-      "title": "이름과 실제 동작",
-      "text": "complete_acquire와 complete_release는 이 헤더에서 빈 inline 함수입니다. 이름에 acquire/release가 있다는 이유만으로 이 함수들이 하드웨어 메모리 장벽을 실행한다고 설명하면 안 됩니다. 실제 상태 동기화는 구현의 잠금과 깨우기 경로를 확인해야 합니다."
+      "title": "이름만으로 판단하지 않기",
+      "text": "complete_acquire와 complete_release는 빈 inline 함수입니다. 이름에 acquire·release가 있어도 여기서 하드웨어 접근 순서 장벽을 실행하지 않습니다. 실제 동기화는 구현의 잠금과 깨우기에서 확인해야 합니다."
     },
     {
-      "title": "init과 reinit",
-      "text": "init_completion은 done0 설정과 init_swait_queue_head를 모두 실행합니다. reinit_completion은 done만0으로 바꾸며 잠금을 잡거나 대기 큐를 다시 만들지 않습니다. 재사용 전에 이전 대기·알림 작업과 경쟁하지 않음을 보장해야 하며 특히 complete_all 뒤의 재사용에서 필요합니다."
+      "title": "처음 준비와 다시 쓰기",
+      "text": "init은 done을 0으로 하고 대기 큐도 만듭니다. reinit은 done만 0으로 하며 잠금도 잡지 않습니다. 특히 complete_all 뒤 재사용 전에 지난 대기자와 알림자가 더는 경쟁하지 않음을 호출자가 보장해야 합니다."
     },
     {
-      "title": "대기 함수군",
-      "text": "일반 및 IO 대기는 void, interruptible/killable/state는 int입니다. 비인터럽트 timeout과 IO timeout은 unsigned long, interruptible/killable timeout은 long입니다. 음수 인터럽트 오류를 표현해야 하는 변형과 단순 timeout 반환 형식의 차이를 구분합니다. 시간 단위와 성공 반환값은 구현 문서를 함께 읽습니다."
+      "title": "대기 함수 반환형",
+      "text": "일반·IO 대기는 void, interruptible·killable·state는 int입니다. 일반 timeout·IO timeout은 unsigned long, 중단 가능한 timeout은 long입니다. 뒤쪽은 음수 중단 오류도 담아야 합니다. 시간 단위와 성공 숫자는 구현 설명을 함께 봅니다."
     },
     {
-      "title": "비대기와 알림 선언",
-      "text": "try_wait_for_completion과 completion_done은 bool이며 소비 시도와 관측의 차이가 있습니다. complete, complete_on_current_cpu, complete_all은 void 알림 함수입니다. 헤더는 함수 선언만 제공하며 complete_all 뒤 모든 대기자의 후속 처리까지 끝났다는 보증을 주지 않습니다."
+      "title": "확인과 알림",
+      "text": "try_wait와 completion_done은 bool이며 앞은 알림 소비 시도, 뒤는 상태 관측입니다. complete, complete_on_current_cpu, complete_all은 void입니다. complete_all을 불렀다고 깨어난 모두가 뒤의 일까지 끝냈다는 뜻은 아닙니다."
     },
     {
-      "title": "CS 연결",
-      "text": "상태와 대기 큐의 결합, 정적·동적 초기화, 조건부 컴파일, 반환형의 오류 표현, 스택 객체와 비동기 수명을 학습합니다. 일부 선언만 연결한 수업이 아니라 이 파일의 매크로와 inline도 함께 다룹니다."
+      "title": "배울 원리",
+      "text": "상태와 기다리는 줄을 묶는 법, 선언 때와 실행 중 초기화, 설정에 따른 코드 선택, 반환형의 음수 오류를 배웁니다. 자동 스택 변수 이름을 붙였다고 비동기 수명이 자동 해결되지 않습니다. 선언뿐 아니라 매크로와 짧은 본문도 함께 읽습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "reinit_completion이 대기 큐까지 다시 초기화하는가?",
+      "prompt": "reinit은 기다리는 큐도 다시 만드나요?",
       "options": [
+        "아니다. done만 0으로 만든다",
+        "그렇다. init과 같은 본문이다"
+      ],
+      "answer": 0,
+      "explanation": "남은 대기자와 알림자가 없는 안전한 재사용 시점을 따로 확보해야 합니다.",
+      "original_prompt": "reinit_completion이 대기 큐까지 다시 초기화하는가?",
+      "original_options": [
         "아니다. done만0으로 설정한다",
         "그렇다. init_completion과 본문이 같다"
       ],
-      "answer": 0,
-      "explanation": "init_completion은 큐 초기화도 하지만 reinit은 단일 저장뿐입니다. 재사용 시 남은 대기자·알림자와의 경쟁을 호출자가 해결해야 합니다."
+      "original_explanation": "init_completion은 큐 초기화도 하지만 reinit은 단일 저장뿐입니다. 재사용 시 남은 대기자·알림자와의 경쟁을 호출자가 해결해야 합니다."
     },
     {
-      "prompt": "이 버전의 complete_acquire는 실제 장벽을 실행하는가?",
+      "prompt": "이 버전 complete_acquire는 실제 장벽인가요?",
       "options": [
+        "그렇다. 이름만으로 보장된다",
+        "아니다. 빈 inline 함수이다"
+      ],
+      "answer": 1,
+      "explanation": "동기화는 실제 completion 구현의 잠금과 깨우기를 봅니다.",
+      "original_prompt": "이 버전의 complete_acquire는 실제 장벽을 실행하는가?",
+      "original_options": [
         "그렇다. 이름만으로 acquire 장벽이 보장된다",
         "아니다. 빈 inline이다"
       ],
-      "answer": 1,
-      "explanation": "실제 본문이 비어 있습니다. 상태 동기화는 completion.c의 잠금과 깨우기 절차에서 확인해야 합니다."
+      "original_explanation": "실제 본문이 비어 있습니다. 상태 동기화는 completion.c의 잠금과 깨우기 절차에서 확인해야 합니다."
     },
     {
-      "prompt": "interruptible_timeout의 반환형이 long인 이유와 연결되는 동작은?",
+      "prompt": "interruptible_timeout이 long을 쓰는 동작상의 이유는?",
       "options": [
+        "0 시간 초과와 양수 성공 외에 음수 중단 오류도 돌려줄 수 있다",
+        "끝난 스레드 주소를 돌려준다"
+      ],
+      "answer": 0,
+      "explanation": "-ERESTARTSYS를 unsigned 성공 값처럼 읽으면 안 됩니다.",
+      "original_prompt": "interruptible_timeout의 반환형이 long인 이유와 연결되는 동작은?",
+      "original_options": [
         "시간 초과0·성공 양수 외에 음수 인터럽트 오류를 반환할 수 있다",
         "완료된 스레드 주소를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "인터럽트 가능한 대기는 -ERESTARTSYS를 반환할 수 있습니다. 이를 unsigned로만 해석하면 오류와 큰 양수 성공을 혼동할 수 있습니다."
+      "original_explanation": "인터럽트 가능한 대기는 -ERESTARTSYS를 반환할 수 있습니다. 이를 unsigned로만 해석하면 오류와 큰 양수 성공을 혼동할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "init과 reinit이 각각 어떤 칸을 바꾸는지 비교해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_COMPLETION_H\n#define __LINUX_COMPLETION_H\n\n/*\n * (C) Copyright 2001 Linus Torvalds\n *\n * Atomic wait-for-completion handler data structures.\n * See kernel/sched/completion.c for details.\n */\n\n#include <linux/swait.h>\n\n/*\n * struct completion - structure used to maintain state for a \"completion\"\n *\n * This is the opaque structure used to maintain the state for a \"completion\".\n * Completions currently use a FIFO to queue threads that have to wait for\n * the \"completion\" event.\n *\n * See also:  complete(), wait_for_completion() (and friends _timeout,\n * _interruptible, _interruptible_timeout, and _killable), init_completion(),\n * reinit_completion(), and macros DECLARE_COMPLETION(),\n * DECLARE_COMPLETION_ONSTACK().\n */\nstruct completion {\n\tunsigned int done;\n\tstruct swait_queue_head wait;\n};\n\n#define init_completion_map(x, m) init_completion(x)\nstatic inline void complete_acquire(struct completion *x) {}\nstatic inline void complete_release(struct completion *x) {}\n\n#define COMPLETION_INITIALIZER(work) \\\n\t{ 0, __SWAIT_QUEUE_HEAD_INITIALIZER((work).wait) }\n\n#define COMPLETION_INITIALIZER_ONSTACK_MAP(work, map) \\\n\t(*({ init_completion_map(&(work), &(map)); &(work); }))\n\n#define COMPLETION_INITIALIZER_ONSTACK(work) \\\n\t(*({ init_completion(&work); &work; }))\n\n/**\n * DECLARE_COMPLETION - declare and initialize a completion structure\n * @work:  identifier for the completion structure\n *\n * This macro declares and initializes a completion structure. Generally used\n * for static declarations. You should use the _ONSTACK variant for automatic\n * variables.\n */\n#define DECLARE_COMPLETION(work) \\\n\tstruct completion work = COMPLETION_INITIALIZER(work)\n\n/*\n * Lockdep needs to run a non-constant initializer for on-stack\n * completions - so we use the _ONSTACK() variant for those that\n * are on the kernel stack:\n */\n/**\n * DECLARE_COMPLETION_ONSTACK - declare and initialize a completion structure\n * @work:  identifier for the completion structure\n *\n * This macro declares and initializes a completion structure on the kernel\n * stack.\n */\n#ifdef CONFIG_LOCKDEP\n# define DECLARE_COMPLETION_ONSTACK(work) \\\n\tstruct completion work = COMPLETION_INITIALIZER_ONSTACK(work)\n# define DECLARE_COMPLETION_ONSTACK_MAP(work, map) \\\n\tstruct completion work = COMPLETION_INITIALIZER_ONSTACK_MAP(work, map)\n#else\n# define DECLARE_COMPLETION_ONSTACK(work) DECLARE_COMPLETION(work)\n# define DECLARE_COMPLETION_ONSTACK_MAP(work, map) DECLARE_COMPLETION(work)\n#endif\n\n/**\n * init_completion - Initialize a dynamically allocated completion\n * @x:  pointer to completion structure that is to be initialized\n *\n * This inline function will initialize a dynamically created completion\n * structure.\n */\nstatic inline void init_completion(struct completion *x)\n{\n\tx->done = 0;\n\tinit_swait_queue_head(&x->wait);\n}\n\n/**\n * reinit_completion - reinitialize a completion structure\n * @x:  pointer to completion structure that is to be reinitialized\n *\n * This inline function should be used to reinitialize a completion structure so it can\n * be reused. This is especially important after complete_all() is used.\n */\nstatic inline void reinit_completion(struct completion *x)\n{\n\tx->done = 0;\n}\n\nextern void wait_for_completion(struct completion *);\nextern void wait_for_completion_io(struct completion *);\nextern int wait_for_completion_interruptible(struct completion *x);\nextern int wait_for_completion_killable(struct completion *x);\nextern int wait_for_completion_state(struct completion *x, unsigned int state);\nextern unsigned long wait_for_completion_timeout(struct completion *x,\n\t\t\t\t\t\t   unsigned long timeout);\nextern unsigned long wait_for_completion_io_timeout(struct completion *x,\n\t\t\t\t\t\t    unsigned long timeout);\nextern long wait_for_completion_interruptible_timeout(\n\tstruct completion *x, unsigned long timeout);\nextern long wait_for_completion_killable_timeout(\n\tstruct completion *x, unsigned long timeout);\nextern bool try_wait_for_completion(struct completion *x);\nextern bool completion_done(struct completion *x);\n\nextern void complete(struct completion *);\nextern void complete_on_current_cpu(struct completion *x);\nextern void complete_all(struct completion *);\n\n#endif\n",
   "source_review": {
@@ -112,5 +126,149 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/completion.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-91257c3f0ab5e206",
+    "path": "include/linux/completion.h",
+    "title": "Completion 헤더 전체: 완료 상태와 대기 인터페이스",
+    "area": "동기화 · 대기 큐 · 스케줄링 · 객체 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "완료 신호를 기다리는 스레드들이 공유하는 상태와 초기화·대기·알림 API를 선언합니다.",
+    "guide": [
+      "done과 단순 대기 큐를 묶어 완료 통지를 저장합니다. 처음 초기화와 재사용을 위한 상태 초기화는 서로 다른 작업입니다.",
+      "대기 API는 잠들 수 있으므로 적절한 실행 문맥과 객체 수명을 확보해야 합니다. 스택 선언 매크로가 비동기 작업 종료를 자동 보장하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0, guard와 저작권, swait.h 포함, completion 구조체, map 및 acquire/release helper, 초기화 매크로와 LOCKDEP 분기, init/reinit inline, 대기·관측·완료 함수 선언으로 구성됩니다. 실제 스케줄링과 done 소비는 kernel/sched/completion.c에 있습니다."
+      },
+      {
+        "title": "상태 자료구조",
+        "text": "completion은 unsigned int done과 swait_queue_head wait로 구성됩니다. 주석은 대기 스레드를 FIFO로 큐에 넣는다고 설명합니다. done은 스레드 수나 완료시각 필드가 아니며 구체적인 누적 신호와 전체 완료 표식 의미는 구현이 정합니다."
+      },
+      {
+        "title": "정적 초기화",
+        "text": "COMPLETION_INITIALIZER(work)는 done0과 work.wait를 가리키는 swait 초기화식을 만듭니다. DECLARE_COMPLETION은 이를 사용해 구조체를 선언·초기화합니다. 단순한0 메모리 채우기만으로 대기 큐 초기화가 모두 대체되는 것은 아닙니다."
+      },
+      {
+        "title": "스택과 lockdep",
+        "text": "CONFIG_LOCKDEP가 켜지면 ONSTACK 변형은 statement expression에서 init_completion을 실행하는 비상수 초기화를 사용합니다. 꺼져 있으면 DECLARE_COMPLETION으로 매핑됩니다. ONSTACK_MAP도 해당 분기를 따르지만 이 버전의 init_completion_map(x,m)은 init_completion(x)으로 정의되어 map 인자를 실질적으로 사용하지 않습니다."
+      },
+      {
+        "title": "이름과 실제 동작",
+        "text": "complete_acquire와 complete_release는 이 헤더에서 빈 inline 함수입니다. 이름에 acquire/release가 있다는 이유만으로 이 함수들이 하드웨어 메모리 장벽을 실행한다고 설명하면 안 됩니다. 실제 상태 동기화는 구현의 잠금과 깨우기 경로를 확인해야 합니다."
+      },
+      {
+        "title": "init과 reinit",
+        "text": "init_completion은 done0 설정과 init_swait_queue_head를 모두 실행합니다. reinit_completion은 done만0으로 바꾸며 잠금을 잡거나 대기 큐를 다시 만들지 않습니다. 재사용 전에 이전 대기·알림 작업과 경쟁하지 않음을 보장해야 하며 특히 complete_all 뒤의 재사용에서 필요합니다."
+      },
+      {
+        "title": "대기 함수군",
+        "text": "일반 및 IO 대기는 void, interruptible/killable/state는 int입니다. 비인터럽트 timeout과 IO timeout은 unsigned long, interruptible/killable timeout은 long입니다. 음수 인터럽트 오류를 표현해야 하는 변형과 단순 timeout 반환 형식의 차이를 구분합니다. 시간 단위와 성공 반환값은 구현 문서를 함께 읽습니다."
+      },
+      {
+        "title": "비대기와 알림 선언",
+        "text": "try_wait_for_completion과 completion_done은 bool이며 소비 시도와 관측의 차이가 있습니다. complete, complete_on_current_cpu, complete_all은 void 알림 함수입니다. 헤더는 함수 선언만 제공하며 complete_all 뒤 모든 대기자의 후속 처리까지 끝났다는 보증을 주지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "상태와 대기 큐의 결합, 정적·동적 초기화, 조건부 컴파일, 반환형의 오류 표현, 스택 객체와 비동기 수명을 학습합니다. 일부 선언만 연결한 수업이 아니라 이 파일의 매크로와 inline도 함께 다룹니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "reinit_completion이 대기 큐까지 다시 초기화하는가?",
+        "options": [
+          "아니다. done만0으로 설정한다",
+          "그렇다. init_completion과 본문이 같다"
+        ],
+        "answer": 0,
+        "explanation": "init_completion은 큐 초기화도 하지만 reinit은 단일 저장뿐입니다. 재사용 시 남은 대기자·알림자와의 경쟁을 호출자가 해결해야 합니다."
+      },
+      {
+        "prompt": "이 버전의 complete_acquire는 실제 장벽을 실행하는가?",
+        "options": [
+          "그렇다. 이름만으로 acquire 장벽이 보장된다",
+          "아니다. 빈 inline이다"
+        ],
+        "answer": 1,
+        "explanation": "실제 본문이 비어 있습니다. 상태 동기화는 completion.c의 잠금과 깨우기 절차에서 확인해야 합니다."
+      },
+      {
+        "prompt": "interruptible_timeout의 반환형이 long인 이유와 연결되는 동작은?",
+        "options": [
+          "시간 초과0·성공 양수 외에 음수 인터럽트 오류를 반환할 수 있다",
+          "완료된 스레드 주소를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "인터럽트 가능한 대기는 -ERESTARTSYS를 반환할 수 있습니다. 이를 unsigned로만 해석하면 오류와 큰 양수 성공을 혼동할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __LINUX_COMPLETION_H\n#define __LINUX_COMPLETION_H\n\n/*\n * (C) Copyright 2001 Linus Torvalds\n *\n * Atomic wait-for-completion handler data structures.\n * See kernel/sched/completion.c for details.\n */\n\n#include <linux/swait.h>\n\n/*\n * struct completion - structure used to maintain state for a \"completion\"\n *\n * This is the opaque structure used to maintain the state for a \"completion\".\n * Completions currently use a FIFO to queue threads that have to wait for\n * the \"completion\" event.\n *\n * See also:  complete(), wait_for_completion() (and friends _timeout,\n * _interruptible, _interruptible_timeout, and _killable), init_completion(),\n * reinit_completion(), and macros DECLARE_COMPLETION(),\n * DECLARE_COMPLETION_ONSTACK().\n */\nstruct completion {\n\tunsigned int done;\n\tstruct swait_queue_head wait;\n};\n\n#define init_completion_map(x, m) init_completion(x)\nstatic inline void complete_acquire(struct completion *x) {}\nstatic inline void complete_release(struct completion *x) {}\n\n#define COMPLETION_INITIALIZER(work) \\\n\t{ 0, __SWAIT_QUEUE_HEAD_INITIALIZER((work).wait) }\n\n#define COMPLETION_INITIALIZER_ONSTACK_MAP(work, map) \\\n\t(*({ init_completion_map(&(work), &(map)); &(work); }))\n\n#define COMPLETION_INITIALIZER_ONSTACK(work) \\\n\t(*({ init_completion(&work); &work; }))\n\n/**\n * DECLARE_COMPLETION - declare and initialize a completion structure\n * @work:  identifier for the completion structure\n *\n * This macro declares and initializes a completion structure. Generally used\n * for static declarations. You should use the _ONSTACK variant for automatic\n * variables.\n */\n#define DECLARE_COMPLETION(work) \\\n\tstruct completion work = COMPLETION_INITIALIZER(work)\n\n/*\n * Lockdep needs to run a non-constant initializer for on-stack\n * completions - so we use the _ONSTACK() variant for those that\n * are on the kernel stack:\n */\n/**\n * DECLARE_COMPLETION_ONSTACK - declare and initialize a completion structure\n * @work:  identifier for the completion structure\n *\n * This macro declares and initializes a completion structure on the kernel\n * stack.\n */\n#ifdef CONFIG_LOCKDEP\n# define DECLARE_COMPLETION_ONSTACK(work) \\\n\tstruct completion work = COMPLETION_INITIALIZER_ONSTACK(work)\n# define DECLARE_COMPLETION_ONSTACK_MAP(work, map) \\\n\tstruct completion work = COMPLETION_INITIALIZER_ONSTACK_MAP(work, map)\n#else\n# define DECLARE_COMPLETION_ONSTACK(work) DECLARE_COMPLETION(work)\n# define DECLARE_COMPLETION_ONSTACK_MAP(work, map) DECLARE_COMPLETION(work)\n#endif\n\n/**\n * init_completion - Initialize a dynamically allocated completion\n * @x:  pointer to completion structure that is to be initialized\n *\n * This inline function will initialize a dynamically created completion\n * structure.\n */\nstatic inline void init_completion(struct completion *x)\n{\n\tx->done = 0;\n\tinit_swait_queue_head(&x->wait);\n}\n\n/**\n * reinit_completion - reinitialize a completion structure\n * @x:  pointer to completion structure that is to be reinitialized\n *\n * This inline function should be used to reinitialize a completion structure so it can\n * be reused. This is especially important after complete_all() is used.\n */\nstatic inline void reinit_completion(struct completion *x)\n{\n\tx->done = 0;\n}\n\nextern void wait_for_completion(struct completion *);\nextern void wait_for_completion_io(struct completion *);\nextern int wait_for_completion_interruptible(struct completion *x);\nextern int wait_for_completion_killable(struct completion *x);\nextern int wait_for_completion_state(struct completion *x, unsigned int state);\nextern unsigned long wait_for_completion_timeout(struct completion *x,\n\t\t\t\t\t\t   unsigned long timeout);\nextern unsigned long wait_for_completion_io_timeout(struct completion *x,\n\t\t\t\t\t\t    unsigned long timeout);\nextern long wait_for_completion_interruptible_timeout(\n\tstruct completion *x, unsigned long timeout);\nextern long wait_for_completion_killable_timeout(\n\tstruct completion *x, unsigned long timeout);\nextern bool try_wait_for_completion(struct completion *x);\nextern bool completion_done(struct completion *x);\n\nextern void complete(struct completion *);\nextern void complete_on_current_cpu(struct completion *x);\nextern void complete_all(struct completion *);\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "db5aac6634fbb92542486d273d93861dfd29061043d461ae494cfa2b2e9f4e4b",
+      "scope": "whole-file",
+      "line_count": 122,
+      "authoring_source": "course/file_units/completions.py",
+      "sections": [
+        "전체 구성",
+        "상태 자료구조",
+        "정적 초기화",
+        "스택과 lockdep",
+        "이름과 실제 동작",
+        "init과 reinit",
+        "대기 함수군",
+        "비대기와 알림 선언",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/completion.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "일을 마쳤다는 알림을 기다리는 상자를 만듭니다. 처음 상자를 만드는 일과 다음 일을 위해 알림 숫자만 지우는 일은 다릅니다.",
+    "meaning": "completion의 상태와 대기 줄, 초기화 종류와 함수 반환형을 구분합니다.",
+    "exercise": "init과 reinit이 각각 어떤 칸을 바꾸는지 비교해 보세요."
+  },
+  "goal": "completion의 상태와 대기 줄, 초기화 종류와 함수 반환형을 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "init과 reinit이 각각 어떤 칸을 바꾸는지 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "6ee39bae1a78cf75839fae95010194a6060fc587989d079ee93f9d99a83b0ab3",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,129 +5,155 @@
   "area": "균형 이진 트리 · 포인터 태깅 · 중복 키 · RCU",
   "track": "files",
   "kind": "kernel",
-  "intro": "트리 노드 접근과 연결, 외부 균형 함수 선언, 비교 콜백 기반 삽입·검색 helper를 제공합니다.",
+  "intro": "rbtree 헤더의 연결·캐시·중복 키 검색과 호출자 책임을 이해합니다.",
   "guide": [
-    "키 순서 결정과 트리 균형 복구를 분리합니다. 새 노드를 올바른 빈 링크에 연결한 뒤 색상·회전을 관리하는 함수를 호출합니다.",
-    "일관된 비교 관계와 객체 수명·동기화를 호출자가 보장합니다. RCU helper도 동시 회전 중 검색의 완전성을 보장하지 않는다는 원문 경고를 지켜야 합니다."
+    "비교 규칙은 삽입과 검색에서 같아야 합니다.",
+    "노드 수명과 동시 사용 규약은 호출자가 지킵니다.",
+    "safe는 모든 트리 변경을 허용한다는 말이 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구성",
-      "text": "SPDX와 역사적 설명, guard와 container_of/rbtree_types/stddef/rcupdate 포함 뒤에 부모·객체·빈 상태 매크로가 있습니다. 균형·순회·교체 외부 선언, 일반/RCU 연결과 safe 객체 변환, 후위 순회, 캐시 wrapper, 비교 연산 계약, 추가·중복 추가·검색·중복 순회 helper로 끝납니다. 실제 회전 함수 본문은 이 헤더에 없습니다."
+      "title": "헤더 지도",
+      "text": "라이선스·옛 설명, 가드와 네 헤더 뒤 부모·객체·빈 표지 매크로가 있습니다. 균형·순회·교체 선언, 일반·RCU 연결, safe 변환·후위 순회, 캐시, 비교 약속, 추가·찾아 추가·검색·같은 키 순회가 이어집니다. 실제 회전 본문은 다른 파일입니다."
     },
     {
-      "title": "부모와 미연결 표식",
-      "text": "rb_parent는 __rb_parent_color의 하위2비트를 ~3으로 지운 뒤 부모 포인터로 바꿉니다. RB_EMPTY_ROOT는 READ_ONCE로 루트 NULL 여부를 봅니다. RB_CLEAR_NODE는 부모·색상 필드에 자기 주소를 저장하고 RB_EMPTY_NODE는 그 값인지 확인합니다. 이 표식은 특정 트리 소속을 검색하지 않으며 일반 rb_erase를 불렀다고 자동 복구되는 계약으로 가정하면 안 됩니다."
+      "title": "부모와 미연결 표시",
+      "text": "rb_parent는 결합 필드의 아래 두 비트를 ~3으로 지워 주소를 얻습니다. EMPTY_ROOT는 READ_ONCE로 NULL을 봅니다. CLEAR_NODE는 필드에 자기 주소를 넣고 EMPTY_NODE는 그 표지인지 봅니다. 특정 트리에 있는지 전체 검색하지 않으며 일반 erase 뒤 자동으로 표지를 되돌린다고 가정하면 안 됩니다."
     },
     {
-      "title": "포함 객체와 NULL",
-      "text": "rb_entry는 container_of이고 rb_entry_safe는 입력을 임시 변수에 한 번 저장하여 NULL이면 NULL, 아니면 포함 객체를 반환합니다. safe라는 이름은 NULL 처리에 관한 것이며 임의로 해제된 포인터의 수명을 보호하지 않습니다."
+      "title": "전체 객체로 돌아가기",
+      "text": "rb_entry는 container_of입니다. safe는 입력을 임시 칸에 한 번 담아 NULL이면 NULL, 아니면 포함 객체를 줍니다. 이 safe는 NULL 대응이며 이미 해제된 객체 주소를 살려 주는 수명 보호는 아닙니다."
     },
     {
-      "title": "외부 API 선언",
-      "text": "rb_insert_color와 rb_erase가 균형 유지·삭제를 담당합니다. next/prev/first/last는 중위 순서, first_postorder/next_postorder는 자식 뒤 부모를 방문하는 순서를 제공합니다. replace_node와 replace_node_rcu는 제거·재삽입 없이 노드를 교체하는 API이며 정렬 위치에 맞는 키를 유지하는 등 교체 계약이 필요합니다. 선언만으로 모든 키 변경이 안전하다고 추측하지 않습니다."
+      "title": "외부 함수의 역할",
+      "text": "insert_color와 erase는 균형·삭제, first/last/next/prev는 정렬된 중위, postorder는 자식 뒤 부모 순회입니다. 일반·RCU replace는 삭제·재삽입 없이 교체하므로 같은 정렬 위치에 맞는 키 등 계약이 필요합니다. 모든 키 변경이 안전하다는 선언은 아닙니다."
     },
     {
-      "title": "연결과 공개 순서",
-      "text": "rb_link_node는 부모 필드를 저장하고 좌우 자식을 NULL로 만든 뒤 *rb_link에 새 노드를 씁니다. rcu 버전은 마지막 공개에 rcu_assign_pointer를 사용합니다. 이 두 함수 자체는 색상 균형 복구를 호출하지 않습니다. 부모와 링크 위치는 호출자가 올바르게 찾아 전달해야 합니다."
+      "title": "연결과 공개",
+      "text": "link_node는 부모를 넣고 좌우를 NULL로 한 뒤 찾은 링크 칸에 새 주소를 씁니다. RCU 버전은 마지막 공개에 rcu_assign_pointer를 씁니다. 앞서 준비한 내용이 공개보다 먼저 보이게 하는 약속입니다. 둘 다 균형 복구는 안 하며 올바른 부모와 빈 칸은 호출자가 찾아야 합니다."
     },
     {
-      "title": "후위 safe 순회의 제한",
-      "text": "rbtree_postorder_for_each_entry_safe는 현재 객체 처리 전에 다음 후위 노드를 계산합니다. 현재 객체의 메모리를 무효화하는 처리를 허용하지만 rb_erase처럼 트리를 재균형해 순서를 바꾸는 작업까지 허용하지 않습니다. 원문은 이런 변경이 일부 노드를 놓치게 할 수 있다고 경고합니다."
+      "title": "후위 safe의 제한",
+      "text": "현재 객체를 처리하기 전에 다음 방문 객체를 계산해 둡니다. 그래서 현재 메모리를 무효화해도 이어갈 수 있지만 rb_erase처럼 회전하여 방문 순서를 바꾸는 동작은 허용하지 않습니다. 그 경우 일부 노드를 놓칠 수 있다고 주석이 경고합니다."
     },
     {
-      "title": "캐시 삽입과 최소값",
-      "text": "rb_first_cached는 rb_leftmost를 직접 읽습니다. insert_color_cached는 leftmost가 true이면 캐시를 갱신한 뒤 일반 균형 함수를 호출합니다. leftmost 플래그는 호출자가 계산하거나 rb_add_cached가 탐색 과정에서 계산합니다. 잘못된 플래그는 캐시의 의미를 깨뜨립니다."
+      "title": "캐시 삽입",
+      "text": "first_cached는 저장된 leftmost를 바로 읽습니다. insert_color_cached는 leftmost=true일 때 새 주소로 바꾸고 일반 균형을 합니다. 이 플래그를 호출자가 올바로 정하거나 add_cached가 탐색 중 계산해야 합니다. 잘못 주면 캐시가 실제 최소를 가리키지 않습니다."
     },
     {
       "title": "캐시 삭제와 교체",
-      "text": "erase_cached는 삭제 노드가 최소이면 삭제 전에 rb_next로 새 최소를 구해 캐시에 저장하고 일반 삭제를 호출합니다. 반환값은 최소 노드가 바뀐 경우의 새 최소 또는 NULL입니다. NULL은 비최소 삭제일 수도 있고 마지막 노드 삭제일 수도 있습니다. replace_node_cached는 victim이 최소일 때 캐시를 new로 바꾼 뒤 일반 교체를 합니다."
+      "text": "삭제 대상이 최소일 때 삭제 전에 next로 새 최소를 얻고 캐시에 쓴 뒤 일반 erase를 합니다. 반환은 최소가 바뀐 경우 새 최소, 아니면 NULL입니다. NULL은 비최소 삭제일 수도 마지막 노드 삭제일 수도 있습니다. replace_cached도 대상이 최소일 때 캐시를 new로 고친 뒤 일반 교체합니다."
     },
     {
-      "title": "두 비교 규약",
-      "text": "less는 노드 두 개를 비교하는 bool이고 cmp는 음수/0/양수 결과를 냅니다. 검색용 cmp는 키 포인터와 노드 포인터를 받아 큰 임시 객체를 만들 필요가 없습니다. 삽입과 검색에서 비교 관계가 일관되어야 하며 동등한 노드가 여러 개면 일반 find가 어느 것을 반환할지 보장하지 않습니다."
+      "title": "비교 함수 두 종류",
+      "text": "less는 노드 두 개의 앞뒤를 bool로, cmp는 음수·0·양수로 줍니다. 검색 cmp는 키 주소와 노드 주소를 받아 커다란 임시 객체를 만들 필요가 없습니다. 같은 관계를 써야 하며 동등한 키가 여러 개면 일반 find가 그중 어느 것을 줄지는 보장하지 않습니다."
     },
     {
-      "title": "일반·캐시 삽입",
-      "text": "rb_add는 less이면 왼쪽, 아니면 오른쪽으로 내려가 빈 링크에 연결하고 균형을 복구합니다. 같은 키도 삽입할 수 있습니다. rb_add_cached도 같은 탐색을 하며 오른쪽으로 간 적이 있으면 leftmost=false입니다. 새 최소일 때 새 노드 포인터, 아니면 NULL을 반환하며 NULL도 정상 삽입 결과입니다."
+      "title": "그냥 추가하기",
+      "text": "add는 less이면 왼쪽, 아니면 오른쪽으로 가 빈 곳에 연결하고 색을 맞춥니다. 같은 키도 넣습니다. add_cached는 오른쪽으로 간 적이 있으면 leftmost=false입니다. 새 최소이면 새 노드 주소, 아니면 NULL을 주므로 NULL도 정상 삽입입니다."
     },
     {
-      "title": "찾거나 추가",
-      "text": "rb_find_add는 cmp0인 기존 노드를 발견하면 그 포인터를 반환하고 새 노드를 연결하지 않습니다. 끝까지 없으면 연결·균형 복구 후 NULL을 반환합니다. rcu 버전은 연결 공개를 rb_link_node_rcu로 바꿉니다. 삽입에 실패했다는 의미의 NULL이 아니며 두 경우의 새 객체 소유권을 호출자가 처리해야 합니다."
+      "title": "찾거나 새로 넣기",
+      "text": "find_add는 cmp=0인 기존 노드를 찾으면 그 주소를 주고 새 노드는 안 잇습니다. 없으면 연결·균형 뒤 NULL입니다. RCU 버전은 마지막 링크 공개 방식을 바꿉니다. NULL이 할당 실패는 아니며 쓰이지 않은 새 객체나 삽입된 객체의 소유권은 호출자가 다룹니다."
     },
     {
-      "title": "일반 검색과 RCU 검색",
-      "text": "rb_find는 키와 현재 노드를 비교해 한쪽 자식으로 내려가거나 일치 노드를 반환합니다. rb_find_rcu는 자식 접근에 rcu_dereference_raw를 쓰지만 동시 트리 회전 중 내려가는 경로가 일치를 놓칠 수 있다고 명시합니다. NULL 결과가 모든 동시 상황에서 키 부재를 증명하는 것은 아닙니다. 이 helper에 읽기 잠금·객체 회수 정책 전체가 포함된 것도 아닙니다."
+      "title": "일반과 RCU 검색",
+      "text": "find는 비교에 따라 자식 한쪽으로 가거나 일치 노드를 줍니다. RCU 검색은 자식 읽기에 rcu_dereference_raw를 쓰지만 동시 회전으로 일치를 놓칠 수 있습니다. NULL이 항상 부재 증명은 아닙니다. 읽기 구간 시작이나 객체 회수 규약 전체도 이 도구 안에 들어 있지 않습니다."
     },
     {
-      "title": "첫 일치와 같은 키 순회",
-      "text": "rb_find_first는 cmp0이면 후보를 저장하고 계속 왼쪽을 탐색해 가장 왼쪽 일치를 찾습니다. rb_next_match는 rb_next로 한 번 이동하고 cmp가0이 아니면 NULL입니다. rb_for_each는 이 둘을 조합해 같은 키의 인접한 중위 구간을 순회합니다. 비교 관계와 트리 순서가 맞아야 동등한 키의 구간 의미가 유지됩니다."
+      "title": "같은 키 모아 보기",
+      "text": "find_first는 일치 후보를 남기고 계속 왼쪽으로 가 가장 왼쪽 일치를 찾습니다. next_match는 next 한 번 뒤 비교가 다르면 NULL입니다. for_each는 둘을 묶어 같은 키의 연속된 중위 구간을 봅니다. 비교와 정렬이 맞아야 동등한 키가 한 구간이라는 뜻도 유지됩니다."
     },
     {
-      "title": "역사적 주석과 현재 코드",
-      "text": "파일 앞의 오래된 설명은 삽입·검색 핵심을 직접 작성해 콜백 비용을 피하는 방식을 강조하지만 파일 뒤에는 콜백 기반 helper가 실제로 존재합니다. 서두만 보고 콜백을 전혀 지원하지 않는다고 결론 내리지 않습니다. __always_inline helper의 최적화 가능성과 실제 호출 비용은 빌드 결과에 달려 있습니다."
+      "title": "옛 설명과 현재 기능",
+      "text": "서두는 직접 삽입·검색 코드를 써 콜백 비용을 피한다고 설명하지만 뒤에는 비교 콜백을 받는 함수가 실제 있습니다. 콜백이 전혀 없다고 요약하면 틀립니다. always_inline이 최적화를 돕더라도 실제 비용은 빌드 결과에 달립니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "이진 검색 순서와 균형 조건의 분리, 포인터 태깅, 중복 키·lower-bound형 탐색, 캐시 일관성, 후위 순회와 재균형, 메모리 수명과 검색 완전성의 차이를 학습합니다. 전체 헤더 경로를 대조했으며 외부 회전 구현이나 실제 RCU 경쟁을 실행 검증한 것으로 세지 않습니다."
+      "title": "검토 범위",
+      "text": "순서와 균형의 분리, 주소 태그, 중복 키의 첫 일치, 최소값 캐시, 후위 순회와 재균형, 수명과 검색 완전성을 배웁니다. 헤더 전체를 대조한 것이며 외부 회전이나 실제 RCU 경쟁을 실행 시험한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "rb_link_node만 호출하면 균형 복구도 완료되는가?",
+      "prompt": "link_node만 부르면 균형도 끝나나요?",
       "options": [
+        "아니다. 별도 균형 함수가 필요하다",
+        "그렇다. 내부에서 회전한다"
+      ],
+      "answer": 0,
+      "explanation": "연결 필드만 쓰며 add 같은 함수가 이어 insert_color를 부릅니다.",
+      "original_prompt": "rb_link_node만 호출하면 균형 복구도 완료되는가?",
+      "original_options": [
         "아니다. 연결 후 별도 균형 함수가 필요하다",
         "그렇다. 내부에서 회전까지 수행한다"
       ],
-      "answer": 0,
-      "explanation": "본문은 부모·자식과 링크 포인터를 설정할 뿐입니다. rb_add 같은 wrapper가 이어서 rb_insert_color를 호출합니다."
+      "original_explanation": "본문은 부모·자식과 링크 포인터를 설정할 뿐입니다. rb_add 같은 wrapper가 이어서 rb_insert_color를 호출합니다."
     },
     {
-      "prompt": "후위 safe 순회에서 rb_erase를 자유롭게 호출해도 되는가?",
+      "prompt": "후위 safe에서 erase를 마음대로 불러도 되나요?",
       "options": [
-        "된다. safe가 모든 트리 변경을 허용한다",
+        "된다. 모든 변경이 안전하다",
         "안 된다. 재균형으로 방문 순서가 바뀔 수 있다"
       ],
       "answer": 1,
-      "explanation": "원문 주석은 현재 메모리 무효화와 트리 재정렬을 구분하고 rb_erase로 노드를 놓칠 수 있다고 명시합니다."
+      "explanation": "현재 메모리 무효화와 트리 재정렬은 다릅니다.",
+      "original_prompt": "후위 safe 순회에서 rb_erase를 자유롭게 호출해도 되는가?",
+      "original_options": [
+        "된다. safe가 모든 트리 변경을 허용한다",
+        "안 된다. 재균형으로 방문 순서가 바뀔 수 있다"
+      ],
+      "original_explanation": "원문 주석은 현재 메모리 무효화와 트리 재정렬을 구분하고 rb_erase로 노드를 놓칠 수 있다고 명시합니다."
     },
     {
-      "prompt": "rb_find_add가 NULL을 반환하면?",
+      "prompt": "find_add의 NULL은?",
       "options": [
+        "일치가 없어 새 노드를 넣었다",
+        "할당 실패로 못 넣었다"
+      ],
+      "answer": 0,
+      "explanation": "객체 할당을 하지 않는 함수이며 일치하면 기존 주소를 줍니다.",
+      "original_prompt": "rb_find_add가 NULL을 반환하면?",
+      "original_options": [
         "일치 노드가 없어 새 노드를 삽입한 경우다",
         "메모리 할당 실패로 삽입하지 못한 경우다"
       ],
-      "answer": 0,
-      "explanation": "이 helper는 객체를 할당하지 않습니다. 일치하면 기존 포인터를 반환하고 새 삽입 경로 끝에서 NULL을 반환합니다."
+      "original_explanation": "이 helper는 객체를 할당하지 않습니다. 일치하면 기존 포인터를 반환하고 새 삽입 경로 끝에서 NULL을 반환합니다."
     },
     {
-      "prompt": "rb_find_rcu의 NULL은 동시 회전 중 키 부재의 완전한 증명인가?",
+      "prompt": "find_rcu의 NULL은 동시 회전 중에도 부재 증명인가요?",
       "options": [
+        "그렇다. RCU는 완전한 스냅샷이다",
+        "아니다. 존재하는 키를 놓칠 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "수명 보호와 검색 완전성은 다른 약속입니다.",
+      "original_prompt": "rb_find_rcu의 NULL은 동시 회전 중 키 부재의 완전한 증명인가?",
+      "original_options": [
         "그렇다. RCU 이름이 완전한 스냅샷을 보장한다",
         "아니다. 회전 경쟁으로 false negative가 가능하다"
       ],
-      "answer": 1,
-      "explanation": "함수 주석에 동시 회전과 탐색의 불완전성이 명시되어 있습니다. 객체 수명 보호와 탐색 결과 완전성은 다릅니다."
+      "original_explanation": "함수 주석에 동시 회전과 탐색의 불완전성이 명시되어 있습니다. 객체 수명 보호와 탐색 결과 완전성은 다릅니다."
     },
     {
-      "prompt": "같은 키 중 가장 왼쪽 노드를 찾으려면?",
+      "prompt": "같은 키 중 가장 왼쪽을 찾는 함수는?",
       "options": [
+        "rb_find_first",
+        "rb_find가 언제나 가장 왼쪽이다"
+      ],
+      "answer": 0,
+      "explanation": "일반 find는 처음 만난 일치에서 끝납니다.",
+      "original_prompt": "같은 키 중 가장 왼쪽 노드를 찾으려면?",
+      "original_options": [
         "rb_find_first를 사용한다",
         "rb_find가 항상 가장 왼쪽을 반환한다"
       ],
-      "answer": 0,
-      "explanation": "일반 find는 처음 만난 동등 노드에서 끝납니다. find_first는 일치 후보를 저장하고 왼쪽 탐색을 계속합니다."
+      "original_explanation": "일반 find는 처음 만난 동등 노드에서 끝납니다. find_first는 일치 후보를 저장하고 왼쪽 탐색을 계속합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "같은 키를 찾으면 기존 주소, 새로 넣으면 NULL인 find_add 반환을 두 경우로 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n  Red Black Trees\n  (C) 1999  Andrea Arcangeli <andrea@suse.de>\n  \n\n  linux/include/linux/rbtree.h\n\n  To use rbtrees you'll have to implement your own insert and search cores.\n  This will avoid us to use callbacks and to drop drammatically performances.\n  I know it's not the cleaner way,  but in C (not in C++) to get\n  performances and genericity...\n\n  See Documentation/core-api/rbtree.rst for documentation and samples.\n*/\n\n#ifndef\t_LINUX_RBTREE_H\n#define\t_LINUX_RBTREE_H\n\n#include <linux/container_of.h>\n#include <linux/rbtree_types.h>\n\n#include <linux/stddef.h>\n#include <linux/rcupdate.h>\n\n#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))\n\n#define\trb_entry(ptr, type, member) container_of(ptr, type, member)\n\n#define RB_EMPTY_ROOT(root)  (READ_ONCE((root)->rb_node) == NULL)\n\n/* 'empty' nodes are nodes that are known not to be inserted in an rbtree */\n#define RB_EMPTY_NODE(node)  \\\n\t((node)->__rb_parent_color == (unsigned long)(node))\n#define RB_CLEAR_NODE(node)  \\\n\t((node)->__rb_parent_color = (unsigned long)(node))\n\n\nextern void rb_insert_color(struct rb_node *, struct rb_root *);\nextern void rb_erase(struct rb_node *, struct rb_root *);\n\n\n/* Find logical next and previous nodes in a tree */\nextern struct rb_node *rb_next(const struct rb_node *);\nextern struct rb_node *rb_prev(const struct rb_node *);\nextern struct rb_node *rb_first(const struct rb_root *);\nextern struct rb_node *rb_last(const struct rb_root *);\n\n/* Postorder iteration - always visit the parent after its children */\nextern struct rb_node *rb_first_postorder(const struct rb_root *);\nextern struct rb_node *rb_next_postorder(const struct rb_node *);\n\n/* Fast replacement of a single node without remove/rebalance/add/rebalance */\nextern void rb_replace_node(struct rb_node *victim, struct rb_node *new,\n\t\t\t    struct rb_root *root);\nextern void rb_replace_node_rcu(struct rb_node *victim, struct rb_node *new,\n\t\t\t\tstruct rb_root *root);\n\nstatic inline void rb_link_node(struct rb_node *node, struct rb_node *parent,\n\t\t\t\tstruct rb_node **rb_link)\n{\n\tnode->__rb_parent_color = (unsigned long)parent;\n\tnode->rb_left = node->rb_right = NULL;\n\n\t*rb_link = node;\n}\n\nstatic inline void rb_link_node_rcu(struct rb_node *node, struct rb_node *parent,\n\t\t\t\t    struct rb_node **rb_link)\n{\n\tnode->__rb_parent_color = (unsigned long)parent;\n\tnode->rb_left = node->rb_right = NULL;\n\n\trcu_assign_pointer(*rb_link, node);\n}\n\n#define rb_entry_safe(ptr, type, member) \\\n\t({ typeof(ptr) ____ptr = (ptr); \\\n\t   ____ptr ? rb_entry(____ptr, type, member) : NULL; \\\n\t})\n\n/**\n * rbtree_postorder_for_each_entry_safe - iterate in post-order over rb_root of\n * given type allowing the backing memory of @pos to be invalidated\n *\n * @pos:\tthe 'type *' to use as a loop cursor.\n * @n:\t\tanother 'type *' to use as temporary storage\n * @root:\t'rb_root *' of the rbtree.\n * @field:\tthe name of the rb_node field within 'type'.\n *\n * rbtree_postorder_for_each_entry_safe() provides a similar guarantee as\n * list_for_each_entry_safe() and allows the iteration to continue independent\n * of changes to @pos by the body of the loop.\n *\n * Note, however, that it cannot handle other modifications that re-order the\n * rbtree it is iterating over. This includes calling rb_erase() on @pos, as\n * rb_erase() may rebalance the tree, causing us to miss some nodes.\n */\n#define rbtree_postorder_for_each_entry_safe(pos, n, root, field) \\\n\tfor (pos = rb_entry_safe(rb_first_postorder(root), typeof(*pos), field); \\\n\t     pos && ({ n = rb_entry_safe(rb_next_postorder(&pos->field), \\\n\t\t\ttypeof(*pos), field); 1; }); \\\n\t     pos = n)\n\n/* Same as rb_first(), but O(1) */\n#define rb_first_cached(root) (root)->rb_leftmost\n\nstatic inline void rb_insert_color_cached(struct rb_node *node,\n\t\t\t\t\t  struct rb_root_cached *root,\n\t\t\t\t\t  bool leftmost)\n{\n\tif (leftmost)\n\t\troot->rb_leftmost = node;\n\trb_insert_color(node, &root->rb_root);\n}\n\n\nstatic inline struct rb_node *\nrb_erase_cached(struct rb_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node *leftmost = NULL;\n\n\tif (root->rb_leftmost == node)\n\t\tleftmost = root->rb_leftmost = rb_next(node);\n\n\trb_erase(node, &root->rb_root);\n\n\treturn leftmost;\n}\n\nstatic inline void rb_replace_node_cached(struct rb_node *victim,\n\t\t\t\t\t  struct rb_node *new,\n\t\t\t\t\t  struct rb_root_cached *root)\n{\n\tif (root->rb_leftmost == victim)\n\t\troot->rb_leftmost = new;\n\trb_replace_node(victim, new, &root->rb_root);\n}\n\n/*\n * The below helper functions use 2 operators with 3 different\n * calling conventions. The operators are related like:\n *\n *\tcomp(a->key,b) < 0  := less(a,b)\n *\tcomp(a->key,b) > 0  := less(b,a)\n *\tcomp(a->key,b) == 0 := !less(a,b) && !less(b,a)\n *\n * If these operators define a partial order on the elements we make no\n * guarantee on which of the elements matching the key is found. See\n * rb_find().\n *\n * The reason for this is to allow the find() interface without requiring an\n * on-stack dummy object, which might not be feasible due to object size.\n */\n\n/**\n * rb_add_cached() - insert @node into the leftmost cached tree @tree\n * @node: node to insert\n * @tree: leftmost cached tree to insert @node into\n * @less: operator defining the (partial) node order\n *\n * Returns @node when it is the new leftmost, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_add_cached(struct rb_node *node, struct rb_root_cached *tree,\n\t      bool (*less)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_root.rb_node;\n\tstruct rb_node *parent = NULL;\n\tbool leftmost = true;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tif (less(node, parent)) {\n\t\t\tlink = &parent->rb_left;\n\t\t} else {\n\t\t\tlink = &parent->rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color_cached(node, tree, leftmost);\n\n\treturn leftmost ? node : NULL;\n}\n\n/**\n * rb_add() - insert @node into @tree\n * @node: node to insert\n * @tree: tree to insert @node into\n * @less: operator defining the (partial) node order\n */\nstatic __always_inline void\nrb_add(struct rb_node *node, struct rb_root *tree,\n       bool (*less)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tif (less(node, parent))\n\t\t\tlink = &parent->rb_left;\n\t\telse\n\t\t\tlink = &parent->rb_right;\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color(node, tree);\n}\n\n/**\n * rb_find_add() - find equivalent @node in @tree, or add @node\n * @node: node to look-for / insert\n * @tree: tree to search / modify\n * @cmp: operator defining the node order\n *\n * Returns the rb_node matching @node, or NULL when no match is found and @node\n * is inserted.\n */\nstatic __always_inline struct rb_node *\nrb_find_add(struct rb_node *node, struct rb_root *tree,\n\t    int (*cmp)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\tint c;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tc = cmp(node, parent);\n\n\t\tif (c < 0)\n\t\t\tlink = &parent->rb_left;\n\t\telse if (c > 0)\n\t\t\tlink = &parent->rb_right;\n\t\telse\n\t\t\treturn parent;\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color(node, tree);\n\treturn NULL;\n}\n\n/**\n * rb_find_add_rcu() - find equivalent @node in @tree, or add @node\n * @node: node to look-for / insert\n * @tree: tree to search / modify\n * @cmp: operator defining the node order\n *\n * Adds a Store-Release for link_node.\n *\n * Returns the rb_node matching @node, or NULL when no match is found and @node\n * is inserted.\n */\nstatic __always_inline struct rb_node *\nrb_find_add_rcu(struct rb_node *node, struct rb_root *tree,\n\t\tint (*cmp)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\tint c;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tc = cmp(node, parent);\n\n\t\tif (c < 0)\n\t\t\tlink = &parent->rb_left;\n\t\telse if (c > 0)\n\t\t\tlink = &parent->rb_right;\n\t\telse\n\t\t\treturn parent;\n\t}\n\n\trb_link_node_rcu(node, parent, link);\n\trb_insert_color(node, tree);\n\treturn NULL;\n}\n\n/**\n * rb_find() - find @key in tree @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining the node order\n *\n * Returns the rb_node matching @key or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find(const void *key, const struct rb_root *tree,\n\tint (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c < 0)\n\t\t\tnode = node->rb_left;\n\t\telse if (c > 0)\n\t\t\tnode = node->rb_right;\n\t\telse\n\t\t\treturn node;\n\t}\n\n\treturn NULL;\n}\n\n/**\n * rb_find_rcu() - find @key in tree @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining the node order\n *\n * Notably, tree descent vs concurrent tree rotations is unsound and can result\n * in false-negatives.\n *\n * Returns the rb_node matching @key or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find_rcu(const void *key, const struct rb_root *tree,\n\t    int (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c < 0)\n\t\t\tnode = rcu_dereference_raw(node->rb_left);\n\t\telse if (c > 0)\n\t\t\tnode = rcu_dereference_raw(node->rb_right);\n\t\telse\n\t\t\treturn node;\n\t}\n\n\treturn NULL;\n}\n\n/**\n * rb_find_first() - find the first @key in @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n *\n * Returns the leftmost node matching @key, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find_first(const void *key, const struct rb_root *tree,\n\t      int (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\tstruct rb_node *match = NULL;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c <= 0) {\n\t\t\tif (!c)\n\t\t\t\tmatch = node;\n\t\t\tnode = node->rb_left;\n\t\t} else if (c > 0) {\n\t\t\tnode = node->rb_right;\n\t\t}\n\t}\n\n\treturn match;\n}\n\n/**\n * rb_next_match() - find the next @key in @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n *\n * Returns the next node matching @key, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_next_match(const void *key, struct rb_node *node,\n\t      int (*cmp)(const void *key, const struct rb_node *))\n{\n\tnode = rb_next(node);\n\tif (node && cmp(key, node))\n\t\tnode = NULL;\n\treturn node;\n}\n\n/**\n * rb_for_each() - iterates a subtree matching @key\n * @node: iterator\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n */\n#define rb_for_each(node, key, tree, cmp) \\\n\tfor ((node) = rb_find_first((key), (tree), (cmp)); \\\n\t     (node); (node) = rb_next_match((key), (node), (cmp)))\n\n#endif\t/* _LINUX_RBTREE_H */\n",
   "source_review": {
@@ -160,5 +186,197 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/rbtree.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-bfda118abeee0baa",
+    "path": "include/linux/rbtree.h",
+    "title": "레드블랙 트리 인터페이스 전체: 연결·캐시·중복 검색·RCU 한계",
+    "area": "균형 이진 트리 · 포인터 태깅 · 중복 키 · RCU",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "트리 노드 접근과 연결, 외부 균형 함수 선언, 비교 콜백 기반 삽입·검색 helper를 제공합니다.",
+    "guide": [
+      "키 순서 결정과 트리 균형 복구를 분리합니다. 새 노드를 올바른 빈 링크에 연결한 뒤 색상·회전을 관리하는 함수를 호출합니다.",
+      "일관된 비교 관계와 객체 수명·동기화를 호출자가 보장합니다. RCU helper도 동시 회전 중 검색의 완전성을 보장하지 않는다는 원문 경고를 지켜야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "SPDX와 역사적 설명, guard와 container_of/rbtree_types/stddef/rcupdate 포함 뒤에 부모·객체·빈 상태 매크로가 있습니다. 균형·순회·교체 외부 선언, 일반/RCU 연결과 safe 객체 변환, 후위 순회, 캐시 wrapper, 비교 연산 계약, 추가·중복 추가·검색·중복 순회 helper로 끝납니다. 실제 회전 함수 본문은 이 헤더에 없습니다."
+      },
+      {
+        "title": "부모와 미연결 표식",
+        "text": "rb_parent는 __rb_parent_color의 하위2비트를 ~3으로 지운 뒤 부모 포인터로 바꿉니다. RB_EMPTY_ROOT는 READ_ONCE로 루트 NULL 여부를 봅니다. RB_CLEAR_NODE는 부모·색상 필드에 자기 주소를 저장하고 RB_EMPTY_NODE는 그 값인지 확인합니다. 이 표식은 특정 트리 소속을 검색하지 않으며 일반 rb_erase를 불렀다고 자동 복구되는 계약으로 가정하면 안 됩니다."
+      },
+      {
+        "title": "포함 객체와 NULL",
+        "text": "rb_entry는 container_of이고 rb_entry_safe는 입력을 임시 변수에 한 번 저장하여 NULL이면 NULL, 아니면 포함 객체를 반환합니다. safe라는 이름은 NULL 처리에 관한 것이며 임의로 해제된 포인터의 수명을 보호하지 않습니다."
+      },
+      {
+        "title": "외부 API 선언",
+        "text": "rb_insert_color와 rb_erase가 균형 유지·삭제를 담당합니다. next/prev/first/last는 중위 순서, first_postorder/next_postorder는 자식 뒤 부모를 방문하는 순서를 제공합니다. replace_node와 replace_node_rcu는 제거·재삽입 없이 노드를 교체하는 API이며 정렬 위치에 맞는 키를 유지하는 등 교체 계약이 필요합니다. 선언만으로 모든 키 변경이 안전하다고 추측하지 않습니다."
+      },
+      {
+        "title": "연결과 공개 순서",
+        "text": "rb_link_node는 부모 필드를 저장하고 좌우 자식을 NULL로 만든 뒤 *rb_link에 새 노드를 씁니다. rcu 버전은 마지막 공개에 rcu_assign_pointer를 사용합니다. 이 두 함수 자체는 색상 균형 복구를 호출하지 않습니다. 부모와 링크 위치는 호출자가 올바르게 찾아 전달해야 합니다."
+      },
+      {
+        "title": "후위 safe 순회의 제한",
+        "text": "rbtree_postorder_for_each_entry_safe는 현재 객체 처리 전에 다음 후위 노드를 계산합니다. 현재 객체의 메모리를 무효화하는 처리를 허용하지만 rb_erase처럼 트리를 재균형해 순서를 바꾸는 작업까지 허용하지 않습니다. 원문은 이런 변경이 일부 노드를 놓치게 할 수 있다고 경고합니다."
+      },
+      {
+        "title": "캐시 삽입과 최소값",
+        "text": "rb_first_cached는 rb_leftmost를 직접 읽습니다. insert_color_cached는 leftmost가 true이면 캐시를 갱신한 뒤 일반 균형 함수를 호출합니다. leftmost 플래그는 호출자가 계산하거나 rb_add_cached가 탐색 과정에서 계산합니다. 잘못된 플래그는 캐시의 의미를 깨뜨립니다."
+      },
+      {
+        "title": "캐시 삭제와 교체",
+        "text": "erase_cached는 삭제 노드가 최소이면 삭제 전에 rb_next로 새 최소를 구해 캐시에 저장하고 일반 삭제를 호출합니다. 반환값은 최소 노드가 바뀐 경우의 새 최소 또는 NULL입니다. NULL은 비최소 삭제일 수도 있고 마지막 노드 삭제일 수도 있습니다. replace_node_cached는 victim이 최소일 때 캐시를 new로 바꾼 뒤 일반 교체를 합니다."
+      },
+      {
+        "title": "두 비교 규약",
+        "text": "less는 노드 두 개를 비교하는 bool이고 cmp는 음수/0/양수 결과를 냅니다. 검색용 cmp는 키 포인터와 노드 포인터를 받아 큰 임시 객체를 만들 필요가 없습니다. 삽입과 검색에서 비교 관계가 일관되어야 하며 동등한 노드가 여러 개면 일반 find가 어느 것을 반환할지 보장하지 않습니다."
+      },
+      {
+        "title": "일반·캐시 삽입",
+        "text": "rb_add는 less이면 왼쪽, 아니면 오른쪽으로 내려가 빈 링크에 연결하고 균형을 복구합니다. 같은 키도 삽입할 수 있습니다. rb_add_cached도 같은 탐색을 하며 오른쪽으로 간 적이 있으면 leftmost=false입니다. 새 최소일 때 새 노드 포인터, 아니면 NULL을 반환하며 NULL도 정상 삽입 결과입니다."
+      },
+      {
+        "title": "찾거나 추가",
+        "text": "rb_find_add는 cmp0인 기존 노드를 발견하면 그 포인터를 반환하고 새 노드를 연결하지 않습니다. 끝까지 없으면 연결·균형 복구 후 NULL을 반환합니다. rcu 버전은 연결 공개를 rb_link_node_rcu로 바꿉니다. 삽입에 실패했다는 의미의 NULL이 아니며 두 경우의 새 객체 소유권을 호출자가 처리해야 합니다."
+      },
+      {
+        "title": "일반 검색과 RCU 검색",
+        "text": "rb_find는 키와 현재 노드를 비교해 한쪽 자식으로 내려가거나 일치 노드를 반환합니다. rb_find_rcu는 자식 접근에 rcu_dereference_raw를 쓰지만 동시 트리 회전 중 내려가는 경로가 일치를 놓칠 수 있다고 명시합니다. NULL 결과가 모든 동시 상황에서 키 부재를 증명하는 것은 아닙니다. 이 helper에 읽기 잠금·객체 회수 정책 전체가 포함된 것도 아닙니다."
+      },
+      {
+        "title": "첫 일치와 같은 키 순회",
+        "text": "rb_find_first는 cmp0이면 후보를 저장하고 계속 왼쪽을 탐색해 가장 왼쪽 일치를 찾습니다. rb_next_match는 rb_next로 한 번 이동하고 cmp가0이 아니면 NULL입니다. rb_for_each는 이 둘을 조합해 같은 키의 인접한 중위 구간을 순회합니다. 비교 관계와 트리 순서가 맞아야 동등한 키의 구간 의미가 유지됩니다."
+      },
+      {
+        "title": "역사적 주석과 현재 코드",
+        "text": "파일 앞의 오래된 설명은 삽입·검색 핵심을 직접 작성해 콜백 비용을 피하는 방식을 강조하지만 파일 뒤에는 콜백 기반 helper가 실제로 존재합니다. 서두만 보고 콜백을 전혀 지원하지 않는다고 결론 내리지 않습니다. __always_inline helper의 최적화 가능성과 실제 호출 비용은 빌드 결과에 달려 있습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "이진 검색 순서와 균형 조건의 분리, 포인터 태깅, 중복 키·lower-bound형 탐색, 캐시 일관성, 후위 순회와 재균형, 메모리 수명과 검색 완전성의 차이를 학습합니다. 전체 헤더 경로를 대조했으며 외부 회전 구현이나 실제 RCU 경쟁을 실행 검증한 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "rb_link_node만 호출하면 균형 복구도 완료되는가?",
+        "options": [
+          "아니다. 연결 후 별도 균형 함수가 필요하다",
+          "그렇다. 내부에서 회전까지 수행한다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 부모·자식과 링크 포인터를 설정할 뿐입니다. rb_add 같은 wrapper가 이어서 rb_insert_color를 호출합니다."
+      },
+      {
+        "prompt": "후위 safe 순회에서 rb_erase를 자유롭게 호출해도 되는가?",
+        "options": [
+          "된다. safe가 모든 트리 변경을 허용한다",
+          "안 된다. 재균형으로 방문 순서가 바뀔 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "원문 주석은 현재 메모리 무효화와 트리 재정렬을 구분하고 rb_erase로 노드를 놓칠 수 있다고 명시합니다."
+      },
+      {
+        "prompt": "rb_find_add가 NULL을 반환하면?",
+        "options": [
+          "일치 노드가 없어 새 노드를 삽입한 경우다",
+          "메모리 할당 실패로 삽입하지 못한 경우다"
+        ],
+        "answer": 0,
+        "explanation": "이 helper는 객체를 할당하지 않습니다. 일치하면 기존 포인터를 반환하고 새 삽입 경로 끝에서 NULL을 반환합니다."
+      },
+      {
+        "prompt": "rb_find_rcu의 NULL은 동시 회전 중 키 부재의 완전한 증명인가?",
+        "options": [
+          "그렇다. RCU 이름이 완전한 스냅샷을 보장한다",
+          "아니다. 회전 경쟁으로 false negative가 가능하다"
+        ],
+        "answer": 1,
+        "explanation": "함수 주석에 동시 회전과 탐색의 불완전성이 명시되어 있습니다. 객체 수명 보호와 탐색 결과 완전성은 다릅니다."
+      },
+      {
+        "prompt": "같은 키 중 가장 왼쪽 노드를 찾으려면?",
+        "options": [
+          "rb_find_first를 사용한다",
+          "rb_find가 항상 가장 왼쪽을 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "일반 find는 처음 만난 동등 노드에서 끝납니다. find_first는 일치 후보를 저장하고 왼쪽 탐색을 계속합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n/*\n  Red Black Trees\n  (C) 1999  Andrea Arcangeli <andrea@suse.de>\n  \n\n  linux/include/linux/rbtree.h\n\n  To use rbtrees you'll have to implement your own insert and search cores.\n  This will avoid us to use callbacks and to drop drammatically performances.\n  I know it's not the cleaner way,  but in C (not in C++) to get\n  performances and genericity...\n\n  See Documentation/core-api/rbtree.rst for documentation and samples.\n*/\n\n#ifndef\t_LINUX_RBTREE_H\n#define\t_LINUX_RBTREE_H\n\n#include <linux/container_of.h>\n#include <linux/rbtree_types.h>\n\n#include <linux/stddef.h>\n#include <linux/rcupdate.h>\n\n#define rb_parent(r)   ((struct rb_node *)((r)->__rb_parent_color & ~3))\n\n#define\trb_entry(ptr, type, member) container_of(ptr, type, member)\n\n#define RB_EMPTY_ROOT(root)  (READ_ONCE((root)->rb_node) == NULL)\n\n/* 'empty' nodes are nodes that are known not to be inserted in an rbtree */\n#define RB_EMPTY_NODE(node)  \\\n\t((node)->__rb_parent_color == (unsigned long)(node))\n#define RB_CLEAR_NODE(node)  \\\n\t((node)->__rb_parent_color = (unsigned long)(node))\n\n\nextern void rb_insert_color(struct rb_node *, struct rb_root *);\nextern void rb_erase(struct rb_node *, struct rb_root *);\n\n\n/* Find logical next and previous nodes in a tree */\nextern struct rb_node *rb_next(const struct rb_node *);\nextern struct rb_node *rb_prev(const struct rb_node *);\nextern struct rb_node *rb_first(const struct rb_root *);\nextern struct rb_node *rb_last(const struct rb_root *);\n\n/* Postorder iteration - always visit the parent after its children */\nextern struct rb_node *rb_first_postorder(const struct rb_root *);\nextern struct rb_node *rb_next_postorder(const struct rb_node *);\n\n/* Fast replacement of a single node without remove/rebalance/add/rebalance */\nextern void rb_replace_node(struct rb_node *victim, struct rb_node *new,\n\t\t\t    struct rb_root *root);\nextern void rb_replace_node_rcu(struct rb_node *victim, struct rb_node *new,\n\t\t\t\tstruct rb_root *root);\n\nstatic inline void rb_link_node(struct rb_node *node, struct rb_node *parent,\n\t\t\t\tstruct rb_node **rb_link)\n{\n\tnode->__rb_parent_color = (unsigned long)parent;\n\tnode->rb_left = node->rb_right = NULL;\n\n\t*rb_link = node;\n}\n\nstatic inline void rb_link_node_rcu(struct rb_node *node, struct rb_node *parent,\n\t\t\t\t    struct rb_node **rb_link)\n{\n\tnode->__rb_parent_color = (unsigned long)parent;\n\tnode->rb_left = node->rb_right = NULL;\n\n\trcu_assign_pointer(*rb_link, node);\n}\n\n#define rb_entry_safe(ptr, type, member) \\\n\t({ typeof(ptr) ____ptr = (ptr); \\\n\t   ____ptr ? rb_entry(____ptr, type, member) : NULL; \\\n\t})\n\n/**\n * rbtree_postorder_for_each_entry_safe - iterate in post-order over rb_root of\n * given type allowing the backing memory of @pos to be invalidated\n *\n * @pos:\tthe 'type *' to use as a loop cursor.\n * @n:\t\tanother 'type *' to use as temporary storage\n * @root:\t'rb_root *' of the rbtree.\n * @field:\tthe name of the rb_node field within 'type'.\n *\n * rbtree_postorder_for_each_entry_safe() provides a similar guarantee as\n * list_for_each_entry_safe() and allows the iteration to continue independent\n * of changes to @pos by the body of the loop.\n *\n * Note, however, that it cannot handle other modifications that re-order the\n * rbtree it is iterating over. This includes calling rb_erase() on @pos, as\n * rb_erase() may rebalance the tree, causing us to miss some nodes.\n */\n#define rbtree_postorder_for_each_entry_safe(pos, n, root, field) \\\n\tfor (pos = rb_entry_safe(rb_first_postorder(root), typeof(*pos), field); \\\n\t     pos && ({ n = rb_entry_safe(rb_next_postorder(&pos->field), \\\n\t\t\ttypeof(*pos), field); 1; }); \\\n\t     pos = n)\n\n/* Same as rb_first(), but O(1) */\n#define rb_first_cached(root) (root)->rb_leftmost\n\nstatic inline void rb_insert_color_cached(struct rb_node *node,\n\t\t\t\t\t  struct rb_root_cached *root,\n\t\t\t\t\t  bool leftmost)\n{\n\tif (leftmost)\n\t\troot->rb_leftmost = node;\n\trb_insert_color(node, &root->rb_root);\n}\n\n\nstatic inline struct rb_node *\nrb_erase_cached(struct rb_node *node, struct rb_root_cached *root)\n{\n\tstruct rb_node *leftmost = NULL;\n\n\tif (root->rb_leftmost == node)\n\t\tleftmost = root->rb_leftmost = rb_next(node);\n\n\trb_erase(node, &root->rb_root);\n\n\treturn leftmost;\n}\n\nstatic inline void rb_replace_node_cached(struct rb_node *victim,\n\t\t\t\t\t  struct rb_node *new,\n\t\t\t\t\t  struct rb_root_cached *root)\n{\n\tif (root->rb_leftmost == victim)\n\t\troot->rb_leftmost = new;\n\trb_replace_node(victim, new, &root->rb_root);\n}\n\n/*\n * The below helper functions use 2 operators with 3 different\n * calling conventions. The operators are related like:\n *\n *\tcomp(a->key,b) < 0  := less(a,b)\n *\tcomp(a->key,b) > 0  := less(b,a)\n *\tcomp(a->key,b) == 0 := !less(a,b) && !less(b,a)\n *\n * If these operators define a partial order on the elements we make no\n * guarantee on which of the elements matching the key is found. See\n * rb_find().\n *\n * The reason for this is to allow the find() interface without requiring an\n * on-stack dummy object, which might not be feasible due to object size.\n */\n\n/**\n * rb_add_cached() - insert @node into the leftmost cached tree @tree\n * @node: node to insert\n * @tree: leftmost cached tree to insert @node into\n * @less: operator defining the (partial) node order\n *\n * Returns @node when it is the new leftmost, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_add_cached(struct rb_node *node, struct rb_root_cached *tree,\n\t      bool (*less)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_root.rb_node;\n\tstruct rb_node *parent = NULL;\n\tbool leftmost = true;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tif (less(node, parent)) {\n\t\t\tlink = &parent->rb_left;\n\t\t} else {\n\t\t\tlink = &parent->rb_right;\n\t\t\tleftmost = false;\n\t\t}\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color_cached(node, tree, leftmost);\n\n\treturn leftmost ? node : NULL;\n}\n\n/**\n * rb_add() - insert @node into @tree\n * @node: node to insert\n * @tree: tree to insert @node into\n * @less: operator defining the (partial) node order\n */\nstatic __always_inline void\nrb_add(struct rb_node *node, struct rb_root *tree,\n       bool (*less)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tif (less(node, parent))\n\t\t\tlink = &parent->rb_left;\n\t\telse\n\t\t\tlink = &parent->rb_right;\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color(node, tree);\n}\n\n/**\n * rb_find_add() - find equivalent @node in @tree, or add @node\n * @node: node to look-for / insert\n * @tree: tree to search / modify\n * @cmp: operator defining the node order\n *\n * Returns the rb_node matching @node, or NULL when no match is found and @node\n * is inserted.\n */\nstatic __always_inline struct rb_node *\nrb_find_add(struct rb_node *node, struct rb_root *tree,\n\t    int (*cmp)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\tint c;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tc = cmp(node, parent);\n\n\t\tif (c < 0)\n\t\t\tlink = &parent->rb_left;\n\t\telse if (c > 0)\n\t\t\tlink = &parent->rb_right;\n\t\telse\n\t\t\treturn parent;\n\t}\n\n\trb_link_node(node, parent, link);\n\trb_insert_color(node, tree);\n\treturn NULL;\n}\n\n/**\n * rb_find_add_rcu() - find equivalent @node in @tree, or add @node\n * @node: node to look-for / insert\n * @tree: tree to search / modify\n * @cmp: operator defining the node order\n *\n * Adds a Store-Release for link_node.\n *\n * Returns the rb_node matching @node, or NULL when no match is found and @node\n * is inserted.\n */\nstatic __always_inline struct rb_node *\nrb_find_add_rcu(struct rb_node *node, struct rb_root *tree,\n\t\tint (*cmp)(struct rb_node *, const struct rb_node *))\n{\n\tstruct rb_node **link = &tree->rb_node;\n\tstruct rb_node *parent = NULL;\n\tint c;\n\n\twhile (*link) {\n\t\tparent = *link;\n\t\tc = cmp(node, parent);\n\n\t\tif (c < 0)\n\t\t\tlink = &parent->rb_left;\n\t\telse if (c > 0)\n\t\t\tlink = &parent->rb_right;\n\t\telse\n\t\t\treturn parent;\n\t}\n\n\trb_link_node_rcu(node, parent, link);\n\trb_insert_color(node, tree);\n\treturn NULL;\n}\n\n/**\n * rb_find() - find @key in tree @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining the node order\n *\n * Returns the rb_node matching @key or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find(const void *key, const struct rb_root *tree,\n\tint (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c < 0)\n\t\t\tnode = node->rb_left;\n\t\telse if (c > 0)\n\t\t\tnode = node->rb_right;\n\t\telse\n\t\t\treturn node;\n\t}\n\n\treturn NULL;\n}\n\n/**\n * rb_find_rcu() - find @key in tree @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining the node order\n *\n * Notably, tree descent vs concurrent tree rotations is unsound and can result\n * in false-negatives.\n *\n * Returns the rb_node matching @key or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find_rcu(const void *key, const struct rb_root *tree,\n\t    int (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c < 0)\n\t\t\tnode = rcu_dereference_raw(node->rb_left);\n\t\telse if (c > 0)\n\t\t\tnode = rcu_dereference_raw(node->rb_right);\n\t\telse\n\t\t\treturn node;\n\t}\n\n\treturn NULL;\n}\n\n/**\n * rb_find_first() - find the first @key in @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n *\n * Returns the leftmost node matching @key, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_find_first(const void *key, const struct rb_root *tree,\n\t      int (*cmp)(const void *key, const struct rb_node *))\n{\n\tstruct rb_node *node = tree->rb_node;\n\tstruct rb_node *match = NULL;\n\n\twhile (node) {\n\t\tint c = cmp(key, node);\n\n\t\tif (c <= 0) {\n\t\t\tif (!c)\n\t\t\t\tmatch = node;\n\t\t\tnode = node->rb_left;\n\t\t} else if (c > 0) {\n\t\t\tnode = node->rb_right;\n\t\t}\n\t}\n\n\treturn match;\n}\n\n/**\n * rb_next_match() - find the next @key in @tree\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n *\n * Returns the next node matching @key, or NULL.\n */\nstatic __always_inline struct rb_node *\nrb_next_match(const void *key, struct rb_node *node,\n\t      int (*cmp)(const void *key, const struct rb_node *))\n{\n\tnode = rb_next(node);\n\tif (node && cmp(key, node))\n\t\tnode = NULL;\n\treturn node;\n}\n\n/**\n * rb_for_each() - iterates a subtree matching @key\n * @node: iterator\n * @key: key to match\n * @tree: tree to search\n * @cmp: operator defining node order\n */\n#define rb_for_each(node, key, tree, cmp) \\\n\tfor ((node) = rb_find_first((key), (tree), (cmp)); \\\n\t     (node); (node) = rb_next_match((key), (node), (cmp)))\n\n#endif\t/* _LINUX_RBTREE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f80d6c4d8ed7ac6f4714a500e4080bcd5070279496a82f602b517055bbbcbd6e",
+      "scope": "whole-file",
+      "line_count": 401,
+      "authoring_source": "course/file_units/rbtree_interfaces.py",
+      "sections": [
+        "파일 전체 구성",
+        "부모와 미연결 표식",
+        "포함 객체와 NULL",
+        "외부 API 선언",
+        "연결과 공개 순서",
+        "후위 safe 순회의 제한",
+        "캐시 삽입과 최소값",
+        "캐시 삭제와 교체",
+        "두 비교 규약",
+        "일반·캐시 삽입",
+        "찾거나 추가",
+        "일반 검색과 RCU 검색",
+        "첫 일치와 같은 키 순회",
+        "역사적 주석과 현재 코드",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/rbtree.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "빈 자리를 찾아 노드를 연결하는 일과 색 균형을 맞추는 일을 나눕니다. 편의 함수의 이름이 safe나 RCU여도 무엇까지 보장하는지 확인해야 합니다.",
+    "meaning": "rbtree 헤더의 연결·캐시·중복 키 검색과 호출자 책임을 이해합니다.",
+    "exercise": "같은 키를 찾으면 기존 주소, 새로 넣으면 NULL인 find_add 반환을 두 경우로 적어 보세요."
+  },
+  "goal": "rbtree 헤더의 연결·캐시·중복 키 검색과 호출자 책임을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "같은 키를 찾으면 기존 주소, 새로 넣으면 NULL인 find_add 반환을 두 경우로 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "22629b1bbf00ca6d1a395fc30434948dc7b7327307b53849effbe0dd1f69d576",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

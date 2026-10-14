@@ -5,54 +5,62 @@
   "area": "callback · 모듈 연결 · 함수 테이블 · KUnit",
   "track": "files",
   "kind": "kernel",
-  "intro": "구현 함수 선언과 inline 설치 함수 전체를 분석합니다.",
+  "intro": "KUnit hook 함수 선언과 연결·실행 상태를 구별합니다.",
   "guide": [
-    "공통 테이블의 저장소 정의와 실제 callback 연결은 별도 단계로 관리할 수 있습니다.",
-    "extern 함수 선언, format annotation, 포인터 대입과 실행 상태를 구분합니다."
+    "hook은 필요할 때 호출하도록 함수 주소를 연결해 두는 자리입니다. callback 주소를 저장하는 일과 그 함수를 실행하는 일은 다릅니다.",
+    "함수 선언은 인수와 반환값을 알려 줍니다. __printf 표시는 문자열 형식과 추가 인수가 맞는지 컴파일러가 확인하도록 돕습니다.",
+    "hook 테이블과 kunit_running이라는 실행 상태 표시는 별개입니다. 연결만 했다고 현재 작업에 테스트 문맥이 생기는 것은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "헤더와 구현 선언",
-      "text": "GPL-2.0 guard 안에 test-bug.h를 포함합니다. __kunit_fail_current_test_impl은 file,line,fmt,...를 받는 void 함수이며 __printf(3,4) annotation을 가집니다. __kunit_get_static_stub_address_impl은 test와 real 주소를 받아 void *를 반환합니다. 실제 함수 본문은 여기 없고 다른 C 파일에 있습니다."
+      "title": "헤더와 두 구현 함수의 선언",
+      "text": "GPL-2.0 보호 조건 안에서 test-bug.h를 포함합니다. 실패 기록 구현 함수는 file, line, fmt와 추가 인수를 받는 void 함수입니다. __printf(3,4)는 세 번째가 형식 문자열이고 네 번째부터 그 문자열의 추가 값이라는 검사 표시입니다. 대체 함수 주소 조회는 test와 실제 함수 주소를 받아 void *를 반환합니다. 실제 몸체는 다른 C 파일에 있습니다."
     },
     {
-      "title": "설치 함수 전체",
-      "text": "kunit_install_hooks는 static inline void 함수이며 kunit_hooks.fail_current_test와 get_static_stub_address에 각각 구현 함수 주소를 대입합니다. callback을 즉시 호출하거나 테스트를 실행하는 코드가 아닙니다. 포인터를 0으로 초기화한 전역 저장소가 실제 동작을 가리키게 하는 연결 단계입니다."
+      "title": "설치 함수가 실제로 하는 일",
+      "text": "static inline void인 kunit_install_hooks는 fail_current_test와 get_static_stub_address 두 자리에 해당 구현 함수 주소를 대입합니다. 처음 비어 있던 전역 표가 실제 동작을 가리키게 하는 연결입니다. 테스트를 실행하거나 실패 함수를 지금 호출하는 문장은 없습니다."
     },
     {
-      "title": "설치와 실행 key는 별개",
-      "text": "함수에는 kunit_running static key를 enable하는 명령,잠금,teardown 또는 모듈 참조 획득이 없습니다. hook을 설치한 것만으로 현재 task가 KUnit test 문맥을 갖는다고 가정하면 안 됩니다. 두 선언·포맷 annotation·대입 두 개와 guard를 모두 검토했습니다. 호출 시점과 동기화의 전체 계약은 호출부에서 확인해야 합니다."
+      "title": "설치만으로 바뀌지 않는 것",
+      "text": "이 함수에는 kunit_running static key를 켜는 명령, 잠금, 제거 동작이나 모듈 참조 획득이 없습니다. static key는 실행 경로를 켜고 끄는 효율적인 상태 표시입니다. 연결을 했다고 현재 task가 KUnit 테스트에 속한다고 가정하면 안 됩니다. 두 선언과 형식 검사 표시, 대입 두 줄 및 보호 조건을 읽었으며 설치 시점·동기화 약속은 호출부까지 봐야 합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "kunit_install_hooks는 등록한 함수를 바로 실행하는가?",
+      "prompt": "kunit_install_hooks는 연결할 함수를 즉시 실행하나요?",
       "options": [
+        "아니요, 함수 포인터 두 개를 대입합니다.",
+        "네, 현재 테스트를 반드시 실패시킵니다."
+      ],
+      "answer": 0,
+      "explanation": "본문은 두 주소 대입입니다. 연결과 실행은 다른 동작입니다.",
+      "original_prompt": "kunit_install_hooks는 등록한 함수를 바로 실행하는가?",
+      "original_options": [
         "아니다. 두 함수 포인터를 대입한다",
         "그렇다. 현재 테스트를 무조건 실패시킨다"
       ],
-      "answer": 0,
-      "explanation": "본문은 대입 두 줄입니다. 함수 주소 연결과 callback 호출을 구분합니다."
+      "original_explanation": "본문은 대입 두 줄입니다. 함수 주소 연결과 callback 호출을 구분합니다."
     },
     {
-      "prompt": "설치 함수가 kunit_running도 true로 바꾸는가?",
+      "prompt": "설치 함수가 kunit_running도 참으로 바꾸나요?",
       "options": [
+        "네, 주소 대입이 상태 표시를 자동으로 바꿉니다.",
+        "아니요, 이 함수에는 그 상태를 바꾸는 코드가 없습니다."
+      ],
+      "answer": 1,
+      "explanation": "hook 보관 표와 실행 상태 표시는 별도 자료이므로 없는 동작을 추측해서는 안 됩니다.",
+      "original_prompt": "설치 함수가 kunit_running도 true로 바꾸는가?",
+      "original_options": [
         "그렇다. 함수 포인터 대입이 key를 자동 변경한다",
         "아니다. 이 함수에는 key 갱신이 없다"
       ],
-      "answer": 1,
-      "explanation": "hook 저장소와 실행 상태 key는 별개 자료입니다. 이 파일에 없는 전환을 추정하지 않습니다."
+      "original_explanation": "hook 저장소와 실행 상태 key는 별개 자료입니다. 이 파일에 없는 전환을 추정하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "두 함수 주소 대입을 찾고 실제 호출 괄호가 없는지 확인하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Declarations for hook implementations.\n *\n * These will be set as the function pointers in struct kunit_hook_table,\n * found in include/kunit/test-bug.h.\n *\n * Copyright (C) 2023, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n\n#ifndef _KUNIT_HOOKS_IMPL_H\n#define _KUNIT_HOOKS_IMPL_H\n\n#include <kunit/test-bug.h>\n\n/* List of declarations. */\nvoid __printf(3, 4) __kunit_fail_current_test_impl(const char *file,\n\t\t\t\t\t\t   int line,\n\t\t\t\t\t\t   const char *fmt, ...);\nvoid *__kunit_get_static_stub_address_impl(struct kunit *test, void *real_fn_addr);\n\n/* Code to set all of the function pointers. */\nstatic inline void kunit_install_hooks(void)\n{\n\t/* Install the KUnit hook functions. */\n\tkunit_hooks.fail_current_test = __kunit_fail_current_test_impl;\n\tkunit_hooks.get_static_stub_address = __kunit_get_static_stub_address_impl;\n}\n\n#endif /* _KUNIT_HOOKS_IMPL_H */\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/hooks-impl.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-dd95f29ff020d5d7",
+    "path": "lib/kunit/hooks-impl.h",
+    "title": "KUnit hook 설치: 두 구현 주소를 공통 테이블에 연결",
+    "area": "callback · 모듈 연결 · 함수 테이블 · KUnit",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "구현 함수 선언과 inline 설치 함수 전체를 분석합니다.",
+    "guide": [
+      "공통 테이블의 저장소 정의와 실제 callback 연결은 별도 단계로 관리할 수 있습니다.",
+      "extern 함수 선언, format annotation, 포인터 대입과 실행 상태를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더와 구현 선언",
+        "text": "GPL-2.0 guard 안에 test-bug.h를 포함합니다. __kunit_fail_current_test_impl은 file,line,fmt,...를 받는 void 함수이며 __printf(3,4) annotation을 가집니다. __kunit_get_static_stub_address_impl은 test와 real 주소를 받아 void *를 반환합니다. 실제 함수 본문은 여기 없고 다른 C 파일에 있습니다."
+      },
+      {
+        "title": "설치 함수 전체",
+        "text": "kunit_install_hooks는 static inline void 함수이며 kunit_hooks.fail_current_test와 get_static_stub_address에 각각 구현 함수 주소를 대입합니다. callback을 즉시 호출하거나 테스트를 실행하는 코드가 아닙니다. 포인터를 0으로 초기화한 전역 저장소가 실제 동작을 가리키게 하는 연결 단계입니다."
+      },
+      {
+        "title": "설치와 실행 key는 별개",
+        "text": "함수에는 kunit_running static key를 enable하는 명령,잠금,teardown 또는 모듈 참조 획득이 없습니다. hook을 설치한 것만으로 현재 task가 KUnit test 문맥을 갖는다고 가정하면 안 됩니다. 두 선언·포맷 annotation·대입 두 개와 guard를 모두 검토했습니다. 호출 시점과 동기화의 전체 계약은 호출부에서 확인해야 합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "kunit_install_hooks는 등록한 함수를 바로 실행하는가?",
+        "options": [
+          "아니다. 두 함수 포인터를 대입한다",
+          "그렇다. 현재 테스트를 무조건 실패시킨다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 대입 두 줄입니다. 함수 주소 연결과 callback 호출을 구분합니다."
+      },
+      {
+        "prompt": "설치 함수가 kunit_running도 true로 바꾸는가?",
+        "options": [
+          "그렇다. 함수 포인터 대입이 key를 자동 변경한다",
+          "아니다. 이 함수에는 key 갱신이 없다"
+        ],
+        "answer": 1,
+        "explanation": "hook 저장소와 실행 상태 key는 별개 자료입니다. 이 파일에 없는 전환을 추정하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Declarations for hook implementations.\n *\n * These will be set as the function pointers in struct kunit_hook_table,\n * found in include/kunit/test-bug.h.\n *\n * Copyright (C) 2023, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n\n#ifndef _KUNIT_HOOKS_IMPL_H\n#define _KUNIT_HOOKS_IMPL_H\n\n#include <kunit/test-bug.h>\n\n/* List of declarations. */\nvoid __printf(3, 4) __kunit_fail_current_test_impl(const char *file,\n\t\t\t\t\t\t   int line,\n\t\t\t\t\t\t   const char *fmt, ...);\nvoid *__kunit_get_static_stub_address_impl(struct kunit *test, void *real_fn_addr);\n\n/* Code to set all of the function pointers. */\nstatic inline void kunit_install_hooks(void)\n{\n\t/* Install the KUnit hook functions. */\n\tkunit_hooks.fail_current_test = __kunit_fail_current_test_impl;\n\tkunit_hooks.get_static_stub_address = __kunit_get_static_stub_address_impl;\n}\n\n#endif /* _KUNIT_HOOKS_IMPL_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "684ba60eb6c3160224a8f687d4303bce414a7b07452df7f85dbd71345f8468c7",
+      "scope": "whole-file",
+      "line_count": 31,
+      "authoring_source": "course/file_units/kunit_resource_actions.py",
+      "sections": [
+        "헤더와 구현 선언",
+        "설치 함수 전체",
+        "설치와 실행 key는 별개"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/hooks-impl.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "도구함의 버튼에 실제 기능을 연결하는 작은 헤더입니다. 버튼을 연결했다고 누른 것도, 테스트가 실행 중으로 바뀐 것도 아닙니다.",
+    "meaning": "KUnit hook 함수 선언과 연결·실행 상태를 구별합니다.",
+    "exercise": "두 함수 주소 대입을 찾고 실제 호출 괄호가 없는지 확인하세요."
+  },
+  "goal": "KUnit hook 함수 선언과 연결·실행 상태를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "두 함수 주소 대입을 찾고 실제 호출 괄호가 없는지 확인하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "0fe6197877f7c911225bcc5cbf8c7c7faac630a49080c270112f378a7c266744",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

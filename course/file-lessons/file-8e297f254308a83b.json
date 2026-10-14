@@ -5,84 +5,104 @@
   "area": "Kbuild · 도구 호환성 · BTF · 조건부 변수",
   "track": "files",
   "kind": "kernel",
-  "intro": "모든 버전 경계·외부 모듈 조건·언어 제외 조건과 export를 분석합니다.",
+  "intro": "Makefile.btf는 이미 탐지한 pahole 버전과 설정에 맞춰 공통 BTF 옵션과 외부 모듈 추가 옵션을 나눠 내보냅니다.",
   "guide": [
-    "도구 기능의 세대 차이는 버전별 분기와 선택적인 기능 목록으로 빌드 계약에 반영됩니다.",
-    "Make 조건식, 설정 기반 변수 선택, 최소·최대 버전 경계를 비교합니다."
+    "BTF는 커널이 사용할 형식 정보를 담는 표현입니다. 이 파일은 그 정보를 만드는 도구 옵션을 고르며 인코딩 알고리즘 자체를 구현하지 않습니다.",
+    "중첩 조건은 바깥과 안쪽을 모두 만족해야 합니다. <=125 안의 <=121을 생략하면 옵션 범위가 바뀝니다.",
+    "공통 옵션 변수와 모듈 전용 추가 변수는 서로 다른 결과입니다."
   ],
   "deep_dive": [
     {
-      "title": "입력과 기본 변수",
-      "text": "GPL-2.0 Makefile은 pahole-ver := CONFIG_PAHOLE_VERSION으로 이미 탐지된 값을 받고 pahole-flags-y를 빈 값으로 초기화합니다. 이 파일에서 pahole-version.sh를 직접 실행하지 않습니다. test-le·test-ge helper 결과 y를 변수 이름과 조건식에 사용합니다."
+      "title": "입력과 빈 옵션 목록",
+      "text": "GPL Makefile은 CONFIG_PAHOLE_VERSION을 즉시 확장해 pahole-ver에 넣고 공통 옵션을 비워 시작합니다. 여기서 pahole-version.sh를 직접 실행하지 않습니다. test-le·test-ge가 돌려주는 y를 조건과 변수 이름에 이용합니다."
     },
     {
-      "title": "1.18부터 1.21의 변수 인코딩 회피",
-      "text": "바깥 조건은 버전<=125이며 그 안에서 <=121인 경우 >=118에 --skip_encoding_btf_vars를 추가합니다. 즉 118,119,120,121 구간입니다. 주석은 해당 버전이 크기 0인 per-CPU 변수를 처리하지 못하는 이유를 설명합니다. 단순히 모든 1.25 이하에 이 옵션을 적용하지 않습니다."
+      "title": "118부터 121까지의 회피",
+      "text": "바깥 <=125 안에서 다시 <=121을 확인하고 >=118인 변수에 --skip_encoding_btf_vars를 더합니다. 결과 범위는 118~121입니다. 해당 버전이 크기 0인 CPU별 변수를 처리하지 못한다는 주석 때문이며 125 이하 모두에 붙이는 것이 아닙니다."
     },
     {
-      "title": "기존 옵션 누적",
-      "text": "같은 <=125 구역에서 >=121이면 --btf_gen_floats, >=122이면 -j, >=125이면 --skip_encoding_btf_inconsistent_proto와 --btf_gen_optimized를 추가합니다. 121은 변수 회피와 float 옵션을 동시에 얻습니다. 125는 122의 병렬 옵션과 float 옵션도 함께 얻지만 118~121 전용 변수 회피는 받지 않습니다."
+      "title": "구버전 옵션 누적",
+      "text": "<=125 안에서 >=121이면 float, >=122이면 -j, >=125이면 inconsistent_proto 회피와 optimized 옵션을 더합니다. 따라서 121은 변수 회피와 float를 함께 받고 125는 float·병렬·최적화 등을 받되 118~121 전용 회피는 받지 않습니다."
     },
     {
-      "title": "1.26 이후 feature 목록",
-      "text": ">125 경로에서 >=126이면 pahole-flags-y에 -j와 --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs를 설정합니다. 이전 개별 옵션들을 똑같이 모두 추가하는 형태가 아닙니다. 기능 이름 목록의 순서와 항목을 그대로 읽으며 이 파일이 각 BTF 기능의 내부 인코딩 알고리즘을 구현하지는 않습니다."
+      "title": "126부터 기능 목록 사용",
+      "text": ">125 경로에서 >=126이면 -j와 --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs를 설정합니다. 예전 개별 옵션을 모두 그대로 추가하는 방식이 아닙니다. 목록의 이름과 순서를 보존하되 각 기능 내부 구현까지 이 파일에 있다고 설명하지 않습니다."
     },
     {
-      "title": "외부 모듈과 언어 제외",
-      "text": "새 버전 구역 안에서 KBUILD_EXTMOD가 비어 있지 않으면 >=126의 module-pahole-flags-y에 --btf_features=distilled_base를 더합니다. 바깥 두 버전 경로가 끝난 뒤 CONFIG_PAHOLE_HAS_LANG_EXCLUDE가 y이면 공통 pahole-flags-y에 --lang_exclude=rust를 추가합니다. 외부 모듈 전용 옵션과 공통 언어 제외 옵션은 서로 다른 변수와 조건입니다."
+      "title": "외부 모듈과 Rust 제외",
+      "text": "새 버전 구간에서 KBUILD_EXTMOD가 비어 있지 않고 >=126이면 모듈 옵션에 --btf_features=distilled_base를 더합니다. 버전 분기 바깥에서 PAHOLE_HAS_LANG_EXCLUDE가 y이면 공통 옵션에 --lang_exclude=rust를 붙입니다. 서로 다른 변수와 조건을 하나로 합쳐 읽지 않습니다."
     },
     {
-      "title": "Export와 경계 예제",
-      "text": "PAHOLE_FLAGS := pahole-flags-y와 MODULE_PAHOLE_FLAGS := module-pahole-flags-y를 export합니다. 전자는 공통 옵션, 후자는 모듈 전용 추가 옵션입니다. 여기서 둘을 자동으로 하나의 문자열로 합쳐 내보내지 않습니다. 전체 조건·변수 대입·export를 검토했고 실제 pahole 버전별 BTF 산출물을 실행 비교한 것은 아닙니다."
+      "title": "내보내는 두 값",
+      "text": "PAHOLE_FLAGS는 공통 목록, MODULE_PAHOLE_FLAGS는 모듈 추가 목록을 즉시 확장해 export합니다. 이 파일에서 두 문자열을 자동 합쳐 하나로 내보내지는 않습니다. 모든 조건을 읽었지만 실제 버전별 BTF 산출물을 실행 비교한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "버전 121에서 동시에 선택되는 옵션은?",
+      "prompt": "121에서 함께 선택되는 옵션은 무엇인가요?",
       "options": [
+        "변수 인코딩 회피와 float 생성입니다.",
+        "-j 하나뿐입니다."
+      ],
+      "answer": 0,
+      "explanation": "118~121 조건과 121 이상 조건이 겹치고 -j는 122부터입니다.",
+      "original_prompt": "버전 121에서 동시에 선택되는 옵션은?",
+      "original_options": [
         "변수 인코딩 회피와 float 생성",
         "오직 -j 하나"
       ],
-      "answer": 0,
-      "explanation": "<=121와 >=118 조건 및 >=121 조건이 동시에 참입니다. -j는 122부터입니다."
+      "original_explanation": "<=121와 >=118 조건 및 >=121 조건이 동시에 참입니다. -j는 122부터입니다."
     },
     {
-      "prompt": "버전 125가 --skip_encoding_btf_vars를 받는가?",
+      "prompt": "125도 변수 인코딩 회피 옵션을 받나요?",
       "options": [
+        "예. 125 이하 모두입니다.",
+        "아니요. 그 옵션은 118~121입니다."
+      ],
+      "answer": 1,
+      "explanation": "중첩된 <=121 조건을 함께 봐야 합니다.",
+      "original_prompt": "버전 125가 --skip_encoding_btf_vars를 받는가?",
+      "original_options": [
         "그렇다. 125 이하 모두 받는다",
         "아니다. 그 옵션은 118~121 구간이다"
       ],
-      "answer": 1,
-      "explanation": "중첩된 <=121 조건을 빠뜨리면 범위를 잘못 읽게 됩니다."
+      "original_explanation": "중첩된 <=121 조건을 빠뜨리면 범위를 잘못 읽게 됩니다."
     },
     {
-      "prompt": "distilled_base가 모듈 옵션에 추가되는 조건은?",
+      "prompt": "distilled_base가 추가되는 조건은 무엇인가요?",
       "options": [
+        "외부 모듈 빌드이고 버전 126 이상입니다.",
+        "모든 커널과 모든 버전입니다."
+      ],
+      "answer": 0,
+      "explanation": "KBUILD_EXTMOD와 새 버전 조건이 모두 필요합니다.",
+      "original_prompt": "distilled_base가 모듈 옵션에 추가되는 조건은?",
+      "original_options": [
         "외부 모듈 빌드이며 버전 126 이상",
         "모든 커널과 모든 pahole 버전"
       ],
-      "answer": 0,
-      "explanation": "KBUILD_EXTMOD 비어 있지 않음과 새 버전 분기 안의 >=126 조건을 모두 확인해야 합니다."
+      "original_explanation": "KBUILD_EXTMOD 비어 있지 않음과 새 버전 분기 안의 >=126 조건을 모두 확인해야 합니다."
     },
     {
-      "prompt": "CONFIG_PAHOLE_HAS_LANG_EXCLUDE가 y이면 어느 언어를 제외하는가?",
+      "prompt": "언어 제외 설정이 y이면 무엇을 제외하나요?",
       "options": [
+        "모든 C 코드입니다.",
+        "rust입니다."
+      ],
+      "answer": 1,
+      "explanation": "공통 옵션의 실제 문자열은 --lang_exclude=rust입니다.",
+      "original_prompt": "CONFIG_PAHOLE_HAS_LANG_EXCLUDE가 y이면 어느 언어를 제외하는가?",
+      "original_options": [
         "모든 C 코드",
         "rust"
       ],
-      "answer": 1,
-      "explanation": "공통 옵션에 --lang_exclude=rust를 추가합니다. 새 버전 분기 밖에 있어 별도의 기능 탐지 설정으로 제어됩니다."
+      "original_explanation": "공통 옵션에 --lang_exclude=rust를 추가합니다. 새 버전 분기 밖에 있어 별도의 기능 탐지 설정으로 제어됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "121·125·126의 선택 옵션을 세 줄로 적고 118~121 전용 옵션의 범위를 표시하세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0\n\npahole-ver := $(CONFIG_PAHOLE_VERSION)\npahole-flags-y :=\n\nifeq ($(call test-le, $(pahole-ver), 125),y)\n\n# pahole 1.18 through 1.21 can't handle zero-sized per-CPU vars\nifeq ($(call test-le, $(pahole-ver), 121),y)\npahole-flags-$(call test-ge, $(pahole-ver), 118)\t+= --skip_encoding_btf_vars\nendif\n\npahole-flags-$(call test-ge, $(pahole-ver), 121)\t+= --btf_gen_floats\n\npahole-flags-$(call test-ge, $(pahole-ver), 122)\t+= -j\n\npahole-flags-$(call test-ge, $(pahole-ver), 125)\t+= --skip_encoding_btf_inconsistent_proto --btf_gen_optimized\n\nelse\n\n# Switch to using --btf_features for v1.26 and later.\npahole-flags-$(call test-ge, $(pahole-ver), 126)  = -j --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs\n\nifneq ($(KBUILD_EXTMOD),)\nmodule-pahole-flags-$(call test-ge, $(pahole-ver), 126) += --btf_features=distilled_base\nendif\n\nendif\n\npahole-flags-$(CONFIG_PAHOLE_HAS_LANG_EXCLUDE)\t\t+= --lang_exclude=rust\n\nexport PAHOLE_FLAGS := $(pahole-flags-y)\nexport MODULE_PAHOLE_FLAGS := $(module-pahole-flags-y)\n",
   "source_review": {
@@ -106,5 +126,143 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/Makefile.btf"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8e297f254308a83b",
+    "path": "scripts/Makefile.btf",
+    "title": "Pahole 버전별 BTF 옵션: 개별 플래그에서 feature 목록으로",
+    "area": "Kbuild · 도구 호환성 · BTF · 조건부 변수",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "모든 버전 경계·외부 모듈 조건·언어 제외 조건과 export를 분석합니다.",
+    "guide": [
+      "도구 기능의 세대 차이는 버전별 분기와 선택적인 기능 목록으로 빌드 계약에 반영됩니다.",
+      "Make 조건식, 설정 기반 변수 선택, 최소·최대 버전 경계를 비교합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "입력과 기본 변수",
+        "text": "GPL-2.0 Makefile은 pahole-ver := CONFIG_PAHOLE_VERSION으로 이미 탐지된 값을 받고 pahole-flags-y를 빈 값으로 초기화합니다. 이 파일에서 pahole-version.sh를 직접 실행하지 않습니다. test-le·test-ge helper 결과 y를 변수 이름과 조건식에 사용합니다."
+      },
+      {
+        "title": "1.18부터 1.21의 변수 인코딩 회피",
+        "text": "바깥 조건은 버전<=125이며 그 안에서 <=121인 경우 >=118에 --skip_encoding_btf_vars를 추가합니다. 즉 118,119,120,121 구간입니다. 주석은 해당 버전이 크기 0인 per-CPU 변수를 처리하지 못하는 이유를 설명합니다. 단순히 모든 1.25 이하에 이 옵션을 적용하지 않습니다."
+      },
+      {
+        "title": "기존 옵션 누적",
+        "text": "같은 <=125 구역에서 >=121이면 --btf_gen_floats, >=122이면 -j, >=125이면 --skip_encoding_btf_inconsistent_proto와 --btf_gen_optimized를 추가합니다. 121은 변수 회피와 float 옵션을 동시에 얻습니다. 125는 122의 병렬 옵션과 float 옵션도 함께 얻지만 118~121 전용 변수 회피는 받지 않습니다."
+      },
+      {
+        "title": "1.26 이후 feature 목록",
+        "text": ">125 경로에서 >=126이면 pahole-flags-y에 -j와 --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs를 설정합니다. 이전 개별 옵션들을 똑같이 모두 추가하는 형태가 아닙니다. 기능 이름 목록의 순서와 항목을 그대로 읽으며 이 파일이 각 BTF 기능의 내부 인코딩 알고리즘을 구현하지는 않습니다."
+      },
+      {
+        "title": "외부 모듈과 언어 제외",
+        "text": "새 버전 구역 안에서 KBUILD_EXTMOD가 비어 있지 않으면 >=126의 module-pahole-flags-y에 --btf_features=distilled_base를 더합니다. 바깥 두 버전 경로가 끝난 뒤 CONFIG_PAHOLE_HAS_LANG_EXCLUDE가 y이면 공통 pahole-flags-y에 --lang_exclude=rust를 추가합니다. 외부 모듈 전용 옵션과 공통 언어 제외 옵션은 서로 다른 변수와 조건입니다."
+      },
+      {
+        "title": "Export와 경계 예제",
+        "text": "PAHOLE_FLAGS := pahole-flags-y와 MODULE_PAHOLE_FLAGS := module-pahole-flags-y를 export합니다. 전자는 공통 옵션, 후자는 모듈 전용 추가 옵션입니다. 여기서 둘을 자동으로 하나의 문자열로 합쳐 내보내지 않습니다. 전체 조건·변수 대입·export를 검토했고 실제 pahole 버전별 BTF 산출물을 실행 비교한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "버전 121에서 동시에 선택되는 옵션은?",
+        "options": [
+          "변수 인코딩 회피와 float 생성",
+          "오직 -j 하나"
+        ],
+        "answer": 0,
+        "explanation": "<=121와 >=118 조건 및 >=121 조건이 동시에 참입니다. -j는 122부터입니다."
+      },
+      {
+        "prompt": "버전 125가 --skip_encoding_btf_vars를 받는가?",
+        "options": [
+          "그렇다. 125 이하 모두 받는다",
+          "아니다. 그 옵션은 118~121 구간이다"
+        ],
+        "answer": 1,
+        "explanation": "중첩된 <=121 조건을 빠뜨리면 범위를 잘못 읽게 됩니다."
+      },
+      {
+        "prompt": "distilled_base가 모듈 옵션에 추가되는 조건은?",
+        "options": [
+          "외부 모듈 빌드이며 버전 126 이상",
+          "모든 커널과 모든 pahole 버전"
+        ],
+        "answer": 0,
+        "explanation": "KBUILD_EXTMOD 비어 있지 않음과 새 버전 분기 안의 >=126 조건을 모두 확인해야 합니다."
+      },
+      {
+        "prompt": "CONFIG_PAHOLE_HAS_LANG_EXCLUDE가 y이면 어느 언어를 제외하는가?",
+        "options": [
+          "모든 C 코드",
+          "rust"
+        ],
+        "answer": 1,
+        "explanation": "공통 옵션에 --lang_exclude=rust를 추가합니다. 새 버전 분기 밖에 있어 별도의 기능 탐지 설정으로 제어됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0\n\npahole-ver := $(CONFIG_PAHOLE_VERSION)\npahole-flags-y :=\n\nifeq ($(call test-le, $(pahole-ver), 125),y)\n\n# pahole 1.18 through 1.21 can't handle zero-sized per-CPU vars\nifeq ($(call test-le, $(pahole-ver), 121),y)\npahole-flags-$(call test-ge, $(pahole-ver), 118)\t+= --skip_encoding_btf_vars\nendif\n\npahole-flags-$(call test-ge, $(pahole-ver), 121)\t+= --btf_gen_floats\n\npahole-flags-$(call test-ge, $(pahole-ver), 122)\t+= -j\n\npahole-flags-$(call test-ge, $(pahole-ver), 125)\t+= --skip_encoding_btf_inconsistent_proto --btf_gen_optimized\n\nelse\n\n# Switch to using --btf_features for v1.26 and later.\npahole-flags-$(call test-ge, $(pahole-ver), 126)  = -j --btf_features=encode_force,var,float,enum64,decl_tag,type_tag,optimized_func,consistent_func,decl_tag_kfuncs\n\nifneq ($(KBUILD_EXTMOD),)\nmodule-pahole-flags-$(call test-ge, $(pahole-ver), 126) += --btf_features=distilled_base\nendif\n\nendif\n\npahole-flags-$(CONFIG_PAHOLE_HAS_LANG_EXCLUDE)\t\t+= --lang_exclude=rust\n\nexport PAHOLE_FLAGS := $(pahole-flags-y)\nexport MODULE_PAHOLE_FLAGS := $(module-pahole-flags-y)\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "55868c02b84dd820247cf71aedf7c305d29ffa930a24631a34961c81d9ff0b58",
+      "scope": "whole-file",
+      "line_count": 33,
+      "authoring_source": "course/file_units/btf_build_helpers.py",
+      "sections": [
+        "입력과 기본 변수",
+        "1.18부터 1.21의 변수 인코딩 회피",
+        "기존 옵션 누적",
+        "1.26 이후 feature 목록",
+        "외부 모듈과 언어 제외",
+        "Export와 경계 예제"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/Makefile.btf"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "도구의 세대마다 쓸 수 있는 기능이 달라서 버전표를 보고 옵션을 골라 담는 준비 목록입니다.",
+    "meaning": "Makefile.btf는 이미 탐지한 pahole 버전과 설정에 맞춰 공통 BTF 옵션과 외부 모듈 추가 옵션을 나눠 내보냅니다.",
+    "exercise": "121·125·126의 선택 옵션을 세 줄로 적고 118~121 전용 옵션의 범위를 표시하세요."
+  },
+  "goal": "Makefile.btf는 이미 탐지한 pahole 버전과 설정에 맞춰 공통 BTF 옵션과 외부 모듈 추가 옵션을 나눠 내보냅니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "121·125·126의 선택 옵션을 세 줄로 적고 118~121 전용 옵션의 범위를 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "90962883a224bcd02a6efb5d029d886bf82b958fef44e346ea50eba2f08a1e19",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

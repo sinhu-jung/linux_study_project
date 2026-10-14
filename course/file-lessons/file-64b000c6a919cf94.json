@@ -5,54 +5,62 @@
   "area": "초기화 · 함수 포인터 · API 계약",
   "track": "files",
   "kind": "kernel",
-  "intro": "내부 초기화 helper의 모든 대입과 초기화하지 않는 필드를 확인합니다.",
+  "intro": "try-catch 초기화 함수가 쓰는 필드와 실행 준비 책임을 구별합니다.",
   "guide": [
-    "이름이 init인 함수라도 객체의 모든 필드를 초기화하는지는 실제 본문으로 확인해야 합니다.",
-    "객체 초기화 범위와 이후 실행 단계의 책임을 구분합니다."
+    "함수 포인터는 나중에 부를 함수의 주소입니다. 주소를 저장했다고 함수가 실행되는 것은 아닙니다.",
+    "이 도우미는 test, try, catch만 저장하고 try_result와 context는 건드리지 않습니다.",
+    "결과와 문맥은 나중의 run이 준비합니다. init 직후 결과가 반드시 0이라고 읽으면 안 됩니다."
   ],
   "deep_dive": [
     {
-      "title": "헤더 구성",
-      "text": "GPL-2.0 내부 헤더는 _KUNIT_TRY_CATCH_IMPL_H guard,공개 kunit/try-catch.h와 linux/types.h include,struct kunit 전방 선언으로 구성됩니다. 주석상 테스트와 내부 구현이 공유하는 인터페이스입니다."
+      "title": "내부 헤더의 구성",
+      "text": "GPL-2.0, _KUNIT_TRY_CATCH_IMPL_H 보호 조건, 공개 try-catch.h와 types.h 포함, kunit 전방 선언으로 이루어집니다. 주석은 구현과 테스트가 함께 사용하는 내부 약속이라고 설명합니다."
     },
     {
-      "title": "대입 세 개",
-      "text": "static inline kunit_try_catch_init은 상태 객체,test,try,catch를 받습니다. 본문은 try_catch->test=test,try_catch->try=try,try_catch->catch=catch 세 대입입니다. callback을 즉시 실행하거나 worker를 생성하지 않습니다."
+      "title": "실제로 쓰는 세 칸",
+      "text": "static inline void init은 상태, test, try와 catch를 받습니다. 본문은 test, try, catch에 해당 값을 대입하는 세 줄입니다. 함수를 바로 부르거나 작업 스레드를 만드는 명령은 없습니다."
     },
     {
-      "title": "미초기화 필드와 책임",
-      "text": "try_result와 context는 이 helper에서 설정하지 않습니다. 별도로 확인한 run이 실행 시작 때 context와 결과를 설정합니다. init 직후 get_result를 호출해 무조건 0을 기대하면 안 됩니다. NULL callback 검사나 실패 반환도 없고 반환 타입은 void입니다. 선언과 전체 본문을 대조했습니다."
+      "title": "아직 설정하지 않은 상태",
+      "text": "try_result와 context는 그대로이며 run이 실행 시작에 설정합니다. NULL 함수 검사도 없고 오류 반환도 없는 void 함수입니다. 이름보다 실제 대입 목록을 보아 초기화 범위를 판단해야 합니다. 예를 들어 이전에 쓰지 않은 결과 칸을 이 호출만으로 0이라 믿을 수 없습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "init 호출만으로 try_result=0이 보장되는가?",
+      "prompt": "init만 호출하면 try_result=0인가요?",
       "options": [
+        "아니요, 이 도우미는 그 칸에 쓰지 않습니다.",
+        "네, 구조체 전체를 0으로 지웁니다."
+      ],
+      "answer": 0,
+      "explanation": "대입은 test, try, catch 세 필드뿐입니다.",
+      "original_prompt": "init 호출만으로 try_result=0이 보장되는가?",
+      "original_options": [
         "아니다. 이 helper는 그 필드를 쓰지 않는다",
         "그렇다. 구조체의 모든 바이트를 지운다"
       ],
-      "answer": 0,
-      "explanation": "대입은 test,try,catch 세 필드뿐입니다. 함수 이름보다 실제 쓰기 집합이 초기화 범위를 결정합니다."
+      "original_explanation": "대입은 test,try,catch 세 필드뿐입니다. 함수 이름보다 실제 쓰기 집합이 초기화 범위를 결정합니다."
     },
     {
-      "prompt": "init은 try callback을 언제 호출하는가?",
+      "prompt": "init은 try 함수를 언제 실행하나요?",
       "options": [
+        "catch를 부른 직후 실행합니다.",
+        "여기서는 실행하지 않고 주소만 저장합니다."
+      ],
+      "answer": 1,
+      "explanation": "간접 호출이 아니라 함수 포인터 대입이며 실행은 run의 역할입니다.",
+      "original_prompt": "init은 try callback을 언제 호출하는가?",
+      "original_options": [
         "catch를 실행한 직후 호출한다",
         "여기서는 호출하지 않고 주소만 저장한다"
       ],
-      "answer": 1,
-      "explanation": "함수 포인터 대입과 간접 호출은 다른 동작입니다. 테스트 실행은 run의 책임입니다."
+      "original_explanation": "함수 포인터 대입과 간접 호출은 다른 동작입니다. 테스트 실행은 run의 책임입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "구조체의 다섯 필드 중 init이 대입하는 세 필드에 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Internal kunit try catch implementation to be shared with tests.\n *\n * Copyright (C) 2019, Google LLC.\n * Author: Brendan Higgins <brendanhiggins@google.com>\n */\n\n#ifndef _KUNIT_TRY_CATCH_IMPL_H\n#define _KUNIT_TRY_CATCH_IMPL_H\n\n#include <kunit/try-catch.h>\n#include <linux/types.h>\n\nstruct kunit;\n\nstatic inline void kunit_try_catch_init(struct kunit_try_catch *try_catch,\n\t\t\t\t\tstruct kunit *test,\n\t\t\t\t\tkunit_try_catch_func_t try,\n\t\t\t\t\tkunit_try_catch_func_t catch)\n{\n\ttry_catch->test = test;\n\ttry_catch->try = try;\n\ttry_catch->catch = catch;\n}\n\n#endif /* _KUNIT_TRY_CATCH_IMPL_H */\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/try-catch-impl.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-64b000c6a919cf94",
+    "path": "lib/kunit/try-catch-impl.h",
+    "title": "KUnit try/catch 초기화: callback 연결과 실행 상태의 경계",
+    "area": "초기화 · 함수 포인터 · API 계약",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "내부 초기화 helper의 모든 대입과 초기화하지 않는 필드를 확인합니다.",
+    "guide": [
+      "이름이 init인 함수라도 객체의 모든 필드를 초기화하는지는 실제 본문으로 확인해야 합니다.",
+      "객체 초기화 범위와 이후 실행 단계의 책임을 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더 구성",
+        "text": "GPL-2.0 내부 헤더는 _KUNIT_TRY_CATCH_IMPL_H guard,공개 kunit/try-catch.h와 linux/types.h include,struct kunit 전방 선언으로 구성됩니다. 주석상 테스트와 내부 구현이 공유하는 인터페이스입니다."
+      },
+      {
+        "title": "대입 세 개",
+        "text": "static inline kunit_try_catch_init은 상태 객체,test,try,catch를 받습니다. 본문은 try_catch->test=test,try_catch->try=try,try_catch->catch=catch 세 대입입니다. callback을 즉시 실행하거나 worker를 생성하지 않습니다."
+      },
+      {
+        "title": "미초기화 필드와 책임",
+        "text": "try_result와 context는 이 helper에서 설정하지 않습니다. 별도로 확인한 run이 실행 시작 때 context와 결과를 설정합니다. init 직후 get_result를 호출해 무조건 0을 기대하면 안 됩니다. NULL callback 검사나 실패 반환도 없고 반환 타입은 void입니다. 선언과 전체 본문을 대조했습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "init 호출만으로 try_result=0이 보장되는가?",
+        "options": [
+          "아니다. 이 helper는 그 필드를 쓰지 않는다",
+          "그렇다. 구조체의 모든 바이트를 지운다"
+        ],
+        "answer": 0,
+        "explanation": "대입은 test,try,catch 세 필드뿐입니다. 함수 이름보다 실제 쓰기 집합이 초기화 범위를 결정합니다."
+      },
+      {
+        "prompt": "init은 try callback을 언제 호출하는가?",
+        "options": [
+          "catch를 실행한 직후 호출한다",
+          "여기서는 호출하지 않고 주소만 저장한다"
+        ],
+        "answer": 1,
+        "explanation": "함수 포인터 대입과 간접 호출은 다른 동작입니다. 테스트 실행은 run의 책임입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Internal kunit try catch implementation to be shared with tests.\n *\n * Copyright (C) 2019, Google LLC.\n * Author: Brendan Higgins <brendanhiggins@google.com>\n */\n\n#ifndef _KUNIT_TRY_CATCH_IMPL_H\n#define _KUNIT_TRY_CATCH_IMPL_H\n\n#include <kunit/try-catch.h>\n#include <linux/types.h>\n\nstruct kunit;\n\nstatic inline void kunit_try_catch_init(struct kunit_try_catch *try_catch,\n\t\t\t\t\tstruct kunit *test,\n\t\t\t\t\tkunit_try_catch_func_t try,\n\t\t\t\t\tkunit_try_catch_func_t catch)\n{\n\ttry_catch->test = test;\n\ttry_catch->try = try;\n\ttry_catch->catch = catch;\n}\n\n#endif /* _KUNIT_TRY_CATCH_IMPL_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a27da9077d9af1339ed09a37f9924d8009174286c61a0b0bed4f0179016d591a",
+      "scope": "whole-file",
+      "line_count": 27,
+      "authoring_source": "course/file_units/kunit_try_catch.py",
+      "sections": [
+        "헤더 구성",
+        "대입 세 개",
+        "미초기화 필드와 책임"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/try-catch-impl.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "init이라는 이름이 붙었다고 상자의 모든 칸을 지우는 것은 아닙니다. 이 함수는 시험과 두 실행 함수의 주소 세 칸만 채웁니다.",
+    "meaning": "try-catch 초기화 함수가 쓰는 필드와 실행 준비 책임을 구별합니다.",
+    "exercise": "구조체의 다섯 필드 중 init이 대입하는 세 필드에 표시하세요."
+  },
+  "goal": "try-catch 초기화 함수가 쓰는 필드와 실행 준비 책임을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "구조체의 다섯 필드 중 init이 대입하는 세 필드에 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "b8389cc5cc0e806faf8b7b954bf487fe898b149cdf12fa6415f2f143b75033c6",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

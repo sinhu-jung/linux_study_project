@@ -110,7 +110,7 @@
     const deep=detail(box,l.track==='files'?'파일 전체 해설 · 동작과 주의할 조건':'더 깊이 읽기 · 원리 설명',l.deep_dive);if(!easy&&l.track==='files'&&deep)deep.open=true;detail(box,'추가 읽기 도움말',l.reading_support);
     if(l.practice){const p=el('section');p.append(el('h3','직접 해보기'),el('p','아래 실습은 자동 실행되지 않습니다. Linux 명령은 Linux/WSL에서 실행하세요.','muted'));if(l.practice.command)p.append(el('pre',l.practice.command));if(l.practice.expected){const d=el('details');d.append(el('summary','예상 결과·확인 기준'));rich(d,l.practice.expected);p.append(d);}box.append(p);}
     detail(box,'단계별 원리 실험',l.experiment);
-    if(l.technical_original){const old=l.technical_original;detail(box,'원래 전문 설명과 비교하기',{intro:old.intro,guide:old.guide,concepts:old.concepts,experiment:old.experiment,reading_support:old.reading_support});}
+    if(l.technical_original){const old=l.technical_original;detail(box,'원래 전문 설명과 비교하기',{intro:old.intro,guide:old.guide,concepts:old.concepts,deep_dive:old.deep_dive,practice:old.practice,experiment:old.experiment,reading_support:old.reading_support});}
     if(l.annotated){const d=el('details');d.append(el('summary',l.source_review?'파일 전체 원본':'전체 코드 해설·주석 답지'),el('pre',l.annotated));box.append(d);}
     if(l.references){const d=el('details');d.append(el('summary','참고 자료'));for(const ref of l.references){const url=typeof ref==='string'?ref:(ref.url||ref.href);if(url&&/^https?:\/\//.test(url)){const a=el('a',typeof ref==='object'?(ref.title||url):url);a.href=url;a.target='_blank';a.rel='noopener noreferrer';d.append(a,el('br'));}else rich(d,ref);}box.append(d);}
     const practice=$('practice');practice.classList.remove('hidden');practice.replaceChildren(el('h2','문제 · 정답의 이유까지 확인하기'),el('p','답을 선택해 채점하거나 풀이를 먼저 볼 수 있습니다. 풀이 열람은 진도를 올리지 않습니다.','muted'));

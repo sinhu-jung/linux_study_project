@@ -5,54 +5,62 @@
   "area": "소스 재사용 · syscall · ABI · 빌드 옵션",
   "track": "files",
   "kind": "kernel",
-  "intro": "단일 어셈블리 include의 역할을 분석합니다.",
+  "intro": "compat getcpu는 공통 시스템 호출 진입 소스를 RV32·ilp32 조건으로 재사용합니다.",
   "guide": [
-    "호환 ABI용 객체는 소스 복사 없이 다른 컴파일 옵션으로 같은 명령열을 사용할 수 있습니다.",
-    "소스 이름과 실제 함수 심볼을 구별합니다."
+    "getcpu는 실행 중인 CPU 정보를 묻는 기능입니다. syscall은 사용자 프로그램이 커널에 일을 요청하는 입구입니다.",
+    "ecall은 RISC-V에서 커널 서비스로 들어가는 명령이고 a7에는 요청 번호를 넣습니다.",
+    "호환 빌드의 ABI는 인자·결과 전달 규칙입니다. 소스 재사용과 함수 이름 변경은 별개입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 내용",
-      "text": "GPL-2.0-only와 #include \"../vdso/getcpu.S\"만 있습니다. 함수 이름을 바꾸는 매크로나 추가 CPU 탐지 코드는 없습니다."
+      "text": "이 파일은 GPL-2.0-only 표시와 ../vdso/getcpu.S를 포함하는 한 줄입니다. 이름 변경 매크로나 CPU 탐지 알고리즘을 따로 넣지 않습니다."
     },
     {
       "title": "포함되는 동작",
-      "text": "공통 파일은 __vdso_getcpu 심볼, CFI, a7에 __NR_getcpu 설정, ecall, ret를 제공합니다. 이 wrapper가 별도 __compat_vdso_getcpu 본문을 정의하는 것은 아닙니다. compat Makefile의 RV32·ilp32 옵션 아래 별도 객체로 빌드됩니다."
+      "text": "공통 소스가 __vdso_getcpu 이름, 호출 경로 추적용 CFI 정보, a7에 __NR_getcpu를 넣는 명령, ecall과 ret를 제공합니다. 별도의 __compat_vdso_getcpu 본문을 만드는 것이 아니라 호환 Makefile의 RV32·ilp32 옵션으로 다른 객체를 만듭니다."
     },
     {
       "title": "범위",
-      "text": "출력 포인터 처리와 CPU 조회는 syscall에 위임됩니다. 단순 include를 분석했다고 커널 getcpu 구현 전체를 완료 처리하지 않습니다. 실제 32비트 호출 실행 검증은 수행하지 않았습니다."
+      "text": "결과 포인터 처리와 CPU 정보 조회는 커널 시스템 호출에 맡깁니다. 이 연결 파일을 읽었다고 커널 getcpu 구현 전체를 완료한 것은 아니며 실제 32비트 실행 시험도 별도입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 wrapper가 함수 이름을 __compat_vdso_getcpu로 바꾸는가?",
+      "prompt": "이 파일은 함수 이름을 __compat_vdso_getcpu로 바꾸나요?",
       "options": [
+        "아니요. 이름 재정의 없이 공통 소스를 포함합니다.",
+        "네. 디렉터리 이름만으로 심볼이 바뀝니다."
+      ],
+      "answer": 0,
+      "explanation": "이름을 바꾸는 매크로나 별도 정의가 없습니다.",
+      "original_prompt": "이 wrapper가 함수 이름을 __compat_vdso_getcpu로 바꾸는가?",
+      "original_options": [
         "아니다. 이름 재정의 없이 공통 소스를 포함한다",
         "그렇다. 디렉터리 이름만으로 심볼이 바뀐다"
       ],
-      "answer": 0,
-      "explanation": "전처리 매크로나 별도 정의가 없으므로 경로 이름만으로 함수 이름을 추정하면 안 됩니다."
+      "original_explanation": "전처리 매크로나 별도 정의가 없으므로 경로 이름만으로 함수 이름을 추정하면 안 됩니다."
     },
     {
-      "prompt": "가져오는 공통 getcpu의 핵심 처리 방식은?",
+      "prompt": "포함된 공통 getcpu는 어떻게 처리하나요?",
       "options": [
+        "CPU 번호를 CSR에서 직접 읽고 항상 0을 반환합니다.",
+        "ecall로 getcpu 시스템 호출을 부릅니다."
+      ],
+      "answer": 1,
+      "explanation": "실제 명령열은 요청 번호를 넣고 커널에 조회를 맡깁니다.",
+      "original_prompt": "가져오는 공통 getcpu의 핵심 처리 방식은?",
+      "original_options": [
         "CPU 번호를 CSR에서 직접 읽어 항상 0을 반환한다",
         "ecall로 getcpu syscall을 호출한다"
       ],
-      "answer": 1,
-      "explanation": "공통 어셈블리의 실제 명령열과 연결해 읽어야 합니다."
+      "original_explanation": "공통 어셈블리의 실제 명령열과 연결해 읽어야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "include 경로와 실제 __vdso_getcpu 이름을 적어 서로 다른 정보임을 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/getcpu.S\"\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/getcpu.S"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0def9c5d973474b8",
+    "path": "arch/riscv/kernel/compat_vdso/getcpu.S",
+    "title": "Compat getcpu: 공통 syscall 진입점 재사용",
+    "area": "소스 재사용 · syscall · ABI · 빌드 옵션",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "단일 어셈블리 include의 역할을 분석합니다.",
+    "guide": [
+      "호환 ABI용 객체는 소스 복사 없이 다른 컴파일 옵션으로 같은 명령열을 사용할 수 있습니다.",
+      "소스 이름과 실제 함수 심볼을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 내용",
+        "text": "GPL-2.0-only와 #include \"../vdso/getcpu.S\"만 있습니다. 함수 이름을 바꾸는 매크로나 추가 CPU 탐지 코드는 없습니다."
+      },
+      {
+        "title": "포함되는 동작",
+        "text": "공통 파일은 __vdso_getcpu 심볼, CFI, a7에 __NR_getcpu 설정, ecall, ret를 제공합니다. 이 wrapper가 별도 __compat_vdso_getcpu 본문을 정의하는 것은 아닙니다. compat Makefile의 RV32·ilp32 옵션 아래 별도 객체로 빌드됩니다."
+      },
+      {
+        "title": "범위",
+        "text": "출력 포인터 처리와 CPU 조회는 syscall에 위임됩니다. 단순 include를 분석했다고 커널 getcpu 구현 전체를 완료 처리하지 않습니다. 실제 32비트 호출 실행 검증은 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 wrapper가 함수 이름을 __compat_vdso_getcpu로 바꾸는가?",
+        "options": [
+          "아니다. 이름 재정의 없이 공통 소스를 포함한다",
+          "그렇다. 디렉터리 이름만으로 심볼이 바뀐다"
+        ],
+        "answer": 0,
+        "explanation": "전처리 매크로나 별도 정의가 없으므로 경로 이름만으로 함수 이름을 추정하면 안 됩니다."
+      },
+      {
+        "prompt": "가져오는 공통 getcpu의 핵심 처리 방식은?",
+        "options": [
+          "CPU 번호를 CSR에서 직접 읽어 항상 0을 반환한다",
+          "ecall로 getcpu syscall을 호출한다"
+        ],
+        "answer": 1,
+        "explanation": "공통 어셈블리의 실제 명령열과 연결해 읽어야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/getcpu.S\"\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "06ed1727e90691bd3b8d25b88996e58bb2aafa63693e3e5a093f916607f1c7c2",
+      "scope": "whole-file",
+      "line_count": 3,
+      "authoring_source": "course/file_units/riscv_compat_wrappers.py",
+      "sections": [
+        "전체 내용",
+        "포함되는 동작",
+        "범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/getcpu.S"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 안내문을 작은 규격의 책자에 다시 인쇄합니다. 책자가 달라도 안내문 안의 담당 이름이 자동으로 바뀌지는 않습니다.",
+    "meaning": "compat getcpu는 공통 시스템 호출 진입 소스를 RV32·ilp32 조건으로 재사용합니다.",
+    "exercise": "include 경로와 실제 __vdso_getcpu 이름을 적어 서로 다른 정보임을 표시하세요."
+  },
+  "goal": "compat getcpu는 공통 시스템 호출 진입 소스를 RV32·ilp32 조건으로 재사용합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "include 경로와 실제 __vdso_getcpu 이름을 적어 서로 다른 정보임을 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "135050f3fe5ebc320754d926396f7d4784f0b398f697ee9468ba73231576113d",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

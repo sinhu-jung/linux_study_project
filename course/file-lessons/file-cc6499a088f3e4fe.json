@@ -5,155 +5,193 @@
   "area": "초기 부팅 · 가상 메모리 · 슬롯 할당 · 페이지 정렬 · 수명 검증",
   "track": "files",
   "kind": "kernel",
-  "intro": "정규 ioremap 이전에 사용하는 임시 매핑의 할당·해제·복사와 비MMU 경로를 해설합니다.",
+  "intro": "부팅 초기 매핑은 제한된 슬롯에 페이지를 연결하고 원래 주소와 크기로 해제해요.",
   "guide": [
-    "제한된 고정 슬롯에 페이지 단위 매핑을 설치하고 원래 주소 offset과 요청 크기를 보존합니다.",
-    "앞서 읽은 ARM 및 generic fixmap의 역방향 인덱스 배치를 실제 매핑 루프와 연결합니다."
+    "매핑은 물리 주소의 자료를 CPU가 쓸 가상 주소에 연결하는 일이에요. early_ioremap은 정식 ioremap이 준비되기 전 임시로 사용해요.",
+    "페이지 경계로 넓혀 연결하되 반환 주소에는 원래 페이지 안의 위치를 되돌려 더해요. 해제할 때는 반올림한 크기가 아니라 원래 요청 크기를 줘야 해요.",
+    "MMU가 있는 구성의 슬롯 관리와 없는 구성의 단순 주소 변환은 달라요. 모든 구성이 같은 보호나 실패 복구를 제공한다고 생각하면 안 돼요."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0·설명·저작권과 관련 kernel/mm/io/fixmap 헤더 뒤 CONFIG_MMU 분기에서 관리 상태·설정·매핑·해제·복사를 구현합니다. 비MMU에서는 물리주소 변환과 빈 해제를 제공하며 early_memunmap 래퍼는 두 구성에 공통입니다. __init·__initdata는 초기화 단계 수명과 관련되므로 일반 런타임 할당 API처럼 사용하지 않습니다."
+      "text": "관련 kernel·mm·io·fixmap 헤더 뒤 MMU가 있는 분기에서 관리 상태, 초기화, 매핑, 해제, 복사를 구현해요. MMU는 주소 변환을 맡는 장치예요. 없는 구성은 주소 변환과 빈 해제를 제공하고 memunmap wrapper는 공통이에요. __init와 __initdata는 부팅 초기 수명 표시라 일반 실행 중 할당처럼 쓰지 않아요."
     },
     {
       "title": "진단과 보호 속성 조정",
-      "text": "early_ioremap_debug 파라미터 handler는 전달 문자열을 분석하지 않고 debug=1로 설정해0을 반환합니다. weak early_memremap_pgprot_adjust의 기본 구현은 prot를 그대로 반환하며 아키텍처가 대체할 수 있습니다. 이 hook은 주소를 매핑하는 함수 자체가 아닙니다."
+      "text": "debug 설정 함수는 문자열 내용을 분석하지 않고 debug를 1로 켠 뒤 0을 반환해요. early_memremap_pgprot_adjust는 보호 속성 prot를 조정하는 hook, 즉 아키텍처가 바꿀 연결 지점이에요. 기본 weak 구현은 그대로 돌려주며 직접 매핑을 설치하지 않아요."
     },
     {
       "title": "Paging 단계 전환",
-      "text": "early_ioremap_reset은 after_paging_init을1로 바꿉니다. 기존 슬롯을 해제하거나 배열을 초기화하는 함수가 아닙니다. 이후 설정·해제는 __late_set_fixmap/__late_clear_fixmap으로 분기합니다. 아키텍처가 이 매크로를 제공하지 않으면 기본 helper는 BUG를 발생시키므로 reset 이후 사용이 모든 환경에서 지원되는 것은 아닙니다."
+      "text": "early_ioremap_reset은 after_paging_init을 1로 바꾸기만 해요. 기존 슬롯을 지우지 않아요. 이후에는 late 설정·해제 도구를 부르는데, 아키텍처가 이를 제공하지 않으면 기본 함수는 BUG를 일으켜요. reset 뒤에도 어디서나 사용 가능하다는 뜻은 아니에요."
     },
     {
       "title": "슬롯 상태와 초기화",
-      "text": "prev_map은 슬롯별 반환 주소, prev_size는 요청 원래 크기, slot_virt는 슬롯의 가상 시작을 보관합니다. setup은 기존 prev_map이 있으면 경고하고 slot_virt[i]=__fix_to_virt(FIX_BTMAP_BEGIN-NR_FIX_BTMAPS*i)를 계산합니다. 이미 쓰는 슬롯을 초기화해서 비우는 본문은 없습니다. 슬롯 수와 한 슬롯의 페이지 수는 다른 상수입니다."
+      "text": "prev_map은 빌려준 주소, prev_size는 원래 요청 크기, slot_virt는 슬롯 가상 시작을 저장해요. setup은 기존 사용을 경고하고 FIX_BTMAP_BEGIN-NR_FIX_BTMAPS*i로 각 시작을 계산해요. 사용 중인 슬롯을 자동 비우지 않으며 슬롯 개수와 슬롯당 페이지 수는 달라요."
     },
     {
       "title": "누수 검사",
-      "text": "late_initcall의 check_early_ioremap_leak는 NULL이 아닌 prev_map 개수를 셉니다. 남은 영역이 있으면 경고하고1,없으면0을 반환합니다. 이 검사는 누수를 보고할 뿐 남은 영역을 자동 해제하지 않습니다. debug 옵션은 map/unmap 시 WARN을 통한 추가 추적에도 쓰입니다."
+      "text": "나중에 실행되는 누수 검사는 NULL이 아닌 prev_map 개수를 세어요. 남은 영역이 있으면 경고하고 1, 없으면 0이에요. 빌린 채 남은 영역을 보고할 뿐 자동 반납하지 않아요. debug는 매핑·해제 때의 추가 추적에도 쓰여요."
     },
     {
       "title": "빈 슬롯 선택",
-      "text": "__early_ioremap은 SYSTEM_RUNNING 이상이면 경고하지만 그 경고만으로 즉시 반환하지는 않습니다. prev_map을 앞에서부터 선형 탐색해 첫 NULL 슬롯을 고릅니다. 빈 슬롯이 없으면 경고 후 NULL입니다. 별도 잠금이나 동적 슬롯 확장 코드는 없으며 일반적인 동시 런타임 allocator로 해석하면 안 됩니다."
+      "text": "본체는 SYSTEM_RUNNING 이상이면 경고하지만 그 줄만으로 반환하지는 않아요. 앞에서부터 prev_map이 NULL인 첫 슬롯을 골라요. 없으면 경고 후 NULL이에요. 잠금이나 슬롯 자동 확장이 없어 일반적인 동시 실행용 할당기로 보면 안 돼요."
     },
     {
       "title": "크기와 정렬",
-      "text": "last_addr=phys_addr+size-1을 계산해 크기0 또는 last_addr<phys_addr를 거부합니다. 원래 size를 prev_size에 저장하고 offset_in_page를 보존한 뒤 phys_addr를 PAGE_MASK로 내립니다. 매핑 길이는 PAGE_ALIGN(last_addr+1)-정렬주소로 계산하며 페이지 수가 NR_FIX_BTMAPS보다 크면 거부합니다. 이 검사를 전체 물리주소 유효성 검증으로 확대하지 않습니다."
+      "text": "last_addr=phys_addr+size-1에서 크기 0 또는 끝이 시작보다 작아지는 경우를 거부해요. 원래 크기를 저장하고 페이지 안 위치 offset을 남긴 뒤 시작을 PAGE_MASK로 내리고 끝은 PAGE_ALIGN으로 올려요. 페이지 수가 슬롯 용량을 넘으면 실패해요. 이것이 모든 물리 주소 유효성 검사인 것은 아니에요."
     },
     {
       "title": "실패 시 상태와 페이지 설치",
-      "text": "페이지 수 초과 실패에서는 prev_size가 이미 갱신됐지만 prev_map은 아직 NULL이므로 슬롯은 점유 상태가 되지 않습니다. 실제 설치는 슬롯 시작 idx에서 물리주소를 PAGE_SIZE씩 올리고 idx를 하나씩 내립니다. fixmap 주소는 인덱스가 작아질수록 증가하므로 연속 물리 페이지와 연속 가상 페이지가 대응합니다. 각 설치 helper의 반환값을 검사하는 rollback 루프는 없습니다."
+      "text": "크기 초과 때 prev_size는 바뀌었어도 prev_map은 NULL이므로 슬롯은 여전히 비어 있어요. 설치하면서 물리 주소는 PAGE_SIZE씩 올리고 idx는 하나씩 내려요. fixmap은 인덱스가 줄면 가상 주소가 올라가 연속 페이지끼리 연결돼요. 각 설치 실패를 검사해 되돌리는 rollback 반복문은 없어요."
     },
     {
       "title": "반환 주소와 debug 주의",
-      "text": "설치를 마치면 prev_map=slot_virt+offset을 기록하고 반환합니다. debug WARN에 전달하는 phys_addr는 페이지 루프에서 증가한 뒤의 값이고 size도 정렬된 길이입니다. 로그의 모든 값이 원래 호출 인자라고 설명하면 틀립니다. 원래 요청 크기는 prev_size에 따로 남아 있습니다."
+      "text": "성공 뒤 slot_virt+offset을 prev_map에 기록하고 돌려줘요. debug에 찍는 phys_addr는 반복 중 증가한 뒤이고 size도 정렬된 길이예요. 로그 숫자가 모두 원래 입력은 아니며 원래 요청 크기는 prev_size에 따로 있어요."
     },
     {
       "title": "정확한 해제 입력",
-      "text": "early_iounmap은 prev_map과 전달 addr가 정확히 같은 슬롯을 찾습니다. 찾지 못하거나 prev_size와 전달 size가 다르면 경고 후 반환합니다. 반환 주소의 중간 포인터나 임의로 반올림한 크기로 해제하는 API가 아닙니다. NULL도 정상 매핑 포인터처럼 사용하면 안 되며 본문에는 별도의 첫 NULL 전용 검사가 없습니다."
+      "text": "early_iounmap은 반환받았던 주소와 정확히 같은 prev_map을 찾아요. 없거나 전달 크기가 prev_size와 다르면 경고 후 끝나요. 중간 주소나 임의로 반올림한 크기를 주면 안 돼요. 첫 부분에 별도 NULL 검사도 없으므로 NULL을 정상 매핑 주소처럼 쓰지 마세요."
     },
     {
       "title": "해제 페이지 수와 슬롯 반환",
-      "text": "해제는 주소가 fix_to_virt(FIX_BTMAP_BEGIN)보다 낮으면 경고 후 반환합니다. offset+원래 size를 PAGE_ALIGN해 페이지 수를 구하고 같은 인덱스 방향으로 late clear 또는 early set(idx,0,CLEAR)를 수행합니다. 끝나면 prev_map만 NULL로 바꿉니다. prev_size와 slot_virt를0으로 지우지 않아도 슬롯 사용 여부는 prev_map으로 결정됩니다."
+      "text": "해제 주소가 fix_to_virt(FIX_BTMAP_BEGIN)보다 낮으면 경고하고 끝나요. offset+원래 크기를 페이지 단위로 올림해 해제할 페이지 수를 구해요. 같은 인덱스 방향으로 late clear 또는 early CLEAR를 하고 prev_map만 NULL로 바꿔요. 다른 배열값이 남아도 사용 여부는 prev_map으로 판단해요."
     },
     {
       "title": "속성별 매핑 API",
-      "text": "early_ioremap은 FIXMAP_PAGE_IO로 직접 매핑합니다. early_memremap은 NORMAL을 pgprot_adjust에 통과시킨 뒤 주소공간 주석 타입을 __force로 변환합니다. FIXMAP_PAGE_RO가 있을 때만 ro 구현을 제공하며 역시 조정 hook을 사용합니다. CONFIG_ARCH_USE_MEMREMAP_PROT의 prot API는 __pgprot(prot_val)을 직접 넘기므로 이 조정 hook을 호출하지 않습니다."
+      "text": "early_ioremap은 IO 속성을 바로 써요. memremap은 NORMAL을 조정 hook에 통과시키며 ro는 FIXMAP_PAGE_RO가 있는 경우에만 같은 방식으로 제공돼요. CONFIG_ARCH_USE_MEMREMAP_PROT의 prot 함수는 __pgprot(prot_val)을 바로 넘겨 이 hook을 부르지 않아요. __force는 주소공간 형식 주석 변환에 쓰여요."
     },
     {
       "title": "큰 메모리 복사",
-      "text": "MAX_MAP_CHUNK는 NR_FIX_BTMAPS<<PAGE_SHIFT입니다. copy_from_early_mem은 src의 페이지 offset인 slop을 구하고 clen을 size와 MAX_MAP_CHUNK-slop 중 작은 값으로 제한합니다. 정렬된 src에 clen+slop만큼 매핑하고 p+slop에서 clen만 복사한 뒤 원래 매핑 길이로 해제합니다. dest/src를clen만큼 올리고 size를 줄여 반복합니다."
+      "text": "MAX_MAP_CHUNK는 한 슬롯이 담는 바이트 수예요. 복사 함수는 src의 페이지 안 여백 slop을 구해 clen을 남은 크기와 MAX_MAP_CHUNK-slop 중 작은 값으로 정해요. 정렬된 src를 clen+slop만큼 연결해 p+slop에서 clen만 복사하고 그 매핑 길이로 해제해요. 두 주소를 clen만큼 옮기며 반복해요."
     },
     {
       "title": "복사 경계 예제",
-      "text": "가정한 슬롯 용량8192바이트, src offset100, 남은 크기9000이면 첫 복사 길이는8092이고 매핑 길이는8192입니다. 이후 src는 페이지 경계가 되며 남은908바이트를 처리합니다. 이 함수에는 early_memremap의 NULL 반환 검사나 오류 반환 경로가 없으므로 실패를 안전하게 복구하는 일반 복사 API라고 설명하면 안 됩니다. size0이면 루프에 들어가지 않습니다."
+      "text": "용량 8192, 여백 100, 남은 9000이면 첫 복사는 8092이고 매핑은 8192바이트예요. 다음에는 페이지 경계에서 남은 908바이트를 처리해요. 이 함수는 매핑의 NULL을 검사하지 않고 memcpy를 하며 오류 반환도 없어요. 유효한 부팅 자원이 필요하고 크기 0이면 반복하지 않아요."
     },
     {
       "title": "비MMU 구현",
-      "text": "비MMU early_ioremap은 phys_addr를 __iomem 포인터로, memremap과 ro는 일반 포인터로 변환해 반환합니다. size 검사나 별도 매핑 설치는 없고 early_iounmap은 빈 함수입니다. 따라서 ro라는 이름만으로 이 분기가 하드웨어 읽기 전용 보호를 설치한다고 추론하면 틀립니다. 이 분기에는 앞의 chunk 복사 함수나 prot 함수 정의가 없습니다."
+      "text": "MMU 없는 분기는 물리 주소를 포인터로 바꾸어 반환하며 크기 검사나 페이지 연결 설치가 없어요. iounmap도 빈 함수예요. ro라는 이름만으로 하드웨어 읽기 전용 페이지를 만든다고 말할 수 없어요. 이 분기에는 앞의 조각 복사와 prot 함수 정의도 없어요."
     },
     {
       "title": "공통 메모리 해제",
-      "text": "early_memunmap은 일반 포인터를 __force __iomem 포인터로 바꾸어 early_iounmap에 위임합니다. 타입 주석 변환 자체가 주소 변환이나 물리 페이지 해제가 아닙니다. 실제 동작은 MMU 구성에 따라 슬롯 해제 또는 빈 함수입니다."
+      "text": "early_memunmap은 일반 포인터를 __iomem 형식으로 바꿔 early_iounmap에 맡겨요. 형식 주석 변환 자체는 주소 번역이나 물리 페이지 해제가 아니에요. MMU 구성에 따라 슬롯 연결을 지우거나 아무 동작도 하지 않아요."
     },
     {
       "title": "CS 연결과 범위",
-      "text": "한정된 슬롯의 first-free 탐색, 배열 기반 메타데이터, 페이지 정렬과 offset 복원, 부팅 상태 기계, 정확한 해제 계약, bounded chunk 복사와 오류 처리의 부재를 학습합니다. 이 해설과 원본 대응 검사는 모든 아키텍처의 PTE·TLB 처리를 실행 검증한 것은 아닙니다."
+      "text": "이 파일에서 첫 빈칸 탐색, 배열 관리표, 페이지 올림과 원래 위치 복원, 부팅 단계 전환, 정확한 반납 조건, 조각 복사와 빠진 오류 검사를 배워요. 원문 대조가 모든 아키텍처의 페이지 표와 TLB 동작을 실제 실행 검증한 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "early_ioremap_reset은 기존 매핑을 모두 해제하는가?",
+      "prompt": "early_ioremap_reset은 기존 연결을 모두 해제하나요?",
       "options": [
+        "아니요. after_paging_init을 1로 바꿔요.",
+        "네. 모든 prev_map을 NULL로 바꿔요."
+      ],
+      "answer": 0,
+      "explanation": "reset은 이후 사용할 도구를 바꾸는 상태 대입만 해요.",
+      "original_prompt": "early_ioremap_reset은 기존 매핑을 모두 해제하는가?",
+      "original_options": [
         "아니다. after_paging_init을1로 설정한다",
         "그렇다. 모든 prev_map을 NULL로 만든다"
       ],
-      "answer": 0,
-      "explanation": "reset 본문은 상태 변수 대입 하나입니다. 이후 요청에 late hook을 쓰도록 바꿀 뿐 기존 슬롯을 순회하지 않습니다."
+      "original_explanation": "reset 본문은 상태 변수 대입 하나입니다. 이후 요청에 late hook을 쓰도록 바꿀 뿐 기존 슬롯을 순회하지 않습니다."
     },
     {
-      "prompt": "해제 시 전달해야 하는 size는?",
+      "prompt": "해제할 때 어떤 size를 주나요?",
       "options": [
+        "항상 페이지 단위로 올림한 크기예요.",
+        "처음 요청했던 크기예요."
+      ],
+      "answer": 1,
+      "explanation": "prev_size는 정렬 전 크기이며 해제 때 정확히 비교해요.",
+      "original_prompt": "해제 시 전달해야 하는 size는?",
+      "original_options": [
         "항상 페이지 크기로 반올림한 크기이다",
         "원래 요청 크기이다"
       ],
-      "answer": 1,
-      "explanation": "매핑 시 prev_size에는 정렬 전 size를 저장하고 해제에서 정확히 비교합니다. 실제 PTE 개수는 offset과 size로 다시 계산합니다."
+      "original_explanation": "매핑 시 prev_size에는 정렬 전 size를 저장하고 해제에서 정확히 비교합니다. 실제 PTE 개수는 offset과 size로 다시 계산합니다."
     },
     {
-      "prompt": "페이지 설치 루프가 idx를 감소시키는 이유는?",
+      "prompt": "페이지 설치 때 idx를 줄이는 이유는 무엇인가요?",
       "options": [
+        "fixmap에서는 인덱스 감소가 가상 주소 증가에 해당해요.",
+        "물리 주소도 함께 감소하기 때문이에요."
+      ],
+      "answer": 0,
+      "explanation": "물리 주소는 늘고, TOP에서 인덱스 값을 빼는 가상 주소도 늘어요.",
+      "original_prompt": "페이지 설치 루프가 idx를 감소시키는 이유는?",
+      "original_options": [
         "fixmap에서 인덱스 감소가 가상 주소 증가에 대응하기 때문이다",
         "물리주소도 감소시키기 때문이다"
       ],
-      "answer": 0,
-      "explanation": "물리주소는 PAGE_SIZE씩 증가합니다. __fix_to_virt는 TOP에서 인덱스의 페이지 값을 빼므로 idx 감소가 연속 증가 주소를 만듭니다."
+      "original_explanation": "물리주소는 PAGE_SIZE씩 증가합니다. __fix_to_virt는 TOP에서 인덱스의 페이지 값을 빼므로 idx 감소가 연속 증가 주소를 만듭니다."
     },
     {
-      "prompt": "크기 초과로 매핑이 실패하면 prev_size 갱신 때문에 슬롯이 영구 점유되는가?",
+      "prompt": "크기 초과 실패 뒤 prev_size가 남으면 슬롯이 영구 점유되나요?",
       "options": [
+        "네. prev_size가 0이 아니면 사용 중이에요.",
+        "아니요. 사용 여부는 아직 NULL인 prev_map으로 봐요."
+      ],
+      "answer": 1,
+      "explanation": "빈 슬롯 탐색은 크기가 아니라 prev_map을 검사해요.",
+      "original_prompt": "크기 초과로 매핑이 실패하면 prev_size 갱신 때문에 슬롯이 영구 점유되는가?",
+      "original_options": [
         "그렇다. prev_size가0이 아니면 점유다",
         "아니다. 점유 판단은 아직 NULL인 prev_map이다"
       ],
-      "answer": 1,
-      "explanation": "빈 슬롯 검색은 !prev_map[i]만 검사합니다. prev_size의 남은 값과 실제 점유 상태를 구분해야 합니다."
+      "original_explanation": "빈 슬롯 검색은 !prev_map[i]만 검사합니다. prev_size의 남은 값과 실제 점유 상태를 구분해야 합니다."
     },
     {
-      "prompt": "chunk 용량8192, offset100, 남은9000이면 첫 복사 길이는?",
+      "prompt": "용량 8192, 여백 100, 남은 9000이면 첫 복사는 얼마인가요?",
       "options": [
+        "8092바이트예요.",
+        "8192바이트예요."
+      ],
+      "answer": 0,
+      "explanation": "매핑 용량 안에 앞의 여백 100도 들어가야 해요.",
+      "original_prompt": "chunk 용량8192, offset100, 남은9000이면 첫 복사 길이는?",
+      "original_options": [
         "8092바이트이다",
         "8192바이트이다"
       ],
-      "answer": 0,
-      "explanation": "매핑에는 선행 offset100도 포함돼야 하므로 복사 길이는8192-100=8092입니다. 매핑 길이는8092+100입니다."
+      "original_explanation": "매핑에는 선행 offset100도 포함돼야 하므로 복사 길이는8192-100=8092입니다. 매핑 길이는8092+100입니다."
     },
     {
-      "prompt": "copy_from_early_mem이 매핑 실패를 검사하는가?",
+      "prompt": "copy_from_early_mem은 매핑 실패를 검사하나요?",
       "options": [
+        "네. 실패하면 오류 코드를 반환해요.",
+        "아니요. NULL 검사 없이 memcpy를 불러요."
+      ],
+      "answer": 1,
+      "explanation": "반환형 void이고 본체는 매핑·복사·해제를 바로 이어가요.",
+      "original_prompt": "copy_from_early_mem이 매핑 실패를 검사하는가?",
+      "original_options": [
         "그렇다. 실패하면 오류 코드를 반환한다",
         "아니다. NULL 검사 없이 memcpy를 호출한다"
       ],
-      "answer": 1,
-      "explanation": "본문은 매핑,복사,해제 순서이고 반환형은void입니다. 사용 가능한 부팅 자원과 유효한 입력이라는 호출 조건이 중요합니다."
+      "original_explanation": "본문은 매핑,복사,해제 순서이고 반환형은void입니다. 사용 가능한 부팅 자원과 유효한 입력이라는 호출 조건이 중요합니다."
     },
     {
-      "prompt": "비MMU early_memremap_ro는 하드웨어 읽기 전용 PTE를 설치하는가?",
+      "prompt": "MMU 없는 early_memremap_ro는 읽기 전용 PTE를 설치하나요?",
       "options": [
+        "아니요. 물리 주소를 포인터로 반환해요.",
+        "네. 항상 읽기 전용 PTE를 만들어요."
+      ],
+      "answer": 0,
+      "explanation": "해당 분기에는 페이지 표 설정 코드가 없어요.",
+      "original_prompt": "비MMU early_memremap_ro는 하드웨어 읽기 전용 PTE를 설치하는가?",
+      "original_options": [
         "아니다. 물리주소를 포인터로 반환한다",
         "그렇다. 항상 RO PTE를 만든다"
       ],
-      "answer": 0,
-      "explanation": "해당 분기에 페이지 테이블 설정은 없고 size도 사용하지 않습니다. 이름만으로 구현에 없는 보호를 부여하면 안 됩니다."
+      "original_explanation": "해당 분기에 페이지 테이블 설정은 없고 size도 사용하지 않습니다. 이름만으로 구현에 없는 보호를 부여하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "용량 8192, 시작 여백 100, 복사량 9000에서 첫 복사와 다음 복사를 계산해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Provide common bits of early_ioremap() support for architectures needing\n * temporary mappings during boot before ioremap() is available.\n *\n * This is mostly a direct copy of the x86 early_ioremap implementation.\n *\n * (C) Copyright 1995 1996, 2014 Linus Torvalds\n *\n */\n#include <linux/kernel.h>\n#include <linux/init.h>\n#include <linux/io.h>\n#include <linux/module.h>\n#include <linux/slab.h>\n#include <linux/mm.h>\n#include <linux/vmalloc.h>\n#include <asm/fixmap.h>\n#include <asm/early_ioremap.h>\n#include \"internal.h\"\n\n#ifdef CONFIG_MMU\nstatic int early_ioremap_debug __initdata;\n\nstatic int __init early_ioremap_debug_setup(char *str)\n{\n\tearly_ioremap_debug = 1;\n\n\treturn 0;\n}\nearly_param(\"early_ioremap_debug\", early_ioremap_debug_setup);\n\nstatic int after_paging_init __initdata;\n\npgprot_t __init __weak early_memremap_pgprot_adjust(resource_size_t phys_addr,\n\t\t\t\t\t\t    unsigned long size,\n\t\t\t\t\t\t    pgprot_t prot)\n{\n\treturn prot;\n}\n\nvoid __init early_ioremap_reset(void)\n{\n\tafter_paging_init = 1;\n}\n\n/*\n * Generally, ioremap() is available after paging_init() has been called.\n * Architectures wanting to allow early_ioremap after paging_init() can\n * define __late_set_fixmap and __late_clear_fixmap to do the right thing.\n */\n#ifndef __late_set_fixmap\nstatic inline void __init __late_set_fixmap(enum fixed_addresses idx,\n\t\t\t\t\t    phys_addr_t phys, pgprot_t prot)\n{\n\tBUG();\n}\n#endif\n\n#ifndef __late_clear_fixmap\nstatic inline void __init __late_clear_fixmap(enum fixed_addresses idx)\n{\n\tBUG();\n}\n#endif\n\nstatic void __iomem *prev_map[FIX_BTMAPS_SLOTS] __initdata;\nstatic unsigned long prev_size[FIX_BTMAPS_SLOTS] __initdata;\nstatic unsigned long slot_virt[FIX_BTMAPS_SLOTS] __initdata;\n\nvoid __init early_ioremap_setup(void)\n{\n\tint i;\n\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tWARN_ON_ONCE(prev_map[i]);\n\t\tslot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);\n\t}\n}\n\nstatic int __init check_early_ioremap_leak(void)\n{\n\tint count = 0;\n\tint i;\n\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++)\n\t\tif (prev_map[i])\n\t\t\tcount++;\n\n\tif (WARN(count, KERN_WARNING\n\t\t \"Debug warning: early ioremap leak of %d areas detected.\\n\"\n\t\t \"please boot with early_ioremap_debug and report the dmesg.\\n\",\n\t\t count))\n\t\treturn 1;\n\treturn 0;\n}\nlate_initcall(check_early_ioremap_leak);\n\nstatic void __init __iomem *\n__early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)\n{\n\tunsigned long offset;\n\tresource_size_t last_addr;\n\tunsigned int nrpages;\n\tenum fixed_addresses idx;\n\tint i, slot;\n\n\tWARN_ON(system_state >= SYSTEM_RUNNING);\n\n\tslot = -1;\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tif (!prev_map[i]) {\n\t\t\tslot = i;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (WARN(slot < 0, \"%s(%pa, %08lx) not found slot\\n\",\n\t\t __func__, &phys_addr, size))\n\t\treturn NULL;\n\n\t/* Don't allow wraparound or zero size */\n\tlast_addr = phys_addr + size - 1;\n\tif (WARN_ON(!size || last_addr < phys_addr))\n\t\treturn NULL;\n\n\tprev_size[slot] = size;\n\t/*\n\t * Mappings have to be page-aligned\n\t */\n\toffset = offset_in_page(phys_addr);\n\tphys_addr &= PAGE_MASK;\n\tsize = PAGE_ALIGN(last_addr + 1) - phys_addr;\n\n\t/*\n\t * Mappings have to fit in the FIX_BTMAP area.\n\t */\n\tnrpages = size >> PAGE_SHIFT;\n\tif (WARN_ON(nrpages > NR_FIX_BTMAPS))\n\t\treturn NULL;\n\n\t/*\n\t * Ok, go for it..\n\t */\n\tidx = FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*slot;\n\twhile (nrpages > 0) {\n\t\tif (after_paging_init)\n\t\t\t__late_set_fixmap(idx, phys_addr, prot);\n\t\telse\n\t\t\t__early_set_fixmap(idx, phys_addr, prot);\n\t\tphys_addr += PAGE_SIZE;\n\t\t--idx;\n\t\t--nrpages;\n\t}\n\tWARN(early_ioremap_debug, \"%s(%pa, %08lx) [%d] => %08lx + %08lx\\n\",\n\t     __func__, &phys_addr, size, slot, offset, slot_virt[slot]);\n\n\tprev_map[slot] = (void __iomem *)(offset + slot_virt[slot]);\n\treturn prev_map[slot];\n}\n\nvoid __init early_iounmap(void __iomem *addr, unsigned long size)\n{\n\tunsigned long virt_addr;\n\tunsigned long offset;\n\tunsigned int nrpages;\n\tenum fixed_addresses idx;\n\tint i, slot;\n\n\tslot = -1;\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tif (prev_map[i] == addr) {\n\t\t\tslot = i;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (WARN(slot < 0, \"%s(%p, %08lx) not found slot\\n\",\n\t\t  __func__, addr, size))\n\t\treturn;\n\n\tif (WARN(prev_size[slot] != size,\n\t\t \"%s(%p, %08lx) [%d] size not consistent %08lx\\n\",\n\t\t  __func__, addr, size, slot, prev_size[slot]))\n\t\treturn;\n\n\tWARN(early_ioremap_debug, \"%s(%p, %08lx) [%d]\\n\",\n\t      __func__, addr, size, slot);\n\n\tvirt_addr = (unsigned long)addr;\n\tif (WARN_ON(virt_addr < fix_to_virt(FIX_BTMAP_BEGIN)))\n\t\treturn;\n\n\toffset = offset_in_page(virt_addr);\n\tnrpages = PAGE_ALIGN(offset + size) >> PAGE_SHIFT;\n\n\tidx = FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*slot;\n\twhile (nrpages > 0) {\n\t\tif (after_paging_init)\n\t\t\t__late_clear_fixmap(idx);\n\t\telse\n\t\t\t__early_set_fixmap(idx, 0, FIXMAP_PAGE_CLEAR);\n\t\t--idx;\n\t\t--nrpages;\n\t}\n\tprev_map[slot] = NULL;\n}\n\n/* Remap an IO device */\nvoid __init __iomem *\nearly_ioremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn __early_ioremap(phys_addr, size, FIXMAP_PAGE_IO);\n}\n\n/* Remap memory */\nvoid __init *\nearly_memremap(resource_size_t phys_addr, unsigned long size)\n{\n\tpgprot_t prot = early_memremap_pgprot_adjust(phys_addr, size,\n\t\t\t\t\t\t     FIXMAP_PAGE_NORMAL);\n\n\treturn (__force void *)__early_ioremap(phys_addr, size, prot);\n}\n#ifdef FIXMAP_PAGE_RO\nvoid __init *\nearly_memremap_ro(resource_size_t phys_addr, unsigned long size)\n{\n\tpgprot_t prot = early_memremap_pgprot_adjust(phys_addr, size,\n\t\t\t\t\t\t     FIXMAP_PAGE_RO);\n\n\treturn (__force void *)__early_ioremap(phys_addr, size, prot);\n}\n#endif\n\n#ifdef CONFIG_ARCH_USE_MEMREMAP_PROT\nvoid __init *\nearly_memremap_prot(resource_size_t phys_addr, unsigned long size,\n\t\t    unsigned long prot_val)\n{\n\treturn (__force void *)__early_ioremap(phys_addr, size,\n\t\t\t\t\t       __pgprot(prot_val));\n}\n#endif\n\n#define MAX_MAP_CHUNK\t(NR_FIX_BTMAPS << PAGE_SHIFT)\n\nvoid __init copy_from_early_mem(void *dest, phys_addr_t src, unsigned long size)\n{\n\tunsigned long slop, clen;\n\tchar *p;\n\n\twhile (size) {\n\t\tslop = offset_in_page(src);\n\t\tclen = size;\n\t\tif (clen > MAX_MAP_CHUNK - slop)\n\t\t\tclen = MAX_MAP_CHUNK - slop;\n\t\tp = early_memremap(src & PAGE_MASK, clen + slop);\n\t\tmemcpy(dest, p + slop, clen);\n\t\tearly_memunmap(p, clen + slop);\n\t\tdest += clen;\n\t\tsrc += clen;\n\t\tsize -= clen;\n\t}\n}\n\n#else /* CONFIG_MMU */\n\nvoid __init __iomem *\nearly_ioremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (__force void __iomem *)phys_addr;\n}\n\n/* Remap memory */\nvoid __init *\nearly_memremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (void *)phys_addr;\n}\nvoid __init *\nearly_memremap_ro(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (void *)phys_addr;\n}\n\nvoid __init early_iounmap(void __iomem *addr, unsigned long size)\n{\n}\n\n#endif /* CONFIG_MMU */\n\n\nvoid __init early_memunmap(void *addr, unsigned long size)\n{\n\tearly_iounmap((__force void __iomem *)addr, size);\n}\n",
   "source_review": {
@@ -188,5 +226,225 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/mm/early_ioremap.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-cc6499a088f3e4fe",
+    "path": "mm/early_ioremap.c",
+    "title": "초기 I/O 매핑 전체: 고정 슬롯과 부팅 단계 전환",
+    "area": "초기 부팅 · 가상 메모리 · 슬롯 할당 · 페이지 정렬 · 수명 검증",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정규 ioremap 이전에 사용하는 임시 매핑의 할당·해제·복사와 비MMU 경로를 해설합니다.",
+    "guide": [
+      "제한된 고정 슬롯에 페이지 단위 매핑을 설치하고 원래 주소 offset과 요청 크기를 보존합니다.",
+      "앞서 읽은 ARM 및 generic fixmap의 역방향 인덱스 배치를 실제 매핑 루프와 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0·설명·저작권과 관련 kernel/mm/io/fixmap 헤더 뒤 CONFIG_MMU 분기에서 관리 상태·설정·매핑·해제·복사를 구현합니다. 비MMU에서는 물리주소 변환과 빈 해제를 제공하며 early_memunmap 래퍼는 두 구성에 공통입니다. __init·__initdata는 초기화 단계 수명과 관련되므로 일반 런타임 할당 API처럼 사용하지 않습니다."
+      },
+      {
+        "title": "진단과 보호 속성 조정",
+        "text": "early_ioremap_debug 파라미터 handler는 전달 문자열을 분석하지 않고 debug=1로 설정해0을 반환합니다. weak early_memremap_pgprot_adjust의 기본 구현은 prot를 그대로 반환하며 아키텍처가 대체할 수 있습니다. 이 hook은 주소를 매핑하는 함수 자체가 아닙니다."
+      },
+      {
+        "title": "Paging 단계 전환",
+        "text": "early_ioremap_reset은 after_paging_init을1로 바꿉니다. 기존 슬롯을 해제하거나 배열을 초기화하는 함수가 아닙니다. 이후 설정·해제는 __late_set_fixmap/__late_clear_fixmap으로 분기합니다. 아키텍처가 이 매크로를 제공하지 않으면 기본 helper는 BUG를 발생시키므로 reset 이후 사용이 모든 환경에서 지원되는 것은 아닙니다."
+      },
+      {
+        "title": "슬롯 상태와 초기화",
+        "text": "prev_map은 슬롯별 반환 주소, prev_size는 요청 원래 크기, slot_virt는 슬롯의 가상 시작을 보관합니다. setup은 기존 prev_map이 있으면 경고하고 slot_virt[i]=__fix_to_virt(FIX_BTMAP_BEGIN-NR_FIX_BTMAPS*i)를 계산합니다. 이미 쓰는 슬롯을 초기화해서 비우는 본문은 없습니다. 슬롯 수와 한 슬롯의 페이지 수는 다른 상수입니다."
+      },
+      {
+        "title": "누수 검사",
+        "text": "late_initcall의 check_early_ioremap_leak는 NULL이 아닌 prev_map 개수를 셉니다. 남은 영역이 있으면 경고하고1,없으면0을 반환합니다. 이 검사는 누수를 보고할 뿐 남은 영역을 자동 해제하지 않습니다. debug 옵션은 map/unmap 시 WARN을 통한 추가 추적에도 쓰입니다."
+      },
+      {
+        "title": "빈 슬롯 선택",
+        "text": "__early_ioremap은 SYSTEM_RUNNING 이상이면 경고하지만 그 경고만으로 즉시 반환하지는 않습니다. prev_map을 앞에서부터 선형 탐색해 첫 NULL 슬롯을 고릅니다. 빈 슬롯이 없으면 경고 후 NULL입니다. 별도 잠금이나 동적 슬롯 확장 코드는 없으며 일반적인 동시 런타임 allocator로 해석하면 안 됩니다."
+      },
+      {
+        "title": "크기와 정렬",
+        "text": "last_addr=phys_addr+size-1을 계산해 크기0 또는 last_addr<phys_addr를 거부합니다. 원래 size를 prev_size에 저장하고 offset_in_page를 보존한 뒤 phys_addr를 PAGE_MASK로 내립니다. 매핑 길이는 PAGE_ALIGN(last_addr+1)-정렬주소로 계산하며 페이지 수가 NR_FIX_BTMAPS보다 크면 거부합니다. 이 검사를 전체 물리주소 유효성 검증으로 확대하지 않습니다."
+      },
+      {
+        "title": "실패 시 상태와 페이지 설치",
+        "text": "페이지 수 초과 실패에서는 prev_size가 이미 갱신됐지만 prev_map은 아직 NULL이므로 슬롯은 점유 상태가 되지 않습니다. 실제 설치는 슬롯 시작 idx에서 물리주소를 PAGE_SIZE씩 올리고 idx를 하나씩 내립니다. fixmap 주소는 인덱스가 작아질수록 증가하므로 연속 물리 페이지와 연속 가상 페이지가 대응합니다. 각 설치 helper의 반환값을 검사하는 rollback 루프는 없습니다."
+      },
+      {
+        "title": "반환 주소와 debug 주의",
+        "text": "설치를 마치면 prev_map=slot_virt+offset을 기록하고 반환합니다. debug WARN에 전달하는 phys_addr는 페이지 루프에서 증가한 뒤의 값이고 size도 정렬된 길이입니다. 로그의 모든 값이 원래 호출 인자라고 설명하면 틀립니다. 원래 요청 크기는 prev_size에 따로 남아 있습니다."
+      },
+      {
+        "title": "정확한 해제 입력",
+        "text": "early_iounmap은 prev_map과 전달 addr가 정확히 같은 슬롯을 찾습니다. 찾지 못하거나 prev_size와 전달 size가 다르면 경고 후 반환합니다. 반환 주소의 중간 포인터나 임의로 반올림한 크기로 해제하는 API가 아닙니다. NULL도 정상 매핑 포인터처럼 사용하면 안 되며 본문에는 별도의 첫 NULL 전용 검사가 없습니다."
+      },
+      {
+        "title": "해제 페이지 수와 슬롯 반환",
+        "text": "해제는 주소가 fix_to_virt(FIX_BTMAP_BEGIN)보다 낮으면 경고 후 반환합니다. offset+원래 size를 PAGE_ALIGN해 페이지 수를 구하고 같은 인덱스 방향으로 late clear 또는 early set(idx,0,CLEAR)를 수행합니다. 끝나면 prev_map만 NULL로 바꿉니다. prev_size와 slot_virt를0으로 지우지 않아도 슬롯 사용 여부는 prev_map으로 결정됩니다."
+      },
+      {
+        "title": "속성별 매핑 API",
+        "text": "early_ioremap은 FIXMAP_PAGE_IO로 직접 매핑합니다. early_memremap은 NORMAL을 pgprot_adjust에 통과시킨 뒤 주소공간 주석 타입을 __force로 변환합니다. FIXMAP_PAGE_RO가 있을 때만 ro 구현을 제공하며 역시 조정 hook을 사용합니다. CONFIG_ARCH_USE_MEMREMAP_PROT의 prot API는 __pgprot(prot_val)을 직접 넘기므로 이 조정 hook을 호출하지 않습니다."
+      },
+      {
+        "title": "큰 메모리 복사",
+        "text": "MAX_MAP_CHUNK는 NR_FIX_BTMAPS<<PAGE_SHIFT입니다. copy_from_early_mem은 src의 페이지 offset인 slop을 구하고 clen을 size와 MAX_MAP_CHUNK-slop 중 작은 값으로 제한합니다. 정렬된 src에 clen+slop만큼 매핑하고 p+slop에서 clen만 복사한 뒤 원래 매핑 길이로 해제합니다. dest/src를clen만큼 올리고 size를 줄여 반복합니다."
+      },
+      {
+        "title": "복사 경계 예제",
+        "text": "가정한 슬롯 용량8192바이트, src offset100, 남은 크기9000이면 첫 복사 길이는8092이고 매핑 길이는8192입니다. 이후 src는 페이지 경계가 되며 남은908바이트를 처리합니다. 이 함수에는 early_memremap의 NULL 반환 검사나 오류 반환 경로가 없으므로 실패를 안전하게 복구하는 일반 복사 API라고 설명하면 안 됩니다. size0이면 루프에 들어가지 않습니다."
+      },
+      {
+        "title": "비MMU 구현",
+        "text": "비MMU early_ioremap은 phys_addr를 __iomem 포인터로, memremap과 ro는 일반 포인터로 변환해 반환합니다. size 검사나 별도 매핑 설치는 없고 early_iounmap은 빈 함수입니다. 따라서 ro라는 이름만으로 이 분기가 하드웨어 읽기 전용 보호를 설치한다고 추론하면 틀립니다. 이 분기에는 앞의 chunk 복사 함수나 prot 함수 정의가 없습니다."
+      },
+      {
+        "title": "공통 메모리 해제",
+        "text": "early_memunmap은 일반 포인터를 __force __iomem 포인터로 바꾸어 early_iounmap에 위임합니다. 타입 주석 변환 자체가 주소 변환이나 물리 페이지 해제가 아닙니다. 실제 동작은 MMU 구성에 따라 슬롯 해제 또는 빈 함수입니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "한정된 슬롯의 first-free 탐색, 배열 기반 메타데이터, 페이지 정렬과 offset 복원, 부팅 상태 기계, 정확한 해제 계약, bounded chunk 복사와 오류 처리의 부재를 학습합니다. 이 해설과 원본 대응 검사는 모든 아키텍처의 PTE·TLB 처리를 실행 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "early_ioremap_reset은 기존 매핑을 모두 해제하는가?",
+        "options": [
+          "아니다. after_paging_init을1로 설정한다",
+          "그렇다. 모든 prev_map을 NULL로 만든다"
+        ],
+        "answer": 0,
+        "explanation": "reset 본문은 상태 변수 대입 하나입니다. 이후 요청에 late hook을 쓰도록 바꿀 뿐 기존 슬롯을 순회하지 않습니다."
+      },
+      {
+        "prompt": "해제 시 전달해야 하는 size는?",
+        "options": [
+          "항상 페이지 크기로 반올림한 크기이다",
+          "원래 요청 크기이다"
+        ],
+        "answer": 1,
+        "explanation": "매핑 시 prev_size에는 정렬 전 size를 저장하고 해제에서 정확히 비교합니다. 실제 PTE 개수는 offset과 size로 다시 계산합니다."
+      },
+      {
+        "prompt": "페이지 설치 루프가 idx를 감소시키는 이유는?",
+        "options": [
+          "fixmap에서 인덱스 감소가 가상 주소 증가에 대응하기 때문이다",
+          "물리주소도 감소시키기 때문이다"
+        ],
+        "answer": 0,
+        "explanation": "물리주소는 PAGE_SIZE씩 증가합니다. __fix_to_virt는 TOP에서 인덱스의 페이지 값을 빼므로 idx 감소가 연속 증가 주소를 만듭니다."
+      },
+      {
+        "prompt": "크기 초과로 매핑이 실패하면 prev_size 갱신 때문에 슬롯이 영구 점유되는가?",
+        "options": [
+          "그렇다. prev_size가0이 아니면 점유다",
+          "아니다. 점유 판단은 아직 NULL인 prev_map이다"
+        ],
+        "answer": 1,
+        "explanation": "빈 슬롯 검색은 !prev_map[i]만 검사합니다. prev_size의 남은 값과 실제 점유 상태를 구분해야 합니다."
+      },
+      {
+        "prompt": "chunk 용량8192, offset100, 남은9000이면 첫 복사 길이는?",
+        "options": [
+          "8092바이트이다",
+          "8192바이트이다"
+        ],
+        "answer": 0,
+        "explanation": "매핑에는 선행 offset100도 포함돼야 하므로 복사 길이는8192-100=8092입니다. 매핑 길이는8092+100입니다."
+      },
+      {
+        "prompt": "copy_from_early_mem이 매핑 실패를 검사하는가?",
+        "options": [
+          "그렇다. 실패하면 오류 코드를 반환한다",
+          "아니다. NULL 검사 없이 memcpy를 호출한다"
+        ],
+        "answer": 1,
+        "explanation": "본문은 매핑,복사,해제 순서이고 반환형은void입니다. 사용 가능한 부팅 자원과 유효한 입력이라는 호출 조건이 중요합니다."
+      },
+      {
+        "prompt": "비MMU early_memremap_ro는 하드웨어 읽기 전용 PTE를 설치하는가?",
+        "options": [
+          "아니다. 물리주소를 포인터로 반환한다",
+          "그렇다. 항상 RO PTE를 만든다"
+        ],
+        "answer": 0,
+        "explanation": "해당 분기에 페이지 테이블 설정은 없고 size도 사용하지 않습니다. 이름만으로 구현에 없는 보호를 부여하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Provide common bits of early_ioremap() support for architectures needing\n * temporary mappings during boot before ioremap() is available.\n *\n * This is mostly a direct copy of the x86 early_ioremap implementation.\n *\n * (C) Copyright 1995 1996, 2014 Linus Torvalds\n *\n */\n#include <linux/kernel.h>\n#include <linux/init.h>\n#include <linux/io.h>\n#include <linux/module.h>\n#include <linux/slab.h>\n#include <linux/mm.h>\n#include <linux/vmalloc.h>\n#include <asm/fixmap.h>\n#include <asm/early_ioremap.h>\n#include \"internal.h\"\n\n#ifdef CONFIG_MMU\nstatic int early_ioremap_debug __initdata;\n\nstatic int __init early_ioremap_debug_setup(char *str)\n{\n\tearly_ioremap_debug = 1;\n\n\treturn 0;\n}\nearly_param(\"early_ioremap_debug\", early_ioremap_debug_setup);\n\nstatic int after_paging_init __initdata;\n\npgprot_t __init __weak early_memremap_pgprot_adjust(resource_size_t phys_addr,\n\t\t\t\t\t\t    unsigned long size,\n\t\t\t\t\t\t    pgprot_t prot)\n{\n\treturn prot;\n}\n\nvoid __init early_ioremap_reset(void)\n{\n\tafter_paging_init = 1;\n}\n\n/*\n * Generally, ioremap() is available after paging_init() has been called.\n * Architectures wanting to allow early_ioremap after paging_init() can\n * define __late_set_fixmap and __late_clear_fixmap to do the right thing.\n */\n#ifndef __late_set_fixmap\nstatic inline void __init __late_set_fixmap(enum fixed_addresses idx,\n\t\t\t\t\t    phys_addr_t phys, pgprot_t prot)\n{\n\tBUG();\n}\n#endif\n\n#ifndef __late_clear_fixmap\nstatic inline void __init __late_clear_fixmap(enum fixed_addresses idx)\n{\n\tBUG();\n}\n#endif\n\nstatic void __iomem *prev_map[FIX_BTMAPS_SLOTS] __initdata;\nstatic unsigned long prev_size[FIX_BTMAPS_SLOTS] __initdata;\nstatic unsigned long slot_virt[FIX_BTMAPS_SLOTS] __initdata;\n\nvoid __init early_ioremap_setup(void)\n{\n\tint i;\n\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tWARN_ON_ONCE(prev_map[i]);\n\t\tslot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);\n\t}\n}\n\nstatic int __init check_early_ioremap_leak(void)\n{\n\tint count = 0;\n\tint i;\n\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++)\n\t\tif (prev_map[i])\n\t\t\tcount++;\n\n\tif (WARN(count, KERN_WARNING\n\t\t \"Debug warning: early ioremap leak of %d areas detected.\\n\"\n\t\t \"please boot with early_ioremap_debug and report the dmesg.\\n\",\n\t\t count))\n\t\treturn 1;\n\treturn 0;\n}\nlate_initcall(check_early_ioremap_leak);\n\nstatic void __init __iomem *\n__early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)\n{\n\tunsigned long offset;\n\tresource_size_t last_addr;\n\tunsigned int nrpages;\n\tenum fixed_addresses idx;\n\tint i, slot;\n\n\tWARN_ON(system_state >= SYSTEM_RUNNING);\n\n\tslot = -1;\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tif (!prev_map[i]) {\n\t\t\tslot = i;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (WARN(slot < 0, \"%s(%pa, %08lx) not found slot\\n\",\n\t\t __func__, &phys_addr, size))\n\t\treturn NULL;\n\n\t/* Don't allow wraparound or zero size */\n\tlast_addr = phys_addr + size - 1;\n\tif (WARN_ON(!size || last_addr < phys_addr))\n\t\treturn NULL;\n\n\tprev_size[slot] = size;\n\t/*\n\t * Mappings have to be page-aligned\n\t */\n\toffset = offset_in_page(phys_addr);\n\tphys_addr &= PAGE_MASK;\n\tsize = PAGE_ALIGN(last_addr + 1) - phys_addr;\n\n\t/*\n\t * Mappings have to fit in the FIX_BTMAP area.\n\t */\n\tnrpages = size >> PAGE_SHIFT;\n\tif (WARN_ON(nrpages > NR_FIX_BTMAPS))\n\t\treturn NULL;\n\n\t/*\n\t * Ok, go for it..\n\t */\n\tidx = FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*slot;\n\twhile (nrpages > 0) {\n\t\tif (after_paging_init)\n\t\t\t__late_set_fixmap(idx, phys_addr, prot);\n\t\telse\n\t\t\t__early_set_fixmap(idx, phys_addr, prot);\n\t\tphys_addr += PAGE_SIZE;\n\t\t--idx;\n\t\t--nrpages;\n\t}\n\tWARN(early_ioremap_debug, \"%s(%pa, %08lx) [%d] => %08lx + %08lx\\n\",\n\t     __func__, &phys_addr, size, slot, offset, slot_virt[slot]);\n\n\tprev_map[slot] = (void __iomem *)(offset + slot_virt[slot]);\n\treturn prev_map[slot];\n}\n\nvoid __init early_iounmap(void __iomem *addr, unsigned long size)\n{\n\tunsigned long virt_addr;\n\tunsigned long offset;\n\tunsigned int nrpages;\n\tenum fixed_addresses idx;\n\tint i, slot;\n\n\tslot = -1;\n\tfor (i = 0; i < FIX_BTMAPS_SLOTS; i++) {\n\t\tif (prev_map[i] == addr) {\n\t\t\tslot = i;\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (WARN(slot < 0, \"%s(%p, %08lx) not found slot\\n\",\n\t\t  __func__, addr, size))\n\t\treturn;\n\n\tif (WARN(prev_size[slot] != size,\n\t\t \"%s(%p, %08lx) [%d] size not consistent %08lx\\n\",\n\t\t  __func__, addr, size, slot, prev_size[slot]))\n\t\treturn;\n\n\tWARN(early_ioremap_debug, \"%s(%p, %08lx) [%d]\\n\",\n\t      __func__, addr, size, slot);\n\n\tvirt_addr = (unsigned long)addr;\n\tif (WARN_ON(virt_addr < fix_to_virt(FIX_BTMAP_BEGIN)))\n\t\treturn;\n\n\toffset = offset_in_page(virt_addr);\n\tnrpages = PAGE_ALIGN(offset + size) >> PAGE_SHIFT;\n\n\tidx = FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*slot;\n\twhile (nrpages > 0) {\n\t\tif (after_paging_init)\n\t\t\t__late_clear_fixmap(idx);\n\t\telse\n\t\t\t__early_set_fixmap(idx, 0, FIXMAP_PAGE_CLEAR);\n\t\t--idx;\n\t\t--nrpages;\n\t}\n\tprev_map[slot] = NULL;\n}\n\n/* Remap an IO device */\nvoid __init __iomem *\nearly_ioremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn __early_ioremap(phys_addr, size, FIXMAP_PAGE_IO);\n}\n\n/* Remap memory */\nvoid __init *\nearly_memremap(resource_size_t phys_addr, unsigned long size)\n{\n\tpgprot_t prot = early_memremap_pgprot_adjust(phys_addr, size,\n\t\t\t\t\t\t     FIXMAP_PAGE_NORMAL);\n\n\treturn (__force void *)__early_ioremap(phys_addr, size, prot);\n}\n#ifdef FIXMAP_PAGE_RO\nvoid __init *\nearly_memremap_ro(resource_size_t phys_addr, unsigned long size)\n{\n\tpgprot_t prot = early_memremap_pgprot_adjust(phys_addr, size,\n\t\t\t\t\t\t     FIXMAP_PAGE_RO);\n\n\treturn (__force void *)__early_ioremap(phys_addr, size, prot);\n}\n#endif\n\n#ifdef CONFIG_ARCH_USE_MEMREMAP_PROT\nvoid __init *\nearly_memremap_prot(resource_size_t phys_addr, unsigned long size,\n\t\t    unsigned long prot_val)\n{\n\treturn (__force void *)__early_ioremap(phys_addr, size,\n\t\t\t\t\t       __pgprot(prot_val));\n}\n#endif\n\n#define MAX_MAP_CHUNK\t(NR_FIX_BTMAPS << PAGE_SHIFT)\n\nvoid __init copy_from_early_mem(void *dest, phys_addr_t src, unsigned long size)\n{\n\tunsigned long slop, clen;\n\tchar *p;\n\n\twhile (size) {\n\t\tslop = offset_in_page(src);\n\t\tclen = size;\n\t\tif (clen > MAX_MAP_CHUNK - slop)\n\t\t\tclen = MAX_MAP_CHUNK - slop;\n\t\tp = early_memremap(src & PAGE_MASK, clen + slop);\n\t\tmemcpy(dest, p + slop, clen);\n\t\tearly_memunmap(p, clen + slop);\n\t\tdest += clen;\n\t\tsrc += clen;\n\t\tsize -= clen;\n\t}\n}\n\n#else /* CONFIG_MMU */\n\nvoid __init __iomem *\nearly_ioremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (__force void __iomem *)phys_addr;\n}\n\n/* Remap memory */\nvoid __init *\nearly_memremap(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (void *)phys_addr;\n}\nvoid __init *\nearly_memremap_ro(resource_size_t phys_addr, unsigned long size)\n{\n\treturn (void *)phys_addr;\n}\n\nvoid __init early_iounmap(void __iomem *addr, unsigned long size)\n{\n}\n\n#endif /* CONFIG_MMU */\n\n\nvoid __init early_memunmap(void *addr, unsigned long size)\n{\n\tearly_iounmap((__force void __iomem *)addr, size);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "32ce5cd77011d64f9dc254b36bce9bd43e6e7e8810f8e555316f03689fb9afca",
+      "scope": "whole-file",
+      "line_count": 297,
+      "authoring_source": "course/file_units/early_ioremap.py",
+      "sections": [
+        "전체 구성",
+        "진단과 보호 속성 조정",
+        "Paging 단계 전환",
+        "슬롯 상태와 초기화",
+        "누수 검사",
+        "빈 슬롯 선택",
+        "크기와 정렬",
+        "실패 시 상태와 페이지 설치",
+        "반환 주소와 debug 주의",
+        "정확한 해제 입력",
+        "해제 페이지 수와 슬롯 반환",
+        "속성별 매핑 API",
+        "큰 메모리 복사",
+        "복사 경계 예제",
+        "비MMU 구현",
+        "공통 메모리 해제",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/mm/early_ioremap.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "정식 통로가 열리기 전, 몇 개뿐인 임시 통로를 빌리고 빌린 정보 그대로 돌려줘요.",
+    "meaning": "부팅 초기 매핑은 제한된 슬롯에 페이지를 연결하고 원래 주소와 크기로 해제해요.",
+    "exercise": "용량 8192, 시작 여백 100, 복사량 9000에서 첫 복사와 다음 복사를 계산해 보세요."
+  },
+  "goal": "부팅 초기 매핑은 제한된 슬롯에 페이지를 연결하고 원래 주소와 크기로 해제해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "용량 8192, 시작 여백 100, 복사량 9000에서 첫 복사와 다음 복사를 계산해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "218964065efaaec2b041679347a8d3b3baed6d747ce7e1c7d4d4b102d41419e9",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

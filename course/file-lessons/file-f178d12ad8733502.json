@@ -5,54 +5,62 @@
   "area": "ELF note · LTO · 전처리 · 빌드 메타데이터",
   "track": "files",
   "kind": "kernel",
-  "intro": "LTO note type과 설정별 매크로의 전체 정의를 분석합니다.",
+  "intro": "LTO 빌드 정보 note의 종류와 값, 설정을 켜는 작업과의 차이를 설명합니다.",
   "guide": [
-    "빌드 설정을 ELF 메타데이터에 기록하는 작업과 해당 최적화를 실행하는 작업은 다릅니다.",
-    "전처리 분기, ELF note 이름·type·descriptor를 구분합니다."
+    "LTO는 링크 단계에서 여러 번역 결과를 함께 보고 최적화하는 기능입니다. 이 파일은 그 설정 정보를 표시합니다.",
+    "ELF는 커널 실행 파일의 형식이며 note는 그 안에 넣는 부가 정보입니다. type은 정보 종류, descriptor는 그 종류에 담을 값입니다.",
+    "매크로를 정의하거나 헤더를 포함하는 것 자체가 LTO 옵션을 켜지는 않습니다."
   ],
   "deep_dive": [
     {
       "title": "헤더 구성과 note type",
-      "text": "include guard 안에서 linux/elfnote.h를 포함하고 LINUX_ELFNOTE_LTO_INFO를 0x101로 정의합니다. 이 원본 헤더에는 별도 SPDX 줄이 없습니다. 주된 결과는 함수가 아니라 BUILD_LTO_INFO 매크로입니다."
+      "text": "중복 포함 방지 안에 elfnote.h를 넣고 정보 종류 번호 0x101을 정의합니다. 보존된 이 헤더에는 별도의 SPDX 줄이 없습니다. 결과물은 실행 함수가 아니라 BUILD_LTO_INFO 매크로입니다."
     },
     {
       "title": "두 설정 분기",
-      "text": "CONFIG_LTO가 있으면 ELFNOTE32(\"Linux\",0x101,1), 없으면 같은 name·type에 descriptor 0을 쓰도록 정의합니다. 설정이 없을 때 note 전체를 생략하는 매크로가 아닙니다. ELFNOTE32의 의미를 커널 전체가 반드시 32비트로 빌드된다는 뜻으로 해석하지 않습니다."
+      "text": "설정이 있으면 Linux 이름과 종류 0x101에 값 1을, 없으면 값 0을 넣는 ELFNOTE32로 정의합니다. 꺼진 경우 note 전체를 생략하지 않습니다. ELFNOTE32라는 이름을 커널 전체가 반드시 32비트라는 뜻으로 해석하면 안 됩니다."
     },
     {
       "title": "사용과 범위",
-      "text": "init/version.c에서 BUILD_LTO_INFO를 사용하면 해당 note가 생성되는 연결입니다. 헤더를 포함하는 것만으로 LTO 최적화가 켜지거나 링크 옵션이 바뀌지는 않습니다. type 상수·조건부 정의·include 전체를 검토했으며 실제 ELF 바이너리를 추출해 확인한 것은 아닙니다."
+      "text": "init/version.c가 BUILD_LTO_INFO를 사용할 때 해당 표식이 만들어집니다. 포함만으로 최적화나 링크 옵션을 바꾸지는 않습니다. 이는 조건과 매크로 대조이며 실제 생성 ELF 파일을 꺼내 확인한 결과가 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "CONFIG_LTO가 없을 때 BUILD_LTO_INFO는?",
+      "prompt": "LTO 설정이 없으면 매크로는 무엇을 하나요?",
       "options": [
+        "값 0인 Linux note를 정의합니다.",
+        "완전히 빈 매크로가 됩니다."
+      ],
+      "answer": 0,
+      "explanation": "else에도 ELFNOTE32가 있어 비활성을 표시합니다.",
+      "original_prompt": "CONFIG_LTO가 없을 때 BUILD_LTO_INFO는?",
+      "original_options": [
         "descriptor 0인 Linux note를 정의한다",
         "아무 코드도 없는 빈 매크로다"
       ],
-      "answer": 0,
-      "explanation": "else 분기에도 ELFNOTE32 호출이 있습니다. 비활성 정보를 명시적으로 기록합니다."
+      "original_explanation": "else 분기에도 ELFNOTE32 호출이 있습니다. 비활성 정보를 명시적으로 기록합니다."
     },
     {
-      "prompt": "LTO note의 type과 descriptor의 역할은?",
+      "prompt": "type과 descriptor는 각각 무엇인가요?",
       "options": [
+        "둘 다 현재 프로세스 번호입니다.",
+        "종류 0x101과 설정에 따른 값 1 또는 0입니다."
+      ],
+      "answer": 1,
+      "explanation": "정보의 종류와 그 안의 값은 별도입니다.",
+      "original_prompt": "LTO note의 type과 descriptor의 역할은?",
+      "original_options": [
         "둘 다 현재 PID를 저장한다",
         "type은 0x101 식별자, descriptor는 설정에 따른 1 또는 0"
       ],
-      "answer": 1,
-      "explanation": "note 종류와 그 종류의 값은 별개입니다. 이 매크로는 최적화를 수행하는 함수가 아닙니다."
+      "original_explanation": "note 종류와 그 종류의 값은 별개입니다. 이 매크로는 최적화를 수행하는 함수가 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "CONFIG_LTO가 켜질 때와 꺼질 때 name, type, descriptor 중 바뀌는 부분을 찾아 보세요."
   },
   "annotated": "#ifndef __ELFNOTE_LTO_H\n#define __ELFNOTE_LTO_H\n\n#include <linux/elfnote.h>\n\n#define LINUX_ELFNOTE_LTO_INFO\t0x101\n\n#ifdef CONFIG_LTO\n#define BUILD_LTO_INFO\tELFNOTE32(\"Linux\", LINUX_ELFNOTE_LTO_INFO, 1)\n#else\n#define BUILD_LTO_INFO\tELFNOTE32(\"Linux\", LINUX_ELFNOTE_LTO_INFO, 0)\n#endif\n\n#endif /* __ELFNOTE_LTO_H */\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/elfnote-lto.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f178d12ad8733502",
+    "path": "include/linux/elfnote-lto.h",
+    "title": "LTO ELF note: 설정을 숫자 descriptor로 기록하기",
+    "area": "ELF note · LTO · 전처리 · 빌드 메타데이터",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "LTO note type과 설정별 매크로의 전체 정의를 분석합니다.",
+    "guide": [
+      "빌드 설정을 ELF 메타데이터에 기록하는 작업과 해당 최적화를 실행하는 작업은 다릅니다.",
+      "전처리 분기, ELF note 이름·type·descriptor를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더 구성과 note type",
+        "text": "include guard 안에서 linux/elfnote.h를 포함하고 LINUX_ELFNOTE_LTO_INFO를 0x101로 정의합니다. 이 원본 헤더에는 별도 SPDX 줄이 없습니다. 주된 결과는 함수가 아니라 BUILD_LTO_INFO 매크로입니다."
+      },
+      {
+        "title": "두 설정 분기",
+        "text": "CONFIG_LTO가 있으면 ELFNOTE32(\"Linux\",0x101,1), 없으면 같은 name·type에 descriptor 0을 쓰도록 정의합니다. 설정이 없을 때 note 전체를 생략하는 매크로가 아닙니다. ELFNOTE32의 의미를 커널 전체가 반드시 32비트로 빌드된다는 뜻으로 해석하지 않습니다."
+      },
+      {
+        "title": "사용과 범위",
+        "text": "init/version.c에서 BUILD_LTO_INFO를 사용하면 해당 note가 생성되는 연결입니다. 헤더를 포함하는 것만으로 LTO 최적화가 켜지거나 링크 옵션이 바뀌지는 않습니다. type 상수·조건부 정의·include 전체를 검토했으며 실제 ELF 바이너리를 추출해 확인한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CONFIG_LTO가 없을 때 BUILD_LTO_INFO는?",
+        "options": [
+          "descriptor 0인 Linux note를 정의한다",
+          "아무 코드도 없는 빈 매크로다"
+        ],
+        "answer": 0,
+        "explanation": "else 분기에도 ELFNOTE32 호출이 있습니다. 비활성 정보를 명시적으로 기록합니다."
+      },
+      {
+        "prompt": "LTO note의 type과 descriptor의 역할은?",
+        "options": [
+          "둘 다 현재 PID를 저장한다",
+          "type은 0x101 식별자, descriptor는 설정에 따른 1 또는 0"
+        ],
+        "answer": 1,
+        "explanation": "note 종류와 그 종류의 값은 별개입니다. 이 매크로는 최적화를 수행하는 함수가 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "#ifndef __ELFNOTE_LTO_H\n#define __ELFNOTE_LTO_H\n\n#include <linux/elfnote.h>\n\n#define LINUX_ELFNOTE_LTO_INFO\t0x101\n\n#ifdef CONFIG_LTO\n#define BUILD_LTO_INFO\tELFNOTE32(\"Linux\", LINUX_ELFNOTE_LTO_INFO, 1)\n#else\n#define BUILD_LTO_INFO\tELFNOTE32(\"Linux\", LINUX_ELFNOTE_LTO_INFO, 0)\n#endif\n\n#endif /* __ELFNOTE_LTO_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a89aac8e5036b816253d083581dd73b4ff7670c4f2c0fbd485af9436f0de7851",
+      "scope": "whole-file",
+      "line_count": 14,
+      "authoring_source": "course/file_units/kernel_version_build.py",
+      "sections": [
+        "헤더 구성과 note type",
+        "두 설정 분기",
+        "사용과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/elfnote-lto.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "실행 파일에 “이 기능을 켜서 만들었음”이라는 작은 쪽지를 넣을 수 있습니다. 기능이 꺼졌을 때도 0이라고 적어 둡니다.",
+    "meaning": "LTO 빌드 정보 note의 종류와 값, 설정을 켜는 작업과의 차이를 설명합니다.",
+    "exercise": "CONFIG_LTO가 켜질 때와 꺼질 때 name, type, descriptor 중 바뀌는 부분을 찾아 보세요."
+  },
+  "goal": "LTO 빌드 정보 note의 종류와 값, 설정을 켜는 작업과의 차이를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "CONFIG_LTO가 켜질 때와 꺼질 때 name, type, descriptor 중 바뀌는 부분을 찾아 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "9084213bae16f15a34601b815bb2fc2b56d45b08312f50946870c0e49feb40be",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

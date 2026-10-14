@@ -5,146 +5,178 @@
   "area": "오류 주입 · watchdog · clocksource · 재시도 · kthread · 동시 접근 · 테스트 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 모의 clocksource, 오류 주입 callback, 재등록과 테스트 스레드 수명을 전체 소스로 분석합니다.",
+  "intro": "오류를 넣는 시험에서 단위, 재시도 경계, 비동기 결과와 정리를 구분합니다.",
   "guide": [
-    "감시기의 내성을 검증하려면 측정 지연과 잘못된 시계 값이라는 서로 다른 실패 원인을 의도적으로 만들어야 합니다.",
-    "watchdog의 재시도 한계와 불안정 판정 테스트를 읽고 로그·경고·반환값의 차이를 이해합니다."
+    "지연은 읽기 시간을 늘리고 fuzz는 반환 숫자를 바꿉니다.",
+    "허용 횟수보다 한 번 많은 경우까지 시험합니다.",
+    "모듈 초기화 성공은 뒤에서 도는 시험의 합격과 다릅니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 지도",
-      "text": "GPL-2.0+와 저작권 주석, 모듈 이름을 붙이는 pr_fmt, include와 모듈 메타데이터로 시작합니다. holdoff 매개변수, task 포인터, jiffies 모의 시계, ktime 모의 시계와 오류 주입 상태, 재설정 helper, 테스트 스레드, 매개변수 출력·init·빈 cleanup이 전체입니다. KUnit suite가 아니라 별도 kernel thread를 시작하는 테스트 모듈입니다."
+      "title": "시험 파일 지도",
+      "text": "GPL-2.0+와 저작권, 모듈 이름을 로그 앞에 붙이는 pr_fmt, 헤더와 메타데이터로 시작합니다. holdoff, 작업 주소, 두 모의 시계, 오류 상태, 재설정, 시험 스레드, init과 빈 cleanup으로 구성됩니다. KUnit 묶음이 아니라 별도 커널 실행 흐름인 스레드를 시작합니다."
     },
     {
-      "title": "시작 지연 매개변수",
-      "text": "holdoff는 CONFIG_TEST_CLOCKSOURCE_WATCHDOG가 built-in이면 10, 아니면 0으로 초기화됩니다. int module_param의 노출 mode는 0444이며 설명상 단위는 초입니다. 테스트 스레드는 holdoff*HZ를 schedule_timeout_uninterruptible에 넘깁니다. 이 파일에는 음수나 비정상적으로 큰 매개변수에 대한 별도 범위 검사가 없습니다."
+      "title": "시작 전에 기다리기",
+      "text": "holdoff는 커널에 내장되면 10, 아니면 0초입니다. int 모듈 인수이며 공개 권한 0444입니다. holdoff*HZ를 기다림 함수에 줍니다. 음수나 너무 큰 수를 막는 별도 검사는 없습니다."
     },
     {
-      "title": "Jiffies 모의 시계 전체 설정",
-      "text": "wdtest_jiffies_read는 jiffies를 u64로 반환합니다. clocksource의 이름은 wdtest-jiffies, rating=1, uncertainty_margin=TICK_NSEC, mask=32비트, flags=CLOCK_SOURCE_MUST_VERIFY입니다. mult=TICK_NSEC<<JIFFIES_SHIFT, shift=JIFFIES_SHIFT, max_cycles=10입니다. 기본 jiffies 시계와 닮았지만 명시한 uncertainty margin과 검증 플래그를 이 테스트 목적에 맞춰 사용합니다."
+      "title": "jiffies 시계",
+      "text": "읽기 함수는 jiffies를 u64로 돌려줍니다. 이름 wdtest-jiffies, rating=1, 오차 허용 폭 TICK_NSEC, 32비트 mask, MUST_VERIFY를 씁니다. mult=TICK_NSEC<<JIFFIES_SHIFT, shift=JIFFIES_SHIFT, max_cycles=10입니다. 기본 jiffies와 닮았지만 허용 폭과 검증 표시는 시험용 설정입니다."
     },
     {
-      "title": "Ktime 모의 시계 전체 설정",
-      "text": "이름은 wdtest-ktime, rating=300, read=wdtest_ktime_read, mask=64비트입니다. KTIME_FLAGS는 IS_CONTINUOUS, VALID_FOR_HRES, MUST_VERIFY, VERIFY_PERCPU의 OR입니다. mark_unstable callback과 자기 list head 초기화도 지정합니다. mult와 shift를 이 initializer에서 직접 설정하지 않고 이후 1000000kHz로 등록할 때 계산하도록 합니다."
+      "title": "ktime 시계",
+      "text": "wdtest-ktime은 rating=300, 64비트 mask와 지정 읽기 함수를 씁니다. 연속·고해상도·검증 필수·CPU별 검증 플래그를 함께 켭니다. 불안정할 때 부를 콜백, 즉 미리 등록한 함수와 자기 목록 머리도 지정합니다. mult와 shift는 여기서 직접 채우지 않고 1000000kHz 등록 때 계산합니다."
     },
     {
-      "title": "읽기 지연 주입",
-      "text": "wdtest_ktime_read는 READ_ONCE로 남은 지연 횟수를 읽습니다. 0이 아니면 udelay(cs->uncertainty_margin/250)를 호출하고 남은 횟수에서 1을 뺀 값을 WRITE_ONCE로 저장합니다. margin의 단위는 ns이고 udelay의 인자는 us이므로 숫자 변환까지 고려하면 나눗셈 절단을 제외하고 margin의 약 네 배 길이 지연을 주입합니다. 250으로 나눈 ns만큼 지연한다고 읽으면 단위가 틀립니다."
+      "title": "읽기를 늦추기",
+      "text": "READ_ONCE로 남은 횟수를 읽고 0이 아니면 udelay(margin/250) 뒤 하나 줄여 WRITE_ONCE합니다. margin은 ns, udelay 인수는 us입니다. 따라서 나눗셈의 버림을 빼면 허용 폭의 약 네 배 지연입니다. 1000ns이면 4us이지 4ns가 아닙니다."
     },
     {
-      "title": "읽기 값 흔들림 주입",
-      "text": "그 다음 ktime_get_real_fast_ns를 읽습니다. fuzz가 켜졌으면 static sign을 반전하고 sign*100*NSEC_PER_MSEC를 더합니다. sign의 초기값이 1이므로 첫 fuzz 읽기는 -100ms, 다음은 +100ms 방향입니다. 이것은 의도적인 두 값의 교대 오프셋이며 포함된 prandom 헤더가 있다고 난수 분포를 사용하는 것은 아닙니다."
+      "title": "읽은 값을 흔들기",
+      "text": "ktime_get_real_fast_ns 뒤 fuzz가 켜지면 sign을 뒤집고 ±100ms를 더합니다. sign은 1에서 시작하므로 첫 번은 -100ms, 다음은 +100ms입니다. prandom 헤더가 있어도 난수 분포로 흔드는 방식은 아닙니다."
     },
     {
-      "title": "공유 값 접근의 의미",
-      "text": "ndelays와 fuzz에는 READ_ONCE/WRITE_ONCE를 사용하지만 ndelays의 읽고-감소하고-쓰기 전체가 atomic decrement로 바뀌는 것은 아닙니다. static sign에도 별도 lock이나 atomic 연산이 없습니다. 이 파일의 테스트용 상태를 임의의 동시 callback에서도 정확한 전역 횟수를 보장하는 범용 오류 주입기로 설명하지 않습니다."
+      "title": "한 번 접근과 원자적 변경",
+      "text": "ndelays와 fuzz에 READ_ONCE·WRITE_ONCE를 쓰지만 읽기→감소→쓰기가 하나로 쪼개지지 않는 원자적 연산은 아닙니다. sign에도 잠금이나 원자 연산이 없습니다. 임의로 콜백들이 동시에 불려도 전역 횟수가 정확하다는 범용 보장은 아닙니다."
     },
     {
-      "title": "Unstable callback과 reset",
-      "text": "wdtest_ktime_cs_mark_unstable은 이름을 포함한 안내 로그만 출력합니다. reset helper는 flags에 UNSTABLE이 있을 때 unregister, flags=KTIME_FLAGS, HZ/10만큼 sleep, 1000000kHz 재등록을 수행합니다. 이미 안정적이면 아무 일도 하지 않습니다. 객체 전체를 memset하거나 sign과 fuzz 상태를 다시 초기화하는 함수는 아닙니다."
+      "title": "불안정 알림과 재설정",
+      "text": "불안정 콜백은 시계 이름을 넣은 로그만 냅니다. reset은 UNSTABLE일 때 등록 해제, 원래 KTIME_FLAGS 복구, HZ/10 기다림, 1000000kHz 재등록을 합니다. 안정적이면 아무것도 안 합니다. 객체 전체나 sign·fuzz를 처음부터 지우는 함수는 아닙니다."
     },
     {
-      "title": "첫 시험: 명시한 margin 유지",
-      "text": "스레드는 초기 holdoff 뒤 jiffies 모의 시계를 등록하고 uncertainty_margin이 TICK_NSEC와 같은지 WARN_ON_ONCE로 검사합니다. 읽기 두 번 사이 HZ만큼 쉬고 값이 같으면 경고합니다. 끝에서 unregister합니다. 정확히 HZ만큼 카운터가 증가했는지를 검사하는 것이 아니라 단지 두 값이 다른지를 확인합니다."
+      "title": "첫 시험",
+      "text": "처음 기다린 뒤 jiffies 시계를 등록하고 허용 폭이 TICK_NSEC인지 경고 검사합니다. 두 읽기 사이 HZ만큼 쉬고 값이 같으면 경고한 뒤 해제합니다. 정확히 HZ만큼 증가했는지가 아니라 두 값이 다른지만 봅니다."
     },
     {
-      "title": "둘째 시험: 자동 margin과 짧은 진행",
-      "text": "ktime 모의 시계를 1000000kHz로 등록하고 margin이 NSEC_PER_USEC보다 작으면 경고합니다. read, udelay(1), read 뒤 두 값을 로그로 출력하고 time_before(j2,j1+NSEC_PER_USEC)이면 경고합니다. j1/j2는 unsigned long이라 32비트 환경에서는 u64 읽기 결과의 전체 폭을 그대로 보관하지 않습니다. 시간 비교는 해당 long 폭의 time_before 의미를 따릅니다."
+      "title": "둘째 시험",
+      "text": "ktime 시계를 등록하고 허용 폭이 1us보다 작으면 경고합니다. 읽기→udelay(1)→읽기 뒤 값을 로그로 보이고 time_before(j2,j1+1us)이면 경고합니다. j1·j2가 unsigned long이라 32비트 기계에서는 u64 전체를 담지 못합니다. 비교도 그 long 폭의 규칙입니다."
     },
     {
-      "title": "재시도 한계 순회",
-      "text": "max_retries는 clocksource_get_max_watchdog_retry에서 얻고 i=0부터 max_retries+1까지 양 끝 포함해 순회합니다. 로그의 설명은 i<=1이면서 i<max_retries이면 추가 문구 없음, 그 외 i<=max_retries이면 expect message, 초과면 expect clock skew입니다. 로그 문구 선택과 실제 상태 assertion은 별도입니다."
+      "title": "재시도 경계",
+      "text": "허용 횟수 max_retries를 받아 0부터 max_retries+1까지 시험합니다. i<=1이고 i<max_retries면 덧말 없이, 그 밖의 허용 범위면 expect message, 초과면 expect clock skew를 로그에 붙입니다. 이 문구 선택 자체가 상태 검사는 아닙니다."
     },
     {
-      "title": "지연 시험의 판정",
-      "text": "각 i를 ndelays에 저장하고 2*HZ만큼 쉽니다. 남은 ndelays가 0이 아니면 경고하고, i<=max_retries와 UNSTABLE이 아님이 일치하는지 검사합니다. 즉 허용 재시도 이내면 안정, 한 번 초과하면 불안정을 기대합니다. 그 뒤 reset helper를 호출해 필요하면 다음 시험용 시계를 다시 등록합니다."
+      "title": "지연 시험 판정",
+      "text": "i를 남은 지연 횟수에 쓰고 2*HZ 기다립니다. 남은 횟수가 0이 아니면 경고합니다. 허용 범위 안이면 안정, 한 번 넘으면 불안정인지도 검사합니다. 다음 시험을 위해 필요할 때 reset으로 재등록합니다."
     },
     {
-      "title": "값 흔들림과 CPU별 검사",
-      "text": "지연 주입 순회가 끝나면 fuzz=true로 하고 2*HZ만큼 기다립니다. UNSTABLE이 아니면 경고하고 clocksource_verify_percpu를 호출한 뒤 fuzz=false로 끕니다. 로그는 clock skew와 CPU별 mismatch를 기대한다고 말하지만 이 파일이 그 메시지 문자열을 자동 파싱해 일치 여부를 판단하지는 않습니다. 마지막에 ktime 모의 시계를 unregister하고 Done 로그와 0을 반환합니다."
+      "title": "값 흔들기 시험",
+      "text": "fuzz를 켜고 2*HZ 기다린 뒤 불안정하지 않으면 경고합니다. CPU별 검증을 부르고 fuzz를 끕니다. 로그는 시간차와 CPU별 불일치를 기대한다고 적지만 문자열을 자동 분석하지는 않습니다. 마지막에 시계 해제, Done 로그, 0 반환을 합니다."
     },
     {
-      "title": "오류를 보고하는 방식",
-      "text": "등록 함수들의 반환값을 테스트 본문과 reset에서 확인하지 않습니다. 실패 판정은 여러 WARN_ON_ONCE와 로그이며 경고가 생겼다고 스레드가 즉시 음수 오류를 반환하는 구조도 아닙니다. 정상 경로 끝의 0만 보고 모든 시험이 통과했다고 해석할 수 없습니다. 모듈 init의 성공과 비동기 테스트 완료도 다른 시점입니다."
+      "title": "실패를 읽는 법",
+      "text": "등록 함수의 반환값은 본문과 reset에서 확인하지 않습니다. 실패는 여러 WARN_ON_ONCE와 로그로 알리며 즉시 음수 반환으로 끝내지 않습니다. 마지막 0만 보고 모두 합격했다고 할 수 없습니다. 모듈 init 성공과 나중 시험 완료도 별개입니다."
     },
     {
-      "title": "스레드 생성과 초기화 실패",
-      "text": "init은 holdoff를 pr_alert로 출력하고 kthread_run(wdtest_func,NULL,\"wdtest\")을 호출합니다. ERR_PTR이면 PTR_ERR를 반환하고 경고를 출력하며 wdtest_task=NULL로 둡니다. 성공하면 task 포인터를 디버깅용으로 남기고 바로 0을 반환합니다. 테스트가 끝날 때까지 init에서 기다리는 동작은 없습니다."
+      "title": "스레드 시작",
+      "text": "init은 holdoff를 출력하고 kthread_run으로 wdtest를 만듭니다. 오류 주소 ERR_PTR이면 PTR_ERR를 반환하고 경고하며 task 주소를 NULL로 둡니다. 성공하면 디버깅용 주소를 남기고 즉시 0을 반환하므로 시험 종료까지 기다리지 않습니다."
     },
     {
-      "title": "Cleanup의 실제 범위",
-      "text": "module_exit에 연결한 clocksource_wdtest_cleanup 본문은 비어 있습니다. 이 파일에는 kthread_stop, 완료 대기, kthread_should_stop 검사도 없습니다. 테스트 스레드의 정상 종료가 두 모의 시계를 정리하지만 임의 시점의 종료 요청에 대해 cleanup이 스레드를 중단·join한다고 가정하면 안 됩니다. 수명 관리 코드를 읽을 때 함수 이름보다 본문이 중요합니다."
+      "title": "빈 정리 함수",
+      "text": "module_exit의 cleanup은 비었습니다. kthread_stop, 완료 대기, 중단 요청 확인도 없습니다. 정상 시험 끝은 두 시계를 정리하지만 아무 때나 종료해도 cleanup이 스레드를 멈추고 기다려 준다고 가정하면 안 됩니다. 이름보다 실제 본문을 봅니다."
     },
     {
-      "title": "CS와 검증 범위",
-      "text": "모의 장치, 지연과 값 손상이라는 서로 다른 실패 모델, 재시도 경계의 +1 시험, 단위 변환, 비동기 테스트의 결과 수집과 수명 관리를 학습합니다. 소스 전체를 대조한 학습 자료이며 실제 모듈 로드, clocksource 전환 또는 watchdog 경고 발생을 실행 검증한 것은 아닙니다."
+      "title": "배울 범위",
+      "text": "모의 장치, 지연과 값 손상의 차이, 경계보다 하나 많은 시험, 단위 변환, 뒤에서 도는 시험 결과와 수명 관리를 배웁니다. 소스 설명이며 실제 모듈을 올려 시계를 바꾸거나 watchdog 경고를 일으킨 시험 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "ndelays 지연과 fuzz 오류 주입의 차이는?",
+      "prompt": "ndelays와 fuzz는 어떻게 다른가요?",
       "options": [
+        "앞은 읽기 함수를 늦추고 뒤는 반환 시각을 번갈아 바꾼다",
+        "둘 다 같은 난수 지연이다"
+      ],
+      "answer": 0,
+      "explanation": "시간 비용과 반환 값의 일관성이라는 다른 고장을 만듭니다.",
+      "original_prompt": "ndelays 지연과 fuzz 오류 주입의 차이는?",
+      "original_options": [
         "전자는 callback을 늦추고 후자는 반환 시각을 교대로 바꾼다",
         "둘 다 동일한 난수 지연만 주입한다"
       ],
-      "answer": 0,
-      "explanation": "udelay는 읽기 경로의 시간 비용을, +/-100ms는 읽은 값의 일관성을 교란합니다. 서로 다른 실패 모델을 검사합니다."
+      "original_explanation": "udelay는 읽기 경로의 시간 비용을, +/-100ms는 읽은 값의 일관성을 교란합니다. 서로 다른 실패 모델을 검사합니다."
     },
     {
-      "prompt": "uncertainty_margin=1000ns라면 주입 udelay 인자는?",
+      "prompt": "margin=1000ns일 때 udelay에 준 4의 단위는?",
       "options": [
+        "4ns",
+        "4us"
+      ],
+      "answer": 1,
+      "explanation": "1000/250=4이고 udelay의 단위는 us입니다.",
+      "original_prompt": "uncertainty_margin=1000ns라면 주입 udelay 인자는?",
+      "original_options": [
         "4ns이다",
         "4us이다"
       ],
-      "answer": 1,
-      "explanation": "1000/250=4를 udelay에 전달합니다. 그 함수의 단위가 마이크로초이므로 4000ns의 지연 요청입니다."
+      "original_explanation": "1000/250=4를 udelay에 전달합니다. 그 함수의 단위가 마이크로초이므로 4000ns의 지연 요청입니다."
     },
     {
-      "prompt": "재시도 시험은 max_retries까지만 실행하는가?",
+      "prompt": "재시도는 허용 횟수까지만 시험하나요?",
       "options": [
+        "아니다. max_retries+1도 시험한다",
+        "그렇다. 초과 사례는 없다"
+      ],
+      "answer": 0,
+      "explanation": "허용 마지막 값과 바로 다음 값을 비교합니다.",
+      "original_prompt": "재시도 시험은 max_retries까지만 실행하는가?",
+      "original_options": [
         "아니다. max_retries+1까지 포함한다",
         "그렇다. 허용 범위를 넘는 사례는 검사하지 않는다"
       ],
-      "answer": 0,
-      "explanation": "허용 경계의 마지막 값과 바로 초과하는 값을 함께 검사해 안정/불안정 판정이 바뀌는지 확인합니다."
+      "original_explanation": "허용 경계의 마지막 값과 바로 초과하는 값을 함께 검사해 안정/불안정 판정이 바뀌는지 확인합니다."
     },
     {
-      "prompt": "모듈 init이 0이면 테스트 전체가 이미 완료·통과했는가?",
+      "prompt": "init이 0이면 시험도 끝나 합격했나요?",
       "options": [
+        "그렇다. kthread_run이 모든 결과를 돌려준다",
+        "아니다. 스레드를 만든 뒤 따로 진행한다"
+      ],
+      "answer": 1,
+      "explanation": "경고 결과와 실행 완료를 따로 확인해야 합니다.",
+      "original_prompt": "모듈 init이 0이면 테스트 전체가 이미 완료·통과했는가?",
+      "original_options": [
         "그렇다. kthread_run이 모든 시험 결과를 반환한다",
         "아니다. 스레드 생성 성공 뒤 비동기로 진행된다"
       ],
-      "answer": 1,
-      "explanation": "init은 생성 성공 후 바로 반환합니다. 본문의 실패는 WARN_ON_ONCE로 보고되므로 반환값만으로 합격을 판단할 수 없습니다."
+      "original_explanation": "init은 생성 성공 후 바로 반환합니다. 본문의 실패는 WARN_ON_ONCE로 보고되므로 반환값만으로 합격을 판단할 수 없습니다."
     },
     {
-      "prompt": "빈 cleanup이 자동으로 테스트 스레드를 join하는가?",
+      "prompt": "빈 cleanup은 스레드가 끝나기를 자동으로 기다리나요?",
       "options": [
+        "아니다. 중단과 대기 코드가 없다",
+        "그렇다. module_exit만 등록하면 자동 종료한다"
+      ],
+      "answer": 0,
+      "explanation": "정상 시험 끝의 정리와 외부 종료 정리는 다릅니다.",
+      "original_prompt": "빈 cleanup이 자동으로 테스트 스레드를 join하는가?",
+      "original_options": [
         "아니다. 본문에 stop이나 대기 처리가 없다",
         "그렇다. module_exit 등록만으로 임의의 kthread가 자동 종료된다"
       ],
-      "answer": 0,
-      "explanation": "스레드 수명 관리는 명시적인 코드를 확인해야 합니다. 이 파일의 정상 스레드 끝 정리와 외부 종료 cleanup은 별개입니다."
+      "original_explanation": "스레드 수명 관리는 명시적인 코드를 확인해야 합니다. 이 파일의 정상 스레드 끝 정리와 외부 종료 cleanup은 별개입니다."
     },
     {
-      "prompt": "READ_ONCE와 WRITE_ONCE로 ndelays를 읽고 쓰면 감소 전체가 atomic인가?",
+      "prompt": "READ_ONCE·WRITE_ONCE면 감소 전체가 원자적인가요?",
       "options": [
+        "그렇다. 경쟁해도 늘 정확히 한 번 감소한다",
+        "아니다. 읽기와 쓰기 사이 전체를 하나로 묶지 않는다"
+      ],
+      "answer": 1,
+      "explanation": "각 접근의 표시와 쪼개지지 않는 읽기·수정·쓰기 연산은 다릅니다.",
+      "original_prompt": "READ_ONCE와 WRITE_ONCE로 ndelays를 읽고 쓰면 감소 전체가 atomic인가?",
+      "original_options": [
         "그렇다. 모든 경쟁 읽기에서 정확히 한 번씩 감소한다",
         "아니다. 읽기와 쓰기 사이 전체를 원자화하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "개별 접근을 명시하는 것과 atomic read-modify-write는 다릅니다. 테스트 구현의 전제를 범용 동시성 보장으로 확대하지 않습니다."
+      "original_explanation": "개별 접근을 명시하는 것과 atomic read-modify-write는 다릅니다. 테스트 구현의 전제를 범용 동시성 보장으로 확대하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "1000ns를 250으로 나눈 4가 udelay에서는 왜 4us인지 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * Unit test for the clocksource watchdog.\n *\n * Copyright (C) 2021 Facebook, Inc.\n *\n * Author: Paul E. McKenney <paulmck@kernel.org>\n */\n#define pr_fmt(fmt) KBUILD_MODNAME \": \" fmt\n\n#include <linux/device.h>\n#include <linux/clocksource.h>\n#include <linux/init.h>\n#include <linux/module.h>\n#include <linux/sched.h> /* for spin_unlock_irq() using preempt_count() m68k */\n#include <linux/tick.h>\n#include <linux/kthread.h>\n#include <linux/delay.h>\n#include <linux/prandom.h>\n#include <linux/cpu.h>\n\n#include \"tick-internal.h\"\n\nMODULE_LICENSE(\"GPL\");\nMODULE_DESCRIPTION(\"Clocksource watchdog unit test\");\nMODULE_AUTHOR(\"Paul E. McKenney <paulmck@kernel.org>\");\n\nstatic int holdoff = IS_BUILTIN(CONFIG_TEST_CLOCKSOURCE_WATCHDOG) ? 10 : 0;\nmodule_param(holdoff, int, 0444);\nMODULE_PARM_DESC(holdoff, \"Time to wait to start test (s).\");\n\n/* Watchdog kthread's task_struct pointer for debug purposes. */\nstatic struct task_struct *wdtest_task;\n\nstatic u64 wdtest_jiffies_read(struct clocksource *cs)\n{\n\treturn (u64)jiffies;\n}\n\nstatic struct clocksource clocksource_wdtest_jiffies = {\n\t.name\t\t\t= \"wdtest-jiffies\",\n\t.rating\t\t\t= 1, /* lowest valid rating*/\n\t.uncertainty_margin\t= TICK_NSEC,\n\t.read\t\t\t= wdtest_jiffies_read,\n\t.mask\t\t\t= CLOCKSOURCE_MASK(32),\n\t.flags\t\t\t= CLOCK_SOURCE_MUST_VERIFY,\n\t.mult\t\t\t= TICK_NSEC << JIFFIES_SHIFT, /* details above */\n\t.shift\t\t\t= JIFFIES_SHIFT,\n\t.max_cycles\t\t= 10,\n};\n\nstatic int wdtest_ktime_read_ndelays;\nstatic bool wdtest_ktime_read_fuzz;\n\nstatic u64 wdtest_ktime_read(struct clocksource *cs)\n{\n\tint wkrn = READ_ONCE(wdtest_ktime_read_ndelays);\n\tstatic int sign = 1;\n\tu64 ret;\n\n\tif (wkrn) {\n\t\tudelay(cs->uncertainty_margin / 250);\n\t\tWRITE_ONCE(wdtest_ktime_read_ndelays, wkrn - 1);\n\t}\n\tret = ktime_get_real_fast_ns();\n\tif (READ_ONCE(wdtest_ktime_read_fuzz)) {\n\t\tsign = -sign;\n\t\tret = ret + sign * 100 * NSEC_PER_MSEC;\n\t}\n\treturn ret;\n}\n\nstatic void wdtest_ktime_cs_mark_unstable(struct clocksource *cs)\n{\n\tpr_info(\"--- Marking %s unstable due to clocksource watchdog.\\n\", cs->name);\n}\n\n#define KTIME_FLAGS (CLOCK_SOURCE_IS_CONTINUOUS | \\\n\t\t     CLOCK_SOURCE_VALID_FOR_HRES | \\\n\t\t     CLOCK_SOURCE_MUST_VERIFY | \\\n\t\t     CLOCK_SOURCE_VERIFY_PERCPU)\n\nstatic struct clocksource clocksource_wdtest_ktime = {\n\t.name\t\t\t= \"wdtest-ktime\",\n\t.rating\t\t\t= 300,\n\t.read\t\t\t= wdtest_ktime_read,\n\t.mask\t\t\t= CLOCKSOURCE_MASK(64),\n\t.flags\t\t\t= KTIME_FLAGS,\n\t.mark_unstable\t\t= wdtest_ktime_cs_mark_unstable,\n\t.list\t\t\t= LIST_HEAD_INIT(clocksource_wdtest_ktime.list),\n};\n\n/* Reset the clocksource if needed. */\nstatic void wdtest_ktime_clocksource_reset(void)\n{\n\tif (clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE) {\n\t\tclocksource_unregister(&clocksource_wdtest_ktime);\n\t\tclocksource_wdtest_ktime.flags = KTIME_FLAGS;\n\t\tschedule_timeout_uninterruptible(HZ / 10);\n\t\tclocksource_register_khz(&clocksource_wdtest_ktime, 1000 * 1000);\n\t}\n}\n\n/* Run the specified series of watchdog tests. */\nstatic int wdtest_func(void *arg)\n{\n\tunsigned long j1, j2;\n\tint i, max_retries;\n\tchar *s;\n\n\tschedule_timeout_uninterruptible(holdoff * HZ);\n\n\t/*\n\t * Verify that jiffies-like clocksources get the manually\n\t * specified uncertainty margin.\n\t */\n\tpr_info(\"--- Verify jiffies-like uncertainty margin.\\n\");\n\t__clocksource_register(&clocksource_wdtest_jiffies);\n\tWARN_ON_ONCE(clocksource_wdtest_jiffies.uncertainty_margin != TICK_NSEC);\n\n\tj1 = clocksource_wdtest_jiffies.read(&clocksource_wdtest_jiffies);\n\tschedule_timeout_uninterruptible(HZ);\n\tj2 = clocksource_wdtest_jiffies.read(&clocksource_wdtest_jiffies);\n\tWARN_ON_ONCE(j1 == j2);\n\n\tclocksource_unregister(&clocksource_wdtest_jiffies);\n\n\t/*\n\t * Verify that tsc-like clocksources are assigned a reasonable\n\t * uncertainty margin.\n\t */\n\tpr_info(\"--- Verify tsc-like uncertainty margin.\\n\");\n\tclocksource_register_khz(&clocksource_wdtest_ktime, 1000 * 1000);\n\tWARN_ON_ONCE(clocksource_wdtest_ktime.uncertainty_margin < NSEC_PER_USEC);\n\n\tj1 = clocksource_wdtest_ktime.read(&clocksource_wdtest_ktime);\n\tudelay(1);\n\tj2 = clocksource_wdtest_ktime.read(&clocksource_wdtest_ktime);\n\tpr_info(\"--- tsc-like times: %lu - %lu = %lu.\\n\", j2, j1, j2 - j1);\n\tWARN_ON_ONCE(time_before(j2, j1 + NSEC_PER_USEC));\n\n\t/* Verify tsc-like stability with various numbers of errors injected. */\n\tmax_retries = clocksource_get_max_watchdog_retry();\n\tfor (i = 0; i <= max_retries + 1; i++) {\n\t\tif (i <= 1 && i < max_retries)\n\t\t\ts = \"\";\n\t\telse if (i <= max_retries)\n\t\t\ts = \", expect message\";\n\t\telse\n\t\t\ts = \", expect clock skew\";\n\t\tpr_info(\"--- Watchdog with %dx error injection, %d retries%s.\\n\", i, max_retries, s);\n\t\tWRITE_ONCE(wdtest_ktime_read_ndelays, i);\n\t\tschedule_timeout_uninterruptible(2 * HZ);\n\t\tWARN_ON_ONCE(READ_ONCE(wdtest_ktime_read_ndelays));\n\t\tWARN_ON_ONCE((i <= max_retries) !=\n\t\t\t     !(clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE));\n\t\twdtest_ktime_clocksource_reset();\n\t}\n\n\t/* Verify tsc-like stability with clock-value-fuzz error injection. */\n\tpr_info(\"--- Watchdog clock-value-fuzz error injection, expect clock skew and per-CPU mismatches.\\n\");\n\tWRITE_ONCE(wdtest_ktime_read_fuzz, true);\n\tschedule_timeout_uninterruptible(2 * HZ);\n\tWARN_ON_ONCE(!(clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE));\n\tclocksource_verify_percpu(&clocksource_wdtest_ktime);\n\tWRITE_ONCE(wdtest_ktime_read_fuzz, false);\n\n\tclocksource_unregister(&clocksource_wdtest_ktime);\n\n\tpr_info(\"--- Done with test.\\n\");\n\treturn 0;\n}\n\nstatic void wdtest_print_module_parms(void)\n{\n\tpr_alert(\"--- holdoff=%d\\n\", holdoff);\n}\n\n/* Cleanup function. */\nstatic void clocksource_wdtest_cleanup(void)\n{\n}\n\nstatic int __init clocksource_wdtest_init(void)\n{\n\tint ret = 0;\n\n\twdtest_print_module_parms();\n\n\t/* Create watchdog-test task. */\n\twdtest_task = kthread_run(wdtest_func, NULL, \"wdtest\");\n\tif (IS_ERR(wdtest_task)) {\n\t\tret = PTR_ERR(wdtest_task);\n\t\tpr_warn(\"%s: Failed to create wdtest kthread.\\n\", __func__);\n\t\twdtest_task = NULL;\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}\n\nmodule_init(clocksource_wdtest_init);\nmodule_exit(clocksource_wdtest_cleanup);\n",
   "source_review": {
@@ -179,5 +211,216 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/clocksource-wdtest.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-d836e53fcea485ec",
+    "path": "kernel/time/clocksource-wdtest.c",
+    "title": "Clocksource watchdog 테스트: 읽기 지연과 시각 흔들림 주입",
+    "area": "오류 주입 · watchdog · clocksource · 재시도 · kthread · 동시 접근 · 테스트 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 모의 clocksource, 오류 주입 callback, 재등록과 테스트 스레드 수명을 전체 소스로 분석합니다.",
+    "guide": [
+      "감시기의 내성을 검증하려면 측정 지연과 잘못된 시계 값이라는 서로 다른 실패 원인을 의도적으로 만들어야 합니다.",
+      "watchdog의 재시도 한계와 불안정 판정 테스트를 읽고 로그·경고·반환값의 차이를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 지도",
+        "text": "GPL-2.0+와 저작권 주석, 모듈 이름을 붙이는 pr_fmt, include와 모듈 메타데이터로 시작합니다. holdoff 매개변수, task 포인터, jiffies 모의 시계, ktime 모의 시계와 오류 주입 상태, 재설정 helper, 테스트 스레드, 매개변수 출력·init·빈 cleanup이 전체입니다. KUnit suite가 아니라 별도 kernel thread를 시작하는 테스트 모듈입니다."
+      },
+      {
+        "title": "시작 지연 매개변수",
+        "text": "holdoff는 CONFIG_TEST_CLOCKSOURCE_WATCHDOG가 built-in이면 10, 아니면 0으로 초기화됩니다. int module_param의 노출 mode는 0444이며 설명상 단위는 초입니다. 테스트 스레드는 holdoff*HZ를 schedule_timeout_uninterruptible에 넘깁니다. 이 파일에는 음수나 비정상적으로 큰 매개변수에 대한 별도 범위 검사가 없습니다."
+      },
+      {
+        "title": "Jiffies 모의 시계 전체 설정",
+        "text": "wdtest_jiffies_read는 jiffies를 u64로 반환합니다. clocksource의 이름은 wdtest-jiffies, rating=1, uncertainty_margin=TICK_NSEC, mask=32비트, flags=CLOCK_SOURCE_MUST_VERIFY입니다. mult=TICK_NSEC<<JIFFIES_SHIFT, shift=JIFFIES_SHIFT, max_cycles=10입니다. 기본 jiffies 시계와 닮았지만 명시한 uncertainty margin과 검증 플래그를 이 테스트 목적에 맞춰 사용합니다."
+      },
+      {
+        "title": "Ktime 모의 시계 전체 설정",
+        "text": "이름은 wdtest-ktime, rating=300, read=wdtest_ktime_read, mask=64비트입니다. KTIME_FLAGS는 IS_CONTINUOUS, VALID_FOR_HRES, MUST_VERIFY, VERIFY_PERCPU의 OR입니다. mark_unstable callback과 자기 list head 초기화도 지정합니다. mult와 shift를 이 initializer에서 직접 설정하지 않고 이후 1000000kHz로 등록할 때 계산하도록 합니다."
+      },
+      {
+        "title": "읽기 지연 주입",
+        "text": "wdtest_ktime_read는 READ_ONCE로 남은 지연 횟수를 읽습니다. 0이 아니면 udelay(cs->uncertainty_margin/250)를 호출하고 남은 횟수에서 1을 뺀 값을 WRITE_ONCE로 저장합니다. margin의 단위는 ns이고 udelay의 인자는 us이므로 숫자 변환까지 고려하면 나눗셈 절단을 제외하고 margin의 약 네 배 길이 지연을 주입합니다. 250으로 나눈 ns만큼 지연한다고 읽으면 단위가 틀립니다."
+      },
+      {
+        "title": "읽기 값 흔들림 주입",
+        "text": "그 다음 ktime_get_real_fast_ns를 읽습니다. fuzz가 켜졌으면 static sign을 반전하고 sign*100*NSEC_PER_MSEC를 더합니다. sign의 초기값이 1이므로 첫 fuzz 읽기는 -100ms, 다음은 +100ms 방향입니다. 이것은 의도적인 두 값의 교대 오프셋이며 포함된 prandom 헤더가 있다고 난수 분포를 사용하는 것은 아닙니다."
+      },
+      {
+        "title": "공유 값 접근의 의미",
+        "text": "ndelays와 fuzz에는 READ_ONCE/WRITE_ONCE를 사용하지만 ndelays의 읽고-감소하고-쓰기 전체가 atomic decrement로 바뀌는 것은 아닙니다. static sign에도 별도 lock이나 atomic 연산이 없습니다. 이 파일의 테스트용 상태를 임의의 동시 callback에서도 정확한 전역 횟수를 보장하는 범용 오류 주입기로 설명하지 않습니다."
+      },
+      {
+        "title": "Unstable callback과 reset",
+        "text": "wdtest_ktime_cs_mark_unstable은 이름을 포함한 안내 로그만 출력합니다. reset helper는 flags에 UNSTABLE이 있을 때 unregister, flags=KTIME_FLAGS, HZ/10만큼 sleep, 1000000kHz 재등록을 수행합니다. 이미 안정적이면 아무 일도 하지 않습니다. 객체 전체를 memset하거나 sign과 fuzz 상태를 다시 초기화하는 함수는 아닙니다."
+      },
+      {
+        "title": "첫 시험: 명시한 margin 유지",
+        "text": "스레드는 초기 holdoff 뒤 jiffies 모의 시계를 등록하고 uncertainty_margin이 TICK_NSEC와 같은지 WARN_ON_ONCE로 검사합니다. 읽기 두 번 사이 HZ만큼 쉬고 값이 같으면 경고합니다. 끝에서 unregister합니다. 정확히 HZ만큼 카운터가 증가했는지를 검사하는 것이 아니라 단지 두 값이 다른지를 확인합니다."
+      },
+      {
+        "title": "둘째 시험: 자동 margin과 짧은 진행",
+        "text": "ktime 모의 시계를 1000000kHz로 등록하고 margin이 NSEC_PER_USEC보다 작으면 경고합니다. read, udelay(1), read 뒤 두 값을 로그로 출력하고 time_before(j2,j1+NSEC_PER_USEC)이면 경고합니다. j1/j2는 unsigned long이라 32비트 환경에서는 u64 읽기 결과의 전체 폭을 그대로 보관하지 않습니다. 시간 비교는 해당 long 폭의 time_before 의미를 따릅니다."
+      },
+      {
+        "title": "재시도 한계 순회",
+        "text": "max_retries는 clocksource_get_max_watchdog_retry에서 얻고 i=0부터 max_retries+1까지 양 끝 포함해 순회합니다. 로그의 설명은 i<=1이면서 i<max_retries이면 추가 문구 없음, 그 외 i<=max_retries이면 expect message, 초과면 expect clock skew입니다. 로그 문구 선택과 실제 상태 assertion은 별도입니다."
+      },
+      {
+        "title": "지연 시험의 판정",
+        "text": "각 i를 ndelays에 저장하고 2*HZ만큼 쉽니다. 남은 ndelays가 0이 아니면 경고하고, i<=max_retries와 UNSTABLE이 아님이 일치하는지 검사합니다. 즉 허용 재시도 이내면 안정, 한 번 초과하면 불안정을 기대합니다. 그 뒤 reset helper를 호출해 필요하면 다음 시험용 시계를 다시 등록합니다."
+      },
+      {
+        "title": "값 흔들림과 CPU별 검사",
+        "text": "지연 주입 순회가 끝나면 fuzz=true로 하고 2*HZ만큼 기다립니다. UNSTABLE이 아니면 경고하고 clocksource_verify_percpu를 호출한 뒤 fuzz=false로 끕니다. 로그는 clock skew와 CPU별 mismatch를 기대한다고 말하지만 이 파일이 그 메시지 문자열을 자동 파싱해 일치 여부를 판단하지는 않습니다. 마지막에 ktime 모의 시계를 unregister하고 Done 로그와 0을 반환합니다."
+      },
+      {
+        "title": "오류를 보고하는 방식",
+        "text": "등록 함수들의 반환값을 테스트 본문과 reset에서 확인하지 않습니다. 실패 판정은 여러 WARN_ON_ONCE와 로그이며 경고가 생겼다고 스레드가 즉시 음수 오류를 반환하는 구조도 아닙니다. 정상 경로 끝의 0만 보고 모든 시험이 통과했다고 해석할 수 없습니다. 모듈 init의 성공과 비동기 테스트 완료도 다른 시점입니다."
+      },
+      {
+        "title": "스레드 생성과 초기화 실패",
+        "text": "init은 holdoff를 pr_alert로 출력하고 kthread_run(wdtest_func,NULL,\"wdtest\")을 호출합니다. ERR_PTR이면 PTR_ERR를 반환하고 경고를 출력하며 wdtest_task=NULL로 둡니다. 성공하면 task 포인터를 디버깅용으로 남기고 바로 0을 반환합니다. 테스트가 끝날 때까지 init에서 기다리는 동작은 없습니다."
+      },
+      {
+        "title": "Cleanup의 실제 범위",
+        "text": "module_exit에 연결한 clocksource_wdtest_cleanup 본문은 비어 있습니다. 이 파일에는 kthread_stop, 완료 대기, kthread_should_stop 검사도 없습니다. 테스트 스레드의 정상 종료가 두 모의 시계를 정리하지만 임의 시점의 종료 요청에 대해 cleanup이 스레드를 중단·join한다고 가정하면 안 됩니다. 수명 관리 코드를 읽을 때 함수 이름보다 본문이 중요합니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "모의 장치, 지연과 값 손상이라는 서로 다른 실패 모델, 재시도 경계의 +1 시험, 단위 변환, 비동기 테스트의 결과 수집과 수명 관리를 학습합니다. 소스 전체를 대조한 학습 자료이며 실제 모듈 로드, clocksource 전환 또는 watchdog 경고 발생을 실행 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ndelays 지연과 fuzz 오류 주입의 차이는?",
+        "options": [
+          "전자는 callback을 늦추고 후자는 반환 시각을 교대로 바꾼다",
+          "둘 다 동일한 난수 지연만 주입한다"
+        ],
+        "answer": 0,
+        "explanation": "udelay는 읽기 경로의 시간 비용을, +/-100ms는 읽은 값의 일관성을 교란합니다. 서로 다른 실패 모델을 검사합니다."
+      },
+      {
+        "prompt": "uncertainty_margin=1000ns라면 주입 udelay 인자는?",
+        "options": [
+          "4ns이다",
+          "4us이다"
+        ],
+        "answer": 1,
+        "explanation": "1000/250=4를 udelay에 전달합니다. 그 함수의 단위가 마이크로초이므로 4000ns의 지연 요청입니다."
+      },
+      {
+        "prompt": "재시도 시험은 max_retries까지만 실행하는가?",
+        "options": [
+          "아니다. max_retries+1까지 포함한다",
+          "그렇다. 허용 범위를 넘는 사례는 검사하지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "허용 경계의 마지막 값과 바로 초과하는 값을 함께 검사해 안정/불안정 판정이 바뀌는지 확인합니다."
+      },
+      {
+        "prompt": "모듈 init이 0이면 테스트 전체가 이미 완료·통과했는가?",
+        "options": [
+          "그렇다. kthread_run이 모든 시험 결과를 반환한다",
+          "아니다. 스레드 생성 성공 뒤 비동기로 진행된다"
+        ],
+        "answer": 1,
+        "explanation": "init은 생성 성공 후 바로 반환합니다. 본문의 실패는 WARN_ON_ONCE로 보고되므로 반환값만으로 합격을 판단할 수 없습니다."
+      },
+      {
+        "prompt": "빈 cleanup이 자동으로 테스트 스레드를 join하는가?",
+        "options": [
+          "아니다. 본문에 stop이나 대기 처리가 없다",
+          "그렇다. module_exit 등록만으로 임의의 kthread가 자동 종료된다"
+        ],
+        "answer": 0,
+        "explanation": "스레드 수명 관리는 명시적인 코드를 확인해야 합니다. 이 파일의 정상 스레드 끝 정리와 외부 종료 cleanup은 별개입니다."
+      },
+      {
+        "prompt": "READ_ONCE와 WRITE_ONCE로 ndelays를 읽고 쓰면 감소 전체가 atomic인가?",
+        "options": [
+          "그렇다. 모든 경쟁 읽기에서 정확히 한 번씩 감소한다",
+          "아니다. 읽기와 쓰기 사이 전체를 원자화하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "개별 접근을 명시하는 것과 atomic read-modify-write는 다릅니다. 테스트 구현의 전제를 범용 동시성 보장으로 확대하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * Unit test for the clocksource watchdog.\n *\n * Copyright (C) 2021 Facebook, Inc.\n *\n * Author: Paul E. McKenney <paulmck@kernel.org>\n */\n#define pr_fmt(fmt) KBUILD_MODNAME \": \" fmt\n\n#include <linux/device.h>\n#include <linux/clocksource.h>\n#include <linux/init.h>\n#include <linux/module.h>\n#include <linux/sched.h> /* for spin_unlock_irq() using preempt_count() m68k */\n#include <linux/tick.h>\n#include <linux/kthread.h>\n#include <linux/delay.h>\n#include <linux/prandom.h>\n#include <linux/cpu.h>\n\n#include \"tick-internal.h\"\n\nMODULE_LICENSE(\"GPL\");\nMODULE_DESCRIPTION(\"Clocksource watchdog unit test\");\nMODULE_AUTHOR(\"Paul E. McKenney <paulmck@kernel.org>\");\n\nstatic int holdoff = IS_BUILTIN(CONFIG_TEST_CLOCKSOURCE_WATCHDOG) ? 10 : 0;\nmodule_param(holdoff, int, 0444);\nMODULE_PARM_DESC(holdoff, \"Time to wait to start test (s).\");\n\n/* Watchdog kthread's task_struct pointer for debug purposes. */\nstatic struct task_struct *wdtest_task;\n\nstatic u64 wdtest_jiffies_read(struct clocksource *cs)\n{\n\treturn (u64)jiffies;\n}\n\nstatic struct clocksource clocksource_wdtest_jiffies = {\n\t.name\t\t\t= \"wdtest-jiffies\",\n\t.rating\t\t\t= 1, /* lowest valid rating*/\n\t.uncertainty_margin\t= TICK_NSEC,\n\t.read\t\t\t= wdtest_jiffies_read,\n\t.mask\t\t\t= CLOCKSOURCE_MASK(32),\n\t.flags\t\t\t= CLOCK_SOURCE_MUST_VERIFY,\n\t.mult\t\t\t= TICK_NSEC << JIFFIES_SHIFT, /* details above */\n\t.shift\t\t\t= JIFFIES_SHIFT,\n\t.max_cycles\t\t= 10,\n};\n\nstatic int wdtest_ktime_read_ndelays;\nstatic bool wdtest_ktime_read_fuzz;\n\nstatic u64 wdtest_ktime_read(struct clocksource *cs)\n{\n\tint wkrn = READ_ONCE(wdtest_ktime_read_ndelays);\n\tstatic int sign = 1;\n\tu64 ret;\n\n\tif (wkrn) {\n\t\tudelay(cs->uncertainty_margin / 250);\n\t\tWRITE_ONCE(wdtest_ktime_read_ndelays, wkrn - 1);\n\t}\n\tret = ktime_get_real_fast_ns();\n\tif (READ_ONCE(wdtest_ktime_read_fuzz)) {\n\t\tsign = -sign;\n\t\tret = ret + sign * 100 * NSEC_PER_MSEC;\n\t}\n\treturn ret;\n}\n\nstatic void wdtest_ktime_cs_mark_unstable(struct clocksource *cs)\n{\n\tpr_info(\"--- Marking %s unstable due to clocksource watchdog.\\n\", cs->name);\n}\n\n#define KTIME_FLAGS (CLOCK_SOURCE_IS_CONTINUOUS | \\\n\t\t     CLOCK_SOURCE_VALID_FOR_HRES | \\\n\t\t     CLOCK_SOURCE_MUST_VERIFY | \\\n\t\t     CLOCK_SOURCE_VERIFY_PERCPU)\n\nstatic struct clocksource clocksource_wdtest_ktime = {\n\t.name\t\t\t= \"wdtest-ktime\",\n\t.rating\t\t\t= 300,\n\t.read\t\t\t= wdtest_ktime_read,\n\t.mask\t\t\t= CLOCKSOURCE_MASK(64),\n\t.flags\t\t\t= KTIME_FLAGS,\n\t.mark_unstable\t\t= wdtest_ktime_cs_mark_unstable,\n\t.list\t\t\t= LIST_HEAD_INIT(clocksource_wdtest_ktime.list),\n};\n\n/* Reset the clocksource if needed. */\nstatic void wdtest_ktime_clocksource_reset(void)\n{\n\tif (clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE) {\n\t\tclocksource_unregister(&clocksource_wdtest_ktime);\n\t\tclocksource_wdtest_ktime.flags = KTIME_FLAGS;\n\t\tschedule_timeout_uninterruptible(HZ / 10);\n\t\tclocksource_register_khz(&clocksource_wdtest_ktime, 1000 * 1000);\n\t}\n}\n\n/* Run the specified series of watchdog tests. */\nstatic int wdtest_func(void *arg)\n{\n\tunsigned long j1, j2;\n\tint i, max_retries;\n\tchar *s;\n\n\tschedule_timeout_uninterruptible(holdoff * HZ);\n\n\t/*\n\t * Verify that jiffies-like clocksources get the manually\n\t * specified uncertainty margin.\n\t */\n\tpr_info(\"--- Verify jiffies-like uncertainty margin.\\n\");\n\t__clocksource_register(&clocksource_wdtest_jiffies);\n\tWARN_ON_ONCE(clocksource_wdtest_jiffies.uncertainty_margin != TICK_NSEC);\n\n\tj1 = clocksource_wdtest_jiffies.read(&clocksource_wdtest_jiffies);\n\tschedule_timeout_uninterruptible(HZ);\n\tj2 = clocksource_wdtest_jiffies.read(&clocksource_wdtest_jiffies);\n\tWARN_ON_ONCE(j1 == j2);\n\n\tclocksource_unregister(&clocksource_wdtest_jiffies);\n\n\t/*\n\t * Verify that tsc-like clocksources are assigned a reasonable\n\t * uncertainty margin.\n\t */\n\tpr_info(\"--- Verify tsc-like uncertainty margin.\\n\");\n\tclocksource_register_khz(&clocksource_wdtest_ktime, 1000 * 1000);\n\tWARN_ON_ONCE(clocksource_wdtest_ktime.uncertainty_margin < NSEC_PER_USEC);\n\n\tj1 = clocksource_wdtest_ktime.read(&clocksource_wdtest_ktime);\n\tudelay(1);\n\tj2 = clocksource_wdtest_ktime.read(&clocksource_wdtest_ktime);\n\tpr_info(\"--- tsc-like times: %lu - %lu = %lu.\\n\", j2, j1, j2 - j1);\n\tWARN_ON_ONCE(time_before(j2, j1 + NSEC_PER_USEC));\n\n\t/* Verify tsc-like stability with various numbers of errors injected. */\n\tmax_retries = clocksource_get_max_watchdog_retry();\n\tfor (i = 0; i <= max_retries + 1; i++) {\n\t\tif (i <= 1 && i < max_retries)\n\t\t\ts = \"\";\n\t\telse if (i <= max_retries)\n\t\t\ts = \", expect message\";\n\t\telse\n\t\t\ts = \", expect clock skew\";\n\t\tpr_info(\"--- Watchdog with %dx error injection, %d retries%s.\\n\", i, max_retries, s);\n\t\tWRITE_ONCE(wdtest_ktime_read_ndelays, i);\n\t\tschedule_timeout_uninterruptible(2 * HZ);\n\t\tWARN_ON_ONCE(READ_ONCE(wdtest_ktime_read_ndelays));\n\t\tWARN_ON_ONCE((i <= max_retries) !=\n\t\t\t     !(clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE));\n\t\twdtest_ktime_clocksource_reset();\n\t}\n\n\t/* Verify tsc-like stability with clock-value-fuzz error injection. */\n\tpr_info(\"--- Watchdog clock-value-fuzz error injection, expect clock skew and per-CPU mismatches.\\n\");\n\tWRITE_ONCE(wdtest_ktime_read_fuzz, true);\n\tschedule_timeout_uninterruptible(2 * HZ);\n\tWARN_ON_ONCE(!(clocksource_wdtest_ktime.flags & CLOCK_SOURCE_UNSTABLE));\n\tclocksource_verify_percpu(&clocksource_wdtest_ktime);\n\tWRITE_ONCE(wdtest_ktime_read_fuzz, false);\n\n\tclocksource_unregister(&clocksource_wdtest_ktime);\n\n\tpr_info(\"--- Done with test.\\n\");\n\treturn 0;\n}\n\nstatic void wdtest_print_module_parms(void)\n{\n\tpr_alert(\"--- holdoff=%d\\n\", holdoff);\n}\n\n/* Cleanup function. */\nstatic void clocksource_wdtest_cleanup(void)\n{\n}\n\nstatic int __init clocksource_wdtest_init(void)\n{\n\tint ret = 0;\n\n\twdtest_print_module_parms();\n\n\t/* Create watchdog-test task. */\n\twdtest_task = kthread_run(wdtest_func, NULL, \"wdtest\");\n\tif (IS_ERR(wdtest_task)) {\n\t\tret = PTR_ERR(wdtest_task);\n\t\tpr_warn(\"%s: Failed to create wdtest kthread.\\n\", __func__);\n\t\twdtest_task = NULL;\n\t\treturn ret;\n\t}\n\n\treturn 0;\n}\n\nmodule_init(clocksource_wdtest_init);\nmodule_exit(clocksource_wdtest_cleanup);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "87d49c9d14491f0edd74f9986a01edcf5b20871be84fd651c6ccf4023152fd92",
+      "scope": "whole-file",
+      "line_count": 203,
+      "authoring_source": "course/file_units/clocksource_watchdog_test.py",
+      "sections": [
+        "전체 파일 지도",
+        "시작 지연 매개변수",
+        "Jiffies 모의 시계 전체 설정",
+        "Ktime 모의 시계 전체 설정",
+        "읽기 지연 주입",
+        "읽기 값 흔들림 주입",
+        "공유 값 접근의 의미",
+        "Unstable callback과 reset",
+        "첫 시험: 명시한 margin 유지",
+        "둘째 시험: 자동 margin과 짧은 진행",
+        "재시도 한계 순회",
+        "지연 시험의 판정",
+        "값 흔들림과 CPU별 검사",
+        "오류를 보고하는 방식",
+        "스레드 생성과 초기화 실패",
+        "Cleanup의 실제 범위",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/clocksource-wdtest.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "감시용 시계가 고장을 잘 찾아내는지 일부러 읽기를 늦추거나 시각을 흔들어 시험합니다. 두 고장은 서로 다릅니다.",
+    "meaning": "오류를 넣는 시험에서 단위, 재시도 경계, 비동기 결과와 정리를 구분합니다.",
+    "exercise": "1000ns를 250으로 나눈 4가 udelay에서는 왜 4us인지 설명해 보세요."
+  },
+  "goal": "오류를 넣는 시험에서 단위, 재시도 경계, 비동기 결과와 정리를 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "1000ns를 250으로 나눈 4가 udelay에서는 왜 4us인지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "e3bc1a199e28dbe3a7db6529cbf802092cde42d20543c68d47e323bb194050a7",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

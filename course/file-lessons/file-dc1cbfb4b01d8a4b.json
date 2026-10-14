@@ -5,83 +5,97 @@
   "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
   "track": "files",
   "kind": "kernel",
-  "intro": "정수와 불리언 변환의 선언, 타입별 inline 연결, 사용자 메모리용 변환 인터페이스를 모은 헤더입니다.",
+  "intro": "kstrtox.h는 문자열을 여러 정수 타입이나 참·거짓으로 바꾸는 함수의 사용 약속을 모아요. 결과값을 쓰기 전에 성공 여부를 확인해야 해요.",
   "guide": [
-    "long과 long long의 크기·정렬을 비교해 호출 경로를 고르고, 고정 폭 이름은 대응하는 기본 정수 함수로 연결합니다. 반환 상태를 확인해야 출력값의 유효성을 알 수 있습니다.",
-    "문자열이 NUL로 종료되는지, 원하는 진법과 결과 타입이 무엇인지 먼저 결정합니다. 사용자 포인터에는 count를 받는 from_user 인터페이스를 사용합니다."
+    "진법은 숫자 각 자리의 규칙이에요. 10진수는 0~9, 16진수는 0~9와 a~f를 숫자로 써요. base는 그 규칙을 지정하는 인자예요.",
+    "정렬은 값이 놓일 주소의 간격 조건이에요. 예를 들어 8바이트 경계에 놓으라는 조건과 값의 크기가 8바이트라는 사실은 구별해요.",
+    "함수의 반환값은 성공·실패 표시이고 res가 가리키는 곳은 변환한 숫자를 넣을 칸이에요. 두 결과를 혼동하지 마세요."
   ],
   "deep_dive": [
     {
-      "title": "전체 선언 구조",
-      "text": "SPDX와 include guard, compiler/types 포함으로 시작합니다. 내부 long 함수와 long long 함수, 문서가 붙은 long inline 두 개, int와 고정 폭 함수, bool, from_user 선언과 inline, 마지막으로 simple_strto 계열의 주의사항과 선언 네 개를 제공합니다."
+      "title": "헤더가 모아 둔 함수들",
+      "text": "라이선스와 중복 포함 방지 조건 뒤 컴파일러·타입 헤더를 포함해요. 내부 long 함수, long long 함수, 설명이 붙은 long 연결 함수, int와 고정 비트 수 함수, bool 함수가 있어요. 사용자 메모리를 받는 from_user 계열과 끝의 simple_strto 네 선언도 포함해요."
     },
     {
-      "title": "크기와 정렬에 따른 long 경로",
-      "text": "kstrtoul은 unsigned long과 unsigned long long의 sizeof와 __alignof__가 모두 같으면 결과 포인터를 변환해 kstrtoull로 전달합니다. 다르면 _kstrtoul이 범위를 검사합니다. kstrtol도 signed 타입으로 같은 선택을 합니다. 서로 다른 C 타입이라 __builtin_types_compatible_p가 0이라는 주석은 왜 타입 동일성 대신 레이아웃 조건을 쓰는지 설명합니다."
+      "title": "long 연결 경로의 두 조건",
+      "text": "kstrtoul은 unsigned long과 unsigned long long의 sizeof, 즉 크기와 __alignof__, 즉 정렬 조건이 모두 같은지 확인해요. 둘 다 같으면 결과 포인터를 바꾸어 kstrtoull로 전달하고, 다르면 _kstrtoul로 가서 범위를 확인해요. kstrtol도 음수를 표현하는 타입으로 같은 선택을 해요. long과 long long은 레이아웃이 같아도 서로 다른 타입이라 타입 자체의 동일성 검사로 이 조건을 대신하지 않아요."
     },
     {
-      "title": "최적화와 언어 규칙",
-      "text": "sizeof와 정렬은 컴파일 시 결정되므로 inline 내부의 조건은 대상 아키텍처에 맞게 제거될 수 있습니다. 이 커널 코드의 포인터 변환을 크기만 같은 모든 사용자 공간 타입에 일반화하면 안 됩니다. 별칭 접근 규칙과 커널 빌드 조건도 함께 고려해야 합니다."
+      "title": "컴파일할 때 결정되는 선택",
+      "text": "크기와 정렬은 프로그램을 번역할 때 정해져요. 그래서 inline 함수 안 조건도 대상 CPU에 맞게 정리될 수 있어요. 이 커널 코드의 포인터 변환을 보고 크기만 같은 모든 C 타입을 서로 바꾸어 읽어도 된다고 생각하면 안 돼요. 어떤 타입으로 같은 메모리를 읽어도 되는지에 관한 별칭 규칙과 커널 빌드 조건도 관련돼요."
     },
     {
-      "title": "고정 폭 이름의 연결",
-      "text": "kstrtou64/kstrtos64는 ull/ll로, kstrtou32/kstrtos32는 uint/int로 전달합니다. 16비트와 8비트 함수는 외부 선언이며 실제 범위 검사는 lib/kstrtox.c에 있습니다. inline은 별도의 문자열 문법을 추가하지 않습니다."
+      "title": "비트 수가 붙은 이름",
+      "text": "kstrtou64와 kstrtos64는 unsigned/signed long long 변환에, kstrtou32와 kstrtos32는 unsigned int/int 변환에 연결돼요. u는 음수 없는 값, s는 음수도 있는 값이에요. 16비트·8비트 함수는 여기서 선언하고 범위 검사는 lib/kstrtox.c에서 해요. 연결 함수가 새로운 문자열 문법을 만드는 것은 아니에요."
     },
     {
-      "title": "반환 상태와 문법",
-      "text": "__must_check는 결과 확인을 요구하는 컴파일러 주석입니다. 런타임에 오류를 자동 처리하는 기능은 아닙니다. 문서는 0 성공, -ERANGE 범위 초과, -EINVAL 문법 오류와 선택적 개행 하나를 설명합니다. unsigned는 +를 허용하지만 -는 허용하지 않습니다. base0은 0x/0 접두사로 진법을 결정하며 최대 지원 진법은 16입니다."
+      "title": "성공 여부와 입력 문법",
+      "text": "__must_check는 반환값을 무시하지 않도록 컴파일러가 진단하는 데 쓰는 표시예요. 오류를 자동 복구하지 않아요. 성공은 0, 담을 수 있는 범위를 넘으면 -ERANGE, 문법이 틀리면 -EINVAL이에요. NUL 끝 표시 앞에 개행 하나를 허용해요. unsigned는 맨 앞 +는 허용하지만 -는 안 돼요. base가 0이면 0x 또는 0 접두사로 진법을 정하며 지원하는 최대 진법은 16이에요."
     },
     {
-      "title": "사용자 포인터 인터페이스",
-      "text": "from_user 선언은 __user 포인터와 size_t count를 받습니다. bool만 진법 인자가 없고 정수에는 진법이 있습니다. 고정 폭 64/32비트 inline 네 개는 대응 from_user 함수로 모든 인자를 전달합니다. __user 표시는 주소 공간 검사를 돕지만 실제 안전한 복사는 구현이 담당합니다."
+      "title": "사용자 메모리를 받는 함수",
+      "text": "from_user는 __user로 표시한 사용자 주소와 읽을 양 count를 받아요. 정수 함수는 진법도 받지만 참·거짓 함수는 진법이 없어요. 64비트·32비트 연결 함수 네 개는 같은 인자를 대응 함수로 전달해요. __user 표시는 주소 종류 검사에 도움을 주지만 실제 안전한 복사는 함수 구현이 해야 해요."
     },
     {
-      "title": "simple_strto를 예외적으로 쓰는 이유",
-      "text": "마지막 주석은 기본적으로 kstrto 계열을 사용하라고 안내합니다. simple_strto는 범위 오버플로를 검사하지 않고 첫 비숫자에서 멈추며 끝 위치를 char **로 전달할 수 있습니다. 10x50 또는 12:21처럼 구분자로 이어진 입력을 처리하는 용도가 있지만, 부분 소비가 필요하다는 이유로 범위 검사를 생략해도 된다는 뜻은 아닙니다."
+      "title": "simple_strto는 부분 읽기예요",
+      "text": "주석은 보통 kstrto 계열을 쓰라고 안내해요. simple_strto는 처음 숫자가 아닌 문자에서 멈추고 그 끝 주소를 알려 줄 수 있어 12:21이나 10x50처럼 구분자가 있는 입력을 나눠 읽는 데 쓰일 수 있어요. 하지만 숫자 범위 초과를 검사하지 않아요. 부분만 읽어야 한다는 필요와 숫자가 범위 안인지 확인하는 책임은 별개예요."
     },
     {
-      "title": "CS 연결과 실행 검증 범위",
-      "text": "표현 폭과 타입 동일성의 차이, 컴파일 시 분기, 오류 채널과 출력 채널의 분리, 전체 파싱과 부분 파싱을 학습합니다. 별도 kstrtox 실행 검사는 구현의 문법·범위 경계를 확인하며 이 헤더의 모든 아키텍처별 inline 경로나 실제 사용자 주소 공간을 검증한 것은 아닙니다."
+      "title": "무엇을 확인한 수업인가요",
+      "text": "타입 크기와 타입 동일성, 번역 시 선택, 성공 표시와 출력 숫자, 전체 읽기와 부분 읽기를 구분해요. 구현의 경계값 실행 검사가 있어도 모든 CPU별 연결 경로나 실제 사용자 주소 접근까지 검증한 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "long과 long long의 크기만 같으면 빠른 경로를 선택하는가?",
+      "prompt": "long과 long long의 크기만 같으면 바로 연결하나요?",
       "options": [
+        "아니요. 정렬 조건도 같아야 해요.",
+        "네. sizeof만 확인해요."
+      ],
+      "answer": 0,
+      "explanation": "&&로 이은 두 비교가 모두 참이어야 빠른 연결 경로로 가요.",
+      "original_prompt": "long과 long long의 크기만 같으면 빠른 경로를 선택하는가?",
+      "original_options": [
         "아니다. 정렬도 같아야 한다",
         "그렇다. sizeof만 비교한다"
       ],
-      "answer": 0,
-      "explanation": "조건에는 sizeof 비교와 __alignof__ 비교가 &&로 연결됩니다. 둘 중 하나라도 다르면 내부 long 변환 함수로 갑니다."
+      "original_explanation": "조건에는 sizeof 비교와 __alignof__ 비교가 &&로 연결됩니다. 둘 중 하나라도 다르면 내부 long 변환 함수로 갑니다."
     },
     {
-      "prompt": "__must_check가 오류를 자동으로 복구하는가?",
+      "prompt": "__must_check가 실패를 알아서 고쳐 주나요?",
       "options": [
+        "네. 실패하면 기본값을 자동으로 넣어요.",
+        "아니요. 호출자가 반환값을 보고 처리해야 해요."
+      ],
+      "answer": 1,
+      "explanation": "이 표시는 반환값을 무시하지 말라는 컴파일러용 안내예요. 실패 분기와 출력 사용은 호출자가 정해요.",
+      "original_prompt": "__must_check가 오류를 자동으로 복구하는가?",
+      "original_options": [
         "그렇다. 실패하면 자동으로 기본값을 쓴다",
         "아니다. 호출자가 반환값을 확인하고 처리해야 한다"
       ],
-      "answer": 1,
-      "explanation": "이 표시는 반환값 무시를 진단하도록 돕습니다. 성공 여부에 따른 제어 흐름과 출력 사용은 호출자가 작성해야 합니다."
+      "original_explanation": "이 표시는 반환값 무시를 진단하도록 돕습니다. 성공 여부에 따른 제어 흐름과 출력 사용은 호출자가 작성해야 합니다."
     },
     {
-      "prompt": "12:21의 앞부분을 읽는 simple_strtol을 선택했다면 무엇을 추가로 고려해야 하는가?",
+      "prompt": "simple_strtol로 12:21의 앞 숫자를 읽으면 무엇을 더 확인하나요?",
       "options": [
+        "어디서 멈췄는지와 숫자 범위를 확인해요.",
+        "범위 초과 검사도 자동이니 숫자만 써요."
+      ],
+      "answer": 0,
+      "explanation": "부분 읽기는 가능하지만 범위 초과 검사가 없다는 원문 경고를 지켜야 해요.",
+      "original_prompt": "12:21의 앞부분을 읽는 simple_strtol을 선택했다면 무엇을 추가로 고려해야 하는가?",
+      "original_options": [
         "끝 위치와 수치 범위를 별도로 검증해야 한다",
         "오버플로 검사가 내장되어 있으므로 값만 사용한다"
       ],
-      "answer": 0,
-      "explanation": "헤더는 simple_strto가 범위 오버플로를 검사하지 않는다고 명시합니다. 부분 파싱과 안전한 범위 검증은 서로 다른 요구입니다."
+      "original_explanation": "헤더는 simple_strto가 범위 오버플로를 검사하지 않는다고 명시합니다. 부분 파싱과 안전한 범위 검증은 서로 다른 요구입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "long과 long long의 크기는 같고 정렬은 다른 경우를 그려 어느 함수를 부르는지 따라가 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_KSTRTOX_H\n#define _LINUX_KSTRTOX_H\n\n#include <linux/compiler.h>\n#include <linux/types.h>\n\n/* Internal, do not use. */\nint __must_check _kstrtoul(const char *s, unsigned int base, unsigned long *res);\nint __must_check _kstrtol(const char *s, unsigned int base, long *res);\n\nint __must_check kstrtoull(const char *s, unsigned int base, unsigned long long *res);\nint __must_check kstrtoll(const char *s, unsigned int base, long long *res);\n\n/**\n * kstrtoul - convert a string to an unsigned long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoul(). Return code must be checked.\n*/\nstatic inline int __must_check kstrtoul(const char *s, unsigned int base, unsigned long *res)\n{\n\t/*\n\t * We want to shortcut function call, but\n\t * __builtin_types_compatible_p(unsigned long, unsigned long long) = 0.\n\t */\n\tif (sizeof(unsigned long) == sizeof(unsigned long long) &&\n\t    __alignof__(unsigned long) == __alignof__(unsigned long long))\n\t\treturn kstrtoull(s, base, (unsigned long long *)res);\n\telse\n\t\treturn _kstrtoul(s, base, res);\n}\n\n/**\n * kstrtol - convert a string to a long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtol(). Return code must be checked.\n */\nstatic inline int __must_check kstrtol(const char *s, unsigned int base, long *res)\n{\n\t/*\n\t * We want to shortcut function call, but\n\t * __builtin_types_compatible_p(long, long long) = 0.\n\t */\n\tif (sizeof(long) == sizeof(long long) &&\n\t    __alignof__(long) == __alignof__(long long))\n\t\treturn kstrtoll(s, base, (long long *)res);\n\telse\n\t\treturn _kstrtol(s, base, res);\n}\n\nint __must_check kstrtouint(const char *s, unsigned int base, unsigned int *res);\nint __must_check kstrtoint(const char *s, unsigned int base, int *res);\n\nstatic inline int __must_check kstrtou64(const char *s, unsigned int base, u64 *res)\n{\n\treturn kstrtoull(s, base, res);\n}\n\nstatic inline int __must_check kstrtos64(const char *s, unsigned int base, s64 *res)\n{\n\treturn kstrtoll(s, base, res);\n}\n\nstatic inline int __must_check kstrtou32(const char *s, unsigned int base, u32 *res)\n{\n\treturn kstrtouint(s, base, res);\n}\n\nstatic inline int __must_check kstrtos32(const char *s, unsigned int base, s32 *res)\n{\n\treturn kstrtoint(s, base, res);\n}\n\nint __must_check kstrtou16(const char *s, unsigned int base, u16 *res);\nint __must_check kstrtos16(const char *s, unsigned int base, s16 *res);\nint __must_check kstrtou8(const char *s, unsigned int base, u8 *res);\nint __must_check kstrtos8(const char *s, unsigned int base, s8 *res);\nint __must_check kstrtobool(const char *s, bool *res);\n\nint __must_check kstrtoull_from_user(const char __user *s, size_t count, unsigned int base, unsigned long long *res);\nint __must_check kstrtoll_from_user(const char __user *s, size_t count, unsigned int base, long long *res);\nint __must_check kstrtoul_from_user(const char __user *s, size_t count, unsigned int base, unsigned long *res);\nint __must_check kstrtol_from_user(const char __user *s, size_t count, unsigned int base, long *res);\nint __must_check kstrtouint_from_user(const char __user *s, size_t count, unsigned int base, unsigned int *res);\nint __must_check kstrtoint_from_user(const char __user *s, size_t count, unsigned int base, int *res);\nint __must_check kstrtou16_from_user(const char __user *s, size_t count, unsigned int base, u16 *res);\nint __must_check kstrtos16_from_user(const char __user *s, size_t count, unsigned int base, s16 *res);\nint __must_check kstrtou8_from_user(const char __user *s, size_t count, unsigned int base, u8 *res);\nint __must_check kstrtos8_from_user(const char __user *s, size_t count, unsigned int base, s8 *res);\nint __must_check kstrtobool_from_user(const char __user *s, size_t count, bool *res);\n\nstatic inline int __must_check kstrtou64_from_user(const char __user *s, size_t count, unsigned int base, u64 *res)\n{\n\treturn kstrtoull_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtos64_from_user(const char __user *s, size_t count, unsigned int base, s64 *res)\n{\n\treturn kstrtoll_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtou32_from_user(const char __user *s, size_t count, unsigned int base, u32 *res)\n{\n\treturn kstrtouint_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtos32_from_user(const char __user *s, size_t count, unsigned int base, s32 *res)\n{\n\treturn kstrtoint_from_user(s, count, base, res);\n}\n\n/*\n * Use kstrto<foo> instead.\n *\n * NOTE: simple_strto<foo> does not check for the range overflow and,\n *\t depending on the input, may give interesting results.\n *\n * Use these functions if and only if you cannot use kstrto<foo>, because\n * the conversion ends on the first non-digit character, which may be far\n * beyond the supported range. It might be useful to parse the strings like\n * 10x50 or 12:21 without altering original string or temporary buffer in use.\n * Keep in mind above caveat.\n */\n\nextern unsigned long simple_strtoul(const char *,char **,unsigned int);\nextern long simple_strtol(const char *,char **,unsigned int);\nextern unsigned long long simple_strtoull(const char *,char **,unsigned int);\nextern long long simple_strtoll(const char *,char **,unsigned int);\n\n#endif\t/* _LINUX_KSTRTOX_H */\n",
   "source_review": {
@@ -107,5 +121,144 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/kstrtox.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-dc1cbfb4b01d8a4b",
+    "path": "include/linux/kstrtox.h",
+    "title": "문자열 변환 공개 계약: 타입 폭과 반환값 검사",
+    "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정수와 불리언 변환의 선언, 타입별 inline 연결, 사용자 메모리용 변환 인터페이스를 모은 헤더입니다.",
+    "guide": [
+      "long과 long long의 크기·정렬을 비교해 호출 경로를 고르고, 고정 폭 이름은 대응하는 기본 정수 함수로 연결합니다. 반환 상태를 확인해야 출력값의 유효성을 알 수 있습니다.",
+      "문자열이 NUL로 종료되는지, 원하는 진법과 결과 타입이 무엇인지 먼저 결정합니다. 사용자 포인터에는 count를 받는 from_user 인터페이스를 사용합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 선언 구조",
+        "text": "SPDX와 include guard, compiler/types 포함으로 시작합니다. 내부 long 함수와 long long 함수, 문서가 붙은 long inline 두 개, int와 고정 폭 함수, bool, from_user 선언과 inline, 마지막으로 simple_strto 계열의 주의사항과 선언 네 개를 제공합니다."
+      },
+      {
+        "title": "크기와 정렬에 따른 long 경로",
+        "text": "kstrtoul은 unsigned long과 unsigned long long의 sizeof와 __alignof__가 모두 같으면 결과 포인터를 변환해 kstrtoull로 전달합니다. 다르면 _kstrtoul이 범위를 검사합니다. kstrtol도 signed 타입으로 같은 선택을 합니다. 서로 다른 C 타입이라 __builtin_types_compatible_p가 0이라는 주석은 왜 타입 동일성 대신 레이아웃 조건을 쓰는지 설명합니다."
+      },
+      {
+        "title": "최적화와 언어 규칙",
+        "text": "sizeof와 정렬은 컴파일 시 결정되므로 inline 내부의 조건은 대상 아키텍처에 맞게 제거될 수 있습니다. 이 커널 코드의 포인터 변환을 크기만 같은 모든 사용자 공간 타입에 일반화하면 안 됩니다. 별칭 접근 규칙과 커널 빌드 조건도 함께 고려해야 합니다."
+      },
+      {
+        "title": "고정 폭 이름의 연결",
+        "text": "kstrtou64/kstrtos64는 ull/ll로, kstrtou32/kstrtos32는 uint/int로 전달합니다. 16비트와 8비트 함수는 외부 선언이며 실제 범위 검사는 lib/kstrtox.c에 있습니다. inline은 별도의 문자열 문법을 추가하지 않습니다."
+      },
+      {
+        "title": "반환 상태와 문법",
+        "text": "__must_check는 결과 확인을 요구하는 컴파일러 주석입니다. 런타임에 오류를 자동 처리하는 기능은 아닙니다. 문서는 0 성공, -ERANGE 범위 초과, -EINVAL 문법 오류와 선택적 개행 하나를 설명합니다. unsigned는 +를 허용하지만 -는 허용하지 않습니다. base0은 0x/0 접두사로 진법을 결정하며 최대 지원 진법은 16입니다."
+      },
+      {
+        "title": "사용자 포인터 인터페이스",
+        "text": "from_user 선언은 __user 포인터와 size_t count를 받습니다. bool만 진법 인자가 없고 정수에는 진법이 있습니다. 고정 폭 64/32비트 inline 네 개는 대응 from_user 함수로 모든 인자를 전달합니다. __user 표시는 주소 공간 검사를 돕지만 실제 안전한 복사는 구현이 담당합니다."
+      },
+      {
+        "title": "simple_strto를 예외적으로 쓰는 이유",
+        "text": "마지막 주석은 기본적으로 kstrto 계열을 사용하라고 안내합니다. simple_strto는 범위 오버플로를 검사하지 않고 첫 비숫자에서 멈추며 끝 위치를 char **로 전달할 수 있습니다. 10x50 또는 12:21처럼 구분자로 이어진 입력을 처리하는 용도가 있지만, 부분 소비가 필요하다는 이유로 범위 검사를 생략해도 된다는 뜻은 아닙니다."
+      },
+      {
+        "title": "CS 연결과 실행 검증 범위",
+        "text": "표현 폭과 타입 동일성의 차이, 컴파일 시 분기, 오류 채널과 출력 채널의 분리, 전체 파싱과 부분 파싱을 학습합니다. 별도 kstrtox 실행 검사는 구현의 문법·범위 경계를 확인하며 이 헤더의 모든 아키텍처별 inline 경로나 실제 사용자 주소 공간을 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "long과 long long의 크기만 같으면 빠른 경로를 선택하는가?",
+        "options": [
+          "아니다. 정렬도 같아야 한다",
+          "그렇다. sizeof만 비교한다"
+        ],
+        "answer": 0,
+        "explanation": "조건에는 sizeof 비교와 __alignof__ 비교가 &&로 연결됩니다. 둘 중 하나라도 다르면 내부 long 변환 함수로 갑니다."
+      },
+      {
+        "prompt": "__must_check가 오류를 자동으로 복구하는가?",
+        "options": [
+          "그렇다. 실패하면 자동으로 기본값을 쓴다",
+          "아니다. 호출자가 반환값을 확인하고 처리해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "이 표시는 반환값 무시를 진단하도록 돕습니다. 성공 여부에 따른 제어 흐름과 출력 사용은 호출자가 작성해야 합니다."
+      },
+      {
+        "prompt": "12:21의 앞부분을 읽는 simple_strtol을 선택했다면 무엇을 추가로 고려해야 하는가?",
+        "options": [
+          "끝 위치와 수치 범위를 별도로 검증해야 한다",
+          "오버플로 검사가 내장되어 있으므로 값만 사용한다"
+        ],
+        "answer": 0,
+        "explanation": "헤더는 simple_strto가 범위 오버플로를 검사하지 않는다고 명시합니다. 부분 파싱과 안전한 범위 검증은 서로 다른 요구입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_KSTRTOX_H\n#define _LINUX_KSTRTOX_H\n\n#include <linux/compiler.h>\n#include <linux/types.h>\n\n/* Internal, do not use. */\nint __must_check _kstrtoul(const char *s, unsigned int base, unsigned long *res);\nint __must_check _kstrtol(const char *s, unsigned int base, long *res);\n\nint __must_check kstrtoull(const char *s, unsigned int base, unsigned long long *res);\nint __must_check kstrtoll(const char *s, unsigned int base, long long *res);\n\n/**\n * kstrtoul - convert a string to an unsigned long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoul(). Return code must be checked.\n*/\nstatic inline int __must_check kstrtoul(const char *s, unsigned int base, unsigned long *res)\n{\n\t/*\n\t * We want to shortcut function call, but\n\t * __builtin_types_compatible_p(unsigned long, unsigned long long) = 0.\n\t */\n\tif (sizeof(unsigned long) == sizeof(unsigned long long) &&\n\t    __alignof__(unsigned long) == __alignof__(unsigned long long))\n\t\treturn kstrtoull(s, base, (unsigned long long *)res);\n\telse\n\t\treturn _kstrtoul(s, base, res);\n}\n\n/**\n * kstrtol - convert a string to a long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtol(). Return code must be checked.\n */\nstatic inline int __must_check kstrtol(const char *s, unsigned int base, long *res)\n{\n\t/*\n\t * We want to shortcut function call, but\n\t * __builtin_types_compatible_p(long, long long) = 0.\n\t */\n\tif (sizeof(long) == sizeof(long long) &&\n\t    __alignof__(long) == __alignof__(long long))\n\t\treturn kstrtoll(s, base, (long long *)res);\n\telse\n\t\treturn _kstrtol(s, base, res);\n}\n\nint __must_check kstrtouint(const char *s, unsigned int base, unsigned int *res);\nint __must_check kstrtoint(const char *s, unsigned int base, int *res);\n\nstatic inline int __must_check kstrtou64(const char *s, unsigned int base, u64 *res)\n{\n\treturn kstrtoull(s, base, res);\n}\n\nstatic inline int __must_check kstrtos64(const char *s, unsigned int base, s64 *res)\n{\n\treturn kstrtoll(s, base, res);\n}\n\nstatic inline int __must_check kstrtou32(const char *s, unsigned int base, u32 *res)\n{\n\treturn kstrtouint(s, base, res);\n}\n\nstatic inline int __must_check kstrtos32(const char *s, unsigned int base, s32 *res)\n{\n\treturn kstrtoint(s, base, res);\n}\n\nint __must_check kstrtou16(const char *s, unsigned int base, u16 *res);\nint __must_check kstrtos16(const char *s, unsigned int base, s16 *res);\nint __must_check kstrtou8(const char *s, unsigned int base, u8 *res);\nint __must_check kstrtos8(const char *s, unsigned int base, s8 *res);\nint __must_check kstrtobool(const char *s, bool *res);\n\nint __must_check kstrtoull_from_user(const char __user *s, size_t count, unsigned int base, unsigned long long *res);\nint __must_check kstrtoll_from_user(const char __user *s, size_t count, unsigned int base, long long *res);\nint __must_check kstrtoul_from_user(const char __user *s, size_t count, unsigned int base, unsigned long *res);\nint __must_check kstrtol_from_user(const char __user *s, size_t count, unsigned int base, long *res);\nint __must_check kstrtouint_from_user(const char __user *s, size_t count, unsigned int base, unsigned int *res);\nint __must_check kstrtoint_from_user(const char __user *s, size_t count, unsigned int base, int *res);\nint __must_check kstrtou16_from_user(const char __user *s, size_t count, unsigned int base, u16 *res);\nint __must_check kstrtos16_from_user(const char __user *s, size_t count, unsigned int base, s16 *res);\nint __must_check kstrtou8_from_user(const char __user *s, size_t count, unsigned int base, u8 *res);\nint __must_check kstrtos8_from_user(const char __user *s, size_t count, unsigned int base, s8 *res);\nint __must_check kstrtobool_from_user(const char __user *s, size_t count, bool *res);\n\nstatic inline int __must_check kstrtou64_from_user(const char __user *s, size_t count, unsigned int base, u64 *res)\n{\n\treturn kstrtoull_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtos64_from_user(const char __user *s, size_t count, unsigned int base, s64 *res)\n{\n\treturn kstrtoll_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtou32_from_user(const char __user *s, size_t count, unsigned int base, u32 *res)\n{\n\treturn kstrtouint_from_user(s, count, base, res);\n}\n\nstatic inline int __must_check kstrtos32_from_user(const char __user *s, size_t count, unsigned int base, s32 *res)\n{\n\treturn kstrtoint_from_user(s, count, base, res);\n}\n\n/*\n * Use kstrto<foo> instead.\n *\n * NOTE: simple_strto<foo> does not check for the range overflow and,\n *\t depending on the input, may give interesting results.\n *\n * Use these functions if and only if you cannot use kstrto<foo>, because\n * the conversion ends on the first non-digit character, which may be far\n * beyond the supported range. It might be useful to parse the strings like\n * 10x50 or 12:21 without altering original string or temporary buffer in use.\n * Keep in mind above caveat.\n */\n\nextern unsigned long simple_strtoul(const char *,char **,unsigned int);\nextern long simple_strtol(const char *,char **,unsigned int);\nextern unsigned long long simple_strtoull(const char *,char **,unsigned int);\nextern long long simple_strtoll(const char *,char **,unsigned int);\n\n#endif\t/* _LINUX_KSTRTOX_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "e0e3bc107d25fd42ace234356d7db023610859f50f08d1e85b6042b6964f4abb",
+      "scope": "whole-file",
+      "line_count": 150,
+      "authoring_source": "course/file_units/string_to_numbers.py",
+      "sections": [
+        "전체 선언 구조",
+        "크기와 정렬에 따른 long 경로",
+        "최적화와 언어 규칙",
+        "고정 폭 이름의 연결",
+        "반환 상태와 문법",
+        "사용자 포인터 인터페이스",
+        "simple_strto를 예외적으로 쓰는 이유",
+        "CS 연결과 실행 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/kstrtox.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "숫자가 적힌 종이를 크기가 다른 상자에 넣을 때, 상자에 들어가는지와 종이를 제대로 읽었는지를 따로 확인해요.",
+    "meaning": "kstrtox.h는 문자열을 여러 정수 타입이나 참·거짓으로 바꾸는 함수의 사용 약속을 모아요. 결과값을 쓰기 전에 성공 여부를 확인해야 해요.",
+    "exercise": "long과 long long의 크기는 같고 정렬은 다른 경우를 그려 어느 함수를 부르는지 따라가 보세요."
+  },
+  "goal": "kstrtox.h는 문자열을 여러 정수 타입이나 참·거짓으로 바꾸는 함수의 사용 약속을 모아요. 결과값을 쓰기 전에 성공 여부를 확인해야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "long과 long long의 크기는 같고 정렬은 다른 경우를 그려 어느 함수를 부르는지 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "c1e602bbf0e06f83816ec23395219e5f32ae9d0976c17dd3ab03ea4536f2582d",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

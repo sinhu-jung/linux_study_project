@@ -5,148 +5,192 @@
   "area": "장치 트리 · 링커 유사 재배치 · 문자열 파싱 · 참조 수명 · 동시성",
   "track": "files",
   "kind": "kernel",
-  "intro": "live tree 최대 ID 탐색,overlay 재배치,내부 offset 수정과 외부 label 연결 전체를 분석합니다.",
+  "intro": "장치 트리에 붙일 overlay의 노드 번호를 옮기고, 내부와 외부를 가리키는 번호를 고쳐요. 도중 실패해도 앞서 고친 값은 자동으로 원래대로 돌아가지 않아요.",
   "guide": [
-    "이름으로 지정된 외부 참조와 overlay 내부 숫자 참조는 서로 다른 재배치 정보를 사용합니다.",
-    "트리 재귀,심볼 테이블,바이트 offset 파싱,엔디언과 부분 갱신을 학습합니다."
+    "overlay는 기존 장치 정보에 덧붙일 트리예요. detached는 아직 실제 트리와 떨어져 있다는 뜻이에요. phandle은 트리의 노드를 가리키는 번호예요.",
+    "fixup은 번호를 고칠 위치 목록이에요. offset은 값의 시작에서 몇 바이트 떨어졌는지를 뜻해요. 바이트는 메모리의 작은 단위이고, 여기서 번호 하나는4바이트예요.",
+    "big endian은 숫자의 큰 자리 바이트부터 저장하는 약속이에요. 참조를 얻으면 쓰는 동안 대상을 붙들고, put으로 돌려줘요. 잠금은 여러 작업이 같은 자료를 동시에 건드리지 못하게 하는 장치지만 잡은 구간만 보호해요."
   ],
   "deep_dive": [
     {
-      "title": "구성과 최대 phandle",
-      "text": "GPL-2.0 파일은 OF: resolver: 로그 접두부와 cleanup,kernel,module,OF,OF device,string,ctype,errno,slab 및 내부 헤더를 사용합니다. live_tree_max_phandle은 devtree_lock을 raw irqsave로 잡고 전체 노드의 최대 phandle을 찾되 OF_PHANDLE_ILLEGAL은 제외합니다. 초기 최대값은 0이고 탐색 후 잠금을 풉니다. 이 잠금만으로 이후 적용까지의 전체 과정을 직렬화하지는 않습니다."
+      "title": "현재 지도에서 가장 큰 번호를 찾아요",
+      "text": "로그에는 OF: resolver:가 붙고 트리·문자열·메모리·정리 도구와 내부 선언을 가져와요. live_tree_max_phandle은 잠금을 잡고 현재 CPU의 인터럽트 상태를 보관한 채 모든 노드를 살펴요. 처음 최대값은0이고 OF_PHANDLE_ILLEGAL이라는 특별한 무효 번호는 제외해요. 최대값을 찾으면 잠금을 풀고 인터럽트 상태를 복원해요. 이후 지도를 붙이는 과정까지 계속 잡고 있지는 않아요."
     },
     {
-      "title": "노드 ID 재배치",
-      "text": "adjust_overlay_phandles는 현재 노드의 phandle이 0도 illegal도 아니면 delta를 더합니다. phandle 또는 linux,phandle 속성 중 길이가 4 이상이고 첫 값이 illegal이 아닌 속성에는 조정된 노드 필드를 big endian으로 기록합니다. 모든 속성의 모든 cell에 delta를 더하는 것이 아닙니다. 이후 자식마다 재귀 호출합니다."
+      "title": "새 노드 번호와 번호 속성을 바꿔요",
+      "text": "노드 번호가0도 무효 번호도 아니면 delta만큼 더해요. 이름이 phandle 또는 linux,phandle인 속성만 살피고, 길이가4이상이며 첫 값이 무효 번호가 아닐 때 바뀐 노드 번호를 큰 바이트부터 적어요. 모든 속성의 모든 숫자에 delta를 더하는 방식이 아니에요. 그다음 자식들에게 같은 일을 반복하는 재귀 호출을 해요."
     },
     {
-      "title": "외부 fixup 문자열 복사",
-      "text": "update_usages는 fixup 속성을 kmemdup하고 __free(kfree) 지역 변수로 관리하므로 정상·오류 반환에서 복제 버퍼가 해제됩니다. 값은 NUL로 구분된 path:property:offset 목록으로 처리합니다. 각 항목 길이를 strlen으로 얻고 두 colon을 NUL로 바꿔 경로·속성·offset을 나눕니다. 길이 끝 안에 NUL이 있는지 strnlen으로 확인하거나 복제 시 종료 문자를 덧붙이는 코드는 없습니다."
+      "title": "외부 연결 위치를 적은 문자열을 복사해요",
+      "text": "수정 위치는 path:property:offset 꼴 문자열이며 NUL이라는 끝 표시로 항목을 나눠요. 원자료를 kmemdup으로 복사하고, __free(kfree) 표시를 붙여 함수를 떠날 때 자동으로 해제해요. 복사 실패는 -ENOMEM이에요. 각 문자열 길이를 strlen으로 구하고 두 콜론을 끝 표시로 바꿔 세 부분을 나눠요. 복제한 길이 안에 NUL이 있는지 제한 길이 함수로 확인하거나 끝 표시를 덧붙이지는 않아요."
     },
     {
-      "title": "외부 참조 위치의 검증",
-      "text": "colon이 없으면 -EINVAL,10진 kstrtoint 오류는 해당 오류를 반환합니다. overlay의 참조를 얻어 내부 full-path 검색에 넘기고 노드가 없으면 오류 대신 다음 tuple로 continue합니다. 노드는 찾았지만 속성이 없으면 -ENOENT입니다. 찾은 노드 참조는 속성 검색 후 put하며 detached tree의 수명 보호 전제를 사용합니다. offset<0 또는 4바이트 쓰기가 속성 길이를 넘으면 -EINVAL이고 통과하면 대상 phandle을 big endian으로 기록합니다."
+      "title": "대상 위치를 찾고 네 바이트를 써요",
+      "text": "콜론이 없으면 -EINVAL이고 offset을 10진 정수로 읽다 실패하면 그 오류를 줘요. overlay에서 해당 경로 노드가 없으면 그 항목만 건너뛰어요. 노드는 있는데 속성이 없으면 -ENOENT예요. 노드 참조는 속성을 찾은 뒤 돌려주므로 떨어진 트리가 계속 살아 있다는 전제가 필요해요. offset이 음수이거나4바이트 쓰기가 속성 길이를 넘으면 실패하고, 통과하면 대상 phandle을 big endian으로 적어요."
     },
     {
-      "title": "Full name 비교",
-      "text": "node_name_cmp는 두 노드 full_name의 kbasename을 of_node_cmp로 비교합니다. 주석은 일반 name이 @ 부분을 제거할 수 있기 때문이라고 설명합니다. node@unit-address의 suffix를 포함한 이름을 사용하여 두 하위 트리를 대응시킵니다."
+      "title": "이름의 @ 뒤도 비교해야 해요",
+      "text": "node_name_cmp는 전체 경로의 마지막 이름을 꺼내 비교해요. 예를 들어 bus/device@10이라면 device@10을 사용해요. 일반 name에는 @ 뒤 부분이 빠질 수 있기 때문이에요. 여기서는 unit-address라는 장치 위치 표시까지 포함해 두 트리의 노드를 맞춰요. 파일을 여는 동작은 아니에요."
     },
     {
-      "title": "Local fixup 속성",
-      "text": "local_fixups가 NULL이면 성공입니다. name,phandle,linux,phandle 자동 속성은 건너뛰고 나머지는 길이가 양수이면서 4의 배수인지 확인합니다. 대응 overlay 속성을 같은 이름으로 찾아 없으면 -EINVAL입니다. 각 big-endian u32 offset 위치의 값에 be32_add_cpu로 delta를 더합니다. off+4 경계 검사는 있지만 unsigned 덧셈 overflow나 offset 정렬을 별도로 검사하는 helper는 없습니다."
+      "title": "내부 수정표의 숫자는 값이 아니라 위치예요",
+      "text": "local_fixups가 없으면 성공해요. 자동으로 붙는 name·phandle·linux,phandle 속성은 넘겨요. 나머지 수정표 길이는 양수이고4의 배수여야 하며 overlay에 같은 이름의 속성이 있어야 해요. 수정표의 u32 숫자를 offset으로 읽고, 그 위치에 이미 적힌 번호에 delta를 더해요. off+4 경계 검사는 있지만 덧셈이 넘치는 경우나4바이트 정렬을 따로 확인하는 helper는 없어요."
     },
     {
-      "title": "두 트리의 병렬 재귀",
-      "text": "local fixup 자식은 scoped iterator로 순회하고 각 자식마다 overlay 자식 목록에서 같은 basename을 선형 검색합니다. 매칭 자식의 순회 참조를 put한 뒤 detached overlay 안의 노드 주소로 재귀합니다. 대응 자식이 없거나 재귀가 실패하면 오류를 반환합니다. 동일 폭의 자식 목록을 매번 검색하므로 이 대응 단계는 단순한 단일 hash lookup이 아닙니다."
+      "title": "두 트리의 자식을 짝지어 내려가요",
+      "text": "수정표의 자식 하나마다 overlay 자식들을 처음부터 살펴 같은 마지막 이름을 찾아요. 없으면 실패해요. 찾은 순회 참조는 돌려준 뒤, 떨어진 overlay가 유지하는 노드 주소로 재귀해요. 안쪽 단계의 오류도 그대로 반환해요. 이름표 사전에서 한 번에 찾는 방식이 아니라 자식 목록을 반복해서 검색하는 방식이에요."
     },
     {
-      "title": "공개 함수의 전제와 실제 delta",
-      "text": "of_resolve_phandles는 overlay=NULL이나 OF_DETACHED가 없으면 -EINVAL입니다. delta=live_tree_max_phandle()+1을 계산해 각 기존 ID에 더합니다. 따라서 live 최대가 100이고 overlay ID가 1이면 실제 결과는 102입니다. 문서의 시작 범위 표현만으로 101이라고 계산하면 안 됩니다. 별도 overflow 검사나 유효 ID 재검증은 이 지점에 없습니다."
+      "title": "더하는 값부터 정확히 계산해요",
+      "text": "of_resolve_phandles는 overlay가 NULL이거나 OF_DETACHED 표시가 없으면 -EINVAL이에요. 실제 덧셈 값은 현재 최대 번호+1이에요. 최대100에 새 노드 번호1이면 delta=101이고 결과는102예요. 문서의 범위 문장만 보고101이라고 계산하면 안 돼요. 이 지점에 별도의 덧셈 넘침 검사나 번호 재검사는 없어요."
     },
     {
-      "title": "Local 먼저,external 나중",
-      "text": "재배치 후 __local_fixups__ 자식을 첫 매칭에서 선택해 내부 참조를 조정합니다. 실패하면 out으로 갑니다. 이어 모든 자식을 순회해 __fixups__를 찾고 없으면 성공합니다. 이 함수 끝에는 local_fixups에 대한 별도 put이 보이지 않으므로 모든 탐색 참조가 같은 방식으로 정리된다고 일반화하지 않습니다. 외부 fixup이 없으면 live symbols 테이블도 필요하지 않습니다."
+      "title": "내부 연결을 먼저 고쳐요",
+      "text": "노드 번호를 옮긴 다음 첫 __local_fixups__ 자식을 찾아 내부 참조를 조정해요. 실패하면 종료 경로로 가요. 그다음 자식들을 돌며 __fixups__를 찾아요. 이것이 없으면 외부 연결을 고칠 필요가 없어 성공해요. 따라서 기존 트리의 이름표 목록도 필요하지 않아요. local_fixups를 마지막에 따로 put하는 줄은 보이지 않으므로 모든 탐색 참조의 정리가 같다고 말하지 않아요."
     },
     {
-      "title": "Live symbol 해석",
-      "text": "__fixups__가 있으면 /__symbols__를 찾아 없을 때 -EINVAL입니다. fixup 속성 중 name만 건너뛰고 각 속성명을 live symbol 속성명으로 사용하여 경로 문자열을 읽습니다. 읽기 오류를 로그와 함께 전파하고 경로 노드가 없으면 -ENOENT입니다. 노드의 phandle을 저장하고 put한 뒤 해당 fixup 목록의 사용 위치들을 수정합니다."
+      "title": "외부 이름표를 실제 번호로 바꿔요",
+      "text": "외부 수정표가 있으면 기존 트리의 /__symbols__를 찾아요. 없으면 -EINVAL이에요. 수정표 속성 중 name은 건너뛰고 나머지 속성명을 이름표로 삼아 실제 경로를 읽어요. 읽기 오류를 기록하고 돌려주며, 경로의 노드가 없으면 -ENOENT예요. 노드의 phandle을 저장한 뒤 참조를 돌려주고, 그 이름표가 쓰인 위치들을 저장한 번호로 고쳐요."
     },
     {
-      "title": "부분 변경과 정리",
-      "text": "오류이면 out에서 최종 오류 로그를 출력하고 tree_symbols 참조를 put한 뒤 err를 반환합니다. 앞서 변경한 노드 ID나 속성 값을 원래대로 복원하는 코드는 없습니다. 따라서 실패 결과의 overlay를 수정 전과 같은 객체로 보아서는 안 됩니다. 일부 external tuple의 노드 부재는 continue라는 점도 최종 0의 의미를 제한합니다."
+      "title": "실패해도 이미 쓴 값은 남아요",
+      "text": "끝에서는 오류가 있을 때만 오류 로그를 남기고 tree_symbols 참조를 돌려준 뒤 결과를 반환해요. 이미 바꾼 노드 번호나 속성을 옛 값으로 복원하는 코드는 없어요. 반환값이 오류라고 overlay도 수정 전 상태라고 보면 안 돼요. 외부 수정표에서 노드가 없는 항목은 건너뛰므로 성공0도 모든 항목을 반드시 썼다는 뜻은 아니에요."
     },
     {
-      "title": "동시성 문서와 범위",
-      "text": "함수 문서는 여러 overlay의 ID 범위 충돌을 막으려면 resolve와 apply를 단일 실행 흐름으로 보호해야 한다고 설명합니다. 이 함수 자체에는 그 전체 구간을 감싸는 mutex가 없으므로 live 최대 탐색 lock만으로 충분하다고 할 수 없습니다. 호출부의 직렬화 여부는 별도 확인 대상입니다."
+      "title": "번호 찾기 잠금만으로는 부족해요",
+      "text": "주석은 여러 overlay가 같은 번호 범위를 고르지 않도록 번호 해결부터 실제 적용까지 한 흐름씩 처리해야 한다고 설명해요. 이 함수에는 그 전체 구간을 감싸는 mutex 잠금이 없어요. 처음 최대 번호를 찾을 때의 잠금은 그 탐색만 보호해요. 호출하는 쪽에서 전체 순서를 어떻게 지키는지 따로 확인해야 해요."
     },
     {
-      "title": "전체 검토와 한계",
-      "text": "최대 ID,노드 재배치,external tuple 수정,이름 비교,local 재귀,공개 resolver와 GPL export 전체를 대조했습니다. 길이·offset 검사가 모든 malformed 입력을 방어한다고 주장하지 않습니다. 실제 overlay 적용·경쟁·실패 주입이나 phandle overflow 실험은 수행하지 않았습니다."
+      "title": "이 파일에서 확인한 범위를 구별해요",
+      "text": "최대 번호 찾기, 번호 옮기기, 외부 위치 수정, 이름 비교, 내부 재귀, 공개 함수와 GPL 공개 표시를 읽었어요. 길이 검사가 있다고 모든 잘못된 문자열·정수 입력이 안전해지는 것은 아니에요. 이 수업은 코드를 따라 설명한 것이며 실제 overlay 적용, 동시에 실행하는 경쟁, 오류 주입, 번호 넘침 실험을 했다는 주장은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "Live 최대 ID=100,overlay ID=1이면 이 코드의 재배치 결과는?",
+      "prompt": "기존 최대 번호100, 새 노드 번호1이면 이 코드가 만드는 번호는?",
       "options": [
+        "102예요",
+        "101이에요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 더할 값은100+1=101이고, 원래 번호1에 더하므로1+101=102예요. 더할 값과 최종 번호를 구별해요.",
+      "original_prompt": "Live 최대 ID=100,overlay ID=1이면 이 코드의 재배치 결과는?",
+      "original_options": [
         "102",
         "101"
       ],
-      "answer": 0,
-      "explanation": "delta는 최대값+1인 101이며 원래 ID 1에 이를 더합니다. 주석의 범위 설명과 실제 식을 구분합니다."
+      "original_explanation": "delta는 최대값+1인 101이며 원래 ID 1에 이를 더합니다. 주석의 범위 설명과 실제 식을 구분합니다."
     },
     {
-      "prompt": "외부 fixup의 참조 노드가 overlay에서 안 보이면?",
+      "prompt": "외부 수정표에 적힌 노드가 overlay 안에 없으면 어떻게 하나요?",
       "options": [
+        "항상 바로 -ENOENT로 끝나요",
+        "그 항목을 넘기고 다음 항목으로 가요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. refnode가 없으면 continue예요. 노드는 찾았지만 속성이 없을 때의 -ENOENT와 다른 경로예요.",
+      "original_prompt": "외부 fixup의 참조 노드가 overlay에서 안 보이면?",
+      "original_options": [
         "언제나 즉시 -ENOENT를 반환한다",
         "해당 tuple을 건너뛰고 다음으로 진행한다"
       ],
-      "answer": 1,
-      "explanation": "refnode가 NULL이면 continue입니다. 노드는 있지만 속성이 없는 경우의 -ENOENT와 다릅니다."
+      "original_explanation": "refnode가 NULL이면 continue입니다. 노드는 있지만 속성이 없는 경우의 -ENOENT와 다릅니다."
     },
     {
-      "prompt": "복제한 fixup 문자열 버퍼는 오류 반환 때도 정리되는가?",
+      "prompt": "복사한 수정표 문자열은 오류로 끝날 때도 해제되나요?",
       "options": [
+        "네. __free(kfree)가 함수 범위를 떠날 때 정리해요",
+        "아니요. 모든 오류 경로에서 영원히 남아요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 지역 변수 선언에 자동 정리 표시가 있어요. 이것은 다른 노드 참조를 put하는 일과 별개인 복제 버퍼의 정리 약속이에요.",
+      "original_prompt": "복제한 fixup 문자열 버퍼는 오류 반환 때도 정리되는가?",
+      "original_options": [
         "__free(kfree) 지역 변수 정리에 의해 해제된다",
         "아니다. 모든 오류 경로에서 영구 누수된다"
       ],
-      "answer": 0,
-      "explanation": "선언에 scope cleanup annotation이 있습니다. 다른 노드 참조 정리와 별개인 버퍼 수명입니다."
+      "original_explanation": "선언에 scope cleanup annotation이 있습니다. 다른 노드 참조 정리와 별개인 버퍼 수명입니다."
     },
     {
-      "prompt": "Local fixup 속성의 u32 값들은 무엇인가?",
+      "prompt": "내부 수정표의 u32 숫자는 무엇을 가리키나요?",
       "options": [
+        "항상 바꿔 넣을 새 번호 자체예요",
+        "같은 이름의 속성 안에서 번호가 적힌 바이트 위치예요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. off는 위치예요. 코드가 prop->value+off로 가서 그곳의 기존 번호에 delta를 더하므로 수정할 값 자체와 구별해야 해요.",
+      "original_prompt": "Local fixup 속성의 u32 값들은 무엇인가?",
+      "original_options": [
         "항상 새 phandle 번호 자체의 목록",
         "대응 속성 내부에서 phandle이 있는 바이트 offset 목록"
       ],
-      "answer": 1,
-      "explanation": "off를 읽어 prop->value+off의 기존 값에 delta를 더합니다. 위치 정보와 수정할 값은 다릅니다."
+      "original_explanation": "off를 읽어 prop->value+off의 기존 값에 delta를 더합니다. 위치 정보와 수정할 값은 다릅니다."
     },
     {
-      "prompt": "두 트리 노드 이름 비교에 full_name의 basename을 쓰는 이유는?",
+      "prompt": "노드 이름을 비교할 때 전체 경로의 마지막 이름을 쓰는 이유는?",
       "options": [
+        "@ 뒤의 장치 위치 표시까지 포함해서 비교하려고요",
+        "전체 경로를 무조건 파일로 열려고요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 일반 name에서는 @ 뒤가 빠질 수 있어 device@10과 device@20을 맞출 때 불충분해요. 파일 읽기와는 관계없어요.",
+      "original_prompt": "두 트리 노드 이름 비교에 full_name의 basename을 쓰는 이유는?",
+      "original_options": [
         "@ 뒤의 unit-address를 포함한 이름을 비교하려고",
         "전체 경로를 무조건 파일로 열려고"
       ],
-      "answer": 0,
-      "explanation": "주석은 일반 name이 @ 부분을 제거하는 점을 지적합니다. 파일 I/O와는 관련 없습니다."
+      "original_explanation": "주석은 일반 name이 @ 부분을 제거하는 점을 지적합니다. 파일 I/O와는 관련 없습니다."
     },
     {
-      "prompt": "중간 fixup 오류가 나면 이전 재배치를 자동 rollback하는가?",
+      "prompt": "중간에 오류가 나면 앞서 고친 번호도 자동으로 돌아오나요?",
       "options": [
+        "네. 오류 반환이 모든 쓰기를 취소해요",
+        "아니요. 옛 값을 복원하는 경로가 없어요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. return으로 오류를 알리는 일과 이미 쓴 메모리를 되돌리는 일은 달라요. 실패한 overlay도 일부 값은 바뀌어 있을 수 있어요.",
+      "original_prompt": "중간 fixup 오류가 나면 이전 재배치를 자동 rollback하는가?",
+      "original_options": [
         "그렇다. err 반환이 모든 메모리 쓰기를 자동 취소한다",
         "아니다. 이 파일에는 원래 값 복원 경로가 없다"
       ],
-      "answer": 1,
-      "explanation": "오류 반환과 transaction rollback은 다릅니다. 이미 수정한 객체 상태를 고려해야 합니다."
+      "original_explanation": "오류 반환과 transaction rollback은 다릅니다. 이미 수정한 객체 상태를 고려해야 합니다."
     },
     {
-      "prompt": "외부 __fixups__가 없으면 live /__symbols__도 반드시 필요한가?",
+      "prompt": "외부 __fixups__가 없어도 기존 /__symbols__가 반드시 필요한가요?",
       "options": [
+        "아니요. 이름표 목록을 찾기 전에 성공 경로로 가요",
+        "네. 모든 overlay는 이름표 목록이 없으면 실패해요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 내부 번호 정리 후 외부 수정표가 없으면 err=0으로 끝내요. 외부 이름을 해석할 때만 기존 이름표 목록이 필요해요.",
+      "original_prompt": "외부 __fixups__가 없으면 live /__symbols__도 반드시 필요한가?",
+      "original_options": [
         "아니다. symbols 조회 전에 성공 반환 경로로 간다",
         "그렇다. 어떤 overlay도 symbols 없이는 실패한다"
       ],
-      "answer": 0,
-      "explanation": "로컬 재배치와 외부 label 해결은 다른 단계입니다. 후자는 실제 외부 fixup이 있을 때 진행됩니다."
+      "original_explanation": "로컬 재배치와 외부 label 해결은 다른 단계입니다. 후자는 실제 외부 fixup이 있을 때 진행됩니다."
     },
     {
-      "prompt": "최대 ID 탐색의 spinlock이 resolve부터 apply까지 보호하는가?",
+      "prompt": "최대 번호를 찾을 때 잡는 잠금이 실제 적용 끝까지 이어지나요?",
       "options": [
+        "네. overlay 적용이 끝날 때까지 유지돼요",
+        "아니요. 최대값을 찾은 뒤 곧 풀어요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. lock과 unlock 사이에는 최대값 탐색만 있어요. 여러 overlay의 전체 번호 해결·적용 순서를 지키는 책임은 호출부까지 살펴야 해요.",
+      "original_prompt": "최대 ID 탐색의 spinlock이 resolve부터 apply까지 보호하는가?",
+      "original_options": [
         "그렇다. 전체 overlay 적용이 끝날 때까지 유지한다",
         "아니다. 최대값 순회 후 바로 해제한다"
       ],
-      "answer": 1,
-      "explanation": "보호 범위를 실제 lock/unlock 위치로 확인해야 합니다. 전체 직렬화는 호출부 계약과 관련됩니다."
+      "original_explanation": "보호 범위를 실제 lock/unlock 위치로 확인해야 합니다. 전체 직렬화는 호출부 계약과 관련됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "기존 최대 번호100과 새 지도 번호1을 적어요. 더할 값101을 먼저 구한 뒤 1+101=102를 계산해요. 새 번호와 그 번호가 적힌 위치를 서로 다른 색으로 표시하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Functions for dealing with DT resolution\n *\n * Copyright (C) 2012 Pantelis Antoniou <panto@antoniou-consulting.com>\n * Copyright (C) 2012 Texas Instruments Inc.\n */\n\n#define pr_fmt(fmt)\t\"OF: resolver: \" fmt\n\n#include <linux/cleanup.h>\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/of.h>\n#include <linux/of_device.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/slab.h>\n\n#include \"of_private.h\"\n\nstatic phandle live_tree_max_phandle(void)\n{\n\tstruct device_node *node;\n\tphandle phandle;\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&devtree_lock, flags);\n\tphandle = 0;\n\tfor_each_of_allnodes(node) {\n\t\tif (node->phandle != OF_PHANDLE_ILLEGAL &&\n\t\t\t\tnode->phandle > phandle)\n\t\t\tphandle = node->phandle;\n\t}\n\traw_spin_unlock_irqrestore(&devtree_lock, flags);\n\n\treturn phandle;\n}\n\nstatic void adjust_overlay_phandles(struct device_node *overlay,\n\t\tint phandle_delta)\n{\n\tstruct device_node *child;\n\tstruct property *prop;\n\tphandle phandle;\n\n\t/* adjust node's phandle in node */\n\tif (overlay->phandle != 0 && overlay->phandle != OF_PHANDLE_ILLEGAL)\n\t\toverlay->phandle += phandle_delta;\n\n\t/* copy adjusted phandle into *phandle properties */\n\tfor_each_property_of_node(overlay, prop) {\n\n\t\tif (of_prop_cmp(prop->name, \"phandle\") &&\n\t\t    of_prop_cmp(prop->name, \"linux,phandle\"))\n\t\t\tcontinue;\n\n\t\tif (prop->length < 4)\n\t\t\tcontinue;\n\n\t\tphandle = be32_to_cpup(prop->value);\n\t\tif (phandle == OF_PHANDLE_ILLEGAL)\n\t\t\tcontinue;\n\n\t\t*(__be32 *)prop->value = cpu_to_be32(overlay->phandle);\n\t}\n\n\tfor_each_child_of_node(overlay, child)\n\t\tadjust_overlay_phandles(child, phandle_delta);\n}\n\nstatic int update_usages_of_a_phandle_reference(struct device_node *overlay,\n\t\tstruct property *prop_fixup, phandle phandle)\n{\n\tstruct device_node *refnode;\n\tstruct property *prop;\n\tchar *value __free(kfree) = kmemdup(prop_fixup->value, prop_fixup->length, GFP_KERNEL);\n\tchar *cur, *end, *node_path, *prop_name, *s;\n\tint offset, len;\n\tint err = 0;\n\n\tif (!value)\n\t\treturn -ENOMEM;\n\n\t/* prop_fixup contains a list of tuples of path:property_name:offset */\n\tend = value + prop_fixup->length;\n\tfor (cur = value; cur < end; cur += len + 1) {\n\t\tlen = strlen(cur);\n\n\t\tnode_path = cur;\n\t\ts = strchr(cur, ':');\n\t\tif (!s)\n\t\t\treturn -EINVAL;\n\t\t*s++ = '\\0';\n\n\t\tprop_name = s;\n\t\ts = strchr(s, ':');\n\t\tif (!s)\n\t\t\treturn -EINVAL;\n\t\t*s++ = '\\0';\n\n\t\terr = kstrtoint(s, 10, &offset);\n\t\tif (err)\n\t\t\treturn err;\n\n\t\trefnode = __of_find_node_by_full_path(of_node_get(overlay), node_path);\n\t\tif (!refnode)\n\t\t\tcontinue;\n\n\t\tfor_each_property_of_node(refnode, prop) {\n\t\t\tif (!of_prop_cmp(prop->name, prop_name))\n\t\t\t\tbreak;\n\t\t}\n\t\tof_node_put(refnode);\n\n\t\tif (!prop)\n\t\t\treturn -ENOENT;\n\n\t\tif (offset < 0 || offset + sizeof(__be32) > prop->length)\n\t\t\treturn -EINVAL;\n\n\t\t*(__be32 *)(prop->value + offset) = cpu_to_be32(phandle);\n\t}\n\n\treturn 0;\n}\n\n/* compare nodes taking into account that 'name' strips out the @ part */\nstatic int node_name_cmp(const struct device_node *dn1,\n\t\tconst struct device_node *dn2)\n{\n\tconst char *n1 = kbasename(dn1->full_name);\n\tconst char *n2 = kbasename(dn2->full_name);\n\n\treturn of_node_cmp(n1, n2);\n}\n\n/*\n * Adjust the local phandle references by the given phandle delta.\n *\n * Subtree @local_fixups, which is overlay node __local_fixups__,\n * mirrors the fragment node structure at the root of the overlay.\n *\n * For each property in the fragments that contains a phandle reference,\n * @local_fixups has a property of the same name that contains a list\n * of offsets of the phandle reference(s) within the respective property\n * value(s).  The values at these offsets will be fixed up.\n */\nstatic int adjust_local_phandle_references(struct device_node *local_fixups,\n\t\tstruct device_node *overlay, int phandle_delta)\n{\n\tstruct device_node *overlay_child;\n\tstruct property *prop_fix, *prop;\n\tint err, i, count;\n\tunsigned int off;\n\n\tif (!local_fixups)\n\t\treturn 0;\n\n\tfor_each_property_of_node(local_fixups, prop_fix) {\n\n\t\t/* skip properties added automatically */\n\t\tif (!of_prop_cmp(prop_fix->name, \"name\") ||\n\t\t    !of_prop_cmp(prop_fix->name, \"phandle\") ||\n\t\t    !of_prop_cmp(prop_fix->name, \"linux,phandle\"))\n\t\t\tcontinue;\n\n\t\tif ((prop_fix->length % 4) != 0 || prop_fix->length == 0)\n\t\t\treturn -EINVAL;\n\t\tcount = prop_fix->length / sizeof(__be32);\n\n\t\tfor_each_property_of_node(overlay, prop) {\n\t\t\tif (!of_prop_cmp(prop->name, prop_fix->name))\n\t\t\t\tbreak;\n\t\t}\n\n\t\tif (!prop)\n\t\t\treturn -EINVAL;\n\n\t\tfor (i = 0; i < count; i++) {\n\t\t\toff = be32_to_cpu(((__be32 *)prop_fix->value)[i]);\n\t\t\tif ((off + 4) > prop->length)\n\t\t\t\treturn -EINVAL;\n\n\t\t\tbe32_add_cpu(prop->value + off, phandle_delta);\n\t\t}\n\t}\n\n\t/*\n\t * These nested loops recurse down two subtrees in parallel, where the\n\t * node names in the two subtrees match.\n\t *\n\t * The roots of the subtrees are the overlay's __local_fixups__ node\n\t * and the overlay's root node.\n\t */\n\tfor_each_child_of_node_scoped(local_fixups, child) {\n\n\t\tfor_each_child_of_node(overlay, overlay_child)\n\t\t\tif (!node_name_cmp(child, overlay_child)) {\n\t\t\t\tof_node_put(overlay_child);\n\t\t\t\tbreak;\n\t\t\t}\n\n\t\tif (!overlay_child)\n\t\t\treturn -EINVAL;\n\n\t\terr = adjust_local_phandle_references(child, overlay_child,\n\t\t\t\tphandle_delta);\n\t\tif (err)\n\t\t\treturn err;\n\t}\n\n\treturn 0;\n}\n\n/**\n * of_resolve_phandles - Relocate and resolve overlay against live tree\n *\n * @overlay:\tPointer to devicetree overlay to relocate and resolve\n *\n * Modify (relocate) values of local phandles in @overlay to a range that\n * does not conflict with the live expanded devicetree.  Update references\n * to the local phandles in @overlay.  Update (resolve) phandle references\n * in @overlay that refer to the live expanded devicetree.\n *\n * Phandle values in the live tree are in the range of\n * 1 .. live_tree_max_phandle().  The range of phandle values in the overlay\n * also begin with at 1.  Adjust the phandle values in the overlay to begin\n * at live_tree_max_phandle() + 1.  Update references to the phandles to\n * the adjusted phandle values.\n *\n * The name of each property in the \"__fixups__\" node in the overlay matches\n * the name of a symbol (a label) in the live tree.  The values of each\n * property in the \"__fixups__\" node is a list of the property values in the\n * overlay that need to be updated to contain the phandle reference\n * corresponding to that symbol in the live tree.  Update the references in\n * the overlay with the phandle values in the live tree.\n *\n * @overlay must be detached.\n *\n * Resolving and applying @overlay to the live expanded devicetree must be\n * protected by a mechanism to ensure that multiple overlays are processed\n * in a single threaded manner so that multiple overlays will not relocate\n * phandles to overlapping ranges.  The mechanism to enforce this is not\n * yet implemented.\n *\n * Return: %0 on success or a negative error value on error.\n */\nint of_resolve_phandles(struct device_node *overlay)\n{\n\tstruct device_node *child, *local_fixups, *refnode;\n\tstruct device_node *tree_symbols, *overlay_fixups;\n\tstruct property *prop;\n\tconst char *refpath;\n\tphandle phandle, phandle_delta;\n\tint err;\n\n\ttree_symbols = NULL;\n\n\tif (!overlay) {\n\t\tpr_err(\"null overlay\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tif (!of_node_check_flag(overlay, OF_DETACHED)) {\n\t\tpr_err(\"overlay not detached\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tphandle_delta = live_tree_max_phandle() + 1;\n\tadjust_overlay_phandles(overlay, phandle_delta);\n\n\tfor_each_child_of_node(overlay, local_fixups)\n\t\tif (of_node_name_eq(local_fixups, \"__local_fixups__\"))\n\t\t\tbreak;\n\n\terr = adjust_local_phandle_references(local_fixups, overlay, phandle_delta);\n\tif (err)\n\t\tgoto out;\n\n\toverlay_fixups = NULL;\n\n\tfor_each_child_of_node(overlay, child) {\n\t\tif (of_node_name_eq(child, \"__fixups__\"))\n\t\t\toverlay_fixups = child;\n\t}\n\n\tif (!overlay_fixups) {\n\t\terr = 0;\n\t\tgoto out;\n\t}\n\n\ttree_symbols = of_find_node_by_path(\"/__symbols__\");\n\tif (!tree_symbols) {\n\t\tpr_err(\"no symbols in root of device tree.\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tfor_each_property_of_node(overlay_fixups, prop) {\n\n\t\t/* skip properties added automatically */\n\t\tif (!of_prop_cmp(prop->name, \"name\"))\n\t\t\tcontinue;\n\n\t\terr = of_property_read_string(tree_symbols,\n\t\t\t\tprop->name, &refpath);\n\t\tif (err) {\n\t\t\tpr_err(\"node label '%s' not found in live devicetree symbols table\\n\",\n\t\t\t       prop->name);\n\t\t\tgoto out;\n\t\t}\n\n\t\trefnode = of_find_node_by_path(refpath);\n\t\tif (!refnode) {\n\t\t\terr = -ENOENT;\n\t\t\tgoto out;\n\t\t}\n\n\t\tphandle = refnode->phandle;\n\t\tof_node_put(refnode);\n\n\t\terr = update_usages_of_a_phandle_reference(overlay, prop, phandle);\n\t\tif (err)\n\t\t\tbreak;\n\t}\n\nout:\n\tif (err)\n\t\tpr_err(\"overlay phandle fixup failed: %d\\n\", err);\n\tof_node_put(tree_symbols);\n\n\treturn err;\n}\nEXPORT_SYMBOL_GPL(of_resolve_phandles);\n",
   "source_review": {
@@ -177,5 +221,214 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/resolver.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-258e0e4c6bfc8e34",
+    "path": "drivers/of/resolver.c",
+    "title": "OF resolver: 로컬 ID 재배치와 외부 symbol fixup",
+    "area": "장치 트리 · 링커 유사 재배치 · 문자열 파싱 · 참조 수명 · 동시성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "live tree 최대 ID 탐색,overlay 재배치,내부 offset 수정과 외부 label 연결 전체를 분석합니다.",
+    "guide": [
+      "이름으로 지정된 외부 참조와 overlay 내부 숫자 참조는 서로 다른 재배치 정보를 사용합니다.",
+      "트리 재귀,심볼 테이블,바이트 offset 파싱,엔디언과 부분 갱신을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성과 최대 phandle",
+        "text": "GPL-2.0 파일은 OF: resolver: 로그 접두부와 cleanup,kernel,module,OF,OF device,string,ctype,errno,slab 및 내부 헤더를 사용합니다. live_tree_max_phandle은 devtree_lock을 raw irqsave로 잡고 전체 노드의 최대 phandle을 찾되 OF_PHANDLE_ILLEGAL은 제외합니다. 초기 최대값은 0이고 탐색 후 잠금을 풉니다. 이 잠금만으로 이후 적용까지의 전체 과정을 직렬화하지는 않습니다."
+      },
+      {
+        "title": "노드 ID 재배치",
+        "text": "adjust_overlay_phandles는 현재 노드의 phandle이 0도 illegal도 아니면 delta를 더합니다. phandle 또는 linux,phandle 속성 중 길이가 4 이상이고 첫 값이 illegal이 아닌 속성에는 조정된 노드 필드를 big endian으로 기록합니다. 모든 속성의 모든 cell에 delta를 더하는 것이 아닙니다. 이후 자식마다 재귀 호출합니다."
+      },
+      {
+        "title": "외부 fixup 문자열 복사",
+        "text": "update_usages는 fixup 속성을 kmemdup하고 __free(kfree) 지역 변수로 관리하므로 정상·오류 반환에서 복제 버퍼가 해제됩니다. 값은 NUL로 구분된 path:property:offset 목록으로 처리합니다. 각 항목 길이를 strlen으로 얻고 두 colon을 NUL로 바꿔 경로·속성·offset을 나눕니다. 길이 끝 안에 NUL이 있는지 strnlen으로 확인하거나 복제 시 종료 문자를 덧붙이는 코드는 없습니다."
+      },
+      {
+        "title": "외부 참조 위치의 검증",
+        "text": "colon이 없으면 -EINVAL,10진 kstrtoint 오류는 해당 오류를 반환합니다. overlay의 참조를 얻어 내부 full-path 검색에 넘기고 노드가 없으면 오류 대신 다음 tuple로 continue합니다. 노드는 찾았지만 속성이 없으면 -ENOENT입니다. 찾은 노드 참조는 속성 검색 후 put하며 detached tree의 수명 보호 전제를 사용합니다. offset<0 또는 4바이트 쓰기가 속성 길이를 넘으면 -EINVAL이고 통과하면 대상 phandle을 big endian으로 기록합니다."
+      },
+      {
+        "title": "Full name 비교",
+        "text": "node_name_cmp는 두 노드 full_name의 kbasename을 of_node_cmp로 비교합니다. 주석은 일반 name이 @ 부분을 제거할 수 있기 때문이라고 설명합니다. node@unit-address의 suffix를 포함한 이름을 사용하여 두 하위 트리를 대응시킵니다."
+      },
+      {
+        "title": "Local fixup 속성",
+        "text": "local_fixups가 NULL이면 성공입니다. name,phandle,linux,phandle 자동 속성은 건너뛰고 나머지는 길이가 양수이면서 4의 배수인지 확인합니다. 대응 overlay 속성을 같은 이름으로 찾아 없으면 -EINVAL입니다. 각 big-endian u32 offset 위치의 값에 be32_add_cpu로 delta를 더합니다. off+4 경계 검사는 있지만 unsigned 덧셈 overflow나 offset 정렬을 별도로 검사하는 helper는 없습니다."
+      },
+      {
+        "title": "두 트리의 병렬 재귀",
+        "text": "local fixup 자식은 scoped iterator로 순회하고 각 자식마다 overlay 자식 목록에서 같은 basename을 선형 검색합니다. 매칭 자식의 순회 참조를 put한 뒤 detached overlay 안의 노드 주소로 재귀합니다. 대응 자식이 없거나 재귀가 실패하면 오류를 반환합니다. 동일 폭의 자식 목록을 매번 검색하므로 이 대응 단계는 단순한 단일 hash lookup이 아닙니다."
+      },
+      {
+        "title": "공개 함수의 전제와 실제 delta",
+        "text": "of_resolve_phandles는 overlay=NULL이나 OF_DETACHED가 없으면 -EINVAL입니다. delta=live_tree_max_phandle()+1을 계산해 각 기존 ID에 더합니다. 따라서 live 최대가 100이고 overlay ID가 1이면 실제 결과는 102입니다. 문서의 시작 범위 표현만으로 101이라고 계산하면 안 됩니다. 별도 overflow 검사나 유효 ID 재검증은 이 지점에 없습니다."
+      },
+      {
+        "title": "Local 먼저,external 나중",
+        "text": "재배치 후 __local_fixups__ 자식을 첫 매칭에서 선택해 내부 참조를 조정합니다. 실패하면 out으로 갑니다. 이어 모든 자식을 순회해 __fixups__를 찾고 없으면 성공합니다. 이 함수 끝에는 local_fixups에 대한 별도 put이 보이지 않으므로 모든 탐색 참조가 같은 방식으로 정리된다고 일반화하지 않습니다. 외부 fixup이 없으면 live symbols 테이블도 필요하지 않습니다."
+      },
+      {
+        "title": "Live symbol 해석",
+        "text": "__fixups__가 있으면 /__symbols__를 찾아 없을 때 -EINVAL입니다. fixup 속성 중 name만 건너뛰고 각 속성명을 live symbol 속성명으로 사용하여 경로 문자열을 읽습니다. 읽기 오류를 로그와 함께 전파하고 경로 노드가 없으면 -ENOENT입니다. 노드의 phandle을 저장하고 put한 뒤 해당 fixup 목록의 사용 위치들을 수정합니다."
+      },
+      {
+        "title": "부분 변경과 정리",
+        "text": "오류이면 out에서 최종 오류 로그를 출력하고 tree_symbols 참조를 put한 뒤 err를 반환합니다. 앞서 변경한 노드 ID나 속성 값을 원래대로 복원하는 코드는 없습니다. 따라서 실패 결과의 overlay를 수정 전과 같은 객체로 보아서는 안 됩니다. 일부 external tuple의 노드 부재는 continue라는 점도 최종 0의 의미를 제한합니다."
+      },
+      {
+        "title": "동시성 문서와 범위",
+        "text": "함수 문서는 여러 overlay의 ID 범위 충돌을 막으려면 resolve와 apply를 단일 실행 흐름으로 보호해야 한다고 설명합니다. 이 함수 자체에는 그 전체 구간을 감싸는 mutex가 없으므로 live 최대 탐색 lock만으로 충분하다고 할 수 없습니다. 호출부의 직렬화 여부는 별도 확인 대상입니다."
+      },
+      {
+        "title": "전체 검토와 한계",
+        "text": "최대 ID,노드 재배치,external tuple 수정,이름 비교,local 재귀,공개 resolver와 GPL export 전체를 대조했습니다. 길이·offset 검사가 모든 malformed 입력을 방어한다고 주장하지 않습니다. 실제 overlay 적용·경쟁·실패 주입이나 phandle overflow 실험은 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "Live 최대 ID=100,overlay ID=1이면 이 코드의 재배치 결과는?",
+        "options": [
+          "102",
+          "101"
+        ],
+        "answer": 0,
+        "explanation": "delta는 최대값+1인 101이며 원래 ID 1에 이를 더합니다. 주석의 범위 설명과 실제 식을 구분합니다."
+      },
+      {
+        "prompt": "외부 fixup의 참조 노드가 overlay에서 안 보이면?",
+        "options": [
+          "언제나 즉시 -ENOENT를 반환한다",
+          "해당 tuple을 건너뛰고 다음으로 진행한다"
+        ],
+        "answer": 1,
+        "explanation": "refnode가 NULL이면 continue입니다. 노드는 있지만 속성이 없는 경우의 -ENOENT와 다릅니다."
+      },
+      {
+        "prompt": "복제한 fixup 문자열 버퍼는 오류 반환 때도 정리되는가?",
+        "options": [
+          "__free(kfree) 지역 변수 정리에 의해 해제된다",
+          "아니다. 모든 오류 경로에서 영구 누수된다"
+        ],
+        "answer": 0,
+        "explanation": "선언에 scope cleanup annotation이 있습니다. 다른 노드 참조 정리와 별개인 버퍼 수명입니다."
+      },
+      {
+        "prompt": "Local fixup 속성의 u32 값들은 무엇인가?",
+        "options": [
+          "항상 새 phandle 번호 자체의 목록",
+          "대응 속성 내부에서 phandle이 있는 바이트 offset 목록"
+        ],
+        "answer": 1,
+        "explanation": "off를 읽어 prop->value+off의 기존 값에 delta를 더합니다. 위치 정보와 수정할 값은 다릅니다."
+      },
+      {
+        "prompt": "두 트리 노드 이름 비교에 full_name의 basename을 쓰는 이유는?",
+        "options": [
+          "@ 뒤의 unit-address를 포함한 이름을 비교하려고",
+          "전체 경로를 무조건 파일로 열려고"
+        ],
+        "answer": 0,
+        "explanation": "주석은 일반 name이 @ 부분을 제거하는 점을 지적합니다. 파일 I/O와는 관련 없습니다."
+      },
+      {
+        "prompt": "중간 fixup 오류가 나면 이전 재배치를 자동 rollback하는가?",
+        "options": [
+          "그렇다. err 반환이 모든 메모리 쓰기를 자동 취소한다",
+          "아니다. 이 파일에는 원래 값 복원 경로가 없다"
+        ],
+        "answer": 1,
+        "explanation": "오류 반환과 transaction rollback은 다릅니다. 이미 수정한 객체 상태를 고려해야 합니다."
+      },
+      {
+        "prompt": "외부 __fixups__가 없으면 live /__symbols__도 반드시 필요한가?",
+        "options": [
+          "아니다. symbols 조회 전에 성공 반환 경로로 간다",
+          "그렇다. 어떤 overlay도 symbols 없이는 실패한다"
+        ],
+        "answer": 0,
+        "explanation": "로컬 재배치와 외부 label 해결은 다른 단계입니다. 후자는 실제 외부 fixup이 있을 때 진행됩니다."
+      },
+      {
+        "prompt": "최대 ID 탐색의 spinlock이 resolve부터 apply까지 보호하는가?",
+        "options": [
+          "그렇다. 전체 overlay 적용이 끝날 때까지 유지한다",
+          "아니다. 최대값 순회 후 바로 해제한다"
+        ],
+        "answer": 1,
+        "explanation": "보호 범위를 실제 lock/unlock 위치로 확인해야 합니다. 전체 직렬화는 호출부 계약과 관련됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Functions for dealing with DT resolution\n *\n * Copyright (C) 2012 Pantelis Antoniou <panto@antoniou-consulting.com>\n * Copyright (C) 2012 Texas Instruments Inc.\n */\n\n#define pr_fmt(fmt)\t\"OF: resolver: \" fmt\n\n#include <linux/cleanup.h>\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/of.h>\n#include <linux/of_device.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/slab.h>\n\n#include \"of_private.h\"\n\nstatic phandle live_tree_max_phandle(void)\n{\n\tstruct device_node *node;\n\tphandle phandle;\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&devtree_lock, flags);\n\tphandle = 0;\n\tfor_each_of_allnodes(node) {\n\t\tif (node->phandle != OF_PHANDLE_ILLEGAL &&\n\t\t\t\tnode->phandle > phandle)\n\t\t\tphandle = node->phandle;\n\t}\n\traw_spin_unlock_irqrestore(&devtree_lock, flags);\n\n\treturn phandle;\n}\n\nstatic void adjust_overlay_phandles(struct device_node *overlay,\n\t\tint phandle_delta)\n{\n\tstruct device_node *child;\n\tstruct property *prop;\n\tphandle phandle;\n\n\t/* adjust node's phandle in node */\n\tif (overlay->phandle != 0 && overlay->phandle != OF_PHANDLE_ILLEGAL)\n\t\toverlay->phandle += phandle_delta;\n\n\t/* copy adjusted phandle into *phandle properties */\n\tfor_each_property_of_node(overlay, prop) {\n\n\t\tif (of_prop_cmp(prop->name, \"phandle\") &&\n\t\t    of_prop_cmp(prop->name, \"linux,phandle\"))\n\t\t\tcontinue;\n\n\t\tif (prop->length < 4)\n\t\t\tcontinue;\n\n\t\tphandle = be32_to_cpup(prop->value);\n\t\tif (phandle == OF_PHANDLE_ILLEGAL)\n\t\t\tcontinue;\n\n\t\t*(__be32 *)prop->value = cpu_to_be32(overlay->phandle);\n\t}\n\n\tfor_each_child_of_node(overlay, child)\n\t\tadjust_overlay_phandles(child, phandle_delta);\n}\n\nstatic int update_usages_of_a_phandle_reference(struct device_node *overlay,\n\t\tstruct property *prop_fixup, phandle phandle)\n{\n\tstruct device_node *refnode;\n\tstruct property *prop;\n\tchar *value __free(kfree) = kmemdup(prop_fixup->value, prop_fixup->length, GFP_KERNEL);\n\tchar *cur, *end, *node_path, *prop_name, *s;\n\tint offset, len;\n\tint err = 0;\n\n\tif (!value)\n\t\treturn -ENOMEM;\n\n\t/* prop_fixup contains a list of tuples of path:property_name:offset */\n\tend = value + prop_fixup->length;\n\tfor (cur = value; cur < end; cur += len + 1) {\n\t\tlen = strlen(cur);\n\n\t\tnode_path = cur;\n\t\ts = strchr(cur, ':');\n\t\tif (!s)\n\t\t\treturn -EINVAL;\n\t\t*s++ = '\\0';\n\n\t\tprop_name = s;\n\t\ts = strchr(s, ':');\n\t\tif (!s)\n\t\t\treturn -EINVAL;\n\t\t*s++ = '\\0';\n\n\t\terr = kstrtoint(s, 10, &offset);\n\t\tif (err)\n\t\t\treturn err;\n\n\t\trefnode = __of_find_node_by_full_path(of_node_get(overlay), node_path);\n\t\tif (!refnode)\n\t\t\tcontinue;\n\n\t\tfor_each_property_of_node(refnode, prop) {\n\t\t\tif (!of_prop_cmp(prop->name, prop_name))\n\t\t\t\tbreak;\n\t\t}\n\t\tof_node_put(refnode);\n\n\t\tif (!prop)\n\t\t\treturn -ENOENT;\n\n\t\tif (offset < 0 || offset + sizeof(__be32) > prop->length)\n\t\t\treturn -EINVAL;\n\n\t\t*(__be32 *)(prop->value + offset) = cpu_to_be32(phandle);\n\t}\n\n\treturn 0;\n}\n\n/* compare nodes taking into account that 'name' strips out the @ part */\nstatic int node_name_cmp(const struct device_node *dn1,\n\t\tconst struct device_node *dn2)\n{\n\tconst char *n1 = kbasename(dn1->full_name);\n\tconst char *n2 = kbasename(dn2->full_name);\n\n\treturn of_node_cmp(n1, n2);\n}\n\n/*\n * Adjust the local phandle references by the given phandle delta.\n *\n * Subtree @local_fixups, which is overlay node __local_fixups__,\n * mirrors the fragment node structure at the root of the overlay.\n *\n * For each property in the fragments that contains a phandle reference,\n * @local_fixups has a property of the same name that contains a list\n * of offsets of the phandle reference(s) within the respective property\n * value(s).  The values at these offsets will be fixed up.\n */\nstatic int adjust_local_phandle_references(struct device_node *local_fixups,\n\t\tstruct device_node *overlay, int phandle_delta)\n{\n\tstruct device_node *overlay_child;\n\tstruct property *prop_fix, *prop;\n\tint err, i, count;\n\tunsigned int off;\n\n\tif (!local_fixups)\n\t\treturn 0;\n\n\tfor_each_property_of_node(local_fixups, prop_fix) {\n\n\t\t/* skip properties added automatically */\n\t\tif (!of_prop_cmp(prop_fix->name, \"name\") ||\n\t\t    !of_prop_cmp(prop_fix->name, \"phandle\") ||\n\t\t    !of_prop_cmp(prop_fix->name, \"linux,phandle\"))\n\t\t\tcontinue;\n\n\t\tif ((prop_fix->length % 4) != 0 || prop_fix->length == 0)\n\t\t\treturn -EINVAL;\n\t\tcount = prop_fix->length / sizeof(__be32);\n\n\t\tfor_each_property_of_node(overlay, prop) {\n\t\t\tif (!of_prop_cmp(prop->name, prop_fix->name))\n\t\t\t\tbreak;\n\t\t}\n\n\t\tif (!prop)\n\t\t\treturn -EINVAL;\n\n\t\tfor (i = 0; i < count; i++) {\n\t\t\toff = be32_to_cpu(((__be32 *)prop_fix->value)[i]);\n\t\t\tif ((off + 4) > prop->length)\n\t\t\t\treturn -EINVAL;\n\n\t\t\tbe32_add_cpu(prop->value + off, phandle_delta);\n\t\t}\n\t}\n\n\t/*\n\t * These nested loops recurse down two subtrees in parallel, where the\n\t * node names in the two subtrees match.\n\t *\n\t * The roots of the subtrees are the overlay's __local_fixups__ node\n\t * and the overlay's root node.\n\t */\n\tfor_each_child_of_node_scoped(local_fixups, child) {\n\n\t\tfor_each_child_of_node(overlay, overlay_child)\n\t\t\tif (!node_name_cmp(child, overlay_child)) {\n\t\t\t\tof_node_put(overlay_child);\n\t\t\t\tbreak;\n\t\t\t}\n\n\t\tif (!overlay_child)\n\t\t\treturn -EINVAL;\n\n\t\terr = adjust_local_phandle_references(child, overlay_child,\n\t\t\t\tphandle_delta);\n\t\tif (err)\n\t\t\treturn err;\n\t}\n\n\treturn 0;\n}\n\n/**\n * of_resolve_phandles - Relocate and resolve overlay against live tree\n *\n * @overlay:\tPointer to devicetree overlay to relocate and resolve\n *\n * Modify (relocate) values of local phandles in @overlay to a range that\n * does not conflict with the live expanded devicetree.  Update references\n * to the local phandles in @overlay.  Update (resolve) phandle references\n * in @overlay that refer to the live expanded devicetree.\n *\n * Phandle values in the live tree are in the range of\n * 1 .. live_tree_max_phandle().  The range of phandle values in the overlay\n * also begin with at 1.  Adjust the phandle values in the overlay to begin\n * at live_tree_max_phandle() + 1.  Update references to the phandles to\n * the adjusted phandle values.\n *\n * The name of each property in the \"__fixups__\" node in the overlay matches\n * the name of a symbol (a label) in the live tree.  The values of each\n * property in the \"__fixups__\" node is a list of the property values in the\n * overlay that need to be updated to contain the phandle reference\n * corresponding to that symbol in the live tree.  Update the references in\n * the overlay with the phandle values in the live tree.\n *\n * @overlay must be detached.\n *\n * Resolving and applying @overlay to the live expanded devicetree must be\n * protected by a mechanism to ensure that multiple overlays are processed\n * in a single threaded manner so that multiple overlays will not relocate\n * phandles to overlapping ranges.  The mechanism to enforce this is not\n * yet implemented.\n *\n * Return: %0 on success or a negative error value on error.\n */\nint of_resolve_phandles(struct device_node *overlay)\n{\n\tstruct device_node *child, *local_fixups, *refnode;\n\tstruct device_node *tree_symbols, *overlay_fixups;\n\tstruct property *prop;\n\tconst char *refpath;\n\tphandle phandle, phandle_delta;\n\tint err;\n\n\ttree_symbols = NULL;\n\n\tif (!overlay) {\n\t\tpr_err(\"null overlay\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tif (!of_node_check_flag(overlay, OF_DETACHED)) {\n\t\tpr_err(\"overlay not detached\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tphandle_delta = live_tree_max_phandle() + 1;\n\tadjust_overlay_phandles(overlay, phandle_delta);\n\n\tfor_each_child_of_node(overlay, local_fixups)\n\t\tif (of_node_name_eq(local_fixups, \"__local_fixups__\"))\n\t\t\tbreak;\n\n\terr = adjust_local_phandle_references(local_fixups, overlay, phandle_delta);\n\tif (err)\n\t\tgoto out;\n\n\toverlay_fixups = NULL;\n\n\tfor_each_child_of_node(overlay, child) {\n\t\tif (of_node_name_eq(child, \"__fixups__\"))\n\t\t\toverlay_fixups = child;\n\t}\n\n\tif (!overlay_fixups) {\n\t\terr = 0;\n\t\tgoto out;\n\t}\n\n\ttree_symbols = of_find_node_by_path(\"/__symbols__\");\n\tif (!tree_symbols) {\n\t\tpr_err(\"no symbols in root of device tree.\\n\");\n\t\terr = -EINVAL;\n\t\tgoto out;\n\t}\n\n\tfor_each_property_of_node(overlay_fixups, prop) {\n\n\t\t/* skip properties added automatically */\n\t\tif (!of_prop_cmp(prop->name, \"name\"))\n\t\t\tcontinue;\n\n\t\terr = of_property_read_string(tree_symbols,\n\t\t\t\tprop->name, &refpath);\n\t\tif (err) {\n\t\t\tpr_err(\"node label '%s' not found in live devicetree symbols table\\n\",\n\t\t\t       prop->name);\n\t\t\tgoto out;\n\t\t}\n\n\t\trefnode = of_find_node_by_path(refpath);\n\t\tif (!refnode) {\n\t\t\terr = -ENOENT;\n\t\t\tgoto out;\n\t\t}\n\n\t\tphandle = refnode->phandle;\n\t\tof_node_put(refnode);\n\n\t\terr = update_usages_of_a_phandle_reference(overlay, prop, phandle);\n\t\tif (err)\n\t\t\tbreak;\n\t}\n\nout:\n\tif (err)\n\t\tpr_err(\"overlay phandle fixup failed: %d\\n\", err);\n\tof_node_put(tree_symbols);\n\n\treturn err;\n}\nEXPORT_SYMBOL_GPL(of_resolve_phandles);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "535a574dcce7a0b87a0561442244b74a0e64b0f9b6e26964c902f59a42f89c6b",
+      "scope": "whole-file",
+      "line_count": 338,
+      "authoring_source": "course/file_units/of_phandle_resolver.py",
+      "sections": [
+        "구성과 최대 phandle",
+        "노드 ID 재배치",
+        "외부 fixup 문자열 복사",
+        "외부 참조 위치의 검증",
+        "Full name 비교",
+        "Local fixup 속성",
+        "두 트리의 병렬 재귀",
+        "공개 함수의 전제와 실제 delta",
+        "Local 먼저,external 나중",
+        "Live symbol 해석",
+        "부분 변경과 정리",
+        "동시성 문서와 범위",
+        "전체 검토와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/resolver.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "기존 지도에 새 건물 지도를 붙이려면 건물 번호가 겹치지 않아야 해요. 번호를 바꾼 뒤 그 건물을 가리키는 안내판도 함께 고쳐야 해요.",
+    "meaning": "장치 트리에 붙일 overlay의 노드 번호를 옮기고, 내부와 외부를 가리키는 번호를 고쳐요. 도중 실패해도 앞서 고친 값은 자동으로 원래대로 돌아가지 않아요.",
+    "exercise": "기존 최대 번호100과 새 지도 번호1을 적어요. 더할 값101을 먼저 구한 뒤 1+101=102를 계산해요. 새 번호와 그 번호가 적힌 위치를 서로 다른 색으로 표시하세요."
+  },
+  "goal": "장치 트리에 붙일 overlay의 노드 번호를 옮기고, 내부와 외부를 가리키는 번호를 고쳐요. 도중 실패해도 앞서 고친 값은 자동으로 원래대로 돌아가지 않아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "기존 최대 번호100과 새 지도 번호1을 적어요. 더할 값101을 먼저 구한 뒤 1+101=102를 계산해요. 새 번호와 그 번호가 적힌 위치를 서로 다른 색으로 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "ed22aa9ed3335fb50a031f34e0967862650d5c8ae64e51dbb1b7586f852e26fd",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 8,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

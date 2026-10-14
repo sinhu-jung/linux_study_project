@@ -5,67 +5,81 @@
   "area": "정수 알고리즘 · 테스트·빌드 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "지수 횟수만큼 반복하지 않고 이진 표현을 이용해 곱셈 수를 줄입니다.",
+  "intro": "지수 비트를 이용한 거듭제곱과 u64 범위를 넘을 때의 결과를 설명합니다.",
   "guide": [
-    "result=1에서 시작하여 exp의 최하위 비트가1이면 base를 곱합니다. exp를 오른쪽으로 한 비트 옮기고 base를 제곱하는 과정을 exp가0이 될 때까지 반복합니다.",
-    "base와 결과는 u64, exp는 unsigned int입니다. 음수 지수·실수 계산·임의 정밀도는 지원하지 않습니다. u64 범위를 넘는 곱은 모듈러 산술로 순환합니다."
+    "지수는 밑을 몇 번 곱하는지를 뜻합니다. 5의 5승은 3125입니다.",
+    "exp의 맨 아래 비트가 1이면 결과에 현재 밑을 곱합니다. 매번 지수를 오른쪽으로 한 칸 옮기고 밑을 제곱합니다.",
+    "u64는 0부터 2^64-1까지 담습니다. 범위를 넘으면 높은 비트를 버리며 별도 오류를 돌려주지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체",
-      "text": "SPDX, pwm_bl에서 유래했다는 주석, export/math/types 헤더, int_pow 함수, GPL export가 전부입니다. 별도 상태·메모리 할당·재귀 호출이 없습니다."
+      "text": "GPL, 화면 밝기 코드에서 유래했다는 주석, 관련 헤더, int_pow와 GPL 외부 공개가 전부입니다. 저장된 전역 상태, 메모리 할당, 재귀 호출은 없습니다."
     },
     {
       "title": "5의5승 추적",
-      "text": "초기(result,base,exp)=(1,5,5)입니다. 첫 반복 뒤(5,25,2), 둘째 뒤(5,625,1), 셋째 뒤(3125,390625,0)입니다. 마지막 base 제곱도 실행하지만 이후 반환에는 사용하지 않습니다."
+      "text": "처음은 (1,5,5)입니다. 첫 반복 뒤 (5,25,2), 둘째 뒤 (5,625,1), 셋째 뒤 (3125,390625,0)입니다. 마지막에도 밑의 제곱은 수행하지만 지수가 0이어서 그 값은 반환 계산에 더 쓰지 않습니다."
     },
     {
       "title": "불변식과 비용",
-      "text": "반복 진입 시 result×base^exp는 원래 거듭제곱과 같습니다. 고정 폭 계산에서는 이 등식도 2^64를 법으로 해석합니다. 지수의 한 비트를 매번 없애므로 exp>0에서 반복 횟수는 floor(log2(exp))+1이고 저장 공간은 O(1)입니다."
+      "text": "반복에 들어갈 때 result×base^exp는 처음 거듭제곱과 같습니다. 고정 64비트에서는 2^64로 나눈 나머지라는 의미로 이 규칙을 읽습니다. 지수 한 비트를 매번 없애므로 양의 지수에서 반복 횟수는 floor(log2(exp))+1이고 추가 공간은 일정합니다."
     },
     {
       "title": "영 입력과 범위",
-      "text": "exp=0이면 루프 없이1을 반환하므로 이 API의 int_pow(0,0)도1입니다. base=0이고 양의 지수면0입니다. int_pow(2,63)은2^63이지만 int_pow(2,64)는 u64에서0이며 오류 코드는 없습니다. 지수만큼 선형 곱셈하는 독립 구현과 비교하면 비트 분기 오류를 찾는 데 도움이 됩니다."
+      "text": "지수가 0이면 반복 없이 1이므로 이 함수의 0^0도 1입니다. 밑 0에 양의 지수는 0입니다. 2^63은 담을 수 있지만 2^64는 u64에서 0으로 돌아갑니다. 선형으로 곱하는 별도 참조 계산과 비교하면 비트 분기 실수를 찾을 수 있지만 넘침에 대한 별도 오류 반환은 없습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "int_pow(0,0)의 실제 반환값은?",
+      "prompt": "이 코드에서 int_pow(0,0)은 무엇인가요?",
       "options": [
+        "1입니다.",
+        "오류 코드입니다."
+      ],
+      "answer": 0,
+      "explanation": "결과를 1로 시작하고 지수 0이면 반복하지 않습니다.",
+      "original_prompt": "int_pow(0,0)의 실제 반환값은?",
+      "original_options": [
         "1",
         "오류 코드"
       ],
-      "answer": 0,
-      "explanation": "result를1로 초기화하고 exp가0이면 반복에 들어가지 않습니다. 수학에서의 관례와 별개로 코드의 반환 규약입니다."
+      "original_explanation": "result를1로 초기화하고 exp가0이면 반복에 들어가지 않습니다. 수학에서의 관례와 별개로 코드의 반환 규약입니다."
     },
     {
-      "prompt": "5의5승 계산에서 exp=2인 반복은 result에 base를 곱하는가?",
+      "prompt": "5의 5승 계산 중 exp=2일 때 결과에 밑을 곱하나요?",
       "options": [
+        "예. 모든 반복에서 곱합니다.",
+        "아니요. 맨 아래 비트가 0입니다."
+      ],
+      "answer": 1,
+      "explanation": "exp&1이 거짓이면 결과는 유지하고 지수 이동과 밑 제곱만 합니다.",
+      "original_prompt": "5의5승 계산에서 exp=2인 반복은 result에 base를 곱하는가?",
+      "original_options": [
         "그렇다. 모든 반복에서 result를 곱한다",
         "아니다. 최하위 비트가0이다"
       ],
-      "answer": 1,
-      "explanation": "exp&1이 거짓이면 result를 유지하고 exp 시프트와 base 제곱만 수행합니다."
+      "original_explanation": "exp&1이 거짓이면 result를 유지하고 exp 시프트와 base 제곱만 수행합니다."
     },
     {
-      "prompt": "u64 결과로 int_pow(2,64)는?",
+      "prompt": "u64 결과의 int_pow(2,64)는 무엇인가요?",
       "options": [
+        "0입니다.",
+        "정확한 2^64를 그대로 담습니다."
+      ],
+      "answer": 0,
+      "explanation": "표현 범위를 넘는 위쪽 비트가 버려져 0이 됩니다.",
+      "original_prompt": "u64 결과로 int_pow(2,64)는?",
+      "original_options": [
         "0",
         "정확한2^64를 그대로 반환한다"
       ],
-      "answer": 0,
-      "explanation": "u64의 표현 범위는0부터2^64-1입니다. unsigned 곱셈은2^64를 법으로 순환하며 별도 오버플로 오류 반환이 없습니다."
+      "original_explanation": "u64의 표현 범위는0부터2^64-1입니다. unsigned 곱셈은2^64를 법으로 순환하며 별도 오버플로 오류 반환이 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "(result, base, exp)를 (1,5,5)에서 시작해 반복마다 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * An integer based power function\n *\n * Derived from drivers/video/backlight/pwm_bl.c\n */\n\n#include <linux/export.h>\n#include <linux/math.h>\n#include <linux/types.h>\n\n/**\n * int_pow - computes the exponentiation of the given base and exponent\n * @base: base which will be raised to the given power\n * @exp: power to be raised to\n *\n * Computes: pow(base, exp), i.e. @base raised to the @exp power\n */\nu64 int_pow(u64 base, unsigned int exp)\n{\n\tu64 result = 1;\n\n\twhile (exp) {\n\t\tif (exp & 1)\n\t\t\tresult *= base;\n\t\texp >>= 1;\n\t\tbase *= base;\n\t}\n\n\treturn result;\n}\nEXPORT_SYMBOL_GPL(int_pow);\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/int_pow.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-fb8addace5571f65",
+    "path": "lib/math/int_pow.c",
+    "title": "정수 거듭제곱 전체: 지수의 비트를 소비하는 반복 제곱",
+    "area": "정수 알고리즘 · 테스트·빌드 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "지수 횟수만큼 반복하지 않고 이진 표현을 이용해 곱셈 수를 줄입니다.",
+    "guide": [
+      "result=1에서 시작하여 exp의 최하위 비트가1이면 base를 곱합니다. exp를 오른쪽으로 한 비트 옮기고 base를 제곱하는 과정을 exp가0이 될 때까지 반복합니다.",
+      "base와 결과는 u64, exp는 unsigned int입니다. 음수 지수·실수 계산·임의 정밀도는 지원하지 않습니다. u64 범위를 넘는 곱은 모듈러 산술로 순환합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "SPDX, pwm_bl에서 유래했다는 주석, export/math/types 헤더, int_pow 함수, GPL export가 전부입니다. 별도 상태·메모리 할당·재귀 호출이 없습니다."
+      },
+      {
+        "title": "5의5승 추적",
+        "text": "초기(result,base,exp)=(1,5,5)입니다. 첫 반복 뒤(5,25,2), 둘째 뒤(5,625,1), 셋째 뒤(3125,390625,0)입니다. 마지막 base 제곱도 실행하지만 이후 반환에는 사용하지 않습니다."
+      },
+      {
+        "title": "불변식과 비용",
+        "text": "반복 진입 시 result×base^exp는 원래 거듭제곱과 같습니다. 고정 폭 계산에서는 이 등식도 2^64를 법으로 해석합니다. 지수의 한 비트를 매번 없애므로 exp>0에서 반복 횟수는 floor(log2(exp))+1이고 저장 공간은 O(1)입니다."
+      },
+      {
+        "title": "영 입력과 범위",
+        "text": "exp=0이면 루프 없이1을 반환하므로 이 API의 int_pow(0,0)도1입니다. base=0이고 양의 지수면0입니다. int_pow(2,63)은2^63이지만 int_pow(2,64)는 u64에서0이며 오류 코드는 없습니다. 지수만큼 선형 곱셈하는 독립 구현과 비교하면 비트 분기 오류를 찾는 데 도움이 됩니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "int_pow(0,0)의 실제 반환값은?",
+        "options": [
+          "1",
+          "오류 코드"
+        ],
+        "answer": 0,
+        "explanation": "result를1로 초기화하고 exp가0이면 반복에 들어가지 않습니다. 수학에서의 관례와 별개로 코드의 반환 규약입니다."
+      },
+      {
+        "prompt": "5의5승 계산에서 exp=2인 반복은 result에 base를 곱하는가?",
+        "options": [
+          "그렇다. 모든 반복에서 result를 곱한다",
+          "아니다. 최하위 비트가0이다"
+        ],
+        "answer": 1,
+        "explanation": "exp&1이 거짓이면 result를 유지하고 exp 시프트와 base 제곱만 수행합니다."
+      },
+      {
+        "prompt": "u64 결과로 int_pow(2,64)는?",
+        "options": [
+          "0",
+          "정확한2^64를 그대로 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "u64의 표현 범위는0부터2^64-1입니다. unsigned 곱셈은2^64를 법으로 순환하며 별도 오버플로 오류 반환이 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * An integer based power function\n *\n * Derived from drivers/video/backlight/pwm_bl.c\n */\n\n#include <linux/export.h>\n#include <linux/math.h>\n#include <linux/types.h>\n\n/**\n * int_pow - computes the exponentiation of the given base and exponent\n * @base: base which will be raised to the given power\n * @exp: power to be raised to\n *\n * Computes: pow(base, exp), i.e. @base raised to the @exp power\n */\nu64 int_pow(u64 base, unsigned int exp)\n{\n\tu64 result = 1;\n\n\twhile (exp) {\n\t\tif (exp & 1)\n\t\t\tresult *= base;\n\t\texp >>= 1;\n\t\tbase *= base;\n\t}\n\n\treturn result;\n}\nEXPORT_SYMBOL_GPL(int_pow);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "10275c5f460e7d053a46b1847d5bf4dc9ee01d2dd74bbff8b2d3e01197b668f3",
+      "scope": "whole-file",
+      "line_count": 32,
+      "authoring_source": "course/file_units/integer_power_root.py",
+      "sections": [
+        "파일 전체",
+        "5의5승 추적",
+        "불변식과 비용",
+        "영 입력과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/int_pow.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "5를 다섯 번 곱할 때 같은 곱을 묶으면 계산을 줄일 수 있습니다. 지수를 반씩 줄이고 밑을 제곱하는 방법을 따라갑니다.",
+    "meaning": "지수 비트를 이용한 거듭제곱과 u64 범위를 넘을 때의 결과를 설명합니다.",
+    "exercise": "(result, base, exp)를 (1,5,5)에서 시작해 반복마다 적어 보세요."
+  },
+  "goal": "지수 비트를 이용한 거듭제곱과 u64 범위를 넘을 때의 결과를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "(result, base, exp)를 (1,5,5)에서 시작해 반복마다 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "a2812ca11571bc5c0680df9fd4f59116eec246fe5b08bf5b9469d30bd3dbc1b2",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

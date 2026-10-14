@@ -5,92 +5,112 @@
   "area": "조건부 컴파일 · static key · 인터페이스 분리 · 불변식 검사",
   "track": "files",
   "kind": "kernel",
-  "intro": "할당·해제·엔트리 변경 지점에서 검사 구현으로 들어가는 아홉 wrapper 전체를 해설합니다.",
+  "intro": "이 헤더는 페이지 테이블 변경 지점에서 선택적으로 검사를 불러요. disabled key가 참이면 검사를 건너뛴다는 방향이 핵심이에요.",
   "guide": [
-    "검사 기능을 빌드에 포함하는 것과 런타임에 검사 경로를 활성화하는 것은 별개입니다.",
-    "페이지 테이블 변경 경로의 선택적 진단 기능과 비용 제어를 이해합니다."
+    "페이지 테이블은 프로그램의 주소와 실제 메모리의 관계를 기록하는 표예요. PTE·PMD·PUD는 그 표의 서로 다른 단계에 있는 항목이에요.",
+    "hook은 큰 작업의 중간에 부르는 보조 기능이에요. 검사 hook을 부른다는 것과 실제 표에 값을 쓰는 것은 달라요.",
+    "static key는 기능 분기 비용을 줄이는 커널 장치예요. 이 변수는 disabled, 즉 검사 꺼짐을 나타내므로 참이면 돌아가요."
   ],
   "deep_dive": [
     {
-      "title": "전체 범위",
-      "text": "GPL-2.0, 저작권과 작성자 주석, guard 뒤 PAGE_TABLE_CHECK 분기가 있습니다. 활성 분기는 jump_label.h를 포함하고 static key와 page_ext_operations를 extern으로 선언하며 내부 함수 선언과 inline wrapper를 제공합니다. 비활성 분기는 같은 외부 호출 이름의 빈 inline 함수들입니다. 이 헤더가 모든 매핑 검사 알고리즘을 구현하지는 않습니다."
+      "title": "파일이 제공하는 것",
+      "text": "PAGE_TABLE_CHECK가 있으면 jump_label.h, 외부 key와 page_ext_operations, 내부 함수 선언과 inline wrapper를 제공해요. 없으면 같은 외부 호출 이름을 가진 빈 함수들을 둬요. 이 헤더는 모든 매핑 검사 알고리즘 본문을 담은 파일은 아니에요."
     },
     {
-      "title": "Disabled라는 key의 방향",
-      "text": "page_table_check_disabled는 struct static_key_true입니다. 모든 활성 wrapper는 static_branch_likely(&page_table_check_disabled)가 참이면 즉시 반환하고 거짓이면 내부 검사 함수를 호출합니다. key가 참이라는 사실은 검사가 활성이라는 뜻이 아닙니다. 관련 구현의 초기화는 검사를 켤 때 이 disabled key를 disable합니다. 헤더에는 key를 변경하는 본문이 없습니다."
+      "title": "disabled key의 방향",
+      "text": "page_table_check_disabled는 static_key_true예요. 각 wrapper는 static_branch_likely가 참이면 return하고 거짓일 때만 검사해요. 관련 구현은 검사를 켤 때 이 disabled key를 disable해요. 이 헤더에는 key를 실제 바꾸는 함수 본문이 없어요."
     },
     {
-      "title": "Alloc과 free의 공통 검사",
-      "text": "page_table_check_alloc과 free는 page와 unsigned int order를 받아 둘 다 __page_table_check_zero로 전달합니다. 이름의 zero를 메모리 내용 memset으로 해석하면 틀립니다. 해당 구현을 대조하면 페이지별 anon/file 매핑 카운터가 0인지 확인하고 0이 아니면 BUG_ON합니다. order는 검사할 2의 거듭제곱 페이지 범위와 연결되며 이 wrapper가 페이지를 할당하거나 해제하지는 않습니다."
+      "title": "할당과 해제 때 같은 검사",
+      "text": "alloc과 free는 page와 unsigned int order를 똑같이 __page_table_check_zero에 넘겨요. 기존 해설이 대조한 본문은 익명·파일 매핑 카운터가 0인지 보고 아니면 BUG_ON해요. zero라는 이름이 페이지 바이트를 0으로 채운다는 뜻은 아니에요. order는 2의 거듭제곱 페이지 범위와 연결되며 wrapper가 할당·해제를 실제 수행하지는 않아요."
     },
     {
-      "title": "세 clear wrapper",
-      "text": "pte_clear, pmd_clear, pud_clear는 mm 포인터와 각각의 엔트리 값을 받아 대응 __page_table_check_*_clear에 전달합니다. 엔트리 포인터가 아닌 값이 입력이라는 점을 확인합니다. 이 wrapper 본문에는 실제 페이지 테이블 엔트리에 0을 쓰거나 TLB를 flush하는 코드가 없습니다. 변경 지점의 검사 hook과 변경 작업 자체를 구분합니다."
+      "title": "세 종류의 clear",
+      "text": "pte_clear, pmd_clear, pud_clear는 mm 포인터와 각각의 엔트리 값을 넘겨요. 엔트리 주소가 아니라 값이에요. 본문에는 실제 항목에 0을 쓰거나 주소 변환 캐시인 TLB를 비우는 명령이 없어요. 실제 변경을 둘러싼 검사 역할로 읽어요."
     },
     {
-      "title": "Set wrapper의 모양",
-      "text": "ptes_set은 mm, pte_t 포인터 ptep, 새 pte 값, unsigned int nr를 전달합니다. pmd_set과 pud_set은 각각 mm, 엔트리 포인터, 새 값만 전달하고 nr 인자는 없습니다. PTE 묶음 인터페이스의 범위를 PMD/PUD 함수에도 임의로 추가해서 설명하지 않습니다. 이 wrapper들은 공통 static key 검사 뒤 인자를 그대로 내부 함수에 넘깁니다."
+      "title": "set 인자의 차이",
+      "text": "ptes_set은 mm, PTE 주소 ptep, 새 값, unsigned int nr를 넘겨 여러 항목 검사의 범위를 표현해요. pmd_set과 pud_set은 mm, 해당 주소와 값만 받고 nr가 없어요. 세 함수에 같은 묶음 개수 인자가 있다고 설명하면 안 돼요. 공통 key 검사 후 각 인자를 그대로 내부에 전달해요."
     },
     {
-      "title": "PTE 범위 clear",
-      "text": "pte_clear_range는 mm, unsigned long addr, pmd_t 값을 받습니다. 주소 끝이나 nr를 받는 형태가 아닙니다. 대응 내부 함수에 세 인자를 전달할 뿐 이 헤더 안에서 PTE 배열을 순회하지 않습니다. 실제 범위와 매핑 조건은 구현에서 확인해야 합니다."
+      "title": "PTE 범위 clear의 입구",
+      "text": "pte_clear_range는 mm, unsigned long addr, pmd_t 값을 받아요. 끝 주소나 nr를 별도로 받지 않아요. 헤더 안에서 배열을 돌지 않고 세 인자를 내부 함수에 넘겨요. 실제 범위와 매핑 조건은 그 구현을 읽어야 해요."
     },
     {
-      "title": "기능 미포함 분기",
-      "text": "CONFIG_PAGE_TABLE_CHECK가 없으면 alloc, free, 세 clear, ptes_set, pmd_set, pud_set, clear_range의 아홉 함수 모두 void 빈 본문입니다. 이 분기에 __ 함수 선언, static key, operations 선언을 다시 제공하지 않습니다. 호출 경로의 소스 형태를 유지하되 기능을 없애는 방식입니다. 빈 inline 함수라는 사실만으로 인자로 전달한 C 표현식의 부수효과까지 언어 차원에서 사라진다고 단정하지 않습니다."
+      "title": "기능을 빼는 빌드",
+      "text": "비활성이면 alloc, free, 세 clear, 세 set, clear_range의 아홉 함수가 모두 빈 void예요. 내부 __ 선언이나 key·operations는 그 분기에 다시 없어요. 호출부를 유지하며 기능을 빼는 방식이에요. 빈 함수라고 인자 표현식의 C 부수효과까지 언어 차원에서 사라진다고 보장하지는 않아요."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "빌드 시 기능 제거와 런타임 빠른 분기, 검사 hook과 실제 쓰기 분리, 전달 인자의 타입과 범위, 할당 시 불변식 검사를 학습합니다. mm/page_table_check.c의 일부 구현 대조는 그 파일 전체 완료로 계산하지 않으며, 모든 아키텍처의 hook 연결을 시험한 것도 아닙니다."
+      "title": "학습과 검증 범위",
+      "text": "빌드에서 기능 빼기와 실행 중 분기, 검사와 실제 쓰기, 타입과 범위, 할당 시 불변식 확인을 살펴봤어요. 불변식은 그 지점에서 반드시 맞아야 할 조건이에요. 관련 구현 일부 확인은 mm/page_table_check.c 전체 완료나 모든 컴퓨터 구조의 hook 연결 시험을 뜻하지 않아요."
     }
   ],
   "questions": [
     {
-      "prompt": "page_table_check_disabled key가 참이면 wrapper는 무엇을 하는가?",
+      "prompt": "disabled key가 참이면 wrapper는 무엇을 하나요?",
       "options": [
+        "즉시 돌아가 내부 검사를 건너뛰어요.",
+        "검사가 켜졌다고 보고 내부 함수를 불러요."
+      ],
+      "answer": 0,
+      "explanation": "변수 이름과 return 방향을 함께 읽어요.",
+      "original_prompt": "page_table_check_disabled key가 참이면 wrapper는 무엇을 하는가?",
+      "original_options": [
         "즉시 반환하여 내부 검사를 건너뛴다",
         "검사 기능이 활성이라고 판단하여 내부 함수를 호출한다"
       ],
-      "answer": 0,
-      "explanation": "조건은 disabled key에 대한 static_branch_likely입니다. 변수 이름과 분기의 방향을 함께 읽어야 합니다."
+      "original_explanation": "조건은 disabled key에 대한 static_branch_likely입니다. 변수 이름과 분기의 방향을 함께 읽어야 합니다."
     },
     {
-      "prompt": "alloc/free가 부르는 __page_table_check_zero는 무엇을 확인하는가?",
+      "prompt": "alloc/free의 zero 함수는 무엇을 하나요?",
       "options": [
+        "페이지 데이터 바이트를 모두 0으로 덮어요.",
+        "관련 페이지의 매핑 카운터가 0인지 확인해요."
+      ],
+      "answer": 1,
+      "explanation": "이름만 보고 메모리 초기화로 추측하면 안 돼요.",
+      "original_prompt": "alloc/free가 부르는 __page_table_check_zero는 무엇을 확인하는가?",
+      "original_options": [
         "페이지 데이터 바이트를 전부 0으로 덮어쓴다",
         "관련 페이지의 매핑 카운터가 0인지 확인한다"
       ],
-      "answer": 1,
-      "explanation": "해당 구현은 anon_map_count와 file_map_count에 BUG_ON 검사를 수행합니다. zero라는 이름만으로 초기화 함수라고 추정하면 안 됩니다."
+      "original_explanation": "해당 구현은 anon_map_count와 file_map_count에 BUG_ON 검사를 수행합니다. zero라는 이름만으로 초기화 함수라고 추정하면 안 됩니다."
     },
     {
-      "prompt": "pte_clear wrapper가 실제 PTE 값을 0으로 쓰는가?",
+      "prompt": "pte_clear wrapper가 실제 PTE에 0을 쓰나요?",
       "options": [
+        "아니요. 항목 값을 내부 검사에 넘겨요.",
+        "네. clear라는 이름이면 직접 지워요."
+      ],
+      "answer": 0,
+      "explanation": "입력은 값이고 wrapper에 저장 명령은 없어요.",
+      "original_prompt": "pte_clear wrapper가 실제 PTE 값을 0으로 쓰는가?",
+      "original_options": [
         "아니다. 엔트리 값을 내부 검사 함수에 전달한다",
         "그렇다. 이름에 clear가 있으므로 직접 PTE를 지운다"
       ],
-      "answer": 0,
-      "explanation": "인자는 pte_t 값이며 wrapper에는 엔트리 저장 명령이 없습니다. 호출 지점의 실제 변경과 진단을 구분합니다."
+      "original_explanation": "인자는 pte_t 값이며 wrapper에는 엔트리 저장 명령이 없습니다. 호출 지점의 실제 변경과 진단을 구분합니다."
     },
     {
-      "prompt": "nr 인자를 받는 set wrapper는?",
+      "prompt": "nr 인자를 받는 set wrapper는 어느 것인가요?",
       "options": [
+        "세 set 함수 모두예요.",
+        "page_table_check_ptes_set예요."
+      ],
+      "answer": 1,
+      "explanation": "PTE 묶음 함수에만 개수가 명시돼요.",
+      "original_prompt": "nr 인자를 받는 set wrapper는?",
+      "original_options": [
         "세 set wrapper가 모두 nr를 받는다",
         "page_table_check_ptes_set이다"
       ],
-      "answer": 1,
-      "explanation": "PTE 묶음 함수에만 unsigned int nr가 명시됩니다. PMD/PUD는 엔트리 포인터와 값만 추가로 받습니다."
+      "original_explanation": "PTE 묶음 함수에만 unsigned int nr가 명시됩니다. PMD/PUD는 엔트리 포인터와 값만 추가로 받습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "disabled가 참과 거짓인 두 경우의 화살표를 그린 뒤 clear라는 이름이 실제 엔트리 지우기를 뜻하는지 확인해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\n/*\n * Copyright (c) 2021, Google LLC.\n * Pasha Tatashin <pasha.tatashin@soleen.com>\n */\n#ifndef __LINUX_PAGE_TABLE_CHECK_H\n#define __LINUX_PAGE_TABLE_CHECK_H\n\n#ifdef CONFIG_PAGE_TABLE_CHECK\n#include <linux/jump_label.h>\n\nextern struct static_key_true page_table_check_disabled;\nextern struct page_ext_operations page_table_check_ops;\n\nvoid __page_table_check_zero(struct page *page, unsigned int order);\nvoid __page_table_check_pte_clear(struct mm_struct *mm, pte_t pte);\nvoid __page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd);\nvoid __page_table_check_pud_clear(struct mm_struct *mm, pud_t pud);\nvoid __page_table_check_ptes_set(struct mm_struct *mm, pte_t *ptep, pte_t pte,\n\t\tunsigned int nr);\nvoid __page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp, pmd_t pmd);\nvoid __page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp, pud_t pud);\nvoid __page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\tunsigned long addr,\n\t\t\t\t\tpmd_t pmd);\n\nstatic inline void page_table_check_alloc(struct page *page, unsigned int order)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_zero(page, order);\n}\n\nstatic inline void page_table_check_free(struct page *page, unsigned int order)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_zero(page, order);\n}\n\nstatic inline void page_table_check_pte_clear(struct mm_struct *mm, pte_t pte)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pte_clear(mm, pte);\n}\n\nstatic inline void page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pmd_clear(mm, pmd);\n}\n\nstatic inline void page_table_check_pud_clear(struct mm_struct *mm, pud_t pud)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pud_clear(mm, pud);\n}\n\nstatic inline void page_table_check_ptes_set(struct mm_struct *mm,\n\t\tpte_t *ptep, pte_t pte, unsigned int nr)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_ptes_set(mm, ptep, pte, nr);\n}\n\nstatic inline void page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp,\n\t\t\t\t\t    pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pmd_set(mm, pmdp, pmd);\n}\n\nstatic inline void page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp,\n\t\t\t\t\t    pud_t pud)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pud_set(mm, pudp, pud);\n}\n\nstatic inline void page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\t\t    unsigned long addr,\n\t\t\t\t\t\t    pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pte_clear_range(mm, addr, pmd);\n}\n\n#else\n\nstatic inline void page_table_check_alloc(struct page *page, unsigned int order)\n{\n}\n\nstatic inline void page_table_check_free(struct page *page, unsigned int order)\n{\n}\n\nstatic inline void page_table_check_pte_clear(struct mm_struct *mm, pte_t pte)\n{\n}\n\nstatic inline void page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd)\n{\n}\n\nstatic inline void page_table_check_pud_clear(struct mm_struct *mm, pud_t pud)\n{\n}\n\nstatic inline void page_table_check_ptes_set(struct mm_struct *mm,\n\t\tpte_t *ptep, pte_t pte, unsigned int nr)\n{\n}\n\nstatic inline void page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp,\n\t\t\t\t\t    pmd_t pmd)\n{\n}\n\nstatic inline void page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp,\n\t\t\t\t\t    pud_t pud)\n{\n}\n\nstatic inline void page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\t\t    unsigned long addr,\n\t\t\t\t\t\t    pmd_t pmd)\n{\n}\n\n#endif /* CONFIG_PAGE_TABLE_CHECK */\n#endif /* __LINUX_PAGE_TABLE_CHECK_H */\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/page_table_check.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0e8cdea121e29ea3",
+    "path": "include/linux/page_table_check.h",
+    "title": "페이지 테이블 검사 hook: 빌드 구성과 static key",
+    "area": "조건부 컴파일 · static key · 인터페이스 분리 · 불변식 검사",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "할당·해제·엔트리 변경 지점에서 검사 구현으로 들어가는 아홉 wrapper 전체를 해설합니다.",
+    "guide": [
+      "검사 기능을 빌드에 포함하는 것과 런타임에 검사 경로를 활성화하는 것은 별개입니다.",
+      "페이지 테이블 변경 경로의 선택적 진단 기능과 비용 제어를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 범위",
+        "text": "GPL-2.0, 저작권과 작성자 주석, guard 뒤 PAGE_TABLE_CHECK 분기가 있습니다. 활성 분기는 jump_label.h를 포함하고 static key와 page_ext_operations를 extern으로 선언하며 내부 함수 선언과 inline wrapper를 제공합니다. 비활성 분기는 같은 외부 호출 이름의 빈 inline 함수들입니다. 이 헤더가 모든 매핑 검사 알고리즘을 구현하지는 않습니다."
+      },
+      {
+        "title": "Disabled라는 key의 방향",
+        "text": "page_table_check_disabled는 struct static_key_true입니다. 모든 활성 wrapper는 static_branch_likely(&page_table_check_disabled)가 참이면 즉시 반환하고 거짓이면 내부 검사 함수를 호출합니다. key가 참이라는 사실은 검사가 활성이라는 뜻이 아닙니다. 관련 구현의 초기화는 검사를 켤 때 이 disabled key를 disable합니다. 헤더에는 key를 변경하는 본문이 없습니다."
+      },
+      {
+        "title": "Alloc과 free의 공통 검사",
+        "text": "page_table_check_alloc과 free는 page와 unsigned int order를 받아 둘 다 __page_table_check_zero로 전달합니다. 이름의 zero를 메모리 내용 memset으로 해석하면 틀립니다. 해당 구현을 대조하면 페이지별 anon/file 매핑 카운터가 0인지 확인하고 0이 아니면 BUG_ON합니다. order는 검사할 2의 거듭제곱 페이지 범위와 연결되며 이 wrapper가 페이지를 할당하거나 해제하지는 않습니다."
+      },
+      {
+        "title": "세 clear wrapper",
+        "text": "pte_clear, pmd_clear, pud_clear는 mm 포인터와 각각의 엔트리 값을 받아 대응 __page_table_check_*_clear에 전달합니다. 엔트리 포인터가 아닌 값이 입력이라는 점을 확인합니다. 이 wrapper 본문에는 실제 페이지 테이블 엔트리에 0을 쓰거나 TLB를 flush하는 코드가 없습니다. 변경 지점의 검사 hook과 변경 작업 자체를 구분합니다."
+      },
+      {
+        "title": "Set wrapper의 모양",
+        "text": "ptes_set은 mm, pte_t 포인터 ptep, 새 pte 값, unsigned int nr를 전달합니다. pmd_set과 pud_set은 각각 mm, 엔트리 포인터, 새 값만 전달하고 nr 인자는 없습니다. PTE 묶음 인터페이스의 범위를 PMD/PUD 함수에도 임의로 추가해서 설명하지 않습니다. 이 wrapper들은 공통 static key 검사 뒤 인자를 그대로 내부 함수에 넘깁니다."
+      },
+      {
+        "title": "PTE 범위 clear",
+        "text": "pte_clear_range는 mm, unsigned long addr, pmd_t 값을 받습니다. 주소 끝이나 nr를 받는 형태가 아닙니다. 대응 내부 함수에 세 인자를 전달할 뿐 이 헤더 안에서 PTE 배열을 순회하지 않습니다. 실제 범위와 매핑 조건은 구현에서 확인해야 합니다."
+      },
+      {
+        "title": "기능 미포함 분기",
+        "text": "CONFIG_PAGE_TABLE_CHECK가 없으면 alloc, free, 세 clear, ptes_set, pmd_set, pud_set, clear_range의 아홉 함수 모두 void 빈 본문입니다. 이 분기에 __ 함수 선언, static key, operations 선언을 다시 제공하지 않습니다. 호출 경로의 소스 형태를 유지하되 기능을 없애는 방식입니다. 빈 inline 함수라는 사실만으로 인자로 전달한 C 표현식의 부수효과까지 언어 차원에서 사라진다고 단정하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "빌드 시 기능 제거와 런타임 빠른 분기, 검사 hook과 실제 쓰기 분리, 전달 인자의 타입과 범위, 할당 시 불변식 검사를 학습합니다. mm/page_table_check.c의 일부 구현 대조는 그 파일 전체 완료로 계산하지 않으며, 모든 아키텍처의 hook 연결을 시험한 것도 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "page_table_check_disabled key가 참이면 wrapper는 무엇을 하는가?",
+        "options": [
+          "즉시 반환하여 내부 검사를 건너뛴다",
+          "검사 기능이 활성이라고 판단하여 내부 함수를 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "조건은 disabled key에 대한 static_branch_likely입니다. 변수 이름과 분기의 방향을 함께 읽어야 합니다."
+      },
+      {
+        "prompt": "alloc/free가 부르는 __page_table_check_zero는 무엇을 확인하는가?",
+        "options": [
+          "페이지 데이터 바이트를 전부 0으로 덮어쓴다",
+          "관련 페이지의 매핑 카운터가 0인지 확인한다"
+        ],
+        "answer": 1,
+        "explanation": "해당 구현은 anon_map_count와 file_map_count에 BUG_ON 검사를 수행합니다. zero라는 이름만으로 초기화 함수라고 추정하면 안 됩니다."
+      },
+      {
+        "prompt": "pte_clear wrapper가 실제 PTE 값을 0으로 쓰는가?",
+        "options": [
+          "아니다. 엔트리 값을 내부 검사 함수에 전달한다",
+          "그렇다. 이름에 clear가 있으므로 직접 PTE를 지운다"
+        ],
+        "answer": 0,
+        "explanation": "인자는 pte_t 값이며 wrapper에는 엔트리 저장 명령이 없습니다. 호출 지점의 실제 변경과 진단을 구분합니다."
+      },
+      {
+        "prompt": "nr 인자를 받는 set wrapper는?",
+        "options": [
+          "세 set wrapper가 모두 nr를 받는다",
+          "page_table_check_ptes_set이다"
+        ],
+        "answer": 1,
+        "explanation": "PTE 묶음 함수에만 unsigned int nr가 명시됩니다. PMD/PUD는 엔트리 포인터와 값만 추가로 받습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\n/*\n * Copyright (c) 2021, Google LLC.\n * Pasha Tatashin <pasha.tatashin@soleen.com>\n */\n#ifndef __LINUX_PAGE_TABLE_CHECK_H\n#define __LINUX_PAGE_TABLE_CHECK_H\n\n#ifdef CONFIG_PAGE_TABLE_CHECK\n#include <linux/jump_label.h>\n\nextern struct static_key_true page_table_check_disabled;\nextern struct page_ext_operations page_table_check_ops;\n\nvoid __page_table_check_zero(struct page *page, unsigned int order);\nvoid __page_table_check_pte_clear(struct mm_struct *mm, pte_t pte);\nvoid __page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd);\nvoid __page_table_check_pud_clear(struct mm_struct *mm, pud_t pud);\nvoid __page_table_check_ptes_set(struct mm_struct *mm, pte_t *ptep, pte_t pte,\n\t\tunsigned int nr);\nvoid __page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp, pmd_t pmd);\nvoid __page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp, pud_t pud);\nvoid __page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\tunsigned long addr,\n\t\t\t\t\tpmd_t pmd);\n\nstatic inline void page_table_check_alloc(struct page *page, unsigned int order)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_zero(page, order);\n}\n\nstatic inline void page_table_check_free(struct page *page, unsigned int order)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_zero(page, order);\n}\n\nstatic inline void page_table_check_pte_clear(struct mm_struct *mm, pte_t pte)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pte_clear(mm, pte);\n}\n\nstatic inline void page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pmd_clear(mm, pmd);\n}\n\nstatic inline void page_table_check_pud_clear(struct mm_struct *mm, pud_t pud)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pud_clear(mm, pud);\n}\n\nstatic inline void page_table_check_ptes_set(struct mm_struct *mm,\n\t\tpte_t *ptep, pte_t pte, unsigned int nr)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_ptes_set(mm, ptep, pte, nr);\n}\n\nstatic inline void page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp,\n\t\t\t\t\t    pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pmd_set(mm, pmdp, pmd);\n}\n\nstatic inline void page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp,\n\t\t\t\t\t    pud_t pud)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pud_set(mm, pudp, pud);\n}\n\nstatic inline void page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\t\t    unsigned long addr,\n\t\t\t\t\t\t    pmd_t pmd)\n{\n\tif (static_branch_likely(&page_table_check_disabled))\n\t\treturn;\n\n\t__page_table_check_pte_clear_range(mm, addr, pmd);\n}\n\n#else\n\nstatic inline void page_table_check_alloc(struct page *page, unsigned int order)\n{\n}\n\nstatic inline void page_table_check_free(struct page *page, unsigned int order)\n{\n}\n\nstatic inline void page_table_check_pte_clear(struct mm_struct *mm, pte_t pte)\n{\n}\n\nstatic inline void page_table_check_pmd_clear(struct mm_struct *mm, pmd_t pmd)\n{\n}\n\nstatic inline void page_table_check_pud_clear(struct mm_struct *mm, pud_t pud)\n{\n}\n\nstatic inline void page_table_check_ptes_set(struct mm_struct *mm,\n\t\tpte_t *ptep, pte_t pte, unsigned int nr)\n{\n}\n\nstatic inline void page_table_check_pmd_set(struct mm_struct *mm, pmd_t *pmdp,\n\t\t\t\t\t    pmd_t pmd)\n{\n}\n\nstatic inline void page_table_check_pud_set(struct mm_struct *mm, pud_t *pudp,\n\t\t\t\t\t    pud_t pud)\n{\n}\n\nstatic inline void page_table_check_pte_clear_range(struct mm_struct *mm,\n\t\t\t\t\t\t    unsigned long addr,\n\t\t\t\t\t\t    pmd_t pmd)\n{\n}\n\n#endif /* CONFIG_PAGE_TABLE_CHECK */\n#endif /* __LINUX_PAGE_TABLE_CHECK_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "ff7a1222e01ee4910841c3876822e76dc04e3c3a032306ba9db3426d3d5562f8",
+      "scope": "whole-file",
+      "line_count": 149,
+      "authoring_source": "course/file_units/page_table_check_contract.py",
+      "sections": [
+        "전체 범위",
+        "Disabled라는 key의 방향",
+        "Alloc과 free의 공통 검사",
+        "세 clear wrapper",
+        "Set wrapper의 모양",
+        "PTE 범위 clear",
+        "기능 미포함 분기",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/page_table_check.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "책을 옮기는 사람 옆에서 장부가 맞는지 검사하는 사람은 책 자체를 옮기지 않아요. 페이지 테이블 검사 hook도 변경 작업과 구별해야 해요.",
+    "meaning": "이 헤더는 페이지 테이블 변경 지점에서 선택적으로 검사를 불러요. disabled key가 참이면 검사를 건너뛴다는 방향이 핵심이에요.",
+    "exercise": "disabled가 참과 거짓인 두 경우의 화살표를 그린 뒤 clear라는 이름이 실제 엔트리 지우기를 뜻하는지 확인해 보세요."
+  },
+  "goal": "이 헤더는 페이지 테이블 변경 지점에서 선택적으로 검사를 불러요. disabled key가 참이면 검사를 건너뛴다는 방향이 핵심이에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "disabled가 참과 거짓인 두 경우의 화살표를 그린 뒤 clear라는 이름이 실제 엔트리 지우기를 뜻하는지 확인해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "22fe0870f700b3333d4b802def57a1d931be6fa315eac025cdd67fc646b11edf",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

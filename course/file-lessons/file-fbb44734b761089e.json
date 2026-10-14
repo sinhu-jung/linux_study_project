@@ -5,92 +5,112 @@
   "area": "PAE · 물리 주소 폭 · PAT와 MTRR · 캐시 모드 · PTE 마스크",
   "track": "files",
   "kind": "kernel",
-  "intro": "물리 주소 제한 검사,WC 예약 결과와 PTE 보호값,비PAT fallback을 해설합니다.",
+  "intro": "x86 I/O 캐시 예약·보호값 생성·local PFN 매핑을 구별합니다.",
   "guide": [
-    "캐시 속성 예약과 실제 가상 페이지 매핑은 별도 단계이며 요청한 WC와 선택된 최종 모드를 구분합니다.",
-    "io-mapping.h의 iomap_create_wc/free 및 local helper 호출을 실제 구현과 연결합니다."
+    "PFN은 물리 페이지 번호이며 바이트 주소와 단위가 다릅니다.",
+    "WC는 쓰기를 모아 보내는 캐시 방식, WB는 일반적인 쓰기 되돌림 방식입니다.",
+    "PAT와 MTRR은 x86에서 메모리 영역의 캐시 처리 방식을 정하는 장치입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0-or-later·저작권 뒤 iomap/memtype/export/highmem 헤더를 포함합니다. 내부 주소 가능성 검사,공개 create/free/local map 세 함수와 각각의 GPL export가 전부입니다. 사용자 VMA 매핑이나 장치 read/write 동작은 이 파일에 없습니다."
+      "text": "파일은 매핑 가능성 검사와 예약·해제·local 매핑 함수 셋을 담습니다. 사용자 가상 영역을 만들거나 장치 값을 직접 읽고 쓰는 코드는 없습니다."
     },
     {
       "title": "PAE 없는 주소 한계",
-      "text": "is_io_mapping_possible은 X86_PAE가 없고 PHYS_ADDR_T_64BIT가 있을 때 base+size>0x100000000이면0입니다. 끝이 정확히2^32이면 이 비교만으로 거부하지 않습니다. 나머지 구성이나 범위는1을 반환합니다. 크기0·덧셈 overflow·페이지 정렬을 별도로 검사하는 일반 검증 함수는 아닙니다."
+      "text": "PAE가 없고 물리 주소 타입은 64비트일 때 base+size가 2^32보다 크면 거부합니다. 정확히 같으면 이 검사만으로 거부하지 않습니다. 그 밖은 가능하다고 하며 크기 0, 덧셈 넘침, 페이지 정렬까지 검사하는 일반 검증기는 아닙니다."
     },
     {
       "title": "WC 요청과 예약",
-      "text": "iomap_create_wc는 pcm을 WC로 시작합니다. 가능성 검사가 실패하면 -EINVAL,아니면 memtype_reserve_io(base,base+size,&pcm)를 호출합니다. 실패 코드는 그대로 반환합니다. pcm을 포인터로 전달하므로 이후 보호값은 함수가 돌려준 모드에 기반하며 요청 상수 WC를 무조건 다시 강제하지 않습니다."
+      "text": "create_wc는 WC를 요청하고 가능성 검사 실패면 -EINVAL입니다. 예약 함수에 모드 주소를 넘겨 결정된 pcm을 돌려받으며 실패는 그대로 반환합니다. 요청한 WC를 무조건 다시 강제하지 않고 나온 모드로 보호값을 만듭니다."
     },
     {
       "title": "보호값 생성",
-      "text": "예약 성공 뒤 *prot=__pgprot(__PAGE_KERNEL|cachemode2protval(pcm))를 만듭니다. 이어 pgprot_val(*prot)에 __default_kernel_pte_mask를 AND해 지원하지 않는 비트를 제거하고0을 반환합니다. 이 단계는 출력 보호값 생성이며 여기서 가상주소를 반환하거나 PTE를 설치하지 않습니다."
+      "text": "예약 성공 뒤 커널 페이지 속성과 결정된 캐시 비트를 합쳐 출력 prot에 씁니다. 기본 PTE 마스크로 지원 안 하는 비트를 지우고 0을 반환합니다. PTE는 페이지 변환 기록이며 여기서는 그것을 설치하거나 가상 주소를 반환하지 않습니다."
     },
     {
       "title": "범위 예약 해제",
-      "text": "iomap_free는 memtype_free_io(base,base+size)에 위임합니다. 구조체를 kfree하거나 특정 local 주소를 kunmap하는 함수가 아닙니다. 예약 범위의 수명과 한 번의 페이지 매핑 수명을 공통 io_mapping 인터페이스와 함께 구분해야 합니다."
+      "text": "free는 같은 물리 범위의 캐시 속성 예약 해제를 맡깁니다. 구조체 메모리를 해제하거나 특정 local 주소를 매핑 해제하는 함수가 아닙니다. 범위 예약의 수명과 한 페이지 매핑의 수명은 다릅니다."
     },
     {
       "title": "비PAT의 비WB 처리",
-      "text": "__iomap_local_pfn_prot는 PAT가 비활성이고 prot의 캐시 모드가 WB가 아니면 prot를 __PAGE_KERNEL|UC_MINUS 모드로 새로 구성합니다. 기존 보호값에 bit 하나만 덧붙이는 형태가 아닙니다. 주석은 직접 PWT를 설정한 호출까지 고려하고 MTRR과 결합해 사용자의 WC 가능 시 WC,그렇지 못하면 UC 의도를 처리하려는 설명을 제공합니다. UC_MINUS를 모든 구성에서 무조건 WC와 같다고 해석하지 않습니다."
+      "text": "PAT가 없고 요청이 WB가 아니면 UC_MINUS, 즉 캐시 속성 조합용 비캐시 변형을 바탕으로 보호값을 새로 만듭니다. 비트 하나만 더하지 않습니다. 원문은 직접 PWT를 지정한 경우와 MTRR의 조합도 고려해 가능한 쓰기 결합·비캐시 의도를 다루려는 배경을 설명합니다. UC_MINUS가 항상 WC와 같지는 않습니다."
     },
     {
       "title": "필터 후 local 매핑",
-      "text": "분기 여부와 무관하게 최종 prot에 기본 PTE mask를 AND한 뒤 __kmap_local_pfn_prot(pfn,prot)를 호출합니다. 반환값을 __force __iomem 포인터로 변환합니다. 입력은 물리 byte 주소가 아니라 PFN이며 byte offset 복원을 이 함수가 수행하지 않습니다. local 매핑의 상세 스택·TLB 동작은 하위 helper 범위입니다."
+      "text": "최종 보호값에 지원 비트 마스크를 적용하고 PFN으로 local 매핑을 얻어 I/O 주소 표시 포인터로 반환합니다. 바이트 주소의 나머지 offset을 복원하지 않습니다. 내부 매핑 스택과 주소 변환 캐시인 TLB 처리는 하위 함수 범위입니다."
     },
     {
       "title": "CS 연결과 한계",
-      "text": "주소 폭과 하드웨어 변환 능력,반열린 물리 범위,요청과 협상된 캐시 모드,PTE bit 필터,자원 예약과 주소 생성의 분리,구성별 fallback을 학습합니다. 실제 PAT/MTRR 하드웨어 조합과 모든 오류 경로의 실행 시험을 수행한 것은 아닙니다."
+      "text": "주소 폭의 한계, 끝을 제외한 물리 범위, 요청과 결정 모드, 예약과 주소 생성을 구별합니다. 실제 PAT·MTRR 조합과 모든 실패 경로를 하드웨어에서 시험한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "비PAE·64비트 물리주소 타입에서 base+size가 정확히2^32이면 해당 검사에서 거부되는가?",
+      "prompt": "해당 비PAE 검사에서 끝이 정확히 2^32면 거부하나요?",
       "options": [
+        "아니요. 더 클 때만 거부합니다.",
+        "네. 같거나 크면 거부합니다."
+      ],
+      "answer": 0,
+      "explanation": "이 비교 경계만의 뜻이며 다른 모든 조건 충족을 보장하지는 않습니다.",
+      "original_prompt": "비PAE·64비트 물리주소 타입에서 base+size가 정확히2^32이면 해당 검사에서 거부되는가?",
+      "original_options": [
         "아니다.2^32보다 클 때 거부한다",
         "그렇다.같거나 크면 거부한다"
       ],
-      "answer": 0,
-      "explanation": "본문은 > 비교입니다. 이것은 해당 검사의 경계이며 다른 제약까지 모두 만족한다는 뜻은 아닙니다."
+      "original_explanation": "본문은 > 비교입니다. 이것은 해당 검사의 경계이며 다른 제약까지 모두 만족한다는 뜻은 아닙니다."
     },
     {
-      "prompt": "iomap_create_wc가 반환하는 성공 결과는?",
+      "prompt": "create_wc의 성공 결과는 무엇인가요?",
       "options": [
+        "가상 매핑 주소 자체입니다.",
+        "0이며 prot에 보호값을 씁니다."
+      ],
+      "answer": 1,
+      "explanation": "주소 생성은 별도 local 함수입니다.",
+      "original_prompt": "iomap_create_wc가 반환하는 성공 결과는?",
+      "original_options": [
         "매핑된 가상 포인터 자체이다",
         "0이며 출력 prot에 보호값을 기록한다"
       ],
-      "answer": 1,
-      "explanation": "반환형은int이고 prot 포인터가 출력입니다. 실제 local 주소는 별도 함수에서 얻습니다."
+      "original_explanation": "반환형은int이고 prot 포인터가 출력입니다. 실제 local 주소는 별도 함수에서 얻습니다."
     },
     {
-      "prompt": "예약 뒤 보호값은 항상 원래 상수 WC만 쓰는가?",
+      "prompt": "예약 후에도 반드시 원래 WC만 쓰나요?",
       "options": [
+        "아니요. 예약 함수가 돌려준 pcm을 씁니다.",
+        "네. 돌려준 모드를 무시합니다."
+      ],
+      "answer": 0,
+      "explanation": "&pcm으로 결과 모드를 받아 변환합니다.",
+      "original_prompt": "예약 뒤 보호값은 항상 원래 상수 WC만 쓰는가?",
+      "original_options": [
         "아니다.예약 함수가 반환한 pcm을 사용한다",
         "그렇다.pcm 출력은 무시한다"
       ],
-      "answer": 0,
-      "explanation": "memtype_reserve_io가 &pcm을 받고 이후 cachemode2protval(pcm)을 사용합니다. 요청 모드와 최종 모드를 구별합니다."
+      "original_explanation": "memtype_reserve_io가 &pcm을 받고 이후 cachemode2protval(pcm)을 사용합니다. 요청 모드와 최종 모드를 구별합니다."
     },
     {
-      "prompt": "PAT가 없고 요청 모드가 비WB이면 local helper는?",
+      "prompt": "PAT가 없고 비WB이면 local 함수는 무엇을 하나요?",
       "options": [
+        "어떤 경우든 원래 prot를 그대로 둡니다.",
+        "UC_MINUS 기반으로 다시 만들고 비트를 거릅니다."
+      ],
+      "answer": 1,
+      "explanation": "WB에는 이 재구성 조건이 적용되지 않습니다.",
+      "original_prompt": "PAT가 없고 요청 모드가 비WB이면 local helper는?",
+      "original_options": [
         "어떤 경우든 요청 prot를 그대로 둔다",
         "UC_MINUS 기반 보호값으로 재구성한 뒤 필터한다"
       ],
-      "answer": 1,
-      "explanation": "조건부 대입 다음 공통 mask 적용이 있습니다. WB 요청에는 이 대입이 적용되지 않습니다."
+      "original_explanation": "조건부 대입 다음 공통 mask 적용이 있습니다. WB 요청에는 이 대입이 적용되지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "create_wc의 성공 0과 local 함수의 주소 반환을 각각 표시해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * Copyright © 2008 Ingo Molnar\n */\n\n#include <asm/iomap.h>\n#include <asm/memtype.h>\n#include <linux/export.h>\n#include <linux/highmem.h>\n\nstatic int is_io_mapping_possible(resource_size_t base, unsigned long size)\n{\n#if !defined(CONFIG_X86_PAE) && defined(CONFIG_PHYS_ADDR_T_64BIT)\n\t/* There is no way to map greater than 1 << 32 address without PAE */\n\tif (base + size > 0x100000000ULL)\n\t\treturn 0;\n#endif\n\treturn 1;\n}\n\nint iomap_create_wc(resource_size_t base, unsigned long size, pgprot_t *prot)\n{\n\tenum page_cache_mode pcm = _PAGE_CACHE_MODE_WC;\n\tint ret;\n\n\tif (!is_io_mapping_possible(base, size))\n\t\treturn -EINVAL;\n\n\tret = memtype_reserve_io(base, base + size, &pcm);\n\tif (ret)\n\t\treturn ret;\n\n\t*prot = __pgprot(__PAGE_KERNEL | cachemode2protval(pcm));\n\t/* Filter out unsupported __PAGE_KERNEL* bits: */\n\tpgprot_val(*prot) &= __default_kernel_pte_mask;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(iomap_create_wc);\n\nvoid iomap_free(resource_size_t base, unsigned long size)\n{\n\tmemtype_free_io(base, base + size);\n}\nEXPORT_SYMBOL_GPL(iomap_free);\n\nvoid __iomem *__iomap_local_pfn_prot(unsigned long pfn, pgprot_t prot)\n{\n\t/*\n\t * For non-PAT systems, translate non-WB request to UC- just in\n\t * case the caller set the PWT bit to prot directly without using\n\t * pgprot_writecombine(). UC- translates to uncached if the MTRR\n\t * is UC or WC. UC- gets the real intention, of the user, which is\n\t * \"WC if the MTRR is WC, UC if you can't do that.\"\n\t */\n\tif (!pat_enabled() && pgprot2cachemode(prot) != _PAGE_CACHE_MODE_WB)\n\t\tprot = __pgprot(__PAGE_KERNEL |\n\t\t\t\tcachemode2protval(_PAGE_CACHE_MODE_UC_MINUS));\n\n\t/* Filter out unsupported __PAGE_KERNEL* bits: */\n\tpgprot_val(prot) &= __default_kernel_pte_mask;\n\n\treturn (void __force __iomem *)__kmap_local_pfn_prot(pfn, prot);\n}\nEXPORT_SYMBOL_GPL(__iomap_local_pfn_prot);\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/mm/iomap_32.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-fbb44734b761089e",
+    "path": "arch/x86/mm/iomap_32.c",
+    "title": "x86 I/O 매핑 전체: 캐시 속성 예약과 local PFN 매핑",
+    "area": "PAE · 물리 주소 폭 · PAT와 MTRR · 캐시 모드 · PTE 마스크",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "물리 주소 제한 검사,WC 예약 결과와 PTE 보호값,비PAT fallback을 해설합니다.",
+    "guide": [
+      "캐시 속성 예약과 실제 가상 페이지 매핑은 별도 단계이며 요청한 WC와 선택된 최종 모드를 구분합니다.",
+      "io-mapping.h의 iomap_create_wc/free 및 local helper 호출을 실제 구현과 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0-or-later·저작권 뒤 iomap/memtype/export/highmem 헤더를 포함합니다. 내부 주소 가능성 검사,공개 create/free/local map 세 함수와 각각의 GPL export가 전부입니다. 사용자 VMA 매핑이나 장치 read/write 동작은 이 파일에 없습니다."
+      },
+      {
+        "title": "PAE 없는 주소 한계",
+        "text": "is_io_mapping_possible은 X86_PAE가 없고 PHYS_ADDR_T_64BIT가 있을 때 base+size>0x100000000이면0입니다. 끝이 정확히2^32이면 이 비교만으로 거부하지 않습니다. 나머지 구성이나 범위는1을 반환합니다. 크기0·덧셈 overflow·페이지 정렬을 별도로 검사하는 일반 검증 함수는 아닙니다."
+      },
+      {
+        "title": "WC 요청과 예약",
+        "text": "iomap_create_wc는 pcm을 WC로 시작합니다. 가능성 검사가 실패하면 -EINVAL,아니면 memtype_reserve_io(base,base+size,&pcm)를 호출합니다. 실패 코드는 그대로 반환합니다. pcm을 포인터로 전달하므로 이후 보호값은 함수가 돌려준 모드에 기반하며 요청 상수 WC를 무조건 다시 강제하지 않습니다."
+      },
+      {
+        "title": "보호값 생성",
+        "text": "예약 성공 뒤 *prot=__pgprot(__PAGE_KERNEL|cachemode2protval(pcm))를 만듭니다. 이어 pgprot_val(*prot)에 __default_kernel_pte_mask를 AND해 지원하지 않는 비트를 제거하고0을 반환합니다. 이 단계는 출력 보호값 생성이며 여기서 가상주소를 반환하거나 PTE를 설치하지 않습니다."
+      },
+      {
+        "title": "범위 예약 해제",
+        "text": "iomap_free는 memtype_free_io(base,base+size)에 위임합니다. 구조체를 kfree하거나 특정 local 주소를 kunmap하는 함수가 아닙니다. 예약 범위의 수명과 한 번의 페이지 매핑 수명을 공통 io_mapping 인터페이스와 함께 구분해야 합니다."
+      },
+      {
+        "title": "비PAT의 비WB 처리",
+        "text": "__iomap_local_pfn_prot는 PAT가 비활성이고 prot의 캐시 모드가 WB가 아니면 prot를 __PAGE_KERNEL|UC_MINUS 모드로 새로 구성합니다. 기존 보호값에 bit 하나만 덧붙이는 형태가 아닙니다. 주석은 직접 PWT를 설정한 호출까지 고려하고 MTRR과 결합해 사용자의 WC 가능 시 WC,그렇지 못하면 UC 의도를 처리하려는 설명을 제공합니다. UC_MINUS를 모든 구성에서 무조건 WC와 같다고 해석하지 않습니다."
+      },
+      {
+        "title": "필터 후 local 매핑",
+        "text": "분기 여부와 무관하게 최종 prot에 기본 PTE mask를 AND한 뒤 __kmap_local_pfn_prot(pfn,prot)를 호출합니다. 반환값을 __force __iomem 포인터로 변환합니다. 입력은 물리 byte 주소가 아니라 PFN이며 byte offset 복원을 이 함수가 수행하지 않습니다. local 매핑의 상세 스택·TLB 동작은 하위 helper 범위입니다."
+      },
+      {
+        "title": "CS 연결과 한계",
+        "text": "주소 폭과 하드웨어 변환 능력,반열린 물리 범위,요청과 협상된 캐시 모드,PTE bit 필터,자원 예약과 주소 생성의 분리,구성별 fallback을 학습합니다. 실제 PAT/MTRR 하드웨어 조합과 모든 오류 경로의 실행 시험을 수행한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "비PAE·64비트 물리주소 타입에서 base+size가 정확히2^32이면 해당 검사에서 거부되는가?",
+        "options": [
+          "아니다.2^32보다 클 때 거부한다",
+          "그렇다.같거나 크면 거부한다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 > 비교입니다. 이것은 해당 검사의 경계이며 다른 제약까지 모두 만족한다는 뜻은 아닙니다."
+      },
+      {
+        "prompt": "iomap_create_wc가 반환하는 성공 결과는?",
+        "options": [
+          "매핑된 가상 포인터 자체이다",
+          "0이며 출력 prot에 보호값을 기록한다"
+        ],
+        "answer": 1,
+        "explanation": "반환형은int이고 prot 포인터가 출력입니다. 실제 local 주소는 별도 함수에서 얻습니다."
+      },
+      {
+        "prompt": "예약 뒤 보호값은 항상 원래 상수 WC만 쓰는가?",
+        "options": [
+          "아니다.예약 함수가 반환한 pcm을 사용한다",
+          "그렇다.pcm 출력은 무시한다"
+        ],
+        "answer": 0,
+        "explanation": "memtype_reserve_io가 &pcm을 받고 이후 cachemode2protval(pcm)을 사용합니다. 요청 모드와 최종 모드를 구별합니다."
+      },
+      {
+        "prompt": "PAT가 없고 요청 모드가 비WB이면 local helper는?",
+        "options": [
+          "어떤 경우든 요청 prot를 그대로 둔다",
+          "UC_MINUS 기반 보호값으로 재구성한 뒤 필터한다"
+        ],
+        "answer": 1,
+        "explanation": "조건부 대입 다음 공통 mask 적용이 있습니다. WB 요청에는 이 대입이 적용되지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * Copyright © 2008 Ingo Molnar\n */\n\n#include <asm/iomap.h>\n#include <asm/memtype.h>\n#include <linux/export.h>\n#include <linux/highmem.h>\n\nstatic int is_io_mapping_possible(resource_size_t base, unsigned long size)\n{\n#if !defined(CONFIG_X86_PAE) && defined(CONFIG_PHYS_ADDR_T_64BIT)\n\t/* There is no way to map greater than 1 << 32 address without PAE */\n\tif (base + size > 0x100000000ULL)\n\t\treturn 0;\n#endif\n\treturn 1;\n}\n\nint iomap_create_wc(resource_size_t base, unsigned long size, pgprot_t *prot)\n{\n\tenum page_cache_mode pcm = _PAGE_CACHE_MODE_WC;\n\tint ret;\n\n\tif (!is_io_mapping_possible(base, size))\n\t\treturn -EINVAL;\n\n\tret = memtype_reserve_io(base, base + size, &pcm);\n\tif (ret)\n\t\treturn ret;\n\n\t*prot = __pgprot(__PAGE_KERNEL | cachemode2protval(pcm));\n\t/* Filter out unsupported __PAGE_KERNEL* bits: */\n\tpgprot_val(*prot) &= __default_kernel_pte_mask;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(iomap_create_wc);\n\nvoid iomap_free(resource_size_t base, unsigned long size)\n{\n\tmemtype_free_io(base, base + size);\n}\nEXPORT_SYMBOL_GPL(iomap_free);\n\nvoid __iomem *__iomap_local_pfn_prot(unsigned long pfn, pgprot_t prot)\n{\n\t/*\n\t * For non-PAT systems, translate non-WB request to UC- just in\n\t * case the caller set the PWT bit to prot directly without using\n\t * pgprot_writecombine(). UC- translates to uncached if the MTRR\n\t * is UC or WC. UC- gets the real intention, of the user, which is\n\t * \"WC if the MTRR is WC, UC if you can't do that.\"\n\t */\n\tif (!pat_enabled() && pgprot2cachemode(prot) != _PAGE_CACHE_MODE_WB)\n\t\tprot = __pgprot(__PAGE_KERNEL |\n\t\t\t\tcachemode2protval(_PAGE_CACHE_MODE_UC_MINUS));\n\n\t/* Filter out unsupported __PAGE_KERNEL* bits: */\n\tpgprot_val(prot) &= __default_kernel_pte_mask;\n\n\treturn (void __force __iomem *)__kmap_local_pfn_prot(pfn, prot);\n}\nEXPORT_SYMBOL_GPL(__iomap_local_pfn_prot);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "454a1cf03def4cb390196b152bed68797d3c87b0c78584baa65c684622898db8",
+      "scope": "whole-file",
+      "line_count": 65,
+      "authoring_source": "course/file_units/x86_iomap.py",
+      "sections": [
+        "전체 구성",
+        "PAE 없는 주소 한계",
+        "WC 요청과 예약",
+        "보호값 생성",
+        "범위 예약 해제",
+        "비PAT의 비WB 처리",
+        "필터 후 local 매핑",
+        "CS 연결과 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/mm/iomap_32.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치 메모리를 쓰기 전에 저장 방식을 예약하고, 실제로 볼 주소를 만드는 작업은 따로 합니다. 요청한 캐시 방식과 예약 후 결정된 방식도 같다고 단정할 수 없습니다.",
+    "meaning": "x86 I/O 캐시 예약·보호값 생성·local PFN 매핑을 구별합니다.",
+    "exercise": "create_wc의 성공 0과 local 함수의 주소 반환을 각각 표시해 보세요."
+  },
+  "goal": "x86 I/O 캐시 예약·보호값 생성·local PFN 매핑을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "create_wc의 성공 0과 local 함수의 주소 반환을 각각 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "a9484c43fc0fa7abf1dfdfb3dfb963a2d3259b8f12349eb9532c82187df2793e",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

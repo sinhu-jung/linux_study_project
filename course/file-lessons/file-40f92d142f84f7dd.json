@@ -5,175 +5,213 @@
   "area": "우선순위 상속 · futex · 대리 소유권 · RT · 잠금 진단",
   "track": "files",
   "kind": "kernel",
-  "intro": "RT mutex 공개 함수, PI futex의 proxy 획득·정리, 우선순위 조정과 PREEMPT_RT의 일반 mutex API 연결을 구현합니다.",
+  "intro": "잠금을 얻는 함수, 기다리는 함수, 실패 뒤 정리하는 함수의 반환값을 각각 구별합니다.",
   "guide": [
-    "실제 우선순위 상속 알고리즘과 API wrapper를 구분합니다. 대리 대기가 오류로 돌아와도 정리 중 소유권을 얻을 수 있어 최종 상태를 확인해야 합니다.",
-    "대리 획득의 시작·대기·정리 반환값을 각각 구분합니다. 이 파일을 읽었다고 포함되는 rtmutex.c의 모든 알고리즘까지 학습 완료로 세지 않습니다."
+    "PI는 기다리는 높은 우선순위를 현재 소유자에게 물려주는 일입니다.",
+    "proxy는 다른 태스크를 대신해 잠금 절차를 시작한다는 뜻입니다.",
+    "lockdep는 잠금 순서의 잘못을 찾는 진단 장치이며 실제 잠금 소유권을 대신하지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성과 포함 방식",
-      "text": "GPL-2.0-only, spinlock/export 포함, RT_MUTEX_BUILD_MUTEX 정의 뒤 rtmutex.c를 직접 포함합니다. 이어 chain 한계, 일반 RT API, futex와 proxy API, PI 조정·postunlock·진단, PREEMPT_RT mutex wrapper가 있습니다. 실제 핵심 알고리즘은 포함되는 파일의 helper를 이용하며 두 소스 파일의 학습 범위는 별개입니다."
+      "text": "RT_MUTEX_BUILD_MUTEX를 정한 뒤 rtmutex.c를 포함합니다. 이 파일은 호출 창구와 진단 처리를 연결하고, 포함된 파일은 실제 잠금 알고리즘을 제공합니다. 둘의 책임을 나눠 읽습니다."
     },
     {
       "title": "체인 한계와 빠른 경로",
-      "text": "max_lock_depth는1024로 초기화된 전역 int입니다. 주석은 우선순위 상승 체인 순회 제한을 설명하며 이 파일 자체에 전체 체인 루프가 있지는 않습니다. 디버그나 아키텍처 cmpxchg 지원에 따라 빠른 원자 경로가 사라질 수 있다는 설명도 포함됩니다."
+      "text": "max_lock_depth는 우선순위 상속 관계를 따라가는 최대 횟수이며 여기서는 1024입니다. 원자적으로 비교하고 바꾸는 cmpxchg를 지원하지 않거나 디버깅 설정을 켜면 빠른 획득·해제 경로가 컴파일에서 빠질 수 있습니다."
     },
     {
       "title": "RT 공통 획득",
-      "text": "__rt_mutex_lock_common은 might_sleep, mutex_acquire_nest 진단 기록, __rt_mutex_lock 호출 순서입니다. 실패 ret이면 mutex_release로 진단 획득을 되돌립니다. 진단 기록이 실제 잠금 소유권을 주는 것은 아니며 반환값은 핵심 함수에서 옵니다."
+      "text": "공통 획득 함수는 잠들 수 있는 위치인지 확인하고 lockdep에 획득을 알린 뒤 __rt_mutex_lock을 호출합니다. 실패하면 진단 기록도 해제합니다. 진단에 기록했다고 실제 소유자가 되는 것은 아닙니다."
     },
     {
       "title": "기본 초기화와 공개 획득",
-      "text": "rt_mutex_base_init은 __rt_mutex_base_init을 호출하고 일반 export입니다. DEBUG_LOCK_ALLOC이면 nested와 nest_lock wrapper, 아니면 일반 rt_mutex_lock이 TASK_UNINTERRUPTIBLE로 공통 획득을 호출합니다. interruptible/killable은 각각 상태를 바꾸고 성공0, 신호 중단 -EINTR 계약입니다. 이 공개 rt_mutex 획득 계열은 GPL export합니다."
+      "text": "rt_mutex_base_init은 기본 구조를 준비합니다. 디버그 설정에서는 중첩 관계를 기록하는 획득 함수를, 그 밖에는 일반 획득 함수를 제공합니다. interruptible과 killable 함수는 성공하면 0, 신호 때문에 중단되면 -EINTR를 돌려줍니다. 신호에 반응하는 대기 상태가 서로 다릅니다."
     },
     {
       "title": "trylock과 해제",
-      "text": "rt_mutex_trylock은 DEBUG_RT_MUTEXES에서 비태스크 문맥이면 경고 후0입니다. 핵심 trylock 성공에만 lockdep 획득을 기록하고 성공1·경합0을 반환합니다. 주석은 태스크 문맥의 atomic region은 가능하지만 hard/soft IRQ 문맥은 안 된다고 구분합니다. unlock은 진단 release 뒤 핵심 unlock을 호출합니다."
+      "text": "rt_mutex_trylock은 얻으면 1, 경쟁 때문에 못 얻으면 0입니다. 잠들지 않아도 태스크 문맥에서만 호출하며 하드·소프트 인터럽트 처리 중에는 쓰지 않습니다. 원자적 구역에서 호출 가능한 조건과 인터럽트 허용 여부를 혼동하지 않습니다. 성공할 때만 진단 획득을 기록하고 unlock은 진단 해제 뒤 실제 해제를 합니다."
     },
     {
       "title": "Futex trylock 분리",
-      "text": "rt_mutex_futex_trylock은 rt_mutex_slowtrylock, 밑줄 버전은 __rt_mutex_slowtrylock으로 전달합니다. 주석은 futex 변형이 빠른 경로를 사용해서는 안 된다고 명시합니다. 이름이 비슷해도 일반 rt_mutex_trylock으로 바꾸면 동일한 계약이라고 가정할 수 없습니다."
+      "text": "futex용 trylock 두 함수는 느린 경로로 들어갑니다. futex는 사용자 공간의 잠금과 커널 대기를 연결하는 장치이며, 이 변형은 빠른 경로를 사용하면 안 된다는 별도 약속이 있습니다."
     },
     {
       "title": "Futex 잠금 아래 해제",
-      "text": "__rt_mutex_futex_unlock은 wait_lock 보유를 assert하고 debug unlock을 수행합니다. 대기자가 없으면 owner=NULL 뒤 false, 있으면 mark_wakeup_next_waiter를 호출한 뒤 true입니다. 이 bool은 해제 성공 여부가 아니라 이후 postunlock이 필요한지입니다. 주석은 깨우기 전 역전을 막기 위해 유지한 선점 금지와 postunlock의 짝을 설명합니다."
+      "text": "내부 futex 해제는 wait_lock을 이미 잡았다고 가정합니다. 대기자가 없으면 소유자를 NULL로 만들고 false를 돌려줍니다. 대기자가 있으면 깨울 대상을 표시하고 true를 돌려줍니다. 이 값은 성공 여부가 아니라 후속 postunlock 필요 여부입니다. 그때 막아 둔 선점은 후속 처리까지 유지됩니다."
     },
     {
       "title": "Futex 외부 해제",
-      "text": "rt_mutex_futex_unlock은 wake queue를 만들고 irqsave wait_lock 아래 내부 해제를 호출합니다. 잠금을 풀고 IRQ를 복원한 뒤 필요한 경우 rt_mutex_postunlock을 호출합니다. 큐 표시와 실제 깨우기를 잠금 밖 단계로 나누며 false인 무대기 경로에도 해제는 이미 이루어졌습니다."
+      "text": "바깥 futex 해제 함수는 인터럽트 상태를 저장하며 wait_lock을 잡습니다. 내부 해제를 마친 뒤 잠금을 풀고 인터럽트 상태를 복구합니다. 내부 결과가 true일 때만 깨어날 태스크 처리와 선점 복구를 하는 postunlock을 실행합니다."
     },
     {
       "title": "RT 객체 초기화",
-      "text": "__rt_mutex_init은 보유 잠금 메모리 재초기화를 검사하고 base 초기화, LD_WAIT_SLEEP lockdep map 초기화를 수행합니다. 잠긴 객체의 재초기화는 문서상 금지입니다. 객체 메모리 할당이나 수명 참조 획득을 대신하는 함수는 아닙니다."
+      "text": "__rt_mutex_init은 메모리에 아직 사용 중인 잠금이 없는지 진단하고 기본 상태와 잠들 수 있는 잠금의 진단 지도를 준비합니다. 이미 잠긴 객체를 다시 초기화하면 안 됩니다. 새 메모리를 할당하거나 객체 참조 수를 늘리는 함수는 아닙니다."
     },
     {
       "title": "Proxy 초기 소유자",
-      "text": "rt_mutex_init_proxy_locked는 base를 초기화하고 PI futex 전용 static key를 wait_lock class에 지정한 뒤 proxy_owner를 설정합니다. PI 상태가 아직 다른 태스크에 공개되지 않아 경쟁이 없다는 전제이며 자체 외부 직렬화는 하지 않습니다. RT에서 futex hashbucket 잠금과 관련된 lockdep 재귀 오탐을 피하려 별도 class를 둔다는 주석이 있습니다."
+      "text": "proxy 초기화는 기본 상태를 만들고 지정한 태스크를 소유자로 적습니다. 아직 다른 태스크에 공개하지 않은 PI 상태에 사용하는 절차이며, 호출자가 동시 실행을 막아야 합니다. PREEMPT_RT에서 서로 다른 wait_lock을 같은 종류로 오해해 재귀 잠금 경고가 나지 않도록 별도 진단 분류 키도 붙입니다."
     },
     {
       "title": "Proxy 최종 해제",
-      "text": "rt_mutex_proxy_unlock은 debug proxy unlock과 owner clear만 합니다. 주석은 더 이상 다른 태스크에 보이지 않고 해제될 PI 상태의 정리용이라고 설명합니다. 살아 있는 경쟁 큐를 일반 unlock처럼 처리하거나 호출자 직렬화 없이 사용하는 API가 아닙니다."
+      "text": "proxy 해제는 진단 상태와 소유자 표시를 정리합니다. 더 이상 다른 태스크에게 보이지 않고 곧 해제할 PI 상태에 쓰며 호출자가 동시 접근을 막아야 합니다. 살아 있는 일반 대기 줄을 처리하는 보통 unlock으로 바꾸어 쓰면 안 됩니다."
     },
     {
       "title": "Proxy 시작 내부 함수",
-      "text": "__rt_mutex_start_proxy_lock은 wait_lock 보유를 요구합니다. 지정 task가 즉시 try_to_take에 성공하면1입니다. 아니면 task_blocks_on_rt_mutex에 FULL_CHAINWALK를 전달해 대기와 교착 검사를 진행합니다. 오류가 났지만 체인 순회 중 owner가 사라졌다면 ret0으로 바꿔 대기 측이 다시 해결하도록 합니다. 반환0은 대기 중,1은 해당 task의 획득,음수는 오류입니다."
+      "text": "내부 proxy 시작은 wait_lock을 잡은 상태에서 호출합니다. 지정한 태스크가 바로 얻으면 1, 기다리게 되면 0, 오류면 음수를 돌려줍니다. 우선순위 관계 전체를 살펴 교착 상태를 찾습니다. 조사 중 소유자가 사라졌다면 오류를 0으로 바꿔 대기자가 다시 판단하게 할 수 있습니다."
     },
     {
       "title": "Proxy 시작 wrapper와 정리 차이",
-      "text": "rt_mutex_start_proxy_lock은 lock_irq로 내부 함수를 호출하고 ret이0이 아니면 remove_waiter를 실행한 뒤 잠금을 풉니다. 주석은 내부 버전과 달리 실패 대기자를 정리한다고 설명하지만 실제 조건은 음수뿐 아니라 양수1도 포함합니다. 내부 시작은 실패에서 대기자를 제거하지 않으므로 wait 또는 cleanup의 후속 절차가 필요합니다."
+      "text": "바깥 proxy 시작 함수는 wait_lock을 직접 잡고 내부 함수를 부릅니다. 결과가 0이 아니면 대기자를 제거하므로 음수 오류뿐 아니라 양수 1도 이 조건에 들어갑니다. 내부 함수는 실패한 대기자를 스스로 제거하지 않으므로 후속 대기 또는 정리 절차가 필요합니다."
     },
     {
       "title": "Proxy 실제 대기",
-      "text": "rt_mutex_wait_proxy_lock은 wait_lock을 잡고 TASK_INTERRUPTIBLE로 설정한 뒤 rt_mutex_slowlock_block에 waiter와 선택적 hrtimer_sleeper를 전달합니다. 타이머가 있으면 이미 시작되어 있어야 한다는 문서 조건이 있습니다. 이후 fixup_rt_mutex_waiters(lock,true)로 waiter bit를 정리하고 잠금을 풀어 성공0 또는 -EINTR/-ETIMEDOUT을 반환합니다."
+      "text": "proxy 대기는 인터럽트 가능한 상태로 실제 잠들어 기다립니다. 제한 시간이 필요하면 전달한 고해상도 타이머는 이미 시작되어 있어야 합니다. 성공은 0, 신호 중단은 -EINTR, 시간 초과는 -ETIMEDOUT입니다. 대기자 표시 비트도 정돈한 뒤 wait_lock을 풉니다."
     },
     {
       "title": "Proxy cleanup의 역설적 반환",
-      "text": "rt_mutex_cleanup_proxy_lock은 잠금 아래 무조건 try_to_take_rt_mutex를 시도합니다. 이어 실제 owner가 current가 아니면 remove_waiter하고 cleanup=true, 소유자가 되었다면 false입니다. 마지막에 fixup_rt_mutex_waiters(lock,false)를 실행합니다. false는 정리 실패로 무시할 값이 아니라 획득했으므로 앞선 wait 오류를 버려야 한다는 의미입니다."
+      "text": "cleanup은 먼저 다시 획득을 시도하고 현재 소유자가 자신인지 확인합니다. 소유자가 아니면 대기 줄에서 제거하고 true를 돌려줍니다. 이미 얻었다면 false이며, 앞서 대기 함수가 돌려준 실패를 무시해야 합니다. 마지막에 대기자 표시도 맞춥니다."
     },
     {
       "title": "오류 뒤에도 소유권을 얻는 이유",
-      "text": "대기 함수가 오류로 반환해도 항목이 제거되기 전까지 인계 대상일 수 있습니다. 해제가 owner를 NULL로 둔 중간 상태도 cleanup의 trylock이 처리합니다. timeout 반환 하나만 보고 waiter 메모리를 버리면 큐와 소유권을 잘못 처리할 수 있어 최종 정리 결과를 확인해야 합니다."
+      "text": "시간 초과를 알아챈 순간과 대기 줄에서 빠지는 순간 사이에도 잠금을 받을 수 있습니다. 따라서 시간 초과만 보고 대기자 메모리를 버리면 안 됩니다. 해제 중 소유자가 잠시 NULL인 상태도 있으므로 cleanup이 재시도하고 최종 소유권을 확인합니다."
     },
     {
       "title": "우선순위 변경 후 PI 재검사",
-      "text": "rt_mutex_adjust_pi는 task->pi_lock을 irqsave로 잡고 pi_blocked_on을 확인합니다. 대기자가 없거나 waiter tree 정보가 현재 태스크의 정보와 같으면 종료합니다. 아니면 다음 lock을 얻고 잠금을 푼 뒤 get_task_struct로 참조를 확보하여 MIN_CHAINWALK 조정 함수에 넘깁니다. 주석은 그 참조가 체인 함수에서 반납된다고 명시합니다."
+      "text": "태스크의 우선순위가 바뀌면 pi_lock을 잡고 대기 관계를 확인합니다. 기다리는 잠금이 없거나 기록된 우선순위와 달라진 점이 없으면 끝납니다. 필요하면 태스크 참조를 얻어 수명이 유지되게 하고 최소한의 관계 추적을 요청합니다. 그 참조를 놓는 일은 호출된 핵심 코드와 연결됩니다."
     },
     {
       "title": "postunlock과 태스크 종료 진단",
-      "text": "rt_mutex_postunlock은 rt_mutex_wake_up_q를 호출해 앞서 준비한 깨우기를 수행하며 선점 재활성화 계약과 연결됩니다. DEBUG_RT_MUTEXES의 rt_mutex_debug_task_free는 pi_waiters 트리가 비었는지와 pi_blocked_on이 남았는지 경고합니다. 태스크 메모리를 실제 free하는 함수는 아닙니다."
+      "text": "postunlock은 예약된 태스크를 깨우고 앞서 막은 선점을 다시 허용합니다. rt_mutex_debug_task_free는 종료할 태스크에 우선순위 상속 대기자나 기다리는 잠금이 남았는지 경고합니다. 이름에 free가 있어도 태스크 메모리를 해제하는 함수는 아닙니다."
     },
     {
       "title": "RT 일반 mutex 초기화와 공통 획득",
-      "text": "PREEMPT_RT 부분의 __mutex_rt_init은 메모리 검사와 lockdep map 초기화만 하며 base 초기화는 공개 헤더의 __mutex_init 매크로와 연결됩니다. __mutex_lock_common은 진단 획득 후 __rt_mutex_lock을 호출하고 실패는 release, 성공은 lock_acquired를 기록합니다. 실제 API 호출 위치 ip를 인자로 받아 진단에 전달합니다."
+      "text": "PREEMPT_RT의 일반 mutex 초기화 함수는 메모리 진단과 잠금 진단 지도 준비를 맡으며 기본 잠금 초기화는 헤더의 절차와 연결됩니다. 공통 획득 함수는 진단 획득을 알리고 핵심 함수를 호출한 뒤 실패와 성공을 각각 기록합니다. 호출 위치 주소도 진단에 사용합니다."
     },
     {
       "title": "RT 일반 mutex wrapper 전체",
-      "text": "DEBUG_LOCK_ALLOC이면 nested/nest_lock/interruptible_nested/killable_nested/io_nested가 있고 아니면 일반 lock/interruptible/killable/io가 있습니다. 각각 대응 태스크 상태와 subclass를 전달합니다. IO 변형은 io_schedule_prepare의 token을 받아 공통 획득 후 io_schedule_finish로 마무리합니다. 상태와 회계만 바꾸고 별도 잠금 자료구조를 만들지 않습니다."
+      "text": "디버그 여부에 따라 중첩 정보가 있는 이름과 일반 이름의 함수가 나뉩니다. 끊을 수 없는 대기, 신호로 끊을 수 있는 대기, 종료 신호에 반응하는 대기의 상태를 각각 전달합니다. IO 변형은 잠금 전후에 입출력 대기 기록을 준비하고 복구하며 별도의 잠금 자료구조를 만드는 것은 아닙니다."
     },
     {
       "title": "RT 일반 mutex trylock과 unlock",
-      "text": "mutex_trylock도 디버그 문맥 확인, 핵심 trylock, 성공 시 진단 기록을 수행합니다. mutex_unlock은 진단 release 뒤 핵심 unlock입니다. 일반 이름의 export와 rt_mutex 이름의 GPL export 등 심볼 공개 정책은 원문의 각 선언에 따릅니다. 이 파일의 RT 구현을 비RT mutex.c의 모든 빠른 경로와 동일하다고 설명하지 않습니다."
+      "text": "PREEMPT_RT 일반 mutex의 trylock도 태스크 문맥 조건을 확인하며 성공했을 때만 획득 진단을 기록합니다. unlock은 진단 해제와 핵심 해제를 연결합니다. 공개되는 심벌 조건을 확인해야 하며 이 구현을 비실시간 설정의 mutex 핵심과 같다고 단정하지 않습니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "우선순위 상속과 호출 계층, 대리 소유자, 시작·대기·취소의 다단계 프로토콜, 깨우기 지연, lockdep class와 실제 잠금의 분리, 태스크 참조 수명을 학습합니다. 이 수업은 API 파일의 모든 경로를 설명하며 포함된 PI 핵심 알고리즘 전체나 모든 futex 경쟁을 검증한 결과는 아닙니다."
+      "text": "반환값의 뜻, proxy의 시작·대기·정리 순서, 우선순위 상속, 진단 기록, 객체 수명 참조를 함께 읽습니다. 이 파일을 읽었다고 포함된 핵심 구현의 모든 경로나 실제 실행 시험까지 확인한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "proxy 시작의1과 proxy 대기의0은 각각 무엇인가?",
+      "prompt": "proxy 시작이 1이고 실제 대기가 0이면 각각 무엇을 뜻하나요?",
       "options": [
+        "둘 다 해당 단계에서 잠금을 얻었다는 뜻입니다.",
+        "둘 다 시간 초과라는 뜻입니다."
+      ],
+      "answer": 0,
+      "explanation": "시작 함수와 대기 함수는 성공을 나타내는 숫자가 다릅니다.",
+      "original_prompt": "proxy 시작의1과 proxy 대기의0은 각각 무엇인가?",
+      "original_options": [
         "둘 다 각 단계에서의 획득 성공이다",
         "둘 다 시간 초과이다"
       ],
-      "answer": 0,
-      "explanation": "start는1획득·0대기·음수오류이고 wait는0성공·음수오류입니다. 함수별 반환 규약을 하나로 섞으면 획득 여부를 잘못 판단합니다."
+      "original_explanation": "start는1획득·0대기·음수오류이고 wait는0성공·음수오류입니다. 함수별 반환 규약을 하나로 섞으면 획득 여부를 잘못 판단합니다."
     },
     {
-      "prompt": "proxy wait가 timeout 오류를 반환하면 즉시 waiter를 버려도 되는가?",
+      "prompt": "proxy 대기에서 시간이 초과되면 대기자를 바로 버려도 되나요?",
       "options": [
+        "네. 시간 초과와 동시에 모든 연결이 사라집니다.",
+        "아니요. cleanup으로 최종 소유권과 대기 줄 제거를 확인합니다."
+      ],
+      "answer": 1,
+      "explanation": "오류를 받은 뒤에도 대기 줄에서 빠지기 전에는 소유자가 될 수 있습니다.",
+      "original_prompt": "proxy wait가 timeout 오류를 반환하면 즉시 waiter를 버려도 되는가?",
+      "original_options": [
         "그렇다. 오류 반환이 항상 모든 대기 정리를 끝낸다",
         "아니다. cleanup에서 최종 소유권과 큐 제거를 확인해야 한다"
       ],
-      "answer": 1,
-      "explanation": "대기자는 제거되기 전까지 소유권을 받을 수 있습니다. cleanup이 false이면 이미 획득한 것이므로 앞선 wait 오류를 무시해야 합니다."
+      "original_explanation": "대기자는 제거되기 전까지 소유권을 받을 수 있습니다. cleanup이 false이면 이미 획득한 것이므로 앞선 wait 오류를 무시해야 합니다."
     },
     {
-      "prompt": "rt_mutex_cleanup_proxy_lock의 false는?",
+      "prompt": "cleanup이 false를 돌려주면 어떻게 읽나요?",
       "options": [
+        "이미 잠금을 얻었으므로 앞의 대기 실패를 무시합니다.",
+        "아직 소유자가 없으므로 항상 실패입니다."
+      ],
+      "answer": 0,
+      "explanation": "false는 여기서 잠금 획득을 발견했다는 뜻입니다.",
+      "original_prompt": "rt_mutex_cleanup_proxy_lock의 false는?",
+      "original_options": [
         "현재 태스크가 잠금을 획득했다는 의미이다",
         "정리가 성공했고 잠금을 소유하지 않는다는 의미이다"
       ],
-      "answer": 0,
-      "explanation": "owner가 current가 아닌 경우만 제거 후 cleanup=true입니다. 소유자가 된 경우에는 false로 돌아가 호출자에게 획득 사실을 알립니다."
+      "original_explanation": "owner가 current가 아닌 경우만 제거 후 cleanup=true입니다. 소유자가 된 경우에는 false로 돌아가 호출자에게 획득 사실을 알립니다."
     },
     {
-      "prompt": "내부 futex unlock의 false는 해제 실패인가?",
+      "prompt": "내부 futex 해제의 false는 무엇인가요?",
       "options": [
+        "잠금 해제가 실패했다는 뜻입니다.",
+        "추가 postunlock 처리가 필요 없다는 뜻입니다."
+      ],
+      "answer": 1,
+      "explanation": "대기자가 없으면 소유자를 비우고 false로 정상 종료합니다.",
+      "original_prompt": "내부 futex unlock의 false는 해제 실패인가?",
+      "original_options": [
         "그렇다. 다시 unlock해야 한다",
         "아니다. 대기자가 없어 postunlock이 필요 없다는 뜻이다"
       ],
-      "answer": 1,
-      "explanation": "무대기 경로는 owner=NULL로 바꾸고 false입니다. 외부 wrapper는 이 bool로 잠금 밖 깨우기 후처리가 필요한지만 결정합니다."
+      "original_explanation": "무대기 경로는 owner=NULL로 바꾸고 false입니다. 외부 wrapper는 이 bool로 잠금 밖 깨우기 후처리가 필요한지만 결정합니다."
     },
     {
-      "prompt": "proxy 초기 소유자 설정 함수가 경쟁 접근을 자체 잠금으로 직렬화하는가?",
+      "prompt": "proxy 초기화가 동시 접근을 알아서 막나요?",
       "options": [
+        "아니요. 호출자가 공개 시점과 동시 접근을 관리합니다.",
+        "네. 모든 태스크를 막는 전역 잠금을 자동으로 잡습니다."
+      ],
+      "answer": 0,
+      "explanation": "아직 다른 태스크에 보이지 않는 PI 상태라는 전제가 있습니다.",
+      "original_prompt": "proxy 초기 소유자 설정 함수가 경쟁 접근을 자체 잠금으로 직렬화하는가?",
+      "original_options": [
         "아니다. 아직 공개되지 않은 PI 상태라는 전제와 호출자 직렬화가 필요하다",
         "그렇다. 항상 전역 futex lock을 자동 획득한다"
       ],
-      "answer": 0,
-      "explanation": "원문은 No locking과 미공개 pi_state 전제를 명시합니다. 일반 경쟁 중 소유자 변경 API처럼 사용할 수 없습니다."
+      "original_explanation": "원문은 No locking과 미공개 pi_state 전제를 명시합니다. 일반 경쟁 중 소유자 변경 API처럼 사용할 수 없습니다."
     },
     {
-      "prompt": "RT trylock이 비대기 함수이면 hard IRQ에서도 사용할 수 있는가?",
+      "prompt": "잠들지 않는 trylock은 인터럽트 처리 중에도 쓸 수 있나요?",
       "options": [
+        "네. 잠들지만 않으면 어디서든 가능합니다.",
+        "아니요. 태스크 문맥에서 호출해야 합니다."
+      ],
+      "answer": 1,
+      "explanation": "원자적 구역에서 호출 가능하다는 말은 하드·소프트 인터럽트 허용과 다릅니다.",
+      "original_prompt": "RT trylock이 비대기 함수이면 hard IRQ에서도 사용할 수 있는가?",
+      "original_options": [
         "그렇다. 잠들지 않는 함수는 모두 IRQ 안전하다",
         "아니다. 문서는 태스크 문맥만 허용한다"
       ],
-      "answer": 1,
-      "explanation": "rt_mutex_trylock 문서는 atomic region과 interrupt context를 구별합니다. DEBUG_RT_MUTEXES에서는 !in_task도 검사합니다."
+      "original_explanation": "rt_mutex_trylock 문서는 atomic region과 interrupt context를 구별합니다. DEBUG_RT_MUTEXES에서는 !in_task도 검사합니다."
     },
     {
-      "prompt": "RT 일반 mutex의 IO 획득 wrapper는 무엇을 추가하는가?",
+      "prompt": "IO 잠금 변형이 더하는 일은 무엇인가요?",
       "options": [
+        "입출력 대기 기록을 잠금 전후에 준비하고 복구합니다.",
+        "잠금을 얻을 때마다 디스크 요청을 직접 보냅니다."
+      ],
+      "answer": 0,
+      "explanation": "io_schedule 준비와 복구는 대기 상태 기록에 관한 처리입니다.",
+      "original_prompt": "RT 일반 mutex의 IO 획득 wrapper는 무엇을 추가하는가?",
+      "original_options": [
         "io_schedule_prepare/finish로 IO 대기 회계를 감싼다",
         "잠금 획득 대신 디스크 요청을 직접 제출한다"
       ],
-      "answer": 0,
-      "explanation": "token을 보존해 획득 전후 회계 처리를 연결합니다. 실제 획득은 동일한 __mutex_lock_common과 RT mutex core를 사용합니다."
+      "original_explanation": "token을 보존해 획득 전후 회계 처리를 연결합니다. 실제 획득은 동일한 __mutex_lock_common과 RT mutex core를 사용합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "proxy 시작의 1, 대기의 0, 정리의 false를 각각 소유권 획득과 연결해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * rtmutex API\n */\n#include <linux/spinlock.h>\n#include <linux/export.h>\n\n#define RT_MUTEX_BUILD_MUTEX\n#include \"rtmutex.c\"\n\n/*\n * Max number of times we'll walk the boosting chain:\n */\nint max_lock_depth = 1024;\n\n/*\n * Debug aware fast / slowpath lock,trylock,unlock\n *\n * The atomic acquire/release ops are compiled away, when either the\n * architecture does not support cmpxchg or when debugging is enabled.\n */\nstatic __always_inline int __rt_mutex_lock_common(struct rt_mutex *lock,\n\t\t\t\t\t\t  unsigned int state,\n\t\t\t\t\t\t  struct lockdep_map *nest_lock,\n\t\t\t\t\t\t  unsigned int subclass)\n{\n\tint ret;\n\n\tmight_sleep();\n\tmutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, _RET_IP_);\n\tret = __rt_mutex_lock(&lock->rtmutex, state);\n\tif (ret)\n\t\tmutex_release(&lock->dep_map, _RET_IP_);\n\treturn ret;\n}\n\nvoid rt_mutex_base_init(struct rt_mutex_base *rtb)\n{\n\t__rt_mutex_base_init(rtb);\n}\nEXPORT_SYMBOL(rt_mutex_base_init);\n\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n/**\n * rt_mutex_lock_nested - lock a rt_mutex\n *\n * @lock: the rt_mutex to be locked\n * @subclass: the lockdep subclass\n */\nvoid __sched rt_mutex_lock_nested(struct rt_mutex *lock, unsigned int subclass)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, NULL, subclass);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_nested);\n\nvoid __sched _rt_mutex_lock_nest_lock(struct rt_mutex *lock, struct lockdep_map *nest_lock)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, nest_lock, 0);\n}\nEXPORT_SYMBOL_GPL(_rt_mutex_lock_nest_lock);\n\n#else /* !CONFIG_DEBUG_LOCK_ALLOC */\n\n/**\n * rt_mutex_lock - lock a rt_mutex\n *\n * @lock: the rt_mutex to be locked\n */\nvoid __sched rt_mutex_lock(struct rt_mutex *lock)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock);\n#endif\n\n/**\n * rt_mutex_lock_interruptible - lock a rt_mutex interruptible\n *\n * @lock:\t\tthe rt_mutex to be locked\n *\n * Returns:\n *  0\t\ton success\n * -EINTR\twhen interrupted by a signal\n */\nint __sched rt_mutex_lock_interruptible(struct rt_mutex *lock)\n{\n\treturn __rt_mutex_lock_common(lock, TASK_INTERRUPTIBLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_interruptible);\n\n/**\n * rt_mutex_lock_killable - lock a rt_mutex killable\n *\n * @lock:\t\tthe rt_mutex to be locked\n *\n * Returns:\n *  0\t\ton success\n * -EINTR\twhen interrupted by a signal\n */\nint __sched rt_mutex_lock_killable(struct rt_mutex *lock)\n{\n\treturn __rt_mutex_lock_common(lock, TASK_KILLABLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_killable);\n\n/**\n * rt_mutex_trylock - try to lock a rt_mutex\n *\n * @lock:\tthe rt_mutex to be locked\n *\n * This function can only be called in thread context. It's safe to call it\n * from atomic regions, but not from hard or soft interrupt context.\n *\n * Returns:\n *  1 on success\n *  0 on contention\n */\nint __sched rt_mutex_trylock(struct rt_mutex *lock)\n{\n\tint ret;\n\n\tif (IS_ENABLED(CONFIG_DEBUG_RT_MUTEXES) && WARN_ON_ONCE(!in_task()))\n\t\treturn 0;\n\n\tret = __rt_mutex_trylock(&lock->rtmutex);\n\tif (ret)\n\t\tmutex_acquire(&lock->dep_map, 0, 1, _RET_IP_);\n\n\treturn ret;\n}\nEXPORT_SYMBOL_GPL(rt_mutex_trylock);\n\n/**\n * rt_mutex_unlock - unlock a rt_mutex\n *\n * @lock: the rt_mutex to be unlocked\n */\nvoid __sched rt_mutex_unlock(struct rt_mutex *lock)\n{\n\tmutex_release(&lock->dep_map, _RET_IP_);\n\t__rt_mutex_unlock(&lock->rtmutex);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_unlock);\n\n/*\n * Futex variants, must not use fastpath.\n */\nint __sched rt_mutex_futex_trylock(struct rt_mutex_base *lock)\n{\n\treturn rt_mutex_slowtrylock(lock);\n}\n\nint __sched __rt_mutex_futex_trylock(struct rt_mutex_base *lock)\n{\n\treturn __rt_mutex_slowtrylock(lock);\n}\n\n/**\n * __rt_mutex_futex_unlock - Futex variant, that since futex variants\n * do not use the fast-path, can be simple and will not need to retry.\n *\n * @lock:\tThe rt_mutex to be unlocked\n * @wqh:\tThe wake queue head from which to get the next lock waiter\n */\nbool __sched __rt_mutex_futex_unlock(struct rt_mutex_base *lock,\n\t\t\t\t     struct rt_wake_q_head *wqh)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\n\tdebug_rt_mutex_unlock(lock);\n\n\tif (!rt_mutex_has_waiters(lock)) {\n\t\tlock->owner = NULL;\n\t\treturn false; /* done */\n\t}\n\n\t/*\n\t * We've already deboosted, mark_wakeup_next_waiter() will\n\t * retain preempt_disabled when we drop the wait_lock, to\n\t * avoid inversion prior to the wakeup.  preempt_disable()\n\t * therein pairs with rt_mutex_postunlock().\n\t */\n\tmark_wakeup_next_waiter(wqh, lock);\n\n\treturn true; /* call postunlock() */\n}\n\nvoid __sched rt_mutex_futex_unlock(struct rt_mutex_base *lock)\n{\n\tDEFINE_RT_WAKE_Q(wqh);\n\tunsigned long flags;\n\tbool postunlock;\n\n\traw_spin_lock_irqsave(&lock->wait_lock, flags);\n\tpostunlock = __rt_mutex_futex_unlock(lock, &wqh);\n\traw_spin_unlock_irqrestore(&lock->wait_lock, flags);\n\n\tif (postunlock)\n\t\trt_mutex_postunlock(&wqh);\n}\n\n/**\n * __rt_mutex_init - initialize the rt_mutex\n *\n * @lock:\tThe rt_mutex to be initialized\n * @name:\tThe lock name used for debugging\n * @key:\tThe lock class key used for debugging\n *\n * Initialize the rt_mutex to unlocked state.\n *\n * Initializing of a locked rt_mutex is not allowed\n */\nvoid __sched __rt_mutex_init(struct rt_mutex *lock, const char *name,\n\t\t\t     struct lock_class_key *key)\n{\n\tdebug_check_no_locks_freed((void *)lock, sizeof(*lock));\n\t__rt_mutex_base_init(&lock->rtmutex);\n\tlockdep_init_map_wait(&lock->dep_map, name, key, 0, LD_WAIT_SLEEP);\n}\nEXPORT_SYMBOL_GPL(__rt_mutex_init);\n\n/**\n * rt_mutex_init_proxy_locked - initialize and lock a rt_mutex on behalf of a\n *\t\t\t\tproxy owner\n *\n * @lock:\tthe rt_mutex to be locked\n * @proxy_owner:the task to set as owner\n *\n * No locking. Caller has to do serializing itself\n *\n * Special API call for PI-futex support. This initializes the rtmutex and\n * assigns it to @proxy_owner. Concurrent operations on the rtmutex are not\n * possible at this point because the pi_state which contains the rtmutex\n * is not yet visible to other tasks.\n */\nvoid __sched rt_mutex_init_proxy_locked(struct rt_mutex_base *lock,\n\t\t\t\t\tstruct task_struct *proxy_owner)\n{\n\tstatic struct lock_class_key pi_futex_key;\n\n\t__rt_mutex_base_init(lock);\n\t/*\n\t * On PREEMPT_RT the futex hashbucket spinlock becomes 'sleeping'\n\t * and rtmutex based. That causes a lockdep false positive, because\n\t * some of the futex functions invoke spin_unlock(&hb->lock) with\n\t * the wait_lock of the rtmutex associated to the pi_futex held.\n\t * spin_unlock() in turn takes wait_lock of the rtmutex on which\n\t * the spinlock is based, which makes lockdep notice a lock\n\t * recursion. Give the futex/rtmutex wait_lock a separate key.\n\t */\n\tlockdep_set_class(&lock->wait_lock, &pi_futex_key);\n\trt_mutex_set_owner(lock, proxy_owner);\n}\n\n/**\n * rt_mutex_proxy_unlock - release a lock on behalf of owner\n *\n * @lock:\tthe rt_mutex to be locked\n *\n * No locking. Caller has to do serializing itself\n *\n * Special API call for PI-futex support. This just cleans up the rtmutex\n * (debugging) state. Concurrent operations on this rt_mutex are not\n * possible because it belongs to the pi_state which is about to be freed\n * and it is not longer visible to other tasks.\n */\nvoid __sched rt_mutex_proxy_unlock(struct rt_mutex_base *lock)\n{\n\tdebug_rt_mutex_proxy_unlock(lock);\n\trt_mutex_clear_owner(lock);\n}\n\n/**\n * __rt_mutex_start_proxy_lock() - Start lock acquisition for another task\n * @lock:\t\tthe rt_mutex to take\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n * @task:\t\tthe task to prepare\n *\n * Starts the rt_mutex acquire; it enqueues the @waiter and does deadlock\n * detection. It does not wait, see rt_mutex_wait_proxy_lock() for that.\n *\n * NOTE: does _NOT_ remove the @waiter on failure; must either call\n * rt_mutex_wait_proxy_lock() or rt_mutex_cleanup_proxy_lock() after this.\n *\n * Returns:\n *  0 - task blocked on lock\n *  1 - acquired the lock for task, caller should wake it up\n * <0 - error\n *\n * Special API call for PI-futex support.\n */\nint __sched __rt_mutex_start_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t\tstruct rt_mutex_waiter *waiter,\n\t\t\t\t\tstruct task_struct *task)\n{\n\tint ret;\n\n\tlockdep_assert_held(&lock->wait_lock);\n\n\tif (try_to_take_rt_mutex(lock, task, NULL))\n\t\treturn 1;\n\n\t/* We enforce deadlock detection for futexes */\n\tret = task_blocks_on_rt_mutex(lock, waiter, task, NULL,\n\t\t\t\t      RT_MUTEX_FULL_CHAINWALK);\n\n\tif (ret && !rt_mutex_owner(lock)) {\n\t\t/*\n\t\t * Reset the return value. We might have\n\t\t * returned with -EDEADLK and the owner\n\t\t * released the lock while we were walking the\n\t\t * pi chain.  Let the waiter sort it out.\n\t\t */\n\t\tret = 0;\n\t}\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_start_proxy_lock() - Start lock acquisition for another task\n * @lock:\t\tthe rt_mutex to take\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n * @task:\t\tthe task to prepare\n *\n * Starts the rt_mutex acquire; it enqueues the @waiter and does deadlock\n * detection. It does not wait, see rt_mutex_wait_proxy_lock() for that.\n *\n * NOTE: unlike __rt_mutex_start_proxy_lock this _DOES_ remove the @waiter\n * on failure.\n *\n * Returns:\n *  0 - task blocked on lock\n *  1 - acquired the lock for task, caller should wake it up\n * <0 - error\n *\n * Special API call for PI-futex support.\n */\nint __sched rt_mutex_start_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t      struct rt_mutex_waiter *waiter,\n\t\t\t\t      struct task_struct *task)\n{\n\tint ret;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\tret = __rt_mutex_start_proxy_lock(lock, waiter, task);\n\tif (unlikely(ret))\n\t\tremove_waiter(lock, waiter);\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_wait_proxy_lock() - Wait for lock acquisition\n * @lock:\t\tthe rt_mutex we were woken on\n * @to:\t\t\tthe timeout, null if none. hrtimer should already have\n *\t\t\tbeen started.\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n *\n * Wait for the lock acquisition started on our behalf by\n * rt_mutex_start_proxy_lock(). Upon failure, the caller must call\n * rt_mutex_cleanup_proxy_lock().\n *\n * Returns:\n *  0 - success\n * <0 - error, one of -EINTR, -ETIMEDOUT\n *\n * Special API call for PI-futex support\n */\nint __sched rt_mutex_wait_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t     struct hrtimer_sleeper *to,\n\t\t\t\t     struct rt_mutex_waiter *waiter)\n{\n\tint ret;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\t/* sleep on the mutex */\n\tset_current_state(TASK_INTERRUPTIBLE);\n\tret = rt_mutex_slowlock_block(lock, NULL, TASK_INTERRUPTIBLE, to, waiter);\n\t/*\n\t * try_to_take_rt_mutex() sets the waiter bit unconditionally. We might\n\t * have to fix that up.\n\t */\n\tfixup_rt_mutex_waiters(lock, true);\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_cleanup_proxy_lock() - Cleanup failed lock acquisition\n * @lock:\t\tthe rt_mutex we were woken on\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n *\n * Attempt to clean up after a failed __rt_mutex_start_proxy_lock() or\n * rt_mutex_wait_proxy_lock().\n *\n * Unless we acquired the lock; we're still enqueued on the wait-list and can\n * in fact still be granted ownership until we're removed. Therefore we can\n * find we are in fact the owner and must disregard the\n * rt_mutex_wait_proxy_lock() failure.\n *\n * Returns:\n *  true  - did the cleanup, we done.\n *  false - we acquired the lock after rt_mutex_wait_proxy_lock() returned,\n *          caller should disregards its return value.\n *\n * Special API call for PI-futex support\n */\nbool __sched rt_mutex_cleanup_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t\t struct rt_mutex_waiter *waiter)\n{\n\tbool cleanup = false;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\t/*\n\t * Do an unconditional try-lock, this deals with the lock stealing\n\t * state where __rt_mutex_futex_unlock() -> mark_wakeup_next_waiter()\n\t * sets a NULL owner.\n\t *\n\t * We're not interested in the return value, because the subsequent\n\t * test on rt_mutex_owner() will infer that. If the trylock succeeded,\n\t * we will own the lock and it will have removed the waiter. If we\n\t * failed the trylock, we're still not owner and we need to remove\n\t * ourselves.\n\t */\n\ttry_to_take_rt_mutex(lock, current, waiter);\n\t/*\n\t * Unless we're the owner; we're still enqueued on the wait_list.\n\t * So check if we became owner, if not, take us off the wait_list.\n\t */\n\tif (rt_mutex_owner(lock) != current) {\n\t\tremove_waiter(lock, waiter);\n\t\tcleanup = true;\n\t}\n\t/*\n\t * try_to_take_rt_mutex() sets the waiter bit unconditionally. We might\n\t * have to fix that up.\n\t */\n\tfixup_rt_mutex_waiters(lock, false);\n\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn cleanup;\n}\n\n/*\n * Recheck the pi chain, in case we got a priority setting\n *\n * Called from sched_setscheduler\n */\nvoid __sched rt_mutex_adjust_pi(struct task_struct *task)\n{\n\tstruct rt_mutex_waiter *waiter;\n\tstruct rt_mutex_base *next_lock;\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&task->pi_lock, flags);\n\n\twaiter = task->pi_blocked_on;\n\tif (!waiter || rt_waiter_node_equal(&waiter->tree, task_to_waiter_node(task))) {\n\t\traw_spin_unlock_irqrestore(&task->pi_lock, flags);\n\t\treturn;\n\t}\n\tnext_lock = waiter->lock;\n\traw_spin_unlock_irqrestore(&task->pi_lock, flags);\n\n\t/* gets dropped in rt_mutex_adjust_prio_chain()! */\n\tget_task_struct(task);\n\n\trt_mutex_adjust_prio_chain(task, RT_MUTEX_MIN_CHAINWALK, NULL,\n\t\t\t\t   next_lock, NULL, task);\n}\n\n/*\n * Performs the wakeup of the top-waiter and re-enables preemption.\n */\nvoid __sched rt_mutex_postunlock(struct rt_wake_q_head *wqh)\n{\n\trt_mutex_wake_up_q(wqh);\n}\n\n#ifdef CONFIG_DEBUG_RT_MUTEXES\nvoid rt_mutex_debug_task_free(struct task_struct *task)\n{\n\tDEBUG_LOCKS_WARN_ON(!RB_EMPTY_ROOT(&task->pi_waiters.rb_root));\n\tDEBUG_LOCKS_WARN_ON(task->pi_blocked_on);\n}\n#endif\n\n#ifdef CONFIG_PREEMPT_RT\n/* Mutexes */\nvoid __mutex_rt_init(struct mutex *mutex, const char *name,\n\t\t     struct lock_class_key *key)\n{\n\tdebug_check_no_locks_freed((void *)mutex, sizeof(*mutex));\n\tlockdep_init_map_wait(&mutex->dep_map, name, key, 0, LD_WAIT_SLEEP);\n}\nEXPORT_SYMBOL(__mutex_rt_init);\n\nstatic __always_inline int __mutex_lock_common(struct mutex *lock,\n\t\t\t\t\t       unsigned int state,\n\t\t\t\t\t       unsigned int subclass,\n\t\t\t\t\t       struct lockdep_map *nest_lock,\n\t\t\t\t\t       unsigned long ip)\n{\n\tint ret;\n\n\tmight_sleep();\n\tmutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);\n\tret = __rt_mutex_lock(&lock->rtmutex, state);\n\tif (ret)\n\t\tmutex_release(&lock->dep_map, ip);\n\telse\n\t\tlock_acquired(&lock->dep_map, ip);\n\treturn ret;\n}\n\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\nvoid __sched mutex_lock_nested(struct mutex *lock, unsigned int subclass)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_nested);\n\nvoid __sched _mutex_lock_nest_lock(struct mutex *lock,\n\t\t\t\t   struct lockdep_map *nest_lock)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, nest_lock, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(_mutex_lock_nest_lock);\n\nint __sched mutex_lock_interruptible_nested(struct mutex *lock,\n\t\t\t\t\t    unsigned int subclass)\n{\n\treturn __mutex_lock_common(lock, TASK_INTERRUPTIBLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_interruptible_nested);\n\nint __sched mutex_lock_killable_nested(struct mutex *lock,\n\t\t\t\t\t    unsigned int subclass)\n{\n\treturn __mutex_lock_common(lock, TASK_KILLABLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_killable_nested);\n\nvoid __sched mutex_lock_io_nested(struct mutex *lock, unsigned int subclass)\n{\n\tint token;\n\n\tmight_sleep();\n\n\ttoken = io_schedule_prepare();\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, subclass, NULL, _RET_IP_);\n\tio_schedule_finish(token);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_io_nested);\n\n#else /* CONFIG_DEBUG_LOCK_ALLOC */\n\nvoid __sched mutex_lock(struct mutex *lock)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock);\n\nint __sched mutex_lock_interruptible(struct mutex *lock)\n{\n\treturn __mutex_lock_common(lock, TASK_INTERRUPTIBLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock_interruptible);\n\nint __sched mutex_lock_killable(struct mutex *lock)\n{\n\treturn __mutex_lock_common(lock, TASK_KILLABLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock_killable);\n\nvoid __sched mutex_lock_io(struct mutex *lock)\n{\n\tint token = io_schedule_prepare();\n\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, NULL, _RET_IP_);\n\tio_schedule_finish(token);\n}\nEXPORT_SYMBOL(mutex_lock_io);\n#endif /* !CONFIG_DEBUG_LOCK_ALLOC */\n\nint __sched mutex_trylock(struct mutex *lock)\n{\n\tint ret;\n\n\tif (IS_ENABLED(CONFIG_DEBUG_RT_MUTEXES) && WARN_ON_ONCE(!in_task()))\n\t\treturn 0;\n\n\tret = __rt_mutex_trylock(&lock->rtmutex);\n\tif (ret)\n\t\tmutex_acquire(&lock->dep_map, 0, 1, _RET_IP_);\n\n\treturn ret;\n}\nEXPORT_SYMBOL(mutex_trylock);\n\nvoid __sched mutex_unlock(struct mutex *lock)\n{\n\tmutex_release(&lock->dep_map, _RET_IP_);\n\t__rt_mutex_unlock(&lock->rtmutex);\n}\nEXPORT_SYMBOL(mutex_unlock);\n\n#endif /* CONFIG_PREEMPT_RT */\n",
   "source_review": {
@@ -213,5 +251,250 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/rtmutex_api.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-40f92d142f84f7dd",
+    "path": "kernel/locking/rtmutex_api.c",
+    "title": "RT mutex API 전체: 일반 획득, PI futex 대리 대기와 RT mutex 연결",
+    "area": "우선순위 상속 · futex · 대리 소유권 · RT · 잠금 진단",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "RT mutex 공개 함수, PI futex의 proxy 획득·정리, 우선순위 조정과 PREEMPT_RT의 일반 mutex API 연결을 구현합니다.",
+    "guide": [
+      "실제 우선순위 상속 알고리즘과 API wrapper를 구분합니다. 대리 대기가 오류로 돌아와도 정리 중 소유권을 얻을 수 있어 최종 상태를 확인해야 합니다.",
+      "대리 획득의 시작·대기·정리 반환값을 각각 구분합니다. 이 파일을 읽었다고 포함되는 rtmutex.c의 모든 알고리즘까지 학습 완료로 세지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 포함 방식",
+        "text": "GPL-2.0-only, spinlock/export 포함, RT_MUTEX_BUILD_MUTEX 정의 뒤 rtmutex.c를 직접 포함합니다. 이어 chain 한계, 일반 RT API, futex와 proxy API, PI 조정·postunlock·진단, PREEMPT_RT mutex wrapper가 있습니다. 실제 핵심 알고리즘은 포함되는 파일의 helper를 이용하며 두 소스 파일의 학습 범위는 별개입니다."
+      },
+      {
+        "title": "체인 한계와 빠른 경로",
+        "text": "max_lock_depth는1024로 초기화된 전역 int입니다. 주석은 우선순위 상승 체인 순회 제한을 설명하며 이 파일 자체에 전체 체인 루프가 있지는 않습니다. 디버그나 아키텍처 cmpxchg 지원에 따라 빠른 원자 경로가 사라질 수 있다는 설명도 포함됩니다."
+      },
+      {
+        "title": "RT 공통 획득",
+        "text": "__rt_mutex_lock_common은 might_sleep, mutex_acquire_nest 진단 기록, __rt_mutex_lock 호출 순서입니다. 실패 ret이면 mutex_release로 진단 획득을 되돌립니다. 진단 기록이 실제 잠금 소유권을 주는 것은 아니며 반환값은 핵심 함수에서 옵니다."
+      },
+      {
+        "title": "기본 초기화와 공개 획득",
+        "text": "rt_mutex_base_init은 __rt_mutex_base_init을 호출하고 일반 export입니다. DEBUG_LOCK_ALLOC이면 nested와 nest_lock wrapper, 아니면 일반 rt_mutex_lock이 TASK_UNINTERRUPTIBLE로 공통 획득을 호출합니다. interruptible/killable은 각각 상태를 바꾸고 성공0, 신호 중단 -EINTR 계약입니다. 이 공개 rt_mutex 획득 계열은 GPL export합니다."
+      },
+      {
+        "title": "trylock과 해제",
+        "text": "rt_mutex_trylock은 DEBUG_RT_MUTEXES에서 비태스크 문맥이면 경고 후0입니다. 핵심 trylock 성공에만 lockdep 획득을 기록하고 성공1·경합0을 반환합니다. 주석은 태스크 문맥의 atomic region은 가능하지만 hard/soft IRQ 문맥은 안 된다고 구분합니다. unlock은 진단 release 뒤 핵심 unlock을 호출합니다."
+      },
+      {
+        "title": "Futex trylock 분리",
+        "text": "rt_mutex_futex_trylock은 rt_mutex_slowtrylock, 밑줄 버전은 __rt_mutex_slowtrylock으로 전달합니다. 주석은 futex 변형이 빠른 경로를 사용해서는 안 된다고 명시합니다. 이름이 비슷해도 일반 rt_mutex_trylock으로 바꾸면 동일한 계약이라고 가정할 수 없습니다."
+      },
+      {
+        "title": "Futex 잠금 아래 해제",
+        "text": "__rt_mutex_futex_unlock은 wait_lock 보유를 assert하고 debug unlock을 수행합니다. 대기자가 없으면 owner=NULL 뒤 false, 있으면 mark_wakeup_next_waiter를 호출한 뒤 true입니다. 이 bool은 해제 성공 여부가 아니라 이후 postunlock이 필요한지입니다. 주석은 깨우기 전 역전을 막기 위해 유지한 선점 금지와 postunlock의 짝을 설명합니다."
+      },
+      {
+        "title": "Futex 외부 해제",
+        "text": "rt_mutex_futex_unlock은 wake queue를 만들고 irqsave wait_lock 아래 내부 해제를 호출합니다. 잠금을 풀고 IRQ를 복원한 뒤 필요한 경우 rt_mutex_postunlock을 호출합니다. 큐 표시와 실제 깨우기를 잠금 밖 단계로 나누며 false인 무대기 경로에도 해제는 이미 이루어졌습니다."
+      },
+      {
+        "title": "RT 객체 초기화",
+        "text": "__rt_mutex_init은 보유 잠금 메모리 재초기화를 검사하고 base 초기화, LD_WAIT_SLEEP lockdep map 초기화를 수행합니다. 잠긴 객체의 재초기화는 문서상 금지입니다. 객체 메모리 할당이나 수명 참조 획득을 대신하는 함수는 아닙니다."
+      },
+      {
+        "title": "Proxy 초기 소유자",
+        "text": "rt_mutex_init_proxy_locked는 base를 초기화하고 PI futex 전용 static key를 wait_lock class에 지정한 뒤 proxy_owner를 설정합니다. PI 상태가 아직 다른 태스크에 공개되지 않아 경쟁이 없다는 전제이며 자체 외부 직렬화는 하지 않습니다. RT에서 futex hashbucket 잠금과 관련된 lockdep 재귀 오탐을 피하려 별도 class를 둔다는 주석이 있습니다."
+      },
+      {
+        "title": "Proxy 최종 해제",
+        "text": "rt_mutex_proxy_unlock은 debug proxy unlock과 owner clear만 합니다. 주석은 더 이상 다른 태스크에 보이지 않고 해제될 PI 상태의 정리용이라고 설명합니다. 살아 있는 경쟁 큐를 일반 unlock처럼 처리하거나 호출자 직렬화 없이 사용하는 API가 아닙니다."
+      },
+      {
+        "title": "Proxy 시작 내부 함수",
+        "text": "__rt_mutex_start_proxy_lock은 wait_lock 보유를 요구합니다. 지정 task가 즉시 try_to_take에 성공하면1입니다. 아니면 task_blocks_on_rt_mutex에 FULL_CHAINWALK를 전달해 대기와 교착 검사를 진행합니다. 오류가 났지만 체인 순회 중 owner가 사라졌다면 ret0으로 바꿔 대기 측이 다시 해결하도록 합니다. 반환0은 대기 중,1은 해당 task의 획득,음수는 오류입니다."
+      },
+      {
+        "title": "Proxy 시작 wrapper와 정리 차이",
+        "text": "rt_mutex_start_proxy_lock은 lock_irq로 내부 함수를 호출하고 ret이0이 아니면 remove_waiter를 실행한 뒤 잠금을 풉니다. 주석은 내부 버전과 달리 실패 대기자를 정리한다고 설명하지만 실제 조건은 음수뿐 아니라 양수1도 포함합니다. 내부 시작은 실패에서 대기자를 제거하지 않으므로 wait 또는 cleanup의 후속 절차가 필요합니다."
+      },
+      {
+        "title": "Proxy 실제 대기",
+        "text": "rt_mutex_wait_proxy_lock은 wait_lock을 잡고 TASK_INTERRUPTIBLE로 설정한 뒤 rt_mutex_slowlock_block에 waiter와 선택적 hrtimer_sleeper를 전달합니다. 타이머가 있으면 이미 시작되어 있어야 한다는 문서 조건이 있습니다. 이후 fixup_rt_mutex_waiters(lock,true)로 waiter bit를 정리하고 잠금을 풀어 성공0 또는 -EINTR/-ETIMEDOUT을 반환합니다."
+      },
+      {
+        "title": "Proxy cleanup의 역설적 반환",
+        "text": "rt_mutex_cleanup_proxy_lock은 잠금 아래 무조건 try_to_take_rt_mutex를 시도합니다. 이어 실제 owner가 current가 아니면 remove_waiter하고 cleanup=true, 소유자가 되었다면 false입니다. 마지막에 fixup_rt_mutex_waiters(lock,false)를 실행합니다. false는 정리 실패로 무시할 값이 아니라 획득했으므로 앞선 wait 오류를 버려야 한다는 의미입니다."
+      },
+      {
+        "title": "오류 뒤에도 소유권을 얻는 이유",
+        "text": "대기 함수가 오류로 반환해도 항목이 제거되기 전까지 인계 대상일 수 있습니다. 해제가 owner를 NULL로 둔 중간 상태도 cleanup의 trylock이 처리합니다. timeout 반환 하나만 보고 waiter 메모리를 버리면 큐와 소유권을 잘못 처리할 수 있어 최종 정리 결과를 확인해야 합니다."
+      },
+      {
+        "title": "우선순위 변경 후 PI 재검사",
+        "text": "rt_mutex_adjust_pi는 task->pi_lock을 irqsave로 잡고 pi_blocked_on을 확인합니다. 대기자가 없거나 waiter tree 정보가 현재 태스크의 정보와 같으면 종료합니다. 아니면 다음 lock을 얻고 잠금을 푼 뒤 get_task_struct로 참조를 확보하여 MIN_CHAINWALK 조정 함수에 넘깁니다. 주석은 그 참조가 체인 함수에서 반납된다고 명시합니다."
+      },
+      {
+        "title": "postunlock과 태스크 종료 진단",
+        "text": "rt_mutex_postunlock은 rt_mutex_wake_up_q를 호출해 앞서 준비한 깨우기를 수행하며 선점 재활성화 계약과 연결됩니다. DEBUG_RT_MUTEXES의 rt_mutex_debug_task_free는 pi_waiters 트리가 비었는지와 pi_blocked_on이 남았는지 경고합니다. 태스크 메모리를 실제 free하는 함수는 아닙니다."
+      },
+      {
+        "title": "RT 일반 mutex 초기화와 공통 획득",
+        "text": "PREEMPT_RT 부분의 __mutex_rt_init은 메모리 검사와 lockdep map 초기화만 하며 base 초기화는 공개 헤더의 __mutex_init 매크로와 연결됩니다. __mutex_lock_common은 진단 획득 후 __rt_mutex_lock을 호출하고 실패는 release, 성공은 lock_acquired를 기록합니다. 실제 API 호출 위치 ip를 인자로 받아 진단에 전달합니다."
+      },
+      {
+        "title": "RT 일반 mutex wrapper 전체",
+        "text": "DEBUG_LOCK_ALLOC이면 nested/nest_lock/interruptible_nested/killable_nested/io_nested가 있고 아니면 일반 lock/interruptible/killable/io가 있습니다. 각각 대응 태스크 상태와 subclass를 전달합니다. IO 변형은 io_schedule_prepare의 token을 받아 공통 획득 후 io_schedule_finish로 마무리합니다. 상태와 회계만 바꾸고 별도 잠금 자료구조를 만들지 않습니다."
+      },
+      {
+        "title": "RT 일반 mutex trylock과 unlock",
+        "text": "mutex_trylock도 디버그 문맥 확인, 핵심 trylock, 성공 시 진단 기록을 수행합니다. mutex_unlock은 진단 release 뒤 핵심 unlock입니다. 일반 이름의 export와 rt_mutex 이름의 GPL export 등 심볼 공개 정책은 원문의 각 선언에 따릅니다. 이 파일의 RT 구현을 비RT mutex.c의 모든 빠른 경로와 동일하다고 설명하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "우선순위 상속과 호출 계층, 대리 소유자, 시작·대기·취소의 다단계 프로토콜, 깨우기 지연, lockdep class와 실제 잠금의 분리, 태스크 참조 수명을 학습합니다. 이 수업은 API 파일의 모든 경로를 설명하며 포함된 PI 핵심 알고리즘 전체나 모든 futex 경쟁을 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "proxy 시작의1과 proxy 대기의0은 각각 무엇인가?",
+        "options": [
+          "둘 다 각 단계에서의 획득 성공이다",
+          "둘 다 시간 초과이다"
+        ],
+        "answer": 0,
+        "explanation": "start는1획득·0대기·음수오류이고 wait는0성공·음수오류입니다. 함수별 반환 규약을 하나로 섞으면 획득 여부를 잘못 판단합니다."
+      },
+      {
+        "prompt": "proxy wait가 timeout 오류를 반환하면 즉시 waiter를 버려도 되는가?",
+        "options": [
+          "그렇다. 오류 반환이 항상 모든 대기 정리를 끝낸다",
+          "아니다. cleanup에서 최종 소유권과 큐 제거를 확인해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "대기자는 제거되기 전까지 소유권을 받을 수 있습니다. cleanup이 false이면 이미 획득한 것이므로 앞선 wait 오류를 무시해야 합니다."
+      },
+      {
+        "prompt": "rt_mutex_cleanup_proxy_lock의 false는?",
+        "options": [
+          "현재 태스크가 잠금을 획득했다는 의미이다",
+          "정리가 성공했고 잠금을 소유하지 않는다는 의미이다"
+        ],
+        "answer": 0,
+        "explanation": "owner가 current가 아닌 경우만 제거 후 cleanup=true입니다. 소유자가 된 경우에는 false로 돌아가 호출자에게 획득 사실을 알립니다."
+      },
+      {
+        "prompt": "내부 futex unlock의 false는 해제 실패인가?",
+        "options": [
+          "그렇다. 다시 unlock해야 한다",
+          "아니다. 대기자가 없어 postunlock이 필요 없다는 뜻이다"
+        ],
+        "answer": 1,
+        "explanation": "무대기 경로는 owner=NULL로 바꾸고 false입니다. 외부 wrapper는 이 bool로 잠금 밖 깨우기 후처리가 필요한지만 결정합니다."
+      },
+      {
+        "prompt": "proxy 초기 소유자 설정 함수가 경쟁 접근을 자체 잠금으로 직렬화하는가?",
+        "options": [
+          "아니다. 아직 공개되지 않은 PI 상태라는 전제와 호출자 직렬화가 필요하다",
+          "그렇다. 항상 전역 futex lock을 자동 획득한다"
+        ],
+        "answer": 0,
+        "explanation": "원문은 No locking과 미공개 pi_state 전제를 명시합니다. 일반 경쟁 중 소유자 변경 API처럼 사용할 수 없습니다."
+      },
+      {
+        "prompt": "RT trylock이 비대기 함수이면 hard IRQ에서도 사용할 수 있는가?",
+        "options": [
+          "그렇다. 잠들지 않는 함수는 모두 IRQ 안전하다",
+          "아니다. 문서는 태스크 문맥만 허용한다"
+        ],
+        "answer": 1,
+        "explanation": "rt_mutex_trylock 문서는 atomic region과 interrupt context를 구별합니다. DEBUG_RT_MUTEXES에서는 !in_task도 검사합니다."
+      },
+      {
+        "prompt": "RT 일반 mutex의 IO 획득 wrapper는 무엇을 추가하는가?",
+        "options": [
+          "io_schedule_prepare/finish로 IO 대기 회계를 감싼다",
+          "잠금 획득 대신 디스크 요청을 직접 제출한다"
+        ],
+        "answer": 0,
+        "explanation": "token을 보존해 획득 전후 회계 처리를 연결합니다. 실제 획득은 동일한 __mutex_lock_common과 RT mutex core를 사용합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * rtmutex API\n */\n#include <linux/spinlock.h>\n#include <linux/export.h>\n\n#define RT_MUTEX_BUILD_MUTEX\n#include \"rtmutex.c\"\n\n/*\n * Max number of times we'll walk the boosting chain:\n */\nint max_lock_depth = 1024;\n\n/*\n * Debug aware fast / slowpath lock,trylock,unlock\n *\n * The atomic acquire/release ops are compiled away, when either the\n * architecture does not support cmpxchg or when debugging is enabled.\n */\nstatic __always_inline int __rt_mutex_lock_common(struct rt_mutex *lock,\n\t\t\t\t\t\t  unsigned int state,\n\t\t\t\t\t\t  struct lockdep_map *nest_lock,\n\t\t\t\t\t\t  unsigned int subclass)\n{\n\tint ret;\n\n\tmight_sleep();\n\tmutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, _RET_IP_);\n\tret = __rt_mutex_lock(&lock->rtmutex, state);\n\tif (ret)\n\t\tmutex_release(&lock->dep_map, _RET_IP_);\n\treturn ret;\n}\n\nvoid rt_mutex_base_init(struct rt_mutex_base *rtb)\n{\n\t__rt_mutex_base_init(rtb);\n}\nEXPORT_SYMBOL(rt_mutex_base_init);\n\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n/**\n * rt_mutex_lock_nested - lock a rt_mutex\n *\n * @lock: the rt_mutex to be locked\n * @subclass: the lockdep subclass\n */\nvoid __sched rt_mutex_lock_nested(struct rt_mutex *lock, unsigned int subclass)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, NULL, subclass);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_nested);\n\nvoid __sched _rt_mutex_lock_nest_lock(struct rt_mutex *lock, struct lockdep_map *nest_lock)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, nest_lock, 0);\n}\nEXPORT_SYMBOL_GPL(_rt_mutex_lock_nest_lock);\n\n#else /* !CONFIG_DEBUG_LOCK_ALLOC */\n\n/**\n * rt_mutex_lock - lock a rt_mutex\n *\n * @lock: the rt_mutex to be locked\n */\nvoid __sched rt_mutex_lock(struct rt_mutex *lock)\n{\n\t__rt_mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock);\n#endif\n\n/**\n * rt_mutex_lock_interruptible - lock a rt_mutex interruptible\n *\n * @lock:\t\tthe rt_mutex to be locked\n *\n * Returns:\n *  0\t\ton success\n * -EINTR\twhen interrupted by a signal\n */\nint __sched rt_mutex_lock_interruptible(struct rt_mutex *lock)\n{\n\treturn __rt_mutex_lock_common(lock, TASK_INTERRUPTIBLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_interruptible);\n\n/**\n * rt_mutex_lock_killable - lock a rt_mutex killable\n *\n * @lock:\t\tthe rt_mutex to be locked\n *\n * Returns:\n *  0\t\ton success\n * -EINTR\twhen interrupted by a signal\n */\nint __sched rt_mutex_lock_killable(struct rt_mutex *lock)\n{\n\treturn __rt_mutex_lock_common(lock, TASK_KILLABLE, NULL, 0);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_lock_killable);\n\n/**\n * rt_mutex_trylock - try to lock a rt_mutex\n *\n * @lock:\tthe rt_mutex to be locked\n *\n * This function can only be called in thread context. It's safe to call it\n * from atomic regions, but not from hard or soft interrupt context.\n *\n * Returns:\n *  1 on success\n *  0 on contention\n */\nint __sched rt_mutex_trylock(struct rt_mutex *lock)\n{\n\tint ret;\n\n\tif (IS_ENABLED(CONFIG_DEBUG_RT_MUTEXES) && WARN_ON_ONCE(!in_task()))\n\t\treturn 0;\n\n\tret = __rt_mutex_trylock(&lock->rtmutex);\n\tif (ret)\n\t\tmutex_acquire(&lock->dep_map, 0, 1, _RET_IP_);\n\n\treturn ret;\n}\nEXPORT_SYMBOL_GPL(rt_mutex_trylock);\n\n/**\n * rt_mutex_unlock - unlock a rt_mutex\n *\n * @lock: the rt_mutex to be unlocked\n */\nvoid __sched rt_mutex_unlock(struct rt_mutex *lock)\n{\n\tmutex_release(&lock->dep_map, _RET_IP_);\n\t__rt_mutex_unlock(&lock->rtmutex);\n}\nEXPORT_SYMBOL_GPL(rt_mutex_unlock);\n\n/*\n * Futex variants, must not use fastpath.\n */\nint __sched rt_mutex_futex_trylock(struct rt_mutex_base *lock)\n{\n\treturn rt_mutex_slowtrylock(lock);\n}\n\nint __sched __rt_mutex_futex_trylock(struct rt_mutex_base *lock)\n{\n\treturn __rt_mutex_slowtrylock(lock);\n}\n\n/**\n * __rt_mutex_futex_unlock - Futex variant, that since futex variants\n * do not use the fast-path, can be simple and will not need to retry.\n *\n * @lock:\tThe rt_mutex to be unlocked\n * @wqh:\tThe wake queue head from which to get the next lock waiter\n */\nbool __sched __rt_mutex_futex_unlock(struct rt_mutex_base *lock,\n\t\t\t\t     struct rt_wake_q_head *wqh)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\n\tdebug_rt_mutex_unlock(lock);\n\n\tif (!rt_mutex_has_waiters(lock)) {\n\t\tlock->owner = NULL;\n\t\treturn false; /* done */\n\t}\n\n\t/*\n\t * We've already deboosted, mark_wakeup_next_waiter() will\n\t * retain preempt_disabled when we drop the wait_lock, to\n\t * avoid inversion prior to the wakeup.  preempt_disable()\n\t * therein pairs with rt_mutex_postunlock().\n\t */\n\tmark_wakeup_next_waiter(wqh, lock);\n\n\treturn true; /* call postunlock() */\n}\n\nvoid __sched rt_mutex_futex_unlock(struct rt_mutex_base *lock)\n{\n\tDEFINE_RT_WAKE_Q(wqh);\n\tunsigned long flags;\n\tbool postunlock;\n\n\traw_spin_lock_irqsave(&lock->wait_lock, flags);\n\tpostunlock = __rt_mutex_futex_unlock(lock, &wqh);\n\traw_spin_unlock_irqrestore(&lock->wait_lock, flags);\n\n\tif (postunlock)\n\t\trt_mutex_postunlock(&wqh);\n}\n\n/**\n * __rt_mutex_init - initialize the rt_mutex\n *\n * @lock:\tThe rt_mutex to be initialized\n * @name:\tThe lock name used for debugging\n * @key:\tThe lock class key used for debugging\n *\n * Initialize the rt_mutex to unlocked state.\n *\n * Initializing of a locked rt_mutex is not allowed\n */\nvoid __sched __rt_mutex_init(struct rt_mutex *lock, const char *name,\n\t\t\t     struct lock_class_key *key)\n{\n\tdebug_check_no_locks_freed((void *)lock, sizeof(*lock));\n\t__rt_mutex_base_init(&lock->rtmutex);\n\tlockdep_init_map_wait(&lock->dep_map, name, key, 0, LD_WAIT_SLEEP);\n}\nEXPORT_SYMBOL_GPL(__rt_mutex_init);\n\n/**\n * rt_mutex_init_proxy_locked - initialize and lock a rt_mutex on behalf of a\n *\t\t\t\tproxy owner\n *\n * @lock:\tthe rt_mutex to be locked\n * @proxy_owner:the task to set as owner\n *\n * No locking. Caller has to do serializing itself\n *\n * Special API call for PI-futex support. This initializes the rtmutex and\n * assigns it to @proxy_owner. Concurrent operations on the rtmutex are not\n * possible at this point because the pi_state which contains the rtmutex\n * is not yet visible to other tasks.\n */\nvoid __sched rt_mutex_init_proxy_locked(struct rt_mutex_base *lock,\n\t\t\t\t\tstruct task_struct *proxy_owner)\n{\n\tstatic struct lock_class_key pi_futex_key;\n\n\t__rt_mutex_base_init(lock);\n\t/*\n\t * On PREEMPT_RT the futex hashbucket spinlock becomes 'sleeping'\n\t * and rtmutex based. That causes a lockdep false positive, because\n\t * some of the futex functions invoke spin_unlock(&hb->lock) with\n\t * the wait_lock of the rtmutex associated to the pi_futex held.\n\t * spin_unlock() in turn takes wait_lock of the rtmutex on which\n\t * the spinlock is based, which makes lockdep notice a lock\n\t * recursion. Give the futex/rtmutex wait_lock a separate key.\n\t */\n\tlockdep_set_class(&lock->wait_lock, &pi_futex_key);\n\trt_mutex_set_owner(lock, proxy_owner);\n}\n\n/**\n * rt_mutex_proxy_unlock - release a lock on behalf of owner\n *\n * @lock:\tthe rt_mutex to be locked\n *\n * No locking. Caller has to do serializing itself\n *\n * Special API call for PI-futex support. This just cleans up the rtmutex\n * (debugging) state. Concurrent operations on this rt_mutex are not\n * possible because it belongs to the pi_state which is about to be freed\n * and it is not longer visible to other tasks.\n */\nvoid __sched rt_mutex_proxy_unlock(struct rt_mutex_base *lock)\n{\n\tdebug_rt_mutex_proxy_unlock(lock);\n\trt_mutex_clear_owner(lock);\n}\n\n/**\n * __rt_mutex_start_proxy_lock() - Start lock acquisition for another task\n * @lock:\t\tthe rt_mutex to take\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n * @task:\t\tthe task to prepare\n *\n * Starts the rt_mutex acquire; it enqueues the @waiter and does deadlock\n * detection. It does not wait, see rt_mutex_wait_proxy_lock() for that.\n *\n * NOTE: does _NOT_ remove the @waiter on failure; must either call\n * rt_mutex_wait_proxy_lock() or rt_mutex_cleanup_proxy_lock() after this.\n *\n * Returns:\n *  0 - task blocked on lock\n *  1 - acquired the lock for task, caller should wake it up\n * <0 - error\n *\n * Special API call for PI-futex support.\n */\nint __sched __rt_mutex_start_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t\tstruct rt_mutex_waiter *waiter,\n\t\t\t\t\tstruct task_struct *task)\n{\n\tint ret;\n\n\tlockdep_assert_held(&lock->wait_lock);\n\n\tif (try_to_take_rt_mutex(lock, task, NULL))\n\t\treturn 1;\n\n\t/* We enforce deadlock detection for futexes */\n\tret = task_blocks_on_rt_mutex(lock, waiter, task, NULL,\n\t\t\t\t      RT_MUTEX_FULL_CHAINWALK);\n\n\tif (ret && !rt_mutex_owner(lock)) {\n\t\t/*\n\t\t * Reset the return value. We might have\n\t\t * returned with -EDEADLK and the owner\n\t\t * released the lock while we were walking the\n\t\t * pi chain.  Let the waiter sort it out.\n\t\t */\n\t\tret = 0;\n\t}\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_start_proxy_lock() - Start lock acquisition for another task\n * @lock:\t\tthe rt_mutex to take\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n * @task:\t\tthe task to prepare\n *\n * Starts the rt_mutex acquire; it enqueues the @waiter and does deadlock\n * detection. It does not wait, see rt_mutex_wait_proxy_lock() for that.\n *\n * NOTE: unlike __rt_mutex_start_proxy_lock this _DOES_ remove the @waiter\n * on failure.\n *\n * Returns:\n *  0 - task blocked on lock\n *  1 - acquired the lock for task, caller should wake it up\n * <0 - error\n *\n * Special API call for PI-futex support.\n */\nint __sched rt_mutex_start_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t      struct rt_mutex_waiter *waiter,\n\t\t\t\t      struct task_struct *task)\n{\n\tint ret;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\tret = __rt_mutex_start_proxy_lock(lock, waiter, task);\n\tif (unlikely(ret))\n\t\tremove_waiter(lock, waiter);\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_wait_proxy_lock() - Wait for lock acquisition\n * @lock:\t\tthe rt_mutex we were woken on\n * @to:\t\t\tthe timeout, null if none. hrtimer should already have\n *\t\t\tbeen started.\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n *\n * Wait for the lock acquisition started on our behalf by\n * rt_mutex_start_proxy_lock(). Upon failure, the caller must call\n * rt_mutex_cleanup_proxy_lock().\n *\n * Returns:\n *  0 - success\n * <0 - error, one of -EINTR, -ETIMEDOUT\n *\n * Special API call for PI-futex support\n */\nint __sched rt_mutex_wait_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t     struct hrtimer_sleeper *to,\n\t\t\t\t     struct rt_mutex_waiter *waiter)\n{\n\tint ret;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\t/* sleep on the mutex */\n\tset_current_state(TASK_INTERRUPTIBLE);\n\tret = rt_mutex_slowlock_block(lock, NULL, TASK_INTERRUPTIBLE, to, waiter);\n\t/*\n\t * try_to_take_rt_mutex() sets the waiter bit unconditionally. We might\n\t * have to fix that up.\n\t */\n\tfixup_rt_mutex_waiters(lock, true);\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn ret;\n}\n\n/**\n * rt_mutex_cleanup_proxy_lock() - Cleanup failed lock acquisition\n * @lock:\t\tthe rt_mutex we were woken on\n * @waiter:\t\tthe pre-initialized rt_mutex_waiter\n *\n * Attempt to clean up after a failed __rt_mutex_start_proxy_lock() or\n * rt_mutex_wait_proxy_lock().\n *\n * Unless we acquired the lock; we're still enqueued on the wait-list and can\n * in fact still be granted ownership until we're removed. Therefore we can\n * find we are in fact the owner and must disregard the\n * rt_mutex_wait_proxy_lock() failure.\n *\n * Returns:\n *  true  - did the cleanup, we done.\n *  false - we acquired the lock after rt_mutex_wait_proxy_lock() returned,\n *          caller should disregards its return value.\n *\n * Special API call for PI-futex support\n */\nbool __sched rt_mutex_cleanup_proxy_lock(struct rt_mutex_base *lock,\n\t\t\t\t\t struct rt_mutex_waiter *waiter)\n{\n\tbool cleanup = false;\n\n\traw_spin_lock_irq(&lock->wait_lock);\n\t/*\n\t * Do an unconditional try-lock, this deals with the lock stealing\n\t * state where __rt_mutex_futex_unlock() -> mark_wakeup_next_waiter()\n\t * sets a NULL owner.\n\t *\n\t * We're not interested in the return value, because the subsequent\n\t * test on rt_mutex_owner() will infer that. If the trylock succeeded,\n\t * we will own the lock and it will have removed the waiter. If we\n\t * failed the trylock, we're still not owner and we need to remove\n\t * ourselves.\n\t */\n\ttry_to_take_rt_mutex(lock, current, waiter);\n\t/*\n\t * Unless we're the owner; we're still enqueued on the wait_list.\n\t * So check if we became owner, if not, take us off the wait_list.\n\t */\n\tif (rt_mutex_owner(lock) != current) {\n\t\tremove_waiter(lock, waiter);\n\t\tcleanup = true;\n\t}\n\t/*\n\t * try_to_take_rt_mutex() sets the waiter bit unconditionally. We might\n\t * have to fix that up.\n\t */\n\tfixup_rt_mutex_waiters(lock, false);\n\n\traw_spin_unlock_irq(&lock->wait_lock);\n\n\treturn cleanup;\n}\n\n/*\n * Recheck the pi chain, in case we got a priority setting\n *\n * Called from sched_setscheduler\n */\nvoid __sched rt_mutex_adjust_pi(struct task_struct *task)\n{\n\tstruct rt_mutex_waiter *waiter;\n\tstruct rt_mutex_base *next_lock;\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&task->pi_lock, flags);\n\n\twaiter = task->pi_blocked_on;\n\tif (!waiter || rt_waiter_node_equal(&waiter->tree, task_to_waiter_node(task))) {\n\t\traw_spin_unlock_irqrestore(&task->pi_lock, flags);\n\t\treturn;\n\t}\n\tnext_lock = waiter->lock;\n\traw_spin_unlock_irqrestore(&task->pi_lock, flags);\n\n\t/* gets dropped in rt_mutex_adjust_prio_chain()! */\n\tget_task_struct(task);\n\n\trt_mutex_adjust_prio_chain(task, RT_MUTEX_MIN_CHAINWALK, NULL,\n\t\t\t\t   next_lock, NULL, task);\n}\n\n/*\n * Performs the wakeup of the top-waiter and re-enables preemption.\n */\nvoid __sched rt_mutex_postunlock(struct rt_wake_q_head *wqh)\n{\n\trt_mutex_wake_up_q(wqh);\n}\n\n#ifdef CONFIG_DEBUG_RT_MUTEXES\nvoid rt_mutex_debug_task_free(struct task_struct *task)\n{\n\tDEBUG_LOCKS_WARN_ON(!RB_EMPTY_ROOT(&task->pi_waiters.rb_root));\n\tDEBUG_LOCKS_WARN_ON(task->pi_blocked_on);\n}\n#endif\n\n#ifdef CONFIG_PREEMPT_RT\n/* Mutexes */\nvoid __mutex_rt_init(struct mutex *mutex, const char *name,\n\t\t     struct lock_class_key *key)\n{\n\tdebug_check_no_locks_freed((void *)mutex, sizeof(*mutex));\n\tlockdep_init_map_wait(&mutex->dep_map, name, key, 0, LD_WAIT_SLEEP);\n}\nEXPORT_SYMBOL(__mutex_rt_init);\n\nstatic __always_inline int __mutex_lock_common(struct mutex *lock,\n\t\t\t\t\t       unsigned int state,\n\t\t\t\t\t       unsigned int subclass,\n\t\t\t\t\t       struct lockdep_map *nest_lock,\n\t\t\t\t\t       unsigned long ip)\n{\n\tint ret;\n\n\tmight_sleep();\n\tmutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);\n\tret = __rt_mutex_lock(&lock->rtmutex, state);\n\tif (ret)\n\t\tmutex_release(&lock->dep_map, ip);\n\telse\n\t\tlock_acquired(&lock->dep_map, ip);\n\treturn ret;\n}\n\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\nvoid __sched mutex_lock_nested(struct mutex *lock, unsigned int subclass)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_nested);\n\nvoid __sched _mutex_lock_nest_lock(struct mutex *lock,\n\t\t\t\t   struct lockdep_map *nest_lock)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, nest_lock, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(_mutex_lock_nest_lock);\n\nint __sched mutex_lock_interruptible_nested(struct mutex *lock,\n\t\t\t\t\t    unsigned int subclass)\n{\n\treturn __mutex_lock_common(lock, TASK_INTERRUPTIBLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_interruptible_nested);\n\nint __sched mutex_lock_killable_nested(struct mutex *lock,\n\t\t\t\t\t    unsigned int subclass)\n{\n\treturn __mutex_lock_common(lock, TASK_KILLABLE, subclass, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_killable_nested);\n\nvoid __sched mutex_lock_io_nested(struct mutex *lock, unsigned int subclass)\n{\n\tint token;\n\n\tmight_sleep();\n\n\ttoken = io_schedule_prepare();\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, subclass, NULL, _RET_IP_);\n\tio_schedule_finish(token);\n}\nEXPORT_SYMBOL_GPL(mutex_lock_io_nested);\n\n#else /* CONFIG_DEBUG_LOCK_ALLOC */\n\nvoid __sched mutex_lock(struct mutex *lock)\n{\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock);\n\nint __sched mutex_lock_interruptible(struct mutex *lock)\n{\n\treturn __mutex_lock_common(lock, TASK_INTERRUPTIBLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock_interruptible);\n\nint __sched mutex_lock_killable(struct mutex *lock)\n{\n\treturn __mutex_lock_common(lock, TASK_KILLABLE, 0, NULL, _RET_IP_);\n}\nEXPORT_SYMBOL(mutex_lock_killable);\n\nvoid __sched mutex_lock_io(struct mutex *lock)\n{\n\tint token = io_schedule_prepare();\n\n\t__mutex_lock_common(lock, TASK_UNINTERRUPTIBLE, 0, NULL, _RET_IP_);\n\tio_schedule_finish(token);\n}\nEXPORT_SYMBOL(mutex_lock_io);\n#endif /* !CONFIG_DEBUG_LOCK_ALLOC */\n\nint __sched mutex_trylock(struct mutex *lock)\n{\n\tint ret;\n\n\tif (IS_ENABLED(CONFIG_DEBUG_RT_MUTEXES) && WARN_ON_ONCE(!in_task()))\n\t\treturn 0;\n\n\tret = __rt_mutex_trylock(&lock->rtmutex);\n\tif (ret)\n\t\tmutex_acquire(&lock->dep_map, 0, 1, _RET_IP_);\n\n\treturn ret;\n}\nEXPORT_SYMBOL(mutex_trylock);\n\nvoid __sched mutex_unlock(struct mutex *lock)\n{\n\tmutex_release(&lock->dep_map, _RET_IP_);\n\t__rt_mutex_unlock(&lock->rtmutex);\n}\nEXPORT_SYMBOL(mutex_unlock);\n\n#endif /* CONFIG_PREEMPT_RT */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "43ba70e37923b217b48a1b86fee8f2d410c160cb820a0dc4ccaa5837a0157ccc",
+      "scope": "whole-file",
+      "line_count": 612,
+      "authoring_source": "course/file_units/rtmutex_api.py",
+      "sections": [
+        "전체 구성과 포함 방식",
+        "체인 한계와 빠른 경로",
+        "RT 공통 획득",
+        "기본 초기화와 공개 획득",
+        "trylock과 해제",
+        "Futex trylock 분리",
+        "Futex 잠금 아래 해제",
+        "Futex 외부 해제",
+        "RT 객체 초기화",
+        "Proxy 초기 소유자",
+        "Proxy 최종 해제",
+        "Proxy 시작 내부 함수",
+        "Proxy 시작 wrapper와 정리 차이",
+        "Proxy 실제 대기",
+        "Proxy cleanup의 역설적 반환",
+        "오류 뒤에도 소유권을 얻는 이유",
+        "우선순위 변경 후 PI 재검사",
+        "postunlock과 태스크 종료 진단",
+        "RT 일반 mutex 초기화와 공통 획득",
+        "RT 일반 mutex wrapper 전체",
+        "RT 일반 mutex trylock과 unlock",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/rtmutex_api.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "급한 친구가 빌리려는 도구를 다른 친구가 들고 있으면, 그 친구가 일을 빨리 끝내도록 잠시 우선순위를 높여 줍니다. RT mutex는 이런 우선순위 상속을 쓰는 잠금입니다.",
+    "meaning": "잠금을 얻는 함수, 기다리는 함수, 실패 뒤 정리하는 함수의 반환값을 각각 구별합니다.",
+    "exercise": "proxy 시작의 1, 대기의 0, 정리의 false를 각각 소유권 획득과 연결해 보세요."
+  },
+  "goal": "잠금을 얻는 함수, 기다리는 함수, 실패 뒤 정리하는 함수의 반환값을 각각 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "proxy 시작의 1, 대기의 0, 정리의 false를 각각 소유권 획득과 연결해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "ac2f7567af94c400e240c37d307315d54926f046f2f097666cb402961aeb7e43",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,151 +5,189 @@
   "area": "객체 소유권 · 비동기 처리 · 참조 계수 · RCU · 임계구역",
   "track": "files",
   "kind": "kernel",
-  "intro": "객체에 kref를 넣는 방법부터 스레드 전달, 목록 조회, 마지막 해제와 RCU의 결합까지 예제로 설명하는 문서입니다.",
+  "intro": "kref의 세 소유권 규칙과 목록·RCU 조회에서 수명을 보호하는 방법을 설명합니다.",
   "guide": [
-    "추가 소유자를 만들 때는 공개 전에 참조를 확보하고, 기존 소유권을 넘길 때는 보낸 쪽이 사용을 끝냅니다. 소유하지 않은 포인터에서 참조를 얻을 때는 조회와 획득 사이의 메모리 수명을 보호합니다.",
-    "비동기 작업·큐·목록의 수명 설계를 검토할 때 사용합니다. 문서의 생략된 예제를 완성된 드라이버 코드로 복사하지 말고 현재 함수 형식과 RCU 조회 규칙도 확인해야 합니다."
+    "참조는 객체를 계속 사용할 권리이며 get으로 더하고 put으로 반납합니다. 포인터라는 주소값을 복사하는 것만으로 권리가 늘지는 않습니다.",
+    "RCU는 기존 독자가 읽기를 마칠 때까지 메모리 회수를 미루는 방식입니다. 유예 기간은 그 이전 독자들이 끝나기를 기다리는 기간입니다.",
+    "목록에서 찾는 순간의 보호와 목록 밖에서 오래 사용할 참조는 다릅니다. 조건부 획득에 성공한 경우에만 그 참조로 보호 밖에 가져갈 수 있습니다."
   ],
   "deep_dive": [
     {
       "title": "문서 구성과 출처",
-      "text": "제목, 저자 두 명,2004년 발표 자료 링크, Introduction, Initialization, Kref rules, Krefs and RCU로 구성됩니다. 규칙 부분에 스레드 전달, 잘못된 전달 순서, 큐로 소유권 이전, mutex 목록 조회, 잠금 밖 해제, 조건부 획득 예제가 들어 있습니다. 외부 발표 링크는 문서의 출처이며 이 수업에서 그 자료까지 읽거나 학습 완료로 세지는 않습니다."
+      "text": "제목·두 저자·2004년 발표 링크와 소개, 초기화, 세 규칙, RCU 부분으로 구성됩니다. 스레드 전달, 잘못된 순서, 큐 소유권 이전, mutex 목록과 잠금 밖 정리 예가 있습니다. 링크는 출처이며 이 수업이 외부 발표 자료까지 읽고 완료했다는 뜻은 아닙니다."
     },
     {
       "title": "임베디드 계수와 초기 참조",
-      "text": "my_data 내부 어디에든 struct kref를 둘 수 있습니다. kmalloc 실패는 -ENOMEM, 성공은 kref_init으로 초기 참조1을 만듭니다. 계수가 객체의 첫 필드일 필요가 없어 release는 container_of로 포함 객체를 구합니다. 할당된 객체의 다른 필드 초기화와 공유 공개 순서는 이 계수 초기화와 별개입니다."
+      "text": "my_data 안 어느 위치에나 kref를 둘 수 있습니다. 할당 실패면 ENOMEM, 성공하면 init으로 참조 1을 만듭니다. 첫 필드가 아니어도 되므로 정리 함수는 container_of로 바깥 객체를 찾습니다. 다른 필드 초기화와 다른 실행에 공개할 순서는 별도로 지켜야 합니다."
     },
     {
       "title": "규칙1: 추가 소유자는 공개 전에",
-      "text": "장기 보관하거나 다른 실행 스레드로 넘길 포인터의 추가 참조는 전달 전에 kref_get으로 확보합니다. 기존에 유효한 참조를 소유하여0이 될 수 없게 하고 있다면 계수 증가에 별도 잠금이 필요 없다는 설명입니다. 단지 비NULL 주소를 알고 있는 것을 유효한 참조 소유와 혼동하면 안 됩니다."
+      "text": "오래 보관하거나 다른 스레드에 넘길 추가 포인터의 참조는 전달 전에 get으로 확보합니다. 이미 유효한 참조를 소유해 0이 되지 않게 한다면 증가 자체에 별도 잠금이 필요 없다는 설명입니다. 단순히 NULL 아닌 주소를 아는 것은 그런 소유가 아닙니다."
     },
     {
       "title": "규칙2: 소유권 반납",
-      "text": "자신의 포인터 사용이 끝나면 kref_put을 호출하고 마지막 참조의 release가 자원을 정리합니다. 모든 획득자가 이미 유효한 참조에서 추가 획득한다는 전제라면 각 put을 따로 잠글 필요가 없다는 예입니다. 이것이 객체 내용의 동시 수정까지 잠금 없이 안전하다는 뜻은 아닙니다."
+      "text": "사용을 끝내면 자신의 참조를 put하고 마지막 정리 함수가 자원을 치웁니다. 모두 기존 유효 참조에서 추가 획득하는 조건이면 put마다 별도 잠금이 필요 없다는 예입니다. 객체 내부 값을 동시에 바꾸는 일까지 안전해지는 것은 아닙니다."
     },
     {
       "title": "규칙3: 소유하지 않은 포인터에서 획득",
-      "text": "검색 구조에서 처음 객체를 찾는 경우에는 참조 획득과 마지막 해제가 충돌하지 않게 직렬화하거나 적절한 조건부 획득·수명 보호를 사용해야 합니다. 특히 kref_get이 계수를 읽는 동안 구조체 메모리 자체가 유효해야 합니다. 계수의 원자성만으로 이 전제를 만들 수 없습니다."
+      "text": "검색 구조에서 처음 얻은 주소는 획득과 마지막 해제가 충돌하지 않도록 직렬화하거나 조건부 획득과 수명 보호를 함께 써야 합니다. 계수 필드를 읽는 동안 구조체 메모리 자체가 유효해야 합니다. 카운터 연산의 원자성만으로 해제된 메모리를 보호할 수는 없습니다."
     },
     {
       "title": "두 스레드 예제의 참조 회계",
-      "text": "handler가 init으로1, 실행 전 get으로 추가1을 확보해 합계2입니다. 성공하면 worker가 하나, handler가 하나를 put하며 실행 완료 순서는 중요하지 않습니다. 예제의 생성 실패 경로는 worker에게 줄 예정이던 참조를 put하고 out에서 handler 참조도 put합니다. 두 경로 모두 총 두 번의 반납이 필요합니다."
+      "text": "handler가 init으로 1개, 전달 전 get으로 1개를 만들어 합계 2입니다. 성공하면 worker와 handler가 각각 put하며 끝나는 순서는 상관없습니다. 생성 실패면 worker용 예약을 put하고 out에서 handler 몫도 put합니다. 두 경로 모두 두 참조를 반납합니다."
     },
     {
       "title": "스레드 예제의 현재 API 주의",
-      "text": "문서의 more_data_handling은 void 반환으로 적혀 있지만 v6.12 kthread.h의 threadfn 형식은 int (*)(void *)입니다. 실제 코드에서는 int 반환과 적절한 종료값을 갖춰야 합니다. 예제는 ERR_PTR(-ENOMEM)만 비교하지만 일반 오류 처리는 IS_ERR/PTR_ERR로 계약에 맞춰 해야 합니다. 중간의 점으로 생략된 코드를 포함해 이 블록을 그대로 컴파일 가능한 완성본으로 취급하지 않습니다."
+      "text": "원문 worker는 void 반환이지만 이 프로젝트의 v6.12 kthread 형식은 int (*)(void *)입니다. 실제 구현은 int와 적절한 종료값을 써야 합니다. 예제의 ERR_PTR(-ENOMEM)만 비교하는 부분도 일반 오류 처리는 IS_ERR/PTR_ERR 계약에 맞춰야 합니다. 점으로 생략한 코드까지 그대로 컴파일 가능한 완성 예는 아닙니다."
     },
     {
       "title": "전달 후 get이 위험한 이유",
-      "text": "나쁜 예제는 kthread_run 뒤에 get을 둡니다. 새 스레드가 즉시 동작하여 put하면 추가 참조를 만들기도 전에 기존 계수가0이 되어 객체가 해제될 수 있습니다. 생성 함수 호출이 먼저 반환될 것이라는 가정으로 수명 계약을 세우면 안 됩니다. 다른 특별한 잠금으로 가능해지는 경우가 있더라도 문서는 전달 전 획득 패턴을 권합니다."
+      "text": "kthread_run 뒤에 get하면 새 스레드가 먼저 실행하고 put해 계수가 0이 될 수 있습니다. 그러면 get 전에 객체가 해제됩니다. 생성 호출이 먼저 돌아올 것이라는 시간 추측에 수명을 맡기면 안 됩니다. 특별한 잠금으로 가능한 상황이 있더라도 문서는 전달 전 획득을 권합니다."
     },
     {
       "title": "큐에 소유권을 이전하기",
-      "text": "보낸 쪽이 객체 사용을 완전히 마치고 큐가 기존 참조의 책임을 인수한다면 get→enqueue→put 대신 enqueue로 소유권을 이전할 수 있습니다. 그 뒤 보낸 쪽은 객체를 만지지 않는다는 주석을 남깁니다. 큐가 실제로 인수를 성공했고 나중에 반납한다는 계약이 필요하며 enqueue 자체가 자동으로 참조를 늘린다는 뜻은 아닙니다."
+      "text": "보낸 쪽이 완전히 사용을 끝내고 큐가 기존 참조 책임을 받으면 추가 get→enqueue→put 대신 참조 소유권을 넘길 수 있습니다. 그 뒤 객체를 만지지 않는다는 주석이 도움이 됩니다. 큐의 성공 인수와 나중 반납 계약이 필요하며 enqueue가 자동으로 참조를 늘리는 것은 아닙니다."
     },
     {
       "title": "mutex 목록 조회",
-      "text": "첫 목록 예제는 get_entry에서 mutex를 잡고 빈 목록 검사, q.next로 객체 찾기, kref_get까지 수행합니다. put_entry도 같은 mutex 아래 put을 하고 마지막 release가 list_del과 kfree를 합니다. 조회와 참조 획득이 같은 임계구역에 있어 마지막 제거와 경쟁하지 않습니다. get_entry는 이름과 달리 항목을 목록에서 빼지 않고 참조를 반환합니다."
+      "text": "첫 목록 예는 mutex 안에서 빈 목록 확인, 첫 객체 조회, get을 함께 합니다. put도 같은 잠금 안에서 하고 마지막 정리가 list_del과 kfree를 합니다. 조회와 획득이 제거와 경쟁하지 않습니다. get_entry라는 이름이어도 항목을 목록에서 꺼내는 것이 아니라 참조를 돌려줍니다."
     },
     {
       "title": "비싼 해제를 잠금 밖으로",
-      "text": "다음 예제의 release는 비어 있고, 잠금 안의 kref_put이 참일 때 list_del 후 unlock하고 kfree합니다. 목록에서 제거하는 결정은 잠금 안에서 완료하고 실제 메모리 해제는 밖으로 옮깁니다. false 경로도 unlock합니다. 이 예제만의 빈 callback 계약 덕분에 put 뒤 객체를 정리할 수 있는 것이며, 이미 free하는 일반 callback을 쓴 뒤 같은 패턴으로 접근하면 안 됩니다."
+      "text": "다음 예는 정리 콜백을 비워 두고 잠금 안의 put이 마지막임을 확인하면 list_del을 한 뒤 잠금을 풀고 kfree합니다. false도 잠금을 풉니다. 비싼 해제만 밖으로 옮기는 계약입니다. 이미 메모리를 해제하는 일반 콜백 뒤에 이 패턴을 복사해 객체를 만지면 안 됩니다."
     },
     {
       "title": "조건부 획득으로 put 잠금 축소",
-      "text": "최적화 예제는 조회 mutex 안에서 get_unless_zero를 검사해 실패하면 NULL을 반환합니다. put_entry 자체는 잠금을 잡지 않고 마지막 release만 mutex를 잡아 list_del 후 해제합니다. 카운터가 이미0인데 항목은 아직 목록에 남은 순간도 조건부 획득이 실패로 처리합니다. 조회와 조건부 획득을 분리하면 이미 해제된 계수에 접근할 수 있어 같은 임계구역 유지가 필수입니다."
+      "text": "개선 예는 조회 mutex 안에서 get_unless_zero 성공을 확인하고 실패면 NULL입니다. put 자체는 잠금을 잡지 않고 마지막 정리에서만 잠금을 잡아 목록에서 뺍니다. 계수 0인데 아직 목록에 남은 순간도 조건부 획득이 거부합니다. 조회 뒤 잠금을 풀고 획득하면 메모리가 사라질 수 있어 두 동작은 같은 보호 구역에 있어야 합니다."
     },
     {
       "title": "조건부 획득 결과의 의미",
-      "text": "문서는 get_unless_zero 반환값을 검사하지 않는 사용을 금지합니다. 이미 참조를 소유해 성공을 확신할 수 있는 경우는 일반 get을 사용하라고 설명합니다. 실패를 무시하고 읽기 보호 밖으로 포인터를 넘기면 참조 없는 객체 사용이 됩니다. 실패가 단순 성능상 재시도 신호인지, 조회 결과 없음인지의 처리는 호출자가 정해야 합니다."
+      "text": "get_unless_zero 결과를 무시하면 안 됩니다. 이미 참조를 소유해 성공을 확신할 때는 일반 get을 씁니다. 실패한 주소를 보호 밖으로 넘기면 권리 없는 사용입니다. 실패를 재시도할지 결과 없음으로 처리할지는 호출자의 계약에 맞춥니다."
     },
     {
       "title": "RCU 예제의 수명 연결",
-      "text": "RCU 조회는 rcu_read_lock 안에서 객체를 찾아 get_unless_zero를 시도하고, 성공한 경우에만 참조를 들고 읽기 구역 밖으로 반환합니다. 마지막 release는 mutex 안에서 list_del_rcu, 그 뒤 kfree_rcu로 회수를 지연합니다. 실패한 독자도 계수 필드를 읽을 수 있으므로 구조체와 kref 멤버는 grace period 동안 유효해야 합니다."
+      "text": "RCU 읽기 구역 안에서 조회하고 조건부 획득에 성공해야 참조를 들고 밖으로 나옵니다. 마지막 정리는 mutex 안에서 list_del_rcu, 그 뒤 kfree_rcu로 회수를 미룹니다. 실패한 독자도 계수를 읽을 수 있으므로 객체와 kref는 유예 기간 동안 유효해야 합니다."
     },
     {
       "title": "RCU 예제의 생략과 회수 대안",
-      "text": "원문 조회 예제는 list_empty와 q.next 직접 접근을 보여 주며 목록 공개·삽입 구현은 생략합니다. RCU 읽기 잠금이 모든 일반 포인터 접근을 자동으로 올바른 RCU 조회로 바꾸지는 않으므로 실코드에서는 적절한 RCU 목록 조회·공개 primitive를 적용해야 합니다. 문서는 kfree_rcu 대신 synchronize_rcu 후 kfree도 언급하지만 synchronize_rcu는 오래 잠들 수 있어 문맥 제약을 고려해야 합니다."
+      "text": "원문 예는 list_empty와 q.next 직접 접근을 보이고 삽입·공개는 생략합니다. RCU 구역이 모든 일반 포인터 읽기를 자동으로 올바른 RCU 조회로 바꾸지 않으므로 실제로는 적절한 RCU 목록 접근·공개 도구를 써야 합니다. synchronize_rcu 후 kfree도 가능하지만 오래 잠들 수 있어 호출 문맥을 고려합니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "참조 회계, 추가 소유와 소유권 이동, 비동기 실행 순서, 검색 구조의 제거와 물리적 회수 분리, callback의 잠금 책임, RCU 임계구역에서 장기 참조로 전환하는 패턴을 학습합니다. 이 수업은 원문과 API 형식을 대조한 해설이며 예제의 모든 경쟁 실행을 커널에서 재현한 검사는 아닙니다."
+      "text": "참조 수 회계, 추가 소유와 소유권 이동, 비동기 순서, 목록 제거와 메모리 회수의 분리가 연결됩니다. 콜백의 잠금 책임과 RCU 보호에서 장기 참조로 바꾸는 절차도 중요합니다. 설명은 원문·API 대조이며 모든 경쟁을 커널에서 재현한 시험은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "worker 전달을 위해 init과 get을 각각 한 번 했는데 스레드 생성이 실패했다. 몇 참조를 반납해야 하는가?",
+      "prompt": "init과 worker용 get 뒤 생성 실패면 몇 참조를 반납하나요?",
       "options": [
+        "worker용 예약과 handler 초기 몫 두 개입니다.",
+        "worker가 안 떴으니 초기 몫 한 개입니다."
+      ],
+      "answer": 0,
+      "explanation": "get으로 이미 늘린 예약도 실패 시 취소해야 합니다.",
+      "original_prompt": "worker 전달을 위해 init과 get을 각각 한 번 했는데 스레드 생성이 실패했다. 몇 참조를 반납해야 하는가?",
+      "original_options": [
         "두 개: worker용 예약 참조와 handler의 초기 참조",
         "한 개: worker가 실행되지 않았으므로 초기 참조만"
       ],
-      "answer": 0,
-      "explanation": "get은 생성 성공 여부와 무관하게 이미 추가 참조를 만들었습니다. 실패 시 이 예약을 취소하고 handler도 자기 소유권을 끝내야 누수가 없습니다."
+      "original_explanation": "get은 생성 성공 여부와 무관하게 이미 추가 참조를 만들었습니다. 실패 시 이 예약을 취소하고 handler도 자기 소유권을 끝내야 누수가 없습니다."
     },
     {
-      "prompt": "kthread_run 뒤에 kref_get을 두면 왜 위험한가?",
+      "prompt": "전달 뒤 get이 왜 위험한가요?",
       "options": [
+        "get은 스레드 생성과 절대 함께 쓸 수 없어서입니다.",
+        "worker가 먼저 put해 get 전에 해제될 수 있어서입니다."
+      ],
+      "answer": 1,
+      "explanation": "새 실행은 즉시 진행할 수 있어 공개 전에 참조를 확보합니다.",
+      "original_prompt": "kthread_run 뒤에 kref_get을 두면 왜 위험한가?",
+      "original_options": [
         "kref_get은 어떤 경우에도 스레드 생성과 함께 쓸 수 없다",
         "worker가 먼저 put하여 get 이전에 객체가 해제될 수 있다"
       ],
-      "answer": 1,
-      "explanation": "새 실행 흐름이 즉시 동작할 수 있으므로 추가 참조는 공개 전에 확보해야 합니다. 반환 순서나 스케줄링 속도로 객체 수명을 보장할 수 없습니다."
+      "original_explanation": "새 실행 흐름이 즉시 동작할 수 있으므로 추가 참조는 공개 전에 확보해야 합니다. 반환 순서나 스케줄링 속도로 객체 수명을 보장할 수 없습니다."
     },
     {
-      "prompt": "객체를 큐에 넘긴 뒤 보낸 쪽이 더 사용하지 않는다면 get과 put 한 쌍을 생략할 수 있는 조건은?",
+      "prompt": "큐에 넘길 때 get·put 한 쌍을 생략할 조건은 무엇인가요?",
       "options": [
+        "큐가 기존 참조를 인수하고 반납 책임을 지는 경우입니다.",
+        "주소만 저장하면 언제나 자동 증가하는 경우입니다."
+      ],
+      "answer": 0,
+      "explanation": "기존 소유권을 이전하는 것이며 보낸 쪽은 더 접근하지 않습니다.",
+      "original_prompt": "객체를 큐에 넘긴 뒤 보낸 쪽이 더 사용하지 않는다면 get과 put 한 쌍을 생략할 수 있는 조건은?",
+      "original_options": [
         "큐가 기존 참조 소유권을 인수하고 최종 반납 책임을 지는 경우",
         "포인터 값만 큐에 저장하면 언제나 참조가 자동 증가하는 경우"
       ],
-      "answer": 0,
-      "explanation": "문서의 최적화는 소유권 이전입니다. 추가 소유자를 만드는 동작과 달리 기존 참조의 책임자가 바뀌므로 이전한 쪽은 이후 접근해서는 안 됩니다."
+      "original_explanation": "문서의 최적화는 소유권 이전입니다. 추가 소유자를 만드는 동작과 달리 기존 참조의 책임자가 바뀌므로 이전한 쪽은 이후 접근해서는 안 됩니다."
     },
     {
-      "prompt": "목록에서 찾은 뒤 mutex를 풀고 get_unless_zero를 하면 안전한가?",
+      "prompt": "목록 조회 뒤 mutex를 풀고 조건부 획득해도 안전한가요?",
       "options": [
+        "예. 원자 연산이 해제된 메모리도 보호합니다.",
+        "아니요. 획득 전에 객체가 사라질 수 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "계수 연산을 할 메모리가 살아 있어야 하므로 같은 임계 구역에 둡니다.",
+      "original_prompt": "목록에서 찾은 뒤 mutex를 풀고 get_unless_zero를 하면 안전한가?",
+      "original_options": [
         "그렇다. 조건부 원자 증가가 해제된 메모리도 보호한다",
         "아니다. 획득 전 객체 메모리가 해제될 수 있다"
       ],
-      "answer": 1,
-      "explanation": "문서는 조회와 get_unless_zero를 같은 임계구역에 둘 것을 요구합니다. 원자 카운터 연산을 시도할 때 그 카운터가 살아 있어야 합니다."
+      "original_explanation": "문서는 조회와 get_unless_zero를 같은 임계구역에 둘 것을 요구합니다. 원자 카운터 연산을 시도할 때 그 카운터가 살아 있어야 합니다."
     },
     {
-      "prompt": "빈 release 콜백 예제에서 list_del은 어디에서 수행하는가?",
+      "prompt": "빈 콜백 예의 list_del과 kfree 위치는 어디인가요?",
       "options": [
+        "마지막 put 확인 후 잠금 안에서 목록 제거, 해제는 잠금 밖입니다.",
+        "메모리를 먼저 해제하고 잠금 밖에서 목록을 지웁니다."
+      ],
+      "answer": 0,
+      "explanation": "목록 제거 결정은 보호하고 비싼 해제만 밖으로 옮깁니다.",
+      "original_prompt": "빈 release 콜백 예제에서 list_del은 어디에서 수행하는가?",
+      "original_options": [
         "마지막 put 성공을 확인한 뒤 mutex 안에서, kfree는 unlock 뒤",
         "kfree를 먼저 한 뒤 mutex 밖에서"
       ],
-      "answer": 0,
-      "explanation": "검색 구조에서 항목을 제거하는 결정은 잠금 안에 남깁니다. 비싼 해제 작업만 밖으로 옮기는 예제이며 callback 자체가 이미 free한다면 이 패턴을 그대로 쓸 수 없습니다."
+      "original_explanation": "검색 구조에서 항목을 제거하는 결정은 잠금 안에 남깁니다. 비싼 해제 작업만 밖으로 옮기는 예제이며 callback 자체가 이미 free한다면 이 패턴을 그대로 쓸 수 없습니다."
     },
     {
-      "prompt": "RCU 조회가 get_unless_zero에 성공했다면 읽기 구역 밖에서 사용할 근거는?",
+      "prompt": "RCU 구역 밖에서 쓸 수 있는 근거는 무엇인가요?",
       "options": [
+        "unlock 후에도 모든 주소가 자동 보호되어서입니다.",
+        "성공적으로 획득한 참조를 가지고 있어서입니다."
+      ],
+      "answer": 1,
+      "explanation": "구역은 획득 시도를 보호하고 밖은 새 참조가 보호합니다.",
+      "original_prompt": "RCU 조회가 get_unless_zero에 성공했다면 읽기 구역 밖에서 사용할 근거는?",
+      "original_options": [
         "rcu_read_unlock 이후에도 모든 원래 포인터가 자동 보호되기 때문이다",
         "성공적으로 얻은 참조를 보유하기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "읽기 구역은 참조 획득을 시도하는 동안 메모리를 보호합니다. 밖에서의 사용은 새 참조가 책임지며 나중에 put해야 합니다. 실패한 포인터를 동일하게 사용할 수 없습니다."
+      "original_explanation": "읽기 구역은 참조 획득을 시도하는 동안 메모리를 보호합니다. 밖에서의 사용은 새 참조가 책임지며 나중에 put해야 합니다. 실패한 포인터를 동일하게 사용할 수 없습니다."
     },
     {
-      "prompt": "문서의 void worker 예제를 v6.12 kthread_run에 그대로 넣어도 함수 형식이 맞는가?",
+      "prompt": "원문 void worker가 v6.12 kthread_run 형식에 그대로 맞나요?",
       "options": [
+        "아니요. int를 반환하는 함수여야 합니다.",
+        "예. 모든 반환 형식을 허용합니다."
+      ],
+      "answer": 0,
+      "explanation": "수명 설명용 예와 실제 함수 형식을 구별해야 합니다.",
+      "original_prompt": "문서의 void worker 예제를 v6.12 kthread_run에 그대로 넣어도 함수 형식이 맞는가?",
+      "original_options": [
         "아니다. threadfn은 int를 반환하는 형식이어야 한다",
         "그렇다. kthread_run은 모든 반환 형식을 허용한다"
       ],
-      "answer": 0,
-      "explanation": "현재 kthread.h는 int (*threadfn)(void *)를 받습니다. 문서의 수명 예제와 실제 컴파일 가능한 함수 형식을 구별해 구현해야 합니다."
+      "original_explanation": "현재 kthread.h는 int (*threadfn)(void *)를 받습니다. 문서의 수명 예제와 실제 컴파일 가능한 함수 형식을 구별해 구현해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "init 1개와 worker용 get 1개를 만든 뒤 스레드 생성 성공·실패 각각의 put 두 개를 표시해 보세요."
   },
   "annotated": "===================================================\nAdding reference counters (krefs) to kernel objects\n===================================================\n\n:Author: Corey Minyard <minyard@acm.org>\n:Author: Thomas Hellstrom <thellstrom@vmware.com>\n\nA lot of this was lifted from Greg Kroah-Hartman's 2004 OLS paper and\npresentation on krefs, which can be found at:\n\n  - http://www.kroah.com/linux/talks/ols_2004_kref_paper/Reprint-Kroah-Hartman-OLS2004.pdf\n  - http://www.kroah.com/linux/talks/ols_2004_kref_talk/\n\nIntroduction\n============\n\nkrefs allow you to add reference counters to your objects.  If you\nhave objects that are used in multiple places and passed around, and\nyou don't have refcounts, your code is almost certainly broken.  If\nyou want refcounts, krefs are the way to go.\n\nTo use a kref, add one to your data structures like::\n\n    struct my_data\n    {\n\t.\n\t.\n\tstruct kref refcount;\n\t.\n\t.\n    };\n\nThe kref can occur anywhere within the data structure.\n\nInitialization\n==============\n\nYou must initialize the kref after you allocate it.  To do this, call\nkref_init as so::\n\n     struct my_data *data;\n\n     data = kmalloc(sizeof(*data), GFP_KERNEL);\n     if (!data)\n            return -ENOMEM;\n     kref_init(&data->refcount);\n\nThis sets the refcount in the kref to 1.\n\nKref rules\n==========\n\nOnce you have an initialized kref, you must follow the following\nrules:\n\n1) If you make a non-temporary copy of a pointer, especially if\n   it can be passed to another thread of execution, you must\n   increment the refcount with kref_get() before passing it off::\n\n       kref_get(&data->refcount);\n\n   If you already have a valid pointer to a kref-ed structure (the\n   refcount cannot go to zero) you may do this without a lock.\n\n2) When you are done with a pointer, you must call kref_put()::\n\n       kref_put(&data->refcount, data_release);\n\n   If this is the last reference to the pointer, the release\n   routine will be called.  If the code never tries to get\n   a valid pointer to a kref-ed structure without already\n   holding a valid pointer, it is safe to do this without\n   a lock.\n\n3) If the code attempts to gain a reference to a kref-ed structure\n   without already holding a valid pointer, it must serialize access\n   where a kref_put() cannot occur during the kref_get(), and the\n   structure must remain valid during the kref_get().\n\nFor example, if you allocate some data and then pass it to another\nthread to process::\n\n    void data_release(struct kref *ref)\n    {\n\tstruct my_data *data = container_of(ref, struct my_data, refcount);\n\tkfree(data);\n    }\n\n    void more_data_handling(void *cb_data)\n    {\n\tstruct my_data *data = cb_data;\n\t.\n\t. do stuff with data here\n\t.\n\tkref_put(&data->refcount, data_release);\n    }\n\n    int my_data_handler(void)\n    {\n\tint rv = 0;\n\tstruct my_data *data;\n\tstruct task_struct *task;\n\tdata = kmalloc(sizeof(*data), GFP_KERNEL);\n\tif (!data)\n\t\treturn -ENOMEM;\n\tkref_init(&data->refcount);\n\n\tkref_get(&data->refcount);\n\ttask = kthread_run(more_data_handling, data, \"more_data_handling\");\n\tif (task == ERR_PTR(-ENOMEM)) {\n\t\trv = -ENOMEM;\n\t        kref_put(&data->refcount, data_release);\n\t\tgoto out;\n\t}\n\n\t.\n\t. do stuff with data here\n\t.\n    out:\n\tkref_put(&data->refcount, data_release);\n\treturn rv;\n    }\n\nThis way, it doesn't matter what order the two threads handle the\ndata, the kref_put() handles knowing when the data is not referenced\nany more and releasing it.  The kref_get() does not require a lock,\nsince we already have a valid pointer that we own a refcount for.  The\nput needs no lock because nothing tries to get the data without\nalready holding a pointer.\n\nIn the above example, kref_put() will be called 2 times in both success\nand error paths. This is necessary because the reference count got\nincremented 2 times by kref_init() and kref_get().\n\nNote that the \"before\" in rule 1 is very important.  You should never\ndo something like::\n\n\ttask = kthread_run(more_data_handling, data, \"more_data_handling\");\n\tif (task == ERR_PTR(-ENOMEM)) {\n\t\trv = -ENOMEM;\n\t\tgoto out;\n\t} else\n\t\t/* BAD BAD BAD - get is after the handoff */\n\t\tkref_get(&data->refcount);\n\nDon't assume you know what you are doing and use the above construct.\nFirst of all, you may not know what you are doing.  Second, you may\nknow what you are doing (there are some situations where locking is\ninvolved where the above may be legal) but someone else who doesn't\nknow what they are doing may change the code or copy the code.  It's\nbad style.  Don't do it.\n\nThere are some situations where you can optimize the gets and puts.\nFor instance, if you are done with an object and enqueuing it for\nsomething else or passing it off to something else, there is no reason\nto do a get then a put::\n\n\t/* Silly extra get and put */\n\tkref_get(&obj->ref);\n\tenqueue(obj);\n\tkref_put(&obj->ref, obj_cleanup);\n\nJust do the enqueue.  A comment about this is always welcome::\n\n\tenqueue(obj);\n\t/* We are done with obj, so we pass our refcount off\n\t   to the queue.  DON'T TOUCH obj AFTER HERE! */\n\nThe last rule (rule 3) is the nastiest one to handle.  Say, for\ninstance, you have a list of items that are each kref-ed, and you wish\nto get the first one.  You can't just pull the first item off the list\nand kref_get() it.  That violates rule 3 because you are not already\nholding a valid pointer.  You must add a mutex (or some other lock).\nFor instance::\n\n\tstatic DEFINE_MUTEX(mutex);\n\tstatic LIST_HEAD(q);\n\tstruct my_data\n\t{\n\t\tstruct kref      refcount;\n\t\tstruct list_head link;\n\t};\n\n\tstatic struct my_data *get_entry()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\tmutex_lock(&mutex);\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tkref_get(&entry->refcount);\n\t\t}\n\t\tmutex_unlock(&mutex);\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tlist_del(&entry->link);\n\t\tkfree(entry);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tmutex_lock(&mutex);\n\t\tkref_put(&entry->refcount, release_entry);\n\t\tmutex_unlock(&mutex);\n\t}\n\nThe kref_put() return value is useful if you do not want to hold the\nlock during the whole release operation.  Say you didn't want to call\nkfree() with the lock held in the example above (since it is kind of\npointless to do so).  You could use kref_put() as follows::\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\t/* All work is done after the return from kref_put(). */\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tmutex_lock(&mutex);\n\t\tif (kref_put(&entry->refcount, release_entry)) {\n\t\t\tlist_del(&entry->link);\n\t\t\tmutex_unlock(&mutex);\n\t\t\tkfree(entry);\n\t\t} else\n\t\t\tmutex_unlock(&mutex);\n\t}\n\nThis is really more useful if you have to call other routines as part\nof the free operations that could take a long time or might claim the\nsame lock.  Note that doing everything in the release routine is still\npreferred as it is a little neater.\n\nThe above example could also be optimized using kref_get_unless_zero() in\nthe following way::\n\n\tstatic struct my_data *get_entry()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\tmutex_lock(&mutex);\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tif (!kref_get_unless_zero(&entry->refcount))\n\t\t\t\tentry = NULL;\n\t\t}\n\t\tmutex_unlock(&mutex);\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tmutex_lock(&mutex);\n\t\tlist_del(&entry->link);\n\t\tmutex_unlock(&mutex);\n\t\tkfree(entry);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tkref_put(&entry->refcount, release_entry);\n\t}\n\nWhich is useful to remove the mutex lock around kref_put() in put_entry(), but\nit's important that kref_get_unless_zero is enclosed in the same critical\nsection that finds the entry in the lookup table,\notherwise kref_get_unless_zero may reference already freed memory.\nNote that it is illegal to use kref_get_unless_zero without checking its\nreturn value. If you are sure (by already having a valid pointer) that\nkref_get_unless_zero() will return true, then use kref_get() instead.\n\nKrefs and RCU\n=============\n\nThe function kref_get_unless_zero also makes it possible to use rcu\nlocking for lookups in the above example::\n\n\tstruct my_data\n\t{\n\t\tstruct rcu_head rhead;\n\t\t.\n\t\tstruct kref refcount;\n\t\t.\n\t\t.\n\t};\n\n\tstatic struct my_data *get_entry_rcu()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\trcu_read_lock();\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tif (!kref_get_unless_zero(&entry->refcount))\n\t\t\t\tentry = NULL;\n\t\t}\n\t\trcu_read_unlock();\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry_rcu(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tmutex_lock(&mutex);\n\t\tlist_del_rcu(&entry->link);\n\t\tmutex_unlock(&mutex);\n\t\tkfree_rcu(entry, rhead);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tkref_put(&entry->refcount, release_entry_rcu);\n\t}\n\nBut note that the struct kref member needs to remain in valid memory for a\nrcu grace period after release_entry_rcu was called. That can be accomplished\nby using kfree_rcu(entry, rhead) as done above, or by calling synchronize_rcu()\nbefore using kfree, but note that synchronize_rcu() may sleep for a\nsubstantial amount of time.\n",
   "source_review": {
@@ -183,5 +221,220 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/core-api/kref.rst"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-afdea4008339d794",
+    "path": "Documentation/core-api/kref.rst",
+    "title": "Kref 사용 지침 전체: 소유권 전달과 조회·해제 경쟁",
+    "area": "객체 소유권 · 비동기 처리 · 참조 계수 · RCU · 임계구역",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "객체에 kref를 넣는 방법부터 스레드 전달, 목록 조회, 마지막 해제와 RCU의 결합까지 예제로 설명하는 문서입니다.",
+    "guide": [
+      "추가 소유자를 만들 때는 공개 전에 참조를 확보하고, 기존 소유권을 넘길 때는 보낸 쪽이 사용을 끝냅니다. 소유하지 않은 포인터에서 참조를 얻을 때는 조회와 획득 사이의 메모리 수명을 보호합니다.",
+      "비동기 작업·큐·목록의 수명 설계를 검토할 때 사용합니다. 문서의 생략된 예제를 완성된 드라이버 코드로 복사하지 말고 현재 함수 형식과 RCU 조회 규칙도 확인해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "문서 구성과 출처",
+        "text": "제목, 저자 두 명,2004년 발표 자료 링크, Introduction, Initialization, Kref rules, Krefs and RCU로 구성됩니다. 규칙 부분에 스레드 전달, 잘못된 전달 순서, 큐로 소유권 이전, mutex 목록 조회, 잠금 밖 해제, 조건부 획득 예제가 들어 있습니다. 외부 발표 링크는 문서의 출처이며 이 수업에서 그 자료까지 읽거나 학습 완료로 세지는 않습니다."
+      },
+      {
+        "title": "임베디드 계수와 초기 참조",
+        "text": "my_data 내부 어디에든 struct kref를 둘 수 있습니다. kmalloc 실패는 -ENOMEM, 성공은 kref_init으로 초기 참조1을 만듭니다. 계수가 객체의 첫 필드일 필요가 없어 release는 container_of로 포함 객체를 구합니다. 할당된 객체의 다른 필드 초기화와 공유 공개 순서는 이 계수 초기화와 별개입니다."
+      },
+      {
+        "title": "규칙1: 추가 소유자는 공개 전에",
+        "text": "장기 보관하거나 다른 실행 스레드로 넘길 포인터의 추가 참조는 전달 전에 kref_get으로 확보합니다. 기존에 유효한 참조를 소유하여0이 될 수 없게 하고 있다면 계수 증가에 별도 잠금이 필요 없다는 설명입니다. 단지 비NULL 주소를 알고 있는 것을 유효한 참조 소유와 혼동하면 안 됩니다."
+      },
+      {
+        "title": "규칙2: 소유권 반납",
+        "text": "자신의 포인터 사용이 끝나면 kref_put을 호출하고 마지막 참조의 release가 자원을 정리합니다. 모든 획득자가 이미 유효한 참조에서 추가 획득한다는 전제라면 각 put을 따로 잠글 필요가 없다는 예입니다. 이것이 객체 내용의 동시 수정까지 잠금 없이 안전하다는 뜻은 아닙니다."
+      },
+      {
+        "title": "규칙3: 소유하지 않은 포인터에서 획득",
+        "text": "검색 구조에서 처음 객체를 찾는 경우에는 참조 획득과 마지막 해제가 충돌하지 않게 직렬화하거나 적절한 조건부 획득·수명 보호를 사용해야 합니다. 특히 kref_get이 계수를 읽는 동안 구조체 메모리 자체가 유효해야 합니다. 계수의 원자성만으로 이 전제를 만들 수 없습니다."
+      },
+      {
+        "title": "두 스레드 예제의 참조 회계",
+        "text": "handler가 init으로1, 실행 전 get으로 추가1을 확보해 합계2입니다. 성공하면 worker가 하나, handler가 하나를 put하며 실행 완료 순서는 중요하지 않습니다. 예제의 생성 실패 경로는 worker에게 줄 예정이던 참조를 put하고 out에서 handler 참조도 put합니다. 두 경로 모두 총 두 번의 반납이 필요합니다."
+      },
+      {
+        "title": "스레드 예제의 현재 API 주의",
+        "text": "문서의 more_data_handling은 void 반환으로 적혀 있지만 v6.12 kthread.h의 threadfn 형식은 int (*)(void *)입니다. 실제 코드에서는 int 반환과 적절한 종료값을 갖춰야 합니다. 예제는 ERR_PTR(-ENOMEM)만 비교하지만 일반 오류 처리는 IS_ERR/PTR_ERR로 계약에 맞춰 해야 합니다. 중간의 점으로 생략된 코드를 포함해 이 블록을 그대로 컴파일 가능한 완성본으로 취급하지 않습니다."
+      },
+      {
+        "title": "전달 후 get이 위험한 이유",
+        "text": "나쁜 예제는 kthread_run 뒤에 get을 둡니다. 새 스레드가 즉시 동작하여 put하면 추가 참조를 만들기도 전에 기존 계수가0이 되어 객체가 해제될 수 있습니다. 생성 함수 호출이 먼저 반환될 것이라는 가정으로 수명 계약을 세우면 안 됩니다. 다른 특별한 잠금으로 가능해지는 경우가 있더라도 문서는 전달 전 획득 패턴을 권합니다."
+      },
+      {
+        "title": "큐에 소유권을 이전하기",
+        "text": "보낸 쪽이 객체 사용을 완전히 마치고 큐가 기존 참조의 책임을 인수한다면 get→enqueue→put 대신 enqueue로 소유권을 이전할 수 있습니다. 그 뒤 보낸 쪽은 객체를 만지지 않는다는 주석을 남깁니다. 큐가 실제로 인수를 성공했고 나중에 반납한다는 계약이 필요하며 enqueue 자체가 자동으로 참조를 늘린다는 뜻은 아닙니다."
+      },
+      {
+        "title": "mutex 목록 조회",
+        "text": "첫 목록 예제는 get_entry에서 mutex를 잡고 빈 목록 검사, q.next로 객체 찾기, kref_get까지 수행합니다. put_entry도 같은 mutex 아래 put을 하고 마지막 release가 list_del과 kfree를 합니다. 조회와 참조 획득이 같은 임계구역에 있어 마지막 제거와 경쟁하지 않습니다. get_entry는 이름과 달리 항목을 목록에서 빼지 않고 참조를 반환합니다."
+      },
+      {
+        "title": "비싼 해제를 잠금 밖으로",
+        "text": "다음 예제의 release는 비어 있고, 잠금 안의 kref_put이 참일 때 list_del 후 unlock하고 kfree합니다. 목록에서 제거하는 결정은 잠금 안에서 완료하고 실제 메모리 해제는 밖으로 옮깁니다. false 경로도 unlock합니다. 이 예제만의 빈 callback 계약 덕분에 put 뒤 객체를 정리할 수 있는 것이며, 이미 free하는 일반 callback을 쓴 뒤 같은 패턴으로 접근하면 안 됩니다."
+      },
+      {
+        "title": "조건부 획득으로 put 잠금 축소",
+        "text": "최적화 예제는 조회 mutex 안에서 get_unless_zero를 검사해 실패하면 NULL을 반환합니다. put_entry 자체는 잠금을 잡지 않고 마지막 release만 mutex를 잡아 list_del 후 해제합니다. 카운터가 이미0인데 항목은 아직 목록에 남은 순간도 조건부 획득이 실패로 처리합니다. 조회와 조건부 획득을 분리하면 이미 해제된 계수에 접근할 수 있어 같은 임계구역 유지가 필수입니다."
+      },
+      {
+        "title": "조건부 획득 결과의 의미",
+        "text": "문서는 get_unless_zero 반환값을 검사하지 않는 사용을 금지합니다. 이미 참조를 소유해 성공을 확신할 수 있는 경우는 일반 get을 사용하라고 설명합니다. 실패를 무시하고 읽기 보호 밖으로 포인터를 넘기면 참조 없는 객체 사용이 됩니다. 실패가 단순 성능상 재시도 신호인지, 조회 결과 없음인지의 처리는 호출자가 정해야 합니다."
+      },
+      {
+        "title": "RCU 예제의 수명 연결",
+        "text": "RCU 조회는 rcu_read_lock 안에서 객체를 찾아 get_unless_zero를 시도하고, 성공한 경우에만 참조를 들고 읽기 구역 밖으로 반환합니다. 마지막 release는 mutex 안에서 list_del_rcu, 그 뒤 kfree_rcu로 회수를 지연합니다. 실패한 독자도 계수 필드를 읽을 수 있으므로 구조체와 kref 멤버는 grace period 동안 유효해야 합니다."
+      },
+      {
+        "title": "RCU 예제의 생략과 회수 대안",
+        "text": "원문 조회 예제는 list_empty와 q.next 직접 접근을 보여 주며 목록 공개·삽입 구현은 생략합니다. RCU 읽기 잠금이 모든 일반 포인터 접근을 자동으로 올바른 RCU 조회로 바꾸지는 않으므로 실코드에서는 적절한 RCU 목록 조회·공개 primitive를 적용해야 합니다. 문서는 kfree_rcu 대신 synchronize_rcu 후 kfree도 언급하지만 synchronize_rcu는 오래 잠들 수 있어 문맥 제약을 고려해야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "참조 회계, 추가 소유와 소유권 이동, 비동기 실행 순서, 검색 구조의 제거와 물리적 회수 분리, callback의 잠금 책임, RCU 임계구역에서 장기 참조로 전환하는 패턴을 학습합니다. 이 수업은 원문과 API 형식을 대조한 해설이며 예제의 모든 경쟁 실행을 커널에서 재현한 검사는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "worker 전달을 위해 init과 get을 각각 한 번 했는데 스레드 생성이 실패했다. 몇 참조를 반납해야 하는가?",
+        "options": [
+          "두 개: worker용 예약 참조와 handler의 초기 참조",
+          "한 개: worker가 실행되지 않았으므로 초기 참조만"
+        ],
+        "answer": 0,
+        "explanation": "get은 생성 성공 여부와 무관하게 이미 추가 참조를 만들었습니다. 실패 시 이 예약을 취소하고 handler도 자기 소유권을 끝내야 누수가 없습니다."
+      },
+      {
+        "prompt": "kthread_run 뒤에 kref_get을 두면 왜 위험한가?",
+        "options": [
+          "kref_get은 어떤 경우에도 스레드 생성과 함께 쓸 수 없다",
+          "worker가 먼저 put하여 get 이전에 객체가 해제될 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "새 실행 흐름이 즉시 동작할 수 있으므로 추가 참조는 공개 전에 확보해야 합니다. 반환 순서나 스케줄링 속도로 객체 수명을 보장할 수 없습니다."
+      },
+      {
+        "prompt": "객체를 큐에 넘긴 뒤 보낸 쪽이 더 사용하지 않는다면 get과 put 한 쌍을 생략할 수 있는 조건은?",
+        "options": [
+          "큐가 기존 참조 소유권을 인수하고 최종 반납 책임을 지는 경우",
+          "포인터 값만 큐에 저장하면 언제나 참조가 자동 증가하는 경우"
+        ],
+        "answer": 0,
+        "explanation": "문서의 최적화는 소유권 이전입니다. 추가 소유자를 만드는 동작과 달리 기존 참조의 책임자가 바뀌므로 이전한 쪽은 이후 접근해서는 안 됩니다."
+      },
+      {
+        "prompt": "목록에서 찾은 뒤 mutex를 풀고 get_unless_zero를 하면 안전한가?",
+        "options": [
+          "그렇다. 조건부 원자 증가가 해제된 메모리도 보호한다",
+          "아니다. 획득 전 객체 메모리가 해제될 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 조회와 get_unless_zero를 같은 임계구역에 둘 것을 요구합니다. 원자 카운터 연산을 시도할 때 그 카운터가 살아 있어야 합니다."
+      },
+      {
+        "prompt": "빈 release 콜백 예제에서 list_del은 어디에서 수행하는가?",
+        "options": [
+          "마지막 put 성공을 확인한 뒤 mutex 안에서, kfree는 unlock 뒤",
+          "kfree를 먼저 한 뒤 mutex 밖에서"
+        ],
+        "answer": 0,
+        "explanation": "검색 구조에서 항목을 제거하는 결정은 잠금 안에 남깁니다. 비싼 해제 작업만 밖으로 옮기는 예제이며 callback 자체가 이미 free한다면 이 패턴을 그대로 쓸 수 없습니다."
+      },
+      {
+        "prompt": "RCU 조회가 get_unless_zero에 성공했다면 읽기 구역 밖에서 사용할 근거는?",
+        "options": [
+          "rcu_read_unlock 이후에도 모든 원래 포인터가 자동 보호되기 때문이다",
+          "성공적으로 얻은 참조를 보유하기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "읽기 구역은 참조 획득을 시도하는 동안 메모리를 보호합니다. 밖에서의 사용은 새 참조가 책임지며 나중에 put해야 합니다. 실패한 포인터를 동일하게 사용할 수 없습니다."
+      },
+      {
+        "prompt": "문서의 void worker 예제를 v6.12 kthread_run에 그대로 넣어도 함수 형식이 맞는가?",
+        "options": [
+          "아니다. threadfn은 int를 반환하는 형식이어야 한다",
+          "그렇다. kthread_run은 모든 반환 형식을 허용한다"
+        ],
+        "answer": 0,
+        "explanation": "현재 kthread.h는 int (*threadfn)(void *)를 받습니다. 문서의 수명 예제와 실제 컴파일 가능한 함수 형식을 구별해 구현해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "===================================================\nAdding reference counters (krefs) to kernel objects\n===================================================\n\n:Author: Corey Minyard <minyard@acm.org>\n:Author: Thomas Hellstrom <thellstrom@vmware.com>\n\nA lot of this was lifted from Greg Kroah-Hartman's 2004 OLS paper and\npresentation on krefs, which can be found at:\n\n  - http://www.kroah.com/linux/talks/ols_2004_kref_paper/Reprint-Kroah-Hartman-OLS2004.pdf\n  - http://www.kroah.com/linux/talks/ols_2004_kref_talk/\n\nIntroduction\n============\n\nkrefs allow you to add reference counters to your objects.  If you\nhave objects that are used in multiple places and passed around, and\nyou don't have refcounts, your code is almost certainly broken.  If\nyou want refcounts, krefs are the way to go.\n\nTo use a kref, add one to your data structures like::\n\n    struct my_data\n    {\n\t.\n\t.\n\tstruct kref refcount;\n\t.\n\t.\n    };\n\nThe kref can occur anywhere within the data structure.\n\nInitialization\n==============\n\nYou must initialize the kref after you allocate it.  To do this, call\nkref_init as so::\n\n     struct my_data *data;\n\n     data = kmalloc(sizeof(*data), GFP_KERNEL);\n     if (!data)\n            return -ENOMEM;\n     kref_init(&data->refcount);\n\nThis sets the refcount in the kref to 1.\n\nKref rules\n==========\n\nOnce you have an initialized kref, you must follow the following\nrules:\n\n1) If you make a non-temporary copy of a pointer, especially if\n   it can be passed to another thread of execution, you must\n   increment the refcount with kref_get() before passing it off::\n\n       kref_get(&data->refcount);\n\n   If you already have a valid pointer to a kref-ed structure (the\n   refcount cannot go to zero) you may do this without a lock.\n\n2) When you are done with a pointer, you must call kref_put()::\n\n       kref_put(&data->refcount, data_release);\n\n   If this is the last reference to the pointer, the release\n   routine will be called.  If the code never tries to get\n   a valid pointer to a kref-ed structure without already\n   holding a valid pointer, it is safe to do this without\n   a lock.\n\n3) If the code attempts to gain a reference to a kref-ed structure\n   without already holding a valid pointer, it must serialize access\n   where a kref_put() cannot occur during the kref_get(), and the\n   structure must remain valid during the kref_get().\n\nFor example, if you allocate some data and then pass it to another\nthread to process::\n\n    void data_release(struct kref *ref)\n    {\n\tstruct my_data *data = container_of(ref, struct my_data, refcount);\n\tkfree(data);\n    }\n\n    void more_data_handling(void *cb_data)\n    {\n\tstruct my_data *data = cb_data;\n\t.\n\t. do stuff with data here\n\t.\n\tkref_put(&data->refcount, data_release);\n    }\n\n    int my_data_handler(void)\n    {\n\tint rv = 0;\n\tstruct my_data *data;\n\tstruct task_struct *task;\n\tdata = kmalloc(sizeof(*data), GFP_KERNEL);\n\tif (!data)\n\t\treturn -ENOMEM;\n\tkref_init(&data->refcount);\n\n\tkref_get(&data->refcount);\n\ttask = kthread_run(more_data_handling, data, \"more_data_handling\");\n\tif (task == ERR_PTR(-ENOMEM)) {\n\t\trv = -ENOMEM;\n\t        kref_put(&data->refcount, data_release);\n\t\tgoto out;\n\t}\n\n\t.\n\t. do stuff with data here\n\t.\n    out:\n\tkref_put(&data->refcount, data_release);\n\treturn rv;\n    }\n\nThis way, it doesn't matter what order the two threads handle the\ndata, the kref_put() handles knowing when the data is not referenced\nany more and releasing it.  The kref_get() does not require a lock,\nsince we already have a valid pointer that we own a refcount for.  The\nput needs no lock because nothing tries to get the data without\nalready holding a pointer.\n\nIn the above example, kref_put() will be called 2 times in both success\nand error paths. This is necessary because the reference count got\nincremented 2 times by kref_init() and kref_get().\n\nNote that the \"before\" in rule 1 is very important.  You should never\ndo something like::\n\n\ttask = kthread_run(more_data_handling, data, \"more_data_handling\");\n\tif (task == ERR_PTR(-ENOMEM)) {\n\t\trv = -ENOMEM;\n\t\tgoto out;\n\t} else\n\t\t/* BAD BAD BAD - get is after the handoff */\n\t\tkref_get(&data->refcount);\n\nDon't assume you know what you are doing and use the above construct.\nFirst of all, you may not know what you are doing.  Second, you may\nknow what you are doing (there are some situations where locking is\ninvolved where the above may be legal) but someone else who doesn't\nknow what they are doing may change the code or copy the code.  It's\nbad style.  Don't do it.\n\nThere are some situations where you can optimize the gets and puts.\nFor instance, if you are done with an object and enqueuing it for\nsomething else or passing it off to something else, there is no reason\nto do a get then a put::\n\n\t/* Silly extra get and put */\n\tkref_get(&obj->ref);\n\tenqueue(obj);\n\tkref_put(&obj->ref, obj_cleanup);\n\nJust do the enqueue.  A comment about this is always welcome::\n\n\tenqueue(obj);\n\t/* We are done with obj, so we pass our refcount off\n\t   to the queue.  DON'T TOUCH obj AFTER HERE! */\n\nThe last rule (rule 3) is the nastiest one to handle.  Say, for\ninstance, you have a list of items that are each kref-ed, and you wish\nto get the first one.  You can't just pull the first item off the list\nand kref_get() it.  That violates rule 3 because you are not already\nholding a valid pointer.  You must add a mutex (or some other lock).\nFor instance::\n\n\tstatic DEFINE_MUTEX(mutex);\n\tstatic LIST_HEAD(q);\n\tstruct my_data\n\t{\n\t\tstruct kref      refcount;\n\t\tstruct list_head link;\n\t};\n\n\tstatic struct my_data *get_entry()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\tmutex_lock(&mutex);\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tkref_get(&entry->refcount);\n\t\t}\n\t\tmutex_unlock(&mutex);\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tlist_del(&entry->link);\n\t\tkfree(entry);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tmutex_lock(&mutex);\n\t\tkref_put(&entry->refcount, release_entry);\n\t\tmutex_unlock(&mutex);\n\t}\n\nThe kref_put() return value is useful if you do not want to hold the\nlock during the whole release operation.  Say you didn't want to call\nkfree() with the lock held in the example above (since it is kind of\npointless to do so).  You could use kref_put() as follows::\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\t/* All work is done after the return from kref_put(). */\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tmutex_lock(&mutex);\n\t\tif (kref_put(&entry->refcount, release_entry)) {\n\t\t\tlist_del(&entry->link);\n\t\t\tmutex_unlock(&mutex);\n\t\t\tkfree(entry);\n\t\t} else\n\t\t\tmutex_unlock(&mutex);\n\t}\n\nThis is really more useful if you have to call other routines as part\nof the free operations that could take a long time or might claim the\nsame lock.  Note that doing everything in the release routine is still\npreferred as it is a little neater.\n\nThe above example could also be optimized using kref_get_unless_zero() in\nthe following way::\n\n\tstatic struct my_data *get_entry()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\tmutex_lock(&mutex);\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tif (!kref_get_unless_zero(&entry->refcount))\n\t\t\t\tentry = NULL;\n\t\t}\n\t\tmutex_unlock(&mutex);\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tmutex_lock(&mutex);\n\t\tlist_del(&entry->link);\n\t\tmutex_unlock(&mutex);\n\t\tkfree(entry);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tkref_put(&entry->refcount, release_entry);\n\t}\n\nWhich is useful to remove the mutex lock around kref_put() in put_entry(), but\nit's important that kref_get_unless_zero is enclosed in the same critical\nsection that finds the entry in the lookup table,\notherwise kref_get_unless_zero may reference already freed memory.\nNote that it is illegal to use kref_get_unless_zero without checking its\nreturn value. If you are sure (by already having a valid pointer) that\nkref_get_unless_zero() will return true, then use kref_get() instead.\n\nKrefs and RCU\n=============\n\nThe function kref_get_unless_zero also makes it possible to use rcu\nlocking for lookups in the above example::\n\n\tstruct my_data\n\t{\n\t\tstruct rcu_head rhead;\n\t\t.\n\t\tstruct kref refcount;\n\t\t.\n\t\t.\n\t};\n\n\tstatic struct my_data *get_entry_rcu()\n\t{\n\t\tstruct my_data *entry = NULL;\n\t\trcu_read_lock();\n\t\tif (!list_empty(&q)) {\n\t\t\tentry = container_of(q.next, struct my_data, link);\n\t\t\tif (!kref_get_unless_zero(&entry->refcount))\n\t\t\t\tentry = NULL;\n\t\t}\n\t\trcu_read_unlock();\n\t\treturn entry;\n\t}\n\n\tstatic void release_entry_rcu(struct kref *ref)\n\t{\n\t\tstruct my_data *entry = container_of(ref, struct my_data, refcount);\n\n\t\tmutex_lock(&mutex);\n\t\tlist_del_rcu(&entry->link);\n\t\tmutex_unlock(&mutex);\n\t\tkfree_rcu(entry, rhead);\n\t}\n\n\tstatic void put_entry(struct my_data *entry)\n\t{\n\t\tkref_put(&entry->refcount, release_entry_rcu);\n\t}\n\nBut note that the struct kref member needs to remain in valid memory for a\nrcu grace period after release_entry_rcu was called. That can be accomplished\nby using kfree_rcu(entry, rhead) as done above, or by calling synchronize_rcu()\nbefore using kfree, but note that synchronize_rcu() may sleep for a\nsubstantial amount of time.\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "5724ae3846fa826b8678e909d41ba7ec43c37713f42335cc14f3b080181893e6",
+      "scope": "whole-file",
+      "line_count": 323,
+      "authoring_source": "course/file_units/kref_documentation.py",
+      "sections": [
+        "문서 구성과 출처",
+        "임베디드 계수와 초기 참조",
+        "규칙1: 추가 소유자는 공개 전에",
+        "규칙2: 소유권 반납",
+        "규칙3: 소유하지 않은 포인터에서 획득",
+        "두 스레드 예제의 참조 회계",
+        "스레드 예제의 현재 API 주의",
+        "전달 후 get이 위험한 이유",
+        "큐에 소유권을 이전하기",
+        "mutex 목록 조회",
+        "비싼 해제를 잠금 밖으로",
+        "조건부 획득으로 put 잠금 축소",
+        "조건부 획득 결과의 의미",
+        "RCU 예제의 수명 연결",
+        "RCU 예제의 생략과 회수 대안",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/core-api/kref.rst"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "친구에게 책을 맡기기 전에 그 친구 몫의 대여권을 마련해야 합니다. 먼저 넘기고 나중에 세면 친구가 이미 반납해 책이 치워졌을 수 있습니다.",
+    "meaning": "kref의 세 소유권 규칙과 목록·RCU 조회에서 수명을 보호하는 방법을 설명합니다.",
+    "exercise": "init 1개와 worker용 get 1개를 만든 뒤 스레드 생성 성공·실패 각각의 put 두 개를 표시해 보세요."
+  },
+  "goal": "kref의 세 소유권 규칙과 목록·RCU 조회에서 수명을 보호하는 방법을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "init 1개와 worker용 get 1개를 만든 뒤 스레드 생성 성공·실패 각각의 put 두 개를 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "ccdd2eab5ac933ee3d15e313ad016a846f145ae4483ec8cb783ea819bbff4113",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

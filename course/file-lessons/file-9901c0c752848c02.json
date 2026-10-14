@@ -5,58 +5,66 @@
   "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
   "track": "files",
   "kind": "kernel",
-  "intro": "공개 변환 API 안쪽에서 사용하는 숫자 누적 helper의 선언입니다.",
+  "intro": "이 내부 헤더는 숫자를 읽는 도우미 세 개와 범위 초과 표시를 선언해요. 반환값에는 길이와 오류 표시가 함께 들어갈 수 있어요.",
   "guide": [
-    "KSTRTOX_OVERFLOW는1U<<31이고 진법 보정,최대문자수 제한 파서,기본 제한 파서의3개 함수를 선언합니다.",
-    "내부 반환값은 단순 오류 코드가 아니라 소비 길이와 overflow 표시를 합친 unsigned 값입니다. 공개 API의0/-errno와 혼동하지 않습니다."
+    "파싱은 문자열을 읽어 숫자 같은 값으로 해석하는 일이에요. 진법은 10진수·16진수처럼 각 자리의 값을 정하는 규칙이에요.",
+    "오버플로는 담을 수 있는 숫자 범위를 넘는 일이에요. 여기서는 오류 코드를 따로 반환하는 대신 반환 정수의 한 비트에 표시해요.",
+    "내부 도우미와 공개 변환 함수는 결과를 알려 주는 약속이 달라요. 같은 숫자 변환에 쓰여도 반환값을 같은 방식으로 읽으면 안 돼요."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "SPDX,_LIB_KSTRTOX_H guard,상수하나,함수선언3개,#endif로끝납니다. size_t를사용하지만별도타입헤더include는없어포함문맥에의존합니다."
+      "title": "짧은 헤더의 전체 구성",
+      "text": "라이선스 표기, 중복 포함을 막는 _LIB_KSTRTOX_H 조건, 상수 하나와 함수 선언 세 개로 이루어져요. size_t라는 크기 타입을 사용하지만 타입 헤더를 여기서 직접 포함하지 않아요. 이 파일을 포함하는 앞뒤 문맥에서 타입이 준비되어야 해요."
     },
     {
-      "title": "함수별 역할",
-      "text": "_parse_integer_fixup_radix는base 포인터를갱신하고숫자시작포인터를반환합니다. _parse_integer_limit는명시적진법·출력저장소·최대문자수를받습니다. _parse_integer는최대문자수인자가없는wrapper입니다. 실제알고리즘은같은디렉터리의C파일에있습니다."
+      "title": "세 도우미가 맡는 일",
+      "text": "_parse_integer_fixup_radix는 base가 가리키는 진법 값을 조정하고 숫자를 읽기 시작할 주소를 돌려줘요. _parse_integer_limit는 입력, 진법, 결과를 쓸 주소, 읽을 최대 글자 수를 받아요. _parse_integer에는 최대 글자 수 인자가 없어요. 실제 계산 본문은 같은 디렉터리의 kstrtox.c에 있어요."
     },
     {
-      "title": "플래그 해석",
-      "text": "소비문자수에최상위비트를OR하여overflow를알립니다. 호출자가이를그대로문자열포인터에더하면잘못된길이가됩니다. 공개파서는플래그를먼저확인해오류로반환하고정상길이일때만입력위치를이동합니다."
+      "title": "길이와 경고 표시를 함께 읽기",
+      "text": "KSTRTOX_OVERFLOW는 1U << 31이에요. 1을 31번 비트 자리로 옮긴 표시이며 글자 수 31이라는 뜻이 아니에요. 소비한 글자 수에 이 표시를 OR하여 범위 초과를 알릴 수 있어요. 이를 그대로 입력 주소에 더하면 실제 길이보다 훨씬 멀리 이동할 수 있어요. 공개 파서는 먼저 표시를 검사하여 오류를 반환하고 정상 길이일 때만 주소를 옮겨요."
     },
     {
-      "title": "CS 연결",
-      "text": "하나의정수반환값에상태와길이를함께담는표현,private/public API분리,출력포인터의계약을학습합니다. 내부선언이보인다는이유만으로일반문자열변환사용처에서직접호출할안전한인터페이스라고가정하지않습니다."
+      "title": "내부 약속을 공개 약속과 구분하기",
+      "text": "하나의 반환 정수에 상태와 길이를 함께 넣는 방식이에요. 공개 kstrto 함수가 성공 0 또는 음수 오류를 반환하는 것과 달라요. 내부 선언이 보인다고 일반 사용자가 바로 호출해도 안전한 변환 함수라고 생각하지 마세요. 결과 주소에 언제 값을 쓰는지도 각 구현에서 확인해야 해요."
     }
   ],
   "questions": [
     {
-      "prompt": "KSTRTOX_OVERFLOW는어떤값인가?",
+      "prompt": "KSTRTOX_OVERFLOW의 1U << 31은 무엇인가요?",
       "options": [
+        "unsigned 정수의 31번 비트에 둔 오류 표시예요.",
+        "최대 31글자까지만 읽는다는 길이예요."
+      ],
+      "answer": 0,
+      "explanation": "비트 번호와 글자 수를 구분해요. 이 표시는 반환된 길이에 함께 담기는 상태 정보예요.",
+      "original_prompt": "KSTRTOX_OVERFLOW는어떤값인가?",
+      "original_options": [
         "unsigned의31번비트표시인1U<<31",
         "소비문자수의최대값31"
       ],
-      "answer": 0,
-      "explanation": "비트위치와숫자값을구분합니다.반환길이와함께OR되는상태플래그입니다."
+      "original_explanation": "비트위치와숫자값을구분합니다.반환길이와함께OR되는상태플래그입니다."
     },
     {
-      "prompt": "내부 반환값을곧바로입력포인터에더해도되는가?",
+      "prompt": "내부 반환값을 바로 입력 주소에 더해도 되나요?",
       "options": [
+        "네. 항상 순수한 글자 수예요.",
+        "아니요. 먼저 범위 초과 표시를 확인해야 해요."
+      ],
+      "answer": 1,
+      "explanation": "경고 비트가 켜진 전체 값을 길이로 사용하면 잘못된 주소가 돼요. 오류 검사부터 해야 해요.",
+      "original_prompt": "내부 반환값을곧바로입력포인터에더해도되는가?",
+      "original_options": [
         "된다. 항상순수한문자수다",
         "안 된다. overflow플래그를먼저확인해야한다"
       ],
-      "answer": 1,
-      "explanation": "오류플래그가포함된값은실제소비길이가아닙니다.공개파서의검사순서를따라읽어야합니다."
+      "original_explanation": "오류플래그가포함된값은실제소비길이가아닙니다.공개파서의검사순서를따라읽어야합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "반환값에 31번 비트가 켜진 경우와 꺼진 경우를 나누고, 입력 주소를 옮기기 전에 확인할 것을 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LIB_KSTRTOX_H\n#define _LIB_KSTRTOX_H\n\n#define KSTRTOX_OVERFLOW\t(1U << 31)\nconst char *_parse_integer_fixup_radix(const char *s, unsigned int *base);\nunsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *res,\n\t\t\t\t  size_t max_chars);\nunsigned int _parse_integer(const char *s, unsigned int base, unsigned long long *res);\n\n#endif\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kstrtox.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-9901c0c752848c02",
+    "path": "lib/kstrtox.h",
+    "title": "내부 정수 파서 헤더 전체: 길이와 overflow 비트",
+    "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "공개 변환 API 안쪽에서 사용하는 숫자 누적 helper의 선언입니다.",
+    "guide": [
+      "KSTRTOX_OVERFLOW는1U<<31이고 진법 보정,최대문자수 제한 파서,기본 제한 파서의3개 함수를 선언합니다.",
+      "내부 반환값은 단순 오류 코드가 아니라 소비 길이와 overflow 표시를 합친 unsigned 값입니다. 공개 API의0/-errno와 혼동하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "SPDX,_LIB_KSTRTOX_H guard,상수하나,함수선언3개,#endif로끝납니다. size_t를사용하지만별도타입헤더include는없어포함문맥에의존합니다."
+      },
+      {
+        "title": "함수별 역할",
+        "text": "_parse_integer_fixup_radix는base 포인터를갱신하고숫자시작포인터를반환합니다. _parse_integer_limit는명시적진법·출력저장소·최대문자수를받습니다. _parse_integer는최대문자수인자가없는wrapper입니다. 실제알고리즘은같은디렉터리의C파일에있습니다."
+      },
+      {
+        "title": "플래그 해석",
+        "text": "소비문자수에최상위비트를OR하여overflow를알립니다. 호출자가이를그대로문자열포인터에더하면잘못된길이가됩니다. 공개파서는플래그를먼저확인해오류로반환하고정상길이일때만입력위치를이동합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "하나의정수반환값에상태와길이를함께담는표현,private/public API분리,출력포인터의계약을학습합니다. 내부선언이보인다는이유만으로일반문자열변환사용처에서직접호출할안전한인터페이스라고가정하지않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "KSTRTOX_OVERFLOW는어떤값인가?",
+        "options": [
+          "unsigned의31번비트표시인1U<<31",
+          "소비문자수의최대값31"
+        ],
+        "answer": 0,
+        "explanation": "비트위치와숫자값을구분합니다.반환길이와함께OR되는상태플래그입니다."
+      },
+      {
+        "prompt": "내부 반환값을곧바로입력포인터에더해도되는가?",
+        "options": [
+          "된다. 항상순수한문자수다",
+          "안 된다. overflow플래그를먼저확인해야한다"
+        ],
+        "answer": 1,
+        "explanation": "오류플래그가포함된값은실제소비길이가아닙니다.공개파서의검사순서를따라읽어야합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LIB_KSTRTOX_H\n#define _LIB_KSTRTOX_H\n\n#define KSTRTOX_OVERFLOW\t(1U << 31)\nconst char *_parse_integer_fixup_radix(const char *s, unsigned int *base);\nunsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *res,\n\t\t\t\t  size_t max_chars);\nunsigned int _parse_integer(const char *s, unsigned int base, unsigned long long *res);\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "01e1fde35210c06d74448287a44fcf2ec48066b83304c21e4ae976a69c4ef9a9",
+      "scope": "whole-file",
+      "line_count": 11,
+      "authoring_source": "course/file_units/string_to_numbers.py",
+      "sections": [
+        "전체 파일",
+        "함수별 역할",
+        "플래그 해석",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kstrtox.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "봉투에 글자 수와 빨간 경고 스티커를 함께 넣었다면, 봉투 전체 숫자를 글자 수로 읽으면 안 돼요.",
+    "meaning": "이 내부 헤더는 숫자를 읽는 도우미 세 개와 범위 초과 표시를 선언해요. 반환값에는 길이와 오류 표시가 함께 들어갈 수 있어요.",
+    "exercise": "반환값에 31번 비트가 켜진 경우와 꺼진 경우를 나누고, 입력 주소를 옮기기 전에 확인할 것을 적어 보세요."
+  },
+  "goal": "이 내부 헤더는 숫자를 읽는 도우미 세 개와 범위 초과 표시를 선언해요. 반환값에는 길이와 오류 표시가 함께 들어갈 수 있어요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "반환값에 31번 비트가 켜진 경우와 꺼진 경우를 나누고, 입력 주소를 옮기기 전에 확인할 것을 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "83cc485ad8c34601751ccfcce71335382de43090db1f6f31078472959a1d2d82",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

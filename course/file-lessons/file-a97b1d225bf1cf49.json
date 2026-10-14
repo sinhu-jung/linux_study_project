@@ -5,96 +5,116 @@
   "area": "기계어 인코딩 · 전처리기 · 접두사 · 포인터 const",
   "track": "files",
   "kind": "kernel",
-  "intro": "alternative와 tracing에 쓰는 길이별 NOP 바이트 열을 32·64비트 구성별로 읽습니다.",
+  "intro": "x86 NOP의 바이트 길이와 접두사 조합, 외부 테이블 선언을 설명합니다.",
   "guide": [
-    "명령의 바이트 길이와 명령 개수는 다릅니다. 지정한 공간에 맞는 인코딩을 선택합니다.",
-    "장벽 헤더에서 포함한 NOP 정의를 따라가며 바이트 수와 접두사 조합을 직접 계산합니다."
+    "NOP는 프로그램 상태를 유용하게 바꾸지 않는 빈 동작 명령입니다.",
+    "인코딩은 명령을 CPU가 읽는 바이트들로 나타낸 것입니다.",
+    "접두사는 명령 앞에 붙어 해석을 조절하는 바이트입니다."
   ],
   "deep_dive": [
     {
       "title": "파일 경계",
-      "text": "GPL-2.0, guard와 asm.h 포함, CONFIG_64BIT에 따른 바이트 정의, ASM_NOP 문자열 조각, C용 x86_nops 외부 선언이 전부입니다. 실제 alternative 패치나 tracing 알고리즘은 구현하지 않습니다."
+      "text": "헤더는 32·64비트별 바이트 정의와 어셈블리 변환, C용 외부 테이블 선언을 담습니다. 실제 명령 패치나 실행 추적 알고리즘은 구현하지 않습니다."
     },
     {
       "title": "32비트 짧은 인코딩",
-      "text": "비64비트에서 NOP1은90, NOP2는89 f6, NOP3은8d 76 00, NOP4는8d 74 26 00입니다. 주석은 각각 nop,esi 자기복사,esi를 그대로 계산하는 lea 계열을 설명합니다. 이름의 숫자는 바이트 수이며 NOP4가 nop 명령 네 개라는 뜻이 아닙니다."
+      "text": "32비트 NOP1은 90, NOP2는 89 f6, NOP3은 8d 76 00, NOP4는 8d 74 26 00입니다. 자기 레지스터 복사나 같은 주소 계산처럼 결과가 유지되는 명령도 이용합니다. 숫자는 명령 개수가 아니라 바이트 수입니다."
     },
     {
       "title": "32비트 긴 인코딩",
-      "text": "NOP6은8d b6 뒤0 네 개, NOP7은8d b4 26 뒤0 네 개입니다. NOP5는 DS 접두사3e와 NOP4, NOP8은3e와 NOP7을 결합합니다. 주석은5·8 길이에 GAS가 두 nop 명령을 내보내는 경우와 달리 이 정의는 접두사를 사용한다고 설명합니다. 최대 길이는8입니다."
+      "text": "32비트 NOP6은 8d b6 뒤 0 네 개, NOP7은 8d b4 26 뒤 0 네 개입니다. NOP5는 3e+NOP4, NOP8은 3e+NOP7입니다. 어셈블러가 두 NOP로 만들 수 있는 길이를 여기서는 DS 접두사로 맞추며 최대는 8입니다."
     },
     {
       "title": "64비트 기본 인코딩",
-      "text": "NOP1은90, NOP2는66+NOP1입니다. NOP3/4/5는 각각0f 1f 00,0f 1f 40 00,0f 1f 44 00 00입니다. NOP6은66+NOP5이며 NOP7은0f 1f 80 뒤0 네 개, NOP8은0f 1f 84 뒤0 다섯 개입니다. 주석의 메모리 피연산자 모양만으로 일반 데이터 load와 동일시하지 않습니다."
+      "text": "64비트 NOP1은 90이고 NOP2는 66을 더합니다. NOP3·4·5는 각각 0f 1f 00, 0f 1f 40 00, 0f 1f 44 00 00입니다. NOP6은 66+NOP5, NOP7·8은 더 긴 0 채움입니다. 주소처럼 보이는 피연산자 표기를 일반 데이터 읽기와 같다고 생각하지 않습니다."
     },
     {
       "title": "64비트 접두사 확장",
-      "text": "NOP9는2e+NOP8, NOP10은66+NOP9, NOP11은66+NOP10입니다. 따라서11바이트 열은66 66 2e 0f 1f 84 00 00 00 00 00입니다. 최대 길이는11이고9·10·11의 ASM_NOP 정의도64비트 분기 안에만 있습니다."
+      "text": "64비트 NOP9는 2e+NOP8, NOP10과 NOP11은 66을 하나씩 더합니다. 최종 열은 66 66 2e 0f 1f 84 00 00 00 00 00이며 11바이트입니다. 길이 9~11과 최대 11 정의는 64비트에만 있습니다."
     },
     {
       "title": "바이트에서 asm으로",
-      "text": "ASM_NOP1부터8은 분기 뒤 공통으로 _ASM_BYTES(BYTES_NOPn)를 사용합니다. BYTES 계열은 쉼표로 나열한 바이트 토큰이고 ASM 계열은 asm.h의 변환 매크로를 거칩니다. 이 헤더 자체에는 임의 n을 받아 길이를 생성하는 실행 함수가 없습니다."
+      "text": "ASM_NOP1~8은 공통 구간에서 _ASM_BYTES로 바이트 목록을 어셈블리 표기로 바꿉니다. BYTES는 쉼표로 나열한 토큰이며 ASM은 변환한 표현입니다. 임의 길이 n을 받아 실행 중 새 명령을 만드는 함수는 없습니다."
     },
     {
       "title": "외부 테이블과 const",
-      "text": "비어셈블리에서 extern const unsigned char * const x86_nops[]를 선언합니다. 원소는 읽기 전용 바이트를 가리키는 변경 불가능한 포인터입니다. extern 선언만 있으므로 저장 공간·원소 배치·인덱스 규칙의 실제 정의는 다른 파일에서 확인해야 합니다."
+      "text": "C용 x86_nops는 읽기 전용 바이트를 가리키는 변경 불가능한 포인터 배열의 외부 선언입니다. 초기화가 없어 실제 저장 공간과 인덱스 규칙은 다른 파일 정의를 봐야 합니다."
     },
     {
       "title": "테이블 구현과 연결",
-      "text": "arch/x86/kernel/alternative.c의 실제 정의에서는 x86nops에 길이1부터 최대 길이까지 바이트를 연달아 담고 x86_nops[0]은 NULL로 둡니다. x86_nops[n]은 앞선 길이들의 합 n(n-1)/2 위치를 가리킵니다. 예를 들어 길이4는 offset6, 길이8은 offset28입니다. 이 연결은 해당 파일의 테이블 부분을 확인한 것이며 alternative.c 전체를 해설 완료로 세지 않습니다."
+      "text": "alternative.c의 관련 테이블은 길이 1부터 최대까지 연달아 바이트를 놓고 0번 포인터는 NULL입니다. n번은 앞 길이 합 n(n-1)/2 위치라 4번은 6, 8번은 28바이트 위치입니다. 그 테이블 연결 확인이 파일 전체 해설 완료를 뜻하지는 않습니다."
     },
     {
       "title": "CS 연결",
-      "text": "고정 길이 코드 패치, 인코딩의 재사용, 전처리 조건과 접두사 누적, 선언과 정의의 차이를 학습합니다. 바이트 수를 확인하는 것만으로 모든 CPU의 명령 지원이나 성능을 검증한 것은 아닙니다."
+      "text": "고정 길이 코드 교체, 접두사 재사용, 전처리 분기와 선언·정의를 나눠 읽습니다. 바이트 수를 셌다고 모든 CPU의 지원이나 성능을 실행 검증한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "비64비트 BYTES_NOP5는 어떻게 구성되는가?",
+      "prompt": "32비트 NOP5는 어떻게 만드나요?",
       "options": [
+        "3e와 NOP4를 붙입니다.",
+        "90을 다섯 개 씁니다."
+      ],
+      "answer": 0,
+      "explanation": "한 바이트 접두사와 네 바이트 표현을 합칩니다.",
+      "original_prompt": "비64비트 BYTES_NOP5는 어떻게 구성되는가?",
+      "original_options": [
         "0x3e와 BYTES_NOP4의 결합이다",
         "0x90 다섯 개이다"
       ],
-      "answer": 0,
-      "explanation": "정의가0x3e,BYTES_NOP4입니다.1바이트 접두사와4바이트 인코딩을 합쳐5바이트를 만듭니다."
+      "original_explanation": "정의가0x3e,BYTES_NOP4입니다.1바이트 접두사와4바이트 인코딩을 합쳐5바이트를 만듭니다."
     },
     {
-      "prompt": "64비트 BYTES_NOP11은 BYTES_NOP8보다 몇 바이트 긴가?",
+      "prompt": "64비트 NOP11은 NOP8보다 얼마나 긴가요?",
       "options": [
+        "11바이트입니다.",
+        "3바이트입니다."
+      ],
+      "answer": 1,
+      "explanation": "2e 한 개와 66 두 개를 추가합니다.",
+      "original_prompt": "64비트 BYTES_NOP11은 BYTES_NOP8보다 몇 바이트 긴가?",
+      "original_options": [
         "11바이트이다",
         "3바이트이다"
       ],
-      "answer": 1,
-      "explanation": "NOP9에서2e, NOP10과11에서66을 하나씩 추가합니다.8+1+1+1=11입니다."
+      "original_explanation": "NOP9에서2e, NOP10과11에서66을 하나씩 추가합니다.8+1+1+1=11입니다."
     },
     {
-      "prompt": "ASM_NOP_MAX의 값은 모든 구성에서11인가?",
+      "prompt": "최대 길이는 언제나 11인가요?",
       "options": [
+        "아니요. 비64비트는 8, 64비트는 11입니다.",
+        "네. 설정과 관계없이 11입니다."
+      ],
+      "answer": 0,
+      "explanation": "전처리 두 분기에 다른 값이 있습니다.",
+      "original_prompt": "ASM_NOP_MAX의 값은 모든 구성에서11인가?",
+      "original_options": [
         "아니다. 비64비트8,64비트11이다",
         "그렇다. 구성과 무관하게11이다"
       ],
-      "answer": 0,
-      "explanation": "CONFIG_64BIT 양쪽 분기에 각각 정의되어 있습니다.9~11 인코딩도64비트 쪽에서만 제공합니다."
+      "original_explanation": "CONFIG_64BIT 양쪽 분기에 각각 정의되어 있습니다.9~11 인코딩도64비트 쪽에서만 제공합니다."
     },
     {
-      "prompt": "x86_nops extern 선언이 테이블 내용을 정의하는가?",
+      "prompt": "extern 선언만으로 테이블 내용이 정해지나요?",
       "options": [
+        "네. 바이트가 자동 채워집니다.",
+        "아니요. 다른 파일에 정의가 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "이 헤더에는 실제 초기화 목록이 없습니다.",
+      "original_prompt": "x86_nops extern 선언이 테이블 내용을 정의하는가?",
+      "original_options": [
         "그렇다. extern만으로 바이트가 자동 채워진다",
         "아니다. 내용의 정의는 다른 파일에 있다"
       ],
-      "answer": 1,
-      "explanation": "이 파일에는 초기화 목록이 없습니다. const 포인터 타입과 외부 심벌을 선언할 뿐입니다."
+      "original_explanation": "이 파일에는 초기화 목록이 없습니다. const 포인터 타입과 외부 심벌을 선언할 뿐입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "64비트 NOP8에 2e, 66, 66을 붙여 11바이트가 되는 것을 세어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_NOPS_H\n#define _ASM_X86_NOPS_H\n\n#include <asm/asm.h>\n\n/*\n * Define nops for use with alternative() and for tracing.\n */\n\n#ifndef CONFIG_64BIT\n\n/*\n * Generic 32bit nops from GAS:\n *\n * 1: nop\n * 2: movl %esi,%esi\n * 3: leal 0x0(%esi),%esi\n * 4: leal 0x0(%esi,%eiz,1),%esi\n * 5: leal %ds:0x0(%esi,%eiz,1),%esi\n * 6: leal 0x0(%esi),%esi\n * 7: leal 0x0(%esi,%eiz,1),%esi\n * 8: leal %ds:0x0(%esi,%eiz,1),%esi\n *\n * Except 5 and 8, which are DS prefixed 4 and 7 resp, where GAS would emit 2\n * nop instructions.\n */\n#define BYTES_NOP1\t0x90\n#define BYTES_NOP2\t0x89,0xf6\n#define BYTES_NOP3\t0x8d,0x76,0x00\n#define BYTES_NOP4\t0x8d,0x74,0x26,0x00\n#define BYTES_NOP5\t0x3e,BYTES_NOP4\n#define BYTES_NOP6\t0x8d,0xb6,0x00,0x00,0x00,0x00\n#define BYTES_NOP7\t0x8d,0xb4,0x26,0x00,0x00,0x00,0x00\n#define BYTES_NOP8\t0x3e,BYTES_NOP7\n\n#define ASM_NOP_MAX 8\n\n#else\n\n/*\n * Generic 64bit nops from GAS:\n *\n * 1: nop\n * 2: osp nop\n * 3: nopl (%eax)\n * 4: nopl 0x00(%eax)\n * 5: nopl 0x00(%eax,%eax,1)\n * 6: osp nopl 0x00(%eax,%eax,1)\n * 7: nopl 0x00000000(%eax)\n * 8: nopl 0x00000000(%eax,%eax,1)\n * 9: cs nopl 0x00000000(%eax,%eax,1)\n * 10: osp cs nopl 0x00000000(%eax,%eax,1)\n * 11: osp osp cs nopl 0x00000000(%eax,%eax,1)\n */\n#define BYTES_NOP1\t0x90\n#define BYTES_NOP2\t0x66,BYTES_NOP1\n#define BYTES_NOP3\t0x0f,0x1f,0x00\n#define BYTES_NOP4\t0x0f,0x1f,0x40,0x00\n#define BYTES_NOP5\t0x0f,0x1f,0x44,0x00,0x00\n#define BYTES_NOP6\t0x66,BYTES_NOP5\n#define BYTES_NOP7\t0x0f,0x1f,0x80,0x00,0x00,0x00,0x00\n#define BYTES_NOP8\t0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00\n#define BYTES_NOP9\t0x2e,BYTES_NOP8\n#define BYTES_NOP10\t0x66,BYTES_NOP9\n#define BYTES_NOP11\t0x66,BYTES_NOP10\n\n#define ASM_NOP9  _ASM_BYTES(BYTES_NOP9)\n#define ASM_NOP10 _ASM_BYTES(BYTES_NOP10)\n#define ASM_NOP11 _ASM_BYTES(BYTES_NOP11)\n\n#define ASM_NOP_MAX 11\n\n#endif /* CONFIG_64BIT */\n\n#define ASM_NOP1 _ASM_BYTES(BYTES_NOP1)\n#define ASM_NOP2 _ASM_BYTES(BYTES_NOP2)\n#define ASM_NOP3 _ASM_BYTES(BYTES_NOP3)\n#define ASM_NOP4 _ASM_BYTES(BYTES_NOP4)\n#define ASM_NOP5 _ASM_BYTES(BYTES_NOP5)\n#define ASM_NOP6 _ASM_BYTES(BYTES_NOP6)\n#define ASM_NOP7 _ASM_BYTES(BYTES_NOP7)\n#define ASM_NOP8 _ASM_BYTES(BYTES_NOP8)\n\n#ifndef __ASSEMBLY__\nextern const unsigned char * const x86_nops[];\n#endif\n\n#endif /* _ASM_X86_NOPS_H */\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/nops.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a97b1d225bf1cf49",
+    "path": "arch/x86/include/asm/nops.h",
+    "title": "x86 NOP 헤더 전체: 길이별 바이트와 명령 패치",
+    "area": "기계어 인코딩 · 전처리기 · 접두사 · 포인터 const",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "alternative와 tracing에 쓰는 길이별 NOP 바이트 열을 32·64비트 구성별로 읽습니다.",
+    "guide": [
+      "명령의 바이트 길이와 명령 개수는 다릅니다. 지정한 공간에 맞는 인코딩을 선택합니다.",
+      "장벽 헤더에서 포함한 NOP 정의를 따라가며 바이트 수와 접두사 조합을 직접 계산합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 경계",
+        "text": "GPL-2.0, guard와 asm.h 포함, CONFIG_64BIT에 따른 바이트 정의, ASM_NOP 문자열 조각, C용 x86_nops 외부 선언이 전부입니다. 실제 alternative 패치나 tracing 알고리즘은 구현하지 않습니다."
+      },
+      {
+        "title": "32비트 짧은 인코딩",
+        "text": "비64비트에서 NOP1은90, NOP2는89 f6, NOP3은8d 76 00, NOP4는8d 74 26 00입니다. 주석은 각각 nop,esi 자기복사,esi를 그대로 계산하는 lea 계열을 설명합니다. 이름의 숫자는 바이트 수이며 NOP4가 nop 명령 네 개라는 뜻이 아닙니다."
+      },
+      {
+        "title": "32비트 긴 인코딩",
+        "text": "NOP6은8d b6 뒤0 네 개, NOP7은8d b4 26 뒤0 네 개입니다. NOP5는 DS 접두사3e와 NOP4, NOP8은3e와 NOP7을 결합합니다. 주석은5·8 길이에 GAS가 두 nop 명령을 내보내는 경우와 달리 이 정의는 접두사를 사용한다고 설명합니다. 최대 길이는8입니다."
+      },
+      {
+        "title": "64비트 기본 인코딩",
+        "text": "NOP1은90, NOP2는66+NOP1입니다. NOP3/4/5는 각각0f 1f 00,0f 1f 40 00,0f 1f 44 00 00입니다. NOP6은66+NOP5이며 NOP7은0f 1f 80 뒤0 네 개, NOP8은0f 1f 84 뒤0 다섯 개입니다. 주석의 메모리 피연산자 모양만으로 일반 데이터 load와 동일시하지 않습니다."
+      },
+      {
+        "title": "64비트 접두사 확장",
+        "text": "NOP9는2e+NOP8, NOP10은66+NOP9, NOP11은66+NOP10입니다. 따라서11바이트 열은66 66 2e 0f 1f 84 00 00 00 00 00입니다. 최대 길이는11이고9·10·11의 ASM_NOP 정의도64비트 분기 안에만 있습니다."
+      },
+      {
+        "title": "바이트에서 asm으로",
+        "text": "ASM_NOP1부터8은 분기 뒤 공통으로 _ASM_BYTES(BYTES_NOPn)를 사용합니다. BYTES 계열은 쉼표로 나열한 바이트 토큰이고 ASM 계열은 asm.h의 변환 매크로를 거칩니다. 이 헤더 자체에는 임의 n을 받아 길이를 생성하는 실행 함수가 없습니다."
+      },
+      {
+        "title": "외부 테이블과 const",
+        "text": "비어셈블리에서 extern const unsigned char * const x86_nops[]를 선언합니다. 원소는 읽기 전용 바이트를 가리키는 변경 불가능한 포인터입니다. extern 선언만 있으므로 저장 공간·원소 배치·인덱스 규칙의 실제 정의는 다른 파일에서 확인해야 합니다."
+      },
+      {
+        "title": "테이블 구현과 연결",
+        "text": "arch/x86/kernel/alternative.c의 실제 정의에서는 x86nops에 길이1부터 최대 길이까지 바이트를 연달아 담고 x86_nops[0]은 NULL로 둡니다. x86_nops[n]은 앞선 길이들의 합 n(n-1)/2 위치를 가리킵니다. 예를 들어 길이4는 offset6, 길이8은 offset28입니다. 이 연결은 해당 파일의 테이블 부분을 확인한 것이며 alternative.c 전체를 해설 완료로 세지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "고정 길이 코드 패치, 인코딩의 재사용, 전처리 조건과 접두사 누적, 선언과 정의의 차이를 학습합니다. 바이트 수를 확인하는 것만으로 모든 CPU의 명령 지원이나 성능을 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "비64비트 BYTES_NOP5는 어떻게 구성되는가?",
+        "options": [
+          "0x3e와 BYTES_NOP4의 결합이다",
+          "0x90 다섯 개이다"
+        ],
+        "answer": 0,
+        "explanation": "정의가0x3e,BYTES_NOP4입니다.1바이트 접두사와4바이트 인코딩을 합쳐5바이트를 만듭니다."
+      },
+      {
+        "prompt": "64비트 BYTES_NOP11은 BYTES_NOP8보다 몇 바이트 긴가?",
+        "options": [
+          "11바이트이다",
+          "3바이트이다"
+        ],
+        "answer": 1,
+        "explanation": "NOP9에서2e, NOP10과11에서66을 하나씩 추가합니다.8+1+1+1=11입니다."
+      },
+      {
+        "prompt": "ASM_NOP_MAX의 값은 모든 구성에서11인가?",
+        "options": [
+          "아니다. 비64비트8,64비트11이다",
+          "그렇다. 구성과 무관하게11이다"
+        ],
+        "answer": 0,
+        "explanation": "CONFIG_64BIT 양쪽 분기에 각각 정의되어 있습니다.9~11 인코딩도64비트 쪽에서만 제공합니다."
+      },
+      {
+        "prompt": "x86_nops extern 선언이 테이블 내용을 정의하는가?",
+        "options": [
+          "그렇다. extern만으로 바이트가 자동 채워진다",
+          "아니다. 내용의 정의는 다른 파일에 있다"
+        ],
+        "answer": 1,
+        "explanation": "이 파일에는 초기화 목록이 없습니다. const 포인터 타입과 외부 심벌을 선언할 뿐입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_NOPS_H\n#define _ASM_X86_NOPS_H\n\n#include <asm/asm.h>\n\n/*\n * Define nops for use with alternative() and for tracing.\n */\n\n#ifndef CONFIG_64BIT\n\n/*\n * Generic 32bit nops from GAS:\n *\n * 1: nop\n * 2: movl %esi,%esi\n * 3: leal 0x0(%esi),%esi\n * 4: leal 0x0(%esi,%eiz,1),%esi\n * 5: leal %ds:0x0(%esi,%eiz,1),%esi\n * 6: leal 0x0(%esi),%esi\n * 7: leal 0x0(%esi,%eiz,1),%esi\n * 8: leal %ds:0x0(%esi,%eiz,1),%esi\n *\n * Except 5 and 8, which are DS prefixed 4 and 7 resp, where GAS would emit 2\n * nop instructions.\n */\n#define BYTES_NOP1\t0x90\n#define BYTES_NOP2\t0x89,0xf6\n#define BYTES_NOP3\t0x8d,0x76,0x00\n#define BYTES_NOP4\t0x8d,0x74,0x26,0x00\n#define BYTES_NOP5\t0x3e,BYTES_NOP4\n#define BYTES_NOP6\t0x8d,0xb6,0x00,0x00,0x00,0x00\n#define BYTES_NOP7\t0x8d,0xb4,0x26,0x00,0x00,0x00,0x00\n#define BYTES_NOP8\t0x3e,BYTES_NOP7\n\n#define ASM_NOP_MAX 8\n\n#else\n\n/*\n * Generic 64bit nops from GAS:\n *\n * 1: nop\n * 2: osp nop\n * 3: nopl (%eax)\n * 4: nopl 0x00(%eax)\n * 5: nopl 0x00(%eax,%eax,1)\n * 6: osp nopl 0x00(%eax,%eax,1)\n * 7: nopl 0x00000000(%eax)\n * 8: nopl 0x00000000(%eax,%eax,1)\n * 9: cs nopl 0x00000000(%eax,%eax,1)\n * 10: osp cs nopl 0x00000000(%eax,%eax,1)\n * 11: osp osp cs nopl 0x00000000(%eax,%eax,1)\n */\n#define BYTES_NOP1\t0x90\n#define BYTES_NOP2\t0x66,BYTES_NOP1\n#define BYTES_NOP3\t0x0f,0x1f,0x00\n#define BYTES_NOP4\t0x0f,0x1f,0x40,0x00\n#define BYTES_NOP5\t0x0f,0x1f,0x44,0x00,0x00\n#define BYTES_NOP6\t0x66,BYTES_NOP5\n#define BYTES_NOP7\t0x0f,0x1f,0x80,0x00,0x00,0x00,0x00\n#define BYTES_NOP8\t0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00\n#define BYTES_NOP9\t0x2e,BYTES_NOP8\n#define BYTES_NOP10\t0x66,BYTES_NOP9\n#define BYTES_NOP11\t0x66,BYTES_NOP10\n\n#define ASM_NOP9  _ASM_BYTES(BYTES_NOP9)\n#define ASM_NOP10 _ASM_BYTES(BYTES_NOP10)\n#define ASM_NOP11 _ASM_BYTES(BYTES_NOP11)\n\n#define ASM_NOP_MAX 11\n\n#endif /* CONFIG_64BIT */\n\n#define ASM_NOP1 _ASM_BYTES(BYTES_NOP1)\n#define ASM_NOP2 _ASM_BYTES(BYTES_NOP2)\n#define ASM_NOP3 _ASM_BYTES(BYTES_NOP3)\n#define ASM_NOP4 _ASM_BYTES(BYTES_NOP4)\n#define ASM_NOP5 _ASM_BYTES(BYTES_NOP5)\n#define ASM_NOP6 _ASM_BYTES(BYTES_NOP6)\n#define ASM_NOP7 _ASM_BYTES(BYTES_NOP7)\n#define ASM_NOP8 _ASM_BYTES(BYTES_NOP8)\n\n#ifndef __ASSEMBLY__\nextern const unsigned char * const x86_nops[];\n#endif\n\n#endif /* _ASM_X86_NOPS_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d055341df9c9a5282962fad5b958955113a53884e9c477ce0cb9bc111c06f4ee",
+      "scope": "whole-file",
+      "line_count": 89,
+      "authoring_source": "course/file_units/x86_barriers_and_nops.py",
+      "sections": [
+        "파일 경계",
+        "32비트 짧은 인코딩",
+        "32비트 긴 인코딩",
+        "64비트 기본 인코딩",
+        "64비트 접두사 확장",
+        "바이트에서 asm으로",
+        "외부 테이블과 const",
+        "테이블 구현과 연결",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/nops.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "바꾸어 넣을 명령이 짧으면 남는 칸을 정해진 길이의 빈 동작으로 채웁니다. NOP4는 네 번 실행하는 뜻이 아니라 네 바이트를 차지하는 명령 표현입니다.",
+    "meaning": "x86 NOP의 바이트 길이와 접두사 조합, 외부 테이블 선언을 설명합니다.",
+    "exercise": "64비트 NOP8에 2e, 66, 66을 붙여 11바이트가 되는 것을 세어 보세요."
+  },
+  "goal": "x86 NOP의 바이트 길이와 접두사 조합, 외부 테이블 선언을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "64비트 NOP8에 2e, 66, 66을 붙여 11바이트가 되는 것을 세어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "b676ad1e5805a548f780cb9c0dddee12e481140b4cf58fb61d0f8c1038e762ea",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,71 +5,87 @@
   "area": "주소 의존성 · SMP · 메모리 장벽 · volatile · 계층별 재정의",
   "track": "files",
   "kind": "kernel",
-  "intro": "SMP Alpha에서 관찰값을 읽은 뒤 mb를 붙이는 짧은 아키텍처 override를 해설합니다.",
+  "intro": "여러 CPU를 쓰는 Alpha 설정에서는 값을 읽은 뒤 메모리 순서 장벽을 넣어요. 장벽 뒤에는 다시 읽지 않고 앞에서 보관한 값을 돌려줘요.",
   "guide": [
-    "주소 의존성을 유지하는 compiler 접근만으로 부족한 하드웨어에는 추가 순서 장벽이 필요할 수 있습니다.",
-    "ARM64의 LTO 조건부 acquire 읽기 및 공통 volatile 접근과 대조합니다."
+    "여러 CPU를 쓰는 Alpha 설정에서는 값을 읽은 뒤 메모리 순서 장벽을 넣어요. 장벽 뒤에는 다시 읽지 않고 앞에서 보관한 값을 돌려줘요."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구조",
-      "text": "GPL-2.0·저작권·guard 뒤 CONFIG_SMP에서 asm/barrier.h를 포함하고 __READ_ONCE를 재정의합니다. CONFIG_SMP 조건이 끝난 다음 asm-generic/rwonce.h를 포함합니다. 별도의 쓰기 매크로나 함수 정의는 없습니다."
+      "title": "원문 읽기 1",
+      "text": "CONFIG_SMP는 여러 CPU가 함께 일하는 구성이에요. 이 조건 안에서 asm/barrier.h를 가져와 __READ_ONCE 규칙을 바꿔요. 조건 밖에서는 asm-generic/rwonce.h를 가져와 공통 규칙과 연결해요."
     },
     {
-      "title": "설계 근거 주석",
-      "text": "일부 Alpha CPU 구현은 주소 의존 읽기를 재정렬할 수 있으므로 READ_ONCE에 memory barrier를 추가한다고 주석이 설명합니다. 주석에 추가 읽을거리로 perfbook 링크가 있지만 이 학습 단위는 로컬 소스의 설명과 본문을 근거로 하며 외부 책 전체를 검토한 것으로 세지 않습니다."
+      "title": "원문 읽기 2",
+      "text": "원문 주석은 일부 Alpha CPU가 주소에 의존하는 읽기도 순서를 바꾸어 처리할 수 있다고 설명해요. 따라서 컴파일러가 읽기를 유지하게 하는 것에 더해 CPU의 순서 장벽도 필요해요. mb는 memory barrier, 즉 메모리 접근의 순서를 제한하는 도구예요."
     },
     {
-      "title": "값을 먼저 보관",
-      "text": "매크로는 __unqual_scalar_typeof(x)의 __x에 volatile 포인터 역참조로 읽은 값을 저장합니다. 다음 mb를 실행하고 마지막에 저장한 __x를 typeof(x)로 변환하여 반환합니다. mb 다음 대상을 다시 읽는 것이 아니므로 값 관찰 시점은 장벽 앞입니다."
+      "title": "원문 읽기 3",
+      "text": "먼저 volatile 포인터를 통해 대상 x를 읽어 __x라는 지역 변수에 보관해요. volatile은 이 접근이 컴파일러에 의해 함부로 없어지거나 합쳐지지 않도록 표현하는 데 쓰여요. __unqual_scalar_typeof는 결과를 보관할 형식을 정하는 데 쓰여요."
     },
     {
-      "title": "SMP 조건과 generic 연결",
-      "text": "SMP에서는 generic 헤더가 이미 정의된 __READ_ONCE를 보존하고 public READ_ONCE의 타입 크기 검사 등과 조합합니다. 비SMP에서는 여기의 override가 없으므로 generic 기본값으로 이어집니다. 이 파일만으로 mb의 실제 명령 바이트를 확인한 것은 아니며 해당 정의는 asm/barrier.h에 있습니다."
+      "title": "원문 읽기 4",
+      "text": "그다음 mb()를 실행하고 마지막 식 (typeof(x))__x로 보관해 둔 값을 원래 형식으로 돌려줘요. 읽기 → 보관 → 장벽 → 반환 순서예요. 장벽 뒤에 메모리를 새로 읽은 값이라고 설명하면 틀려요."
     },
     {
-      "title": "CS 연결",
-      "text": "compiler 접근 보존과 CPU 의존성 순서, 관찰값의 지역 보관, 메모리 모델 차이에 따른 override를 학습합니다. READ_ONCE 뒤 장벽이 있다는 사실이 복합 read-modify-write를 원자적으로 만들거나 대상 객체 수명을 보장하지는 않습니다."
+      "title": "원문 읽기 5",
+      "text": "SMP가 아니면 이 파일의 특별한 규칙은 생기지 않아요. 공통 헤더가 기본 구현과 공개 READ_ONCE의 크기 검사 등을 제공해요. mb의 실제 명령은 asm/barrier.h에서 더 확인해야 해요."
+    },
+    {
+      "title": "원문 읽기 6",
+      "text": "장벽이 있어도 여러 읽기·계산·쓰기가 통째로 한 작업이 되지는 않아요. 대상이 아직 살아 있는지 보장하는 수명 관리도 별도예요. 이 파일은 쓰기 매크로를 따로 만들지 않아요."
     }
   ],
   "questions": [
     {
-      "prompt": "SMP Alpha 매크로에서 mb는 실제 읽기 전인가 뒤인가?",
+      "prompt": "SMP Alpha의 이 매크로에서 mb()는 실제 읽기보다 앞인가요, 뒤인가요?",
       "options": [
+        "읽은 뒤에 실행해요",
+        "읽기 전에만 실행해요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 읽은 값을 __x에 먼저 넣고 mb()를 실행해요. 마지막에는 그 값을 돌려주므로 장벽 뒤에 새로 읽는 과정이 없어요.",
+      "original_prompt": "SMP Alpha 매크로에서 mb는 실제 읽기 전인가 뒤인가?",
+      "original_options": [
         "volatile 읽기 뒤이다",
         "읽기 전에만 있다"
       ],
-      "answer": 0,
-      "explanation": "읽은 값을 __x에 담은 다음 mb를 수행하고 저장한 값을 반환합니다. 반환 직전에 다시 읽지 않습니다."
+      "original_explanation": "읽은 값을 __x에 담은 다음 mb를 수행하고 저장한 값을 반환합니다. 반환 직전에 다시 읽지 않습니다."
     },
     {
-      "prompt": "비SMP Alpha에도 이 파일이 같은 __READ_ONCE를 강제하는가?",
+      "prompt": "SMP를 쓰지 않는 Alpha에도 이 특별한 __READ_ONCE가 똑같이 정의되나요?",
       "options": [
+        "네. 공통 헤더를 포함하면 무조건 SMP 규칙이 생겨요",
+        "아니요. 이 재정의는 CONFIG_SMP 조건 안에 있어요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. #ifdef CONFIG_SMP 안에만 특별한 읽기 규칙이 있어요. 조건이 없으면 이 규칙 없이 공통 헤더의 기본 구현으로 이어져요.",
+      "original_prompt": "비SMP Alpha에도 이 파일이 같은 __READ_ONCE를 강제하는가?",
+      "original_options": [
         "그렇다. generic 헤더 포함이 항상 SMP 정의를 만든다",
         "아니다. 재정의는 CONFIG_SMP 안에 있다"
       ],
-      "answer": 1,
-      "explanation": "조건 밖에서는 generic 헤더를 포함할 뿐이며 이 아키텍처 override는 정의되지 않습니다."
+      "original_explanation": "조건 밖에서는 generic 헤더를 포함할 뿐이며 이 아키텍처 override는 정의되지 않습니다."
     },
     {
-      "prompt": "장벽 뒤 반환하는 값은?",
+      "prompt": "장벽을 지난 뒤 돌려주는 값은 무엇인가요?",
       "options": [
+        "장벽 전에 __x에 적어 둔 값이에요",
+        "대상 메모리에서 다시 읽은 새 값이에요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 마지막 식은 __x를 사용해요. 장벽은 접근 순서를 다루는 것이고, 대상 값을 한 번 더 읽으라는 명령은 아니에요.",
+      "original_prompt": "장벽 뒤 반환하는 값은?",
+      "original_options": [
         "장벽 전에 보관한 __x이다",
         "대상 메모리를 다시 읽은 값이다"
       ],
-      "answer": 0,
-      "explanation": "마지막 식은 (typeof(x))__x입니다. memory barrier의 존재와 재읽기를 혼동하지 않아야 합니다."
+      "original_explanation": "마지막 식은 (typeof(x))__x입니다. memory barrier의 존재와 재읽기를 혼동하지 않아야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "읽기 → __x에 저장 → mb() → __x 반환을 네 칸으로 그리세요. 실제 읽기가 몇 번인지 표시하고 CONFIG_SMP가 없을 때는 공통 규칙으로 화살표를 그리세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2019 Google LLC.\n */\n#ifndef __ASM_RWONCE_H\n#define __ASM_RWONCE_H\n\n#ifdef CONFIG_SMP\n\n#include <asm/barrier.h>\n\n/*\n * Alpha is apparently daft enough to reorder address-dependent loads\n * on some CPU implementations. Knock some common sense into it with\n * a memory barrier in READ_ONCE().\n *\n * For the curious, more information about this unusual reordering is\n * available in chapter 15 of the \"perfbook\":\n *\n *  https://kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html\n *\n */\n#define __READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\t__unqual_scalar_typeof(x) __x =\t\t\t\t\t\\\n\t\t(*(volatile typeof(__x) *)(&(x)));\t\t\t\\\n\tmb();\t\t\t\t\t\t\t\t\\\n\t(typeof(x))__x;\t\t\t\t\t\t\t\\\n})\n\n#endif /* CONFIG_SMP */\n\n#include <asm-generic/rwonce.h>\n\n#endif /* __ASM_RWONCE_H */\n",
   "source_review": {
@@ -92,5 +108,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/alpha/include/asm/rwonce.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-41b21c5ac4784aca",
+    "path": "arch/alpha/include/asm/rwonce.h",
+    "title": "Alpha READ_ONCE 전체: 주소 의존 읽기 뒤 장벽",
+    "area": "주소 의존성 · SMP · 메모리 장벽 · volatile · 계층별 재정의",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "SMP Alpha에서 관찰값을 읽은 뒤 mb를 붙이는 짧은 아키텍처 override를 해설합니다.",
+    "guide": [
+      "주소 의존성을 유지하는 compiler 접근만으로 부족한 하드웨어에는 추가 순서 장벽이 필요할 수 있습니다.",
+      "ARM64의 LTO 조건부 acquire 읽기 및 공통 volatile 접근과 대조합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구조",
+        "text": "GPL-2.0·저작권·guard 뒤 CONFIG_SMP에서 asm/barrier.h를 포함하고 __READ_ONCE를 재정의합니다. CONFIG_SMP 조건이 끝난 다음 asm-generic/rwonce.h를 포함합니다. 별도의 쓰기 매크로나 함수 정의는 없습니다."
+      },
+      {
+        "title": "설계 근거 주석",
+        "text": "일부 Alpha CPU 구현은 주소 의존 읽기를 재정렬할 수 있으므로 READ_ONCE에 memory barrier를 추가한다고 주석이 설명합니다. 주석에 추가 읽을거리로 perfbook 링크가 있지만 이 학습 단위는 로컬 소스의 설명과 본문을 근거로 하며 외부 책 전체를 검토한 것으로 세지 않습니다."
+      },
+      {
+        "title": "값을 먼저 보관",
+        "text": "매크로는 __unqual_scalar_typeof(x)의 __x에 volatile 포인터 역참조로 읽은 값을 저장합니다. 다음 mb를 실행하고 마지막에 저장한 __x를 typeof(x)로 변환하여 반환합니다. mb 다음 대상을 다시 읽는 것이 아니므로 값 관찰 시점은 장벽 앞입니다."
+      },
+      {
+        "title": "SMP 조건과 generic 연결",
+        "text": "SMP에서는 generic 헤더가 이미 정의된 __READ_ONCE를 보존하고 public READ_ONCE의 타입 크기 검사 등과 조합합니다. 비SMP에서는 여기의 override가 없으므로 generic 기본값으로 이어집니다. 이 파일만으로 mb의 실제 명령 바이트를 확인한 것은 아니며 해당 정의는 asm/barrier.h에 있습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "compiler 접근 보존과 CPU 의존성 순서, 관찰값의 지역 보관, 메모리 모델 차이에 따른 override를 학습합니다. READ_ONCE 뒤 장벽이 있다는 사실이 복합 read-modify-write를 원자적으로 만들거나 대상 객체 수명을 보장하지는 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "SMP Alpha 매크로에서 mb는 실제 읽기 전인가 뒤인가?",
+        "options": [
+          "volatile 읽기 뒤이다",
+          "읽기 전에만 있다"
+        ],
+        "answer": 0,
+        "explanation": "읽은 값을 __x에 담은 다음 mb를 수행하고 저장한 값을 반환합니다. 반환 직전에 다시 읽지 않습니다."
+      },
+      {
+        "prompt": "비SMP Alpha에도 이 파일이 같은 __READ_ONCE를 강제하는가?",
+        "options": [
+          "그렇다. generic 헤더 포함이 항상 SMP 정의를 만든다",
+          "아니다. 재정의는 CONFIG_SMP 안에 있다"
+        ],
+        "answer": 1,
+        "explanation": "조건 밖에서는 generic 헤더를 포함할 뿐이며 이 아키텍처 override는 정의되지 않습니다."
+      },
+      {
+        "prompt": "장벽 뒤 반환하는 값은?",
+        "options": [
+          "장벽 전에 보관한 __x이다",
+          "대상 메모리를 다시 읽은 값이다"
+        ],
+        "answer": 0,
+        "explanation": "마지막 식은 (typeof(x))__x입니다. memory barrier의 존재와 재읽기를 혼동하지 않아야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2019 Google LLC.\n */\n#ifndef __ASM_RWONCE_H\n#define __ASM_RWONCE_H\n\n#ifdef CONFIG_SMP\n\n#include <asm/barrier.h>\n\n/*\n * Alpha is apparently daft enough to reorder address-dependent loads\n * on some CPU implementations. Knock some common sense into it with\n * a memory barrier in READ_ONCE().\n *\n * For the curious, more information about this unusual reordering is\n * available in chapter 15 of the \"perfbook\":\n *\n *  https://kernel.org/pub/linux/kernel/people/paulmck/perfbook/perfbook.html\n *\n */\n#define __READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\t__unqual_scalar_typeof(x) __x =\t\t\t\t\t\\\n\t\t(*(volatile typeof(__x) *)(&(x)));\t\t\t\\\n\tmb();\t\t\t\t\t\t\t\t\\\n\t(typeof(x))__x;\t\t\t\t\t\t\t\\\n})\n\n#endif /* CONFIG_SMP */\n\n#include <asm-generic/rwonce.h>\n\n#endif /* __ASM_RWONCE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1d32c140b1f81cf3d54e1eaa6d9ba92ccbde4b0ffc0d9ff185bdc5d1e6b1d27b",
+      "scope": "whole-file",
+      "line_count": 35,
+      "authoring_source": "course/file_units/architecture_rwonce.py",
+      "sections": [
+        "파일 전체 구조",
+        "설계 근거 주석",
+        "값을 먼저 보관",
+        "SMP 조건과 generic 연결",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/alpha/include/asm/rwonce.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "쪽지 내용을 먼저 공책에 옮겨 적고, 다음 순서를 지키는 문을 지나간다고 해 보세요. 문을 지난 뒤 건네는 것은 이미 적어 둔 내용이에요.",
+    "meaning": "여러 CPU를 쓰는 Alpha 설정에서는 값을 읽은 뒤 메모리 순서 장벽을 넣어요. 장벽 뒤에는 다시 읽지 않고 앞에서 보관한 값을 돌려줘요.",
+    "exercise": "읽기 → __x에 저장 → mb() → __x 반환을 네 칸으로 그리세요. 실제 읽기가 몇 번인지 표시하고 CONFIG_SMP가 없을 때는 공통 규칙으로 화살표를 그리세요."
+  },
+  "goal": "여러 CPU를 쓰는 Alpha 설정에서는 값을 읽은 뒤 메모리 순서 장벽을 넣어요. 장벽 뒤에는 다시 읽지 않고 앞에서 보관한 값을 돌려줘요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "읽기 → __x에 저장 → mb() → __x 반환을 네 칸으로 그리세요. 실제 읽기가 몇 번인지 표시하고 CONFIG_SMP가 없을 때는 공통 규칙으로 화살표를 그리세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "446622eb48daa06e42900a4b39773f033ab0eab6d9eda85fe847a906be322ff9",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,67 +5,81 @@
   "area": "커널 공통 도구 · 상태·수명·경계",
   "track": "files",
   "kind": "kernel",
-  "intro": "양방향 리스트를 안전하게 조작하려면 next와 prev가 서로 일치해야 합니다. 검증 함수가 검사하지 않는 범위도 함께 읽습니다.",
+  "intro": "양방향 리스트의 지역 연결 검사와 포인터 유효성 전제를 이해합니다.",
   "guide": [
-    "__list_add_valid_or_report는 prev/next의 NULL, 서로의 역방향 링크, new가 바로 이웃과 같은지를 검사합니다. __list_del_entry_valid_or_report는 entry의 이웃을 읽고 NULL·poison·역방향 연결을 검사합니다. 감지된 손상은 보고 후 false, 통과는 true입니다.",
-    "이 함수들은 검증·오류 보고이며 실제 링크 수정이나 메모리 해제를 하지 않습니다. 유효하게 읽을 수 있는 객체와 호출 경로의 동기화가 전제입니다. 전역 리스트를 전부 순회해 모든 중복을 찾는 검사도 아닙니다."
+    "검사 함수는 연결을 고치거나 메모리를 해제하지 않습니다.",
+    "NULL 검사는 순서와 검사 대상이 중요합니다.",
+    "읽을 수 있는 객체와 동시 변경을 막는 규약은 호출자가 확보합니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구성",
-      "text": "저작권·GPL 설명, export/list/bug/kernel/rculist 헤더와 두 __list_valid_slowpath 함수, 각 EXPORT_SYMBOL이 전체입니다. CHECK_DATA_CORRUPTION의 실제 진단 또는 중단 동작은 구성과 매크로 정의에 의존합니다. 이 함수는 오류가 보고 후 복귀하는 경우 false를 반환하는 구조입니다."
+      "title": "두 검사 함수",
+      "text": "저작권·GPL 설명과 다섯 헤더 뒤 __list_valid_slowpath 함수 두 개와 각각의 export가 있습니다. CHECK_DATA_CORRUPTION이 경고만 하는지 중단하는지는 설정과 매크로에 달려 있습니다. 보고 뒤 돌아오는 경우에는 false, 통과하면 true입니다."
     },
     {
-      "title": "삽입 검증 순서",
-      "text": "prev==NULL 또는 next==NULL이 참이면 || 단락 평가로 뒤의 역참조 검사를 실행하지 않습니다. 이후 next->prev==prev와 prev->next==next가 필요합니다. 마지막 new==prev||new==next는 인접 노드와 같은 객체를 바로 삽입하는 실수를 찾지만 new가 멀리 떨어진 다른 리스트에 연결되어 있는지 전체 검색하지는 않습니다."
+      "title": "넣기 전 확인",
+      "text": "prev 또는 next가 NULL이면 ||가 뒤 조건을 생략해 그 주소를 따라 읽지 않습니다. 다음에는 next->prev가 prev이고 prev->next가 next인지 봅니다. 마지막으로 new가 바로 prev나 next와 같은지 봅니다. 멀리 다른 리스트에 이미 들어 있는지 모두 돌아보지는 않습니다."
     },
     {
-      "title": "삭제 검증 순서",
-      "text": "먼저 entry->prev와 entry->next를 지역 변수에 읽으므로 entry 자체가 유효해야 합니다. 그 뒤 next/prev NULL, LIST_POISON1/2, prev->next 및 next->prev가 entry를 가리키는지 검사합니다. entry==NULL을 먼저 막는 코드가 없는 점과 이웃 NULL 검사가 있다는 점은 다릅니다."
+      "title": "빼기 전 확인",
+      "text": "먼저 entry->prev와 entry->next를 읽으므로 entry 자체는 유효해야 합니다. 이후 이웃의 NULL, 삭제 뒤 잘못된 접근을 드러내는 LIST_POISON1·2 표지, 이웃이 entry를 다시 가리키는지 검사합니다. entry=NULL을 먼저 막는 코드와 이웃 NULL 검사는 다른 것입니다."
     },
     {
-      "title": "CS 연결과 검사의 한계",
-      "text": "양방향 링크의 지역 불변식 검사로 메모리 손상을 조기에 드러냅니다. 시간은 검사 몇 개의 O(1)이며 리스트 전체의 무순환성·소유권·동시 변경 부재를 증명하지 않습니다. 임의의 잘못된 non-NULL 포인터를 무조건 안전하게 역참조할 수 있는 주소 검증기가 아닙니다."
+      "title": "몇 개 연결만 보는 한계",
+      "text": "양방향 링크가 지켜야 할 지역 규칙을 몇 번 확인하므로 O(1)입니다. 리스트 전체의 순환 여부나 소유권, 동시 수정이 없음을 증명하지 않습니다. NULL 아닌 임의의 잘못된 주소도 안전하게 읽어 주는 주소 검사기는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "삽입 검사에서 prev가 NULL이면 곧바로 prev->next를 읽는가?",
+      "prompt": "prev가 NULL이면 바로 prev->next를 읽나요?",
       "options": [
+        "아니다. 앞 조건이 참이면 ||가 뒤를 생략한다",
+        "그렇다. ||는 모든 조건을 계산한다"
+      ],
+      "answer": 0,
+      "explanation": "왼쪽부터 참을 찾으면 나머지는 실행하지 않습니다.",
+      "original_prompt": "삽입 검사에서 prev가 NULL이면 곧바로 prev->next를 읽는가?",
+      "original_options": [
         "아니다. 앞 조건이 참이면 ||가 뒤 조건 평가를 생략한다",
         "그렇다. ||는 모든 조건을 항상 평가한다"
       ],
-      "answer": 0,
-      "explanation": "C의 논리 OR는 왼쪽부터 평가하며 참이면 나머지를 실행하지 않습니다. 이 순서가 NULL 검사 뒤 역참조를 두는 의미입니다."
+      "original_explanation": "C의 논리 OR는 왼쪽부터 평가하며 참이면 나머지를 실행하지 않습니다. 이 순서가 NULL 검사 뒤 역참조를 두는 의미입니다."
     },
     {
-      "prompt": "삭제 검사에 entry=NULL을 전달해도 이웃 NULL 검사로 보호되는가?",
+      "prompt": "삭제 검사에 entry=NULL도 안전한가요?",
       "options": [
+        "그렇다. 이웃 NULL 검사로 모두 막는다",
+        "아니다. 검사 전에 entry의 필드를 읽는다"
+      ],
+      "answer": 1,
+      "explanation": "대상 자체가 유효해야 합니다.",
+      "original_prompt": "삭제 검사에 entry=NULL을 전달해도 이웃 NULL 검사로 보호되는가?",
+      "original_options": [
         "그렇다. 모든 NULL을 무조건 안전하게 거절한다",
         "아니다. 검사 전에 entry->prev/next를 먼저 읽는다"
       ],
-      "answer": 1,
-      "explanation": "entry 자체의 유효성 검사가 없습니다. 지역 변수 초기화 시 이미 역참조하므로 호출자 계약이 필요합니다."
+      "original_explanation": "entry 자체의 유효성 검사가 없습니다. 지역 변수 초기화 시 이미 역참조하므로 호출자 계약이 필요합니다."
     },
     {
-      "prompt": "삽입 검사를 통과하면 new가 어디에도 연결되지 않았음을 증명하는가?",
+      "prompt": "삽입 검사 통과는 new가 어디에도 없다는 증명인가요?",
       "options": [
-        "아니다. 직접 이웃과 같은지만 확인하며 전역 목록은 순회하지 않는다",
+        "아니다. 바로 이웃과 같은지만 확인한다",
         "그렇다. 모든 리스트를 자동 검색한다"
       ],
       "answer": 0,
-      "explanation": "new==prev 또는 new==next만 검사합니다. 제한된 지역 검사를 전역 소유권 검증으로 확대 해석하면 안 됩니다."
+      "explanation": "지역 연결 검사를 전역 소유권 검사로 확대하면 안 됩니다.",
+      "original_prompt": "삽입 검사를 통과하면 new가 어디에도 연결되지 않았음을 증명하는가?",
+      "original_options": [
+        "아니다. 직접 이웃과 같은지만 확인하며 전역 목록은 순회하지 않는다",
+        "그렇다. 모든 리스트를 자동 검색한다"
+      ],
+      "original_explanation": "new==prev 또는 new==next만 검사합니다. 제한된 지역 검사를 전역 소유권 검증으로 확대 해석하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "prev↔next 사이에 new를 넣기 전 두 역방향 화살표를 그려 보세요."
   },
   "annotated": "/*\n * Copyright 2006, Red Hat, Inc., Dave Jones\n * Released under the General Public License (GPL).\n *\n * This file contains the linked list validation and error reporting for\n * LIST_HARDENED and DEBUG_LIST.\n */\n\n#include <linux/export.h>\n#include <linux/list.h>\n#include <linux/bug.h>\n#include <linux/kernel.h>\n#include <linux/rculist.h>\n\n/*\n * Check that the data structures for the list manipulations are reasonably\n * valid. Failures here indicate memory corruption (and possibly an exploit\n * attempt).\n */\n\n__list_valid_slowpath\nbool __list_add_valid_or_report(struct list_head *new, struct list_head *prev,\n\t\t\t\tstruct list_head *next)\n{\n\tif (CHECK_DATA_CORRUPTION(prev == NULL,\n\t\t\t\"list_add corruption. prev is NULL.\\n\") ||\n\t    CHECK_DATA_CORRUPTION(next == NULL,\n\t\t\t\"list_add corruption. next is NULL.\\n\") ||\n\t    CHECK_DATA_CORRUPTION(next->prev != prev,\n\t\t\t\"list_add corruption. next->prev should be prev (%px), but was %px. (next=%px).\\n\",\n\t\t\tprev, next->prev, next) ||\n\t    CHECK_DATA_CORRUPTION(prev->next != next,\n\t\t\t\"list_add corruption. prev->next should be next (%px), but was %px. (prev=%px).\\n\",\n\t\t\tnext, prev->next, prev) ||\n\t    CHECK_DATA_CORRUPTION(new == prev || new == next,\n\t\t\t\"list_add double add: new=%px, prev=%px, next=%px.\\n\",\n\t\t\tnew, prev, next))\n\t\treturn false;\n\n\treturn true;\n}\nEXPORT_SYMBOL(__list_add_valid_or_report);\n\n__list_valid_slowpath\nbool __list_del_entry_valid_or_report(struct list_head *entry)\n{\n\tstruct list_head *prev, *next;\n\n\tprev = entry->prev;\n\tnext = entry->next;\n\n\tif (CHECK_DATA_CORRUPTION(next == NULL,\n\t\t\t\"list_del corruption, %px->next is NULL\\n\", entry) ||\n\t    CHECK_DATA_CORRUPTION(prev == NULL,\n\t\t\t\"list_del corruption, %px->prev is NULL\\n\", entry) ||\n\t    CHECK_DATA_CORRUPTION(next == LIST_POISON1,\n\t\t\t\"list_del corruption, %px->next is LIST_POISON1 (%px)\\n\",\n\t\t\tentry, LIST_POISON1) ||\n\t    CHECK_DATA_CORRUPTION(prev == LIST_POISON2,\n\t\t\t\"list_del corruption, %px->prev is LIST_POISON2 (%px)\\n\",\n\t\t\tentry, LIST_POISON2) ||\n\t    CHECK_DATA_CORRUPTION(prev->next != entry,\n\t\t\t\"list_del corruption. prev->next should be %px, but was %px. (prev=%px)\\n\",\n\t\t\tentry, prev->next, prev) ||\n\t    CHECK_DATA_CORRUPTION(next->prev != entry,\n\t\t\t\"list_del corruption. next->prev should be %px, but was %px. (next=%px)\\n\",\n\t\t\tentry, next->prev, next))\n\t\treturn false;\n\n\treturn true;\n}\nEXPORT_SYMBOL(__list_del_entry_valid_or_report);\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/list_debug.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-3a042ed3f75f735c",
+    "path": "lib/list_debug.c",
+    "title": "연결 리스트 검증 전체: 이웃 불변식과 단락 평가",
+    "area": "커널 공통 도구 · 상태·수명·경계",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "양방향 리스트를 안전하게 조작하려면 next와 prev가 서로 일치해야 합니다. 검증 함수가 검사하지 않는 범위도 함께 읽습니다.",
+    "guide": [
+      "__list_add_valid_or_report는 prev/next의 NULL, 서로의 역방향 링크, new가 바로 이웃과 같은지를 검사합니다. __list_del_entry_valid_or_report는 entry의 이웃을 읽고 NULL·poison·역방향 연결을 검사합니다. 감지된 손상은 보고 후 false, 통과는 true입니다.",
+      "이 함수들은 검증·오류 보고이며 실제 링크 수정이나 메모리 해제를 하지 않습니다. 유효하게 읽을 수 있는 객체와 호출 경로의 동기화가 전제입니다. 전역 리스트를 전부 순회해 모든 중복을 찾는 검사도 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "저작권·GPL 설명, export/list/bug/kernel/rculist 헤더와 두 __list_valid_slowpath 함수, 각 EXPORT_SYMBOL이 전체입니다. CHECK_DATA_CORRUPTION의 실제 진단 또는 중단 동작은 구성과 매크로 정의에 의존합니다. 이 함수는 오류가 보고 후 복귀하는 경우 false를 반환하는 구조입니다."
+      },
+      {
+        "title": "삽입 검증 순서",
+        "text": "prev==NULL 또는 next==NULL이 참이면 || 단락 평가로 뒤의 역참조 검사를 실행하지 않습니다. 이후 next->prev==prev와 prev->next==next가 필요합니다. 마지막 new==prev||new==next는 인접 노드와 같은 객체를 바로 삽입하는 실수를 찾지만 new가 멀리 떨어진 다른 리스트에 연결되어 있는지 전체 검색하지는 않습니다."
+      },
+      {
+        "title": "삭제 검증 순서",
+        "text": "먼저 entry->prev와 entry->next를 지역 변수에 읽으므로 entry 자체가 유효해야 합니다. 그 뒤 next/prev NULL, LIST_POISON1/2, prev->next 및 next->prev가 entry를 가리키는지 검사합니다. entry==NULL을 먼저 막는 코드가 없는 점과 이웃 NULL 검사가 있다는 점은 다릅니다."
+      },
+      {
+        "title": "CS 연결과 검사의 한계",
+        "text": "양방향 링크의 지역 불변식 검사로 메모리 손상을 조기에 드러냅니다. 시간은 검사 몇 개의 O(1)이며 리스트 전체의 무순환성·소유권·동시 변경 부재를 증명하지 않습니다. 임의의 잘못된 non-NULL 포인터를 무조건 안전하게 역참조할 수 있는 주소 검증기가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "삽입 검사에서 prev가 NULL이면 곧바로 prev->next를 읽는가?",
+        "options": [
+          "아니다. 앞 조건이 참이면 ||가 뒤 조건 평가를 생략한다",
+          "그렇다. ||는 모든 조건을 항상 평가한다"
+        ],
+        "answer": 0,
+        "explanation": "C의 논리 OR는 왼쪽부터 평가하며 참이면 나머지를 실행하지 않습니다. 이 순서가 NULL 검사 뒤 역참조를 두는 의미입니다."
+      },
+      {
+        "prompt": "삭제 검사에 entry=NULL을 전달해도 이웃 NULL 검사로 보호되는가?",
+        "options": [
+          "그렇다. 모든 NULL을 무조건 안전하게 거절한다",
+          "아니다. 검사 전에 entry->prev/next를 먼저 읽는다"
+        ],
+        "answer": 1,
+        "explanation": "entry 자체의 유효성 검사가 없습니다. 지역 변수 초기화 시 이미 역참조하므로 호출자 계약이 필요합니다."
+      },
+      {
+        "prompt": "삽입 검사를 통과하면 new가 어디에도 연결되지 않았음을 증명하는가?",
+        "options": [
+          "아니다. 직접 이웃과 같은지만 확인하며 전역 목록은 순회하지 않는다",
+          "그렇다. 모든 리스트를 자동 검색한다"
+        ],
+        "answer": 0,
+        "explanation": "new==prev 또는 new==next만 검사합니다. 제한된 지역 검사를 전역 소유권 검증으로 확대 해석하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/*\n * Copyright 2006, Red Hat, Inc., Dave Jones\n * Released under the General Public License (GPL).\n *\n * This file contains the linked list validation and error reporting for\n * LIST_HARDENED and DEBUG_LIST.\n */\n\n#include <linux/export.h>\n#include <linux/list.h>\n#include <linux/bug.h>\n#include <linux/kernel.h>\n#include <linux/rculist.h>\n\n/*\n * Check that the data structures for the list manipulations are reasonably\n * valid. Failures here indicate memory corruption (and possibly an exploit\n * attempt).\n */\n\n__list_valid_slowpath\nbool __list_add_valid_or_report(struct list_head *new, struct list_head *prev,\n\t\t\t\tstruct list_head *next)\n{\n\tif (CHECK_DATA_CORRUPTION(prev == NULL,\n\t\t\t\"list_add corruption. prev is NULL.\\n\") ||\n\t    CHECK_DATA_CORRUPTION(next == NULL,\n\t\t\t\"list_add corruption. next is NULL.\\n\") ||\n\t    CHECK_DATA_CORRUPTION(next->prev != prev,\n\t\t\t\"list_add corruption. next->prev should be prev (%px), but was %px. (next=%px).\\n\",\n\t\t\tprev, next->prev, next) ||\n\t    CHECK_DATA_CORRUPTION(prev->next != next,\n\t\t\t\"list_add corruption. prev->next should be next (%px), but was %px. (prev=%px).\\n\",\n\t\t\tnext, prev->next, prev) ||\n\t    CHECK_DATA_CORRUPTION(new == prev || new == next,\n\t\t\t\"list_add double add: new=%px, prev=%px, next=%px.\\n\",\n\t\t\tnew, prev, next))\n\t\treturn false;\n\n\treturn true;\n}\nEXPORT_SYMBOL(__list_add_valid_or_report);\n\n__list_valid_slowpath\nbool __list_del_entry_valid_or_report(struct list_head *entry)\n{\n\tstruct list_head *prev, *next;\n\n\tprev = entry->prev;\n\tnext = entry->next;\n\n\tif (CHECK_DATA_CORRUPTION(next == NULL,\n\t\t\t\"list_del corruption, %px->next is NULL\\n\", entry) ||\n\t    CHECK_DATA_CORRUPTION(prev == NULL,\n\t\t\t\"list_del corruption, %px->prev is NULL\\n\", entry) ||\n\t    CHECK_DATA_CORRUPTION(next == LIST_POISON1,\n\t\t\t\"list_del corruption, %px->next is LIST_POISON1 (%px)\\n\",\n\t\t\tentry, LIST_POISON1) ||\n\t    CHECK_DATA_CORRUPTION(prev == LIST_POISON2,\n\t\t\t\"list_del corruption, %px->prev is LIST_POISON2 (%px)\\n\",\n\t\t\tentry, LIST_POISON2) ||\n\t    CHECK_DATA_CORRUPTION(prev->next != entry,\n\t\t\t\"list_del corruption. prev->next should be %px, but was %px. (prev=%px)\\n\",\n\t\t\tentry, prev->next, prev) ||\n\t    CHECK_DATA_CORRUPTION(next->prev != entry,\n\t\t\t\"list_del corruption. next->prev should be %px, but was %px. (next=%px)\\n\",\n\t\t\tentry, next->prev, next))\n\t\treturn false;\n\n\treturn true;\n}\nEXPORT_SYMBOL(__list_del_entry_valid_or_report);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "5b3bba2beed4629aee9fa0f3fcab346713d5e9b057c8911dde6b3e0e6f202ee2",
+      "scope": "whole-file",
+      "line_count": 72,
+      "authoring_source": "course/file_units/core_utilities.py",
+      "sections": [
+        "파일 전체 구성",
+        "삽입 검증 순서",
+        "삭제 검증 순서",
+        "CS 연결과 검사의 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/list_debug.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "앞뒤 친구의 손을 잡은 줄에서 연결이 서로 맞는지 확인합니다. 바로 이웃의 손잡기 검사이지 모든 줄의 소유권 검사까지 하는 것은 아닙니다.",
+    "meaning": "양방향 리스트의 지역 연결 검사와 포인터 유효성 전제를 이해합니다.",
+    "exercise": "prev↔next 사이에 new를 넣기 전 두 역방향 화살표를 그려 보세요."
+  },
+  "goal": "양방향 리스트의 지역 연결 검사와 포인터 유효성 전제를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "prev↔next 사이에 new를 넣기 전 두 역방향 화살표를 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "f2070f25f3bd9080c51a1756b2e92baafecb5aa9630cecfda2bf75616971edec",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

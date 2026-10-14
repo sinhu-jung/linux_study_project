@@ -12,7 +12,11 @@ Windows에서는 **`start-learning.bat`를 더블클릭**하세요. Python 3.9 �
 
 학습 과정 선택에서 **파일 전체 해설 · 작성 완료 묶음**을 고르면 새 파일별 수업을 읽을 수 있습니다. 파일별 본문·문제·전체 원본은 `course/file-lessons/`, 직접 작성한 교육 내용은 `course/file_units/`에 있습니다. 각 교재는 고정 커밋과 원본 SHA-256을 기록합니다. 현재 수와 남은 파일 수는 [file-learning-progress.json](course/file-learning-progress.json), 모든 파일의 상태는 생성 후 `data/file-learning-audit.json`에서 확인합니다.
 
-갱신 순서는 `python tools/build_file_lessons.py` → `python tools/audit_file_learning.py` → `python tools/build_learning.py`입니다. 앞 두 단계에는 `python start-study.py --setup-only`로 준비한 고정 원본이 필요합니다. 이미 생성된 파일별 교재를 학습하는 데는 Git 원본이나 인터넷이 필요하지 않습니다.
+갱신 순서는 `python tools/build_file_lessons.py` → `python tools/audit_file_learning.py` → `python tools/apply_easy_batches.py` → `python tools/build_learning.py`입니다. 앞 두 단계에는 `python start-study.py --setup-only`로 준비한 고정 원본이 필요합니다. 이미 생성된 파일별 교재를 학습하는 데는 Git 원본이나 인터넷이 필요하지 않습니다.
+
+쉬운 설명의 개별 저작 데이터는 `tools/easy_batches/`에 있습니다. `apply_easy_batches.py`는 미완료 수업에만 적용하고 원문 전체를 `technical_original`로 보존합니다. 기존 완료분을 덮어쓰지 않으며 이미 적용한 저작 데이터가 바뀌면 자동 덮어쓰기 대신 오류로 알립니다. 누적 현황은 `course/easy-reading-progress.json`, 재개 목록과 보존·반영 검사는 `data/easy-review-20261014/`에서 확인합니다. 현재 기록과의 대조는 교재 생성 후 `node tools/check_easy_batches.cjs`로 실행합니다. 파일 교재 원본 생성기를 다시 실행한 경우에도 쉬운 설명 적용 단계를 빠뜨리지 마세요.
+
+2026-10-14의 현재 작성 목록은 **4,000수업·9,007문제**입니다. 기존 완료 2,009수업·4,020문제를 보존하고, 남아 있던 1,991수업·4,987문제를 개별적으로 쉽게 풀어 썼습니다. 이는 현재 교재 목록의 재작성 완료이며, 위의 86,680개 커널 파일 전체 집필 목표와는 별개입니다. 실제 아동 이해도 시험은 수행하지 않았습니다.
 
 CRC 표·계산 검산은 `python -m unittest discover -s tests -p test_crc_file_lessons.py -v`, 실제 순수 C 함수 본문 검사는 C 컴파일러가 있는 개발 환경에서 `python tests/check_pure_c_files.py`, Git 설정 검사는 `python tests/check_git_config_files.py`로 실행합니다. 순수 C 검사는 사용자 공간의 최소 형식·의존성 대체를 사용하므로 실제 커널 동시성·장치 동작 테스트를 대신하지 않습니다.
 
@@ -66,7 +70,7 @@ CRC 표·계산 검산은 `python -m unittest discover -s tests -p test_crc_file
 
 **설명이 어려울 때 읽는 순서:** 앞쪽 150개 핵심 수업에는 **쉽게 풀어 읽기 · 이유와 숫자 예시**가 있습니다. 예를 들어 XArray 수업에서는 왜 빈 배열 칸도 공간을 쓰는지, `1000001칸 × 8바이트 = 8000008바이트`가 되는 이유, 두 칸짜리 배열과의 차이, XArray의 관리 비용까지 순서대로 설명합니다.
 
-전체 3455개 OS 수업에는 **29개 분야의 공통 기초**와 **본문에 나온 용어 풀이**를 연결했습니다. 51개 용어 묶음 중 해당 수업에 실제 등장하는 표현을 골라 표시합니다. 포인터·NULL·희소·캐시·RCU·수명 같은 말은 항목을 펼치면 뜻과 예시를 읽을 수 있습니다. 공통 기초와 용어 해설은 반복해서 참고하는 자료이며, 모든 심화 수업을 개별적으로 다시 쓴 것으로 세지는 않습니다. 같은 설명은 오프라인 교재에도 포함됩니다.
+본문에 나온 용어 풀이에서는 해당 수업에 실제 등장하는 표현을 골라 표시합니다. 포인터·NULL·희소·캐시·RCU·수명 같은 말은 항목을 펼치면 뜻과 예시를 읽을 수 있습니다. 공통 기초와 용어 해설은 반복해서 참고하는 자료이며, 용어 풀이만 추가한 것을 개별 재작성으로 세지는 않습니다. `tools/build_learning.py`는 문제은행과 함께 현재 3,465개 OS 수업의 오프라인 교재인 `course/syllabus.md`도 갱신합니다.
 
 ## 1. 필요한 프로그램
 

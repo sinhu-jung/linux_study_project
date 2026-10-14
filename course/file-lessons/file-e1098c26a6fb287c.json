@@ -5,88 +5,108 @@
   "area": "CORDIC · 고정소수점·복소 평면 회전",
   "track": "files",
   "kind": "kernel",
-  "intro": "각도를 작은 회전의 합으로 근사하여 코사인·사인 좌표를 얻습니다.",
+  "intro": "CORDIC의 같은 옛 좌표 사용, 배율과 오차, 각도 복원을 이해합니다.",
   "guide": [
-    "초기 좌표는(39797,0)이고 누적 각도는0입니다. 목표와 누적 각도를 비교해 매 단계 ±atan(2^-iter) 방향으로 회전합니다. 곱셈 대신 좌표의 오른쪽 시프트를 사용하며18단계 뒤 사분면 부호를 복구합니다.",
-    "입력 theta는 정수 도 단위이며 출력 i,q는2^16 배율의 근사 좌표입니다. 라디안이나 이미 스케일된 입력을 넘기는 인터페이스가 아닙니다."
+    "입력은 정수 도 단위입니다.",
+    "출력 i·q는 실제 좌표를 65536배 한 근삿값입니다.",
+    "두 새 좌표는 모두 같은 옛 좌표에서 계산합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "Broadcom 저작권·허용 조건·면책문, module/cordic 헤더,18개 s32 arctan_table,cordic_calc_iq,공개 export,설명·작성자·Dual BSD/GPL 모듈 정보로 구성됩니다. 원문에 없는 SPDX 줄을 있다고 간주하지 않습니다."
+      "title": "파일 구성",
+      "text": "Broadcom 저작권·사용 허락·보증 제외 안내 뒤 module과 cordic 헤더, s32 표 18개, 계산 함수, export와 모듈 정보가 있습니다. 라이선스는 Dual BSD/GPL이며 원문에 없는 SPDX 줄을 있다고 세지 않습니다."
     },
     {
-      "title": "표와 이득 보정",
-      "text": "표는 atan(2^-i)를 도 단위로 바꾸고2^16배하여 반올림한18개 값입니다. 첫 값2949120은45*65536입니다. 시프트 회전은 크기를 sqrt(1+2^(-2i))배 늘리므로 초기 x를 약0.60725*65536인39797로 두어 전체 이득을 미리 보정합니다. 반복 중 별도 제곱근이나 삼각함수 호출은 없습니다."
+      "title": "각도 표와 길이 보정",
+      "text": "표는 atan(2^-i)를 도로 바꾸고 65536배하여 반올림한 값입니다. 첫 항은 45*65536=2949120입니다. 시프트로 돌리면 길이가 sqrt(1+2^(-2i))배 늘어나므로 처음 x를 약 0.60725*65536인 39797로 줄여 전체 증가를 미리 보정합니다. 반복 중 제곱근이나 삼각함수를 호출하지 않습니다."
     },
     {
-      "title": "각도 정규화",
-      "text": "먼저 theta를 고정소수점으로 바꾸고 입력 부호 signtheta를 구합니다. ±180을 더한 뒤360으로 나머지를 취하고 같은180을 빼서 주기를 접습니다. 다음90도보다 크면180을 빼고,-90도보다 작으면180을 더하여 signx=-1로 표시합니다. 마지막에는 i와q 둘 다 이 부호를 곱하므로180도 회전 관계를 복원합니다."
+      "title": "각도 접기",
+      "text": "theta를 고정소수점으로 바꾸고 부호를 정합니다. 부호에 맞는 ±180을 더하고 360으로 나눈 나머지에서 같은 180을 빼 주기를 접습니다. 90보다 크면 180을 빼고 -90보다 작으면 180을 더하며 signx=-1로 표시합니다. 마지막 두 좌표 모두 부호를 바꿔 180도 이동을 되돌립니다."
     },
     {
-      "title": "회전의 동시 갱신",
-      "text": "theta>angle이면 새 i=옛 i-(옛 q>>iter),새 q=옛 q+(옛 i>>iter)입니다. 반대 분기는 각각 덧셈과 뺄셈을 뒤집습니다. valtmp로 i를 잠시 보관하여 q 계산이 옛 i를 사용하도록 합니다. 목표와 누적 각도가 같아도 else 분기로 작은 회전을 수행하므로0도 결과가 반드시 수학적으로 완벽한(65536,0)인 것은 아닙니다."
+      "title": "같은 옛 상태로 계산",
+      "text": "목표가 누적 angle보다 크면 새 i=옛 i-(옛 q>>iter), 새 q=옛 q+(옛 i>>iter)입니다. 반대 분기는 더하기·빼기를 뒤집습니다. valtmp에 새 i를 보관해 q가 옛 i를 쓰게 합니다. 같을 때도 else로 작은 회전을 하므로 0도가 반드시 완벽한 (65536,0)은 아닙니다."
     },
     {
-      "title": "종료와 오차",
-      "text": "iter=0..17의 고정18회 반복이라 입력 크기에 따라 무제한 반복하지 않습니다. 상수 표 양자화·시프트 절단·유한 반복 때문에 근사 오차가 남습니다. i/65536은cos(theta),q/65536은sin(theta)에 대응합니다.90도 부근의 아주 작은 비영 i는 곧바로 함수 오류라는 뜻이 아닙니다."
+      "title": "18번 뒤의 근삿값",
+      "text": "0..17의 고정 18회 뒤 끝납니다. 표 반올림, 오른쪽 이동의 버림, 유한 반복 때문에 작은 오차가 남습니다. i/65536은 cos, q/65536은 sin에 해당합니다. 90도에서 i가 아주 작은 비영 값이라고 바로 고장이라 할 수 없습니다."
     },
     {
-      "title": "타입과 입력 범위",
-      "text": "정규화 전에 s32 고정소수점 시프트를 수행하므로 임의의 큰 s32 각도를 안전하게360으로 먼저 줄이는 함수가 아닙니다. 음수 시프트와 signed 우측 시프트는 커널의 컴파일러·타깃 관례도 고려해야 하며 그대로 가져온 코드가 모든 ISO C 환경에서 같은 의미라고 주장하지 않습니다. 검증한 입력 구간과 컴파일 조건을 명시합니다."
+      "title": "입력 크기의 한계",
+      "text": "큰 각도를 360으로 줄이기 전에 s32 고정소수점 이동을 합니다. 그러므로 임의의 큰 s32도 안전한 함수는 아닙니다. 음수 왼쪽 이동과 signed 오른쪽 이동은 커널 컴파일러·기계 관례도 고려해야 하며 모든 ISO C 환경에 그대로 통한다고 말하지 않습니다. 검사한 입력 범위와 빌드 조건을 밝혀야 합니다."
     },
     {
-      "title": "문서와 실제 시그니처",
-      "text": "주석에는 coord 출력 인자가 언급되지만 실제 함수는 theta 하나를 받고 struct cordic_iq를 값으로 반환합니다. 출력 포인터는 없습니다. 주석을 코드의 실제 인터페이스와 대조하는 것도 오픈소스 읽기의 일부입니다."
+      "title": "주석과 실제 선언",
+      "text": "주석의 coord는 출력 인수처럼 적혔지만 실제로는 theta 하나를 받아 cordic_iq 구조체를 값으로 반환합니다. 출력 주소 인수는 없습니다. 사용법은 주석과 선언·본문을 함께 대조합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "반복 중 valtmp가 필요한 이유는?",
+      "prompt": "valtmp가 필요한 까닭은?",
       "options": [
+        "q가 갱신 전 i를 쓰도록 하려고",
+        "i용 메모리를 새로 할당하려고"
+      ],
+      "answer": 0,
+      "explanation": "둘 다 같은 옛 좌표에서 계산해야 같은 회전입니다.",
+      "original_prompt": "반복 중 valtmp가 필요한 이유는?",
+      "original_options": [
         "q 계산이 갱신 전 i를 사용하도록 하기 위해서다",
         "i의 메모리를 동적으로 할당하기 위해서다"
       ],
-      "answer": 0,
-      "explanation": "회전 식의 두 좌표는 같은 이전 상태에서 계산해야 합니다. i를 먼저 덮으면 q에 새 i를 사용하는 다른 변환이 됩니다."
+      "original_explanation": "회전 식의 두 좌표는 같은 이전 상태에서 계산해야 합니다. i를 먼저 덮으면 q에 새 i를 사용하는 다른 변환이 됩니다."
     },
     {
-      "prompt": "표의 첫 값2949120은 어떤 각도인가?",
+      "prompt": "2949120은 어떤 각도 표현인가요?",
       "options": [
+        "2949120라디안",
+        "65536배 한 45도"
+      ],
+      "answer": 1,
+      "explanation": "atan(1)은 45도입니다.",
+      "original_prompt": "표의 첫 값2949120은 어떤 각도인가?",
+      "original_options": [
         "2949120라디안",
         "2^16배로 표현한45도"
       ],
-      "answer": 1,
-      "explanation": "atan(1)=45도이고45*65536=2949120입니다. 입력과 표의 단위 및 스케일을 구분합니다."
+      "original_explanation": "atan(1)=45도이고45*65536=2949120입니다. 입력과 표의 단위 및 스케일을 구분합니다."
     },
     {
-      "prompt": "signx=-1이면 어느 좌표에 부호를 적용하는가?",
+      "prompt": "signx=-1이면 어디에 부호를 곱하나요?",
       "options": [
-        "i와q 둘 다",
+        "i와 q 모두",
         "i만"
       ],
       "answer": 0,
-      "explanation": "목표를180도 옮긴 뒤 되돌리므로cos와sin 모두 부호가 바뀝니다. 실제 마지막 두 곱셈도 이를 반영합니다."
+      "explanation": "180도 이동을 복구하면 cos와 sin 모두 부호가 바뀝니다.",
+      "original_prompt": "signx=-1이면 어느 좌표에 부호를 적용하는가?",
+      "original_options": [
+        "i와q 둘 다",
+        "i만"
+      ],
+      "original_explanation": "목표를180도 옮긴 뒤 되돌리므로cos와sin 모두 부호가 바뀝니다. 실제 마지막 두 곱셈도 이를 반영합니다."
     },
     {
-      "prompt": "주석의 coord를 두 번째 인자로 전달해야 하는가?",
+      "prompt": "coord를 둘째 인수로 넘겨야 하나요?",
       "options": [
+        "그렇다. 출력 포인터가 있다",
+        "아니다. 구조체를 반환한다"
+      ],
+      "answer": 1,
+      "explanation": "실제 선언은 theta 하나만 받습니다.",
+      "original_prompt": "주석의 coord를 두 번째 인자로 전달해야 하는가?",
+      "original_options": [
         "그렇다. 출력 포인터 인자가 선언되어 있다",
         "아니다. 함수는 구조체를 반환한다"
       ],
-      "answer": 1,
-      "explanation": "실제 시그니처는 struct cordic_iq cordic_calc_iq(s32 theta)입니다. 오래된 주석 문구보다 선언과 본문을 함께 확인해야 합니다."
+      "original_explanation": "실제 시그니처는 struct cordic_iq cordic_calc_iq(s32 theta)입니다. 오래된 주석 문구보다 선언과 본문을 함께 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "첫 표 값 2949120을 65536으로 나누고 왜 45도인지 확인해 보세요."
   },
   "annotated": "/*\n * Copyright (c) 2011 Broadcom Corporation\n *\n * Permission to use, copy, modify, and/or distribute this software for any\n * purpose with or without fee is hereby granted, provided that the above\n * copyright notice and this permission notice appear in all copies.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF\n * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY\n * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES\n * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION\n * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN\n * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n */\n#include <linux/module.h>\n#include <linux/cordic.h>\n\nstatic const s32 arctan_table[] = {\n\t2949120,\n\t1740967,\n\t919879,\n\t466945,\n\t234379,\n\t117304,\n\t58666,\n\t29335,\n\t14668,\n\t7334,\n\t3667,\n\t1833,\n\t917,\n\t458,\n\t229,\n\t115,\n\t57,\n\t29\n};\n\n/*\n * cordic_calc_iq() - calculates the i/q coordinate for given angle\n *\n * theta: angle in degrees for which i/q coordinate is to be calculated\n * coord: function output parameter holding the i/q coordinate\n */\nstruct cordic_iq cordic_calc_iq(s32 theta)\n{\n\tstruct cordic_iq coord;\n\ts32 angle, valtmp;\n\tunsigned iter;\n\tint signx = 1;\n\tint signtheta;\n\n\tcoord.i = CORDIC_ANGLE_GEN;\n\tcoord.q = 0;\n\tangle = 0;\n\n\ttheta = CORDIC_FIXED(theta);\n\tsigntheta = (theta < 0) ? -1 : 1;\n\ttheta = ((theta + CORDIC_FIXED(180) * signtheta) % CORDIC_FIXED(360)) -\n\t\tCORDIC_FIXED(180) * signtheta;\n\n\tif (CORDIC_FLOAT(theta) > 90) {\n\t\ttheta -= CORDIC_FIXED(180);\n\t\tsignx = -1;\n\t} else if (CORDIC_FLOAT(theta) < -90) {\n\t\ttheta += CORDIC_FIXED(180);\n\t\tsignx = -1;\n\t}\n\n\tfor (iter = 0; iter < CORDIC_NUM_ITER; iter++) {\n\t\tif (theta > angle) {\n\t\t\tvaltmp = coord.i - (coord.q >> iter);\n\t\t\tcoord.q += (coord.i >> iter);\n\t\t\tangle += arctan_table[iter];\n\t\t} else {\n\t\t\tvaltmp = coord.i + (coord.q >> iter);\n\t\t\tcoord.q -= (coord.i >> iter);\n\t\t\tangle -= arctan_table[iter];\n\t\t}\n\t\tcoord.i = valtmp;\n\t}\n\n\tcoord.i *= signx;\n\tcoord.q *= signx;\n\treturn coord;\n}\nEXPORT_SYMBOL(cordic_calc_iq);\n\nMODULE_DESCRIPTION(\"CORDIC algorithm\");\nMODULE_AUTHOR(\"Broadcom Corporation\");\nMODULE_LICENSE(\"Dual BSD/GPL\");\n",
   "source_review": {
@@ -111,5 +131,148 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/cordic.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e1098c26a6fb287c",
+    "path": "lib/math/cordic.c",
+    "title": "CORDIC 구현 전체: 시프트와 덧셈으로 좌표 회전하기",
+    "area": "CORDIC · 고정소수점·복소 평면 회전",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "각도를 작은 회전의 합으로 근사하여 코사인·사인 좌표를 얻습니다.",
+    "guide": [
+      "초기 좌표는(39797,0)이고 누적 각도는0입니다. 목표와 누적 각도를 비교해 매 단계 ±atan(2^-iter) 방향으로 회전합니다. 곱셈 대신 좌표의 오른쪽 시프트를 사용하며18단계 뒤 사분면 부호를 복구합니다.",
+      "입력 theta는 정수 도 단위이며 출력 i,q는2^16 배율의 근사 좌표입니다. 라디안이나 이미 스케일된 입력을 넘기는 인터페이스가 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "Broadcom 저작권·허용 조건·면책문, module/cordic 헤더,18개 s32 arctan_table,cordic_calc_iq,공개 export,설명·작성자·Dual BSD/GPL 모듈 정보로 구성됩니다. 원문에 없는 SPDX 줄을 있다고 간주하지 않습니다."
+      },
+      {
+        "title": "표와 이득 보정",
+        "text": "표는 atan(2^-i)를 도 단위로 바꾸고2^16배하여 반올림한18개 값입니다. 첫 값2949120은45*65536입니다. 시프트 회전은 크기를 sqrt(1+2^(-2i))배 늘리므로 초기 x를 약0.60725*65536인39797로 두어 전체 이득을 미리 보정합니다. 반복 중 별도 제곱근이나 삼각함수 호출은 없습니다."
+      },
+      {
+        "title": "각도 정규화",
+        "text": "먼저 theta를 고정소수점으로 바꾸고 입력 부호 signtheta를 구합니다. ±180을 더한 뒤360으로 나머지를 취하고 같은180을 빼서 주기를 접습니다. 다음90도보다 크면180을 빼고,-90도보다 작으면180을 더하여 signx=-1로 표시합니다. 마지막에는 i와q 둘 다 이 부호를 곱하므로180도 회전 관계를 복원합니다."
+      },
+      {
+        "title": "회전의 동시 갱신",
+        "text": "theta>angle이면 새 i=옛 i-(옛 q>>iter),새 q=옛 q+(옛 i>>iter)입니다. 반대 분기는 각각 덧셈과 뺄셈을 뒤집습니다. valtmp로 i를 잠시 보관하여 q 계산이 옛 i를 사용하도록 합니다. 목표와 누적 각도가 같아도 else 분기로 작은 회전을 수행하므로0도 결과가 반드시 수학적으로 완벽한(65536,0)인 것은 아닙니다."
+      },
+      {
+        "title": "종료와 오차",
+        "text": "iter=0..17의 고정18회 반복이라 입력 크기에 따라 무제한 반복하지 않습니다. 상수 표 양자화·시프트 절단·유한 반복 때문에 근사 오차가 남습니다. i/65536은cos(theta),q/65536은sin(theta)에 대응합니다.90도 부근의 아주 작은 비영 i는 곧바로 함수 오류라는 뜻이 아닙니다."
+      },
+      {
+        "title": "타입과 입력 범위",
+        "text": "정규화 전에 s32 고정소수점 시프트를 수행하므로 임의의 큰 s32 각도를 안전하게360으로 먼저 줄이는 함수가 아닙니다. 음수 시프트와 signed 우측 시프트는 커널의 컴파일러·타깃 관례도 고려해야 하며 그대로 가져온 코드가 모든 ISO C 환경에서 같은 의미라고 주장하지 않습니다. 검증한 입력 구간과 컴파일 조건을 명시합니다."
+      },
+      {
+        "title": "문서와 실제 시그니처",
+        "text": "주석에는 coord 출력 인자가 언급되지만 실제 함수는 theta 하나를 받고 struct cordic_iq를 값으로 반환합니다. 출력 포인터는 없습니다. 주석을 코드의 실제 인터페이스와 대조하는 것도 오픈소스 읽기의 일부입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "반복 중 valtmp가 필요한 이유는?",
+        "options": [
+          "q 계산이 갱신 전 i를 사용하도록 하기 위해서다",
+          "i의 메모리를 동적으로 할당하기 위해서다"
+        ],
+        "answer": 0,
+        "explanation": "회전 식의 두 좌표는 같은 이전 상태에서 계산해야 합니다. i를 먼저 덮으면 q에 새 i를 사용하는 다른 변환이 됩니다."
+      },
+      {
+        "prompt": "표의 첫 값2949120은 어떤 각도인가?",
+        "options": [
+          "2949120라디안",
+          "2^16배로 표현한45도"
+        ],
+        "answer": 1,
+        "explanation": "atan(1)=45도이고45*65536=2949120입니다. 입력과 표의 단위 및 스케일을 구분합니다."
+      },
+      {
+        "prompt": "signx=-1이면 어느 좌표에 부호를 적용하는가?",
+        "options": [
+          "i와q 둘 다",
+          "i만"
+        ],
+        "answer": 0,
+        "explanation": "목표를180도 옮긴 뒤 되돌리므로cos와sin 모두 부호가 바뀝니다. 실제 마지막 두 곱셈도 이를 반영합니다."
+      },
+      {
+        "prompt": "주석의 coord를 두 번째 인자로 전달해야 하는가?",
+        "options": [
+          "그렇다. 출력 포인터 인자가 선언되어 있다",
+          "아니다. 함수는 구조체를 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "실제 시그니처는 struct cordic_iq cordic_calc_iq(s32 theta)입니다. 오래된 주석 문구보다 선언과 본문을 함께 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/*\n * Copyright (c) 2011 Broadcom Corporation\n *\n * Permission to use, copy, modify, and/or distribute this software for any\n * purpose with or without fee is hereby granted, provided that the above\n * copyright notice and this permission notice appear in all copies.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF\n * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY\n * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES\n * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION\n * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN\n * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n */\n#include <linux/module.h>\n#include <linux/cordic.h>\n\nstatic const s32 arctan_table[] = {\n\t2949120,\n\t1740967,\n\t919879,\n\t466945,\n\t234379,\n\t117304,\n\t58666,\n\t29335,\n\t14668,\n\t7334,\n\t3667,\n\t1833,\n\t917,\n\t458,\n\t229,\n\t115,\n\t57,\n\t29\n};\n\n/*\n * cordic_calc_iq() - calculates the i/q coordinate for given angle\n *\n * theta: angle in degrees for which i/q coordinate is to be calculated\n * coord: function output parameter holding the i/q coordinate\n */\nstruct cordic_iq cordic_calc_iq(s32 theta)\n{\n\tstruct cordic_iq coord;\n\ts32 angle, valtmp;\n\tunsigned iter;\n\tint signx = 1;\n\tint signtheta;\n\n\tcoord.i = CORDIC_ANGLE_GEN;\n\tcoord.q = 0;\n\tangle = 0;\n\n\ttheta = CORDIC_FIXED(theta);\n\tsigntheta = (theta < 0) ? -1 : 1;\n\ttheta = ((theta + CORDIC_FIXED(180) * signtheta) % CORDIC_FIXED(360)) -\n\t\tCORDIC_FIXED(180) * signtheta;\n\n\tif (CORDIC_FLOAT(theta) > 90) {\n\t\ttheta -= CORDIC_FIXED(180);\n\t\tsignx = -1;\n\t} else if (CORDIC_FLOAT(theta) < -90) {\n\t\ttheta += CORDIC_FIXED(180);\n\t\tsignx = -1;\n\t}\n\n\tfor (iter = 0; iter < CORDIC_NUM_ITER; iter++) {\n\t\tif (theta > angle) {\n\t\t\tvaltmp = coord.i - (coord.q >> iter);\n\t\t\tcoord.q += (coord.i >> iter);\n\t\t\tangle += arctan_table[iter];\n\t\t} else {\n\t\t\tvaltmp = coord.i + (coord.q >> iter);\n\t\t\tcoord.q -= (coord.i >> iter);\n\t\t\tangle -= arctan_table[iter];\n\t\t}\n\t\tcoord.i = valtmp;\n\t}\n\n\tcoord.i *= signx;\n\tcoord.q *= signx;\n\treturn coord;\n}\nEXPORT_SYMBOL(cordic_calc_iq);\n\nMODULE_DESCRIPTION(\"CORDIC algorithm\");\nMODULE_AUTHOR(\"Broadcom Corporation\");\nMODULE_LICENSE(\"Dual BSD/GPL\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "7c190072756c50a105f56de77a7901c90c3ac0f5b1977c081c8134d52314d611",
+      "scope": "whole-file",
+      "line_count": 92,
+      "authoring_source": "course/file_units/cordic_rotation.py",
+      "sections": [
+        "전체 파일",
+        "표와 이득 보정",
+        "각도 정규화",
+        "회전의 동시 갱신",
+        "종료와 오차",
+        "타입과 입력 범위",
+        "문서와 실제 시그니처"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/cordic.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "각도를 조금씩 돌려 원 위의 위치를 찾아 봅시다. 복잡한 곱셈 대신 더하기와 비트 이동으로 가까운 답을 만듭니다.",
+    "meaning": "CORDIC의 같은 옛 좌표 사용, 배율과 오차, 각도 복원을 이해합니다.",
+    "exercise": "첫 표 값 2949120을 65536으로 나누고 왜 45도인지 확인해 보세요."
+  },
+  "goal": "CORDIC의 같은 옛 좌표 사용, 배율과 오차, 각도 복원을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "첫 표 값 2949120을 65536으로 나누고 왜 45도인지 확인해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "36fdf496a123d4d6bcdff0b3b31c3ad5bdfdfae7f1a458f46e1b3897bb8b178b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,58 +5,66 @@
   "area": "ABI · wrapper · 코드 재사용 · 시간 구조체",
   "track": "files",
   "kind": "kernel",
-  "intro": "clock_gettime·gettimeofday·clock_getres wrapper 전체를 자료형과 함께 읽습니다.",
+  "intro": "세 __vdso 시간 진입점은 대응 __cvdso 공통 함수의 결과를 반환합니다.",
   "guide": [
-    "아키텍처 진입점의 역할과 공통 시간 알고리즘의 역할을 분리하면 같은 구현을 다른 ABI에 연결할 수 있습니다.",
-    "공개 심볼 이름과 출력 구조체, 오류 전달의 실제 범위를 설명합니다."
+    "wrapper는 다른 함수로 일을 이어 주는 연결 함수입니다.",
+    "timespec과 timeval은 시간을 담는 구조체 형식이며 이름이 비슷해도 같은 타입으로 바꾸면 안 됩니다.",
+    "errno는 사용자 라이브러리의 오류 표시이며 이 짧은 코드가 따로 설정하지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0과 ARM64 소스에서 복사했다는 이력 뒤 linux/time.h, linux/types.h, vdso/gettime.h를 포함합니다. 세 함수 본문을 정의합니다. 이력상 출처가 같아도 ARM64의 __kernel 이름과 여기의 __vdso 이름을 동일하다고 읽으면 안 됩니다."
+      "text": "라이선스와 ARM64 소스 유래 뒤 시간·타입·공통 gettime 헤더를 포함하고 세 함수를 정의합니다. 유래가 같아도 ARM64의 __kernel 이름과 여기의 __vdso 이름은 다릅니다."
     },
     {
       "title": "Clock_gettime",
-      "text": "__vdso_clock_gettime은 clockid_t clock과 __kernel_timespec *ts를 받아 __cvdso_clock_gettime에 전달하고 int 결과를 반환합니다. 출력 구조체가 old_timespec32인 별도 분기는 이 파일에 없습니다. 공통 gettime.h의 선언 선택 및 실제 빌드 조건과 함께 사용되는 코드이지 이 파일 하나가 모든 ABI의 time32·time64를 자동 선택하지 않습니다."
+      "text": "clock_gettime은 clockid_t와 __kernel_timespec 포인터를 공통 함수에 넘기고 int를 반환합니다. old_timespec32 분기는 없습니다. 공통 선언과 실제 빌드 조건을 함께 봐야 하며 이 파일이 모든 ABI의 time32/time64를 자동 선택하지는 않습니다."
     },
     {
       "title": "Gettimeofday",
-      "text": "__vdso_gettimeofday는 __kernel_old_timeval *tv와 timezone *tz를 __cvdso_gettimeofday에 그대로 전달합니다. 여기서 사용자 포인터 검증이나 timezone 계산을 따로 하지 않습니다. 공통 구현의 반환값을 그대로 내보내며 libc errno를 설정하는 본문도 없습니다."
+      "text": "gettimeofday는 __kernel_old_timeval과 timezone 포인터를 그대로 전달합니다. 포인터 검사나 시간대 계산을 별도로 하지 않고 공통 반환값을 내보냅니다. libc errno 설정도 없습니다."
     },
     {
       "title": "Clock_getres와 범위",
-      "text": "__vdso_clock_getres는 clockid_t clock_id와 __kernel_timespec *res로 __cvdso_clock_getres를 호출합니다. 별도의 time 함수, clock_gettime64 wrapper, weak alias 선언은 없습니다. 모든 함수·include를 대조했으며 실제 RISC-V ELF export와 사용자 프로그램 실행 검증을 수행한 것은 아닙니다."
+      "text": "clock_getres는 clock ID와 __kernel_timespec 결과 포인터를 공통 함수에 넘깁니다. 별도 time 함수,clock_gettime64 연결 함수,weak 별칭은 없습니다. 실제 ELF 공개 목록과 사용자 실행 시험은 별도입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 파일의 __vdso_clock_gettime 출력 구조체는?",
+      "prompt": "이 clock_gettime의 출력 구조체는 무엇인가요?",
       "options": [
+        "struct __kernel_timespec입니다.",
+        "언제나 struct old_timespec32입니다."
+      ],
+      "answer": 0,
+      "explanation": "선언된 포인터 타입을 따라야 합니다.",
+      "original_prompt": "이 파일의 __vdso_clock_gettime 출력 구조체는?",
+      "original_options": [
         "struct __kernel_timespec이다",
         "항상 struct old_timespec32이다"
       ],
-      "answer": 0,
-      "explanation": "시그니처가 __kernel_timespec 포인터를 명시합니다. 다른 compat 파일의 자료형을 여기에 적용하면 안 됩니다."
+      "original_explanation": "시그니처가 __kernel_timespec 포인터를 명시합니다. 다른 compat 파일의 자료형을 여기에 적용하면 안 됩니다."
     },
     {
-      "prompt": "세 wrapper가 직접 시간을 계산하고 errno를 설정하는가?",
+      "prompt": "세 연결 함수가 직접 시간 계산과 errno 설정을 하나요?",
       "options": [
+        "네. 각각 독립 계산 알고리즘이 있습니다.",
+        "아니요. 대응 __cvdso 함수에 맡기고 int 결과를 반환합니다."
+      ],
+      "answer": 1,
+      "explanation": "각 본문은 한 번의 호출 결과 반환입니다.",
+      "original_prompt": "세 wrapper가 직접 시간을 계산하고 errno를 설정하는가?",
+      "original_options": [
         "그렇다. 각 함수에 별도의 시간 변환 알고리즘이 있다",
         "아니다. 대응하는 __cvdso 함수에 위임하고 int 결과를 반환한다"
       ],
-      "answer": 1,
-      "explanation": "각 본문은 한 번의 함수 호출 결과 반환입니다. 공통 알고리즘과 ABI 진입점의 책임을 구분해야 합니다."
+      "original_explanation": "각 본문은 한 번의 함수 호출 결과 반환입니다. 공통 알고리즘과 ABI 진입점의 책임을 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "clock_gettime·gettimeofday·clock_getres 각각의 출력 구조체를 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Copied from arch/arm64/kernel/vdso/vgettimeofday.c\n *\n * Copyright (C) 2018 ARM Ltd.\n * Copyright (C) 2020 SiFive\n */\n\n#include <linux/time.h>\n#include <linux/types.h>\n#include <vdso/gettime.h>\n\nint __vdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)\n{\n\treturn __cvdso_clock_gettime(clock, ts);\n}\n\nint __vdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)\n{\n\treturn __cvdso_gettimeofday(tv, tz);\n}\n\nint __vdso_clock_getres(clockid_t clock_id, struct __kernel_timespec *res)\n{\n\treturn __cvdso_clock_getres(clock_id, res);\n}\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/vgettimeofday.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-77faa4888ff63266",
+    "path": "arch/riscv/kernel/vdso/vgettimeofday.c",
+    "title": "RISC-V 시간 진입점: 세 __vdso 함수의 공통 구현 위임",
+    "area": "ABI · wrapper · 코드 재사용 · 시간 구조체",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "clock_gettime·gettimeofday·clock_getres wrapper 전체를 자료형과 함께 읽습니다.",
+    "guide": [
+      "아키텍처 진입점의 역할과 공통 시간 알고리즘의 역할을 분리하면 같은 구현을 다른 ABI에 연결할 수 있습니다.",
+      "공개 심볼 이름과 출력 구조체, 오류 전달의 실제 범위를 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0과 ARM64 소스에서 복사했다는 이력 뒤 linux/time.h, linux/types.h, vdso/gettime.h를 포함합니다. 세 함수 본문을 정의합니다. 이력상 출처가 같아도 ARM64의 __kernel 이름과 여기의 __vdso 이름을 동일하다고 읽으면 안 됩니다."
+      },
+      {
+        "title": "Clock_gettime",
+        "text": "__vdso_clock_gettime은 clockid_t clock과 __kernel_timespec *ts를 받아 __cvdso_clock_gettime에 전달하고 int 결과를 반환합니다. 출력 구조체가 old_timespec32인 별도 분기는 이 파일에 없습니다. 공통 gettime.h의 선언 선택 및 실제 빌드 조건과 함께 사용되는 코드이지 이 파일 하나가 모든 ABI의 time32·time64를 자동 선택하지 않습니다."
+      },
+      {
+        "title": "Gettimeofday",
+        "text": "__vdso_gettimeofday는 __kernel_old_timeval *tv와 timezone *tz를 __cvdso_gettimeofday에 그대로 전달합니다. 여기서 사용자 포인터 검증이나 timezone 계산을 따로 하지 않습니다. 공통 구현의 반환값을 그대로 내보내며 libc errno를 설정하는 본문도 없습니다."
+      },
+      {
+        "title": "Clock_getres와 범위",
+        "text": "__vdso_clock_getres는 clockid_t clock_id와 __kernel_timespec *res로 __cvdso_clock_getres를 호출합니다. 별도의 time 함수, clock_gettime64 wrapper, weak alias 선언은 없습니다. 모든 함수·include를 대조했으며 실제 RISC-V ELF export와 사용자 프로그램 실행 검증을 수행한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 파일의 __vdso_clock_gettime 출력 구조체는?",
+        "options": [
+          "struct __kernel_timespec이다",
+          "항상 struct old_timespec32이다"
+        ],
+        "answer": 0,
+        "explanation": "시그니처가 __kernel_timespec 포인터를 명시합니다. 다른 compat 파일의 자료형을 여기에 적용하면 안 됩니다."
+      },
+      {
+        "prompt": "세 wrapper가 직접 시간을 계산하고 errno를 설정하는가?",
+        "options": [
+          "그렇다. 각 함수에 별도의 시간 변환 알고리즘이 있다",
+          "아니다. 대응하는 __cvdso 함수에 위임하고 int 결과를 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "각 본문은 한 번의 함수 호출 결과 반환입니다. 공통 알고리즘과 ABI 진입점의 책임을 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Copied from arch/arm64/kernel/vdso/vgettimeofday.c\n *\n * Copyright (C) 2018 ARM Ltd.\n * Copyright (C) 2020 SiFive\n */\n\n#include <linux/time.h>\n#include <linux/types.h>\n#include <vdso/gettime.h>\n\nint __vdso_clock_gettime(clockid_t clock, struct __kernel_timespec *ts)\n{\n\treturn __cvdso_clock_gettime(clock, ts);\n}\n\nint __vdso_gettimeofday(struct __kernel_old_timeval *tv, struct timezone *tz)\n{\n\treturn __cvdso_gettimeofday(tv, tz);\n}\n\nint __vdso_clock_getres(clockid_t clock_id, struct __kernel_timespec *res)\n{\n\treturn __cvdso_clock_getres(clock_id, res);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "ceff1debce0d803ade5495680b26a99d1f477e58a142b96227253b4b0c9c3241",
+      "scope": "whole-file",
+      "line_count": 26,
+      "authoring_source": "course/file_units/riscv_vdso_time_interfaces.py",
+      "sections": [
+        "전체 구성",
+        "Clock_gettime",
+        "Gettimeofday",
+        "Clock_getres와 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/vdso/vgettimeofday.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "접수창구 세 곳이 질문 종류에 맞는 공통 담당자에게 인자를 그대로 전달합니다. 각 창구가 시간을 따로 계산하지는 않습니다.",
+    "meaning": "세 __vdso 시간 진입점은 대응 __cvdso 공통 함수의 결과를 반환합니다.",
+    "exercise": "clock_gettime·gettimeofday·clock_getres 각각의 출력 구조체를 적어 보세요."
+  },
+  "goal": "세 __vdso 시간 진입점은 대응 __cvdso 공통 함수의 결과를 반환합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "clock_gettime·gettimeofday·clock_getres 각각의 출력 구조체를 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "c6c1c1115f1fe343652677f8ba67af193698d4aa7ad9797017eec37989021191",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

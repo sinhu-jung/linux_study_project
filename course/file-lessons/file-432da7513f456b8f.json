@@ -5,100 +5,120 @@
   "area": "LoongArch · LL/SC · fault 제어 · 예외 테이블 · 장벽",
   "track": "files",
   "kind": "kernel",
-  "intro": "LL/SC 반복을 통해 사용자 futex의 산술과 비교 교환을 수행하는 LoongArch 구현입니다.",
+  "intro": "LoongArch futex의 조건부 저장 결과와 오류 뒤 출력 조건을 읽어요.",
   "guide": [
-    "조건부 저장의 상태값 해석은 ISA마다 다릅니다. LoongArch의 sc.w 결과0은 재시도이며, 주소 검사·페이지 fault 제어·출력 대입은 함수별로 따로 확인해야 합니다.",
-    "앞서 본 RISC-V·ARM64와 분기 방향을 비교합니다. 다른 아키텍처의 오류 경로나 장벽을 그대로 복사해 설명하지 않습니다."
+    "ll.w로 이전 값을 읽고 sc.w로 조건부 저장을 시도해요. 이 기계는 sc.w 결과가 0이면 실패라 다시 읽어요.",
+    "산술 helper에는 pagefault_disable/enable이 있고 cmpxchg 본문에는 없어요. 함수 이름만으로 같은 보호를 가정하지 마세요.",
+    "산술 출력은 성공 때만 바뀌지만 cmpxchg는 asm 오류 뒤에도 공통 출력 대입을 거쳐요. 오류일 때 관측값의 유효성에 기대면 안 돼요."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0·저작권·guard, futex/uaccess/asm-extable/barrier/errno 포함, 공통 산술 asm 매크로, 산술 API, 비교 교환 API와 endif입니다. futex 대기 큐나 packed op 해독 구현은 없습니다."
+      "text": "라이선스·저작권·guard 뒤 futex, 사용자 접근, 예외 표, 장벽, 오류 헤더가 있어요. 공통 산술 asm, 산술 API와 비교 교환 API가 본문이에요. futex 대기 목록이나 packed 연산 해독은 없어요."
     },
     {
       "title": "산술의 LL/SC",
-      "text": "매크로는 ll.w로 oldval을 읽고 지정 insn으로 $t0에 후보를 만든 뒤 sc.w로 저장을 시도합니다. sc.w가 $t0에 돌려준 상태가0이면 beqz로 처음부터 반복합니다. RISC-V sc의 비0 재시도와 분기 방향이 다릅니다. 명시적인 반복 횟수 제한은 없습니다."
+      "text": "ll.w가 oldval을 읽고 지정 연산이 임시 레지스터 t0에 후보를 만들어요. sc.w는 저장 결과를 t0에 넣고 0이면 beqz로 처음부터 반복해요. RISC-V는 반대 방향의 상태 판정을 쓰므로 섞지 마세요. 여기에는 반복 횟수 제한이 없어요."
     },
     {
       "title": "asm 제약과 오류",
-      "text": "ret는 입력0과 연결된 출력, oldval은 early-clobber이며 uaddr는 ZC 메모리 제약의 읽기·쓰기 인자로 연결됩니다. memory와 t0를 clobber로 알립니다. ll.w와 sc.w에 각각 예외 테이블을 두고 fault 시 위치3으로 돌아가 ret에 오류를 반영합니다. C 출력 변수 초기값만으로 fault 이후 유효 데이터를 보증하지 않습니다."
+      "text": "ret 출력은 입력 0과 연결되고 oldval은 입력이 다 쓰이기 전에 덮을 수 있는 early-clobber 출력이에요. ZC 메모리 제약과 memory·t0 clobber가 컴파일러와 사용 자원을 약속해요. ll.w와 sc.w의 fault는 예외 표를 따라 위치 3으로 가 ret에 오류를 넣어요. C 초기값만으로 오류 뒤 데이터가 유효하다고 보장하지 않아요."
     },
     {
       "title": "다섯 산술 선택",
-      "text": "SET은 move, ADD는 add.w, OR는 or, XOR는 xor입니다. ANDN은 ~oparg를 넘겨 and로 구현합니다. 모두 동일 LL/SC 반복을 사용하며 성공하면 이전 값을 전달합니다. 미지원 op는 -ENOSYS이고 원자 명령을 실행하지 않습니다."
+      "text": "SET은 move, ADD는 add.w, OR는 or, XOR는 xor예요. ANDN은 oparg를 뒤집은 ~oparg와 and를 해요. 모두 같은 LL/SC 반복이고 성공 때 이전 값을 줘요. 미지원 op는 원자 명령 없이 -ENOSYS예요."
     },
     {
       "title": "산술의 페이지 fault 제어",
-      "text": "arch_futex_atomic_op_inuser는 switch 전에 pagefault_disable, 뒤에 pagefault_enable을 호출합니다. 이 함수 본문에는 별도 access_ok 검사가 없습니다. 이것을 임의 사용자 주소 접근이 항상 안전하다는 뜻으로 해석하지 않고 호출 측 검증과 uaccess 예외 계약도 확인해야 합니다. pagefault_disable은 모든 메모리 접근이 반드시 성공한다는 보증이 아닙니다."
+      "text": "산술 함수는 switch 앞뒤에서 pagefault_disable/enable을 짝지어요. 본문에 별도 access_ok는 없으므로 호출자의 검증과 사용자 접근 예외 약속도 살펴야 해요. fault 처리를 제한한다고 모든 주소 접근이 성공하는 것은 아니에요."
     },
     {
       "title": "산술 출력",
-      "text": "페이지 fault 제어 구간을 닫은 뒤 ret0인 경우에만 *oval=oldval을 기록합니다. -ENOSYS와 접근 오류에서는 새 출력을 쓰지 않습니다. compare·wake 단계가 이 산술 helper 안에서 함께 수행되는 것은 아닙니다."
+      "text": "pagefault 제어 구간을 닫은 뒤 ret 0일 때만 *oval에 이전 값을 넣어요. 접근 오류나 -ENOSYS에서는 새 출력을 쓰지 않아요. 비교 조건 평가나 깨우기까지 이 산술 함수에 들어 있지는 않아요."
     },
     {
       "title": "비교 교환",
-      "text": "cmpxchg는 먼저 access_ok(sizeof(u32))를 검사하고 실패면 -EFAULT입니다. ll.w로 읽은 val이 기대 oldval과 다르면 위치3으로 끝납니다. 같으면 newval을 t0에 옮겨 sc.w, 저장 실패0이면 다시 ll.w부터 비교까지 반복합니다. 접근 성공 ret0과 실제 값 교체 여부를 관측값으로 나누어 판단해야 합니다."
+      "text": "cmpxchg는 먼저 u32 범위를 access_ok로 검사해 실패하면 -EFAULT예요. ll.w 값이 기대값과 다르면 위치 3으로 끝내고 같을 때만 newval을 sc.w로 저장해요. 저장 실패 0이면 다시 읽고 비교해요. 반환 0만 보지 말고 관측값과 기대값을 비교해야 교체 여부를 알아요."
     },
     {
       "title": "공통 종료 장벽",
-      "text": "cmpxchg의 정상 저장·비교 불일치·fault 복귀는 모두 위치3 뒤 __WEAK_LLSC_MB를 지나도록 작성되어 있습니다. 같은 트리의 barrier.h에서 이 매크로는 CONFIG_SMP일 때 dbar0x700 문자열이고 아니면 빈 줄입니다. 산술 매크로에는 이 명시적 종료 매크로가 없으므로 두 본문이 동일하다고 설명하지 않습니다."
+      "text": "cmpxchg의 저장 성공·비교 불일치·fault는 모두 위치 3 뒤 __WEAK_LLSC_MB를 지나요. 같은 트리 barrier.h에서 SMP면 dbar 0x700이고 아니면 빈 문자열이에요. 산술 매크로에는 이 명시적 종료 장벽이 없어 두 본문이 같다고 설명하면 안 돼요."
     },
     {
       "title": "접근·출력 계약 차이",
-      "text": "cmpxchg 함수 자체에는 pagefault_disable/enable 호출이 없고, asm 종료 뒤 ret와 무관하게 *uval=val을 기록합니다. 초기 access_ok 실패만 이 대입 전에 돌아갑니다. 산술 helper의 조건부 출력과 차이가 있어 오류 반환에서 관측값 유효성이나 보존을 가정하면 안 됩니다. 외부 호출 문맥의 fault 제어는 별도입니다."
+      "text": "cmpxchg 안에는 pagefault_disable/enable 쌍이 없어요. 초기 access_ok 실패는 먼저 반환하지만 asm 종료 뒤에는 ret와 무관하게 *uval=val을 써요. 오류에서 값이 보존되거나 성공 관측값이라고 기대하지 마세요. 외부 호출 문맥의 보호는 따로 확인해요."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "ISA별 조건부 저장 성공값, LL/SC 후보 재계산, 예외 복귀와 장벽 위치, 페이지 fault 제어와 주소 검사의 구분, 출력 계약을 학습합니다. 코드를 대조한 수업이며 실제 LoongArch 하드웨어에서 실행하거나 오류를 주입한 검증은 아닙니다."
+      "text": "기계 명령마다 다른 저장 성공 표시, 재읽기와 후보 재계산, 예외 복귀와 장벽, fault 제어와 주소 범위 검사, 출력 유효 시점을 배워요. 원문 대조이지 실제 LoongArch 하드웨어 실행이나 오류 주입 검증은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "이 구현의 sc.w 결과가0이면?",
+      "prompt": "sc.w 결과가 0이면 어떻게 하나요?",
       "options": [
+        "저장 실패라 ll.w부터 다시 시도해요.",
+        "저장 성공이라 바로 끝나요."
+      ],
+      "answer": 0,
+      "explanation": "beqz t0,1b가 0에서 반복하게 해요.",
+      "original_prompt": "이 구현의 sc.w 결과가0이면?",
+      "original_options": [
         "저장 실패로 ll.w부터 재시도한다",
         "저장 성공으로 즉시 반환한다"
       ],
-      "answer": 0,
-      "explanation": "원문은 beqz $t0,1b입니다. RISC-V sc의 실패 판정 방향과 반대이므로 다른 ISA에서 본 규칙을 기계적으로 적용하면 안 됩니다."
+      "original_explanation": "원문은 beqz $t0,1b입니다. RISC-V sc의 실패 판정 방향과 반대이므로 다른 ISA에서 본 규칙을 기계적으로 적용하면 안 됩니다."
     },
     {
-      "prompt": "산술 helper와 cmpxchg 모두 내부에서 pagefault_disable을 호출하는가?",
+      "prompt": "두 함수 모두 내부에서 pagefault_disable을 부르나요?",
       "options": [
+        "네. inatomic이라는 이름이면 자동으로 불러요.",
+        "아니요. 이 파일에서는 산술 helper에만 쌍이 있어요."
+      ],
+      "answer": 1,
+      "explanation": "본문의 호출과 바깥 호출자가 제공하는 보호를 구별해요.",
+      "original_prompt": "산술 helper와 cmpxchg 모두 내부에서 pagefault_disable을 호출하는가?",
+      "original_options": [
         "그렇다. 함수 이름에 inatomic이면 자동 호출된다",
         "아니다. 이 파일에서는 산술 helper에만 그 쌍이 있다"
       ],
-      "answer": 1,
-      "explanation": "cmpxchg 본문은 access_ok와 asm·출력 대입이며 pagefault 제어 쌍은 없습니다. 호출자의 외부 보호와 내부 본문을 구분합니다."
+      "original_explanation": "cmpxchg 본문은 access_ok와 asm·출력 대입이며 pagefault 제어 쌍은 없습니다. 호출자의 외부 보호와 내부 본문을 구분합니다."
     },
     {
-      "prompt": "비교 불일치도 cmpxchg의 __WEAK_LLSC_MB 지점을 통과하는가?",
+      "prompt": "비교 불일치도 cmpxchg의 종료 장벽 위치를 지나나요?",
       "options": [
+        "네. 위치 3으로 이동해요.",
+        "아니요. 모든 비교 불일치는 장벽 뒤로 가요."
+      ],
+      "answer": 0,
+      "explanation": "bne의 목적지 뒤에 __WEAK_LLSC_MB가 있어요.",
+      "original_prompt": "비교 불일치도 cmpxchg의 __WEAK_LLSC_MB 지점을 통과하는가?",
+      "original_options": [
         "그렇다. 분기가 위치3으로 간다",
         "아니다. 모든 비교 불일치가 장벽 뒤로 건너뛴다"
       ],
-      "answer": 0,
-      "explanation": "bne의 목적지는3f이고 그 다음에 장벽 매크로가 있습니다. ARM64에서 본 다른 레이블 구조와 구분해야 합니다."
+      "original_explanation": "bne의 목적지는3f이고 그 다음에 장벽 매크로가 있습니다. ARM64에서 본 다른 레이블 구조와 구분해야 합니다."
     },
     {
-      "prompt": "cmpxchg 오류에서 uval은 항상 보존되는가?",
+      "prompt": "cmpxchg 오류 때 uval은 항상 옛값 그대로인가요?",
       "options": [
+        "네. 모든 출력이 if(!ret)에 들어 있어요.",
+        "아니요. asm fault 뒤에도 공통 대입해요."
+      ],
+      "answer": 1,
+      "explanation": "조건부 출력은 산술 쪽이며 오류의 cmpxchg 출력에 성공 의미를 주면 안 돼요.",
+      "original_prompt": "cmpxchg 오류에서 uval은 항상 보존되는가?",
+      "original_options": [
         "그렇다. if(!ret) 조건이 모든 출력을 감싼다",
         "아니다. asm fault 후 공통 대입이 실행된다"
       ],
-      "answer": 1,
-      "explanation": "if(!ret)는 산술 helper 출력에 있습니다. cmpxchg는 ret 검사 없이 *uval=val이므로 오류에서 그 값을 성공 관측값으로 사용하면 안 됩니다."
+      "original_explanation": "if(!ret)는 산술 helper 출력에 있습니다. cmpxchg는 ret 검사 없이 *uval=val이므로 오류에서 그 값을 성공 관측값으로 사용하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "sc.w 결과 0, 기대값 불일치, 실제 접근 오류의 이동 위치를 표시해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2020-2022 Loongson Technology Corporation Limited\n */\n#ifndef _ASM_FUTEX_H\n#define _ASM_FUTEX_H\n\n#include <linux/futex.h>\n#include <linux/uaccess.h>\n#include <asm/asm-extable.h>\n#include <asm/barrier.h>\n#include <asm/errno.h>\n\n#define __futex_atomic_op(insn, ret, oldval, uaddr, oparg)\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t__asm__ __volatile__(\t\t\t\t\t\t\\\n\t\"1:\tll.w\t%1, %4 # __futex_atomic_op\\n\"\t\t\\\n\t\"\t\" insn\t\"\t\t\t\t\\n\"\t\\\n\t\"2:\tsc.w\t$t0, %2\t\t\t\t\\n\"\t\\\n\t\"\tbeqz\t$t0, 1b\t\t\t\t\\n\"\t\\\n\t\"3:\t\t\t\t\t\t\\n\"\t\\\n\t_ASM_EXTABLE_UACCESS_ERR(1b, 3b, %0)\t\t\t\\\n\t_ASM_EXTABLE_UACCESS_ERR(2b, 3b, %0)\t\t\t\\\n\t: \"=r\" (ret), \"=&r\" (oldval),\t\t\t\t\\\n\t  \"=ZC\" (*uaddr)\t\t\t\t\t\\\n\t: \"0\" (0), \"ZC\" (*uaddr), \"Jr\" (oparg)\t\t\t\\\n\t: \"memory\", \"t0\");\t\t\t\t\t\\\n}\n\nstatic inline int\narch_futex_atomic_op_inuser(int op, int oparg, int *oval, u32 __user *uaddr)\n{\n\tint oldval = 0, ret = 0;\n\n\tpagefault_disable();\n\n\tswitch (op) {\n\tcase FUTEX_OP_SET:\n\t\t__futex_atomic_op(\"move $t0, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_ADD:\n\t\t__futex_atomic_op(\"add.w $t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_OR:\n\t\t__futex_atomic_op(\"or\t$t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_ANDN:\n\t\t__futex_atomic_op(\"and\t$t0, %1, %z5\", ret, oldval, uaddr, ~oparg);\n\t\tbreak;\n\tcase FUTEX_OP_XOR:\n\t\t__futex_atomic_op(\"xor\t$t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tdefault:\n\t\tret = -ENOSYS;\n\t}\n\n\tpagefault_enable();\n\n\tif (!ret)\n\t\t*oval = oldval;\n\n\treturn ret;\n}\n\nstatic inline int\nfutex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr, u32 oldval, u32 newval)\n{\n\tint ret = 0;\n\tu32 val = 0;\n\n\tif (!access_ok(uaddr, sizeof(u32)))\n\t\treturn -EFAULT;\n\n\t__asm__ __volatile__(\n\t\"# futex_atomic_cmpxchg_inatomic\t\t\t\\n\"\n\t\"1:\tll.w\t%1, %3\t\t\t\t\t\\n\"\n\t\"\tbne\t%1, %z4, 3f\t\t\t\t\\n\"\n\t\"\tmove\t$t0, %z5\t\t\t\t\\n\"\n\t\"2:\tsc.w\t$t0, %2\t\t\t\t\t\\n\"\n\t\"\tbeqz\t$t0, 1b\t\t\t\t\t\\n\"\n\t\"3:\t\t\t\t\t\t\t\\n\"\n\t__WEAK_LLSC_MB\n\t_ASM_EXTABLE_UACCESS_ERR(1b, 3b, %0)\n\t_ASM_EXTABLE_UACCESS_ERR(2b, 3b, %0)\n\t: \"+r\" (ret), \"=&r\" (val), \"=ZC\" (*uaddr)\n\t: \"ZC\" (*uaddr), \"Jr\" (oldval), \"Jr\" (newval)\n\t: \"memory\", \"t0\");\n\n\t*uval = val;\n\n\treturn ret;\n}\n\n#endif /* _ASM_FUTEX_H */\n",
   "source_review": {
@@ -126,5 +146,163 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/loongarch/include/asm/futex.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-432da7513f456b8f",
+    "path": "arch/loongarch/include/asm/futex.h",
+    "title": "LoongArch futex 전체: LL/SC 상태값과 페이지 fault 제어",
+    "area": "LoongArch · LL/SC · fault 제어 · 예외 테이블 · 장벽",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "LL/SC 반복을 통해 사용자 futex의 산술과 비교 교환을 수행하는 LoongArch 구현입니다.",
+    "guide": [
+      "조건부 저장의 상태값 해석은 ISA마다 다릅니다. LoongArch의 sc.w 결과0은 재시도이며, 주소 검사·페이지 fault 제어·출력 대입은 함수별로 따로 확인해야 합니다.",
+      "앞서 본 RISC-V·ARM64와 분기 방향을 비교합니다. 다른 아키텍처의 오류 경로나 장벽을 그대로 복사해 설명하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0·저작권·guard, futex/uaccess/asm-extable/barrier/errno 포함, 공통 산술 asm 매크로, 산술 API, 비교 교환 API와 endif입니다. futex 대기 큐나 packed op 해독 구현은 없습니다."
+      },
+      {
+        "title": "산술의 LL/SC",
+        "text": "매크로는 ll.w로 oldval을 읽고 지정 insn으로 $t0에 후보를 만든 뒤 sc.w로 저장을 시도합니다. sc.w가 $t0에 돌려준 상태가0이면 beqz로 처음부터 반복합니다. RISC-V sc의 비0 재시도와 분기 방향이 다릅니다. 명시적인 반복 횟수 제한은 없습니다."
+      },
+      {
+        "title": "asm 제약과 오류",
+        "text": "ret는 입력0과 연결된 출력, oldval은 early-clobber이며 uaddr는 ZC 메모리 제약의 읽기·쓰기 인자로 연결됩니다. memory와 t0를 clobber로 알립니다. ll.w와 sc.w에 각각 예외 테이블을 두고 fault 시 위치3으로 돌아가 ret에 오류를 반영합니다. C 출력 변수 초기값만으로 fault 이후 유효 데이터를 보증하지 않습니다."
+      },
+      {
+        "title": "다섯 산술 선택",
+        "text": "SET은 move, ADD는 add.w, OR는 or, XOR는 xor입니다. ANDN은 ~oparg를 넘겨 and로 구현합니다. 모두 동일 LL/SC 반복을 사용하며 성공하면 이전 값을 전달합니다. 미지원 op는 -ENOSYS이고 원자 명령을 실행하지 않습니다."
+      },
+      {
+        "title": "산술의 페이지 fault 제어",
+        "text": "arch_futex_atomic_op_inuser는 switch 전에 pagefault_disable, 뒤에 pagefault_enable을 호출합니다. 이 함수 본문에는 별도 access_ok 검사가 없습니다. 이것을 임의 사용자 주소 접근이 항상 안전하다는 뜻으로 해석하지 않고 호출 측 검증과 uaccess 예외 계약도 확인해야 합니다. pagefault_disable은 모든 메모리 접근이 반드시 성공한다는 보증이 아닙니다."
+      },
+      {
+        "title": "산술 출력",
+        "text": "페이지 fault 제어 구간을 닫은 뒤 ret0인 경우에만 *oval=oldval을 기록합니다. -ENOSYS와 접근 오류에서는 새 출력을 쓰지 않습니다. compare·wake 단계가 이 산술 helper 안에서 함께 수행되는 것은 아닙니다."
+      },
+      {
+        "title": "비교 교환",
+        "text": "cmpxchg는 먼저 access_ok(sizeof(u32))를 검사하고 실패면 -EFAULT입니다. ll.w로 읽은 val이 기대 oldval과 다르면 위치3으로 끝납니다. 같으면 newval을 t0에 옮겨 sc.w, 저장 실패0이면 다시 ll.w부터 비교까지 반복합니다. 접근 성공 ret0과 실제 값 교체 여부를 관측값으로 나누어 판단해야 합니다."
+      },
+      {
+        "title": "공통 종료 장벽",
+        "text": "cmpxchg의 정상 저장·비교 불일치·fault 복귀는 모두 위치3 뒤 __WEAK_LLSC_MB를 지나도록 작성되어 있습니다. 같은 트리의 barrier.h에서 이 매크로는 CONFIG_SMP일 때 dbar0x700 문자열이고 아니면 빈 줄입니다. 산술 매크로에는 이 명시적 종료 매크로가 없으므로 두 본문이 동일하다고 설명하지 않습니다."
+      },
+      {
+        "title": "접근·출력 계약 차이",
+        "text": "cmpxchg 함수 자체에는 pagefault_disable/enable 호출이 없고, asm 종료 뒤 ret와 무관하게 *uval=val을 기록합니다. 초기 access_ok 실패만 이 대입 전에 돌아갑니다. 산술 helper의 조건부 출력과 차이가 있어 오류 반환에서 관측값 유효성이나 보존을 가정하면 안 됩니다. 외부 호출 문맥의 fault 제어는 별도입니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "ISA별 조건부 저장 성공값, LL/SC 후보 재계산, 예외 복귀와 장벽 위치, 페이지 fault 제어와 주소 검사의 구분, 출력 계약을 학습합니다. 코드를 대조한 수업이며 실제 LoongArch 하드웨어에서 실행하거나 오류를 주입한 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 구현의 sc.w 결과가0이면?",
+        "options": [
+          "저장 실패로 ll.w부터 재시도한다",
+          "저장 성공으로 즉시 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "원문은 beqz $t0,1b입니다. RISC-V sc의 실패 판정 방향과 반대이므로 다른 ISA에서 본 규칙을 기계적으로 적용하면 안 됩니다."
+      },
+      {
+        "prompt": "산술 helper와 cmpxchg 모두 내부에서 pagefault_disable을 호출하는가?",
+        "options": [
+          "그렇다. 함수 이름에 inatomic이면 자동 호출된다",
+          "아니다. 이 파일에서는 산술 helper에만 그 쌍이 있다"
+        ],
+        "answer": 1,
+        "explanation": "cmpxchg 본문은 access_ok와 asm·출력 대입이며 pagefault 제어 쌍은 없습니다. 호출자의 외부 보호와 내부 본문을 구분합니다."
+      },
+      {
+        "prompt": "비교 불일치도 cmpxchg의 __WEAK_LLSC_MB 지점을 통과하는가?",
+        "options": [
+          "그렇다. 분기가 위치3으로 간다",
+          "아니다. 모든 비교 불일치가 장벽 뒤로 건너뛴다"
+        ],
+        "answer": 0,
+        "explanation": "bne의 목적지는3f이고 그 다음에 장벽 매크로가 있습니다. ARM64에서 본 다른 레이블 구조와 구분해야 합니다."
+      },
+      {
+        "prompt": "cmpxchg 오류에서 uval은 항상 보존되는가?",
+        "options": [
+          "그렇다. if(!ret) 조건이 모든 출력을 감싼다",
+          "아니다. asm fault 후 공통 대입이 실행된다"
+        ],
+        "answer": 1,
+        "explanation": "if(!ret)는 산술 helper 출력에 있습니다. cmpxchg는 ret 검사 없이 *uval=val이므로 오류에서 그 값을 성공 관측값으로 사용하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2020-2022 Loongson Technology Corporation Limited\n */\n#ifndef _ASM_FUTEX_H\n#define _ASM_FUTEX_H\n\n#include <linux/futex.h>\n#include <linux/uaccess.h>\n#include <asm/asm-extable.h>\n#include <asm/barrier.h>\n#include <asm/errno.h>\n\n#define __futex_atomic_op(insn, ret, oldval, uaddr, oparg)\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t__asm__ __volatile__(\t\t\t\t\t\t\\\n\t\"1:\tll.w\t%1, %4 # __futex_atomic_op\\n\"\t\t\\\n\t\"\t\" insn\t\"\t\t\t\t\\n\"\t\\\n\t\"2:\tsc.w\t$t0, %2\t\t\t\t\\n\"\t\\\n\t\"\tbeqz\t$t0, 1b\t\t\t\t\\n\"\t\\\n\t\"3:\t\t\t\t\t\t\\n\"\t\\\n\t_ASM_EXTABLE_UACCESS_ERR(1b, 3b, %0)\t\t\t\\\n\t_ASM_EXTABLE_UACCESS_ERR(2b, 3b, %0)\t\t\t\\\n\t: \"=r\" (ret), \"=&r\" (oldval),\t\t\t\t\\\n\t  \"=ZC\" (*uaddr)\t\t\t\t\t\\\n\t: \"0\" (0), \"ZC\" (*uaddr), \"Jr\" (oparg)\t\t\t\\\n\t: \"memory\", \"t0\");\t\t\t\t\t\\\n}\n\nstatic inline int\narch_futex_atomic_op_inuser(int op, int oparg, int *oval, u32 __user *uaddr)\n{\n\tint oldval = 0, ret = 0;\n\n\tpagefault_disable();\n\n\tswitch (op) {\n\tcase FUTEX_OP_SET:\n\t\t__futex_atomic_op(\"move $t0, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_ADD:\n\t\t__futex_atomic_op(\"add.w $t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_OR:\n\t\t__futex_atomic_op(\"or\t$t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tcase FUTEX_OP_ANDN:\n\t\t__futex_atomic_op(\"and\t$t0, %1, %z5\", ret, oldval, uaddr, ~oparg);\n\t\tbreak;\n\tcase FUTEX_OP_XOR:\n\t\t__futex_atomic_op(\"xor\t$t0, %1, %z5\", ret, oldval, uaddr, oparg);\n\t\tbreak;\n\tdefault:\n\t\tret = -ENOSYS;\n\t}\n\n\tpagefault_enable();\n\n\tif (!ret)\n\t\t*oval = oldval;\n\n\treturn ret;\n}\n\nstatic inline int\nfutex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr, u32 oldval, u32 newval)\n{\n\tint ret = 0;\n\tu32 val = 0;\n\n\tif (!access_ok(uaddr, sizeof(u32)))\n\t\treturn -EFAULT;\n\n\t__asm__ __volatile__(\n\t\"# futex_atomic_cmpxchg_inatomic\t\t\t\\n\"\n\t\"1:\tll.w\t%1, %3\t\t\t\t\t\\n\"\n\t\"\tbne\t%1, %z4, 3f\t\t\t\t\\n\"\n\t\"\tmove\t$t0, %z5\t\t\t\t\\n\"\n\t\"2:\tsc.w\t$t0, %2\t\t\t\t\t\\n\"\n\t\"\tbeqz\t$t0, 1b\t\t\t\t\t\\n\"\n\t\"3:\t\t\t\t\t\t\t\\n\"\n\t__WEAK_LLSC_MB\n\t_ASM_EXTABLE_UACCESS_ERR(1b, 3b, %0)\n\t_ASM_EXTABLE_UACCESS_ERR(2b, 3b, %0)\n\t: \"+r\" (ret), \"=&r\" (val), \"=ZC\" (*uaddr)\n\t: \"ZC\" (*uaddr), \"Jr\" (oldval), \"Jr\" (newval)\n\t: \"memory\", \"t0\");\n\n\t*uval = val;\n\n\treturn ret;\n}\n\n#endif /* _ASM_FUTEX_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "6cc799a01a6f402578b1b0990abaf4737ba0120c1c1e44dc664142b9828de58c",
+      "scope": "whole-file",
+      "line_count": 94,
+      "authoring_source": "course/file_units/futex_loongarch_atomic.py",
+      "sections": [
+        "전체 구성",
+        "산술의 LL/SC",
+        "asm 제약과 오류",
+        "다섯 산술 선택",
+        "산술의 페이지 fault 제어",
+        "산술 출력",
+        "비교 교환",
+        "공통 종료 장벽",
+        "접근·출력 계약 차이",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/loongarch/include/asm/futex.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 신호등 색도 장치마다 약속을 읽어야 해요. 여기서는 저장 결과 0이 재시도 표시예요.",
+    "meaning": "LoongArch futex의 조건부 저장 결과와 오류 뒤 출력 조건을 읽어요.",
+    "exercise": "sc.w 결과 0, 기대값 불일치, 실제 접근 오류의 이동 위치를 표시해 보세요."
+  },
+  "goal": "LoongArch futex의 조건부 저장 결과와 오류 뒤 출력 조건을 읽어요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "sc.w 결과 0, 기대값 불일치, 실제 접근 오류의 이동 위치를 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "6073ed2ebc511bf1e596893e6c79963f9db0579ceda446fa34ac4881cd9efce4",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

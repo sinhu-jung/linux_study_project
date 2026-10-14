@@ -5,58 +5,66 @@
   "area": "헤더 계층 · 아키텍처 추상화 · 자원 구간 · 인터럽트 상태",
   "track": "files",
   "kind": "kernel",
-  "intro": "assembly 제외 조건과 아키텍처 include, begin/end 두 선언을 전체 범위로 읽습니다.",
+  "intro": "vDSO 갱신 begin·end의 IRQ 상태 전달과 선언 역할을 설명합니다.",
   "guide": [
-    "공통 갱신 API와 아키텍처별 지원을 연결하되 호출자가 시작·종료 구간과 반환 상태를 정확히 짝지어야 합니다.",
-    "vDSO 데이터를 수정하는 아키텍처 코드가 사용하는 내부 인터페이스를 파악합니다."
+    "IRQ는 하드웨어 인터럽트 요청입니다.",
+    "flags는 여기서 원래 인터럽트 상태를 기억한 값입니다.",
+    "함수 원형은 호출 약속을 선언하며 그 자체로 실행되지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일",
-      "text": "GPL-2.0과 __VDSO_VSYSCALL_H guard 안에 __ASSEMBLY__ 제외 조건이 있습니다. C 문맥에서 asm/vdso/vsyscall.h를 포함한 뒤 두 함수만 선언합니다. 자체 데이터 구조나 inline 구현은 없습니다."
+      "text": "이 헤더는 C 전용 조건 안에서 CPU별 헤더를 포함하고 함수 둘을 선언합니다. 자체 구조체나 인라인 구현은 없습니다."
     },
     {
       "title": "아키텍처 include",
-      "text": "asm/vdso/vsyscall.h가 플랫폼별 연결을 제공합니다. 이 공통 파일을 읽었다고 모든 아키텍처 hook의 구현을 읽은 것은 아닙니다. __ASSEMBLY__ 조건은 함수 선언뿐 아니라 해당 include에도 적용됩니다."
+      "text": "asm/vdso/vsyscall.h가 플랫폼별 연결을 제공합니다. 그 include도 어셈블리 제외 조건 안에 있습니다. 공통 헤더를 읽은 것이 모든 플랫폼 구현을 읽은 것은 아닙니다."
     },
     {
       "title": "Begin과 end 시그니처",
-      "text": "vdso_update_begin은 인자 없이 unsigned long을 반환하고 vdso_update_end는 unsigned long flags를 받아 void입니다. 관련 kernel/time/vsyscall.c의 계약에 따르면 반환값은 저장된 interrupt 상태이며 end에 전달해야 합니다. 임의로 0을 넘기거나 단순 성공 코드로 해석하면 안 됩니다."
+      "text": "begin은 인수 없이 unsigned long을 반환하고 end는 그 flags를 받아 끝냅니다. 관련 구현에서 이 값은 저장된 인터럽트 상태이므로 성공 0·1로 읽거나 임의 0으로 대체하면 안 됩니다."
     },
     {
       "title": "선언과 동작의 분리",
-      "text": "실제 begin은 writer 잠금·IRQ 보호와 sequence 시작을, end는 sequence 종료·아키텍처 sync·잠금 해제·IRQ 복원을 수행합니다. 이 헤더는 그 함수를 선언할 뿐 자동으로 구간을 열지 않습니다. include guard도 런타임 중첩 호출이나 begin/end 누락을 방지하지 않습니다."
+      "text": "실제 시작은 쓰기 잠금·인터럽트 보호·sequence 시작을, 끝은 sequence 종료·플랫폼 동기화·잠금 해제·인터럽트 복원을 연결합니다. 선언 자체나 헤더 guard가 실행 중 짝 누락과 잘못된 중첩을 막지는 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "vdso_update_begin의 반환값은 무엇으로 사용해야 하는가?",
+      "prompt": "begin 결과는 무엇에 써야 하나요?",
       "options": [
+        "대응 end에 넘길 저장된 IRQ flags로 씁니다.",
+        "0 실패·1 성공의 bool로만 씁니다."
+      ],
+      "answer": 0,
+      "explanation": "원래 인터럽트 상태 복원에 필요한 값입니다.",
+      "original_prompt": "vdso_update_begin의 반환값은 무엇으로 사용해야 하는가?",
+      "original_options": [
         "대응하는 vdso_update_end에 전달할 저장된 IRQ flags로 사용한다",
         "0이면 실패, 1이면 성공인 bool로만 사용한다"
       ],
-      "answer": 0,
-      "explanation": "관련 구현과 함수 선언의 flags 인자가 연결됩니다. 원래 interrupt 상태 복원에 필요한 값입니다."
+      "original_explanation": "관련 구현과 함수 선언의 flags 인자가 연결됩니다. 원래 interrupt 상태 복원에 필요한 값입니다."
     },
     {
-      "prompt": "__ASSEMBLY__이면 이 파일에서 아키텍처 vsyscall 헤더를 포함하는가?",
+      "prompt": "어셈블리 문맥에서도 CPU별 헤더를 포함하나요?",
       "options": [
+        "네. 선언만 제외합니다.",
+        "아니요. include도 C 전용 조건 안입니다."
+      ],
+      "answer": 1,
+      "explanation": "전처리 경계가 include와 선언 둘을 함께 감쌉니다.",
+      "original_prompt": "__ASSEMBLY__이면 이 파일에서 아키텍처 vsyscall 헤더를 포함하는가?",
+      "original_options": [
         "그렇다. 함수 선언만 제외하고 include는 항상 실행한다",
         "아니다. 그 include도 C 문맥 조건 안에 있다"
       ],
-      "answer": 1,
-      "explanation": "조건부 전처리 경계가 include와 두 선언을 모두 둘러쌉니다."
+      "original_explanation": "조건부 전처리 경계가 include와 두 선언을 모두 둘러쌉니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "begin 결과를 flags에 보관하고 대응 end에 넘기는 짝을 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_VSYSCALL_H\n#define __VDSO_VSYSCALL_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/vdso/vsyscall.h>\n\nunsigned long vdso_update_begin(void);\nvoid vdso_update_end(unsigned long flags);\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __VDSO_VSYSCALL_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/vsyscall.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-2a8c8985365c0a77",
+    "path": "include/vdso/vsyscall.h",
+    "title": "vDSO 갱신 선언: 아키텍처 연결과 IRQ flags 전달",
+    "area": "헤더 계층 · 아키텍처 추상화 · 자원 구간 · 인터럽트 상태",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "assembly 제외 조건과 아키텍처 include, begin/end 두 선언을 전체 범위로 읽습니다.",
+    "guide": [
+      "공통 갱신 API와 아키텍처별 지원을 연결하되 호출자가 시작·종료 구간과 반환 상태를 정확히 짝지어야 합니다.",
+      "vDSO 데이터를 수정하는 아키텍처 코드가 사용하는 내부 인터페이스를 파악합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0과 __VDSO_VSYSCALL_H guard 안에 __ASSEMBLY__ 제외 조건이 있습니다. C 문맥에서 asm/vdso/vsyscall.h를 포함한 뒤 두 함수만 선언합니다. 자체 데이터 구조나 inline 구현은 없습니다."
+      },
+      {
+        "title": "아키텍처 include",
+        "text": "asm/vdso/vsyscall.h가 플랫폼별 연결을 제공합니다. 이 공통 파일을 읽었다고 모든 아키텍처 hook의 구현을 읽은 것은 아닙니다. __ASSEMBLY__ 조건은 함수 선언뿐 아니라 해당 include에도 적용됩니다."
+      },
+      {
+        "title": "Begin과 end 시그니처",
+        "text": "vdso_update_begin은 인자 없이 unsigned long을 반환하고 vdso_update_end는 unsigned long flags를 받아 void입니다. 관련 kernel/time/vsyscall.c의 계약에 따르면 반환값은 저장된 interrupt 상태이며 end에 전달해야 합니다. 임의로 0을 넘기거나 단순 성공 코드로 해석하면 안 됩니다."
+      },
+      {
+        "title": "선언과 동작의 분리",
+        "text": "실제 begin은 writer 잠금·IRQ 보호와 sequence 시작을, end는 sequence 종료·아키텍처 sync·잠금 해제·IRQ 복원을 수행합니다. 이 헤더는 그 함수를 선언할 뿐 자동으로 구간을 열지 않습니다. include guard도 런타임 중첩 호출이나 begin/end 누락을 방지하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "vdso_update_begin의 반환값은 무엇으로 사용해야 하는가?",
+        "options": [
+          "대응하는 vdso_update_end에 전달할 저장된 IRQ flags로 사용한다",
+          "0이면 실패, 1이면 성공인 bool로만 사용한다"
+        ],
+        "answer": 0,
+        "explanation": "관련 구현과 함수 선언의 flags 인자가 연결됩니다. 원래 interrupt 상태 복원에 필요한 값입니다."
+      },
+      {
+        "prompt": "__ASSEMBLY__이면 이 파일에서 아키텍처 vsyscall 헤더를 포함하는가?",
+        "options": [
+          "그렇다. 함수 선언만 제외하고 include는 항상 실행한다",
+          "아니다. 그 include도 C 문맥 조건 안에 있다"
+        ],
+        "answer": 1,
+        "explanation": "조건부 전처리 경계가 include와 두 선언을 모두 둘러쌉니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_VSYSCALL_H\n#define __VDSO_VSYSCALL_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/vdso/vsyscall.h>\n\nunsigned long vdso_update_begin(void);\nvoid vdso_update_end(unsigned long flags);\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __VDSO_VSYSCALL_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "375ca69ddc4bc45dad4153430b33a7efdd9099f51e857bfff14cb89bca61fe12",
+      "scope": "whole-file",
+      "line_count": 14,
+      "authoring_source": "course/file_units/vdso_sequence_helpers.py",
+      "sections": [
+        "전체 파일",
+        "아키텍처 include",
+        "Begin과 end 시그니처",
+        "선언과 동작의 분리"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/vsyscall.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "게시판 수정 시작 때 맡겨 둔 인터럽트 상태표를 끝날 때 그대로 돌려줘야 원래 환경으로 돌아갈 수 있습니다. begin의 결과는 단순 성공 표시가 아닙니다.",
+    "meaning": "vDSO 갱신 begin·end의 IRQ 상태 전달과 선언 역할을 설명합니다.",
+    "exercise": "begin 결과를 flags에 보관하고 대응 end에 넘기는 짝을 적어 보세요."
+  },
+  "goal": "vDSO 갱신 begin·end의 IRQ 상태 전달과 선언 역할을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "begin 결과를 flags에 보관하고 대응 end에 넘기는 짝을 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "b8ed3a9d2ab49055643510b42fc04ef58b2cf71fb1592753830b0c023914e828",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

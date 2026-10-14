@@ -5,71 +5,85 @@
   "area": "열거형 · 조건부 컴파일 · 플랫폼 확장 · sentinel · 인덱스 범위",
   "track": "files",
   "kind": "kernel",
-  "intro": "enum의 기본값·조건부 확장·상한·특수값을 전체 소스로 읽습니다.",
+  "intro": "공통 clock mode enum의 아키텍처 확장과 MAX·TIMENS의 다른 의미를 설명합니다.",
   "guide": [
-    "일반 모드 집합의 끝을 나타내는 값과 별도 처리 경로를 지시하는 sentinel은 같은 종류의 인덱스가 아닙니다.",
-    "공유 vDSO 데이터의 clock_mode를 실제 하드웨어 선택 또는 namespace 처리로 해석하는 기준을 이해합니다."
+    "vDSO는 일부 커널 정보를 사용자 쪽에서 빠르게 읽는 도움 코드입니다. 공유 자료의 clock_mode는 하드웨어 경로나 namespace 시간 경로를 고르는 표식입니다.",
+    "enum은 이름에 정수 값을 붙이는 목록입니다. 아키텍처별 모드 이름은 조건부 헤더의 매크로가 넣으므로 모든 플랫폼에서 같은 목록은 아닙니다.",
+    "sentinel은 보통 값과 구분되는 특별 표식입니다. TIMENS=INT_MAX를 지원 시계 개수나 일반 배열의 마지막 번호로 해석하지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일과 의존성",
-      "text": "GPL-2.0과 guard, vdso/limits.h include, 조건부 아키텍처 include와 enum vdso_clock_mode가 전부입니다. 하드웨어 counter를 읽는 함수나 mode 유효성을 검사하는 실행 코드는 없습니다. 이 파일에는 __ASSEMBLY__로 C enum을 감싸는 별도 분기도 없습니다."
+      "text": "GPL-2.0과 guard, vdso/limits.h, 조건부 아키텍처 헤더, enum vdso_clock_mode가 전체입니다. 장치 계수기를 읽거나 모드 유효성을 검사하는 실행 함수는 없습니다. C enum을 __ASSEMBLY__ 조건으로 감싸는 별도 분기도 없습니다."
     },
     {
       "title": "기본값과 아키텍처 확장",
-      "text": "VDSO_CLOCKMODE_NONE은 첫 열거자이므로 0입니다. CONFIG_GENERIC_GETTIMEOFDAY가 정의되면 asm/vdso/clocksource.h를 포함하고 VDSO_ARCH_CLOCKMODES를 enum 안에 삽입합니다. 구체적인 하드웨어 모드 이름과 값은 아키텍처 매크로의 확장에 달려 있으므로 모든 플랫폼에서 같은 목록이라고 가정하지 않습니다."
+      "text": "첫 열거자 VDSO_CLOCKMODE_NONE은 자동으로 0입니다. CONFIG_GENERIC_GETTIMEOFDAY가 있으면 asm/vdso/clocksource.h를 포함하고 VDSO_ARCH_CLOCKMODES를 enum 안에 펼칩니다. 구체적인 하드웨어 이름·값은 아키텍처의 매크로 내용에 달려 있어 모든 플랫폼이 같은 목록이라고 가정하지 않습니다."
     },
     {
       "title": "일반 모드 끝과 비활성 구성",
-      "text": "VDSO_CLOCKMODE_MAX는 아키텍처 모드가 있으면 그 뒤에 옵니다. GENERIC_GETTIMEOFDAY가 없으면 NONE 바로 다음이어서 값은 1입니다. 이 enum의 MAX를 유효한 하드웨어 시계를 뜻하는 항목으로 자동 해석하지 않습니다. 모드 개수나 인덱스 검사는 실제 사용 코드를 확인해야 합니다."
+      "text": "VDSO_CLOCKMODE_MAX는 아키텍처 모드 뒤에 옵니다. GENERIC_GETTIMEOFDAY가 없으면 NONE 다음이라 1입니다. 이름이 MAX라고 유효한 하드웨어 시계 한 종류로 자동 해석하지 않습니다. 실제 개수 계산이나 인덱스 검사는 사용하는 코드를 봐야 합니다."
     },
     {
       "title": "Namespace 특수값",
-      "text": "VDSO_CLOCKMODE_TIMENS는 INT_MAX로 명시적으로 지정됩니다. 주석은 time namespace VDSO를 나타내는 표시라고 설명합니다. 일반 하드웨어 모드 목록 뒤의 연속 배열 슬롯을 할당하려는 값이 아니므로 이 값까지 배열을 확장하거나 일반 MAX 범위 검사만으로 의미를 모두 설명하면 안 됩니다. 관련 datapage 계약에서는 seq=1과 함께 namespace 처리 경로를 표시합니다."
+      "text": "VDSO_CLOCKMODE_TIMENS는 INT_MAX를 명시합니다. 시간 namespace용 vDSO를 나타내는 표식이지 일반 모드 뒤의 연속 배열 칸을 크게 늘리려는 값이 아닙니다. 이 값까지 배열을 확장하거나 일반 MAX 범위 검사만으로 모든 의미를 설명하면 안 됩니다. 관련 datapage 약속에서는 seq=1과 함께 namespace 처리 길을 알립니다."
     },
     {
       "title": "검증 범위",
-      "text": "전체 include·조건·열거자를 설명했습니다. 앞서 읽은 limits 헤더의 INT_MAX를 재사용하지만 그 파일을 새로 작성한 것으로 중복 집계하지 않습니다. 각 아키텍처 모드 정의나 사용자 reader의 모든 분기까지 검증한 자료는 아닙니다."
+      "text": "모든 include·조건·열거자를 읽었습니다. limits 헤더의 INT_MAX를 가져다 쓰지만 그 파일을 새로 작성한 것으로 중복 집계하지 않습니다. 각 아키텍처 모드 본문이나 사용자 읽기 코드의 모든 갈림길까지 검증한 자료는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "GENERIC_GETTIMEOFDAY가 없을 때 NONE과 MAX의 값은?",
+      "prompt": "GENERIC_GETTIMEOFDAY가 없으면 NONE과 MAX는 각각 얼마일까요?",
       "options": [
+        "0과 1입니다.",
+        "둘 다 INT_MAX입니다."
+      ],
+      "answer": 0,
+      "explanation": "아키텍처 모드가 빠지면 첫 0 다음은 1입니다. TIMENS만 큰 값을 명시합니다.",
+      "original_prompt": "GENERIC_GETTIMEOFDAY가 없을 때 NONE과 MAX의 값은?",
+      "original_options": [
         "각각 0과 1이다",
         "둘 다 INT_MAX이다"
       ],
-      "answer": 0,
-      "explanation": "조건부 아키텍처 열거자들이 빠지면 첫 값 0 다음의 자동 값이 1입니다. TIMENS만 INT_MAX로 명시합니다."
+      "original_explanation": "조건부 아키텍처 열거자들이 빠지면 첫 값 0 다음의 자동 값이 1입니다. TIMENS만 INT_MAX로 명시합니다."
     },
     {
-      "prompt": "VDSO_ARCH_CLOCKMODES의 모든 모드 이름은 이 공통 파일에 직접 나열되어 있는가?",
+      "prompt": "모든 아키텍처 모드 이름을 공통 파일이 직접 나열할까요?",
       "options": [
+        "네. 모든 플랫폼의 하드웨어 이름을 같게 고정합니다.",
+        "아니요. 조건부 아키텍처 헤더의 매크로가 제공합니다."
+      ],
+      "answer": 1,
+      "explanation": "플랫폼별 목록을 전처리로 삽입합니다. 공통 틀과 구체 이름을 구분합니다.",
+      "original_prompt": "VDSO_ARCH_CLOCKMODES의 모든 모드 이름은 이 공통 파일에 직접 나열되어 있는가?",
+      "original_options": [
         "그렇다. 모든 아키텍처에서 같은 하드웨어 이름을 고정한다",
         "아니다. 조건부 아키텍처 헤더의 매크로가 제공한다"
       ],
-      "answer": 1,
-      "explanation": "전처리 확장으로 플랫폼별 모드 집합을 enum에 삽입합니다. 공통 enum 틀과 구체 구현을 구분합니다."
+      "original_explanation": "전처리 확장으로 플랫폼별 모드 집합을 enum에 삽입합니다. 공통 enum 틀과 구체 구현을 구분합니다."
     },
     {
-      "prompt": "TIMENS=INT_MAX를 일반 clock 배열의 마지막 슬롯 번호로 보아도 되는가?",
+      "prompt": "TIMENS=INT_MAX는 일반 clock 배열의 마지막 번호일까요?",
       "options": [
+        "아니요. namespace 경로의 특수값입니다.",
+        "네. INT_MAX개 시계를 지원한다는 뜻입니다."
+      ],
+      "answer": 0,
+      "explanation": "큰 명시값은 일반 모드와 구분하는 이름표입니다. 크기를 지원 개수로 읽지 않습니다.",
+      "original_prompt": "TIMENS=INT_MAX를 일반 clock 배열의 마지막 슬롯 번호로 보아도 되는가?",
+      "original_options": [
         "아니다. namespace 경로를 나타내는 특수값이다",
         "그렇다. INT_MAX개 clock을 지원한다는 뜻이다"
       ],
-      "answer": 0,
-      "explanation": "큰 명시값은 일반 모드 집합과 구분하는 표시입니다. 값의 크기를 지원 개수로 해석하면 안 됩니다."
+      "original_explanation": "큰 명시값은 일반 모드 집합과 구분하는 표시입니다. 값의 크기를 지원 개수로 해석하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "GENERIC_GETTIMEOFDAY가 꺼졌을 때 enum 값을 계산하고 TIMENS가 일반 배열 칸 번호가 아닌 이유를 말해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_CLOCKSOURCE_H\n#define __VDSO_CLOCKSOURCE_H\n\n#include <vdso/limits.h>\n\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n#include <asm/vdso/clocksource.h>\n#endif /* CONFIG_GENERIC_GETTIMEOFDAY */\n\nenum vdso_clock_mode {\n\tVDSO_CLOCKMODE_NONE,\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n\tVDSO_ARCH_CLOCKMODES,\n#endif\n\tVDSO_CLOCKMODE_MAX,\n\n\t/* Indicator for time namespace VDSO */\n\tVDSO_CLOCKMODE_TIMENS = INT_MAX\n};\n\n#endif /* __VDSO_CLOCKSOURCE_H */\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/clocksource.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-cd2fd407d67ba2e5",
+    "path": "include/vdso/clocksource.h",
+    "title": "vDSO clock mode: 아키텍처 확장과 namespace sentinel",
+    "area": "열거형 · 조건부 컴파일 · 플랫폼 확장 · sentinel · 인덱스 범위",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "enum의 기본값·조건부 확장·상한·특수값을 전체 소스로 읽습니다.",
+    "guide": [
+      "일반 모드 집합의 끝을 나타내는 값과 별도 처리 경로를 지시하는 sentinel은 같은 종류의 인덱스가 아닙니다.",
+      "공유 vDSO 데이터의 clock_mode를 실제 하드웨어 선택 또는 namespace 처리로 해석하는 기준을 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 의존성",
+        "text": "GPL-2.0과 guard, vdso/limits.h include, 조건부 아키텍처 include와 enum vdso_clock_mode가 전부입니다. 하드웨어 counter를 읽는 함수나 mode 유효성을 검사하는 실행 코드는 없습니다. 이 파일에는 __ASSEMBLY__로 C enum을 감싸는 별도 분기도 없습니다."
+      },
+      {
+        "title": "기본값과 아키텍처 확장",
+        "text": "VDSO_CLOCKMODE_NONE은 첫 열거자이므로 0입니다. CONFIG_GENERIC_GETTIMEOFDAY가 정의되면 asm/vdso/clocksource.h를 포함하고 VDSO_ARCH_CLOCKMODES를 enum 안에 삽입합니다. 구체적인 하드웨어 모드 이름과 값은 아키텍처 매크로의 확장에 달려 있으므로 모든 플랫폼에서 같은 목록이라고 가정하지 않습니다."
+      },
+      {
+        "title": "일반 모드 끝과 비활성 구성",
+        "text": "VDSO_CLOCKMODE_MAX는 아키텍처 모드가 있으면 그 뒤에 옵니다. GENERIC_GETTIMEOFDAY가 없으면 NONE 바로 다음이어서 값은 1입니다. 이 enum의 MAX를 유효한 하드웨어 시계를 뜻하는 항목으로 자동 해석하지 않습니다. 모드 개수나 인덱스 검사는 실제 사용 코드를 확인해야 합니다."
+      },
+      {
+        "title": "Namespace 특수값",
+        "text": "VDSO_CLOCKMODE_TIMENS는 INT_MAX로 명시적으로 지정됩니다. 주석은 time namespace VDSO를 나타내는 표시라고 설명합니다. 일반 하드웨어 모드 목록 뒤의 연속 배열 슬롯을 할당하려는 값이 아니므로 이 값까지 배열을 확장하거나 일반 MAX 범위 검사만으로 의미를 모두 설명하면 안 됩니다. 관련 datapage 계약에서는 seq=1과 함께 namespace 처리 경로를 표시합니다."
+      },
+      {
+        "title": "검증 범위",
+        "text": "전체 include·조건·열거자를 설명했습니다. 앞서 읽은 limits 헤더의 INT_MAX를 재사용하지만 그 파일을 새로 작성한 것으로 중복 집계하지 않습니다. 각 아키텍처 모드 정의나 사용자 reader의 모든 분기까지 검증한 자료는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "GENERIC_GETTIMEOFDAY가 없을 때 NONE과 MAX의 값은?",
+        "options": [
+          "각각 0과 1이다",
+          "둘 다 INT_MAX이다"
+        ],
+        "answer": 0,
+        "explanation": "조건부 아키텍처 열거자들이 빠지면 첫 값 0 다음의 자동 값이 1입니다. TIMENS만 INT_MAX로 명시합니다."
+      },
+      {
+        "prompt": "VDSO_ARCH_CLOCKMODES의 모든 모드 이름은 이 공통 파일에 직접 나열되어 있는가?",
+        "options": [
+          "그렇다. 모든 아키텍처에서 같은 하드웨어 이름을 고정한다",
+          "아니다. 조건부 아키텍처 헤더의 매크로가 제공한다"
+        ],
+        "answer": 1,
+        "explanation": "전처리 확장으로 플랫폼별 모드 집합을 enum에 삽입합니다. 공통 enum 틀과 구체 구현을 구분합니다."
+      },
+      {
+        "prompt": "TIMENS=INT_MAX를 일반 clock 배열의 마지막 슬롯 번호로 보아도 되는가?",
+        "options": [
+          "아니다. namespace 경로를 나타내는 특수값이다",
+          "그렇다. INT_MAX개 clock을 지원한다는 뜻이다"
+        ],
+        "answer": 0,
+        "explanation": "큰 명시값은 일반 모드 집합과 구분하는 표시입니다. 값의 크기를 지원 개수로 해석하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_CLOCKSOURCE_H\n#define __VDSO_CLOCKSOURCE_H\n\n#include <vdso/limits.h>\n\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n#include <asm/vdso/clocksource.h>\n#endif /* CONFIG_GENERIC_GETTIMEOFDAY */\n\nenum vdso_clock_mode {\n\tVDSO_CLOCKMODE_NONE,\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n\tVDSO_ARCH_CLOCKMODES,\n#endif\n\tVDSO_CLOCKMODE_MAX,\n\n\t/* Indicator for time namespace VDSO */\n\tVDSO_CLOCKMODE_TIMENS = INT_MAX\n};\n\n#endif /* __VDSO_CLOCKSOURCE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a1a27950295d26ba91befd38ef642bbe40f8fc4bd251e3684238111b88bd8ef1",
+      "scope": "whole-file",
+      "line_count": 22,
+      "authoring_source": "course/file_units/vdso_clock_modes.py",
+      "sections": [
+        "전체 파일과 의존성",
+        "기본값과 아키텍처 확장",
+        "일반 모드 끝과 비활성 구성",
+        "Namespace 특수값",
+        "검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/clocksource.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "목록 끝을 알리는 표시와 특별 통로로 가라는 표시는 다릅니다. vDSO clock mode도 일반 시계 모드의 끝과 시간 namespace를 나타내는 큰 특수값을 구분합니다.",
+    "meaning": "공통 clock mode enum의 아키텍처 확장과 MAX·TIMENS의 다른 의미를 설명합니다.",
+    "exercise": "GENERIC_GETTIMEOFDAY가 꺼졌을 때 enum 값을 계산하고 TIMENS가 일반 배열 칸 번호가 아닌 이유를 말해 보세요."
+  },
+  "goal": "공통 clock mode enum의 아키텍처 확장과 MAX·TIMENS의 다른 의미를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "GENERIC_GETTIMEOFDAY가 꺼졌을 때 enum 값을 계산하고 TIMENS가 일반 배열 칸 번호가 아닌 이유를 말해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_f.json",
+    "authoring_sha256": "d893c565458cd1cd70b766587ad674716296436773153c0e432f095c9f470fbc",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

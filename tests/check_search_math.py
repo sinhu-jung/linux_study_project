@@ -17,8 +17,12 @@ PREFIX = r'''
 #include <limits.h>
 #include <stdio.h>
 typedef int (*cmp_func_t)(const void *,const void *);
+#ifndef __always_inline
 #define __always_inline inline __attribute__((always_inline))
+#endif
+#ifndef __attribute_const__
 #define __attribute_const__ __attribute__((const))
+#endif
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 #define NOKPROBE_SYMBOL(x)

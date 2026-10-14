@@ -5,121 +5,147 @@
   "area": "빌드 도구 · 유클리드 알고리즘 · 기약분수 · 고정 소수점 · 코드 생성",
   "track": "files",
   "kind": "kernel",
-  "intro": "bc 스크립트 전체를 읽어 HZ별 분수와 MUL·ADJ·SHR 상수가 만들어지는 과정을 학습합니다.",
+  "intro": "시간 변환 상수 생성의 약분·올림·배율 탐색과 HZ 일치 검사를 설명합니다.",
   "guide": [
-    "빌드 시 정수 산술로 변환 계수를 계산하여 런타임 코드에서 상수 곱셈과 시프트를 사용할 수 있게 합니다.",
-    "generated/timeconst.h의 값이 어디서 오는지와 단위 변환의 반올림·정확도 전제를 이해합니다."
+    "bc는 계산용 언어입니다. 여기의 ^는 거듭제곱이며 C의 같은 기호가 뜻하는 XOR와 다릅니다.",
+    "NUM은 분자, DEN은 분모입니다. MUL은 곱할 계수, SHR은 오른쪽으로 옮길 비트 수, ADJ는 보정 계수입니다. 비트는 0 또는 1 한 자리입니다.",
+    "생성되는 결과는 C 헤더 글자입니다. 이 프로그램이 실행 중 커널 시간을 직접 바꾸는 것은 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체 실행 흐름",
-      "text": "GPL-2.0 표시 뒤 scale=0을 설정하고 gcd, fmul, fadj, fmuls, timeconst 다섯 함수를 정의합니다. 마지막 hz=read()로 입력을 읽어 timeconst(hz)를 호출합니다. 출력은 C 헤더 텍스트이며 스크립트가 직접 커널 시계를 변경하거나 파일 경로를 열어 쓰는 코드는 없습니다."
+      "text": "GPL 뒤 정수 나눗셈 설정과 gcd, fmul, fadj, fmuls, timeconst를 정의합니다. 마지막에 HZ 하나를 입력받아 상수 출력 함수를 부릅니다. 스크립트 안에 출력 파일 경로를 열거나 커널 시계를 수정하는 코드는 없습니다."
     },
     {
       "title": "정수 산술 환경",
-      "text": "scale=0은 나눗셈을 정수 자리까지 계산하도록 합니다. 여기의 ^는 bc 거듭제곱이므로 2^b는 2의 b승입니다. C 언어의 XOR 연산으로 읽으면 모든 생성식을 잘못 해석하게 됩니다. C의 고정 폭 정수식과 bc의 수 계산 환경을 구분합니다."
+      "text": "scale=0은 나눗셈을 정수 자리까지만 계산하게 합니다. bc의 2^b는 2의 b승입니다. C의 비트 XOR처럼 읽으면 생성식을 잘못 이해합니다. bc의 수 계산 환경과 C의 고정 비트 폭 계산도 구별해야 합니다."
     },
     {
       "title": "Gcd 유클리드 알고리즘",
-      "text": "gcd는 b가 0이 될 때까지 t=b, b=a%b, a=t를 반복하고 a를 반환합니다. 양의 HZ와 단위 배율에서 분자·분모의 공통 인수를 제거하는 데 사용됩니다. 나머지가 줄어드는 유클리드 알고리즘이며 모든 약수를 선형 탐색하는 방식이 아닙니다."
+      "text": "gcd는 b가 0이 될 때까지 a를 b로 나눈 나머지로 갱신하는 유클리드 알고리즘입니다. 두 수를 함께 나눌 가장 큰 수를 찾아 분자·분모를 약분합니다. 모든 약수를 하나씩 검사하는 방식이 아닙니다."
     },
     {
       "title": "올림된 역수 곱 계수",
-      "text": "fmul(b,n,d)는 (2^b*n+d-1)/d를 반환합니다. 양의 d와 비음수 분자에 대해 ceil(2^b*n/d)에 해당합니다. 런타임의 n/d 비율을 정수 곱과 오른쪽 shift로 근사할 때 사용하는 계수입니다. 이 함수 자체가 실제 입력 jiffies를 변환하지는 않습니다."
+      "text": "fmul은 (2^b×n+d-1)/d입니다. 양수 분모와 음수 아닌 분자에서 2^b×n/d를 올린 정수입니다. 나중에 곱셈과 비트 이동으로 비율을 적용할 계수를 만들며 이 함수 자체가 실제 jiffies 입력을 환산하는 것은 아닙니다."
     },
     {
       "title": "조정 계수",
-      "text": "fadj는 d를 d/gcd(n,d)로 줄인 뒤 2^b*(d-1)/d의 정수 몫을 반환합니다. 예를 들어 n/d=1000/300이면 줄인 분모는 3입니다. d가 1로 줄면 조정 계수는 0입니다. 원본 분자와 분모가 아니라 약분한 분모를 쓰는 점이 중요하며 생성된 ADJ를 어느 변환에 더하는지는 소비 코드가 정합니다."
+      "text": "fadj는 먼저 d를 gcd(n,d)로 나누어 약분한 분모를 씁니다. 그 뒤 2^b×(d-1)/d의 정수 몫을 구합니다. 1000/300이면 줄인 분모는 3이며 분모가 1이면 보정값은 0입니다. 생성된 ADJ를 어디에 더할지는 사용하는 코드가 정합니다."
     },
     {
       "title": "시프트 탐색",
-      "text": "fmuls는 s=0부터 fmul(s,n,d)를 구하다 값이 2^(b-1) 이상이면 s를 반환합니다. 사용처는 b=32이므로 실제 비교 기준은 2^31입니다. 주석의 하한 표기 2^b-1을 문자 그대로 2^b에서 1을 뺀 값으로 읽으면 본문의 2^(b-1)과 다릅니다. 주석은 signed 범위의 정확성과 unsigned 상위 절반의 최대 1 오차를 설명하지만 소비 연산의 입력 범위·overflow를 모두 검증하는 함수는 아닙니다."
+      "text": "fmuls는 이동 수 s를 0부터 늘리며 fmul이 2^(b-1) 이상인지 봅니다. b=32인 사용처의 기준은 2^31입니다. 주석의 괄호 없는 2^b-1을 2^b에서 1을 뺀 값으로 읽으면 실제 코드와 다릅니다. 주석의 정확도 설명도 모든 소비 식의 범위·넘침을 검사하는 기능은 아닙니다."
     },
     {
       "title": "출력 헤더의 자기 검증",
-      "text": "timeconst는 자동 생성 주석과 사용 HZ, KERNEL_TIMECONST_H guard, linux/param.h와 types.h include를 출력합니다. 이어 #if HZ != 입력값과 #error를 출력해 다른 설정에서 생성된 헤더 사용을 막습니다. 잘못된 HZ를 런타임에 발견하는 기능이 아니라 생성물의 컴파일 단계 검사입니다."
+      "text": "출력에는 자동 생성 설명과 입력 HZ, 중복 포함 방지, param·types 헤더가 있습니다. #if HZ != 입력값과 #error도 넣어 다른 설정으로 만든 상수표를 쓰면 컴파일에서 드러냅니다. 실행 중 틱에서 발견하는 방식이 아닙니다."
     },
     {
       "title": "잘못된 HZ 분기",
-      "text": "hz<2이면 Totally bogus HZ value라는 #error 줄을 출력합니다. 정상 분기의 나머지 상수와 마지막 #endif는 출력하지 않고 함수 끝 halt로 종료합니다. 잘못된 입력에서도 정상적으로 사용할 수 있는 완성 헤더를 생성하거나 자동으로 HZ를 교정하지 않습니다."
+      "text": "HZ<2이면 잘못된 HZ라는 #error를 출력합니다. 정상 상수와 마지막 #endif는 내지 않고 함수 끝 halt로 종료합니다. 잘못된 입력을 자동 교정하거나 정상적으로 사용 가능한 완성 헤더를 만드는 경로가 아닙니다."
     },
     {
       "title": "밀리초 양방향 상수",
-      "text": "정상 경로는 n/d=1000/hz와 hz/1000 각각에 대해 fmuls(32,...)로 s를 구하고 MUL32, ADJ32, SHR32를 출력합니다. 이름은 HZ_TO_MSEC와 MSEC_TO_HZ입니다. 이어 gcd(hz,1000)으로 약분하여 두 방향의 NUM과 DEN을 출력합니다. HZ=300이면 정방향 분수는 10/3, 역방향은 3/10입니다."
+      "text": "1000/hz와 hz/1000 각각의 이동 수와 MUL32·ADJ32·SHR32를 만듭니다. 이어 최대공약수로 약분한 두 방향 NUM/DEN을 출력합니다. HZ=300이면 틱→밀리초는 10/3, 반대는 3/10입니다."
     },
     {
       "title": "진법 전환",
-      "text": "MUL32와 ADJ32 출력 전 obase=16으로 바꾸어 U64_C(0x...) 형태의 16진수 C 상수를 만듭니다. shift와 분수 출력에는 obase=10으로 돌아갑니다. 이는 출력 숫자의 표기를 바꾸는 것이며 HZ를 16진수로 다시 해석하거나 커널 계산 단위를 바꾸는 연산이 아닙니다."
+      "text": "계수 출력 전 obase=16으로 바꾸어 U64_C(0x...) 모양의 16진수 글자를 만듭니다. 이동 수와 분수에는 다시 10진수를 씁니다. 이는 출력 표기를 바꾸는 것이며 입력 HZ를 새 진법으로 다시 해석하거나 시간 단위를 바꾸지 않습니다."
     },
     {
       "title": "마이크로초와 나노초 상수",
-      "text": "1000000/hz와 hz/1000000에 대해 같은 MUL32/ADJ32/SHR32 및 약분한 NUM/DEN 쌍을 만듭니다. 마지막 나노초는 gcd(hz,1000000000)을 이용한 HZ_TO_NSEC와 NSEC_TO_HZ의 NUM/DEN만 출력합니다. 이 파일은 나노초용 MUL32/ADJ32/SHR32 묶음을 생성하지 않습니다."
+      "text": "마이크로초는 1000000/hz와 그 역방향에 같은 계수·이동·분수 쌍을 만듭니다. 마지막 나노초는 1000000000과의 최대공약수로 NUM/DEN만 만듭니다. 반복 무늬가 비슷해도 나노초용 MUL32·ADJ32·SHR32는 이 파일에서 출력하지 않습니다."
     },
     {
       "title": "종료와 소비 코드 관계",
-      "text": "정상 분기는 헤더 guard를 닫고 timeconst 끝에서 halt합니다. read는 한 번이며 여러 HZ를 자동 순회하는 스크립트가 아닙니다. 생성 상수는 time.c나 jiffies 헤더의 설정별 식에서 사용되므로 ADJ가 생성됐다고 모든 소비 식이 반드시 ADJ를 더하는 것은 아닙니다."
+      "text": "정상 경로는 헤더의 닫는 줄을 내고 halt합니다. 입력을 한 번 읽으며 여러 HZ를 자동 순회하지 않습니다. 생성값은 time.c나 jiffies 헤더의 설정별 식에서 씁니다. ADJ가 생성된다고 모든 식이 반드시 더하는 것은 아닙니다."
     },
     {
       "title": "CS와 검증 범위",
-      "text": "빌드 시 계산과 런타임 계산의 분리, 유클리드 약분, 정수 올림, 역수 곱셈, 언어별 연산자 차이와 생성물 설정 일치 검사를 학습합니다. 전체 스크립트를 소스로 대조했지만 모든 가능한 HZ에 대해 bc 실행과 생성 C 산술을 전수 검증한 결과는 아닙니다."
+      "text": "빌드 때 미리 계산하는 일과 실행 중 계산, 최대공약수, 정수 올림, 곱과 이동으로 나눗셈을 대신하는 방법이 연결됩니다. 언어별 연산자와 생성물의 설정 일치도 중요합니다. 소스 대조를 모든 HZ의 bc 실행과 C 산술 전수 검사로 확대하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 스크립트의 2^b에서 ^는 무엇인가?",
+      "prompt": "이 파일의 ^는 무슨 연산인가요?",
       "options": [
+        "bc의 거듭제곱입니다.",
+        "C와 같은 비트 XOR입니다."
+      ],
+      "answer": 0,
+      "explanation": "계수 계산에 필요한 2의 b승을 뜻합니다.",
+      "original_prompt": "이 스크립트의 2^b에서 ^는 무엇인가?",
+      "original_options": [
         "bc의 거듭제곱 연산이다",
         "C와 같은 비트 XOR이다"
       ],
-      "answer": 0,
-      "explanation": "파일 언어는 bc입니다. 역수 곱셈 계수를 계산하려면 2의 b승이 필요합니다."
+      "original_explanation": "파일 언어는 bc입니다. 역수 곱셈 계수를 계산하려면 2의 b승이 필요합니다."
     },
     {
-      "prompt": "HZ=300이면 HZ_TO_MSEC의 약분된 NUM/DEN은?",
+      "prompt": "HZ=300의 틱→밀리초 분수는 무엇인가요?",
       "options": [
+        "3/10입니다.",
+        "10/3입니다."
+      ],
+      "answer": 1,
+      "explanation": "1000/300을 100으로 약분하며 3/10은 반대 방향입니다.",
+      "original_prompt": "HZ=300이면 HZ_TO_MSEC의 약분된 NUM/DEN은?",
+      "original_options": [
         "3/10이다",
         "10/3이다"
       ],
-      "answer": 1,
-      "explanation": "1000/300을 최대공약수 100으로 나눕니다. 3/10은 밀리초에서 HZ tick으로 돌아가는 역방향입니다."
+      "original_explanation": "1000/300을 최대공약수 100으로 나눕니다. 3/10은 밀리초에서 HZ tick으로 돌아가는 역방향입니다."
     },
     {
-      "prompt": "fmuls(32,n,d)가 비교하는 실제 계수 하한은?",
+      "prompt": "fmuls(32,n,d)의 실제 하한은 무엇인가요?",
       "options": [
+        "2^31입니다.",
+        "2^32-1입니다."
+      ],
+      "answer": 0,
+      "explanation": "본문은 2^(b-1)과 비교합니다.",
+      "original_prompt": "fmuls(32,n,d)가 비교하는 실제 계수 하한은?",
+      "original_options": [
         "2^31이다",
         "2^32-1이다"
       ],
-      "answer": 0,
-      "explanation": "본문은 2^(b-1)과 비교합니다. 주석의 괄호 없는 지수 표기를 실제 코드보다 우선해 해석하면 안 됩니다."
+      "original_explanation": "본문은 2^(b-1)과 비교합니다. 주석의 괄호 없는 지수 표기를 실제 코드보다 우선해 해석하면 안 됩니다."
     },
     {
-      "prompt": "나노초 변환에도 이 생성기가 MUL32/ADJ32/SHR32를 출력하는가?",
+      "prompt": "나노초에도 MUL32·ADJ32·SHR32를 내나요?",
       "options": [
+        "예. 모든 단위가 같습니다.",
+        "아니요. 약분한 NUM/DEN만 냅니다."
+      ],
+      "answer": 1,
+      "explanation": "마지막 블록에 없는 출력을 다른 패턴에서 추측하면 안 됩니다.",
+      "original_prompt": "나노초 변환에도 이 생성기가 MUL32/ADJ32/SHR32를 출력하는가?",
+      "original_options": [
         "그렇다. 모든 단위에 동일한 매크로 묶음을 출력한다",
         "아니다. 나노초에는 약분한 NUM/DEN 쌍을 출력한다"
       ],
-      "answer": 1,
-      "explanation": "마지막 블록은 gcd와 네 분수 매크로만 있습니다. 반복 패턴을 보고 없는 출력을 추정하지 않습니다."
+      "original_explanation": "마지막 블록은 gcd와 네 분수 매크로만 있습니다. 반복 패턴을 보고 없는 출력을 추정하지 않습니다."
     },
     {
-      "prompt": "생성 당시 HZ와 컴파일 당시 HZ가 다르면 어떻게 발견하는가?",
+      "prompt": "생성 HZ와 빌드 HZ의 차이는 어떻게 찾나요?",
       "options": [
+        "생성 헤더의 #if와 #error로 찾습니다.",
+        "첫 타이머 인터럽트가 자동 수정합니다."
+      ],
+      "answer": 0,
+      "explanation": "상수는 설정에 종속되므로 컴파일 단계에서 잘못된 재사용을 막습니다.",
+      "original_prompt": "생성 당시 HZ와 컴파일 당시 HZ가 다르면 어떻게 발견하는가?",
+      "original_options": [
         "생성 헤더의 #if와 #error로 검사한다",
         "실행 중 첫 timer interrupt가 자동으로 상수를 고친다"
       ],
-      "answer": 0,
-      "explanation": "상수는 빌드 설정에 종속됩니다. 생성물 안에 입력 HZ를 명시하여 잘못된 재사용을 컴파일 단계에서 드러냅니다."
+      "original_explanation": "상수는 빌드 설정에 종속됩니다. 생성물 안에 입력 HZ를 명시하여 잘못된 재사용을 컴파일 단계에서 드러냅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "HZ=300일 때 틱에서 밀리초로 가는 1000/300을 약분해 10/3을 구해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\nscale=0\n\ndefine gcd(a,b) {\n\tauto t;\n\twhile (b) {\n\t\tt = b;\n\t\tb = a % b;\n\t\ta = t;\n\t}\n\treturn a;\n}\n\n/* Division by reciprocal multiplication. */\ndefine fmul(b,n,d) {\n       return (2^b*n+d-1)/d;\n}\n\n/* Adjustment factor when a ceiling value is used.  Use as:\n   (imul * n) + (fmulxx * n + fadjxx) >> xx) */\ndefine fadj(b,n,d) {\n\tauto v;\n\td = d/gcd(n,d);\n\tv = 2^b*(d-1)/d;\n\treturn v;\n}\n\n/* Compute the appropriate mul/adj values as well as a shift count,\n   which brings the mul value into the range 2^b-1 <= x < 2^b.  Such\n   a shift value will be correct in the signed integer range and off\n   by at most one in the upper half of the unsigned range. */\ndefine fmuls(b,n,d) {\n\tauto s, m;\n\tfor (s = 0; 1; s++) {\n\t\tm = fmul(s,n,d);\n\t\tif (m >= 2^(b-1))\n\t\t\treturn s;\n\t}\n\treturn 0;\n}\n\ndefine timeconst(hz) {\n\tprint \"/* Automatically generated by kernel/time/timeconst.bc */\\n\"\n\tprint \"/* Time conversion constants for HZ == \", hz, \" */\\n\"\n\tprint \"\\n\"\n\n\tprint \"#ifndef KERNEL_TIMECONST_H\\n\"\n\tprint \"#define KERNEL_TIMECONST_H\\n\\n\"\n\n\tprint \"#include <linux/param.h>\\n\"\n\tprint \"#include <linux/types.h>\\n\\n\"\n\n\tprint \"#if HZ != \", hz, \"\\n\"\n\tprint \"#error \\qinclude/generated/timeconst.h has the wrong HZ value!\\q\\n\"\n\tprint \"#endif\\n\\n\"\n\n\tif (hz < 2) {\n\t\tprint \"#error Totally bogus HZ value!\\n\"\n\t} else {\n\t\ts=fmuls(32,1000,hz)\n\t\tobase=16\n\t\tprint \"#define HZ_TO_MSEC_MUL32\\tU64_C(0x\", fmul(s,1000,hz), \")\\n\"\n\t\tprint \"#define HZ_TO_MSEC_ADJ32\\tU64_C(0x\", fadj(s,1000,hz), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define HZ_TO_MSEC_SHR32\\t\", s, \"\\n\"\n\n\t\ts=fmuls(32,hz,1000)\n\t\tobase=16\n\t\tprint \"#define MSEC_TO_HZ_MUL32\\tU64_C(0x\", fmul(s,hz,1000), \")\\n\"\n\t\tprint \"#define MSEC_TO_HZ_ADJ32\\tU64_C(0x\", fadj(s,hz,1000), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define MSEC_TO_HZ_SHR32\\t\", s, \"\\n\"\n\n\t\tobase=10\n\t\tcd=gcd(hz,1000)\n\t\tprint \"#define HZ_TO_MSEC_NUM\\t\\t\", 1000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_MSEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define MSEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define MSEC_TO_HZ_DEN\\t\\t\", 1000/cd, \"\\n\"\n\t\tprint \"\\n\"\n\n\t\ts=fmuls(32,1000000,hz)\n\t\tobase=16\n\t\tprint \"#define HZ_TO_USEC_MUL32\\tU64_C(0x\", fmul(s,1000000,hz), \")\\n\"\n\t\tprint \"#define HZ_TO_USEC_ADJ32\\tU64_C(0x\", fadj(s,1000000,hz), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define HZ_TO_USEC_SHR32\\t\", s, \"\\n\"\n\n\t\ts=fmuls(32,hz,1000000)\n\t\tobase=16\n\t\tprint \"#define USEC_TO_HZ_MUL32\\tU64_C(0x\", fmul(s,hz,1000000), \")\\n\"\n\t\tprint \"#define USEC_TO_HZ_ADJ32\\tU64_C(0x\", fadj(s,hz,1000000), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define USEC_TO_HZ_SHR32\\t\", s, \"\\n\"\n\n\t\tobase=10\n\t\tcd=gcd(hz,1000000)\n\t\tprint \"#define HZ_TO_USEC_NUM\\t\\t\", 1000000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_USEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define USEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define USEC_TO_HZ_DEN\\t\\t\", 1000000/cd, \"\\n\"\n\n\t\tcd=gcd(hz,1000000000)\n\t\tprint \"#define HZ_TO_NSEC_NUM\\t\\t\", 1000000000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_NSEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define NSEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define NSEC_TO_HZ_DEN\\t\\t\", 1000000000/cd, \"\\n\"\n\t\tprint \"\\n\"\n\n\t\tprint \"#endif /* KERNEL_TIMECONST_H */\\n\"\n\t}\n\thalt\n}\n\nhz = read();\ntimeconst(hz)\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timeconst.bc"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8341481184052f16",
+    "path": "kernel/time/timeconst.bc",
+    "title": "시간 변환 상수 생성기: 최대공약수와 역수 곱셈",
+    "area": "빌드 도구 · 유클리드 알고리즘 · 기약분수 · 고정 소수점 · 코드 생성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "bc 스크립트 전체를 읽어 HZ별 분수와 MUL·ADJ·SHR 상수가 만들어지는 과정을 학습합니다.",
+    "guide": [
+      "빌드 시 정수 산술로 변환 계수를 계산하여 런타임 코드에서 상수 곱셈과 시프트를 사용할 수 있게 합니다.",
+      "generated/timeconst.h의 값이 어디서 오는지와 단위 변환의 반올림·정확도 전제를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 실행 흐름",
+        "text": "GPL-2.0 표시 뒤 scale=0을 설정하고 gcd, fmul, fadj, fmuls, timeconst 다섯 함수를 정의합니다. 마지막 hz=read()로 입력을 읽어 timeconst(hz)를 호출합니다. 출력은 C 헤더 텍스트이며 스크립트가 직접 커널 시계를 변경하거나 파일 경로를 열어 쓰는 코드는 없습니다."
+      },
+      {
+        "title": "정수 산술 환경",
+        "text": "scale=0은 나눗셈을 정수 자리까지 계산하도록 합니다. 여기의 ^는 bc 거듭제곱이므로 2^b는 2의 b승입니다. C 언어의 XOR 연산으로 읽으면 모든 생성식을 잘못 해석하게 됩니다. C의 고정 폭 정수식과 bc의 수 계산 환경을 구분합니다."
+      },
+      {
+        "title": "Gcd 유클리드 알고리즘",
+        "text": "gcd는 b가 0이 될 때까지 t=b, b=a%b, a=t를 반복하고 a를 반환합니다. 양의 HZ와 단위 배율에서 분자·분모의 공통 인수를 제거하는 데 사용됩니다. 나머지가 줄어드는 유클리드 알고리즘이며 모든 약수를 선형 탐색하는 방식이 아닙니다."
+      },
+      {
+        "title": "올림된 역수 곱 계수",
+        "text": "fmul(b,n,d)는 (2^b*n+d-1)/d를 반환합니다. 양의 d와 비음수 분자에 대해 ceil(2^b*n/d)에 해당합니다. 런타임의 n/d 비율을 정수 곱과 오른쪽 shift로 근사할 때 사용하는 계수입니다. 이 함수 자체가 실제 입력 jiffies를 변환하지는 않습니다."
+      },
+      {
+        "title": "조정 계수",
+        "text": "fadj는 d를 d/gcd(n,d)로 줄인 뒤 2^b*(d-1)/d의 정수 몫을 반환합니다. 예를 들어 n/d=1000/300이면 줄인 분모는 3입니다. d가 1로 줄면 조정 계수는 0입니다. 원본 분자와 분모가 아니라 약분한 분모를 쓰는 점이 중요하며 생성된 ADJ를 어느 변환에 더하는지는 소비 코드가 정합니다."
+      },
+      {
+        "title": "시프트 탐색",
+        "text": "fmuls는 s=0부터 fmul(s,n,d)를 구하다 값이 2^(b-1) 이상이면 s를 반환합니다. 사용처는 b=32이므로 실제 비교 기준은 2^31입니다. 주석의 하한 표기 2^b-1을 문자 그대로 2^b에서 1을 뺀 값으로 읽으면 본문의 2^(b-1)과 다릅니다. 주석은 signed 범위의 정확성과 unsigned 상위 절반의 최대 1 오차를 설명하지만 소비 연산의 입력 범위·overflow를 모두 검증하는 함수는 아닙니다."
+      },
+      {
+        "title": "출력 헤더의 자기 검증",
+        "text": "timeconst는 자동 생성 주석과 사용 HZ, KERNEL_TIMECONST_H guard, linux/param.h와 types.h include를 출력합니다. 이어 #if HZ != 입력값과 #error를 출력해 다른 설정에서 생성된 헤더 사용을 막습니다. 잘못된 HZ를 런타임에 발견하는 기능이 아니라 생성물의 컴파일 단계 검사입니다."
+      },
+      {
+        "title": "잘못된 HZ 분기",
+        "text": "hz<2이면 Totally bogus HZ value라는 #error 줄을 출력합니다. 정상 분기의 나머지 상수와 마지막 #endif는 출력하지 않고 함수 끝 halt로 종료합니다. 잘못된 입력에서도 정상적으로 사용할 수 있는 완성 헤더를 생성하거나 자동으로 HZ를 교정하지 않습니다."
+      },
+      {
+        "title": "밀리초 양방향 상수",
+        "text": "정상 경로는 n/d=1000/hz와 hz/1000 각각에 대해 fmuls(32,...)로 s를 구하고 MUL32, ADJ32, SHR32를 출력합니다. 이름은 HZ_TO_MSEC와 MSEC_TO_HZ입니다. 이어 gcd(hz,1000)으로 약분하여 두 방향의 NUM과 DEN을 출력합니다. HZ=300이면 정방향 분수는 10/3, 역방향은 3/10입니다."
+      },
+      {
+        "title": "진법 전환",
+        "text": "MUL32와 ADJ32 출력 전 obase=16으로 바꾸어 U64_C(0x...) 형태의 16진수 C 상수를 만듭니다. shift와 분수 출력에는 obase=10으로 돌아갑니다. 이는 출력 숫자의 표기를 바꾸는 것이며 HZ를 16진수로 다시 해석하거나 커널 계산 단위를 바꾸는 연산이 아닙니다."
+      },
+      {
+        "title": "마이크로초와 나노초 상수",
+        "text": "1000000/hz와 hz/1000000에 대해 같은 MUL32/ADJ32/SHR32 및 약분한 NUM/DEN 쌍을 만듭니다. 마지막 나노초는 gcd(hz,1000000000)을 이용한 HZ_TO_NSEC와 NSEC_TO_HZ의 NUM/DEN만 출력합니다. 이 파일은 나노초용 MUL32/ADJ32/SHR32 묶음을 생성하지 않습니다."
+      },
+      {
+        "title": "종료와 소비 코드 관계",
+        "text": "정상 분기는 헤더 guard를 닫고 timeconst 끝에서 halt합니다. read는 한 번이며 여러 HZ를 자동 순회하는 스크립트가 아닙니다. 생성 상수는 time.c나 jiffies 헤더의 설정별 식에서 사용되므로 ADJ가 생성됐다고 모든 소비 식이 반드시 ADJ를 더하는 것은 아닙니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "빌드 시 계산과 런타임 계산의 분리, 유클리드 약분, 정수 올림, 역수 곱셈, 언어별 연산자 차이와 생성물 설정 일치 검사를 학습합니다. 전체 스크립트를 소스로 대조했지만 모든 가능한 HZ에 대해 bc 실행과 생성 C 산술을 전수 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 스크립트의 2^b에서 ^는 무엇인가?",
+        "options": [
+          "bc의 거듭제곱 연산이다",
+          "C와 같은 비트 XOR이다"
+        ],
+        "answer": 0,
+        "explanation": "파일 언어는 bc입니다. 역수 곱셈 계수를 계산하려면 2의 b승이 필요합니다."
+      },
+      {
+        "prompt": "HZ=300이면 HZ_TO_MSEC의 약분된 NUM/DEN은?",
+        "options": [
+          "3/10이다",
+          "10/3이다"
+        ],
+        "answer": 1,
+        "explanation": "1000/300을 최대공약수 100으로 나눕니다. 3/10은 밀리초에서 HZ tick으로 돌아가는 역방향입니다."
+      },
+      {
+        "prompt": "fmuls(32,n,d)가 비교하는 실제 계수 하한은?",
+        "options": [
+          "2^31이다",
+          "2^32-1이다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 2^(b-1)과 비교합니다. 주석의 괄호 없는 지수 표기를 실제 코드보다 우선해 해석하면 안 됩니다."
+      },
+      {
+        "prompt": "나노초 변환에도 이 생성기가 MUL32/ADJ32/SHR32를 출력하는가?",
+        "options": [
+          "그렇다. 모든 단위에 동일한 매크로 묶음을 출력한다",
+          "아니다. 나노초에는 약분한 NUM/DEN 쌍을 출력한다"
+        ],
+        "answer": 1,
+        "explanation": "마지막 블록은 gcd와 네 분수 매크로만 있습니다. 반복 패턴을 보고 없는 출력을 추정하지 않습니다."
+      },
+      {
+        "prompt": "생성 당시 HZ와 컴파일 당시 HZ가 다르면 어떻게 발견하는가?",
+        "options": [
+          "생성 헤더의 #if와 #error로 검사한다",
+          "실행 중 첫 timer interrupt가 자동으로 상수를 고친다"
+        ],
+        "answer": 0,
+        "explanation": "상수는 빌드 설정에 종속됩니다. 생성물 안에 입력 HZ를 명시하여 잘못된 재사용을 컴파일 단계에서 드러냅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n\nscale=0\n\ndefine gcd(a,b) {\n\tauto t;\n\twhile (b) {\n\t\tt = b;\n\t\tb = a % b;\n\t\ta = t;\n\t}\n\treturn a;\n}\n\n/* Division by reciprocal multiplication. */\ndefine fmul(b,n,d) {\n       return (2^b*n+d-1)/d;\n}\n\n/* Adjustment factor when a ceiling value is used.  Use as:\n   (imul * n) + (fmulxx * n + fadjxx) >> xx) */\ndefine fadj(b,n,d) {\n\tauto v;\n\td = d/gcd(n,d);\n\tv = 2^b*(d-1)/d;\n\treturn v;\n}\n\n/* Compute the appropriate mul/adj values as well as a shift count,\n   which brings the mul value into the range 2^b-1 <= x < 2^b.  Such\n   a shift value will be correct in the signed integer range and off\n   by at most one in the upper half of the unsigned range. */\ndefine fmuls(b,n,d) {\n\tauto s, m;\n\tfor (s = 0; 1; s++) {\n\t\tm = fmul(s,n,d);\n\t\tif (m >= 2^(b-1))\n\t\t\treturn s;\n\t}\n\treturn 0;\n}\n\ndefine timeconst(hz) {\n\tprint \"/* Automatically generated by kernel/time/timeconst.bc */\\n\"\n\tprint \"/* Time conversion constants for HZ == \", hz, \" */\\n\"\n\tprint \"\\n\"\n\n\tprint \"#ifndef KERNEL_TIMECONST_H\\n\"\n\tprint \"#define KERNEL_TIMECONST_H\\n\\n\"\n\n\tprint \"#include <linux/param.h>\\n\"\n\tprint \"#include <linux/types.h>\\n\\n\"\n\n\tprint \"#if HZ != \", hz, \"\\n\"\n\tprint \"#error \\qinclude/generated/timeconst.h has the wrong HZ value!\\q\\n\"\n\tprint \"#endif\\n\\n\"\n\n\tif (hz < 2) {\n\t\tprint \"#error Totally bogus HZ value!\\n\"\n\t} else {\n\t\ts=fmuls(32,1000,hz)\n\t\tobase=16\n\t\tprint \"#define HZ_TO_MSEC_MUL32\\tU64_C(0x\", fmul(s,1000,hz), \")\\n\"\n\t\tprint \"#define HZ_TO_MSEC_ADJ32\\tU64_C(0x\", fadj(s,1000,hz), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define HZ_TO_MSEC_SHR32\\t\", s, \"\\n\"\n\n\t\ts=fmuls(32,hz,1000)\n\t\tobase=16\n\t\tprint \"#define MSEC_TO_HZ_MUL32\\tU64_C(0x\", fmul(s,hz,1000), \")\\n\"\n\t\tprint \"#define MSEC_TO_HZ_ADJ32\\tU64_C(0x\", fadj(s,hz,1000), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define MSEC_TO_HZ_SHR32\\t\", s, \"\\n\"\n\n\t\tobase=10\n\t\tcd=gcd(hz,1000)\n\t\tprint \"#define HZ_TO_MSEC_NUM\\t\\t\", 1000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_MSEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define MSEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define MSEC_TO_HZ_DEN\\t\\t\", 1000/cd, \"\\n\"\n\t\tprint \"\\n\"\n\n\t\ts=fmuls(32,1000000,hz)\n\t\tobase=16\n\t\tprint \"#define HZ_TO_USEC_MUL32\\tU64_C(0x\", fmul(s,1000000,hz), \")\\n\"\n\t\tprint \"#define HZ_TO_USEC_ADJ32\\tU64_C(0x\", fadj(s,1000000,hz), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define HZ_TO_USEC_SHR32\\t\", s, \"\\n\"\n\n\t\ts=fmuls(32,hz,1000000)\n\t\tobase=16\n\t\tprint \"#define USEC_TO_HZ_MUL32\\tU64_C(0x\", fmul(s,hz,1000000), \")\\n\"\n\t\tprint \"#define USEC_TO_HZ_ADJ32\\tU64_C(0x\", fadj(s,hz,1000000), \")\\n\"\n\t\tobase=10\n\t\tprint \"#define USEC_TO_HZ_SHR32\\t\", s, \"\\n\"\n\n\t\tobase=10\n\t\tcd=gcd(hz,1000000)\n\t\tprint \"#define HZ_TO_USEC_NUM\\t\\t\", 1000000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_USEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define USEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define USEC_TO_HZ_DEN\\t\\t\", 1000000/cd, \"\\n\"\n\n\t\tcd=gcd(hz,1000000000)\n\t\tprint \"#define HZ_TO_NSEC_NUM\\t\\t\", 1000000000/cd, \"\\n\"\n\t\tprint \"#define HZ_TO_NSEC_DEN\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define NSEC_TO_HZ_NUM\\t\\t\", hz/cd, \"\\n\"\n\t\tprint \"#define NSEC_TO_HZ_DEN\\t\\t\", 1000000000/cd, \"\\n\"\n\t\tprint \"\\n\"\n\n\t\tprint \"#endif /* KERNEL_TIMECONST_H */\\n\"\n\t}\n\thalt\n}\n\nhz = read();\ntimeconst(hz)\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f27a270da894e3019711dda7e44730537db01e94f4838ad56a5cfe6a9ea88000",
+      "scope": "whole-file",
+      "line_count": 117,
+      "authoring_source": "course/file_units/jiffies_clocksource.py",
+      "sections": [
+        "파일 전체 실행 흐름",
+        "정수 산술 환경",
+        "Gcd 유클리드 알고리즘",
+        "올림된 역수 곱 계수",
+        "조정 계수",
+        "시프트 탐색",
+        "출력 헤더의 자기 검증",
+        "잘못된 HZ 분기",
+        "밀리초 양방향 상수",
+        "진법 전환",
+        "마이크로초와 나노초 상수",
+        "종료와 소비 코드 관계",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/time/timeconst.bc"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "시간 단위를 바꿀 때 매번 복잡한 나눗셈을 하기보다 미리 계산표를 만들 수 있습니다. 이 bc 프로그램은 커널을 만들 때 그 상수를 출력합니다.",
+    "meaning": "시간 변환 상수 생성의 약분·올림·배율 탐색과 HZ 일치 검사를 설명합니다.",
+    "exercise": "HZ=300일 때 틱에서 밀리초로 가는 1000/300을 약분해 10/3을 구해 보세요."
+  },
+  "goal": "시간 변환 상수 생성의 약분·올림·배율 탐색과 HZ 일치 검사를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "HZ=300일 때 틱에서 밀리초로 가는 1000/300을 약분해 10/3을 구해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "6f72782cb51bab69d89ce2bdd3887c626f41d593c6250f04bb294d2d5d4c7ad8",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

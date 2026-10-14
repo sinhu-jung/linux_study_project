@@ -5,71 +5,85 @@
   "area": "CORDIC · 고정소수점·복소 평면 회전",
   "track": "files",
   "kind": "kernel",
-  "intro": "정수와 스케일된 정수를 구분하고 매크로의 평가·범위 조건을 읽습니다.",
+  "intro": "CORDIC 상수와 변환 매크로의 단위, 반올림, 반복 평가를 이해합니다.",
   "guide": [
-    "초기 이득 보정값39797,소수부16비트,반복 횟수18을 정의합니다. CORDIC_FIXED와 CORDIC_FLOAT 변환, s32 i/q 구조체,각도 입력 함수 선언이 이어집니다.",
-    "CORDIC_FLOAT라는 이름은 float 타입을 반환한다는 뜻이 아닙니다. 정수 시프트로 고정소수점 값을 가까운 정수로 반올림합니다."
+    "소수 자리를 16비트만큼 크게 표현합니다.",
+    "뒤의 형 변환이 앞의 잘못된 계산을 고치지는 않습니다.",
+    "매크로 인수에 X++처럼 값이 바뀌는 식을 넣지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체",
-      "text": "Broadcom 저작권·허용 조건, __CORDIC_H_ guard,types.h 포함,상수3개,변환 매크로2개,구조체와 문서화된 함수 선언,#endif가 전부입니다. arctan 표와 회전 본문은 구현 파일에 있습니다."
+      "title": "헤더 전체",
+      "text": "Broadcom 저작권과 사용 조건, __CORDIC_H_ 중복 포함 방지, types 헤더, 세 상수와 두 변환 매크로, 구조체와 함수 선언이 전부입니다. 각도 표와 반복 회전은 구현 파일에 있습니다."
     },
     {
-      "title": "상수와 좌표",
-      "text": "CORDIC_NUM_ITER는 CORDIC_PRECISION_SHIFT+2로18입니다. i는 in-phase 실수부,q는 quadrature 허수부입니다. 함수 문서는 이들이 각각cos와sin에 대응하며2^16 배율임을 명시합니다. 구조체에는 각도나 상태 코드 필드가 없습니다."
+      "title": "숫자 약속",
+      "text": "초기 보정값은 39797, 소수부 이동은 16, 반복은 16+2=18입니다. s32 i는 실수부인 in-phase, q는 허수부인 quadrature이며 각각 cos와 sin 좌표에 대응합니다. 출력은 65536배이고 구조체에 각도나 상태 코드 칸은 없습니다."
     },
     {
-      "title": "변환과 반올림",
-      "text": "CORDIC_FIXED(X)는 X를16비트 왼쪽 이동한 뒤 s32로 캐스트합니다. 뒤의 캐스트가 앞선 식의 오버플로나 유효하지 않은 시프트를 복구하지는 않습니다. CORDIC_FLOAT는 부호에 따라 절댓값 쪽에서 반올림한 뒤 부호를 붙이므로 표현 가능한 ±1.5는±2가 됩니다. 실제 부동소수점 연산은 없습니다."
+      "title": "정수 변환과 반올림",
+      "text": "FIXED는 X를 왼쪽으로 16비트 옮긴 다음 s32로 바꿉니다. 마지막 변환이 앞선 넘침이나 잘못된 시프트를 되돌리지 않습니다. FLOAT는 절댓값 쪽에서 반올림하고 부호를 되붙여 표현 가능한 +1.5와 -1.5가 +2와 -2가 됩니다. 실제 float 연산은 없습니다."
     },
     {
-      "title": "매크로 주의점",
-      "text": "CORDIC_FLOAT는 조건과 선택된 분기에 X가 반복되어 나타나므로 X++ 같은 부수효과를 피해야 합니다. 가장 작은 signed 값의 부호 반전도 표현 범위를 확인해야 합니다. CORDIC_FIXED 입력과 함수 theta 입력의 단위를 혼동해 두 번 스케일하지 않습니다."
+      "title": "인수를 여러 번 보기",
+      "text": "FLOAT에는 X가 조건과 선택된 결과 식에 반복됩니다. X++를 넣으면 뜻밖에 값이 여러 번 바뀔 수 있습니다. 가장 작은 signed 값은 부호를 뒤집어도 담을 수 있는지 확인해야 합니다. 함수 theta는 도 단위이므로 미리 FIXED해서 두 번 키우지 않습니다."
     },
     {
-      "title": "정규화 계약의 범위",
-      "text": "문서는 -180..180 밖의 각도를 변환한다고 설명하지만 구현은 큰 값에 대한 시프트·덧셈 범위 검사 없이 먼저 스케일합니다. 제한 없는 s32 입력의 안전성 보장으로 확장하지 않습니다. coord가 출력 인자라는 문구도 실제 구조체 반환 선언과 구분합니다."
+      "title": "범위와 선언",
+      "text": "문서는 -180..180 밖 각도를 접는다고 하지만 구현은 먼저 키우고 더하는 계산의 범위를 검사하지 않습니다. 모든 s32 입력 안전 보장으로 확대하면 안 됩니다. coord가 출력 인수라는 문구도 실제 구조체 반환 선언과 구별합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "CORDIC_FLOAT(98304)는 어떤 타입의 계산으로 어떤 값을 얻는가?",
+      "prompt": "CORDIC_FLOAT(98304)의 계산과 답은?",
       "options": [
+        "정수 이동으로 2를 얻는다",
+        "float 1.5를 얻는다"
+      ],
+      "answer": 0,
+      "explanation": "98304/65536=1.5를 가까운 정수로 반올림합니다.",
+      "original_prompt": "CORDIC_FLOAT(98304)는 어떤 타입의 계산으로 어떤 값을 얻는가?",
+      "original_options": [
         "정수 시프트로2를 얻는다",
         "float 타입의1.5를 얻는다"
       ],
-      "answer": 0,
-      "explanation": "98304/65536=1.5를 가장 가까운 정수로 반올림합니다. 이름과 달리 float 변환이 아닙니다."
+      "original_explanation": "98304/65536=1.5를 가장 가까운 정수로 반올림합니다. 이름과 달리 float 변환이 아닙니다."
     },
     {
-      "prompt": "CORDIC_FIXED의 마지막 s32 캐스트가 이전 시프트 문제를 모두 막는가?",
+      "prompt": "FIXED의 끝 s32 변환이 앞 시프트 문제도 막나요?",
       "options": [
+        "그렇다. 뒤 변환이면 앞도 안전하다",
+        "아니다. 시프트가 먼저 계산된다"
+      ],
+      "answer": 1,
+      "explanation": "입력 타입과 범위를 미리 살펴야 합니다.",
+      "original_prompt": "CORDIC_FIXED의 마지막 s32 캐스트가 이전 시프트 문제를 모두 막는가?",
+      "original_options": [
         "그렇다. 뒤에서 캐스트하면 앞선 계산도 안전해진다",
         "아니다. 시프트는 캐스트 전에 계산된다"
       ],
-      "answer": 1,
-      "explanation": "식의 평가 순서상 (X)<<16이 먼저입니다. 입력 타입과 유효 범위를 별도로 확인해야 합니다."
+      "original_explanation": "식의 평가 순서상 (X)<<16이 먼저입니다. 입력 타입과 유효 범위를 별도로 확인해야 합니다."
     },
     {
-      "prompt": "CORDIC_FLOAT에 부수효과 있는 식을 전달해도 한 번만 평가되는가?",
+      "prompt": "FLOAT에 값을 바꾸는 식을 넣어도 한 번만 보나요?",
       "options": [
+        "아니다. 조건과 결과에 X가 반복된다",
+        "그렇다. 임시 변수에 보관한다"
+      ],
+      "answer": 0,
+      "explanation": "먼저 값을 변수에 계산해 놓고 전달하는 편이 안전합니다.",
+      "original_prompt": "CORDIC_FLOAT에 부수효과 있는 식을 전달해도 한 번만 평가되는가?",
+      "original_options": [
         "아니다. X가 조건과 결과 식에 반복된다",
         "그렇다. 임시 변수에 저장한다"
       ],
-      "answer": 0,
-      "explanation": "매크로에는 임시 저장이 없습니다. 값을 변수에 먼저 계산해 전달해야 평가 횟수 문제를 피할 수 있습니다."
+      "original_explanation": "매크로에는 임시 저장이 없습니다. 값을 변수에 먼저 계산해 전달해야 평가 횟수 문제를 피할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "98304가 1.5의 고정소수점 표현이며 CORDIC_FLOAT에서 2가 되는 과정을 확인하세요."
   },
   "annotated": "/*\n * Copyright (c) 2011 Broadcom Corporation\n *\n * Permission to use, copy, modify, and/or distribute this software for any\n * purpose with or without fee is hereby granted, provided that the above\n * copyright notice and this permission notice appear in all copies.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF\n * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY\n * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES\n * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION\n * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN\n * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n */\n#ifndef __CORDIC_H_\n#define __CORDIC_H_\n\n#include <linux/types.h>\n\n#define CORDIC_ANGLE_GEN\t39797\n#define CORDIC_PRECISION_SHIFT\t16\n#define CORDIC_NUM_ITER\t(CORDIC_PRECISION_SHIFT + 2)\n\n#define CORDIC_FIXED(X)\t((s32)((X) << CORDIC_PRECISION_SHIFT))\n#define CORDIC_FLOAT(X)\t(((X) >= 0) \\\n\t\t? ((((X) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1) \\\n\t\t: -((((-(X)) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1))\n\n/**\n * struct cordic_iq - i/q coordinate.\n *\n * @i: real part of coordinate (in phase).\n * @q: imaginary part of coordinate (quadrature).\n */\nstruct cordic_iq {\n\ts32 i;\n\ts32 q;\n};\n\n/**\n * cordic_calc_iq() - calculates the i/q coordinate for given angle.\n *\n * @theta: angle in degrees for which i/q coordinate is to be calculated.\n * @coord: function output parameter holding the i/q coordinate.\n *\n * The function calculates the i/q coordinate for a given angle using the\n * CORDIC algorithm. The coordinate consists of a real (i) and an\n * imaginary (q) part. The real part is essentially the cosine of the\n * angle and the imaginary part is the sine of the angle. The returned\n * values are scaled by 2^16 for precision. The range for theta is\n * for -180 degrees to +180 degrees. Passed values outside this range are\n * converted before doing the actual calculation.\n */\nstruct cordic_iq cordic_calc_iq(s32 theta);\n\n#endif /* __CORDIC_H_ */\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/cordic.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8a7a3283ca850a00",
+    "path": "include/linux/cordic.h",
+    "title": "CORDIC 헤더 전체: 좌표 타입과 고정소수점 변환",
+    "area": "CORDIC · 고정소수점·복소 평면 회전",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정수와 스케일된 정수를 구분하고 매크로의 평가·범위 조건을 읽습니다.",
+    "guide": [
+      "초기 이득 보정값39797,소수부16비트,반복 횟수18을 정의합니다. CORDIC_FIXED와 CORDIC_FLOAT 변환, s32 i/q 구조체,각도 입력 함수 선언이 이어집니다.",
+      "CORDIC_FLOAT라는 이름은 float 타입을 반환한다는 뜻이 아닙니다. 정수 시프트로 고정소수점 값을 가까운 정수로 반올림합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "Broadcom 저작권·허용 조건, __CORDIC_H_ guard,types.h 포함,상수3개,변환 매크로2개,구조체와 문서화된 함수 선언,#endif가 전부입니다. arctan 표와 회전 본문은 구현 파일에 있습니다."
+      },
+      {
+        "title": "상수와 좌표",
+        "text": "CORDIC_NUM_ITER는 CORDIC_PRECISION_SHIFT+2로18입니다. i는 in-phase 실수부,q는 quadrature 허수부입니다. 함수 문서는 이들이 각각cos와sin에 대응하며2^16 배율임을 명시합니다. 구조체에는 각도나 상태 코드 필드가 없습니다."
+      },
+      {
+        "title": "변환과 반올림",
+        "text": "CORDIC_FIXED(X)는 X를16비트 왼쪽 이동한 뒤 s32로 캐스트합니다. 뒤의 캐스트가 앞선 식의 오버플로나 유효하지 않은 시프트를 복구하지는 않습니다. CORDIC_FLOAT는 부호에 따라 절댓값 쪽에서 반올림한 뒤 부호를 붙이므로 표현 가능한 ±1.5는±2가 됩니다. 실제 부동소수점 연산은 없습니다."
+      },
+      {
+        "title": "매크로 주의점",
+        "text": "CORDIC_FLOAT는 조건과 선택된 분기에 X가 반복되어 나타나므로 X++ 같은 부수효과를 피해야 합니다. 가장 작은 signed 값의 부호 반전도 표현 범위를 확인해야 합니다. CORDIC_FIXED 입력과 함수 theta 입력의 단위를 혼동해 두 번 스케일하지 않습니다."
+      },
+      {
+        "title": "정규화 계약의 범위",
+        "text": "문서는 -180..180 밖의 각도를 변환한다고 설명하지만 구현은 큰 값에 대한 시프트·덧셈 범위 검사 없이 먼저 스케일합니다. 제한 없는 s32 입력의 안전성 보장으로 확장하지 않습니다. coord가 출력 인자라는 문구도 실제 구조체 반환 선언과 구분합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CORDIC_FLOAT(98304)는 어떤 타입의 계산으로 어떤 값을 얻는가?",
+        "options": [
+          "정수 시프트로2를 얻는다",
+          "float 타입의1.5를 얻는다"
+        ],
+        "answer": 0,
+        "explanation": "98304/65536=1.5를 가장 가까운 정수로 반올림합니다. 이름과 달리 float 변환이 아닙니다."
+      },
+      {
+        "prompt": "CORDIC_FIXED의 마지막 s32 캐스트가 이전 시프트 문제를 모두 막는가?",
+        "options": [
+          "그렇다. 뒤에서 캐스트하면 앞선 계산도 안전해진다",
+          "아니다. 시프트는 캐스트 전에 계산된다"
+        ],
+        "answer": 1,
+        "explanation": "식의 평가 순서상 (X)<<16이 먼저입니다. 입력 타입과 유효 범위를 별도로 확인해야 합니다."
+      },
+      {
+        "prompt": "CORDIC_FLOAT에 부수효과 있는 식을 전달해도 한 번만 평가되는가?",
+        "options": [
+          "아니다. X가 조건과 결과 식에 반복된다",
+          "그렇다. 임시 변수에 저장한다"
+        ],
+        "answer": 0,
+        "explanation": "매크로에는 임시 저장이 없습니다. 값을 변수에 먼저 계산해 전달해야 평가 횟수 문제를 피할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/*\n * Copyright (c) 2011 Broadcom Corporation\n *\n * Permission to use, copy, modify, and/or distribute this software for any\n * purpose with or without fee is hereby granted, provided that the above\n * copyright notice and this permission notice appear in all copies.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF\n * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY\n * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES\n * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION\n * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN\n * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.\n */\n#ifndef __CORDIC_H_\n#define __CORDIC_H_\n\n#include <linux/types.h>\n\n#define CORDIC_ANGLE_GEN\t39797\n#define CORDIC_PRECISION_SHIFT\t16\n#define CORDIC_NUM_ITER\t(CORDIC_PRECISION_SHIFT + 2)\n\n#define CORDIC_FIXED(X)\t((s32)((X) << CORDIC_PRECISION_SHIFT))\n#define CORDIC_FLOAT(X)\t(((X) >= 0) \\\n\t\t? ((((X) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1) \\\n\t\t: -((((-(X)) >> (CORDIC_PRECISION_SHIFT - 1)) + 1) >> 1))\n\n/**\n * struct cordic_iq - i/q coordinate.\n *\n * @i: real part of coordinate (in phase).\n * @q: imaginary part of coordinate (quadrature).\n */\nstruct cordic_iq {\n\ts32 i;\n\ts32 q;\n};\n\n/**\n * cordic_calc_iq() - calculates the i/q coordinate for given angle.\n *\n * @theta: angle in degrees for which i/q coordinate is to be calculated.\n * @coord: function output parameter holding the i/q coordinate.\n *\n * The function calculates the i/q coordinate for a given angle using the\n * CORDIC algorithm. The coordinate consists of a real (i) and an\n * imaginary (q) part. The real part is essentially the cosine of the\n * angle and the imaginary part is the sine of the angle. The returned\n * values are scaled by 2^16 for precision. The range for theta is\n * for -180 degrees to +180 degrees. Passed values outside this range are\n * converted before doing the actual calculation.\n */\nstruct cordic_iq cordic_calc_iq(s32 theta);\n\n#endif /* __CORDIC_H_ */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "be607773af77b9b24b40bad6c5ac676a5a2c90930d3bbcaa430eede18a3c5428",
+      "scope": "whole-file",
+      "line_count": 57,
+      "authoring_source": "course/file_units/cordic_rotation.py",
+      "sections": [
+        "파일 전체",
+        "상수와 좌표",
+        "변환과 반올림",
+        "매크로 주의점",
+        "정규화 계약의 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/cordic.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "소수 대신 큰 정수로 좌표를 담는 약속을 읽습니다. FLOAT라는 이름이어도 실제 계산은 정수입니다.",
+    "meaning": "CORDIC 상수와 변환 매크로의 단위, 반올림, 반복 평가를 이해합니다.",
+    "exercise": "98304가 1.5의 고정소수점 표현이며 CORDIC_FLOAT에서 2가 되는 과정을 확인하세요."
+  },
+  "goal": "CORDIC 상수와 변환 매크로의 단위, 반올림, 반복 평가를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "98304가 1.5의 고정소수점 표현이며 CORDIC_FLOAT에서 2가 되는 과정을 확인하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "3f941b38818ba760f709bc110cd1744c7959f354e06f1c6df58bf6d876afb5de",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

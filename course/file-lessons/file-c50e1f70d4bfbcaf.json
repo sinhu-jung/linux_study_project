@@ -5,58 +5,66 @@
   "area": "가변 길이 레코드 · 파싱 · 문자열 알고리즘",
   "track": "files",
   "kind": "kernel",
-  "intro": "glob_match 하나를 다른 커널 코드에 노출하는 작은 인터페이스입니다.",
+  "intro": "glob_match 선언의 bool 결과와 const 입력의 의미를 읽어요.",
   "guide": [
-    "패턴과 문자열 두 개를 const char 포인터로 받고 bool 일치 여부를 반환합니다.",
-    "이 선언은 버퍼 길이 검사를 추가하지 않습니다. 호출자는 NUL 종료와 유효한 수명을 보장해야 합니다."
+    "glob_match는 패턴과 문자열을 읽어 bool로 일치 여부만 줘요. 문자열 중 어디가 맞았는지 반환하는 API가 아니에요.",
+    "const는 이 포인터를 통해 문자를 바꾸지 않는다는 표시예요. 문자열 끝 NUL이나 올바른 길이를 자동 검사하는 표시가 아니에요.",
+    "__pure는 컴파일러 최적화에 관련된 속성이며 문자열 메모리는 읽어요. 주소가 같아도 그 내용이 바뀌면 결과도 달라질 수 있어요."
   ],
   "deep_dive": [
     {
       "title": "전체 내용",
-      "text": "GPL SPDX, _LINUX_GLOB_H guard, bool용 linux/types.h와 __pure용 linux/compiler.h 포함, 함수 선언 하나, endif로 끝납니다. 문자 클래스나 별표의 세부 문법은 lib/glob.c에 있습니다."
+      "text": "라이선스, guard, bool에 필요한 types.h와 __pure에 필요한 compiler.h, 함수 선언 하나로 돼 있어요. 별표와 문자 묶음의 자세한 처리 규칙은 lib/glob.c 구현에서 봐요."
     },
     {
       "title": "const와 반환값",
-      "text": "char const *는 함수가 해당 포인터를 통해 문자를 변경하지 않는 계약입니다. 호출 중 다른 주체가 메모리를 변경해도 안전하다는 보장은 아닙니다. bool은 일치/불일치만 나타내며 오류 코드나 매칭된 구간을 반환하지 않습니다."
+      "text": "char const *는 그 포인터를 통한 수정 제한이에요. 호출 중 다른 작업이 같은 메모리를 바꿔도 안전하다는 동기화 보장은 아니에요. bool 결과는 참·거짓뿐이라 오류 번호나 맞은 구간을 따로 전달하지 않아요."
     },
     {
       "title": "__pure의 의미",
-      "text": "컴파일러가 함수의 관찰 가능한 부작용과 메모리 읽기 관계를 고려해 호출을 최적화하도록 돕는 속성입니다. 문자열 내용을 읽을 수 있으며, 포인터 주소가 같다는 것만으로 메모리가 변경된 뒤에도 결과가 같다고 가정할 수는 없습니다."
+      "text": "__pure는 관찰 가능한 부작용과 메모리 읽기를 고려해 호출을 최적화하도록 컴파일러에 알려요. 문자열 내용을 읽는 함수이므로 같은 포인터라도 그 메모리를 바꾼 뒤 결과가 같다고 가정하면 안 돼요."
     },
     {
       "title": "CS 연결",
-      "text": "선언과 구현의 분리, 읽기 전용 포인터, 입력 수명, 불리언 API와 오류 채널의 차이, 컴파일러 속성을 학습합니다."
+      "text": "선언과 구현, 읽기용 포인터와 입력의 유효 기간, 일치 여부와 오류 채널, 컴파일러 속성을 나누어 배워요. 호출자가 올바른 NUL 문자열을 준비하고 읽는 동안 유효하게 유지해야 해요."
     }
   ],
   "questions": [
     {
-      "prompt": "glob_match가 매칭된 부분 문자열 주소를 반환하는가?",
+      "prompt": "glob_match가 맞은 부분 문자열의 주소를 돌려주나요?",
       "options": [
+        "아니요. bool로 일치 여부만 줘요.",
+        "네. 첫 매치 위치를 줘요."
+      ],
+      "answer": 0,
+      "explanation": "반환형은 bool이고 위치를 받는 출력 인자도 없어요.",
+      "original_prompt": "glob_match가 매칭된 부분 문자열 주소를 반환하는가?",
+      "original_options": [
         "아니다. bool로 일치 여부만 반환한다",
         "그렇다. 첫 매칭 위치를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "선언의 반환형은 bool입니다. 부분 위치나 오류 번호를 전달하는 별도 출력 인자가 없습니다."
+      "original_explanation": "선언의 반환형은 bool입니다. 부분 위치나 오류 번호를 전달하는 별도 출력 인자가 없습니다."
     },
     {
-      "prompt": "const char *이면 NUL 종료도 자동 보장되는가?",
+      "prompt": "const char *면 NUL 종료도 자동 보장되나요?",
       "options": [
+        "네. const가 길이와 끝 표시를 검증해요.",
+        "아니요. 입력 형식은 호출자가 보장해야 해요."
+      ],
+      "answer": 1,
+      "explanation": "const는 수정 제한이며 종료 문자를 검사하거나 추가하지 않아요.",
+      "original_prompt": "const char *이면 NUL 종료도 자동 보장되는가?",
+      "original_options": [
         "그렇다. const가 길이와 종료를 검증한다",
         "아니다. 호출자가 입력 형식을 보장해야 한다"
       ],
-      "answer": 1,
-      "explanation": "const는 그 포인터를 통한 수정 제한입니다. 길이 검사나 종료 문자를 자동으로 추가하지 않습니다."
+      "original_explanation": "const는 그 포인터를 통한 수정 제한입니다. 길이 검사나 종료 문자를 자동으로 추가하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "입력 문자열, 일치 여부, 매치 위치 중 이 선언이 제공하는 것을 구별해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_GLOB_H\n#define _LINUX_GLOB_H\n\n#include <linux/types.h>\t/* For bool */\n#include <linux/compiler.h>\t/* For __pure */\n\nbool __pure glob_match(char const *pat, char const *str);\n\n#endif\t/* _LINUX_GLOB_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/glob.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c50e1f70d4bfbcaf",
+    "path": "include/linux/glob.h",
+    "title": "Glob 공개 헤더 전체: bool 결과와 pure 계약",
+    "area": "가변 길이 레코드 · 파싱 · 문자열 알고리즘",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "glob_match 하나를 다른 커널 코드에 노출하는 작은 인터페이스입니다.",
+    "guide": [
+      "패턴과 문자열 두 개를 const char 포인터로 받고 bool 일치 여부를 반환합니다.",
+      "이 선언은 버퍼 길이 검사를 추가하지 않습니다. 호출자는 NUL 종료와 유효한 수명을 보장해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 내용",
+        "text": "GPL SPDX, _LINUX_GLOB_H guard, bool용 linux/types.h와 __pure용 linux/compiler.h 포함, 함수 선언 하나, endif로 끝납니다. 문자 클래스나 별표의 세부 문법은 lib/glob.c에 있습니다."
+      },
+      {
+        "title": "const와 반환값",
+        "text": "char const *는 함수가 해당 포인터를 통해 문자를 변경하지 않는 계약입니다. 호출 중 다른 주체가 메모리를 변경해도 안전하다는 보장은 아닙니다. bool은 일치/불일치만 나타내며 오류 코드나 매칭된 구간을 반환하지 않습니다."
+      },
+      {
+        "title": "__pure의 의미",
+        "text": "컴파일러가 함수의 관찰 가능한 부작용과 메모리 읽기 관계를 고려해 호출을 최적화하도록 돕는 속성입니다. 문자열 내용을 읽을 수 있으며, 포인터 주소가 같다는 것만으로 메모리가 변경된 뒤에도 결과가 같다고 가정할 수는 없습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "선언과 구현의 분리, 읽기 전용 포인터, 입력 수명, 불리언 API와 오류 채널의 차이, 컴파일러 속성을 학습합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "glob_match가 매칭된 부분 문자열 주소를 반환하는가?",
+        "options": [
+          "아니다. bool로 일치 여부만 반환한다",
+          "그렇다. 첫 매칭 위치를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "선언의 반환형은 bool입니다. 부분 위치나 오류 번호를 전달하는 별도 출력 인자가 없습니다."
+      },
+      {
+        "prompt": "const char *이면 NUL 종료도 자동 보장되는가?",
+        "options": [
+          "그렇다. const가 길이와 종료를 검증한다",
+          "아니다. 호출자가 입력 형식을 보장해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "const는 그 포인터를 통한 수정 제한입니다. 길이 검사나 종료 문자를 자동으로 추가하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_GLOB_H\n#define _LINUX_GLOB_H\n\n#include <linux/types.h>\t/* For bool */\n#include <linux/compiler.h>\t/* For __pure */\n\nbool __pure glob_match(char const *pat, char const *str);\n\n#endif\t/* _LINUX_GLOB_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "4a3cf5023ee99c30d82b1643c02e1a02ae325ce9e55aea3d01e5354057f4444c",
+      "scope": "whole-file",
+      "line_count": 10,
+      "authoring_source": "course/file_units/firmware_and_glob.py",
+      "sections": [
+        "전체 내용",
+        "const와 반환값",
+        "__pure의 의미",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/glob.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "맞았는지만 알려 주는 채점기는 정답이 있던 위치까지 알려 주지는 않아요.",
+    "meaning": "glob_match 선언의 bool 결과와 const 입력의 의미를 읽어요.",
+    "exercise": "입력 문자열, 일치 여부, 매치 위치 중 이 선언이 제공하는 것을 구별해 보세요."
+  },
+  "goal": "glob_match 선언의 bool 결과와 const 입력의 의미를 읽어요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "입력 문자열, 일치 여부, 매치 위치 중 이 선언이 제공하는 것을 구별해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "fddd45b73dd3b812ef837b4459fec894cc0769754242a03e6d4efc380fec5ef2",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

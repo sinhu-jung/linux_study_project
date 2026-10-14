@@ -5,113 +5,139 @@
   "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
   "track": "files",
   "kind": "kernel",
-  "intro": "숫자 한 자리 변환에서 바이너리 덤프 로그까지 단계적으로 구성한 구현입니다.",
+  "intro": "hexdump.c는 16진 문자와 바이트를 변환하고, 한 줄 포맷과 여러 줄 로그 출력을 나눠 처리합니다.",
   "guide": [
-    "hex_to_bin은 산술 마스크로 문자 범위를 분류하고, hex2bin은 두 니블을 결합합니다. 덤프는 한 줄 포맷과 여러 줄 로그 출력을 분리합니다.",
-    "변환 길이와 버퍼 용량, 실패 전 출력 변경을 구분합니다. 바이트 묶음 덤프는 CPU의 정수 표현을 사용하므로 바이트별 출력과 순서가 달라질 수 있습니다."
+    "니블은 바이트의 절반인 4비트이며 16진 한 글자로 나타낼 수 있습니다. 글자 두 개를 합치면 바이트 하나입니다.",
+    "입력 길이, 출력 버퍼 용량, 충분한 공간이 있을 때 필요한 길이는 서로 다른 수입니다.",
+    "중간에 잘못된 문자를 발견해도 이미 쓴 앞부분은 자동 복구되지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "SPDX와 의존 헤더 뒤에 소문자·대문자 문자표와 export가 있습니다. hex_to_bin, hex2bin, bin2hex, hex_dump_to_buffer를 정의·export하고 CONFIG_PRINTK 조건 안에서 print_hex_dump를 정의·export합니다. 설정에 따라 마지막 함수의 빌드 여부가 달라집니다."
+      "title": "파일의 전체 구성",
+      "text": "SPDX와 자료형·문자 분류·오류·커널·최소최대·export·비정렬 접근 헤더 뒤 소문자·대문자 문자표가 있습니다. 한 자리 변환, 문자열 변환 양방향, 한 줄 포맷 함수를 정의·공개합니다. 여러 줄 print_hex_dump는 PRINTK 설정 안에서만 만들어 공개합니다."
     },
     {
-      "title": "분기 없는 한 자리 변환",
-      "text": "hex_to_bin은 unsigned char 입력에 대해 0..9와 A..F 범위를 각각 산술식으로 표시합니다. ch&0xdf로 소문자를 대문자 영역에 맞춥니다. 범위 안일 때만 숫자에 1을 더한 값 또는 알파벳에 11을 더한 값이 살아남고 처음의 -1과 합쳐 0..15가 됩니다. 어느 범위에도 없으면 -1입니다. 음수 오른쪽 이동에 의존하지 않도록 unsigned 변환 후 >>8을 수행합니다."
+      "title": "한 자리의 산술 분류",
+      "text": "hex_to_bin은 unsigned char를 받아 숫자 0~9와 문자 A~F 범위를 산술식으로 가립니다. ch&0xdf로 소문자도 대문자 쪽에 맞춥니다. 범위 안의 보정 값만 마스크로 남겨 처음 -1과 합치면 0~15, 둘 다 아니면 -1입니다. 음수 오른쪽 이동에 의존하지 않도록 unsigned로 바꾼 뒤 8비트 이동합니다."
     },
     {
-      "title": "부채널과 검증 범위",
-      "text": "주석은 암호 키 입력에도 사용하므로 데이터에 의존하는 조건문이나 메모리 접근을 없애려는 의도를 설명합니다. 소스에 조건문이 없다는 사실만으로 모든 컴파일러·CPU에서 일정 시간이 증명되는 것은 아닙니다. 또한 이어지는 hex2bin은 유효성에 따라 즉시 반환하므로 전체 문자열 변환까지 같은 성질이라고 일반화할 수 없습니다."
+      "title": "분기 없음의 범위",
+      "text": "주석은 암호 키 입력에도 써서 자료에 따라 달라지는 조건문이나 메모리 접근을 피하려는 의도를 설명합니다. 소스의 분기 없음만으로 모든 CPU와 컴파일러의 일정 실행 시간을 증명하지 않습니다. 호출자 hex2bin은 오류에 따라 일찍 끝나므로 문자열 전체까지 같은 성질이라고 말할 수 없습니다."
     },
     {
-      "title": "두 자리 결합과 실패",
-      "text": "hex2bin의 count는 출력 바이트 수입니다. 매번 상위·하위 문자를 읽고 각각 hex_to_bin 결과가 음수인지 검사한 뒤 (hi<<4)|lo를 씁니다. count0은 아무것도 읽거나 쓰지 않고 성공합니다. 잘못된 문자가 나오면 -EINVAL이며 앞에서 성공한 바이트는 이미 써졌습니다. 원문 길이 인자가 없으므로 읽을 수 있는 2*count개 문자를 호출자가 보장해야 합니다."
+      "title": "글자 둘을 바이트 하나로",
+      "text": "hex2bin의 count는 출력 바이트 수입니다. 상위·하위 글자를 각각 변환하고 둘 다 유효하면 (hi<<4)|lo를 씁니다. count=0이면 읽기·쓰기 없이 성공합니다. 오류면 -EINVAL이지만 앞에서 쓴 바이트는 남습니다. 원문 길이 인수가 없으므로 호출자는 읽을 수 있는 2×count 글자를 준비해야 합니다."
     },
     {
-      "title": "반대 방향의 연속 쓰기",
-      "text": "bin2hex는 unsigned char 포인터로 원문을 순회하며 hex_byte_pack이 반환한 다음 위치를 dst로 삼습니다. 반환값은 시작 주소가 아니라 마지막 글자 뒤 위치입니다. 2*count개 소문자 글자를 쓰며 NUL 종료는 하지 않습니다."
+      "title": "바이트를 글자로 풀기",
+      "text": "bin2hex는 바이트를 하나씩 hex_byte_pack으로 쓰고 다음 위치를 받아 이어 씁니다. 2×count개의 소문자 글자를 쓰며 끝의 NUL은 붙이지 않습니다. 반환값도 시작 주소가 아니라 마지막 글자 바로 뒤 주소입니다."
     },
     {
-      "title": "한 줄 입력 정규화",
-      "text": "hex_dump_to_buffer는 rowsize가 16 또는 32가 아니면 16으로 바꾸고 len을 rowsize 이하로 제한합니다. groupsize는 1,2,4,8을 사용하며 유효한 2의 거듭제곱이 아니거나 8보다 크면 1로 바꿉니다. len이 groupsize로 나누어떨어지지 않아도 1로 바꿔 한 줄에 서로 다른 그룹 크기를 섞지 않습니다."
+      "title": "한 줄의 크기 정리",
+      "text": "rowsize가 16·32가 아니면 16으로 고치고 len을 한 줄 이하로 줄입니다. groupsize는 1·2·4·8이며 2의 거듭제곱이 아니거나 8보다 크면 1입니다. len을 묶음 크기로 나눌 수 없어도 1로 바꿉니다. 예를 들어 6바이트에 그룹 4면 4+2 혼합이 아니라 모두 1바이트씩입니다."
     },
     {
-      "title": "묶음 출력과 엔디언",
-      "text": "8/4/2바이트 묶음은 get_unaligned로 정수를 읽고 각각 16/8/4자리 16진수로 출력합니다. 비정렬 읽기 지원과 엔디언 변환은 별개입니다. 예를 들어 little-endian에서 바이트 01 02를 2바이트 묶음으로 읽으면 0201로 표시됩니다. groupsize1은 각 바이트의 상위·하위 니블을 출력하므로 01 02가 됩니다."
+      "title": "정수 묶음과 바이트 순서",
+      "text": "8·4·2바이트는 get_unaligned로 정수를 읽어 각각 16·8·4자리로 표시합니다. 정렬되지 않은 주소를 읽는 지원과 바이트 순서를 바꾸는 일은 별개입니다. little-endian의 01 02는 2바이트 정수 0x0201로 표시됩니다. 1바이트 모드는 각 바이트를 직접 풀어 01 02입니다."
     },
     {
-      "title": "ASCII 열과 종료",
-      "text": "ASCII 시작 열은 rowsize*2+rowsize/groupsize+1입니다. 필요하면 공백을 채운 뒤 원래 각 바이트가 ASCII이고 출력 가능한 경우만 그대로 쓰고 나머지는 점으로 표시합니다. 정상 종료 nil은 linebuf[lx]에 NUL을 씁니다. len0이고 용량이 양수라면 빈 문자열과 반환값 0입니다."
+      "title": "ASCII 열과 끝 표시",
+      "text": "문자 열 시작은 rowsize*2+rowsize/groupsize+1입니다. 공백으로 맞춘 뒤 원래 바이트가 ASCII이며 출력 가능한 경우만 그대로 쓰고 나머지는 점입니다. 정상 종료는 linebuf[lx]에 NUL을 씁니다. len=0이고 용량이 양수면 빈 문자열과 반환 0입니다."
     },
     {
-      "title": "용량 부족과 반환값",
-      "text": "그룹 출력은 snprintf의 필요한 길이를 보고 잘림을 감지합니다. 바이트·공백·ASCII 경로는 NUL 한 칸을 남겨 검사하며 overflow2에서 종료 문자를 씁니다. overflow1은 ascii면 ascii_column+len, 아니면 (groupsize*2+1)*ngroups-1을 반환합니다. 용량0이면 아무것도 쓰지 않고 바로 이 계산으로 갑니다. 따라서 len0·용량0·ascii=false는 -1이며, ascii=true는 열 위치 값입니다. 이 특수 경로를 모든 입력에서 단순한 실제 문자열 길이라고 해석하면 안 됩니다."
+      "title": "부족한 공간과 특수 반환",
+      "text": "그룹 경로는 snprintf의 필요 길이로 잘림을 확인합니다. 바이트·공백·ASCII 경로는 NUL 한 칸을 남기며 overflow2에서 끝 문자를 씁니다. overflow1은 ASCII이면 열 위치+len, 아니면 (groupsize*2+1)*ngroups-1입니다. 용량 0이면 쓰지 않고 바로 그 식으로 가므로 len=0·용량=0·ASCII=false에서는 -1, true에서는 열 위치 값입니다. 모든 특수 반환을 실제 쓴 문자열 길이로 단순화하면 안 됩니다."
     },
     {
       "title": "여러 줄 로그 출력",
-      "text": "CONFIG_PRINTK의 print_hex_dump는 최대 32바이트의 hex+ASCII와 NUL을 담는 지역 버퍼를 사용합니다. rowsize를 정규화하고 원문을 줄 단위로 잘라 포맷합니다. prefix_type에 따라 %p 주소, 8자리 이상으로 표시하는 16진 오프셋, 또는 추가 접두사 없는 경로를 고릅니다. level과 prefix_str도 함께 printk에 전달합니다. 커널 %p 정책을 무시하고 항상 원시 주소가 출력된다고 가정하면 안 됩니다."
+      "text": "PRINTK 함수는 최대 32바이트의 hex·ASCII·NUL을 담을 지역 버퍼를 쓰고 줄 크기를 정리해 입력을 나눕니다. 접두사 방식에 따라 %p 주소, 최소 8자리 16진 offset, 추가 위치 없는 출력 중 고릅니다. 로그 수준과 사용자 prefix_str도 전달합니다. 커널 %p 정책이 있으므로 언제나 가리지 않은 원시 주소를 보인다고 단정하지 않습니다."
     },
     {
-      "title": "CS 연결과 한계",
-      "text": "니블 결합, 산술 범위 검사, 데이터 의존 제어 흐름, 용량과 필요 길이, 정렬과 엔디언, 포맷과 출력 장치의 분리를 학습합니다. len은 size_t지만 로그 루프의 i와 remaining은 int여서 임의의 거대한 입력까지 안전하다고 주장하지 않습니다. 이 수업의 전체 분기 해설은 원본 대조에 근거하며 실제 printk나 모든 아키텍처의 실행 검증은 아닙니다."
+      "title": "확인한 내용과 크기 한계",
+      "text": "니블 결합, 산술 검사, 자료 의존 분기, 필요 길이와 용량, 정렬·엔디언, 포맷과 출력 장치를 구별했습니다. len은 size_t여도 로그 반복의 i와 remaining은 int이므로 임의로 거대한 입력까지 안전하다고 말하지 않습니다. 실제 printk와 모든 아키텍처 실행 시험은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "hex2bin에서 두 번째 출력 바이트의 문자가 잘못되면 첫 번째 바이트는?",
+      "prompt": "두 번째 바이트의 문자가 잘못되면 첫 바이트는 어떻게 되나요?",
       "options": [
+        "이미 출력에 쓰였을 수 있습니다.",
+        "반드시 원래 값으로 복구됩니다."
+      ],
+      "answer": 0,
+      "explanation": "각 바이트를 확인한 뒤 바로 쓰며 되돌리는 코드가 없습니다.",
+      "original_prompt": "hex2bin에서 두 번째 출력 바이트의 문자가 잘못되면 첫 번째 바이트는?",
+      "original_options": [
         "이미 출력 버퍼에 써졌을 수 있다",
         "반드시 원래 값으로 복구된다"
       ],
-      "answer": 0,
-      "explanation": "검사와 저장은 한 바이트씩 반복합니다. 실패 시 이전 저장을 되돌리는 경로는 없습니다."
+      "original_explanation": "검사와 저장은 한 바이트씩 반복합니다. 실패 시 이전 저장을 되돌리는 경로는 없습니다."
     },
     {
-      "prompt": "len6, groupsize4를 덤프하면 그룹 크기는?",
+      "prompt": "len=6, groupsize=4이면 어떤 묶음으로 바꾸나요?",
       "options": [
+        "4바이트와 2바이트를 섞습니다.",
+        "groupsize를 1로 바꿉니다."
+      ],
+      "answer": 1,
+      "explanation": "나머지가 있으면 혼합 묶음을 피합니다.",
+      "original_prompt": "len6, groupsize4를 덤프하면 그룹 크기는?",
+      "original_options": [
         "4바이트 그룹 하나와 2바이트 그룹 하나를 섞는다",
         "1로 바뀐다"
       ],
-      "answer": 1,
-      "explanation": "len%groupsize가 0이 아니면 groupsize=1로 바꿉니다. 혼합 크기 출력을 피하는 분기입니다."
+      "original_explanation": "len%groupsize가 0이 아니면 groupsize=1로 바꿉니다. 혼합 크기 출력을 피하는 분기입니다."
     },
     {
-      "prompt": "little-endian에서 01 02를 groupsize2로 표시하면?",
+      "prompt": "little-endian에서 01 02를 2바이트 묶음으로 표시하면 무엇인가요?",
       "options": [
+        "0201입니다.",
+        "항상 0102입니다."
+      ],
+      "answer": 0,
+      "explanation": "정수로 읽은 값이 0x0201이기 때문입니다.",
+      "original_prompt": "little-endian에서 01 02를 groupsize2로 표시하면?",
+      "original_options": [
         "0201이다",
         "항상 0102다"
       ],
-      "answer": 0,
-      "explanation": "get_unaligned는 해당 바이트를 CPU 정수로 읽습니다. little-endian의 값은 0x0201이며 그 정수를 네 자리로 표시합니다."
+      "original_explanation": "get_unaligned는 해당 바이트를 CPU 정수로 읽습니다. little-endian의 값은 0x0201이며 그 정수를 네 자리로 표시합니다."
     },
     {
-      "prompt": "linebuflen이 0이면 NUL을 쓸 수 있는가?",
+      "prompt": "용량 0인 버퍼에 NUL을 쓸 수 있나요?",
       "options": [
+        "예. 언제나 linebuf[0]을 씁니다.",
+        "아니요. 저장 없이 overflow1로 갑니다."
+      ],
+      "answer": 1,
+      "explanation": "끝 표시를 쓸 공간이 있다는 조건과 없는 조건을 구별합니다.",
+      "original_prompt": "linebuflen이 0이면 NUL을 쓸 수 있는가?",
+      "original_options": [
         "가능하다. 항상 linebuf[0]에 쓴다",
         "없다. 저장 없이 overflow1로 간다"
       ],
-      "answer": 1,
-      "explanation": "용량0은 첫 검사에서 별도 경로로 이동합니다. NUL 종료 설명은 실제로 쓸 수 있는 버퍼가 있을 때와 구분해야 합니다."
+      "original_explanation": "용량0은 첫 검사에서 별도 경로로 이동합니다. NUL 종료 설명은 실제로 쓸 수 있는 버퍼가 있을 때와 구분해야 합니다."
     },
     {
-      "prompt": "hex_to_bin의 분기 없는 소스가 hex2bin 전체의 일정 시간을 증명하는가?",
+      "prompt": "한 자리 함수에 분기가 없으면 hex2bin 전체도 일정 시간임이 증명되나요?",
       "options": [
+        "아니요. hex2bin은 오류에서 일찍 반환합니다.",
+        "예. 호출자도 자동으로 같은 성질입니다."
+      ],
+      "answer": 0,
+      "explanation": "전체 경로와 실제 컴파일 결과까지 살펴야 합니다.",
+      "original_prompt": "hex_to_bin의 분기 없는 소스가 hex2bin 전체의 일정 시간을 증명하는가?",
+      "original_options": [
         "아니다. hex2bin에는 오류에 따른 조기 반환이 있다",
         "그렇다. 한 자리 함수가 분기 없으면 호출자도 동일하다"
       ],
-      "answer": 0,
-      "explanation": "호출자는 각 니블의 음수 결과에 따라 중단합니다. 부채널 성질은 전체 호출 경로와 컴파일된 코드까지 고려해야 합니다."
+      "original_explanation": "호출자는 각 니블의 음수 결과에 따라 중단합니다. 부채널 성질은 전체 호출 경로와 컴파일된 코드까지 고려해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "little-endian의 01 02를 바이트별 01 02와 2바이트 정수 0201로 비교하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * lib/hexdump.c\n */\n\n#include <linux/types.h>\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/kernel.h>\n#include <linux/minmax.h>\n#include <linux/export.h>\n#include <linux/unaligned.h>\n\nconst char hex_asc[] = \"0123456789abcdef\";\nEXPORT_SYMBOL(hex_asc);\nconst char hex_asc_upper[] = \"0123456789ABCDEF\";\nEXPORT_SYMBOL(hex_asc_upper);\n\n/**\n * hex_to_bin - convert a hex digit to its real value\n * @ch: ascii character represents hex digit\n *\n * hex_to_bin() converts one hex digit to its actual value or -1 in case of bad\n * input.\n *\n * This function is used to load cryptographic keys, so it is coded in such a\n * way that there are no conditions or memory accesses that depend on data.\n *\n * Explanation of the logic:\n * (ch - '9' - 1) is negative if ch <= '9'\n * ('0' - 1 - ch) is negative if ch >= '0'\n * we \"and\" these two values, so the result is negative if ch is in the range\n *\t'0' ... '9'\n * we are only interested in the sign, so we do a shift \">> 8\"; note that right\n *\tshift of a negative value is implementation-defined, so we cast the\n *\tvalue to (unsigned) before the shift --- we have 0xffffff if ch is in\n *\tthe range '0' ... '9', 0 otherwise\n * we \"and\" this value with (ch - '0' + 1) --- we have a value 1 ... 10 if ch is\n *\tin the range '0' ... '9', 0 otherwise\n * we add this value to -1 --- we have a value 0 ... 9 if ch is in the range '0'\n *\t... '9', -1 otherwise\n * the next line is similar to the previous one, but we need to decode both\n *\tuppercase and lowercase letters, so we use (ch & 0xdf), which converts\n *\tlowercase to uppercase\n */\nint hex_to_bin(unsigned char ch)\n{\n\tunsigned char cu = ch & 0xdf;\n\treturn -1 +\n\t\t((ch - '0' +  1) & (unsigned)((ch - '9' - 1) & ('0' - 1 - ch)) >> 8) +\n\t\t((cu - 'A' + 11) & (unsigned)((cu - 'F' - 1) & ('A' - 1 - cu)) >> 8);\n}\nEXPORT_SYMBOL(hex_to_bin);\n\n/**\n * hex2bin - convert an ascii hexadecimal string to its binary representation\n * @dst: binary result\n * @src: ascii hexadecimal string\n * @count: result length\n *\n * Return 0 on success, -EINVAL in case of bad input.\n */\nint hex2bin(u8 *dst, const char *src, size_t count)\n{\n\twhile (count--) {\n\t\tint hi, lo;\n\n\t\thi = hex_to_bin(*src++);\n\t\tif (unlikely(hi < 0))\n\t\t\treturn -EINVAL;\n\t\tlo = hex_to_bin(*src++);\n\t\tif (unlikely(lo < 0))\n\t\t\treturn -EINVAL;\n\n\t\t*dst++ = (hi << 4) | lo;\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL(hex2bin);\n\n/**\n * bin2hex - convert binary data to an ascii hexadecimal string\n * @dst: ascii hexadecimal result\n * @src: binary data\n * @count: binary data length\n */\nchar *bin2hex(char *dst, const void *src, size_t count)\n{\n\tconst unsigned char *_src = src;\n\n\twhile (count--)\n\t\tdst = hex_byte_pack(dst, *_src++);\n\treturn dst;\n}\nEXPORT_SYMBOL(bin2hex);\n\n/**\n * hex_dump_to_buffer - convert a blob of data to \"hex ASCII\" in memory\n * @buf: data blob to dump\n * @len: number of bytes in the @buf\n * @rowsize: number of bytes to print per line; must be 16 or 32\n * @groupsize: number of bytes to print at a time (1, 2, 4, 8; default = 1)\n * @linebuf: where to put the converted data\n * @linebuflen: total size of @linebuf, including space for terminating NUL\n * @ascii: include ASCII after the hex output\n *\n * hex_dump_to_buffer() works on one \"line\" of output at a time, i.e.,\n * 16 or 32 bytes of input data converted to hex + ASCII output.\n *\n * Given a buffer of u8 data, hex_dump_to_buffer() converts the input data\n * to a hex + ASCII dump at the supplied memory location.\n * The converted output is always NUL-terminated.\n *\n * E.g.:\n *   hex_dump_to_buffer(frame->data, frame->len, 16, 1,\n *\t\t\tlinebuf, sizeof(linebuf), true);\n *\n * example output buffer:\n * 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f  @ABCDEFGHIJKLMNO\n *\n * Return:\n * The amount of bytes placed in the buffer without terminating NUL. If the\n * output was truncated, then the return value is the number of bytes\n * (excluding the terminating NUL) which would have been written to the final\n * string if enough space had been available.\n */\nint hex_dump_to_buffer(const void *buf, size_t len, int rowsize, int groupsize,\n\t\t       char *linebuf, size_t linebuflen, bool ascii)\n{\n\tconst u8 *ptr = buf;\n\tint ngroups;\n\tu8 ch;\n\tint j, lx = 0;\n\tint ascii_column;\n\tint ret;\n\n\tif (rowsize != 16 && rowsize != 32)\n\t\trowsize = 16;\n\n\tif (len > rowsize)\t\t/* limit to one line at a time */\n\t\tlen = rowsize;\n\tif (!is_power_of_2(groupsize) || groupsize > 8)\n\t\tgroupsize = 1;\n\tif ((len % groupsize) != 0)\t/* no mixed size output */\n\t\tgroupsize = 1;\n\n\tngroups = len / groupsize;\n\tascii_column = rowsize * 2 + rowsize / groupsize + 1;\n\n\tif (!linebuflen)\n\t\tgoto overflow1;\n\n\tif (!len)\n\t\tgoto nil;\n\n\tif (groupsize == 8) {\n\t\tconst u64 *ptr8 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%16.16llx\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr8 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else if (groupsize == 4) {\n\t\tconst u32 *ptr4 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%8.8x\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr4 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else if (groupsize == 2) {\n\t\tconst u16 *ptr2 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%4.4x\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr2 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else {\n\t\tfor (j = 0; j < len; j++) {\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tch = ptr[j];\n\t\t\tlinebuf[lx++] = hex_asc_hi(ch);\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tlinebuf[lx++] = hex_asc_lo(ch);\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tlinebuf[lx++] = ' ';\n\t\t}\n\t\tif (j)\n\t\t\tlx--;\n\t}\n\tif (!ascii)\n\t\tgoto nil;\n\n\twhile (lx < ascii_column) {\n\t\tif (linebuflen < lx + 2)\n\t\t\tgoto overflow2;\n\t\tlinebuf[lx++] = ' ';\n\t}\n\tfor (j = 0; j < len; j++) {\n\t\tif (linebuflen < lx + 2)\n\t\t\tgoto overflow2;\n\t\tch = ptr[j];\n\t\tlinebuf[lx++] = (isascii(ch) && isprint(ch)) ? ch : '.';\n\t}\nnil:\n\tlinebuf[lx] = '\\0';\n\treturn lx;\noverflow2:\n\tlinebuf[lx++] = '\\0';\noverflow1:\n\treturn ascii ? ascii_column + len : (groupsize * 2 + 1) * ngroups - 1;\n}\nEXPORT_SYMBOL(hex_dump_to_buffer);\n\n#ifdef CONFIG_PRINTK\n/**\n * print_hex_dump - print a text hex dump to syslog for a binary blob of data\n * @level: kernel log level (e.g. KERN_DEBUG)\n * @prefix_str: string to prefix each line with;\n *  caller supplies trailing spaces for alignment if desired\n * @prefix_type: controls whether prefix of an offset, address, or none\n *  is printed (%DUMP_PREFIX_OFFSET, %DUMP_PREFIX_ADDRESS, %DUMP_PREFIX_NONE)\n * @rowsize: number of bytes to print per line; must be 16 or 32\n * @groupsize: number of bytes to print at a time (1, 2, 4, 8; default = 1)\n * @buf: data blob to dump\n * @len: number of bytes in the @buf\n * @ascii: include ASCII after the hex output\n *\n * Given a buffer of u8 data, print_hex_dump() prints a hex + ASCII dump\n * to the kernel log at the specified kernel log level, with an optional\n * leading prefix.\n *\n * print_hex_dump() works on one \"line\" of output at a time, i.e.,\n * 16 or 32 bytes of input data converted to hex + ASCII output.\n * print_hex_dump() iterates over the entire input @buf, breaking it into\n * \"line size\" chunks to format and print.\n *\n * E.g.:\n *   print_hex_dump(KERN_DEBUG, \"raw data: \", DUMP_PREFIX_ADDRESS,\n *\t\t    16, 1, frame->data, frame->len, true);\n *\n * Example output using %DUMP_PREFIX_OFFSET and 1-byte mode:\n * 0009ab42: 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f  @ABCDEFGHIJKLMNO\n * Example output using %DUMP_PREFIX_ADDRESS and 4-byte mode:\n * ffffffff88089af0: 73727170 77767574 7b7a7978 7f7e7d7c  pqrstuvwxyz{|}~.\n */\nvoid print_hex_dump(const char *level, const char *prefix_str, int prefix_type,\n\t\t    int rowsize, int groupsize,\n\t\t    const void *buf, size_t len, bool ascii)\n{\n\tconst u8 *ptr = buf;\n\tint i, linelen, remaining = len;\n\tunsigned char linebuf[32 * 3 + 2 + 32 + 1];\n\n\tif (rowsize != 16 && rowsize != 32)\n\t\trowsize = 16;\n\n\tfor (i = 0; i < len; i += rowsize) {\n\t\tlinelen = min(remaining, rowsize);\n\t\tremaining -= rowsize;\n\n\t\thex_dump_to_buffer(ptr + i, linelen, rowsize, groupsize,\n\t\t\t\t   linebuf, sizeof(linebuf), ascii);\n\n\t\tswitch (prefix_type) {\n\t\tcase DUMP_PREFIX_ADDRESS:\n\t\t\tprintk(\"%s%s%p: %s\\n\",\n\t\t\t       level, prefix_str, ptr + i, linebuf);\n\t\t\tbreak;\n\t\tcase DUMP_PREFIX_OFFSET:\n\t\t\tprintk(\"%s%s%.8x: %s\\n\", level, prefix_str, i, linebuf);\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tprintk(\"%s%s%s\\n\", level, prefix_str, linebuf);\n\t\t\tbreak;\n\t\t}\n\t}\n}\nEXPORT_SYMBOL(print_hex_dump);\n\n#endif /* defined(CONFIG_PRINTK) */\n",
   "source_review": {
@@ -140,5 +166,177 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/hexdump.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c18177a9e6aea58f",
+    "path": "lib/hexdump.c",
+    "title": "16진 변환과 덤프 전체: 경계 검사·정렬·로그 출력",
+    "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "숫자 한 자리 변환에서 바이너리 덤프 로그까지 단계적으로 구성한 구현입니다.",
+    "guide": [
+      "hex_to_bin은 산술 마스크로 문자 범위를 분류하고, hex2bin은 두 니블을 결합합니다. 덤프는 한 줄 포맷과 여러 줄 로그 출력을 분리합니다.",
+      "변환 길이와 버퍼 용량, 실패 전 출력 변경을 구분합니다. 바이트 묶음 덤프는 CPU의 정수 표현을 사용하므로 바이트별 출력과 순서가 달라질 수 있습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "SPDX와 의존 헤더 뒤에 소문자·대문자 문자표와 export가 있습니다. hex_to_bin, hex2bin, bin2hex, hex_dump_to_buffer를 정의·export하고 CONFIG_PRINTK 조건 안에서 print_hex_dump를 정의·export합니다. 설정에 따라 마지막 함수의 빌드 여부가 달라집니다."
+      },
+      {
+        "title": "분기 없는 한 자리 변환",
+        "text": "hex_to_bin은 unsigned char 입력에 대해 0..9와 A..F 범위를 각각 산술식으로 표시합니다. ch&0xdf로 소문자를 대문자 영역에 맞춥니다. 범위 안일 때만 숫자에 1을 더한 값 또는 알파벳에 11을 더한 값이 살아남고 처음의 -1과 합쳐 0..15가 됩니다. 어느 범위에도 없으면 -1입니다. 음수 오른쪽 이동에 의존하지 않도록 unsigned 변환 후 >>8을 수행합니다."
+      },
+      {
+        "title": "부채널과 검증 범위",
+        "text": "주석은 암호 키 입력에도 사용하므로 데이터에 의존하는 조건문이나 메모리 접근을 없애려는 의도를 설명합니다. 소스에 조건문이 없다는 사실만으로 모든 컴파일러·CPU에서 일정 시간이 증명되는 것은 아닙니다. 또한 이어지는 hex2bin은 유효성에 따라 즉시 반환하므로 전체 문자열 변환까지 같은 성질이라고 일반화할 수 없습니다."
+      },
+      {
+        "title": "두 자리 결합과 실패",
+        "text": "hex2bin의 count는 출력 바이트 수입니다. 매번 상위·하위 문자를 읽고 각각 hex_to_bin 결과가 음수인지 검사한 뒤 (hi<<4)|lo를 씁니다. count0은 아무것도 읽거나 쓰지 않고 성공합니다. 잘못된 문자가 나오면 -EINVAL이며 앞에서 성공한 바이트는 이미 써졌습니다. 원문 길이 인자가 없으므로 읽을 수 있는 2*count개 문자를 호출자가 보장해야 합니다."
+      },
+      {
+        "title": "반대 방향의 연속 쓰기",
+        "text": "bin2hex는 unsigned char 포인터로 원문을 순회하며 hex_byte_pack이 반환한 다음 위치를 dst로 삼습니다. 반환값은 시작 주소가 아니라 마지막 글자 뒤 위치입니다. 2*count개 소문자 글자를 쓰며 NUL 종료는 하지 않습니다."
+      },
+      {
+        "title": "한 줄 입력 정규화",
+        "text": "hex_dump_to_buffer는 rowsize가 16 또는 32가 아니면 16으로 바꾸고 len을 rowsize 이하로 제한합니다. groupsize는 1,2,4,8을 사용하며 유효한 2의 거듭제곱이 아니거나 8보다 크면 1로 바꿉니다. len이 groupsize로 나누어떨어지지 않아도 1로 바꿔 한 줄에 서로 다른 그룹 크기를 섞지 않습니다."
+      },
+      {
+        "title": "묶음 출력과 엔디언",
+        "text": "8/4/2바이트 묶음은 get_unaligned로 정수를 읽고 각각 16/8/4자리 16진수로 출력합니다. 비정렬 읽기 지원과 엔디언 변환은 별개입니다. 예를 들어 little-endian에서 바이트 01 02를 2바이트 묶음으로 읽으면 0201로 표시됩니다. groupsize1은 각 바이트의 상위·하위 니블을 출력하므로 01 02가 됩니다."
+      },
+      {
+        "title": "ASCII 열과 종료",
+        "text": "ASCII 시작 열은 rowsize*2+rowsize/groupsize+1입니다. 필요하면 공백을 채운 뒤 원래 각 바이트가 ASCII이고 출력 가능한 경우만 그대로 쓰고 나머지는 점으로 표시합니다. 정상 종료 nil은 linebuf[lx]에 NUL을 씁니다. len0이고 용량이 양수라면 빈 문자열과 반환값 0입니다."
+      },
+      {
+        "title": "용량 부족과 반환값",
+        "text": "그룹 출력은 snprintf의 필요한 길이를 보고 잘림을 감지합니다. 바이트·공백·ASCII 경로는 NUL 한 칸을 남겨 검사하며 overflow2에서 종료 문자를 씁니다. overflow1은 ascii면 ascii_column+len, 아니면 (groupsize*2+1)*ngroups-1을 반환합니다. 용량0이면 아무것도 쓰지 않고 바로 이 계산으로 갑니다. 따라서 len0·용량0·ascii=false는 -1이며, ascii=true는 열 위치 값입니다. 이 특수 경로를 모든 입력에서 단순한 실제 문자열 길이라고 해석하면 안 됩니다."
+      },
+      {
+        "title": "여러 줄 로그 출력",
+        "text": "CONFIG_PRINTK의 print_hex_dump는 최대 32바이트의 hex+ASCII와 NUL을 담는 지역 버퍼를 사용합니다. rowsize를 정규화하고 원문을 줄 단위로 잘라 포맷합니다. prefix_type에 따라 %p 주소, 8자리 이상으로 표시하는 16진 오프셋, 또는 추가 접두사 없는 경로를 고릅니다. level과 prefix_str도 함께 printk에 전달합니다. 커널 %p 정책을 무시하고 항상 원시 주소가 출력된다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "CS 연결과 한계",
+        "text": "니블 결합, 산술 범위 검사, 데이터 의존 제어 흐름, 용량과 필요 길이, 정렬과 엔디언, 포맷과 출력 장치의 분리를 학습합니다. len은 size_t지만 로그 루프의 i와 remaining은 int여서 임의의 거대한 입력까지 안전하다고 주장하지 않습니다. 이 수업의 전체 분기 해설은 원본 대조에 근거하며 실제 printk나 모든 아키텍처의 실행 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "hex2bin에서 두 번째 출력 바이트의 문자가 잘못되면 첫 번째 바이트는?",
+        "options": [
+          "이미 출력 버퍼에 써졌을 수 있다",
+          "반드시 원래 값으로 복구된다"
+        ],
+        "answer": 0,
+        "explanation": "검사와 저장은 한 바이트씩 반복합니다. 실패 시 이전 저장을 되돌리는 경로는 없습니다."
+      },
+      {
+        "prompt": "len6, groupsize4를 덤프하면 그룹 크기는?",
+        "options": [
+          "4바이트 그룹 하나와 2바이트 그룹 하나를 섞는다",
+          "1로 바뀐다"
+        ],
+        "answer": 1,
+        "explanation": "len%groupsize가 0이 아니면 groupsize=1로 바꿉니다. 혼합 크기 출력을 피하는 분기입니다."
+      },
+      {
+        "prompt": "little-endian에서 01 02를 groupsize2로 표시하면?",
+        "options": [
+          "0201이다",
+          "항상 0102다"
+        ],
+        "answer": 0,
+        "explanation": "get_unaligned는 해당 바이트를 CPU 정수로 읽습니다. little-endian의 값은 0x0201이며 그 정수를 네 자리로 표시합니다."
+      },
+      {
+        "prompt": "linebuflen이 0이면 NUL을 쓸 수 있는가?",
+        "options": [
+          "가능하다. 항상 linebuf[0]에 쓴다",
+          "없다. 저장 없이 overflow1로 간다"
+        ],
+        "answer": 1,
+        "explanation": "용량0은 첫 검사에서 별도 경로로 이동합니다. NUL 종료 설명은 실제로 쓸 수 있는 버퍼가 있을 때와 구분해야 합니다."
+      },
+      {
+        "prompt": "hex_to_bin의 분기 없는 소스가 hex2bin 전체의 일정 시간을 증명하는가?",
+        "options": [
+          "아니다. hex2bin에는 오류에 따른 조기 반환이 있다",
+          "그렇다. 한 자리 함수가 분기 없으면 호출자도 동일하다"
+        ],
+        "answer": 0,
+        "explanation": "호출자는 각 니블의 음수 결과에 따라 중단합니다. 부채널 성질은 전체 호출 경로와 컴파일된 코드까지 고려해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * lib/hexdump.c\n */\n\n#include <linux/types.h>\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/kernel.h>\n#include <linux/minmax.h>\n#include <linux/export.h>\n#include <linux/unaligned.h>\n\nconst char hex_asc[] = \"0123456789abcdef\";\nEXPORT_SYMBOL(hex_asc);\nconst char hex_asc_upper[] = \"0123456789ABCDEF\";\nEXPORT_SYMBOL(hex_asc_upper);\n\n/**\n * hex_to_bin - convert a hex digit to its real value\n * @ch: ascii character represents hex digit\n *\n * hex_to_bin() converts one hex digit to its actual value or -1 in case of bad\n * input.\n *\n * This function is used to load cryptographic keys, so it is coded in such a\n * way that there are no conditions or memory accesses that depend on data.\n *\n * Explanation of the logic:\n * (ch - '9' - 1) is negative if ch <= '9'\n * ('0' - 1 - ch) is negative if ch >= '0'\n * we \"and\" these two values, so the result is negative if ch is in the range\n *\t'0' ... '9'\n * we are only interested in the sign, so we do a shift \">> 8\"; note that right\n *\tshift of a negative value is implementation-defined, so we cast the\n *\tvalue to (unsigned) before the shift --- we have 0xffffff if ch is in\n *\tthe range '0' ... '9', 0 otherwise\n * we \"and\" this value with (ch - '0' + 1) --- we have a value 1 ... 10 if ch is\n *\tin the range '0' ... '9', 0 otherwise\n * we add this value to -1 --- we have a value 0 ... 9 if ch is in the range '0'\n *\t... '9', -1 otherwise\n * the next line is similar to the previous one, but we need to decode both\n *\tuppercase and lowercase letters, so we use (ch & 0xdf), which converts\n *\tlowercase to uppercase\n */\nint hex_to_bin(unsigned char ch)\n{\n\tunsigned char cu = ch & 0xdf;\n\treturn -1 +\n\t\t((ch - '0' +  1) & (unsigned)((ch - '9' - 1) & ('0' - 1 - ch)) >> 8) +\n\t\t((cu - 'A' + 11) & (unsigned)((cu - 'F' - 1) & ('A' - 1 - cu)) >> 8);\n}\nEXPORT_SYMBOL(hex_to_bin);\n\n/**\n * hex2bin - convert an ascii hexadecimal string to its binary representation\n * @dst: binary result\n * @src: ascii hexadecimal string\n * @count: result length\n *\n * Return 0 on success, -EINVAL in case of bad input.\n */\nint hex2bin(u8 *dst, const char *src, size_t count)\n{\n\twhile (count--) {\n\t\tint hi, lo;\n\n\t\thi = hex_to_bin(*src++);\n\t\tif (unlikely(hi < 0))\n\t\t\treturn -EINVAL;\n\t\tlo = hex_to_bin(*src++);\n\t\tif (unlikely(lo < 0))\n\t\t\treturn -EINVAL;\n\n\t\t*dst++ = (hi << 4) | lo;\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL(hex2bin);\n\n/**\n * bin2hex - convert binary data to an ascii hexadecimal string\n * @dst: ascii hexadecimal result\n * @src: binary data\n * @count: binary data length\n */\nchar *bin2hex(char *dst, const void *src, size_t count)\n{\n\tconst unsigned char *_src = src;\n\n\twhile (count--)\n\t\tdst = hex_byte_pack(dst, *_src++);\n\treturn dst;\n}\nEXPORT_SYMBOL(bin2hex);\n\n/**\n * hex_dump_to_buffer - convert a blob of data to \"hex ASCII\" in memory\n * @buf: data blob to dump\n * @len: number of bytes in the @buf\n * @rowsize: number of bytes to print per line; must be 16 or 32\n * @groupsize: number of bytes to print at a time (1, 2, 4, 8; default = 1)\n * @linebuf: where to put the converted data\n * @linebuflen: total size of @linebuf, including space for terminating NUL\n * @ascii: include ASCII after the hex output\n *\n * hex_dump_to_buffer() works on one \"line\" of output at a time, i.e.,\n * 16 or 32 bytes of input data converted to hex + ASCII output.\n *\n * Given a buffer of u8 data, hex_dump_to_buffer() converts the input data\n * to a hex + ASCII dump at the supplied memory location.\n * The converted output is always NUL-terminated.\n *\n * E.g.:\n *   hex_dump_to_buffer(frame->data, frame->len, 16, 1,\n *\t\t\tlinebuf, sizeof(linebuf), true);\n *\n * example output buffer:\n * 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f  @ABCDEFGHIJKLMNO\n *\n * Return:\n * The amount of bytes placed in the buffer without terminating NUL. If the\n * output was truncated, then the return value is the number of bytes\n * (excluding the terminating NUL) which would have been written to the final\n * string if enough space had been available.\n */\nint hex_dump_to_buffer(const void *buf, size_t len, int rowsize, int groupsize,\n\t\t       char *linebuf, size_t linebuflen, bool ascii)\n{\n\tconst u8 *ptr = buf;\n\tint ngroups;\n\tu8 ch;\n\tint j, lx = 0;\n\tint ascii_column;\n\tint ret;\n\n\tif (rowsize != 16 && rowsize != 32)\n\t\trowsize = 16;\n\n\tif (len > rowsize)\t\t/* limit to one line at a time */\n\t\tlen = rowsize;\n\tif (!is_power_of_2(groupsize) || groupsize > 8)\n\t\tgroupsize = 1;\n\tif ((len % groupsize) != 0)\t/* no mixed size output */\n\t\tgroupsize = 1;\n\n\tngroups = len / groupsize;\n\tascii_column = rowsize * 2 + rowsize / groupsize + 1;\n\n\tif (!linebuflen)\n\t\tgoto overflow1;\n\n\tif (!len)\n\t\tgoto nil;\n\n\tif (groupsize == 8) {\n\t\tconst u64 *ptr8 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%16.16llx\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr8 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else if (groupsize == 4) {\n\t\tconst u32 *ptr4 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%8.8x\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr4 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else if (groupsize == 2) {\n\t\tconst u16 *ptr2 = buf;\n\n\t\tfor (j = 0; j < ngroups; j++) {\n\t\t\tret = snprintf(linebuf + lx, linebuflen - lx,\n\t\t\t\t       \"%s%4.4x\", j ? \" \" : \"\",\n\t\t\t\t       get_unaligned(ptr2 + j));\n\t\t\tif (ret >= linebuflen - lx)\n\t\t\t\tgoto overflow1;\n\t\t\tlx += ret;\n\t\t}\n\t} else {\n\t\tfor (j = 0; j < len; j++) {\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tch = ptr[j];\n\t\t\tlinebuf[lx++] = hex_asc_hi(ch);\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tlinebuf[lx++] = hex_asc_lo(ch);\n\t\t\tif (linebuflen < lx + 2)\n\t\t\t\tgoto overflow2;\n\t\t\tlinebuf[lx++] = ' ';\n\t\t}\n\t\tif (j)\n\t\t\tlx--;\n\t}\n\tif (!ascii)\n\t\tgoto nil;\n\n\twhile (lx < ascii_column) {\n\t\tif (linebuflen < lx + 2)\n\t\t\tgoto overflow2;\n\t\tlinebuf[lx++] = ' ';\n\t}\n\tfor (j = 0; j < len; j++) {\n\t\tif (linebuflen < lx + 2)\n\t\t\tgoto overflow2;\n\t\tch = ptr[j];\n\t\tlinebuf[lx++] = (isascii(ch) && isprint(ch)) ? ch : '.';\n\t}\nnil:\n\tlinebuf[lx] = '\\0';\n\treturn lx;\noverflow2:\n\tlinebuf[lx++] = '\\0';\noverflow1:\n\treturn ascii ? ascii_column + len : (groupsize * 2 + 1) * ngroups - 1;\n}\nEXPORT_SYMBOL(hex_dump_to_buffer);\n\n#ifdef CONFIG_PRINTK\n/**\n * print_hex_dump - print a text hex dump to syslog for a binary blob of data\n * @level: kernel log level (e.g. KERN_DEBUG)\n * @prefix_str: string to prefix each line with;\n *  caller supplies trailing spaces for alignment if desired\n * @prefix_type: controls whether prefix of an offset, address, or none\n *  is printed (%DUMP_PREFIX_OFFSET, %DUMP_PREFIX_ADDRESS, %DUMP_PREFIX_NONE)\n * @rowsize: number of bytes to print per line; must be 16 or 32\n * @groupsize: number of bytes to print at a time (1, 2, 4, 8; default = 1)\n * @buf: data blob to dump\n * @len: number of bytes in the @buf\n * @ascii: include ASCII after the hex output\n *\n * Given a buffer of u8 data, print_hex_dump() prints a hex + ASCII dump\n * to the kernel log at the specified kernel log level, with an optional\n * leading prefix.\n *\n * print_hex_dump() works on one \"line\" of output at a time, i.e.,\n * 16 or 32 bytes of input data converted to hex + ASCII output.\n * print_hex_dump() iterates over the entire input @buf, breaking it into\n * \"line size\" chunks to format and print.\n *\n * E.g.:\n *   print_hex_dump(KERN_DEBUG, \"raw data: \", DUMP_PREFIX_ADDRESS,\n *\t\t    16, 1, frame->data, frame->len, true);\n *\n * Example output using %DUMP_PREFIX_OFFSET and 1-byte mode:\n * 0009ab42: 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f  @ABCDEFGHIJKLMNO\n * Example output using %DUMP_PREFIX_ADDRESS and 4-byte mode:\n * ffffffff88089af0: 73727170 77767574 7b7a7978 7f7e7d7c  pqrstuvwxyz{|}~.\n */\nvoid print_hex_dump(const char *level, const char *prefix_str, int prefix_type,\n\t\t    int rowsize, int groupsize,\n\t\t    const void *buf, size_t len, bool ascii)\n{\n\tconst u8 *ptr = buf;\n\tint i, linelen, remaining = len;\n\tunsigned char linebuf[32 * 3 + 2 + 32 + 1];\n\n\tif (rowsize != 16 && rowsize != 32)\n\t\trowsize = 16;\n\n\tfor (i = 0; i < len; i += rowsize) {\n\t\tlinelen = min(remaining, rowsize);\n\t\tremaining -= rowsize;\n\n\t\thex_dump_to_buffer(ptr + i, linelen, rowsize, groupsize,\n\t\t\t\t   linebuf, sizeof(linebuf), ascii);\n\n\t\tswitch (prefix_type) {\n\t\tcase DUMP_PREFIX_ADDRESS:\n\t\t\tprintk(\"%s%s%p: %s\\n\",\n\t\t\t       level, prefix_str, ptr + i, linebuf);\n\t\t\tbreak;\n\t\tcase DUMP_PREFIX_OFFSET:\n\t\t\tprintk(\"%s%s%.8x: %s\\n\", level, prefix_str, i, linebuf);\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tprintk(\"%s%s%s\\n\", level, prefix_str, linebuf);\n\t\t\tbreak;\n\t\t}\n\t}\n}\nEXPORT_SYMBOL(print_hex_dump);\n\n#endif /* defined(CONFIG_PRINTK) */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "140a2d3793e01a5a80f6b8e23b24256a5072ab4edf0e69796944d61cb65baa87",
+      "scope": "whole-file",
+      "line_count": 295,
+      "authoring_source": "course/file_units/binary_text.py",
+      "sections": [
+        "전체 구성",
+        "분기 없는 한 자리 변환",
+        "부채널과 검증 범위",
+        "두 자리 결합과 실패",
+        "반대 방향의 연속 쓰기",
+        "한 줄 입력 정규화",
+        "묶음 출력과 엔디언",
+        "ASCII 열과 종료",
+        "용량 부족과 반환값",
+        "여러 줄 로그 출력",
+        "CS 연결과 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/hexdump.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "컴퓨터 속 바이트를 사람이 읽을 두 자리 숫자로 풀어 적습니다. 묶어서 읽을지 한 바이트씩 읽을지에 따라 보이는 순서가 달라질 수 있습니다.",
+    "meaning": "hexdump.c는 16진 문자와 바이트를 변환하고, 한 줄 포맷과 여러 줄 로그 출력을 나눠 처리합니다.",
+    "exercise": "little-endian의 01 02를 바이트별 01 02와 2바이트 정수 0201로 비교하세요."
+  },
+  "goal": "hexdump.c는 16진 문자와 바이트를 변환하고, 한 줄 포맷과 여러 줄 로그 출력을 나눠 처리합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "little-endian의 01 02를 바이트별 01 02와 2바이트 정수 0201로 비교하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "5590080e4c0e00f8f850dedbcdd64c0634f9dc044c28b5f1fbc2ef565652a64b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

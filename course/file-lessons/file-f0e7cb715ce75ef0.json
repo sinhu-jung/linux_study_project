@@ -5,54 +5,62 @@
   "area": "링커 스크립트 · 조건부 컴파일 · ABI 재사용",
   "track": "files",
   "kind": "kernel",
-  "intro": "단일 include가 실제 링크 규칙을 가져오는 구조를 분석합니다.",
+  "intro": "compat 링커 스크립트 연결 파일은 공통 배치를 재사용하며 호환 조건은 Makefile에서 받습니다.",
   "guide": [
-    "같은 링커 스크립트라도 외부 전처리 매크로와 링크 모드에 따라 다른 ABI 이미지를 만들 수 있습니다.",
-    "파일 내부 정의와 Makefile에서 공급하는 조건을 구별합니다."
+    "링커 스크립트는 코드와 자료를 결과 파일의 어디에 놓을지 정하는 설계도입니다.",
+    "전처리 옵션은 소스를 읽기 전에 적용할 조건을 바깥 빌드 명령에서 전달할 수 있습니다.",
+    "한 줄 파일도 포함 대상과 빌드 설정을 함께 봐야 역할을 알 수 있습니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체",
-      "text": "GPL-2.0-only 표기와 #include \"../vdso/vdso.lds.S\" 한 줄이 전부입니다. 여기서 OUTPUT_ARCH·SECTIONS·PHDRS를 새로 작성하지 않고 공통 파일의 내용을 사용합니다."
+      "text": "라이선스 표시와 #include \"../vdso/vdso.lds.S\" 한 줄이 전부입니다. CPU 종류 OUTPUT_ARCH, 섹션 배치 SECTIONS, 적재 구간 PHDRS를 따로 새로 만들지 않고 공통 정의를 가져옵니다."
     },
     {
       "title": "Compat 조건의 출처",
-      "text": "이 wrapper 자체에는 #define COMPAT_VDSO가 없습니다. 확인한 compat Makefile이 -DCOMPAT_VDSO를 전처리 옵션으로 공급하므로 공통 VERSION의 hwprobe 공개 항목이 제외됩니다. 32비트 ELF 링크 모드도 Makefile의 -melf32lriscv에서 제공됩니다. include 한 줄만 보고 빌드 문맥을 생략하면 안 됩니다."
+      "text": "이 파일 자체는 COMPAT_VDSO를 정의하지 않습니다. 호환 Makefile이 -DCOMPAT_VDSO를 주어 공통 공개 심볼 목록에서 hwprobe를 제외합니다. 32비트 ELF 모드도 Makefile의 -melf32lriscv에서 옵니다. include만 보고 바깥 조건을 생략하면 안 됩니다."
     },
     {
       "title": "전체 범위",
-      "text": "공통 파일의 주소·섹션·권한 규칙을 재사용하는 연결 파일입니다. 파일 내용이 짧아도 포함 대상과 빌드 옵션의 조합이 역할을 결정합니다. 실제 compat ELF 링크 검증은 수행하지 않았습니다."
+      "text": "공통 파일의 주소·섹션·권한 배치를 재사용하는 연결 역할입니다. 짧은 내용과 빌드 옵션이 함께 동작을 결정하며 여기의 독해는 실제 호환 ELF 링크 검증을 했다는 뜻은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "COMPAT_VDSO는 이 wrapper 안에서 직접 정의되는가?",
+      "prompt": "COMPAT_VDSO는 이 파일 안에서 직접 정의되나요?",
       "options": [
+        "아니요. 호환 Makefile의 전처리 옵션이 줍니다.",
+        "네. include가 자동으로 만듭니다."
+      ],
+      "answer": 0,
+      "explanation": "원본에는 라이선스와 include뿐이므로 조건이 어디서 오는지 구분합니다.",
+      "original_prompt": "COMPAT_VDSO는 이 wrapper 안에서 직접 정의되는가?",
+      "original_options": [
         "아니다. compat Makefile의 전처리 옵션이 공급한다",
         "그렇다. include 지시문이 자동으로 해당 매크로를 만든다"
       ],
-      "answer": 0,
-      "explanation": "원본에는 SPDX와 include뿐입니다. 실제 설정의 출처를 구분해야 합니다."
+      "original_explanation": "원본에는 SPDX와 include뿐입니다. 실제 설정의 출처를 구분해야 합니다."
     },
     {
-      "prompt": "이 파일은 독립된 섹션 배치 규칙을 복사해 갖고 있는가?",
+      "prompt": "이 파일은 독립적인 섹션 배치 규칙을 복사해 갖고 있나요?",
       "options": [
+        "네. 모든 규칙을 별도로 적어 둡니다.",
+        "아니요. 공통 vdso.lds.S를 포함합니다."
+      ],
+      "answer": 1,
+      "explanation": "전처리 포함으로 같은 배치 소스를 재사용합니다.",
+      "original_prompt": "이 파일은 독립된 섹션 배치 규칙을 복사해 갖고 있는가?",
+      "original_options": [
         "그렇다. 전체 규칙을 별도로 하드코딩한다",
         "아니다. 공통 vdso.lds.S를 포함한다"
       ],
-      "answer": 1,
-      "explanation": "코드 중복 대신 전처리 포함으로 같은 소스를 재사용합니다."
+      "original_explanation": "코드 중복 대신 전처리 포함으로 같은 소스를 재사용합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "이 파일의 include와 Makefile의 -DCOMPAT_VDSO를 나누어 적고 역할을 연결하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/vdso.lds.S\"\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/compat_vdso.lds.S"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f0e7cb715ce75ef0",
+    "path": "arch/riscv/kernel/compat_vdso/compat_vdso.lds.S",
+    "title": "Compat 링커 스크립트 wrapper: 공통 배치와 빌드 정의",
+    "area": "링커 스크립트 · 조건부 컴파일 · ABI 재사용",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "단일 include가 실제 링크 규칙을 가져오는 구조를 분석합니다.",
+    "guide": [
+      "같은 링커 스크립트라도 외부 전처리 매크로와 링크 모드에 따라 다른 ABI 이미지를 만들 수 있습니다.",
+      "파일 내부 정의와 Makefile에서 공급하는 조건을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "GPL-2.0-only 표기와 #include \"../vdso/vdso.lds.S\" 한 줄이 전부입니다. 여기서 OUTPUT_ARCH·SECTIONS·PHDRS를 새로 작성하지 않고 공통 파일의 내용을 사용합니다."
+      },
+      {
+        "title": "Compat 조건의 출처",
+        "text": "이 wrapper 자체에는 #define COMPAT_VDSO가 없습니다. 확인한 compat Makefile이 -DCOMPAT_VDSO를 전처리 옵션으로 공급하므로 공통 VERSION의 hwprobe 공개 항목이 제외됩니다. 32비트 ELF 링크 모드도 Makefile의 -melf32lriscv에서 제공됩니다. include 한 줄만 보고 빌드 문맥을 생략하면 안 됩니다."
+      },
+      {
+        "title": "전체 범위",
+        "text": "공통 파일의 주소·섹션·권한 규칙을 재사용하는 연결 파일입니다. 파일 내용이 짧아도 포함 대상과 빌드 옵션의 조합이 역할을 결정합니다. 실제 compat ELF 링크 검증은 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "COMPAT_VDSO는 이 wrapper 안에서 직접 정의되는가?",
+        "options": [
+          "아니다. compat Makefile의 전처리 옵션이 공급한다",
+          "그렇다. include 지시문이 자동으로 해당 매크로를 만든다"
+        ],
+        "answer": 0,
+        "explanation": "원본에는 SPDX와 include뿐입니다. 실제 설정의 출처를 구분해야 합니다."
+      },
+      {
+        "prompt": "이 파일은 독립된 섹션 배치 규칙을 복사해 갖고 있는가?",
+        "options": [
+          "그렇다. 전체 규칙을 별도로 하드코딩한다",
+          "아니다. 공통 vdso.lds.S를 포함한다"
+        ],
+        "answer": 1,
+        "explanation": "코드 중복 대신 전처리 포함으로 같은 소스를 재사용합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/vdso.lds.S\"\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b1e1bdf203f114f43c9c27e8fbf177d5a42527fbd08722928a118f3c8105fdac",
+      "scope": "whole-file",
+      "line_count": 3,
+      "authoring_source": "course/file_units/riscv_compat_wrappers.py",
+      "sections": [
+        "파일 전체",
+        "Compat 조건의 출처",
+        "전체 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/compat_vdso.lds.S"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 배치 설계도를 가져오되 바깥의 제작 옵션으로 호환 제품을 고릅니다.",
+    "meaning": "compat 링커 스크립트 연결 파일은 공통 배치를 재사용하며 호환 조건은 Makefile에서 받습니다.",
+    "exercise": "이 파일의 include와 Makefile의 -DCOMPAT_VDSO를 나누어 적고 역할을 연결하세요."
+  },
+  "goal": "compat 링커 스크립트 연결 파일은 공통 배치를 재사용하며 호환 조건은 Makefile에서 받습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "이 파일의 include와 Makefile의 -DCOMPAT_VDSO를 나누어 적고 역할을 연결하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "b6414e3c61e28e99cc419d2b33606b2fbb209d1d072e31f4ea5ff3b73dda2ac8",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

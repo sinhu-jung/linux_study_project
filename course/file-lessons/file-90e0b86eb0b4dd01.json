@@ -5,58 +5,66 @@
   "area": "주파수와 주기 · 정수 반올림 · 매크로 · 시간 해상도",
   "track": "files",
   "kind": "kernel",
-  "intro": "TICK_NSEC 한 식의 분모, 반올림 항, 정수 오차를 분석합니다.",
+  "intro": "TICK_NSEC의 반올림과 반복 누적 오차를 설명합니다.",
   "guide": [
-    "주파수의 역수를 정수 시간 단위로 표현하면 나누어떨어지지 않는 설정에서 반올림 오차가 생깁니다.",
-    "HZ와 tick 길이를 혼동하지 않고, 시간 변환에서 사용하는 반올림된 tick을 이해합니다."
+    "HZ는 초당 틱 수이며 틱은 시간 진행을 세는 한 번의 단위입니다. 나노초는 1초의 10억분의 1입니다.",
+    "정수 나눗셈은 소수 부분을 담지 못합니다. 분모 절반을 더한 뒤 나누면 가까운 정수로 반올림할 수 있습니다.",
+    "상수로 정한 주기와 실제 장치가 흔들리며 발생시키는 틱의 간격은 다릅니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일",
-      "text": "GPL-2.0과 guard, HZ를 위한 asm/param.h와 시간 단위 상수를 위한 vdso/time64.h include, TICK_NSEC 정의가 전부입니다. tick 카운터 변수나 interrupt handler를 정의하지 않습니다."
+      "text": "GPL과 중복 포함 방지, HZ와 시간 단위 헤더 및 TICK_NSEC 하나가 전부입니다. 틱 카운터 변수나 인터럽트 처리 함수는 없습니다."
     },
     {
       "title": "정수 주기 계산",
-      "text": "TICK_NSEC는 (NSEC_PER_SEC+HZ/2)/HZ입니다. 양의 HZ에 대해 1초의 나노초를 주파수로 나누되 분모 절반을 먼저 더해 가까운 정수로 반올림합니다. 단순히 NSEC_PER_SEC/HZ를 버림하는 식과 다릅니다. HZ는 초당 tick 수이고 결과는 tick당 나노초입니다."
+      "text": "식은 (NSEC_PER_SEC+HZ/2)/HZ입니다. 양수 HZ에서 초당 나노초를 틱 수로 나누며 절반을 더해 반올림합니다. HZ 설정을 바꾸는 것이 아니라 틱당 나노초를 정하는 계산입니다."
     },
     {
       "title": "정확한 경우와 오차",
-      "text": "HZ=1000이면 1000000ns, HZ=250이면 4000000ns입니다. HZ=300이면 3333333ns이며 이를 300배하면 999999900ns로 1초보다 100ns 작습니다. 정수 주기 하나를 반복 더하는 것과 정확한 주파수 비율을 사용하는 변환의 차이를 보여 줍니다. 이 계산 예제가 해당 HZ가 모든 아키텍처에서 지원된다는 뜻은 아닙니다."
+      "text": "HZ=1000이면 1000000ns, 250이면 4000000ns입니다. 300이면 3333333ns라 300배가 999999900ns로 1초보다 100ns 작습니다. 반올림한 한 틱 누적과 정확한 주파수 비율은 다릅니다. 이 예가 모든 CPU에서 해당 HZ를 지원한다는 뜻은 아닙니다."
     },
     {
       "title": "주석과 실행의 경계",
-      "text": "주석에 SHIFTED_HZ라는 표현이 있지만 실제 매크로 식은 HZ를 사용합니다. 이 파일은 HZ>0을 런타임 검사하지 않으며 tick 간격을 측정하는 기능도 없습니다. 정적 환산값을 하드웨어의 실제 지터나 측정 정확도와 혼동하지 않습니다."
+      "text": "주석에는 SHIFTED_HZ라고 적혔지만 실제 식은 HZ입니다. HZ>0을 실행 중 검사하거나 실제 간격을 측정하지 않습니다. 정적 환산값을 하드웨어의 흔들림이나 실측 정확도로 오해하지 마세요."
     }
   ],
   "questions": [
     {
-      "prompt": "TICK_NSEC 식에 HZ/2를 더하는 이유는?",
+      "prompt": "HZ/2를 더하는 이유는 무엇인가요?",
       "options": [
+        "가까운 정수 나노초로 반올림하기 위해서입니다.",
+        "주파수를 두 배로 만들기 위해서입니다."
+      ],
+      "answer": 0,
+      "explanation": "분모 절반을 분자에 더해 나눗셈 반올림을 합니다.",
+      "original_prompt": "TICK_NSEC 식에 HZ/2를 더하는 이유는?",
+      "original_options": [
         "정수 나눗셈에서 가까운 나노초 값으로 반올림하기 위해서이다",
         "주파수를 두 배로 늘리기 위해서이다"
       ],
-      "answer": 0,
-      "explanation": "분자에 분모 절반을 더한 뒤 나눕니다. 주파수 설정 자체를 변경하는 연산이 아닙니다."
+      "original_explanation": "분자에 분모 절반을 더한 뒤 나눕니다. 주파수 설정 자체를 변경하는 연산이 아닙니다."
     },
     {
-      "prompt": "HZ=300일 때 TICK_NSEC*300이 정확히 10^9인가?",
+      "prompt": "HZ=300에서 상수를 300배 하면 정확히 10^9인가요?",
       "options": [
+        "예. 반복 합도 언제나 정확합니다.",
+        "아니요. 999999900입니다."
+      ],
+      "answer": 1,
+      "explanation": "상수에서 잃은 소수 부분이 반복 합에서 저절로 복구되지는 않습니다.",
+      "original_prompt": "HZ=300일 때 TICK_NSEC*300이 정확히 10^9인가?",
+      "original_options": [
         "그렇다. 정수 반올림은 반복 누적에서도 항상 정확하다",
         "아니다. 999999900이다"
       ],
-      "answer": 1,
-      "explanation": "tick 하나를 3333333ns로 표현하며 잘린 분수는 상수에 남지 않습니다. 주파수 비율과 반올림된 tick 누적을 구분합니다."
+      "original_explanation": "tick 하나를 3333333ns로 표현하며 잘린 분수는 상수에 남지 않습니다. 주파수 비율과 반올림된 tick 누적을 구분합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "HZ=300의 3333333ns를 300배 해 1초와 차이를 구해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_JIFFIES_H\n#define __VDSO_JIFFIES_H\n\n#include <asm/param.h>\t\t\t/* for HZ */\n#include <vdso/time64.h>\n\n/* TICK_NSEC is the time between ticks in nsec assuming SHIFTED_HZ */\n#define TICK_NSEC ((NSEC_PER_SEC+HZ/2)/HZ)\n\n#endif /* __VDSO_JIFFIES_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/jiffies.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-90e0b86eb0b4dd01",
+    "path": "include/vdso/jiffies.h",
+    "title": "Tick 길이 상수: HZ에서 나노초로 반올림",
+    "area": "주파수와 주기 · 정수 반올림 · 매크로 · 시간 해상도",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "TICK_NSEC 한 식의 분모, 반올림 항, 정수 오차를 분석합니다.",
+    "guide": [
+      "주파수의 역수를 정수 시간 단위로 표현하면 나누어떨어지지 않는 설정에서 반올림 오차가 생깁니다.",
+      "HZ와 tick 길이를 혼동하지 않고, 시간 변환에서 사용하는 반올림된 tick을 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0과 guard, HZ를 위한 asm/param.h와 시간 단위 상수를 위한 vdso/time64.h include, TICK_NSEC 정의가 전부입니다. tick 카운터 변수나 interrupt handler를 정의하지 않습니다."
+      },
+      {
+        "title": "정수 주기 계산",
+        "text": "TICK_NSEC는 (NSEC_PER_SEC+HZ/2)/HZ입니다. 양의 HZ에 대해 1초의 나노초를 주파수로 나누되 분모 절반을 먼저 더해 가까운 정수로 반올림합니다. 단순히 NSEC_PER_SEC/HZ를 버림하는 식과 다릅니다. HZ는 초당 tick 수이고 결과는 tick당 나노초입니다."
+      },
+      {
+        "title": "정확한 경우와 오차",
+        "text": "HZ=1000이면 1000000ns, HZ=250이면 4000000ns입니다. HZ=300이면 3333333ns이며 이를 300배하면 999999900ns로 1초보다 100ns 작습니다. 정수 주기 하나를 반복 더하는 것과 정확한 주파수 비율을 사용하는 변환의 차이를 보여 줍니다. 이 계산 예제가 해당 HZ가 모든 아키텍처에서 지원된다는 뜻은 아닙니다."
+      },
+      {
+        "title": "주석과 실행의 경계",
+        "text": "주석에 SHIFTED_HZ라는 표현이 있지만 실제 매크로 식은 HZ를 사용합니다. 이 파일은 HZ>0을 런타임 검사하지 않으며 tick 간격을 측정하는 기능도 없습니다. 정적 환산값을 하드웨어의 실제 지터나 측정 정확도와 혼동하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "TICK_NSEC 식에 HZ/2를 더하는 이유는?",
+        "options": [
+          "정수 나눗셈에서 가까운 나노초 값으로 반올림하기 위해서이다",
+          "주파수를 두 배로 늘리기 위해서이다"
+        ],
+        "answer": 0,
+        "explanation": "분자에 분모 절반을 더한 뒤 나눕니다. 주파수 설정 자체를 변경하는 연산이 아닙니다."
+      },
+      {
+        "prompt": "HZ=300일 때 TICK_NSEC*300이 정확히 10^9인가?",
+        "options": [
+          "그렇다. 정수 반올림은 반복 누적에서도 항상 정확하다",
+          "아니다. 999999900이다"
+        ],
+        "answer": 1,
+        "explanation": "tick 하나를 3333333ns로 표현하며 잘린 분수는 상수에 남지 않습니다. 주파수 비율과 반올림된 tick 누적을 구분합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_JIFFIES_H\n#define __VDSO_JIFFIES_H\n\n#include <asm/param.h>\t\t\t/* for HZ */\n#include <vdso/time64.h>\n\n/* TICK_NSEC is the time between ticks in nsec assuming SHIFTED_HZ */\n#define TICK_NSEC ((NSEC_PER_SEC+HZ/2)/HZ)\n\n#endif /* __VDSO_JIFFIES_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "534df3bf0bda6b55ec0a81a194dc44a3ec2bc5123001d89125a88020af8f387d",
+      "scope": "whole-file",
+      "line_count": 11,
+      "authoring_source": "course/file_units/ktime_interface.py",
+      "sections": [
+        "전체 파일",
+        "정수 주기 계산",
+        "정확한 경우와 오차",
+        "주석과 실행의 경계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/jiffies.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "1초를 300칸으로 나누면 한 칸이 정수 나노초로 딱 떨어지지 않습니다. 이 헤더는 가까운 정수로 틱 한 칸의 길이를 정합니다.",
+    "meaning": "TICK_NSEC의 반올림과 반복 누적 오차를 설명합니다.",
+    "exercise": "HZ=300의 3333333ns를 300배 해 1초와 차이를 구해 보세요."
+  },
+  "goal": "TICK_NSEC의 반올림과 반복 누적 오차를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "HZ=300의 3333333ns를 300배 해 1초와 차이를 구해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "998addbaf9cd4cf7e7d294f1bea6fc7f3526e9ff8eab82ef2d374c37a4f8ef95",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

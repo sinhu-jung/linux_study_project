@@ -5,83 +5,97 @@
   "area": "X86-64 syscall ABI · 인라인 어셈블리 · clobber · namespace · 주소 산술",
   "track": "files",
   "kind": "kernel",
-  "intro": "인라인 syscall 제약과 vvar 주소 차이를 이용한 RNG getter를 전체 분석합니다.",
+  "intro": "x86 getrandom 도우미는 정해진 레지스터로 시스템 호출을 요청하고, 시간 이름 공간의 배치에 맞춰 난수 정보 주소를 찾아요.",
   "guide": [
-    "시스템 호출 ABI는 레지스터 제약으로 표현되며, namespace의 페이지 재배치는 관련 데이터 주소의 차이로 보정할 수 있습니다.",
-    "입력·출력 레지스터와 clobber를 읽고 byte 단위 주소 계산을 설명합니다."
+    "레지스터는 CPU 안의 작은 저장 칸이에요. 시스템 호출 ABI는 요청 번호와 인자를 어떤 칸에 넣고 결과를 받을지 정하는 약속이에요.",
+    "시간 이름 공간은 실행 환경마다 시간 관점을 나누는 기능이에요. 여기서 조정하는 것은 시간값이 아니라 공유 데이터가 놓인 주소예요.",
+    "clobber는 어셈블리 코드가 바꿀 수 있는 레지스터나 메모리 효과를 컴파일러에 알리는 목록이에요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0 include guard와 !__ASSEMBLY__ 구역에서 asm/unistd.h와 asm/vvar.h를 포함합니다. getrandom_syscall, __vdso_rng_data 매크로, __arch_get_vdso_rng_data로 구성됩니다. 이 헤더 내부에는 CONFIG_X86_32에 따른 int 0x80 fallback 분기가 없습니다. 필요한 vdso_data 자료형과 시간 데이터 매크로 등은 포함 문맥과 함께 봐야 합니다."
+      "title": "헤더의 구성",
+      "text": "어셈블리 문맥을 제외한 구역에서 unistd와 vvar를 포함해요. getrandom_syscall, 데이터 매크로와 주소 getter가 있어요. 이 헤더 자체에는 32비트용 int 0x80 분기가 없어요. 필요한 vdso_data 타입과 시간 데이터 매크로는 포함 문맥과 함께 준비돼야 해요."
     },
     {
-      "title": "Syscall 입력과 출력",
-      "text": "getrandom_syscall(buffer,len,flags)는 long ret를 선언하고 syscall 어셈블리를 사용합니다. =a 출력은 반환 레지스터이고 입력 0은 같은 레지스터에 __NR_getrandom을 넣도록 연결합니다. D는 buffer, S는 len, d는 flags에 대응합니다. x86-64 syscall 문맥에서 각각 RDI, RSI, RDX에 해당하며 syscall 번호와 반환은 RAX를 사용합니다."
+      "title": "요청 인자를 넣는 칸",
+      "text": "getrandom_syscall은 syscall 어셈블리를 써요. =a 출력은 ret를 받고 입력 0은 같은 칸에 __NR_getrandom을 넣도록 연결해요. x86-64에서는 요청 번호와 반환값이 RAX예요. D는 buffer를 RDI에, S는 len을 RSI에, 소문자 d는 flags를 RDX에 대응시켜요. 대소문자 차이가 중요해요."
     },
     {
-      "title": "Clobber와 반환 계약",
-      "text": "clobber에는 rcx, r11, memory가 명시됩니다. 컴파일러가 그 레지스터와 메모리 효과를 고려하도록 하는 표현이며 그 자체로 사용자 버퍼 크기를 검사하지는 않습니다. ret를 ssize_t로 반환하고 문서 주석은 기록한 바이트 수 또는 음수 오류라고 설명합니다. libc errno를 설정하거나 항상 len을 반환하는 wrapper가 아닙니다. 소스의 asm에는 명시적 volatile 키워드가 없습니다."
+      "title": "바뀔 수 있는 값과 반환값",
+      "text": "rcx·r11·memory가 clobber 목록이에요. 컴파일러가 영향을 고려하게 하지만 그 자체로 버퍼 길이를 검사하지는 않아요. ret를 ssize_t로 반환하며 의미는 기록한 바이트 수 또는 음수 오류예요. 언제나 len을 반환하거나 libc의 errno를 설정하는 연결 함수가 아니에요. 원문 asm에는 명시적인 volatile 단어도 없어요."
     },
     {
-      "title": "기본 RNG 데이터 매크로",
-      "text": "__vdso_rng_data는 VVAR(_vdso_rng_data)로 정의됩니다. 기본 getter는 &__vdso_rng_data를 반환합니다. 아키텍처 vvar 심볼 배치를 통해 데이터를 참조하는 것으로, 이 파일에서 RNG 상태 페이지를 할당하거나 키를 생성하지 않습니다."
+      "title": "기본 난수 정보 주소",
+      "text": "__vdso_rng_data는 VVAR(_vdso_rng_data)로 정의해요. 기본 getter는 그 객체의 주소를 반환해요. 아키텍처의 vvar 심볼 배치를 이용할 뿐 이 파일에서 상태 페이지를 새로 할당하거나 키를 생성하지 않아요."
     },
     {
-      "title": "Namespace 조건",
-      "text": "IS_ENABLED(CONFIG_TIME_NS)와 __vdso_data->clock_mode==VDSO_CLOCKMODE_TIMENS가 모두 참이면 보정한 주소를 반환합니다. 설정이 켜졌다고 모든 task에서 무조건 주소를 바꾸지는 않습니다. 이 조건의 &&는 설정이 거짓일 때 뒤의 모드 접근을 평가하지 않는 논리입니다."
+      "title": "두 조건을 모두 만족할 때만 조정",
+      "text": "CONFIG_TIME_NS 지원과 clock_mode가 VDSO_CLOCKMODE_TIMENS라는 조건이 &&로 이어져 있어요. 설정만 켜졌다고 모든 태스크 주소를 바꾸지 않아요. 설정 조건이 거짓이면 논리 AND의 뒤쪽 모드 접근은 평가하지 않아요."
     },
     {
-      "title": "주소 차이로 보정",
-      "text": "조건이 참이면 (void *)&__vdso_rng_data에 ((void *)&__timens_vdso_data - (void *)&__vdso_data)를 더합니다. GNU C의 void 포인터 산술 문맥에서 두 시간 데이터 위치의 바이트 차이를 RNG 주소에도 적용합니다. 코드에 4096이나 특정 PAGE_SIZE를 직접 더하는 식은 없습니다. 예를 들어 두 주소 차이가 4096이면 RNG 기준 주소에도 4096을 더하지만 이 예시를 고정 상수로 바꾸어 설명하지 않습니다."
+      "title": "두 주소의 바이트 차이 사용",
+      "text": "조건이 맞으면 기본 RNG 주소에 __timens_vdso_data 주소와 __vdso_data 주소의 차이를 더해요. 이 커널의 GNU C void 포인터 계산에서는 바이트 단위예요. 차이가 4096이면 RNG 주소에도 4096을 더하지만 코드에 그 상수가 직접 적힌 것은 아니에요. 실제 두 자료 위치로 차이를 구해요."
     },
     {
-      "title": "구조체 주소와 내용의 차이",
-      "text": "계산은 시간 데이터의 주소 차이를 사용하며 struct vdso_data 내용이나 namespace 시간 offset을 난수 값에 더하는 연산이 아닙니다. 결과는 const vdso_rng_data *이고 실제 generation·ready 확인과 난수 생성은 공통 코드가 담당합니다. 반환 주소를 찾는 과정과 난수 값 생성 과정을 구별해야 합니다."
+      "title": "자료 위치와 난수값 구분",
+      "text": "계산은 시간 구조체의 내용이나 초 단위 offset을 난수에 섞는 일이 아니에요. 결과는 const vdso_rng_data 포인터예요. 실제 generation·ready 확인과 난수 생성은 공통 코드가 맡아요. 주소를 찾는 절차와 난수값 계산은 다른 역할이에요."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "모든 함수·매크로·전처리 구역과 어셈블리 피연산자를 설명했습니다. 레지스터 ABI, 컴파일러 clobber 계약, 페이지 배치와 주소 보정이 핵심입니다. 실제 x86 바이너리 실행, time namespace 매핑, syscall 오류 경로를 재현한 시험은 수행하지 않았습니다."
+      "title": "검토 범위",
+      "text": "함수와 매크로, 전처리 구역, 어셈블리 입력·출력을 대조했어요. 핵심은 레지스터 약속과 컴파일러에 알리는 효과, 페이지 배치 차이예요. 실제 x86 바이너리나 시간 이름 공간 매핑, 시스템 호출 오류를 실행 재현한 검증은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "getrandom syscall helper에서 flags의 제약은 무엇인가?",
+      "prompt": "flags에 대응하는 제약 문자는 무엇인가요?",
       "options": [
+        "소문자 d이며 x86-64의 RDX예요.",
+        "대문자 D이며 buffer와 같은 RDI예요."
+      ],
+      "answer": 0,
+      "explanation": "D는 buffer, S는 len, d는 flags예요. 문자 크기까지 그대로 읽어야 해요.",
+      "original_prompt": "getrandom syscall helper에서 flags의 제약은 무엇인가?",
+      "original_options": [
         "d이며 x86-64 문맥의 RDX에 대응한다",
         "D이며 buffer와 같은 RDI에 전달한다"
       ],
-      "answer": 0,
-      "explanation": "대문자 D는 buffer, S는 len, 소문자 d는 flags입니다. 제약 문자의 대소문자와 역할을 구분해야 합니다."
+      "original_explanation": "대문자 D는 buffer, S는 len, 소문자 d는 flags입니다. 제약 문자의 대소문자와 역할을 구분해야 합니다."
     },
     {
-      "prompt": "RNG 주소 보정에 사용하는 값은?",
+      "prompt": "RNG 주소를 옮길 때 무엇을 더하나요?",
       "options": [
+        "시간 이름 공간의 초 단위 차이를 더해요.",
+        "두 시간 데이터 심볼 주소의 바이트 차이를 더해요."
+      ],
+      "answer": 1,
+      "explanation": "시간값 계산이 아니라 자료 배치에 맞춘 주소 계산이에요.",
+      "original_prompt": "RNG 주소 보정에 사용하는 값은?",
+      "original_options": [
         "시간 namespace의 초 단위 offset이다",
         "두 시간 데이터 심볼 주소의 바이트 차이이다"
       ],
-      "answer": 1,
-      "explanation": "식은 void 포인터끼리의 주소 차이입니다. 데이터 페이지 위치를 옮기는 것이지 시간 값을 난수 데이터에 섞는 연산이 아닙니다."
+      "original_explanation": "식은 void 포인터끼리의 주소 차이입니다. 데이터 페이지 위치를 옮기는 것이지 시간 값을 난수 데이터에 섞는 연산이 아닙니다."
     },
     {
-      "prompt": "CONFIG_TIME_NS가 켜졌으면 getter가 항상 주소를 보정하는가?",
+      "prompt": "CONFIG_TIME_NS가 켜지면 항상 주소가 바뀌나요?",
       "options": [
+        "아니요. 실제 clock_mode도 TIMENS여야 해요.",
+        "네. 설정 하나면 모든 태스크 주소가 바뀌어요."
+      ],
+      "answer": 0,
+      "explanation": "두 조건의 AND이므로 일반 모드는 기본 데이터 주소를 받아요.",
+      "original_prompt": "CONFIG_TIME_NS가 켜졌으면 getter가 항상 주소를 보정하는가?",
+      "original_options": [
         "아니다. clock_mode도 TIMENS여야 한다",
         "그렇다. 설정 하나만으로 모든 task의 주소가 이동한다"
       ],
-      "answer": 0,
-      "explanation": "조건은 설정과 실제 모드 두 항의 AND입니다. 일반 task는 기본 RNG 데이터 주소를 반환합니다."
+      "original_explanation": "조건은 설정과 실제 모드 두 항의 AND입니다. 일반 task는 기본 RNG 데이터 주소를 반환합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "시간 데이터 두 주소가 4096바이트 떨어졌다면 RNG 기준 주소에 어떤 차이를 적용하는지 적고, 이 숫자가 고정 상수는 아닌 이유를 말해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2022-2024 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n */\n#ifndef __ASM_VDSO_GETRANDOM_H\n#define __ASM_VDSO_GETRANDOM_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/unistd.h>\n#include <asm/vvar.h>\n\n/**\n * getrandom_syscall - Invoke the getrandom() syscall.\n * @buffer:\tDestination buffer to fill with random bytes.\n * @len:\tSize of @buffer in bytes.\n * @flags:\tZero or more GRND_* flags.\n * Returns:\tThe number of random bytes written to @buffer, or a negative value indicating an error.\n */\nstatic __always_inline ssize_t getrandom_syscall(void *buffer, size_t len, unsigned int flags)\n{\n\tlong ret;\n\n\tasm (\"syscall\" : \"=a\" (ret) :\n\t     \"0\" (__NR_getrandom), \"D\" (buffer), \"S\" (len), \"d\" (flags) :\n\t     \"rcx\", \"r11\", \"memory\");\n\n\treturn ret;\n}\n\n#define __vdso_rng_data (VVAR(_vdso_rng_data))\n\nstatic __always_inline const struct vdso_rng_data *__arch_get_vdso_rng_data(void)\n{\n\tif (IS_ENABLED(CONFIG_TIME_NS) && __vdso_data->clock_mode == VDSO_CLOCKMODE_TIMENS)\n\t\treturn (void *)&__vdso_rng_data + ((void *)&__timens_vdso_data - (void *)&__vdso_data);\n\treturn &__vdso_rng_data;\n}\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_GETRANDOM_H */\n",
   "source_review": {
@@ -107,5 +121,144 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vdso/getrandom.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a3bb324391541aed",
+    "path": "arch/x86/include/asm/vdso/getrandom.h",
+    "title": "X86 난수 syscall과 namespace RNG 주소 보정",
+    "area": "X86-64 syscall ABI · 인라인 어셈블리 · clobber · namespace · 주소 산술",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "인라인 syscall 제약과 vvar 주소 차이를 이용한 RNG getter를 전체 분석합니다.",
+    "guide": [
+      "시스템 호출 ABI는 레지스터 제약으로 표현되며, namespace의 페이지 재배치는 관련 데이터 주소의 차이로 보정할 수 있습니다.",
+      "입력·출력 레지스터와 clobber를 읽고 byte 단위 주소 계산을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 include guard와 !__ASSEMBLY__ 구역에서 asm/unistd.h와 asm/vvar.h를 포함합니다. getrandom_syscall, __vdso_rng_data 매크로, __arch_get_vdso_rng_data로 구성됩니다. 이 헤더 내부에는 CONFIG_X86_32에 따른 int 0x80 fallback 분기가 없습니다. 필요한 vdso_data 자료형과 시간 데이터 매크로 등은 포함 문맥과 함께 봐야 합니다."
+      },
+      {
+        "title": "Syscall 입력과 출력",
+        "text": "getrandom_syscall(buffer,len,flags)는 long ret를 선언하고 syscall 어셈블리를 사용합니다. =a 출력은 반환 레지스터이고 입력 0은 같은 레지스터에 __NR_getrandom을 넣도록 연결합니다. D는 buffer, S는 len, d는 flags에 대응합니다. x86-64 syscall 문맥에서 각각 RDI, RSI, RDX에 해당하며 syscall 번호와 반환은 RAX를 사용합니다."
+      },
+      {
+        "title": "Clobber와 반환 계약",
+        "text": "clobber에는 rcx, r11, memory가 명시됩니다. 컴파일러가 그 레지스터와 메모리 효과를 고려하도록 하는 표현이며 그 자체로 사용자 버퍼 크기를 검사하지는 않습니다. ret를 ssize_t로 반환하고 문서 주석은 기록한 바이트 수 또는 음수 오류라고 설명합니다. libc errno를 설정하거나 항상 len을 반환하는 wrapper가 아닙니다. 소스의 asm에는 명시적 volatile 키워드가 없습니다."
+      },
+      {
+        "title": "기본 RNG 데이터 매크로",
+        "text": "__vdso_rng_data는 VVAR(_vdso_rng_data)로 정의됩니다. 기본 getter는 &__vdso_rng_data를 반환합니다. 아키텍처 vvar 심볼 배치를 통해 데이터를 참조하는 것으로, 이 파일에서 RNG 상태 페이지를 할당하거나 키를 생성하지 않습니다."
+      },
+      {
+        "title": "Namespace 조건",
+        "text": "IS_ENABLED(CONFIG_TIME_NS)와 __vdso_data->clock_mode==VDSO_CLOCKMODE_TIMENS가 모두 참이면 보정한 주소를 반환합니다. 설정이 켜졌다고 모든 task에서 무조건 주소를 바꾸지는 않습니다. 이 조건의 &&는 설정이 거짓일 때 뒤의 모드 접근을 평가하지 않는 논리입니다."
+      },
+      {
+        "title": "주소 차이로 보정",
+        "text": "조건이 참이면 (void *)&__vdso_rng_data에 ((void *)&__timens_vdso_data - (void *)&__vdso_data)를 더합니다. GNU C의 void 포인터 산술 문맥에서 두 시간 데이터 위치의 바이트 차이를 RNG 주소에도 적용합니다. 코드에 4096이나 특정 PAGE_SIZE를 직접 더하는 식은 없습니다. 예를 들어 두 주소 차이가 4096이면 RNG 기준 주소에도 4096을 더하지만 이 예시를 고정 상수로 바꾸어 설명하지 않습니다."
+      },
+      {
+        "title": "구조체 주소와 내용의 차이",
+        "text": "계산은 시간 데이터의 주소 차이를 사용하며 struct vdso_data 내용이나 namespace 시간 offset을 난수 값에 더하는 연산이 아닙니다. 결과는 const vdso_rng_data *이고 실제 generation·ready 확인과 난수 생성은 공통 코드가 담당합니다. 반환 주소를 찾는 과정과 난수 값 생성 과정을 구별해야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "모든 함수·매크로·전처리 구역과 어셈블리 피연산자를 설명했습니다. 레지스터 ABI, 컴파일러 clobber 계약, 페이지 배치와 주소 보정이 핵심입니다. 실제 x86 바이너리 실행, time namespace 매핑, syscall 오류 경로를 재현한 시험은 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "getrandom syscall helper에서 flags의 제약은 무엇인가?",
+        "options": [
+          "d이며 x86-64 문맥의 RDX에 대응한다",
+          "D이며 buffer와 같은 RDI에 전달한다"
+        ],
+        "answer": 0,
+        "explanation": "대문자 D는 buffer, S는 len, 소문자 d는 flags입니다. 제약 문자의 대소문자와 역할을 구분해야 합니다."
+      },
+      {
+        "prompt": "RNG 주소 보정에 사용하는 값은?",
+        "options": [
+          "시간 namespace의 초 단위 offset이다",
+          "두 시간 데이터 심볼 주소의 바이트 차이이다"
+        ],
+        "answer": 1,
+        "explanation": "식은 void 포인터끼리의 주소 차이입니다. 데이터 페이지 위치를 옮기는 것이지 시간 값을 난수 데이터에 섞는 연산이 아닙니다."
+      },
+      {
+        "prompt": "CONFIG_TIME_NS가 켜졌으면 getter가 항상 주소를 보정하는가?",
+        "options": [
+          "아니다. clock_mode도 TIMENS여야 한다",
+          "그렇다. 설정 하나만으로 모든 task의 주소가 이동한다"
+        ],
+        "answer": 0,
+        "explanation": "조건은 설정과 실제 모드 두 항의 AND입니다. 일반 task는 기본 RNG 데이터 주소를 반환합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2022-2024 Jason A. Donenfeld <Jason@zx2c4.com>. All Rights Reserved.\n */\n#ifndef __ASM_VDSO_GETRANDOM_H\n#define __ASM_VDSO_GETRANDOM_H\n\n#ifndef __ASSEMBLY__\n\n#include <asm/unistd.h>\n#include <asm/vvar.h>\n\n/**\n * getrandom_syscall - Invoke the getrandom() syscall.\n * @buffer:\tDestination buffer to fill with random bytes.\n * @len:\tSize of @buffer in bytes.\n * @flags:\tZero or more GRND_* flags.\n * Returns:\tThe number of random bytes written to @buffer, or a negative value indicating an error.\n */\nstatic __always_inline ssize_t getrandom_syscall(void *buffer, size_t len, unsigned int flags)\n{\n\tlong ret;\n\n\tasm (\"syscall\" : \"=a\" (ret) :\n\t     \"0\" (__NR_getrandom), \"D\" (buffer), \"S\" (len), \"d\" (flags) :\n\t     \"rcx\", \"r11\", \"memory\");\n\n\treturn ret;\n}\n\n#define __vdso_rng_data (VVAR(_vdso_rng_data))\n\nstatic __always_inline const struct vdso_rng_data *__arch_get_vdso_rng_data(void)\n{\n\tif (IS_ENABLED(CONFIG_TIME_NS) && __vdso_data->clock_mode == VDSO_CLOCKMODE_TIMENS)\n\t\treturn (void *)&__vdso_rng_data + ((void *)&__timens_vdso_data - (void *)&__vdso_data);\n\treturn &__vdso_rng_data;\n}\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_GETRANDOM_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "e40db4b4456e4dcf94d2d5259a0ba57d553f165588999f8d5bc9618b57b758d4",
+      "scope": "whole-file",
+      "line_count": 42,
+      "authoring_source": "course/file_units/x86_vdso_random_hooks.py",
+      "sections": [
+        "전체 구성",
+        "Syscall 입력과 출력",
+        "Clobber와 반환 계약",
+        "기본 RNG 데이터 매크로",
+        "Namespace 조건",
+        "주소 차이로 보정",
+        "구조체 주소와 내용의 차이",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vdso/getrandom.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "요청서를 정해진 서랍에 넣어 전달하고, 자료실 위치가 바뀌면 같은 거리만큼 안내 주소를 옮겨요.",
+    "meaning": "x86 getrandom 도우미는 정해진 레지스터로 시스템 호출을 요청하고, 시간 이름 공간의 배치에 맞춰 난수 정보 주소를 찾아요.",
+    "exercise": "시간 데이터 두 주소가 4096바이트 떨어졌다면 RNG 기준 주소에 어떤 차이를 적용하는지 적고, 이 숫자가 고정 상수는 아닌 이유를 말해 보세요."
+  },
+  "goal": "x86 getrandom 도우미는 정해진 레지스터로 시스템 호출을 요청하고, 시간 이름 공간의 배치에 맞춰 난수 정보 주소를 찾아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "시간 데이터 두 주소가 4096바이트 떨어졌다면 RNG 기준 주소에 어떤 차이를 적용하는지 적고, 이 숫자가 고정 상수는 아닌 이유를 말해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "3dda3241649fb1fd327f16eb49ad04f97faaf6567b2219559a83f56384bfd6b2",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

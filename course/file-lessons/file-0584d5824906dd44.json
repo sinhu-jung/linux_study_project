@@ -5,92 +5,112 @@
   "area": "고정소수점 · 조회표·수치 근사",
   "track": "files",
   "kind": "kernel",
-  "intro": "정수 입력의 로그를 소수부24비트의 고정소수점으로 근사합니다.",
+  "intro": "조회표와 보간으로 로그를 근사하고 2^24 배율로 결과를 읽는 방법을 설명합니다.",
   "guide": [
-    "intlog2는 최상위1비트 위치를 정수 지수로 분리하고 정규화한 유효숫자의 상위8개 가변 비트로 표를 조회합니다. 남은23비트는 다음 표 값까지 선형 보간하는 데 사용합니다. intlog10은 intlog2에 고정소수점 log10(2)를 곱합니다.",
-    "양의 u32 입력을 사용합니다. 반환형이 unsigned int라고 소수부가 없는 정수 로그인 것은 아닙니다.2^24로 나눠야 로그 단위의 값을 얻습니다."
+    "고정소수점은 소수를 일정 배율만큼 키워 정수로 저장하는 방법입니다. 결과를 원래 단위로 읽으려면 2^24로 나눕니다.",
+    "보간은 표의 이웃한 두 값 사이를 직선으로 이어 중간값을 추정하는 방법입니다. 빠르지만 모든 입력에서 정확한 실수값을 보장하지 않습니다.",
+    "입력 0은 허용되지 않습니다. 경고 후 0을 반환해도 수학에서 log(0)=0이라는 뜻은 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체 구성",
-      "text": "LGPL-2.1-or-later 식별,저작권,bitops/export/int_log/kernel/types 및 asm/bug 헤더,256개 unsigned short 상수 표,intlog2와 intlog10,각 export로 구성됩니다. 별도 초기화·동적 할당·가변 전역 상태는 없습니다."
+      "text": "LGPL 표기와 저작권, 비트·형식·경고 헤더 뒤 unsigned short 256개 표가 있습니다. intlog2와 intlog10 및 외부 공개가 이어지며 초기화 함수, 새 메모리 할당, 바뀌는 전역 상태는 없습니다."
     },
     {
       "title": "표 전체의 의미",
-      "text": "logtable[i]는 log2(1+i/256)*2^16을 반올림한 값과256개 모두 일치합니다. 첫 값0,마지막0xff47이고 단조 증가합니다. 내부 표는 소수부16비트,최종 출력은24비트여서 표 값을8비트 왼쪽 이동합니다. 최대 인접 차이는369이며 마지막에서 가상의2.0 끝점까지 차이도 고려합니다."
+      "text": "표의 256개 값은 log2(1+i/256)×2^16을 반올림한 값과 일치합니다. 첫 값은 0, 마지막은 0xff47이며 차례로 커집니다. 표는 소수부 16비트, 결과는 24비트이므로 표 값을 8칸 왼쪽으로 옮깁니다. 가장 큰 이웃 차이는 369이며 마지막 값 뒤의 가상 끝점 2.0도 고려합니다."
     },
     {
       "title": "정규화와 인덱스",
-      "text": "msb=fls(value)-1은0기반 최상위 비트 위치입니다. value<<(31-msb)로 최상위 비트를31번에 맞춥니다. significand>>23의 최상위1은 고정이므로 %256으로 제거하고0..255의 인덱스를 얻습니다. 입력8은 msb3,significand0x80000000,index0이라 정확히3<<24를 반환합니다."
+      "text": "fls(value)-1로 가장 높은 1비트의 0부터 센 위치 msb를 찾습니다. 그 비트가 31번에 오도록 옮기면 크기와 유효숫자를 나눌 수 있습니다. 위쪽 9비트의 맨 앞 1은 항상 같아 나머지 256 연산으로 없애고 표 번호 0~255를 얻습니다. 입력 8은 msb=3, 표 번호 0이어서 정확히 3<<24입니다."
     },
     {
       "title": "보간과 마지막 구간",
-      "text": "하위23비트에 인접 표 값의 차이를 곱하고15비트 오른쪽 이동합니다.23비트 비율을 적용하면서 표의16비트 소수부를24비트로 바꾸므로23-8=15입니다. index255의 다음 인덱스는0으로 감기지만 차이에 &0xffff를 적용하여 가상의 표 값65536과의 차이185를 얻습니다. 끝 구간이 음의 기울기가 되는 것은 아닙니다."
+      "text": "아래 23비트에 이웃 표 값의 차이를 곱하고 15칸 오른쪽으로 옮깁니다. 23비트 비율을 적용하면서 결과 배율을 8비트 늘리므로 23-8=15입니다. 마지막 번호 255 다음은 표 번호 0으로 돌아가지만 차이에 &0xffff를 하여 가상 값 65536까지의 양수 차이 185를 얻습니다. 마지막 구간이 내려가는 곡선은 아닙니다."
     },
     {
       "title": "곱의 폭과 오차",
-      "text": "최대 하위값0x7fffff와 최대 표 차이369에 대해 (2^23-1)*369<2^32입니다. 따라서 이 보간 곱은32비트 unsigned 범위 안입니다. 표 양자화,로그 곡선의 선형 보간,우측 시프트 절단 때문에 일반 입력에 정확한 실수 로그를 보장하지 않습니다."
+      "text": "가장 큰 곱도 (2^23-1)×369로 2^32보다 작아 이 보간 중간값은 u32에 들어갑니다. 다만 표 반올림, 곡선을 직선으로 대신함, 오른쪽 이동 때 아래 비트를 버림 때문에 오차가 있습니다. 범위에 들어간다는 것과 수학적으로 완벽히 정확하다는 것은 다릅니다."
     },
     {
       "title": "밑10 변환",
-      "text": "intlog10은 intlog2 결과를 u64 log에 저장한 뒤646456993을 곱하고31비트 이동합니다. 상수는 log10(2)를2^31 배율로 근사한 것입니다. 곱을 u64로 수행하는 점이 중요하며 반환 배율은 여전히2^24입니다.1000처럼 정확한 로그가 정수인 입력도 구현 결과는3<<24와 조금 다를 수 있습니다."
+      "text": "intlog10은 intlog2 결과를 u64에 넣고 646456993을 곱한 뒤 31칸 옮깁니다. 이 상수는 log10(2)×2^31의 근삿값이며 큰 곱을 u64로 계산합니다. 최종 배율은 여전히 2^24입니다. 입력 1000도 정확히 3<<24와 조금 다를 수 있습니다."
     },
     {
       "title": "0 입력과 진단",
-      "text": "두 함수 모두0이면 WARN_ON(1) 후0을 반환합니다. log(0)의 수학적 값이0이라는 뜻이 아닙니다. 정상 입력1의 로그도0이므로 반환값만으로 잘못된0 입력을 판별할 수 없습니다. intlog10의0 분기는 intlog2 호출보다 앞에 있습니다."
+      "text": "두 함수는 0이면 WARN_ON 후 0을 반환합니다. intlog10은 intlog2를 부르기 전에 이 검사를 합니다. 정상 입력 1의 로그 역시 0이므로 반환값 0만으로 입력이 잘못되었는지 구분할 수 없습니다."
     },
     {
       "title": "CS와 검증 범위",
-      "text": "정규화,지수·유효숫자 분리,조회표의 공간/정확도 절충,선형 보간,고정소수점 스케일 변환을 연결합니다. 독립 실수 로그와의 표본 오차 및2의 거듭제곱 정확값을 확인할 수 있지만 유한 표본의 최대 오차를 전체 u32 입력의 증명된 상한이라고 말하면 안 됩니다."
+      "text": "정규화, 지수와 유효숫자 분리, 표 크기와 정확도의 절충, 보간과 배율 변환이 연결됩니다. 독립적인 실수 로그 계산과 표본을 비교하고 2의 거듭제곱을 검사할 수 있습니다. 그러나 몇 개 표본의 최대 오차를 모든 u32 입력에 대한 증명된 한계라고 말하면 안 됩니다."
     }
   ],
   "questions": [
     {
-      "prompt": "intlog2(8)의 반환값을 로그 단위로 읽는 방법은?",
+      "prompt": "intlog2(8)의 결과를 로그 단위로 어떻게 읽나요?",
       "options": [
+        "2^24로 나누면 3입니다.",
+        "반환값 자체가 정수 3입니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 반환값은 3×2^24이며 배율을 나누어 읽습니다.",
+      "original_prompt": "intlog2(8)의 반환값을 로그 단위로 읽는 방법은?",
+      "original_options": [
         "반환값을2^24로 나누면3이다",
         "반환값을 그대로 정수3으로 읽는다"
       ],
-      "answer": 0,
-      "explanation": "msb3을24비트 왼쪽 이동한50,331,648을 반환합니다. 소수부24비트 배율을 고려해야 합니다."
+      "original_explanation": "msb3을24비트 왼쪽 이동한50,331,648을 반환합니다. 소수부24비트 배율을 고려해야 합니다."
     },
     {
-      "prompt": "보간의 마지막 표 구간은 감소하는 구간인가?",
+      "prompt": "마지막 표 구간은 값이 줄어드는 구간인가요?",
       "options": [
+        "예. 다음 값 0을 그냥 빼서 감소합니다.",
+        "아니요. 마스크로 가상 끝점까지의 양수 차이를 구합니다."
+      ],
+      "answer": 1,
+      "explanation": "0-0xff47에 &0xffff를 하면 185가 됩니다.",
+      "original_prompt": "보간의 마지막 표 구간은 감소하는 구간인가?",
+      "original_options": [
         "그렇다. 다음 표 값0을 그냥 빼서 감소한다",
         "아니다. 마스크로 가상 끝점65536까지의 양의 차이를 구한다"
       ],
-      "answer": 1,
-      "explanation": "0-0xff47에 &0xffff를 적용하면185입니다. 표의 순환 인덱스와 수학적 끝점 처리를 함께 읽어야 합니다."
+      "original_explanation": "0-0xff47에 &0xffff를 적용하면185입니다. 표의 순환 인덱스와 수학적 끝점 처리를 함께 읽어야 합니다."
     },
     {
-      "prompt": "0 반환만으로 입력이 유효했다고 판단할 수 있는가?",
+      "prompt": "결과 0이면 입력이 정상이라고 알 수 있나요?",
       "options": [
+        "아니요. 잘못된 0과 정상 1 모두 결과가 0입니다.",
+        "예. 잘못된 입력은 음수를 반환합니다."
+      ],
+      "answer": 0,
+      "explanation": "반환형은 부호 없는 정수이고 입력 0은 경고 후 0입니다.",
+      "original_prompt": "0 반환만으로 입력이 유효했다고 판단할 수 있는가?",
+      "original_options": [
         "없다. 잘못된 입력0과 정상 입력1 모두0을 반환한다",
         "있다. 잘못된 입력은 음수를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "반환형은 unsigned이며0 입력은 경고 후0입니다. 유효 입력 전제는 호출자가 지켜야 합니다."
+      "original_explanation": "반환형은 unsigned이며0 입력은 경고 후0입니다. 유효 입력 전제는 호출자가 지켜야 합니다."
     },
     {
-      "prompt": "intlog10이 u64 중간값을 쓰는 이유는?",
+      "prompt": "intlog10이 u64 중간값을 쓰는 이유는 무엇인가요?",
       "options": [
+        "최종 반환형이 반드시 128비트여야 해서입니다.",
+        "배율 변환 상수와의 큰 곱을 담기 위해서입니다."
+      ],
+      "answer": 1,
+      "explanation": "32비트로 먼저 곱하면 필요한 높은 비트를 잃을 수 있습니다.",
+      "original_prompt": "intlog10이 u64 중간값을 쓰는 이유는?",
+      "original_options": [
         "최종 반환형도 반드시128비트여야 하기 때문이다",
         "스케일 변환 상수와의 곱을 넓은 타입에서 계산하기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "intlog2의 스케일된 결과에646456993을 곱하므로32비트 중간 곱으로는 부족합니다. 최종 반환은 unsigned int입니다."
+      "original_explanation": "intlog2의 스케일된 결과에646456993을 곱하므로32비트 중간 곱으로는 부족합니다. 최종 반환은 unsigned int입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "intlog2(8)의 결과 50331648을 2^24로 나누어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: LGPL-2.1-or-later\n/*\n * Provides fixed-point logarithm operations.\n *\n * Copyright (C) 2006 Christoph Pfister (christophpfister@gmail.com)\n */\n\n#include <linux/bitops.h>\n#include <linux/export.h>\n#include <linux/int_log.h>\n#include <linux/kernel.h>\n#include <linux/types.h>\n\n#include <asm/bug.h>\n\nstatic const unsigned short logtable[256] = {\n\t0x0000, 0x0171, 0x02e0, 0x044e, 0x05ba, 0x0725, 0x088e, 0x09f7,\n\t0x0b5d, 0x0cc3, 0x0e27, 0x0f8a, 0x10eb, 0x124b, 0x13aa, 0x1508,\n\t0x1664, 0x17bf, 0x1919, 0x1a71, 0x1bc8, 0x1d1e, 0x1e73, 0x1fc6,\n\t0x2119, 0x226a, 0x23ba, 0x2508, 0x2656, 0x27a2, 0x28ed, 0x2a37,\n\t0x2b80, 0x2cc8, 0x2e0f, 0x2f54, 0x3098, 0x31dc, 0x331e, 0x345f,\n\t0x359f, 0x36de, 0x381b, 0x3958, 0x3a94, 0x3bce, 0x3d08, 0x3e41,\n\t0x3f78, 0x40af, 0x41e4, 0x4319, 0x444c, 0x457f, 0x46b0, 0x47e1,\n\t0x4910, 0x4a3f, 0x4b6c, 0x4c99, 0x4dc5, 0x4eef, 0x5019, 0x5142,\n\t0x526a, 0x5391, 0x54b7, 0x55dc, 0x5700, 0x5824, 0x5946, 0x5a68,\n\t0x5b89, 0x5ca8, 0x5dc7, 0x5ee5, 0x6003, 0x611f, 0x623a, 0x6355,\n\t0x646f, 0x6588, 0x66a0, 0x67b7, 0x68ce, 0x69e4, 0x6af8, 0x6c0c,\n\t0x6d20, 0x6e32, 0x6f44, 0x7055, 0x7165, 0x7274, 0x7383, 0x7490,\n\t0x759d, 0x76aa, 0x77b5, 0x78c0, 0x79ca, 0x7ad3, 0x7bdb, 0x7ce3,\n\t0x7dea, 0x7ef0, 0x7ff6, 0x80fb, 0x81ff, 0x8302, 0x8405, 0x8507,\n\t0x8608, 0x8709, 0x8809, 0x8908, 0x8a06, 0x8b04, 0x8c01, 0x8cfe,\n\t0x8dfa, 0x8ef5, 0x8fef, 0x90e9, 0x91e2, 0x92db, 0x93d2, 0x94ca,\n\t0x95c0, 0x96b6, 0x97ab, 0x98a0, 0x9994, 0x9a87, 0x9b7a, 0x9c6c,\n\t0x9d5e, 0x9e4f, 0x9f3f, 0xa02e, 0xa11e, 0xa20c, 0xa2fa, 0xa3e7,\n\t0xa4d4, 0xa5c0, 0xa6ab, 0xa796, 0xa881, 0xa96a, 0xaa53, 0xab3c,\n\t0xac24, 0xad0c, 0xadf2, 0xaed9, 0xafbe, 0xb0a4, 0xb188, 0xb26c,\n\t0xb350, 0xb433, 0xb515, 0xb5f7, 0xb6d9, 0xb7ba, 0xb89a, 0xb97a,\n\t0xba59, 0xbb38, 0xbc16, 0xbcf4, 0xbdd1, 0xbead, 0xbf8a, 0xc065,\n\t0xc140, 0xc21b, 0xc2f5, 0xc3cf, 0xc4a8, 0xc580, 0xc658, 0xc730,\n\t0xc807, 0xc8de, 0xc9b4, 0xca8a, 0xcb5f, 0xcc34, 0xcd08, 0xcddc,\n\t0xceaf, 0xcf82, 0xd054, 0xd126, 0xd1f7, 0xd2c8, 0xd399, 0xd469,\n\t0xd538, 0xd607, 0xd6d6, 0xd7a4, 0xd872, 0xd93f, 0xda0c, 0xdad9,\n\t0xdba5, 0xdc70, 0xdd3b, 0xde06, 0xded0, 0xdf9a, 0xe063, 0xe12c,\n\t0xe1f5, 0xe2bd, 0xe385, 0xe44c, 0xe513, 0xe5d9, 0xe69f, 0xe765,\n\t0xe82a, 0xe8ef, 0xe9b3, 0xea77, 0xeb3b, 0xebfe, 0xecc1, 0xed83,\n\t0xee45, 0xef06, 0xefc8, 0xf088, 0xf149, 0xf209, 0xf2c8, 0xf387,\n\t0xf446, 0xf505, 0xf5c3, 0xf680, 0xf73e, 0xf7fb, 0xf8b7, 0xf973,\n\t0xfa2f, 0xfaea, 0xfba5, 0xfc60, 0xfd1a, 0xfdd4, 0xfe8e, 0xff47,\n};\n\nunsigned int intlog2(u32 value)\n{\n\t/**\n\t *\treturns: log2(value) * 2^24\n\t *\twrong result if value = 0 (log2(0) is undefined)\n\t */\n\tunsigned int msb;\n\tunsigned int logentry;\n\tunsigned int significand;\n\tunsigned int interpolation;\n\n\tif (unlikely(value == 0)) {\n\t\tWARN_ON(1);\n\t\treturn 0;\n\t}\n\n\t/* first detect the msb (count begins at 0) */\n\tmsb = fls(value) - 1;\n\n\t/**\n\t *\tnow we use a logtable after the following method:\n\t *\n\t *\tlog2(2^x * y) * 2^24 = x * 2^24 + log2(y) * 2^24\n\t *\twhere x = msb and therefore 1 <= y < 2\n\t *\tfirst y is determined by shifting the value left\n\t *\tso that msb is bit 31\n\t *\t\t0x00231f56 -> 0x8C7D5800\n\t *\tthe result is y * 2^31 -> \"significand\"\n\t *\tthen the highest 9 bits are used for a table lookup\n\t *\tthe highest bit is discarded because it's always set\n\t *\tthe highest nine bits in our example are 100011000\n\t *\tso we would use the entry 0x18\n\t */\n\tsignificand = value << (31 - msb);\n\tlogentry = (significand >> 23) % ARRAY_SIZE(logtable);\n\n\t/**\n\t *\tlast step we do is interpolation because of the\n\t *\tlimitations of the log table the error is that part of\n\t *\tthe significand which isn't used for lookup then we\n\t *\tcompute the ratio between the error and the next table entry\n\t *\tand interpolate it between the log table entry used and the\n\t *\tnext one the biggest error possible is 0x7fffff\n\t *\t(in our example it's 0x7D5800)\n\t *\tneeded value for next table entry is 0x800000\n\t *\tso the interpolation is\n\t *\t(error / 0x800000) * (logtable_next - logtable_current)\n\t *\tin the implementation the division is moved to the end for\n\t *\tbetter accuracy there is also an overflow correction if\n\t *\tlogtable_next is 256\n\t */\n\tinterpolation = ((significand & 0x7fffff) *\n\t\t\t((logtable[(logentry + 1) % ARRAY_SIZE(logtable)] -\n\t\t\t  logtable[logentry]) & 0xffff)) >> 15;\n\n\t/* now we return the result */\n\treturn ((msb << 24) + (logtable[logentry] << 8) + interpolation);\n}\nEXPORT_SYMBOL(intlog2);\n\nunsigned int intlog10(u32 value)\n{\n\t/**\n\t *\treturns: log10(value) * 2^24\n\t *\twrong result if value = 0 (log10(0) is undefined)\n\t */\n\tu64 log;\n\n\tif (unlikely(value == 0)) {\n\t\tWARN_ON(1);\n\t\treturn 0;\n\t}\n\n\tlog = intlog2(value);\n\n\t/**\n\t *\twe use the following method:\n\t *\tlog10(x) = log2(x) * log10(2)\n\t */\n\n\treturn (log * 646456993) >> 31;\n}\nEXPORT_SYMBOL(intlog10);\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/int_log.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0584d5824906dd44",
+    "path": "lib/math/int_log.c",
+    "title": "정수 로그 구현 전체: 256개 표와 선형 보간",
+    "area": "고정소수점 · 조회표·수치 근사",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정수 입력의 로그를 소수부24비트의 고정소수점으로 근사합니다.",
+    "guide": [
+      "intlog2는 최상위1비트 위치를 정수 지수로 분리하고 정규화한 유효숫자의 상위8개 가변 비트로 표를 조회합니다. 남은23비트는 다음 표 값까지 선형 보간하는 데 사용합니다. intlog10은 intlog2에 고정소수점 log10(2)를 곱합니다.",
+      "양의 u32 입력을 사용합니다. 반환형이 unsigned int라고 소수부가 없는 정수 로그인 것은 아닙니다.2^24로 나눠야 로그 단위의 값을 얻습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "LGPL-2.1-or-later 식별,저작권,bitops/export/int_log/kernel/types 및 asm/bug 헤더,256개 unsigned short 상수 표,intlog2와 intlog10,각 export로 구성됩니다. 별도 초기화·동적 할당·가변 전역 상태는 없습니다."
+      },
+      {
+        "title": "표 전체의 의미",
+        "text": "logtable[i]는 log2(1+i/256)*2^16을 반올림한 값과256개 모두 일치합니다. 첫 값0,마지막0xff47이고 단조 증가합니다. 내부 표는 소수부16비트,최종 출력은24비트여서 표 값을8비트 왼쪽 이동합니다. 최대 인접 차이는369이며 마지막에서 가상의2.0 끝점까지 차이도 고려합니다."
+      },
+      {
+        "title": "정규화와 인덱스",
+        "text": "msb=fls(value)-1은0기반 최상위 비트 위치입니다. value<<(31-msb)로 최상위 비트를31번에 맞춥니다. significand>>23의 최상위1은 고정이므로 %256으로 제거하고0..255의 인덱스를 얻습니다. 입력8은 msb3,significand0x80000000,index0이라 정확히3<<24를 반환합니다."
+      },
+      {
+        "title": "보간과 마지막 구간",
+        "text": "하위23비트에 인접 표 값의 차이를 곱하고15비트 오른쪽 이동합니다.23비트 비율을 적용하면서 표의16비트 소수부를24비트로 바꾸므로23-8=15입니다. index255의 다음 인덱스는0으로 감기지만 차이에 &0xffff를 적용하여 가상의 표 값65536과의 차이185를 얻습니다. 끝 구간이 음의 기울기가 되는 것은 아닙니다."
+      },
+      {
+        "title": "곱의 폭과 오차",
+        "text": "최대 하위값0x7fffff와 최대 표 차이369에 대해 (2^23-1)*369<2^32입니다. 따라서 이 보간 곱은32비트 unsigned 범위 안입니다. 표 양자화,로그 곡선의 선형 보간,우측 시프트 절단 때문에 일반 입력에 정확한 실수 로그를 보장하지 않습니다."
+      },
+      {
+        "title": "밑10 변환",
+        "text": "intlog10은 intlog2 결과를 u64 log에 저장한 뒤646456993을 곱하고31비트 이동합니다. 상수는 log10(2)를2^31 배율로 근사한 것입니다. 곱을 u64로 수행하는 점이 중요하며 반환 배율은 여전히2^24입니다.1000처럼 정확한 로그가 정수인 입력도 구현 결과는3<<24와 조금 다를 수 있습니다."
+      },
+      {
+        "title": "0 입력과 진단",
+        "text": "두 함수 모두0이면 WARN_ON(1) 후0을 반환합니다. log(0)의 수학적 값이0이라는 뜻이 아닙니다. 정상 입력1의 로그도0이므로 반환값만으로 잘못된0 입력을 판별할 수 없습니다. intlog10의0 분기는 intlog2 호출보다 앞에 있습니다."
+      },
+      {
+        "title": "CS와 검증 범위",
+        "text": "정규화,지수·유효숫자 분리,조회표의 공간/정확도 절충,선형 보간,고정소수점 스케일 변환을 연결합니다. 독립 실수 로그와의 표본 오차 및2의 거듭제곱 정확값을 확인할 수 있지만 유한 표본의 최대 오차를 전체 u32 입력의 증명된 상한이라고 말하면 안 됩니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "intlog2(8)의 반환값을 로그 단위로 읽는 방법은?",
+        "options": [
+          "반환값을2^24로 나누면3이다",
+          "반환값을 그대로 정수3으로 읽는다"
+        ],
+        "answer": 0,
+        "explanation": "msb3을24비트 왼쪽 이동한50,331,648을 반환합니다. 소수부24비트 배율을 고려해야 합니다."
+      },
+      {
+        "prompt": "보간의 마지막 표 구간은 감소하는 구간인가?",
+        "options": [
+          "그렇다. 다음 표 값0을 그냥 빼서 감소한다",
+          "아니다. 마스크로 가상 끝점65536까지의 양의 차이를 구한다"
+        ],
+        "answer": 1,
+        "explanation": "0-0xff47에 &0xffff를 적용하면185입니다. 표의 순환 인덱스와 수학적 끝점 처리를 함께 읽어야 합니다."
+      },
+      {
+        "prompt": "0 반환만으로 입력이 유효했다고 판단할 수 있는가?",
+        "options": [
+          "없다. 잘못된 입력0과 정상 입력1 모두0을 반환한다",
+          "있다. 잘못된 입력은 음수를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "반환형은 unsigned이며0 입력은 경고 후0입니다. 유효 입력 전제는 호출자가 지켜야 합니다."
+      },
+      {
+        "prompt": "intlog10이 u64 중간값을 쓰는 이유는?",
+        "options": [
+          "최종 반환형도 반드시128비트여야 하기 때문이다",
+          "스케일 변환 상수와의 곱을 넓은 타입에서 계산하기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "intlog2의 스케일된 결과에646456993을 곱하므로32비트 중간 곱으로는 부족합니다. 최종 반환은 unsigned int입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: LGPL-2.1-or-later\n/*\n * Provides fixed-point logarithm operations.\n *\n * Copyright (C) 2006 Christoph Pfister (christophpfister@gmail.com)\n */\n\n#include <linux/bitops.h>\n#include <linux/export.h>\n#include <linux/int_log.h>\n#include <linux/kernel.h>\n#include <linux/types.h>\n\n#include <asm/bug.h>\n\nstatic const unsigned short logtable[256] = {\n\t0x0000, 0x0171, 0x02e0, 0x044e, 0x05ba, 0x0725, 0x088e, 0x09f7,\n\t0x0b5d, 0x0cc3, 0x0e27, 0x0f8a, 0x10eb, 0x124b, 0x13aa, 0x1508,\n\t0x1664, 0x17bf, 0x1919, 0x1a71, 0x1bc8, 0x1d1e, 0x1e73, 0x1fc6,\n\t0x2119, 0x226a, 0x23ba, 0x2508, 0x2656, 0x27a2, 0x28ed, 0x2a37,\n\t0x2b80, 0x2cc8, 0x2e0f, 0x2f54, 0x3098, 0x31dc, 0x331e, 0x345f,\n\t0x359f, 0x36de, 0x381b, 0x3958, 0x3a94, 0x3bce, 0x3d08, 0x3e41,\n\t0x3f78, 0x40af, 0x41e4, 0x4319, 0x444c, 0x457f, 0x46b0, 0x47e1,\n\t0x4910, 0x4a3f, 0x4b6c, 0x4c99, 0x4dc5, 0x4eef, 0x5019, 0x5142,\n\t0x526a, 0x5391, 0x54b7, 0x55dc, 0x5700, 0x5824, 0x5946, 0x5a68,\n\t0x5b89, 0x5ca8, 0x5dc7, 0x5ee5, 0x6003, 0x611f, 0x623a, 0x6355,\n\t0x646f, 0x6588, 0x66a0, 0x67b7, 0x68ce, 0x69e4, 0x6af8, 0x6c0c,\n\t0x6d20, 0x6e32, 0x6f44, 0x7055, 0x7165, 0x7274, 0x7383, 0x7490,\n\t0x759d, 0x76aa, 0x77b5, 0x78c0, 0x79ca, 0x7ad3, 0x7bdb, 0x7ce3,\n\t0x7dea, 0x7ef0, 0x7ff6, 0x80fb, 0x81ff, 0x8302, 0x8405, 0x8507,\n\t0x8608, 0x8709, 0x8809, 0x8908, 0x8a06, 0x8b04, 0x8c01, 0x8cfe,\n\t0x8dfa, 0x8ef5, 0x8fef, 0x90e9, 0x91e2, 0x92db, 0x93d2, 0x94ca,\n\t0x95c0, 0x96b6, 0x97ab, 0x98a0, 0x9994, 0x9a87, 0x9b7a, 0x9c6c,\n\t0x9d5e, 0x9e4f, 0x9f3f, 0xa02e, 0xa11e, 0xa20c, 0xa2fa, 0xa3e7,\n\t0xa4d4, 0xa5c0, 0xa6ab, 0xa796, 0xa881, 0xa96a, 0xaa53, 0xab3c,\n\t0xac24, 0xad0c, 0xadf2, 0xaed9, 0xafbe, 0xb0a4, 0xb188, 0xb26c,\n\t0xb350, 0xb433, 0xb515, 0xb5f7, 0xb6d9, 0xb7ba, 0xb89a, 0xb97a,\n\t0xba59, 0xbb38, 0xbc16, 0xbcf4, 0xbdd1, 0xbead, 0xbf8a, 0xc065,\n\t0xc140, 0xc21b, 0xc2f5, 0xc3cf, 0xc4a8, 0xc580, 0xc658, 0xc730,\n\t0xc807, 0xc8de, 0xc9b4, 0xca8a, 0xcb5f, 0xcc34, 0xcd08, 0xcddc,\n\t0xceaf, 0xcf82, 0xd054, 0xd126, 0xd1f7, 0xd2c8, 0xd399, 0xd469,\n\t0xd538, 0xd607, 0xd6d6, 0xd7a4, 0xd872, 0xd93f, 0xda0c, 0xdad9,\n\t0xdba5, 0xdc70, 0xdd3b, 0xde06, 0xded0, 0xdf9a, 0xe063, 0xe12c,\n\t0xe1f5, 0xe2bd, 0xe385, 0xe44c, 0xe513, 0xe5d9, 0xe69f, 0xe765,\n\t0xe82a, 0xe8ef, 0xe9b3, 0xea77, 0xeb3b, 0xebfe, 0xecc1, 0xed83,\n\t0xee45, 0xef06, 0xefc8, 0xf088, 0xf149, 0xf209, 0xf2c8, 0xf387,\n\t0xf446, 0xf505, 0xf5c3, 0xf680, 0xf73e, 0xf7fb, 0xf8b7, 0xf973,\n\t0xfa2f, 0xfaea, 0xfba5, 0xfc60, 0xfd1a, 0xfdd4, 0xfe8e, 0xff47,\n};\n\nunsigned int intlog2(u32 value)\n{\n\t/**\n\t *\treturns: log2(value) * 2^24\n\t *\twrong result if value = 0 (log2(0) is undefined)\n\t */\n\tunsigned int msb;\n\tunsigned int logentry;\n\tunsigned int significand;\n\tunsigned int interpolation;\n\n\tif (unlikely(value == 0)) {\n\t\tWARN_ON(1);\n\t\treturn 0;\n\t}\n\n\t/* first detect the msb (count begins at 0) */\n\tmsb = fls(value) - 1;\n\n\t/**\n\t *\tnow we use a logtable after the following method:\n\t *\n\t *\tlog2(2^x * y) * 2^24 = x * 2^24 + log2(y) * 2^24\n\t *\twhere x = msb and therefore 1 <= y < 2\n\t *\tfirst y is determined by shifting the value left\n\t *\tso that msb is bit 31\n\t *\t\t0x00231f56 -> 0x8C7D5800\n\t *\tthe result is y * 2^31 -> \"significand\"\n\t *\tthen the highest 9 bits are used for a table lookup\n\t *\tthe highest bit is discarded because it's always set\n\t *\tthe highest nine bits in our example are 100011000\n\t *\tso we would use the entry 0x18\n\t */\n\tsignificand = value << (31 - msb);\n\tlogentry = (significand >> 23) % ARRAY_SIZE(logtable);\n\n\t/**\n\t *\tlast step we do is interpolation because of the\n\t *\tlimitations of the log table the error is that part of\n\t *\tthe significand which isn't used for lookup then we\n\t *\tcompute the ratio between the error and the next table entry\n\t *\tand interpolate it between the log table entry used and the\n\t *\tnext one the biggest error possible is 0x7fffff\n\t *\t(in our example it's 0x7D5800)\n\t *\tneeded value for next table entry is 0x800000\n\t *\tso the interpolation is\n\t *\t(error / 0x800000) * (logtable_next - logtable_current)\n\t *\tin the implementation the division is moved to the end for\n\t *\tbetter accuracy there is also an overflow correction if\n\t *\tlogtable_next is 256\n\t */\n\tinterpolation = ((significand & 0x7fffff) *\n\t\t\t((logtable[(logentry + 1) % ARRAY_SIZE(logtable)] -\n\t\t\t  logtable[logentry]) & 0xffff)) >> 15;\n\n\t/* now we return the result */\n\treturn ((msb << 24) + (logtable[logentry] << 8) + interpolation);\n}\nEXPORT_SYMBOL(intlog2);\n\nunsigned int intlog10(u32 value)\n{\n\t/**\n\t *\treturns: log10(value) * 2^24\n\t *\twrong result if value = 0 (log10(0) is undefined)\n\t */\n\tu64 log;\n\n\tif (unlikely(value == 0)) {\n\t\tWARN_ON(1);\n\t\treturn 0;\n\t}\n\n\tlog = intlog2(value);\n\n\t/**\n\t *\twe use the following method:\n\t *\tlog10(x) = log2(x) * log10(2)\n\t */\n\n\treturn (log * 646456993) >> 31;\n}\nEXPORT_SYMBOL(intlog10);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "2274ba331cd66c9e1b2de189f7d94737b8daf9c955050b447a2e99baf5dabf9c",
+      "scope": "whole-file",
+      "line_count": 133,
+      "authoring_source": "course/file_units/integer_logarithms.py",
+      "sections": [
+        "파일 전체 구성",
+        "표 전체의 의미",
+        "정규화와 인덱스",
+        "보간과 마지막 구간",
+        "곱의 폭과 오차",
+        "밑10 변환",
+        "0 입력과 진단",
+        "CS와 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/math/int_log.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "2를 몇 번 곱해야 8이 될까요? 세 번입니다. 로그는 이런 거듭제곱 횟수를 구하며, 이 파일은 소수 부분도 정수 칸에 크게 늘려 담습니다.",
+    "meaning": "조회표와 보간으로 로그를 근사하고 2^24 배율로 결과를 읽는 방법을 설명합니다.",
+    "exercise": "intlog2(8)의 결과 50331648을 2^24로 나누어 보세요."
+  },
+  "goal": "조회표와 보간으로 로그를 근사하고 2^24 배율로 결과를 읽는 방법을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "intlog2(8)의 결과 50331648을 2^24로 나누어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "d9bb927b45501fab0f164ec16125c68fac7e77eb3e5fbe0e40105879f54f9fda",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

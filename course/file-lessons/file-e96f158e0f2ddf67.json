@@ -5,58 +5,66 @@
   "area": "클록 · C 인터페이스 · 자원 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "전방 선언과 일곱 API 선언 전체를 분석합니다.",
+  "intro": "KUnit 클록 소비자 획득과 공급자 등록의 선언을 구별합니다.",
   "guide": [
-    "클록 소비자 핸들 획득,활성화,하드웨어 등록은 서로 다른 작업입니다.",
-    "포인터 반환과 상태 반환,opaque type,장치 트리 경로를 구분합니다."
+    "클록은 장치가 동작 속도를 맞추는 신호입니다. consumer는 그 신호를 쓰는 쪽, provider는 제공하는 쪽입니다.",
+    "포인터는 객체 위치를 가리키는 값입니다. 선언만 보고 실패가 NULL인지 오류를 담은 주소인지까지 알 수는 없습니다.",
+    "전방 선언은 구조체 이름만 미리 알리는 방법입니다. 포인터만 받는 인터페이스에서는 내부 칸을 아직 몰라도 됩니다."
   ],
   "deep_dive": [
     {
       "title": "헤더와 타입",
-      "text": "GPL-2.0 _CLK_KUNIT_H guard 안에 clk,clk_hw,device,device_node,kunit 다섯 구조체를 전방 선언합니다. include나 구조체 본문은 없으며 포인터로만 사용하는 타입의 내부 정의를 요구하지 않는 인터페이스입니다."
+      "text": "GPL과 _CLK_KUNIT_H 보호 안에 clk, clk_hw, device, device_node, kunit 다섯 구조체 이름만 선언합니다. 포함 헤더나 구조체 본문 없이 포인터 형태로 사용할 약속을 만듭니다."
     },
     {
       "title": "네 consumer 반환 선언",
-      "text": "clk_get_kunit은 device와 con_id,of_clk_get_kunit은 device_node와 index,clk_hw_get_clk_kunit은 hw와 con_id로 clk *를 반환합니다. clk_hw_get_clk_prepared_enabled_kunit도 hw와 con_id를 받아 획득과 준비·활성화를 합칩니다. 모든 함수는 test 문맥을 받습니다."
+      "text": "일반 획득은 device와 연결 이름, 장치 트리 획득은 node와 번호, hw 획득은 하드웨어 정보와 연결 이름을 받습니다. 준비·활성화까지 합친 hw 획득도 있습니다. 네 함수 모두 테스트 문맥을 받고 clk 포인터를 반환합니다."
     },
     {
       "title": "세 상태 반환 선언",
-      "text": "clk_prepare_enable_kunit은 clk *를 활성화하는 int 반환 함수입니다. clk_hw_register_kunit은 device와 hw,of_clk_hw_register_kunit은 device_node와 hw로 provider 하드웨어 등록을 수행하는 int 반환 선언입니다. 헤더에는 unregister helper나 비활성 CONFIG stub이 없으며 실제 cleanup 계약은 구현에서 확인합니다."
+      "text": "prepare_enable은 clk를 준비·활성화해 int 상태를 줍니다. 두 hw 등록 함수는 device 또는 device_node와 hw를 받아 int를 줍니다. 해제 보조 선언이나 설정 비활성용 빈 대체 함수는 없고 자동 정리 계약은 구현을 봐야 합니다."
     },
     {
       "title": "검토 범위",
-      "text": "guard,다섯 전방 선언과 일곱 함수 선언을 모두 확인했습니다. 포인터 반환형만으로 NULL 실패와 ERR_PTR 실패를 구분할 수 없으므로 구현 강의와 함께 읽어야 합니다. 이 헤더는 직접 클록 속도를 계산하거나 하드웨어 레지스터를 쓰지 않습니다."
+      "text": "다섯 전방 선언과 일곱 함수 선언이 전체 범위입니다. 포인터 실패 표현은 구현과 함께 읽습니다. 이 헤더 자체가 속도를 계산하거나 하드웨어 레지스터를 쓰는 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "clk_hw_register_kunit의 반환 타입은?",
+      "prompt": "clk_hw_register_kunit의 반환형은 무엇인가요?",
       "options": [
+        "int입니다.",
+        "struct clk 포인터입니다."
+      ],
+      "answer": 0,
+      "explanation": "공급자 등록의 성공·실패 상태를 줍니다.",
+      "original_prompt": "clk_hw_register_kunit의 반환 타입은?",
+      "original_options": [
         "int",
         "struct clk *"
       ],
-      "answer": 0,
-      "explanation": "provider 등록의 상태를 반환합니다. 소비자 핸들을 얻는 네 함수와 구분합니다."
+      "original_explanation": "provider 등록의 상태를 반환합니다. 소비자 핸들을 얻는 네 함수와 구분합니다."
     },
     {
-      "prompt": "of_clk_get_kunit이 받는 식별 입력은?",
+      "prompt": "of_clk_get_kunit의 식별 입력은 무엇인가요?",
       "options": [
+        "device와 연결 이름뿐입니다.",
+        "device_node와 index입니다."
+      ],
+      "answer": 1,
+      "explanation": "장치 트리의 clocks 항목 번호를 사용하는 별도 경로입니다.",
+      "original_prompt": "of_clk_get_kunit이 받는 식별 입력은?",
+      "original_options": [
         "device와 con_id만",
         "device_node와 index"
       ],
-      "answer": 1,
-      "explanation": "장치 트리 clocks 항목을 선택하는 인터페이스와 일반 device consumer 인터페이스가 별도 선언입니다."
+      "original_explanation": "장치 트리 clocks 항목을 선택하는 인터페이스와 일반 device consumer 인터페이스가 별도 선언입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "포인터를 주는 네 함수와 int 상태를 주는 세 함수를 나누어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _CLK_KUNIT_H\n#define _CLK_KUNIT_H\n\nstruct clk;\nstruct clk_hw;\nstruct device;\nstruct device_node;\nstruct kunit;\n\nstruct clk *\nclk_get_kunit(struct kunit *test, struct device *dev, const char *con_id);\nstruct clk *\nof_clk_get_kunit(struct kunit *test, struct device_node *np, int index);\n\nstruct clk *\nclk_hw_get_clk_kunit(struct kunit *test, struct clk_hw *hw, const char *con_id);\nstruct clk *\nclk_hw_get_clk_prepared_enabled_kunit(struct kunit *test, struct clk_hw *hw,\n\t\t\t\t      const char *con_id);\n\nint clk_prepare_enable_kunit(struct kunit *test, struct clk *clk);\n\nint clk_hw_register_kunit(struct kunit *test, struct device *dev, struct clk_hw *hw);\nint of_clk_hw_register_kunit(struct kunit *test, struct device_node *node,\n\t\t\t     struct clk_hw *hw);\n\n#endif\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/clk.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e96f158e0f2ddf67",
+    "path": "include/kunit/clk.h",
+    "title": "KUnit 클록 API 선언: consumer와 provider 작업 구분",
+    "area": "클록 · C 인터페이스 · 자원 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "전방 선언과 일곱 API 선언 전체를 분석합니다.",
+    "guide": [
+      "클록 소비자 핸들 획득,활성화,하드웨어 등록은 서로 다른 작업입니다.",
+      "포인터 반환과 상태 반환,opaque type,장치 트리 경로를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더와 타입",
+        "text": "GPL-2.0 _CLK_KUNIT_H guard 안에 clk,clk_hw,device,device_node,kunit 다섯 구조체를 전방 선언합니다. include나 구조체 본문은 없으며 포인터로만 사용하는 타입의 내부 정의를 요구하지 않는 인터페이스입니다."
+      },
+      {
+        "title": "네 consumer 반환 선언",
+        "text": "clk_get_kunit은 device와 con_id,of_clk_get_kunit은 device_node와 index,clk_hw_get_clk_kunit은 hw와 con_id로 clk *를 반환합니다. clk_hw_get_clk_prepared_enabled_kunit도 hw와 con_id를 받아 획득과 준비·활성화를 합칩니다. 모든 함수는 test 문맥을 받습니다."
+      },
+      {
+        "title": "세 상태 반환 선언",
+        "text": "clk_prepare_enable_kunit은 clk *를 활성화하는 int 반환 함수입니다. clk_hw_register_kunit은 device와 hw,of_clk_hw_register_kunit은 device_node와 hw로 provider 하드웨어 등록을 수행하는 int 반환 선언입니다. 헤더에는 unregister helper나 비활성 CONFIG stub이 없으며 실제 cleanup 계약은 구현에서 확인합니다."
+      },
+      {
+        "title": "검토 범위",
+        "text": "guard,다섯 전방 선언과 일곱 함수 선언을 모두 확인했습니다. 포인터 반환형만으로 NULL 실패와 ERR_PTR 실패를 구분할 수 없으므로 구현 강의와 함께 읽어야 합니다. 이 헤더는 직접 클록 속도를 계산하거나 하드웨어 레지스터를 쓰지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "clk_hw_register_kunit의 반환 타입은?",
+        "options": [
+          "int",
+          "struct clk *"
+        ],
+        "answer": 0,
+        "explanation": "provider 등록의 상태를 반환합니다. 소비자 핸들을 얻는 네 함수와 구분합니다."
+      },
+      {
+        "prompt": "of_clk_get_kunit이 받는 식별 입력은?",
+        "options": [
+          "device와 con_id만",
+          "device_node와 index"
+        ],
+        "answer": 1,
+        "explanation": "장치 트리 clocks 항목을 선택하는 인터페이스와 일반 device consumer 인터페이스가 별도 선언입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _CLK_KUNIT_H\n#define _CLK_KUNIT_H\n\nstruct clk;\nstruct clk_hw;\nstruct device;\nstruct device_node;\nstruct kunit;\n\nstruct clk *\nclk_get_kunit(struct kunit *test, struct device *dev, const char *con_id);\nstruct clk *\nof_clk_get_kunit(struct kunit *test, struct device_node *np, int index);\n\nstruct clk *\nclk_hw_get_clk_kunit(struct kunit *test, struct clk_hw *hw, const char *con_id);\nstruct clk *\nclk_hw_get_clk_prepared_enabled_kunit(struct kunit *test, struct clk_hw *hw,\n\t\t\t\t      const char *con_id);\n\nint clk_prepare_enable_kunit(struct kunit *test, struct clk *clk);\n\nint clk_hw_register_kunit(struct kunit *test, struct device *dev, struct clk_hw *hw);\nint of_clk_hw_register_kunit(struct kunit *test, struct device_node *node,\n\t\t\t     struct clk_hw *hw);\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "feb66b6c47c40b9c2dfb0b2b7efbdd1c7aa8176f814a330473fafc3d0fd846a5",
+      "scope": "whole-file",
+      "line_count": 28,
+      "authoring_source": "course/file_units/kunit_clock_skb.py",
+      "sections": [
+        "헤더와 타입",
+        "네 consumer 반환 선언",
+        "세 상태 반환 선언",
+        "검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/kunit/clk.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "클록을 빌리는 일과 클록 장치를 등록하는 일은 다른 신청서가 필요합니다. 이 헤더는 일곱 함수의 입력과 결과 모양을 알려줍니다.",
+    "meaning": "KUnit 클록 소비자 획득과 공급자 등록의 선언을 구별합니다.",
+    "exercise": "포인터를 주는 네 함수와 int 상태를 주는 세 함수를 나누어 보세요."
+  },
+  "goal": "KUnit 클록 소비자 획득과 공급자 등록의 선언을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "포인터를 주는 네 함수와 int 상태를 주는 세 함수를 나누어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "98d874e266cf0067dee049520a8b89815e4077e54c66feaa84721d3e25729072",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

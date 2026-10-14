@@ -5,96 +5,116 @@
   "area": "해시 테이블 · 비트 혼합 · 정수 표현",
   "track": "files",
   "kind": "kernel",
-  "intro": "임의 바이트 키 또는 u32 배열을 32비트 해시로 압축하는 Jenkins 계열 구현입니다.",
+  "intro": "Jenkins 해시의 길이 단위, 섞기 단계, 끝부분 처리와 충돌 한계를 설명합니다.",
   "guide": [
-    "a,b,c 세 상태에 입력을 더하고 빼기·XOR·회전·더하기로 혼합합니다. 마지막 블록은 별도 final 혼합을 거쳐 c를 반환합니다.",
-    "해시가 같다고 키가 같다는 뜻은 아닙니다. 길이 단위와 엔디언을 구분하고 암호학적 무결성이나 충돌 저항성을 보장하는 함수로 사용하지 않습니다."
+    "해시는 자료를 작은 숫자로 바꾸는 계산입니다. 서로 다른 자료가 같은 숫자가 되는 충돌이 있으므로 숫자가 같다고 원문까지 같다고 판단하면 안 됩니다.",
+    "jhash는 바이트 수를, jhash2는 u32 정수의 개수를 길이로 받습니다. u32 세 개는 보통 12바이트입니다.",
+    "회전은 밀려난 비트를 반대쪽 끝에 다시 붙이는 연산입니다. 이 파일은 더하기·빼기·XOR와 회전으로 비트를 섞습니다."
   ],
   "deep_dive": [
     {
       "title": "전체 파일",
-      "text": "guard와 Jenkins 원저작·public domain 및 커널 수정 이력 주석, bitops와 unaligned/packed_struct 의존성, 크기·마스크 매크로, mix/final, 초기값, 바이트·워드 배열 함수, 고정 워드 수 helper와 wrapper로 구성됩니다. 함수들은 static inline이며 모듈 등록은 없습니다."
+      "text": "중복 포함 방지와 비트 연산, 정렬되지 않은 주소 읽기 정의를 사용하는 헤더입니다. Jenkins의 저자·공개 배포 이력과 커널 수정 이력이 주석에 있습니다. 버킷 크기, 두 섞기 매크로, 초기 상수, 바이트·정수 배열·고정 길이 함수가 있으며 별도 모듈을 실행하는 파일은 아닙니다."
     },
     {
       "title": "버킷 크기와 마스크",
-      "text": "jhash_size(n)은 u32의 1을 n비트 왼쪽으로 이동해 2^n을 만듭니다. jhash_mask(n)은 2^n-1이며 hash&mask로 해당 크기의 버킷 인덱스를 얻습니다. n은 버킷 개수가 아니라 지수입니다. u32 이동이므로 n32 이상까지 안전하다고 가정하면 안 됩니다."
+      "text": "jhash_size(n)은 1을 n칸 왼쪽으로 옮겨 2의 n제곱을 만듭니다. jhash_mask(n)은 그 값보다 1 작아 결과와 AND하면 바구니 번호로 사용할 수 있습니다. n은 바구니 개수가 아니라 지수입니다. 32비트 값에서 32칸 이상 옮기는 등 허용 범위를 벗어난 이동은 안전하지 않습니다."
     },
     {
       "title": "혼합의 두 단계",
-      "text": "__jhash_mix는 4,6,8,16,19,4비트 회전을 사용해 세 u32를 가역적으로 혼합합니다. __jhash_final은 14,11,25,16,4,14,24비트 회전으로 최종 c에 변화를 확산합니다. unsigned의 모듈러 산술을 사용하며 96비트 상태에서 c만 반환하는 전체 해시는 가역 함수가 아닙니다."
+      "text": "__jhash_mix는 a, b, c라는 u32 세 개를 회전 수 4, 6, 8, 16, 19, 4로 섞습니다. __jhash_final은 14, 11, 25, 16, 4, 14, 24를 사용해 끝을 섞습니다. u32 계산은 넘친 부분을 버리는 규칙을 따릅니다. 중간 mix가 되돌릴 수 있는 변환이어도 전체 96비트 상태에서 c 하나만 반환하는 해시는 원문을 복구하는 암호가 아닙니다."
     },
     {
       "title": "바이트 입력과 초기값",
-      "text": "jhash는 a=b=c=0xdeadbeef+length+initval로 시작합니다. length는 바이트 수이고 입력 NUL도 일반 바이트입니다. 길이가 12보다 클 때만 12바이트를 세 CPU 엔디언 u32로 읽어 더하고 mix합니다. 비정렬 읽기 helper를 사용하므로 키 주소가 4바이트 정렬일 필요는 없습니다."
+      "text": "jhash는 a, b, c를 0xdeadbeef + 바이트 길이 + initval로 시작합니다. 문자열 끝 표시인 NUL도 지정 길이 안에 있으면 보통 바이트로 계산합니다. 남은 길이가 12보다 클 동안에만 정렬되지 않은 주소에서 CPU의 바이트 순서로 u32 세 개를 읽고 중간 섞기를 합니다. 정확히 12이면 끝부분 처리로 갑니다."
     },
     {
       "title": "마지막 0..12바이트",
-      "text": "switch의 fallthrough로 남은 바이트를 낮은 위치부터 a,b,c에 넣습니다. 예를 들어 4바이트이면 k3<<24,k2<<16,k1<<8,k0를 a에 더합니다. 1..12바이트는 final을 한 번 호출하지만 길이0이면 호출하지 않고 초기 c를 반환합니다. while 조건이 >=12가 아니라 >12인 이유는 정확히 12바이트도 이 마지막 처리에 맡기기 때문입니다."
+      "text": "마지막 0부터 12바이트는 switch의 다음 case로 계속 내려가는 fallthrough로 더합니다. 예를 들어 네 바이트는 k[3]<<24부터 k[0]까지 조합됩니다. 1바이트라도 남으면 마지막 섞기를 한 번 하지만 0이면 하지 않습니다. 처음부터 빈 입력이라면 초기 c가 결과입니다."
     },
     {
       "title": "엔디언과 스트리밍 오해",
-      "text": "전체 블록은 CPU 엔디언으로 읽고 마지막 부분은 명시적 바이트 이동으로 조립합니다. 원문도 결과가 엔디언에 의존한다고 명시합니다. initval에 이전 결과를 줄 수 있지만 길이가 초기 상태에 들어가고 매 호출 final을 하므로 조각별 연쇄 호출이 연결된 전체 입력의 한 번 해시와 같다고 볼 수 없습니다."
+      "text": "큰 블록의 u32 읽기는 CPU의 바이트 배치 순서를 따르고 마지막 바이트 조합은 코드에 적힌 순서를 따릅니다. 따라서 결과의 엔디언 의존성을 유의해야 합니다. 이전 해시를 다음 initval로 넣을 수는 있지만 매 호출마다 길이와 마지막 섞기가 들어가므로 나누어 계산한 결과가 합친 입력의 한 번 계산과 같다고 보장하지 않습니다."
     },
     {
       "title": "u32 배열 경로",
-      "text": "jhash2의 length는 워드 개수입니다. 초기 길이 항은 length<<2이고 세 워드씩 처리하다 남은 1..3개를 switch로 더해 final합니다. length0은 초기값을 반환합니다. u32 배열의 숫자 값과 그 배열의 메모리 바이트 표현을 같은 의미로 취급하면 안 됩니다."
+      "text": "jhash2의 length는 u32 개수이며 초기값에는 length<<2로 바이트 수를 반영합니다. 세 개보다 많이 남을 동안 중간 섞기를 하고 마지막 1~3개에는 끝 섞기를 합니다. 0개이면 초기 c를 반환합니다. 숫자 배열과 그 숫자가 메모리에 저장된 바이트 배열을 같은 입력 방식으로 혼동하면 안 됩니다."
     },
     {
       "title": "고정 길이 wrapper",
-      "text": "__jhash_nwords는 세 인자에 initval을 더한 뒤 final합니다. 공개 3words/2words/1word는 0xdeadbeef와 각각 12/8/4를 초기값에 더하고 없는 워드는 0으로 전달합니다. 따라서 대응하는 1..3워드 jhash2 입력과 같은 초기화·최종화를 수행합니다."
+      "text": "__jhash_nwords는 세 입력 각각에 초기값을 더해 마지막 섞기를 합니다. 3·2·1개용 함수는 초기값에 0xdeadbeef와 12·8·4를 더하고 없는 입력은 0으로 채웁니다. 이는 같은 1~3개 u32를 jhash2로 처리하는 경우에 맞춘 간편 함수입니다."
     },
     {
       "title": "CS 연결",
-      "text": "해시 충돌과 키 비교, 2의 거듭제곱 테이블, 회전과 이동의 차이, unsigned wrap, 길이 기반 초기화, 블록·꼬리 분리를 학습합니다. 매크로는 인자를 여러 차례 읽고 수정하므로 단순 u32 변수에 쓰는 내부 용법을 따른다고 이해합니다."
+      "text": "해시 충돌이 가능하므로 바구니 안에서는 실제 키를 비교해야 합니다. 2의 거듭제곱 크기와 마스크, 회전과 이동의 차이, 부호 없는 정수의 넘침이 연결됩니다. 매크로는 인수를 여러 번 사용하거나 바꾸므로 복잡한 부작용이 있는 식 대신 단순한 u32 변수를 쓰는 것이 중요합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "jhash_mask(8)의 값과 버킷 개수는?",
+      "prompt": "jhash_mask(8)의 값과 대응하는 바구니 수는 무엇인가요?",
       "options": [
+        "마스크 255, 바구니 256개입니다.",
+        "마스크 7, 바구니 8개입니다."
+      ],
+      "answer": 0,
+      "explanation": "2의 8제곱은 256이며 마스크는 그보다 1 작습니다.",
+      "original_prompt": "jhash_mask(8)의 값과 버킷 개수는?",
+      "original_options": [
         "255와 256이다",
         "7과 8이다"
       ],
-      "answer": 0,
-      "explanation": "인자8은 지수입니다. 1<<8은256이고 그보다1 작은 마스크가 하위8비트를 선택합니다."
+      "original_explanation": "인자8은 지수입니다. 1<<8은256이고 그보다1 작은 마스크가 하위8비트를 선택합니다."
     },
     {
-      "prompt": "길이0의 jhash도 final을 호출하는가?",
+      "prompt": "jhash에서 처음부터 길이가 0이면 마지막 섞기를 하나요?",
       "options": [
+        "예. 언제나 마지막 섞기를 합니다.",
+        "아니요. 초기 c를 반환합니다."
+      ],
+      "answer": 1,
+      "explanation": "남은 바이트가 0인 경우 final을 실행하지 않습니다.",
+      "original_prompt": "길이0의 jhash도 final을 호출하는가?",
+      "original_options": [
         "그렇다. 모든 호출에서 final을 한 번 실행한다",
         "아니다. 초기 c를 그대로 반환한다"
       ],
-      "answer": 1,
-      "explanation": "switch의 case0은 추가 작업 없이 break합니다. 따라서 결과는 u32 범위의 JHASH_INITVAL+initval입니다."
+      "original_explanation": "switch의 case0은 추가 작업 없이 break합니다. 따라서 결과는 u32 범위의 JHASH_INITVAL+initval입니다."
     },
     {
-      "prompt": "jhash2에서 length3은 몇 바이트의 워드 데이터를 뜻하는가?",
+      "prompt": "jhash2의 length가 3이면 입력은 얼마나 되나요?",
       "options": [
+        "u32 세 개, 즉 12바이트입니다.",
+        "3바이트입니다."
+      ],
+      "answer": 0,
+      "explanation": "jhash2의 길이 단위는 바이트가 아니라 u32 원소입니다.",
+      "original_prompt": "jhash2에서 length3은 몇 바이트의 워드 데이터를 뜻하는가?",
+      "original_options": [
         "u32 세 개, 즉 12바이트다",
         "3바이트다"
       ],
-      "answer": 0,
-      "explanation": "jhash2의 길이 단위는 u32 개수입니다. 초기화에도 length<<2로 바이트 수를 반영합니다."
+      "original_explanation": "jhash2의 길이 단위는 u32 개수입니다. 초기화에도 length<<2로 바이트 수를 반영합니다."
     },
     {
-      "prompt": "조각별로 이전 해시를 initval에 넘기면 전체 한 번 해시와 항상 같은가?",
+      "prompt": "이전 결과를 initval로 이어 넣으면 전체 자료를 한 번 해시한 결과와 같나요?",
       "options": [
+        "예. 항상 같은 스트리밍 계산입니다.",
+        "아니요. 각 호출의 길이 반영과 끝 섞기가 달라집니다."
+      ],
+      "answer": 1,
+      "explanation": "이전 결과를 초기값으로 사용하는 것과 내부 전체 상태를 이어 계산하는 것은 다릅니다.",
+      "original_prompt": "조각별로 이전 해시를 initval에 넘기면 전체 한 번 해시와 항상 같은가?",
+      "original_options": [
         "그렇다. 암묵적인 스트리밍 상태이기 때문이다",
         "아니다. 길이 초기화와 final 호출 경계가 달라진다"
       ],
-      "answer": 1,
-      "explanation": "32비트 반환값만 다음 초기값에 넣는 것은 a,b,c와 미처리 바이트 상태를 유지하는 스트리밍 API가 아닙니다."
+      "original_explanation": "32비트 반환값만 다음 초기값에 넣는 것은 a,b,c와 미처리 바이트 상태를 유지하는 스트리밍 API가 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "길이가 0, 12, 13바이트일 때 반복문과 마지막 섞기 중 어느 곳을 지나는지 표시해 보세요."
   },
   "annotated": "#ifndef _LINUX_JHASH_H\n#define _LINUX_JHASH_H\n\n/* jhash.h: Jenkins hash support.\n *\n * Copyright (C) 2006. Bob Jenkins (bob_jenkins@burtleburtle.net)\n *\n * https://burtleburtle.net/bob/hash/\n *\n * These are the credits from Bob's sources:\n *\n * lookup3.c, by Bob Jenkins, May 2006, Public Domain.\n *\n * These are functions for producing 32-bit hashes for hash table lookup.\n * hashword(), hashlittle(), hashlittle2(), hashbig(), mix(), and final()\n * are externally useful functions.  Routines to test the hash are included\n * if SELF_TEST is defined.  You can use this free for any purpose.  It's in\n * the public domain.  It has no warranty.\n *\n * Copyright (C) 2009-2010 Jozsef Kadlecsik (kadlec@netfilter.org)\n *\n * I've modified Bob's hash to be useful in the Linux kernel, and\n * any bugs present are my fault.\n * Jozsef\n */\n#include <linux/bitops.h>\n#include <linux/unaligned/packed_struct.h>\n\n/* Best hash sizes are of power of two */\n#define jhash_size(n)   ((u32)1<<(n))\n/* Mask the hash value, i.e (value & jhash_mask(n)) instead of (value % n) */\n#define jhash_mask(n)   (jhash_size(n)-1)\n\n/* __jhash_mix - mix 3 32-bit values reversibly. */\n#define __jhash_mix(a, b, c)\t\t\t\\\n{\t\t\t\t\t\t\\\n\ta -= c;  a ^= rol32(c, 4);  c += b;\t\\\n\tb -= a;  b ^= rol32(a, 6);  a += c;\t\\\n\tc -= b;  c ^= rol32(b, 8);  b += a;\t\\\n\ta -= c;  a ^= rol32(c, 16); c += b;\t\\\n\tb -= a;  b ^= rol32(a, 19); a += c;\t\\\n\tc -= b;  c ^= rol32(b, 4);  b += a;\t\\\n}\n\n/* __jhash_final - final mixing of 3 32-bit values (a,b,c) into c */\n#define __jhash_final(a, b, c)\t\t\t\\\n{\t\t\t\t\t\t\\\n\tc ^= b; c -= rol32(b, 14);\t\t\\\n\ta ^= c; a -= rol32(c, 11);\t\t\\\n\tb ^= a; b -= rol32(a, 25);\t\t\\\n\tc ^= b; c -= rol32(b, 16);\t\t\\\n\ta ^= c; a -= rol32(c, 4);\t\t\\\n\tb ^= a; b -= rol32(a, 14);\t\t\\\n\tc ^= b; c -= rol32(b, 24);\t\t\\\n}\n\n/* An arbitrary initial parameter */\n#define JHASH_INITVAL\t\t0xdeadbeef\n\n/* jhash - hash an arbitrary key\n * @k: sequence of bytes as key\n * @length: the length of the key\n * @initval: the previous hash, or an arbitrary value\n *\n * The generic version, hashes an arbitrary sequence of bytes.\n * No alignment or length assumptions are made about the input key.\n *\n * Returns the hash value of the key. The result depends on endianness.\n */\nstatic inline u32 jhash(const void *key, u32 length, u32 initval)\n{\n\tu32 a, b, c;\n\tconst u8 *k = key;\n\n\t/* Set up the internal state */\n\ta = b = c = JHASH_INITVAL + length + initval;\n\n\t/* All but the last block: affect some 32 bits of (a,b,c) */\n\twhile (length > 12) {\n\t\ta += __get_unaligned_cpu32(k);\n\t\tb += __get_unaligned_cpu32(k + 4);\n\t\tc += __get_unaligned_cpu32(k + 8);\n\t\t__jhash_mix(a, b, c);\n\t\tlength -= 12;\n\t\tk += 12;\n\t}\n\t/* Last block: affect all 32 bits of (c) */\n\tswitch (length) {\n\tcase 12: c += (u32)k[11]<<24;\tfallthrough;\n\tcase 11: c += (u32)k[10]<<16;\tfallthrough;\n\tcase 10: c += (u32)k[9]<<8;\tfallthrough;\n\tcase 9:  c += k[8];\t\tfallthrough;\n\tcase 8:  b += (u32)k[7]<<24;\tfallthrough;\n\tcase 7:  b += (u32)k[6]<<16;\tfallthrough;\n\tcase 6:  b += (u32)k[5]<<8;\tfallthrough;\n\tcase 5:  b += k[4];\t\tfallthrough;\n\tcase 4:  a += (u32)k[3]<<24;\tfallthrough;\n\tcase 3:  a += (u32)k[2]<<16;\tfallthrough;\n\tcase 2:  a += (u32)k[1]<<8;\tfallthrough;\n\tcase 1:  a += k[0];\n\t\t __jhash_final(a, b, c);\n\t\t break;\n\tcase 0: /* Nothing left to add */\n\t\tbreak;\n\t}\n\n\treturn c;\n}\n\n/* jhash2 - hash an array of u32's\n * @k: the key which must be an array of u32's\n * @length: the number of u32's in the key\n * @initval: the previous hash, or an arbitrary value\n *\n * Returns the hash value of the key.\n */\nstatic inline u32 jhash2(const u32 *k, u32 length, u32 initval)\n{\n\tu32 a, b, c;\n\n\t/* Set up the internal state */\n\ta = b = c = JHASH_INITVAL + (length<<2) + initval;\n\n\t/* Handle most of the key */\n\twhile (length > 3) {\n\t\ta += k[0];\n\t\tb += k[1];\n\t\tc += k[2];\n\t\t__jhash_mix(a, b, c);\n\t\tlength -= 3;\n\t\tk += 3;\n\t}\n\n\t/* Handle the last 3 u32's */\n\tswitch (length) {\n\tcase 3: c += k[2];\tfallthrough;\n\tcase 2: b += k[1];\tfallthrough;\n\tcase 1: a += k[0];\n\t\t__jhash_final(a, b, c);\n\t\tbreak;\n\tcase 0:\t/* Nothing left to add */\n\t\tbreak;\n\t}\n\n\treturn c;\n}\n\n\n/* __jhash_nwords - hash exactly 3, 2 or 1 word(s) */\nstatic inline u32 __jhash_nwords(u32 a, u32 b, u32 c, u32 initval)\n{\n\ta += initval;\n\tb += initval;\n\tc += initval;\n\n\t__jhash_final(a, b, c);\n\n\treturn c;\n}\n\nstatic inline u32 jhash_3words(u32 a, u32 b, u32 c, u32 initval)\n{\n\treturn __jhash_nwords(a, b, c, initval + JHASH_INITVAL + (3 << 2));\n}\n\nstatic inline u32 jhash_2words(u32 a, u32 b, u32 initval)\n{\n\treturn __jhash_nwords(a, b, 0, initval + JHASH_INITVAL + (2 << 2));\n}\n\nstatic inline u32 jhash_1word(u32 a, u32 initval)\n{\n\treturn __jhash_nwords(a, 0, 0, initval + JHASH_INITVAL + (1 << 2));\n}\n\n#endif /* _LINUX_JHASH_H */\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/jhash.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-d6648c558a2b5f34",
+    "path": "include/linux/jhash.h",
+    "title": "Jenkins 해시 전체: 세 워드 혼합과 마지막 블록",
+    "area": "해시 테이블 · 비트 혼합 · 정수 표현",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "임의 바이트 키 또는 u32 배열을 32비트 해시로 압축하는 Jenkins 계열 구현입니다.",
+    "guide": [
+      "a,b,c 세 상태에 입력을 더하고 빼기·XOR·회전·더하기로 혼합합니다. 마지막 블록은 별도 final 혼합을 거쳐 c를 반환합니다.",
+      "해시가 같다고 키가 같다는 뜻은 아닙니다. 길이 단위와 엔디언을 구분하고 암호학적 무결성이나 충돌 저항성을 보장하는 함수로 사용하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "guard와 Jenkins 원저작·public domain 및 커널 수정 이력 주석, bitops와 unaligned/packed_struct 의존성, 크기·마스크 매크로, mix/final, 초기값, 바이트·워드 배열 함수, 고정 워드 수 helper와 wrapper로 구성됩니다. 함수들은 static inline이며 모듈 등록은 없습니다."
+      },
+      {
+        "title": "버킷 크기와 마스크",
+        "text": "jhash_size(n)은 u32의 1을 n비트 왼쪽으로 이동해 2^n을 만듭니다. jhash_mask(n)은 2^n-1이며 hash&mask로 해당 크기의 버킷 인덱스를 얻습니다. n은 버킷 개수가 아니라 지수입니다. u32 이동이므로 n32 이상까지 안전하다고 가정하면 안 됩니다."
+      },
+      {
+        "title": "혼합의 두 단계",
+        "text": "__jhash_mix는 4,6,8,16,19,4비트 회전을 사용해 세 u32를 가역적으로 혼합합니다. __jhash_final은 14,11,25,16,4,14,24비트 회전으로 최종 c에 변화를 확산합니다. unsigned의 모듈러 산술을 사용하며 96비트 상태에서 c만 반환하는 전체 해시는 가역 함수가 아닙니다."
+      },
+      {
+        "title": "바이트 입력과 초기값",
+        "text": "jhash는 a=b=c=0xdeadbeef+length+initval로 시작합니다. length는 바이트 수이고 입력 NUL도 일반 바이트입니다. 길이가 12보다 클 때만 12바이트를 세 CPU 엔디언 u32로 읽어 더하고 mix합니다. 비정렬 읽기 helper를 사용하므로 키 주소가 4바이트 정렬일 필요는 없습니다."
+      },
+      {
+        "title": "마지막 0..12바이트",
+        "text": "switch의 fallthrough로 남은 바이트를 낮은 위치부터 a,b,c에 넣습니다. 예를 들어 4바이트이면 k3<<24,k2<<16,k1<<8,k0를 a에 더합니다. 1..12바이트는 final을 한 번 호출하지만 길이0이면 호출하지 않고 초기 c를 반환합니다. while 조건이 >=12가 아니라 >12인 이유는 정확히 12바이트도 이 마지막 처리에 맡기기 때문입니다."
+      },
+      {
+        "title": "엔디언과 스트리밍 오해",
+        "text": "전체 블록은 CPU 엔디언으로 읽고 마지막 부분은 명시적 바이트 이동으로 조립합니다. 원문도 결과가 엔디언에 의존한다고 명시합니다. initval에 이전 결과를 줄 수 있지만 길이가 초기 상태에 들어가고 매 호출 final을 하므로 조각별 연쇄 호출이 연결된 전체 입력의 한 번 해시와 같다고 볼 수 없습니다."
+      },
+      {
+        "title": "u32 배열 경로",
+        "text": "jhash2의 length는 워드 개수입니다. 초기 길이 항은 length<<2이고 세 워드씩 처리하다 남은 1..3개를 switch로 더해 final합니다. length0은 초기값을 반환합니다. u32 배열의 숫자 값과 그 배열의 메모리 바이트 표현을 같은 의미로 취급하면 안 됩니다."
+      },
+      {
+        "title": "고정 길이 wrapper",
+        "text": "__jhash_nwords는 세 인자에 initval을 더한 뒤 final합니다. 공개 3words/2words/1word는 0xdeadbeef와 각각 12/8/4를 초기값에 더하고 없는 워드는 0으로 전달합니다. 따라서 대응하는 1..3워드 jhash2 입력과 같은 초기화·최종화를 수행합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "해시 충돌과 키 비교, 2의 거듭제곱 테이블, 회전과 이동의 차이, unsigned wrap, 길이 기반 초기화, 블록·꼬리 분리를 학습합니다. 매크로는 인자를 여러 차례 읽고 수정하므로 단순 u32 변수에 쓰는 내부 용법을 따른다고 이해합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "jhash_mask(8)의 값과 버킷 개수는?",
+        "options": [
+          "255와 256이다",
+          "7과 8이다"
+        ],
+        "answer": 0,
+        "explanation": "인자8은 지수입니다. 1<<8은256이고 그보다1 작은 마스크가 하위8비트를 선택합니다."
+      },
+      {
+        "prompt": "길이0의 jhash도 final을 호출하는가?",
+        "options": [
+          "그렇다. 모든 호출에서 final을 한 번 실행한다",
+          "아니다. 초기 c를 그대로 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "switch의 case0은 추가 작업 없이 break합니다. 따라서 결과는 u32 범위의 JHASH_INITVAL+initval입니다."
+      },
+      {
+        "prompt": "jhash2에서 length3은 몇 바이트의 워드 데이터를 뜻하는가?",
+        "options": [
+          "u32 세 개, 즉 12바이트다",
+          "3바이트다"
+        ],
+        "answer": 0,
+        "explanation": "jhash2의 길이 단위는 u32 개수입니다. 초기화에도 length<<2로 바이트 수를 반영합니다."
+      },
+      {
+        "prompt": "조각별로 이전 해시를 initval에 넘기면 전체 한 번 해시와 항상 같은가?",
+        "options": [
+          "그렇다. 암묵적인 스트리밍 상태이기 때문이다",
+          "아니다. 길이 초기화와 final 호출 경계가 달라진다"
+        ],
+        "answer": 1,
+        "explanation": "32비트 반환값만 다음 초기값에 넣는 것은 a,b,c와 미처리 바이트 상태를 유지하는 스트리밍 API가 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "#ifndef _LINUX_JHASH_H\n#define _LINUX_JHASH_H\n\n/* jhash.h: Jenkins hash support.\n *\n * Copyright (C) 2006. Bob Jenkins (bob_jenkins@burtleburtle.net)\n *\n * https://burtleburtle.net/bob/hash/\n *\n * These are the credits from Bob's sources:\n *\n * lookup3.c, by Bob Jenkins, May 2006, Public Domain.\n *\n * These are functions for producing 32-bit hashes for hash table lookup.\n * hashword(), hashlittle(), hashlittle2(), hashbig(), mix(), and final()\n * are externally useful functions.  Routines to test the hash are included\n * if SELF_TEST is defined.  You can use this free for any purpose.  It's in\n * the public domain.  It has no warranty.\n *\n * Copyright (C) 2009-2010 Jozsef Kadlecsik (kadlec@netfilter.org)\n *\n * I've modified Bob's hash to be useful in the Linux kernel, and\n * any bugs present are my fault.\n * Jozsef\n */\n#include <linux/bitops.h>\n#include <linux/unaligned/packed_struct.h>\n\n/* Best hash sizes are of power of two */\n#define jhash_size(n)   ((u32)1<<(n))\n/* Mask the hash value, i.e (value & jhash_mask(n)) instead of (value % n) */\n#define jhash_mask(n)   (jhash_size(n)-1)\n\n/* __jhash_mix - mix 3 32-bit values reversibly. */\n#define __jhash_mix(a, b, c)\t\t\t\\\n{\t\t\t\t\t\t\\\n\ta -= c;  a ^= rol32(c, 4);  c += b;\t\\\n\tb -= a;  b ^= rol32(a, 6);  a += c;\t\\\n\tc -= b;  c ^= rol32(b, 8);  b += a;\t\\\n\ta -= c;  a ^= rol32(c, 16); c += b;\t\\\n\tb -= a;  b ^= rol32(a, 19); a += c;\t\\\n\tc -= b;  c ^= rol32(b, 4);  b += a;\t\\\n}\n\n/* __jhash_final - final mixing of 3 32-bit values (a,b,c) into c */\n#define __jhash_final(a, b, c)\t\t\t\\\n{\t\t\t\t\t\t\\\n\tc ^= b; c -= rol32(b, 14);\t\t\\\n\ta ^= c; a -= rol32(c, 11);\t\t\\\n\tb ^= a; b -= rol32(a, 25);\t\t\\\n\tc ^= b; c -= rol32(b, 16);\t\t\\\n\ta ^= c; a -= rol32(c, 4);\t\t\\\n\tb ^= a; b -= rol32(a, 14);\t\t\\\n\tc ^= b; c -= rol32(b, 24);\t\t\\\n}\n\n/* An arbitrary initial parameter */\n#define JHASH_INITVAL\t\t0xdeadbeef\n\n/* jhash - hash an arbitrary key\n * @k: sequence of bytes as key\n * @length: the length of the key\n * @initval: the previous hash, or an arbitrary value\n *\n * The generic version, hashes an arbitrary sequence of bytes.\n * No alignment or length assumptions are made about the input key.\n *\n * Returns the hash value of the key. The result depends on endianness.\n */\nstatic inline u32 jhash(const void *key, u32 length, u32 initval)\n{\n\tu32 a, b, c;\n\tconst u8 *k = key;\n\n\t/* Set up the internal state */\n\ta = b = c = JHASH_INITVAL + length + initval;\n\n\t/* All but the last block: affect some 32 bits of (a,b,c) */\n\twhile (length > 12) {\n\t\ta += __get_unaligned_cpu32(k);\n\t\tb += __get_unaligned_cpu32(k + 4);\n\t\tc += __get_unaligned_cpu32(k + 8);\n\t\t__jhash_mix(a, b, c);\n\t\tlength -= 12;\n\t\tk += 12;\n\t}\n\t/* Last block: affect all 32 bits of (c) */\n\tswitch (length) {\n\tcase 12: c += (u32)k[11]<<24;\tfallthrough;\n\tcase 11: c += (u32)k[10]<<16;\tfallthrough;\n\tcase 10: c += (u32)k[9]<<8;\tfallthrough;\n\tcase 9:  c += k[8];\t\tfallthrough;\n\tcase 8:  b += (u32)k[7]<<24;\tfallthrough;\n\tcase 7:  b += (u32)k[6]<<16;\tfallthrough;\n\tcase 6:  b += (u32)k[5]<<8;\tfallthrough;\n\tcase 5:  b += k[4];\t\tfallthrough;\n\tcase 4:  a += (u32)k[3]<<24;\tfallthrough;\n\tcase 3:  a += (u32)k[2]<<16;\tfallthrough;\n\tcase 2:  a += (u32)k[1]<<8;\tfallthrough;\n\tcase 1:  a += k[0];\n\t\t __jhash_final(a, b, c);\n\t\t break;\n\tcase 0: /* Nothing left to add */\n\t\tbreak;\n\t}\n\n\treturn c;\n}\n\n/* jhash2 - hash an array of u32's\n * @k: the key which must be an array of u32's\n * @length: the number of u32's in the key\n * @initval: the previous hash, or an arbitrary value\n *\n * Returns the hash value of the key.\n */\nstatic inline u32 jhash2(const u32 *k, u32 length, u32 initval)\n{\n\tu32 a, b, c;\n\n\t/* Set up the internal state */\n\ta = b = c = JHASH_INITVAL + (length<<2) + initval;\n\n\t/* Handle most of the key */\n\twhile (length > 3) {\n\t\ta += k[0];\n\t\tb += k[1];\n\t\tc += k[2];\n\t\t__jhash_mix(a, b, c);\n\t\tlength -= 3;\n\t\tk += 3;\n\t}\n\n\t/* Handle the last 3 u32's */\n\tswitch (length) {\n\tcase 3: c += k[2];\tfallthrough;\n\tcase 2: b += k[1];\tfallthrough;\n\tcase 1: a += k[0];\n\t\t__jhash_final(a, b, c);\n\t\tbreak;\n\tcase 0:\t/* Nothing left to add */\n\t\tbreak;\n\t}\n\n\treturn c;\n}\n\n\n/* __jhash_nwords - hash exactly 3, 2 or 1 word(s) */\nstatic inline u32 __jhash_nwords(u32 a, u32 b, u32 c, u32 initval)\n{\n\ta += initval;\n\tb += initval;\n\tc += initval;\n\n\t__jhash_final(a, b, c);\n\n\treturn c;\n}\n\nstatic inline u32 jhash_3words(u32 a, u32 b, u32 c, u32 initval)\n{\n\treturn __jhash_nwords(a, b, c, initval + JHASH_INITVAL + (3 << 2));\n}\n\nstatic inline u32 jhash_2words(u32 a, u32 b, u32 initval)\n{\n\treturn __jhash_nwords(a, b, 0, initval + JHASH_INITVAL + (2 << 2));\n}\n\nstatic inline u32 jhash_1word(u32 a, u32 initval)\n{\n\treturn __jhash_nwords(a, 0, 0, initval + JHASH_INITVAL + (1 << 2));\n}\n\n#endif /* _LINUX_JHASH_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d02ffc660975dddc2717e244ef59d6f05833e8ceffd65d0928d79187ab787cfc",
+      "scope": "whole-file",
+      "line_count": 176,
+      "authoring_source": "course/file_units/hash_contracts.py",
+      "sections": [
+        "전체 파일",
+        "버킷 크기와 마스크",
+        "혼합의 두 단계",
+        "바이트 입력과 초기값",
+        "마지막 0..12바이트",
+        "엔디언과 스트리밍 오해",
+        "u32 배열 경로",
+        "고정 길이 wrapper",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/jhash.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "이름표를 여러 바구니에 나누려면 이름을 작은 숫자로 바꾸는 규칙이 필요합니다. jhash는 입력 비트를 여러 번 섞어 이런 숫자를 만듭니다.",
+    "meaning": "Jenkins 해시의 길이 단위, 섞기 단계, 끝부분 처리와 충돌 한계를 설명합니다.",
+    "exercise": "길이가 0, 12, 13바이트일 때 반복문과 마지막 섞기 중 어느 곳을 지나는지 표시해 보세요."
+  },
+  "goal": "Jenkins 해시의 길이 단위, 섞기 단계, 끝부분 처리와 충돌 한계를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "길이가 0, 12, 13바이트일 때 반복문과 마지막 섞기 중 어느 곳을 지나는지 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "3bf30b5ed8e793d18972598782121e97c45c06b587f8d7c088df308ccd24c9a0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

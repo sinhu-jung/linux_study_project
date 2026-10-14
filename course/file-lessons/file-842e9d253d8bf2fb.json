@@ -5,58 +5,66 @@
   "area": "균형 이진 트리 · 포인터 태깅 · 중복 키 · RCU",
   "track": "files",
   "kind": "kernel",
-  "intro": "트리 노드, 일반 루트, 최소값을 캐시한 루트의 메모리 표현을 정의합니다.",
+  "intro": "노드와 두 루트 구조체의 배치, 태그 비트와 초기값을 이해합니다.",
   "guide": [
-    "노드는 부모·색상 정보를 담는 unsigned long 하나와 좌우 자식 포인터를 가집니다. 캐시 루트는 일반 루트에 왼쪽 끝 포인터를 더합니다.",
-    "이 헤더의 구조체만으로 균형이나 수명이 보장되지 않습니다. 연결·회전·색상 관리 API와 함께 사용합니다."
+    "부모 주소와 색이 한 unsigned long 안에 합쳐져 있습니다.",
+    "cached 루트는 최소값만 기억합니다.",
+    "구조체 선언과 균형·수명 관리는 다른 일입니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "SPDX와 guard 뒤에 rb_node, rb_root, rb_root_cached, 두 빈 루트 매크로, endif가 있습니다. 다른 헤더를 직접 포함하지 않으며 NULL 같은 이름은 사용 문맥에서 정의되어 있어야 합니다."
+      "title": "전체 타입",
+      "text": "라이선스·가드 뒤 rb_node, rb_root, rb_root_cached와 두 빈 루트 매크로가 있습니다. 다른 헤더를 직접 포함하지 않으므로 NULL 같은 이름은 사용 문맥이 정의해야 합니다. 회전이나 수명 관리 함수는 없습니다."
     },
     {
-      "title": "노드 표현",
-      "text": "rb_node는 __rb_parent_color, rb_right, rb_left 순서입니다. unsigned long 크기의 정렬 속성을 명시하며 주석은 CRIS의 필요성을 언급합니다. 부모 포인터와 색상 관련 비트의 실제 마스킹은 다른 헤더에서 수행하므로 이 필드를 평범한 부모 주소로 바로 역참조하면 안 됩니다."
+      "title": "노드의 세 칸",
+      "text": "부모·색 unsigned long, 오른쪽 자식, 왼쪽 자식 순서입니다. sizeof(long) 정렬을 명시하고 주석은 CRIS의 필요를 언급합니다. 정렬 덕분에 활용하는 낮은 상태 비트는 다른 헤더의 접근자가 제거합니다. 결합 필드를 순수 부모 주소처럼 바로 따라가면 안 됩니다."
     },
     {
-      "title": "일반 루트와 캐시 루트",
-      "text": "rb_root는 루트 노드 포인터 하나입니다. rb_root_cached는 일반 루트와 rb_leftmost를 가지며 최대값 캐시는 없습니다. 원문은 오른쪽 끝 캐시의 추가 메모리에 비해 수혜 사용처가 적다고 설계 이유를 설명하고 필요하면 사용자가 별도로 구현할 수 있다고 합니다."
+      "title": "최소값 캐시",
+      "text": "일반 루트는 시작 노드 주소 하나입니다. cached는 여기에 rb_leftmost를 더하며 최대값 주소는 없습니다. 원문은 오른쪽 끝 주소의 추가 공간에 비해 이득 볼 사용처가 적다는 이유를 말하고 필요하면 사용자가 만들 수 있다고 합니다."
     },
     {
-      "title": "초기값과 CS",
-      "text": "RB_ROOT는 NULL 루트, RB_ROOT_CACHED는 루트와 최소값 모두 NULL인 compound literal입니다. 초기값 대입은 기존 객체를 해제하는 동작이 아닙니다. 태그 비트와 정렬, 메모리 비용과 조회 비용의 교환, 최소 자료형과 알고리즘 분리를 학습합니다."
+      "title": "빈 상태 만들기",
+      "text": "RB_ROOT는 NULL 시작점, RB_ROOT_CACHED는 시작점과 최소값이 모두 NULL인 구조체 값 표현입니다. 이를 대입해도 기존 객체를 해제하지는 않습니다. 주소의 태그 비트·정렬, 공간과 조회 비용의 교환, 자료형과 알고리즘 분리를 배웁니다."
     }
   ],
   "questions": [
     {
-      "prompt": "rb_root_cached가 최대값도 캐시하는가?",
+      "prompt": "cached가 최대값도 기억하나요?",
       "options": [
+        "아니다. 왼쪽 끝만 더한다",
+        "그렇다. 양 끝을 늘 저장한다"
+      ],
+      "answer": 0,
+      "explanation": "구조체는 rb_root와 rb_leftmost뿐입니다.",
+      "original_prompt": "rb_root_cached가 최대값도 캐시하는가?",
+      "original_options": [
         "아니다. 왼쪽 끝 포인터만 추가한다",
         "그렇다. 양 끝을 항상 캐시한다"
       ],
-      "answer": 0,
-      "explanation": "선언에는 rb_root와 rb_leftmost만 있습니다. 오른쪽 끝은 공간 비용과 사용처를 고려해 제외했다고 주석이 설명합니다."
+      "original_explanation": "선언에는 rb_root와 rb_leftmost만 있습니다. 오른쪽 끝은 공간 비용과 사용처를 고려해 제외했다고 주석이 설명합니다."
     },
     {
-      "prompt": "__rb_parent_color를 그대로 부모 포인터로 사용해도 되는가?",
+      "prompt": "결합 필드를 그대로 부모 포인터로 쓰나요?",
       "options": [
+        "된다. 순수 주소다",
+        "안 된다. 상태 비트를 지우는 접근자를 쓴다"
+      ],
+      "answer": 1,
+      "explanation": "rb_parent가 낮은 비트를 마스킹합니다.",
+      "original_prompt": "__rb_parent_color를 그대로 부모 포인터로 사용해도 되는가?",
+      "original_options": [
         "된다. 이름만 다를 뿐 순수한 포인터다",
         "안 된다. 상태 비트를 제거하는 접근자를 사용해야 한다"
       ],
-      "answer": 1,
-      "explanation": "부모와 색상 정보가 결합된 unsigned long입니다. rbtree.h의 rb_parent는 하위 비트를 마스킹합니다."
+      "original_explanation": "부모와 색상 정보가 결합된 unsigned long입니다. rbtree.h의 rb_parent는 하위 비트를 마스킹합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "일반 루트에 어떤 한 주소를 더하면 cached 루트가 되는지 찾아보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n#ifndef _LINUX_RBTREE_TYPES_H\n#define _LINUX_RBTREE_TYPES_H\n\nstruct rb_node {\n\tunsigned long  __rb_parent_color;\n\tstruct rb_node *rb_right;\n\tstruct rb_node *rb_left;\n} __attribute__((aligned(sizeof(long))));\n/* The alignment might seem pointless, but allegedly CRIS needs it */\n\nstruct rb_root {\n\tstruct rb_node *rb_node;\n};\n\n/*\n * Leftmost-cached rbtrees.\n *\n * We do not cache the rightmost node based on footprint\n * size vs number of potential users that could benefit\n * from O(1) rb_last(). Just not worth it, users that want\n * this feature can always implement the logic explicitly.\n * Furthermore, users that want to cache both pointers may\n * find it a bit asymmetric, but that's ok.\n */\nstruct rb_root_cached {\n\tstruct rb_root rb_root;\n\tstruct rb_node *rb_leftmost;\n};\n\n#define RB_ROOT (struct rb_root) { NULL, }\n#define RB_ROOT_CACHED (struct rb_root_cached) { {NULL, }, NULL }\n\n#endif\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/rbtree_types.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-842e9d253d8bf2fb",
+    "path": "include/linux/rbtree_types.h",
+    "title": "레드블랙 트리 타입 전체: 부모·색상 결합과 선택적 최소값 캐시",
+    "area": "균형 이진 트리 · 포인터 태깅 · 중복 키 · RCU",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "트리 노드, 일반 루트, 최소값을 캐시한 루트의 메모리 표현을 정의합니다.",
+    "guide": [
+      "노드는 부모·색상 정보를 담는 unsigned long 하나와 좌우 자식 포인터를 가집니다. 캐시 루트는 일반 루트에 왼쪽 끝 포인터를 더합니다.",
+      "이 헤더의 구조체만으로 균형이나 수명이 보장되지 않습니다. 연결·회전·색상 관리 API와 함께 사용합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "SPDX와 guard 뒤에 rb_node, rb_root, rb_root_cached, 두 빈 루트 매크로, endif가 있습니다. 다른 헤더를 직접 포함하지 않으며 NULL 같은 이름은 사용 문맥에서 정의되어 있어야 합니다."
+      },
+      {
+        "title": "노드 표현",
+        "text": "rb_node는 __rb_parent_color, rb_right, rb_left 순서입니다. unsigned long 크기의 정렬 속성을 명시하며 주석은 CRIS의 필요성을 언급합니다. 부모 포인터와 색상 관련 비트의 실제 마스킹은 다른 헤더에서 수행하므로 이 필드를 평범한 부모 주소로 바로 역참조하면 안 됩니다."
+      },
+      {
+        "title": "일반 루트와 캐시 루트",
+        "text": "rb_root는 루트 노드 포인터 하나입니다. rb_root_cached는 일반 루트와 rb_leftmost를 가지며 최대값 캐시는 없습니다. 원문은 오른쪽 끝 캐시의 추가 메모리에 비해 수혜 사용처가 적다고 설계 이유를 설명하고 필요하면 사용자가 별도로 구현할 수 있다고 합니다."
+      },
+      {
+        "title": "초기값과 CS",
+        "text": "RB_ROOT는 NULL 루트, RB_ROOT_CACHED는 루트와 최소값 모두 NULL인 compound literal입니다. 초기값 대입은 기존 객체를 해제하는 동작이 아닙니다. 태그 비트와 정렬, 메모리 비용과 조회 비용의 교환, 최소 자료형과 알고리즘 분리를 학습합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "rb_root_cached가 최대값도 캐시하는가?",
+        "options": [
+          "아니다. 왼쪽 끝 포인터만 추가한다",
+          "그렇다. 양 끝을 항상 캐시한다"
+        ],
+        "answer": 0,
+        "explanation": "선언에는 rb_root와 rb_leftmost만 있습니다. 오른쪽 끝은 공간 비용과 사용처를 고려해 제외했다고 주석이 설명합니다."
+      },
+      {
+        "prompt": "__rb_parent_color를 그대로 부모 포인터로 사용해도 되는가?",
+        "options": [
+          "된다. 이름만 다를 뿐 순수한 포인터다",
+          "안 된다. 상태 비트를 제거하는 접근자를 사용해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "부모와 색상 정보가 결합된 unsigned long입니다. rbtree.h의 rb_parent는 하위 비트를 마스킹합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-or-later */\n#ifndef _LINUX_RBTREE_TYPES_H\n#define _LINUX_RBTREE_TYPES_H\n\nstruct rb_node {\n\tunsigned long  __rb_parent_color;\n\tstruct rb_node *rb_right;\n\tstruct rb_node *rb_left;\n} __attribute__((aligned(sizeof(long))));\n/* The alignment might seem pointless, but allegedly CRIS needs it */\n\nstruct rb_root {\n\tstruct rb_node *rb_node;\n};\n\n/*\n * Leftmost-cached rbtrees.\n *\n * We do not cache the rightmost node based on footprint\n * size vs number of potential users that could benefit\n * from O(1) rb_last(). Just not worth it, users that want\n * this feature can always implement the logic explicitly.\n * Furthermore, users that want to cache both pointers may\n * find it a bit asymmetric, but that's ok.\n */\nstruct rb_root_cached {\n\tstruct rb_root rb_root;\n\tstruct rb_node *rb_leftmost;\n};\n\n#define RB_ROOT (struct rb_root) { NULL, }\n#define RB_ROOT_CACHED (struct rb_root_cached) { {NULL, }, NULL }\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "bb78534d4212776381b3b849ad6ce1009b9d3fdfb87e19f51e5e9449e7f03e22",
+      "scope": "whole-file",
+      "line_count": 34,
+      "authoring_source": "course/file_units/rbtree_interfaces.py",
+      "sections": [
+        "전체 구성",
+        "노드 표현",
+        "일반 루트와 캐시 루트",
+        "초기값과 CS"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/rbtree_types.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "트리의 노드는 실제 물건 대신 부모·자식의 주소와 색 표시를 담습니다. 최소값을 자주 찾으면 그 주소 한 칸을 더 기억해 둘 수 있습니다.",
+    "meaning": "노드와 두 루트 구조체의 배치, 태그 비트와 초기값을 이해합니다.",
+    "exercise": "일반 루트에 어떤 한 주소를 더하면 cached 루트가 되는지 찾아보세요."
+  },
+  "goal": "노드와 두 루트 구조체의 배치, 태그 비트와 초기값을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "일반 루트에 어떤 한 주소를 더하면 cached 루트가 되는지 찾아보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "ec83fb40aeb2d1c85648591f7d87fd1e294a3a10c0d01b4f2efdf7ab278f57d1",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

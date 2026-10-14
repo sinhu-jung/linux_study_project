@@ -5,66 +5,74 @@
   "area": "세마포어 · 동기화 · 대기 큐 · 스케줄링",
   "track": "files",
   "kind": "kernel",
-  "intro": "계수형 세마포어의 구조체, 초기화와 획득·반납 함수 선언을 제공합니다.",
+  "intro": "세마포어의 남은 수, 대기 줄, 초기화와 반납 규칙을 설명합니다.",
   "guide": [
-    "남은 획득 가능 수와 대기 목록을 raw spinlock으로 보호합니다. mutex와 달리 특정 소유자에게 반납 권한을 묶지 않습니다.",
-    "멤버에 직접 접근하지 않고 API를 사용합니다. 이진 세마포어도 mutex와 같은 소유자 규칙이나 진단 기능을 갖는 것은 아닙니다."
+    "세마포어는 동시에 사용할 수 있는 자원의 개수를 세는 동기화 장치입니다.",
+    "raw spinlock은 짧은 내부 상태 변경 동안 다른 실행이 끼어들지 못하게 하는 잠금입니다.",
+    "jiffies는 커널이 시간을 세는 눈금 단위입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0-only와 저작권, 구현 파일 안내, guard, list/spinlock 포함, semaphore 구조체, 초기화 매크로, sema_init, 여섯 외부 함수 선언과 endif가 있습니다. wait 동작과 반환값 상세는 kernel/locking/semaphore.c를 가리킵니다."
+      "text": "헤더는 자료구조, 초기화 매크로, sema_init과 여섯 함수 선언을 모읍니다. 잠드는 과정과 상세 결과 규칙은 kernel/locking/semaphore.c에서 확인합니다."
     },
     {
       "title": "자료구조",
-      "text": "raw_spinlock_t lock, unsigned int count, list_head wait_list를 저장합니다. owner 태스크 필드는 없습니다. 주석은 직접 멤버를 접근하지 말라고 명시하며 count를 단순 읽고 별도로 줄이는 방식은 API의 원자적 획득을 대체하지 못합니다."
+      "text": "구조체에는 내부 raw spinlock, 남은 획득 수 count, 기다리는 목록 wait_list가 있습니다. owner 필드는 없습니다. 멤버에 직접 접근하지 말라는 약속이 있으므로 count를 읽고 나중에 줄이는 별도 동작으로 원자적 획득을 흉내 내면 안 됩니다."
     },
     {
       "title": "초기화",
-      "text": "__SEMAPHORE_INITIALIZER(name,n)은 unlocked raw lock, count n, 빈 wait_list를 만듭니다. DEFINE_SEMAPHORE는 이름과 초기 수 두 인자를 받습니다. sema_init은 int val로 구조체 전체를 초기화한 뒤 static key를 이용해 lockdep map을 설정합니다. 값 검증이나 사용 중인 대기자 정리는 하지 않으므로 살아 있는 큐를 임의로 재초기화하지 않습니다."
+      "text": "초기화는 풀린 내부 잠금, 지정한 count, 빈 목록을 만듭니다. DEFINE_SEMAPHORE는 이름과 초기 수를 받습니다. sema_init은 구조체를 대입하고 정적 키로 잠금 진단 분류를 설정하지만 값 검사나 기존 대기자 정리를 하지 않습니다. 사용 중인 것을 다시 초기화하면 안 됩니다."
     },
     {
       "title": "반납 주체와 실행 문맥",
-      "text": "주석은 다른 스레드에서도 up할 수 있고 down_trylock과 up은 인터럽트 문맥에서 사용할 수 있다고 설명합니다. 이 성질을 잠들 수 있는 모든 down 변형의 IRQ 안전성으로 확대하면 안 됩니다. 객체 메모리는 호출과 대기 동안 유효해야 합니다."
+      "text": "소유자 개념이 없으므로 down한 태스크와 다른 태스크가 up할 수 있습니다. down_trylock과 up은 인터럽트 문맥에서도 가능하지만 잠들 수 있는 모든 down 함수까지 허용된다는 뜻은 아닙니다. 대기와 호출 동안 객체 메모리도 살아 있어야 합니다."
     },
     {
       "title": "함수 선언과 결과",
-      "text": "down과 up은 void이며 interruptible/killable/trylock/timeout은 __must_check int입니다. timeout의 시간은 long jiffies 인자로 받습니다. 같은 int여도 trylock은 실패1, 중단 가능 함수는 음수 오류처럼 계약이 다르므로 단일 성공 판정 방식으로 묶기 전에 구현 문서를 확인해야 합니다."
+      "text": "down과 up은 반환값이 없고 나머지 네 획득 함수는 결과 확인이 필요한 정수를 반환합니다. timeout은 long jiffies를 받습니다. trylock은 성공 0·실패 1이고 다른 변형은 음수 오류를 쓸 수 있으므로 같은 정수형이라고 같은 판정법을 쓰지 않습니다."
     },
     {
       "title": "CS 연결",
-      "text": "자원 계수와 소유자 추적의 차이, 침입형 대기 목록, 초기화 불변식, 반환값 검사를 통한 소유권 획득 확인을 학습합니다. count1로 만들었다는 사실만으로 mutex의 모든 의미와 동일해지지는 않습니다."
+      "text": "남은 자원을 세는 것과 한 소유자를 추적하는 것은 다릅니다. 목록 연결은 대기 객체 안에 들어가며 초기화와 반환값 확인이 사용 규칙을 지킵니다. count가 1인 이진 세마포어도 mutex의 모든 진단과 소유자 의미를 갖지는 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이진 세마포어의 up은 down한 스레드만 호출할 수 있는가?",
+      "prompt": "공 하나짜리 세마포어도 빌린 태스크만 up할 수 있나요?",
       "options": [
+        "아니요. 다른 태스크나 인터럽트에서도 반납할 수 있습니다.",
+        "네. owner 필드로 같은 태스크인지 검사합니다."
+      ],
+      "answer": 0,
+      "explanation": "소유자 필드는 없지만 자원 수의 균형과 객체 수명은 지켜야 합니다.",
+      "original_prompt": "이진 세마포어의 up은 down한 스레드만 호출할 수 있는가?",
+      "original_options": [
         "아니다. 소유자 개념이 없어 다른 스레드나 인터럽트에서도 가능하다",
         "그렇다. 구조체에 owner가 저장되어 검사한다"
       ],
-      "answer": 0,
-      "explanation": "헤더는 owner 필드를 두지 않으며 이진 세마포어도 mutex와 다르다고 명시합니다. 다만 사용자가 정한 자원 수와 수명 계약은 지켜야 합니다."
+      "original_explanation": "헤더는 owner 필드를 두지 않으며 이진 세마포어도 mutex와 다르다고 명시합니다. 다만 사용자가 정한 자원 수와 수명 계약은 지켜야 합니다."
     },
     {
-      "prompt": "sema_init이 현재 대기자들을 안전하게 깨우고 재사용을 준비하는가?",
+      "prompt": "sema_init이 기존 대기자를 모두 안전하게 깨우나요?",
       "options": [
+        "네. 초기화 안에 전체 깨우기가 있습니다.",
+        "아니요. 구조체 초기화만 하며 기존 대기를 정리하지 않습니다."
+      ],
+      "answer": 1,
+      "explanation": "사용 중에 덮어 초기화하면 연결과 동기화 상태를 잃을 수 있습니다.",
+      "original_prompt": "sema_init이 현재 대기자들을 안전하게 깨우고 재사용을 준비하는가?",
+      "original_options": [
         "그렇다. 초기화 안에 전체 깨우기가 있다",
         "아니다. 구조체를 초기화할 뿐 기존 대기 정리를 하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "sema_init은 초기화식 대입과 lockdep 설정만 수행합니다. 사용 중 객체를 초기화하면 기존 대기 목록과 동기화 상태를 잃을 수 있습니다."
+      "original_explanation": "sema_init은 초기화식 대입과 lockdep 설정만 수행합니다. 사용 중 객체를 초기화하면 기존 대기 목록과 동기화 상태를 잃을 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "count를 1로 만들었다고 mutex와 같은 소유자 규칙이 생기지 않는 이유를 말해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (c) 2008 Intel Corporation\n * Author: Matthew Wilcox <willy@linux.intel.com>\n *\n * Please see kernel/locking/semaphore.c for documentation of these functions\n */\n#ifndef __LINUX_SEMAPHORE_H\n#define __LINUX_SEMAPHORE_H\n\n#include <linux/list.h>\n#include <linux/spinlock.h>\n\n/* Please don't access any members of this structure directly */\nstruct semaphore {\n\traw_spinlock_t\t\tlock;\n\tunsigned int\t\tcount;\n\tstruct list_head\twait_list;\n};\n\n#define __SEMAPHORE_INITIALIZER(name, n)\t\t\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t.lock\t\t= __RAW_SPIN_LOCK_UNLOCKED((name).lock),\t\\\n\t.count\t\t= n,\t\t\t\t\t\t\\\n\t.wait_list\t= LIST_HEAD_INIT((name).wait_list),\t\t\\\n}\n\n/*\n * Unlike mutexes, binary semaphores do not have an owner, so up() can\n * be called in a different thread from the one which called down().\n * It is also safe to call down_trylock() and up() from interrupt\n * context.\n */\n#define DEFINE_SEMAPHORE(_name, _n)\t\\\n\tstruct semaphore _name = __SEMAPHORE_INITIALIZER(_name, _n)\n\nstatic inline void sema_init(struct semaphore *sem, int val)\n{\n\tstatic struct lock_class_key __key;\n\t*sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);\n\tlockdep_init_map(&sem->lock.dep_map, \"semaphore->lock\", &__key, 0);\n}\n\nextern void down(struct semaphore *sem);\nextern int __must_check down_interruptible(struct semaphore *sem);\nextern int __must_check down_killable(struct semaphore *sem);\nextern int __must_check down_trylock(struct semaphore *sem);\nextern int __must_check down_timeout(struct semaphore *sem, long jiffies);\nextern void up(struct semaphore *sem);\n\n#endif /* __LINUX_SEMAPHORE_H */\n",
   "source_review": {
@@ -88,5 +96,125 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/semaphore.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-7f4ea674b25826cd",
+    "path": "include/linux/semaphore.h",
+    "title": "세마포어 헤더 전체: 자원 수와 소유자 없는 반납",
+    "area": "세마포어 · 동기화 · 대기 큐 · 스케줄링",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "계수형 세마포어의 구조체, 초기화와 획득·반납 함수 선언을 제공합니다.",
+    "guide": [
+      "남은 획득 가능 수와 대기 목록을 raw spinlock으로 보호합니다. mutex와 달리 특정 소유자에게 반납 권한을 묶지 않습니다.",
+      "멤버에 직접 접근하지 않고 API를 사용합니다. 이진 세마포어도 mutex와 같은 소유자 규칙이나 진단 기능을 갖는 것은 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0-only와 저작권, 구현 파일 안내, guard, list/spinlock 포함, semaphore 구조체, 초기화 매크로, sema_init, 여섯 외부 함수 선언과 endif가 있습니다. wait 동작과 반환값 상세는 kernel/locking/semaphore.c를 가리킵니다."
+      },
+      {
+        "title": "자료구조",
+        "text": "raw_spinlock_t lock, unsigned int count, list_head wait_list를 저장합니다. owner 태스크 필드는 없습니다. 주석은 직접 멤버를 접근하지 말라고 명시하며 count를 단순 읽고 별도로 줄이는 방식은 API의 원자적 획득을 대체하지 못합니다."
+      },
+      {
+        "title": "초기화",
+        "text": "__SEMAPHORE_INITIALIZER(name,n)은 unlocked raw lock, count n, 빈 wait_list를 만듭니다. DEFINE_SEMAPHORE는 이름과 초기 수 두 인자를 받습니다. sema_init은 int val로 구조체 전체를 초기화한 뒤 static key를 이용해 lockdep map을 설정합니다. 값 검증이나 사용 중인 대기자 정리는 하지 않으므로 살아 있는 큐를 임의로 재초기화하지 않습니다."
+      },
+      {
+        "title": "반납 주체와 실행 문맥",
+        "text": "주석은 다른 스레드에서도 up할 수 있고 down_trylock과 up은 인터럽트 문맥에서 사용할 수 있다고 설명합니다. 이 성질을 잠들 수 있는 모든 down 변형의 IRQ 안전성으로 확대하면 안 됩니다. 객체 메모리는 호출과 대기 동안 유효해야 합니다."
+      },
+      {
+        "title": "함수 선언과 결과",
+        "text": "down과 up은 void이며 interruptible/killable/trylock/timeout은 __must_check int입니다. timeout의 시간은 long jiffies 인자로 받습니다. 같은 int여도 trylock은 실패1, 중단 가능 함수는 음수 오류처럼 계약이 다르므로 단일 성공 판정 방식으로 묶기 전에 구현 문서를 확인해야 합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "자원 계수와 소유자 추적의 차이, 침입형 대기 목록, 초기화 불변식, 반환값 검사를 통한 소유권 획득 확인을 학습합니다. count1로 만들었다는 사실만으로 mutex의 모든 의미와 동일해지지는 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이진 세마포어의 up은 down한 스레드만 호출할 수 있는가?",
+        "options": [
+          "아니다. 소유자 개념이 없어 다른 스레드나 인터럽트에서도 가능하다",
+          "그렇다. 구조체에 owner가 저장되어 검사한다"
+        ],
+        "answer": 0,
+        "explanation": "헤더는 owner 필드를 두지 않으며 이진 세마포어도 mutex와 다르다고 명시합니다. 다만 사용자가 정한 자원 수와 수명 계약은 지켜야 합니다."
+      },
+      {
+        "prompt": "sema_init이 현재 대기자들을 안전하게 깨우고 재사용을 준비하는가?",
+        "options": [
+          "그렇다. 초기화 안에 전체 깨우기가 있다",
+          "아니다. 구조체를 초기화할 뿐 기존 대기 정리를 하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "sema_init은 초기화식 대입과 lockdep 설정만 수행합니다. 사용 중 객체를 초기화하면 기존 대기 목록과 동기화 상태를 잃을 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (c) 2008 Intel Corporation\n * Author: Matthew Wilcox <willy@linux.intel.com>\n *\n * Please see kernel/locking/semaphore.c for documentation of these functions\n */\n#ifndef __LINUX_SEMAPHORE_H\n#define __LINUX_SEMAPHORE_H\n\n#include <linux/list.h>\n#include <linux/spinlock.h>\n\n/* Please don't access any members of this structure directly */\nstruct semaphore {\n\traw_spinlock_t\t\tlock;\n\tunsigned int\t\tcount;\n\tstruct list_head\twait_list;\n};\n\n#define __SEMAPHORE_INITIALIZER(name, n)\t\t\t\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t.lock\t\t= __RAW_SPIN_LOCK_UNLOCKED((name).lock),\t\\\n\t.count\t\t= n,\t\t\t\t\t\t\\\n\t.wait_list\t= LIST_HEAD_INIT((name).wait_list),\t\t\\\n}\n\n/*\n * Unlike mutexes, binary semaphores do not have an owner, so up() can\n * be called in a different thread from the one which called down().\n * It is also safe to call down_trylock() and up() from interrupt\n * context.\n */\n#define DEFINE_SEMAPHORE(_name, _n)\t\\\n\tstruct semaphore _name = __SEMAPHORE_INITIALIZER(_name, _n)\n\nstatic inline void sema_init(struct semaphore *sem, int val)\n{\n\tstatic struct lock_class_key __key;\n\t*sem = (struct semaphore) __SEMAPHORE_INITIALIZER(*sem, val);\n\tlockdep_init_map(&sem->lock.dep_map, \"semaphore->lock\", &__key, 0);\n}\n\nextern void down(struct semaphore *sem);\nextern int __must_check down_interruptible(struct semaphore *sem);\nextern int __must_check down_killable(struct semaphore *sem);\nextern int __must_check down_trylock(struct semaphore *sem);\nextern int __must_check down_timeout(struct semaphore *sem, long jiffies);\nextern void up(struct semaphore *sem);\n\n#endif /* __LINUX_SEMAPHORE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "88a71e6b4d33fd857e583fd2b7c34158141bcc34b5f496228865c55e2d42f18b",
+      "scope": "whole-file",
+      "line_count": 51,
+      "authoring_source": "course/file_units/semaphores.py",
+      "sections": [
+        "전체 구성",
+        "자료구조",
+        "초기화",
+        "반납 주체와 실행 문맥",
+        "함수 선언과 결과",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/semaphore.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "대여할 공이 세 개면 세 명까지 바로 빌리고 네 번째는 기다립니다. 세마포어는 남은 공의 수와 기다리는 줄을 관리하며 특정 사람이 주인이라는 기록은 두지 않습니다.",
+    "meaning": "세마포어의 남은 수, 대기 줄, 초기화와 반납 규칙을 설명합니다.",
+    "exercise": "count를 1로 만들었다고 mutex와 같은 소유자 규칙이 생기지 않는 이유를 말해 보세요."
+  },
+  "goal": "세마포어의 남은 수, 대기 줄, 초기화와 반납 규칙을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "count를 1로 만들었다고 mutex와 같은 소유자 규칙이 생기지 않는 이유를 말해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "e6cd1408ed5cae5933b0c77cfccc02f41894c17b831d5e62e3c7dc204bb21b5b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

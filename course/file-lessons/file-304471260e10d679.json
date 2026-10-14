@@ -5,122 +5,154 @@
   "area": "Kconfig · 의존성 그래프 · 논리식 · 테스트 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "DTC와 OF 메뉴,모든 하위 설정의 타입·조건·기본값 및 도움말을 분석합니다.",
+  "intro": "OF Kconfig의 depends on·select·default·prompt if를 구별하고 설정 연결을 따라갑니다.",
   "guide": [
-    "설정의 의존성,다른 설정을 선택하는 관계,기본값과 메뉴 표시 조건은 서로 다른 기능입니다.",
-    "의존성 그래프,조건 논리,빌드 구성과 실행 전제의 차이를 학습합니다."
+    "bool은 켜기·끄기, tristate는 모듈 선택까지 가능한 설정 타입입니다.",
+    "depends on은 허용 조건, select는 다른 심볼 선택, default는 기본값, prompt if는 메뉴 표시 조건입니다.",
+    "빌드에 포함하는 것과 실제 부팅 중 실행·적용하는 것을 구별합니다."
   ],
   "deep_dive": [
     {
-      "title": "파일과 상위 메뉴",
-      "text": "GPL-2.0 파일은 prompt 없는 bool DTC를 먼저 정의하고 bool menuconfig OF를 Device Tree and Open Firmware support라는 이름으로 제공합니다. 도움말은 필요한 플랫폼의 자동 선택과 unittest,overlay,compile coverage를 위한 수동 선택을 설명합니다. 이후 설정은 if OF 영역에 속하고 마지막 endif로 닫힙니다. DTC 자체는 이 if 바깥에 있습니다."
+      "title": "상위 메뉴와 바깥 DTC",
+      "text": "라이선스 뒤 설명 문구 없는 bool DTC를 정의하고 OF를 장치 트리·Open Firmware 지원 메뉴로 둡니다. 필요한 플랫폼이 자동 선택하거나 시험·겹쳐 적용할 트리·컴파일 점검을 위해 수동 선택할 수 있습니다. 이후는 if OF 안이며 DTC는 그 바깥입니다."
     },
     {
-      "title": "기존 runtime unittest",
-      "text": "OF_UNITTEST는 bool이며 OF_EARLY_FLATTREE에 depends on하고 IRQ_DOMAIN과 OF_RESOLVE를 select합니다. 도움말은 부팅 때 한 번 실행하고 콘솔에 결과를 출력한다고 설명합니다. TAINT_TEST,의도적인 오류·경고·스택 출력과 트리 손상 가능성도 이 테스트 설정의 문서에 명시됩니다. 로그를 scripts/dtc/of_unittest_expect로 처리하도록 안내하며 KUnit 설정과 같은 테스트 집합이라고 볼 수 없습니다."
+      "title": "기존 부팅 단위 시험",
+      "text": "OF_UNITTEST는 bool이며 EARLY_FLATTREE에 의존하고 IRQ_DOMAIN·OF_RESOLVE를 선택합니다. 부팅 한 번 실행해 콘솔에 결과를 쓰는 개발용 시험입니다. TAINT_TEST 표시, 의도적 오류·경고·호출 경로 출력과 트리 손상 가능성을 도움말이 설명합니다. 로그는 of_unittest_expect로 줄이고 예상 결과를 확인하도록 합니다. KUnit과 같은 시험 묶음은 아닙니다."
     },
     {
-      "title": "기본 OF KUnit 테스트",
-      "text": "OF_KUNIT_TEST는 tristate이고 KUNIT에 의존하며 기본값은 KUNIT_ALL_TESTS입니다. prompt 뒤 if !KUNIT_ALL_TESTS는 메뉴 표시 조건이며 테스트 기능 전체를 끄는 depends on과 다릅니다. 도움말은 OF 기반 KUnit 테스트를 빌드한다고 설명합니다. EARLY_FLATTREE를 이 항목에서 직접 depends on하거나 select하지 않으므로 실행 helper의 별도 skip 조건을 함께 봐야 합니다."
+      "title": "기본 KUnit 시험",
+      "text": "OF_KUNIT_TEST는 KUNIT에 의존하는 tristate이고 기본값은 KUNIT_ALL_TESTS입니다. !KUNIT_ALL_TESTS는 prompt 표시 조건이지 켜졌을 때 시험을 강제로 끄는 의존성이 아닙니다. EARLY_FLATTREE를 직접 요구·선택하지 않으므로 실제 시험 helper의 별도 건너뛰기 조건도 확인합니다. 도움말은 불확실하면 N이되 안전하게 켤 수 있다고 안내합니다."
     },
     {
-      "title": "전체 DTB 빌드",
-      "text": "OF_ALL_DTBS는 bool이며 COMPILE_TEST에 의존하고 DTC를 select합니다. 설명은 현재 아키텍처에서 가능한 DTB를 모두 빌드한다는 것입니다. 모든 아키텍처의 모든 DTB를 한꺼번에 빌드하거나 런타임 트리에 모두 설치하는 의미가 아닙니다."
+      "title": "현재 CPU 종류의 DTB 빌드",
+      "text": "OF_ALL_DTBS는 COMPILE_TEST에 의존하는 bool이며 DTC를 선택합니다. 현재 아키텍처의 가능한 장치 트리 바이너리를 모두 빌드한다는 뜻입니다. 모든 아키텍처 전체를 만들거나 현재 트리에 모두 적용하는 것은 아닙니다. 도움말은 불확실하면 N이되 안전한 선택이라고 설명합니다."
     },
     {
-      "title": "Flattened tree 기반",
-      "text": "OF_FLATTREE는 prompt 없는 bool이고 DTC,LIBFDT,CRC32를 select합니다. OF_EARLY_FLATTREE는 def_bool로 OF이면서 SPARC,ALPHA,HEXAGON,M68K,PARISC,S390 중 어느 것도 아닌 조건을 기본값으로 둡니다. HAS_DMA와 HAS_IOMEM이 모두 있으면 DMA_DECLARE_COHERENT를 select하고 OF_FLATTREE를 select합니다. def_bool 기본 논리를 별도의 명시적 depends on 목록으로 바꿔 읽으면 안 됩니다."
+      "title": "평탄 트리 기반",
+      "text": "OF_FLATTREE는 숨은 bool이며 DTC·LIBFDT·CRC32를 선택합니다. EARLY_FLATTREE 기본값은 OF이고 SPARC·ALPHA·HEXAGON·M68K·PARISC·S390이 아닌 경우입니다. HAS_DMA와 HAS_IOMEM이 모두 있으면 DMA_DECLARE_COHERENT도 선택하고 OF_FLATTREE를 선택합니다. 기본 논리를 별도의 depends on 목록처럼 바꿔 읽지 않습니다."
     },
     {
-      "title": "PROM과 sysfs 표현",
-      "text": "OF_PROMTREE는 bool만 선언된 내부 설정입니다. OF_KOBJ는 def_bool SYSFS로 기본값을 정합니다. 여기에는 실제 kobject 생성 코드나 PROM 순회 알고리즘이 없습니다. 해당 기능의 object 선택과 실행 코드는 다른 파일에서 정의됩니다."
+      "title": "PROM과 sysfs 설정",
+      "text": "OF_PROMTREE는 bool만 선언한 내부 설정이고 OF_KOBJ는 SYSFS를 기본값으로 합니다. 실제 kobject 생성이나 펌웨어 PROM 트리 순회 코드는 여기 없습니다. 설정에 따른 파일 선택과 실행은 다른 파일이 맡습니다."
     },
     {
-      "title": "동적 트리의 표시 조건",
-      "text": "OF_DYNAMIC은 bool이며 prompt는 OF_UNITTEST일 때 표시되고 OF_KOBJ를 select합니다. 도움말은 일부 플랫폼의 런타임 트리 수정과 테스트 커버리지를 설명합니다. prompt가 숨겨졌다고 다른 설정의 select가 불가능한 것은 아닙니다. OF_OVERLAY가 이 설정을 선택하는 관계가 아래에 있습니다."
+      "title": "동적 트리 메뉴 표시",
+      "text": "OF_DYNAMIC은 OF_UNITTEST일 때만 문구가 보이는 bool이고 OF_KOBJ를 선택합니다. 일부 플랫폼의 실행 중 트리 수정과 시험 범위를 설명하며 필요한 때만 선택하라는 주석이 있습니다. 문구가 안 보여도 다른 설정이 select할 수 있고 아래 OVERLAY가 실제로 선택합니다."
     },
     {
-      "title": "주소·IRQ·예약 메모리",
-      "text": "OF_ADDRESS는 def_bool y이지만 !SPARC && (HAS_IOMEM || UML)에 depends on합니다. OF_IRQ도 def_bool y이고 !SPARC && IRQ_DOMAIN에 의존합니다. OF_RESERVED_MEM은 def_bool OF_EARLY_FLATTREE입니다. 기본 y라는 표현만 보고 의존성이 거짓인 구성에서도 켜진다고 해석하면 안 됩니다."
+      "title": "주소·IRQ·예약 영역",
+      "text": "OF_ADDRESS는 기본 y지만 !SPARC && (HAS_IOMEM || UML)에 의존합니다. OF_IRQ도 기본 y이며 !SPARC && IRQ_DOMAIN에 의존합니다. OF_RESERVED_MEM의 기본은 EARLY_FLATTREE입니다. 기본 y라는 말만으로 조건이 거짓인 곳까지 켜진다고 보지 않습니다."
     },
     {
-      "title": "Resolver와 overlay",
-      "text": "OF_RESOLVE는 prompt 없는 bool입니다. OF_OVERLAY는 사용자 prompt가 있는 bool이며 OF_DYNAMIC,OF_FLATTREE,OF_RESOLVE를 select합니다. 도움말은 동적으로 로드된 데이터로 커널 트리 일부를 수정하는 방법이라고 설명합니다. OF_FLATTREE 선택과 OF_EARLY_FLATTREE 선택은 같은 것이 아니며 이 항목은 EARLY를 직접 select하지 않습니다."
+      "title": "해결기와 덧붙일 트리",
+      "text": "OF_RESOLVE는 숨은 bool입니다. 사용자 메뉴가 있는 OF_OVERLAY는 DYNAMIC·FLATTREE·RESOLVE를 선택해 동적으로 불러온 자료로 트리 일부를 바꾸게 합니다. FLATTREE와 EARLY_FLATTREE는 다른 심볼이며 EARLY를 직접 선택하지 않습니다. 필요한 플랫폼의 자동 선택과 시험용 수동 선택을 설명합니다."
     },
     {
       "title": "Overlay KUnit과 NUMA",
-      "text": "OF_OVERLAY_KUNIT_TEST는 tristate,prompt if !KUNIT_ALL_TESTS,depends on KUNIT,default KUNIT_ALL_TESTS를 갖고 OF_OVERLAY를 select합니다. 그러므로 overlay 선택을 통해 dynamic·flattree·resolve로 관계가 이어집니다. 마지막 OF_NUMA는 prompt 없는 bool입니다. 이 파일 자체에 OF_NUMA의 기본값이나 별도 select는 없습니다."
+      "text": "OVERLAY_KUNIT_TEST는 KUNIT 의존 tristate, KUNIT_ALL_TESTS 기본값과 반대 조건의 메뉴 표시를 갖고 OVERLAY를 선택합니다. 따라서 dynamic·flattree·resolve로 연결됩니다. 도움말은 안전한 시험 선택이며 불확실하면 N이라고 합니다. 마지막 OF_NUMA는 숨은 bool뿐이고 여기 자체의 기본값·select는 없습니다."
     },
     {
-      "title": "그래프와 검토 범위",
-      "text": "DTC,OF와 모든 하위 설정,도움말 및 조건을 대조했습니다. 의존성 그래프를 읽을 때 depends on은 허용 조건,select는 다른 심볼 선택,default는 기본값,prompt if는 표시 조건으로 구분합니다. Kconfig 처리 전체를 실행한 것은 아니며 다른 파일에서의 선택과 아키텍처 설정까지 이 한 파일로 확정할 수 없습니다."
+      "title": "설정 그래프의 읽기 범위",
+      "text": "DTC와 OF 및 모든 하위 항목·도움말·조건을 읽었습니다. 허용·선택·기본·표시 관계를 나누어 봅니다. Kconfig 전체를 실행한 것이 아니며 다른 파일과 아키텍처에서 선택하는 관계까지 이 파일 하나로 확정하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "OF_KUNIT_TEST의 prompt if !KUNIT_ALL_TESTS는 무엇을 제어하는가?",
+      "prompt": "OF_KUNIT_TEST의 prompt if는 무엇을 정하나요?",
       "options": [
+        "메뉴 문구를 보여 줄 조건입니다.",
+        "ALL_TESTS가 켜지면 시험을 무조건 끕니다."
+      ],
+      "answer": 0,
+      "explanation": "오히려 기본값이 ALL_TESTS입니다. 표시와 의존성을 구별합니다.",
+      "original_prompt": "OF_KUNIT_TEST의 prompt if !KUNIT_ALL_TESTS는 무엇을 제어하는가?",
+      "original_options": [
         "메뉴 prompt의 표시 조건",
         "KUNIT_ALL_TESTS가 켜지면 테스트를 무조건 비활성화하는 조건"
       ],
-      "answer": 0,
-      "explanation": "테스트의 default는 오히려 KUNIT_ALL_TESTS입니다. prompt 조건과 depends on을 구분해야 합니다."
+      "original_explanation": "테스트의 default는 오히려 KUNIT_ALL_TESTS입니다. prompt 조건과 depends on을 구분해야 합니다."
     },
     {
-      "prompt": "OF_OVERLAY가 직접 선택하는 세 설정은?",
+      "prompt": "OVERLAY가 직접 선택하는 세 항목은?",
       "options": [
+        "EARLY_FLATTREE·NUMA·PROMTREE입니다.",
+        "DYNAMIC·FLATTREE·RESOLVE입니다."
+      ],
+      "answer": 1,
+      "explanation": "실제 select를 읽습니다. FLATTREE와 EARLY는 다릅니다.",
+      "original_prompt": "OF_OVERLAY가 직접 선택하는 세 설정은?",
+      "original_options": [
         "OF_EARLY_FLATTREE,OF_NUMA,OF_PROMTREE",
         "OF_DYNAMIC,OF_FLATTREE,OF_RESOLVE"
       ],
-      "answer": 1,
-      "explanation": "실제 select 목록을 따라야 합니다. FLATTREE와 EARLY_FLATTREE는 서로 다른 심볼입니다."
+      "original_explanation": "실제 select 목록을 따라야 합니다. FLATTREE와 EARLY_FLATTREE는 서로 다른 심볼입니다."
     },
     {
-      "prompt": "OF_ALL_DTBS의 도움말상 빌드 범위는?",
+      "prompt": "ALL_DTBS가 빌드하는 범위는?",
       "options": [
+        "현재 아키텍처의 가능한 DTB입니다.",
+        "항상 모든 아키텍처의 모든 DTB입니다."
+      ],
+      "answer": 0,
+      "explanation": "도움말이 현재 architecture로 한정합니다. 빌드와 실행 중 적용도 다릅니다.",
+      "original_prompt": "OF_ALL_DTBS의 도움말상 빌드 범위는?",
+      "original_options": [
         "현재 아키텍처의 가능한 DTB",
         "항상 모든 아키텍처의 모든 DTB"
       ],
-      "answer": 0,
-      "explanation": "현재 architecture라는 범위가 명시되어 있습니다. 빌드와 런타임 적용도 구분합니다."
+      "original_explanation": "현재 architecture라는 범위가 명시되어 있습니다. 빌드와 런타임 적용도 구분합니다."
     },
     {
-      "prompt": "OF_ADDRESS의 기본 y는 모든 플랫폼에서 무조건 y를 보장하는가?",
+      "prompt": "ADDRESS의 기본 y는 모든 플랫폼에서 켜짐을 보장하나요?",
       "options": [
+        "네. depends on은 영향이 없습니다.",
+        "아니요. SPARC 제외와 IOMEM 또는 UML 조건이 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "기본값의 적용 범위는 의존성으로 제한됩니다.",
+      "original_prompt": "OF_ADDRESS의 기본 y는 모든 플랫폼에서 무조건 y를 보장하는가?",
+      "original_options": [
         "그렇다. depends on은 아무 영향이 없다",
         "아니다. !SPARC와 HAS_IOMEM 또는 UML 조건에 의존한다"
       ],
-      "answer": 1,
-      "explanation": "기본값을 적용할 수 있는 범위는 의존성으로 제한됩니다."
+      "original_explanation": "기본값을 적용할 수 있는 범위는 의존성으로 제한됩니다."
     },
     {
-      "prompt": "OF_DYNAMIC prompt가 숨겨지면 OF_OVERLAY가 선택할 수 없는가?",
+      "prompt": "DYNAMIC 메뉴가 숨겨지면 OVERLAY도 선택할 수 없나요?",
       "options": [
+        "아니요. 표시와 select 관계는 별개입니다.",
+        "네. 숨은 설정은 절대 켤 수 없습니다."
+      ],
+      "answer": 0,
+      "explanation": "OVERLAY에 실제 select가 있습니다. 사용자 노출과 내부 선택을 구별합니다.",
+      "original_prompt": "OF_DYNAMIC prompt가 숨겨지면 OF_OVERLAY가 선택할 수 없는가?",
+      "original_options": [
         "아니다. prompt 표시와 select 관계는 별개다",
         "그렇다. 숨겨진 설정은 절대 켤 수 없다"
       ],
-      "answer": 0,
-      "explanation": "OF_OVERLAY에는 OF_DYNAMIC select가 실제로 있습니다. 사용자 메뉴 노출과 내부 선택 가능성을 구분합니다."
+      "original_explanation": "OF_OVERLAY에는 OF_DYNAMIC select가 실제로 있습니다. 사용자 메뉴 노출과 내부 선택 가능성을 구분합니다."
     },
     {
-      "prompt": "OF_UNITTEST와 OF_KUNIT_TEST가 동일 설정인가?",
+      "prompt": "OF_UNITTEST와 OF_KUNIT_TEST는 같은 설정인가요?",
       "options": [
+        "네. 다른 이름의 별칭입니다.",
+        "아니요. 타입·의존성과 실행 설명이 다릅니다."
+      ],
+      "answer": 1,
+      "explanation": "앞은 부팅 시험 bool, 뒤는 KUNIT 의존 tristate입니다.",
+      "original_prompt": "OF_UNITTEST와 OF_KUNIT_TEST가 동일 설정인가?",
+      "original_options": [
         "그렇다. 이름만 다른 alias다",
         "아니다. 타입·의존성과 실행 설명이 다른 항목이다"
       ],
-      "answer": 1,
-      "explanation": "전자는 부팅 runtime unittest용 bool,후자는 KUNIT 의존 tristate입니다. 두 테스트 집합을 혼동하지 않습니다."
+      "original_explanation": "전자는 부팅 runtime unittest용 bool,후자는 KUNIT 의존 tristate입니다. 두 테스트 집합을 혼동하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "OF_OVERLAY에서 직접 선택하는 세 항목을 화살표로 그리고 EARLY_FLATTREE가 포함되는지 확인해 보세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0\nconfig DTC\n\tbool\n\nmenuconfig OF\n\tbool \"Device Tree and Open Firmware support\"\n\thelp\n\t  This option enables the device tree infrastructure.\n\t  It is automatically selected by platforms that need it or can\n\t  be enabled manually for unittests, overlays or\n\t  compile-coverage.\n\nif OF\n\nconfig OF_UNITTEST\n\tbool \"Device Tree runtime unit tests\"\n\tdepends on OF_EARLY_FLATTREE\n\tselect IRQ_DOMAIN\n\tselect OF_RESOLVE\n\thelp\n\t  This option builds in test cases for the device tree infrastructure\n\t  that are executed once at boot time, and the results dumped to the\n\t  console.\n\n\t  This option should only be enabled for a development kernel. The tests\n\t  will taint the kernel with TAINT_TEST. The tests will cause ERROR and\n\t  WARNING messages to print on the console. The tests will cause stack\n\t  traces to print on the console.  It is possible that the tests will\n\t  leave the devicetree in a corrupted state.\n\n\t  The unittest output will be verbose.  Copy the output to a file\n\t  via capturing the console output or via the dmesg command.  Process\n\t  this file with scripts/dtc/of_unittest_expect to reduce the\n\t  verbosity, test whether expected output is present, and to\n\t  summarize the results.\n\n\t  If unsure, say N here. This option is not safe to enable.\n\nconfig OF_KUNIT_TEST\n\ttristate \"Devicetree KUnit Test\" if !KUNIT_ALL_TESTS\n\tdepends on KUNIT\n\tdefault KUNIT_ALL_TESTS\n\thelp\n\t  This option builds KUnit unit tests for device tree infrastructure.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_ALL_DTBS\n\tbool \"Build all Device Tree Blobs\"\n\tdepends on COMPILE_TEST\n\tselect DTC\n\thelp\n\t  This option builds all possible Device Tree Blobs (DTBs) for the\n\t  current architecture.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_FLATTREE\n\tbool\n\tselect DTC\n\tselect LIBFDT\n\tselect CRC32\n\nconfig OF_EARLY_FLATTREE\n\tdef_bool OF && !(SPARC || ALPHA || HEXAGON || M68K || PARISC || S390)\n\tselect DMA_DECLARE_COHERENT if HAS_DMA && HAS_IOMEM\n\tselect OF_FLATTREE\n\nconfig OF_PROMTREE\n\tbool\n\nconfig OF_KOBJ\n\tdef_bool SYSFS\n\n# Hardly any platforms need this.  It is safe to select, but only do so if you\n# need it.\nconfig OF_DYNAMIC\n\tbool \"Support for dynamic device trees\" if OF_UNITTEST\n\tselect OF_KOBJ\n\thelp\n\t  On some platforms, the device tree can be manipulated at runtime.\n\t  While this option is selected automatically on such platforms, you\n\t  can enable it manually to improve device tree unit test coverage.\n\nconfig OF_ADDRESS\n\tdef_bool y\n\tdepends on !SPARC && (HAS_IOMEM || UML)\n\nconfig OF_IRQ\n\tdef_bool y\n\tdepends on !SPARC && IRQ_DOMAIN\n\nconfig OF_RESERVED_MEM\n\tdef_bool OF_EARLY_FLATTREE\n\nconfig OF_RESOLVE\n\tbool\n\nconfig OF_OVERLAY\n\tbool \"Device Tree overlays\"\n\tselect OF_DYNAMIC\n\tselect OF_FLATTREE\n\tselect OF_RESOLVE\n\thelp\n\t  Overlays are a method to dynamically modify part of the kernel's\n\t  device tree with dynamically loaded data.\n\t  While this option is selected automatically when needed, you can\n\t  enable it manually to improve device tree unit test coverage.\n\nconfig OF_OVERLAY_KUNIT_TEST\n\ttristate \"Device Tree overlay KUnit tests\" if !KUNIT_ALL_TESTS\n\tdepends on KUNIT\n\tdefault KUNIT_ALL_TESTS\n\tselect OF_OVERLAY\n\thelp\n\t  This option builds KUnit unit tests for the device tree overlay code.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_NUMA\n\tbool\n\nendif # OF\n",
   "source_review": {
@@ -149,5 +181,186 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/Kconfig"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-304471260e10d679",
+    "path": "drivers/of/Kconfig",
+    "title": "OF 구성 그래프: depends on·select·default와 테스트 조건",
+    "area": "Kconfig · 의존성 그래프 · 논리식 · 테스트 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "DTC와 OF 메뉴,모든 하위 설정의 타입·조건·기본값 및 도움말을 분석합니다.",
+    "guide": [
+      "설정의 의존성,다른 설정을 선택하는 관계,기본값과 메뉴 표시 조건은 서로 다른 기능입니다.",
+      "의존성 그래프,조건 논리,빌드 구성과 실행 전제의 차이를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일과 상위 메뉴",
+        "text": "GPL-2.0 파일은 prompt 없는 bool DTC를 먼저 정의하고 bool menuconfig OF를 Device Tree and Open Firmware support라는 이름으로 제공합니다. 도움말은 필요한 플랫폼의 자동 선택과 unittest,overlay,compile coverage를 위한 수동 선택을 설명합니다. 이후 설정은 if OF 영역에 속하고 마지막 endif로 닫힙니다. DTC 자체는 이 if 바깥에 있습니다."
+      },
+      {
+        "title": "기존 runtime unittest",
+        "text": "OF_UNITTEST는 bool이며 OF_EARLY_FLATTREE에 depends on하고 IRQ_DOMAIN과 OF_RESOLVE를 select합니다. 도움말은 부팅 때 한 번 실행하고 콘솔에 결과를 출력한다고 설명합니다. TAINT_TEST,의도적인 오류·경고·스택 출력과 트리 손상 가능성도 이 테스트 설정의 문서에 명시됩니다. 로그를 scripts/dtc/of_unittest_expect로 처리하도록 안내하며 KUnit 설정과 같은 테스트 집합이라고 볼 수 없습니다."
+      },
+      {
+        "title": "기본 OF KUnit 테스트",
+        "text": "OF_KUNIT_TEST는 tristate이고 KUNIT에 의존하며 기본값은 KUNIT_ALL_TESTS입니다. prompt 뒤 if !KUNIT_ALL_TESTS는 메뉴 표시 조건이며 테스트 기능 전체를 끄는 depends on과 다릅니다. 도움말은 OF 기반 KUnit 테스트를 빌드한다고 설명합니다. EARLY_FLATTREE를 이 항목에서 직접 depends on하거나 select하지 않으므로 실행 helper의 별도 skip 조건을 함께 봐야 합니다."
+      },
+      {
+        "title": "전체 DTB 빌드",
+        "text": "OF_ALL_DTBS는 bool이며 COMPILE_TEST에 의존하고 DTC를 select합니다. 설명은 현재 아키텍처에서 가능한 DTB를 모두 빌드한다는 것입니다. 모든 아키텍처의 모든 DTB를 한꺼번에 빌드하거나 런타임 트리에 모두 설치하는 의미가 아닙니다."
+      },
+      {
+        "title": "Flattened tree 기반",
+        "text": "OF_FLATTREE는 prompt 없는 bool이고 DTC,LIBFDT,CRC32를 select합니다. OF_EARLY_FLATTREE는 def_bool로 OF이면서 SPARC,ALPHA,HEXAGON,M68K,PARISC,S390 중 어느 것도 아닌 조건을 기본값으로 둡니다. HAS_DMA와 HAS_IOMEM이 모두 있으면 DMA_DECLARE_COHERENT를 select하고 OF_FLATTREE를 select합니다. def_bool 기본 논리를 별도의 명시적 depends on 목록으로 바꿔 읽으면 안 됩니다."
+      },
+      {
+        "title": "PROM과 sysfs 표현",
+        "text": "OF_PROMTREE는 bool만 선언된 내부 설정입니다. OF_KOBJ는 def_bool SYSFS로 기본값을 정합니다. 여기에는 실제 kobject 생성 코드나 PROM 순회 알고리즘이 없습니다. 해당 기능의 object 선택과 실행 코드는 다른 파일에서 정의됩니다."
+      },
+      {
+        "title": "동적 트리의 표시 조건",
+        "text": "OF_DYNAMIC은 bool이며 prompt는 OF_UNITTEST일 때 표시되고 OF_KOBJ를 select합니다. 도움말은 일부 플랫폼의 런타임 트리 수정과 테스트 커버리지를 설명합니다. prompt가 숨겨졌다고 다른 설정의 select가 불가능한 것은 아닙니다. OF_OVERLAY가 이 설정을 선택하는 관계가 아래에 있습니다."
+      },
+      {
+        "title": "주소·IRQ·예약 메모리",
+        "text": "OF_ADDRESS는 def_bool y이지만 !SPARC && (HAS_IOMEM || UML)에 depends on합니다. OF_IRQ도 def_bool y이고 !SPARC && IRQ_DOMAIN에 의존합니다. OF_RESERVED_MEM은 def_bool OF_EARLY_FLATTREE입니다. 기본 y라는 표현만 보고 의존성이 거짓인 구성에서도 켜진다고 해석하면 안 됩니다."
+      },
+      {
+        "title": "Resolver와 overlay",
+        "text": "OF_RESOLVE는 prompt 없는 bool입니다. OF_OVERLAY는 사용자 prompt가 있는 bool이며 OF_DYNAMIC,OF_FLATTREE,OF_RESOLVE를 select합니다. 도움말은 동적으로 로드된 데이터로 커널 트리 일부를 수정하는 방법이라고 설명합니다. OF_FLATTREE 선택과 OF_EARLY_FLATTREE 선택은 같은 것이 아니며 이 항목은 EARLY를 직접 select하지 않습니다."
+      },
+      {
+        "title": "Overlay KUnit과 NUMA",
+        "text": "OF_OVERLAY_KUNIT_TEST는 tristate,prompt if !KUNIT_ALL_TESTS,depends on KUNIT,default KUNIT_ALL_TESTS를 갖고 OF_OVERLAY를 select합니다. 그러므로 overlay 선택을 통해 dynamic·flattree·resolve로 관계가 이어집니다. 마지막 OF_NUMA는 prompt 없는 bool입니다. 이 파일 자체에 OF_NUMA의 기본값이나 별도 select는 없습니다."
+      },
+      {
+        "title": "그래프와 검토 범위",
+        "text": "DTC,OF와 모든 하위 설정,도움말 및 조건을 대조했습니다. 의존성 그래프를 읽을 때 depends on은 허용 조건,select는 다른 심볼 선택,default는 기본값,prompt if는 표시 조건으로 구분합니다. Kconfig 처리 전체를 실행한 것은 아니며 다른 파일에서의 선택과 아키텍처 설정까지 이 한 파일로 확정할 수 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "OF_KUNIT_TEST의 prompt if !KUNIT_ALL_TESTS는 무엇을 제어하는가?",
+        "options": [
+          "메뉴 prompt의 표시 조건",
+          "KUNIT_ALL_TESTS가 켜지면 테스트를 무조건 비활성화하는 조건"
+        ],
+        "answer": 0,
+        "explanation": "테스트의 default는 오히려 KUNIT_ALL_TESTS입니다. prompt 조건과 depends on을 구분해야 합니다."
+      },
+      {
+        "prompt": "OF_OVERLAY가 직접 선택하는 세 설정은?",
+        "options": [
+          "OF_EARLY_FLATTREE,OF_NUMA,OF_PROMTREE",
+          "OF_DYNAMIC,OF_FLATTREE,OF_RESOLVE"
+        ],
+        "answer": 1,
+        "explanation": "실제 select 목록을 따라야 합니다. FLATTREE와 EARLY_FLATTREE는 서로 다른 심볼입니다."
+      },
+      {
+        "prompt": "OF_ALL_DTBS의 도움말상 빌드 범위는?",
+        "options": [
+          "현재 아키텍처의 가능한 DTB",
+          "항상 모든 아키텍처의 모든 DTB"
+        ],
+        "answer": 0,
+        "explanation": "현재 architecture라는 범위가 명시되어 있습니다. 빌드와 런타임 적용도 구분합니다."
+      },
+      {
+        "prompt": "OF_ADDRESS의 기본 y는 모든 플랫폼에서 무조건 y를 보장하는가?",
+        "options": [
+          "그렇다. depends on은 아무 영향이 없다",
+          "아니다. !SPARC와 HAS_IOMEM 또는 UML 조건에 의존한다"
+        ],
+        "answer": 1,
+        "explanation": "기본값을 적용할 수 있는 범위는 의존성으로 제한됩니다."
+      },
+      {
+        "prompt": "OF_DYNAMIC prompt가 숨겨지면 OF_OVERLAY가 선택할 수 없는가?",
+        "options": [
+          "아니다. prompt 표시와 select 관계는 별개다",
+          "그렇다. 숨겨진 설정은 절대 켤 수 없다"
+        ],
+        "answer": 0,
+        "explanation": "OF_OVERLAY에는 OF_DYNAMIC select가 실제로 있습니다. 사용자 메뉴 노출과 내부 선택 가능성을 구분합니다."
+      },
+      {
+        "prompt": "OF_UNITTEST와 OF_KUNIT_TEST가 동일 설정인가?",
+        "options": [
+          "그렇다. 이름만 다른 alias다",
+          "아니다. 타입·의존성과 실행 설명이 다른 항목이다"
+        ],
+        "answer": 1,
+        "explanation": "전자는 부팅 runtime unittest용 bool,후자는 KUNIT 의존 tristate입니다. 두 테스트 집합을 혼동하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0\nconfig DTC\n\tbool\n\nmenuconfig OF\n\tbool \"Device Tree and Open Firmware support\"\n\thelp\n\t  This option enables the device tree infrastructure.\n\t  It is automatically selected by platforms that need it or can\n\t  be enabled manually for unittests, overlays or\n\t  compile-coverage.\n\nif OF\n\nconfig OF_UNITTEST\n\tbool \"Device Tree runtime unit tests\"\n\tdepends on OF_EARLY_FLATTREE\n\tselect IRQ_DOMAIN\n\tselect OF_RESOLVE\n\thelp\n\t  This option builds in test cases for the device tree infrastructure\n\t  that are executed once at boot time, and the results dumped to the\n\t  console.\n\n\t  This option should only be enabled for a development kernel. The tests\n\t  will taint the kernel with TAINT_TEST. The tests will cause ERROR and\n\t  WARNING messages to print on the console. The tests will cause stack\n\t  traces to print on the console.  It is possible that the tests will\n\t  leave the devicetree in a corrupted state.\n\n\t  The unittest output will be verbose.  Copy the output to a file\n\t  via capturing the console output or via the dmesg command.  Process\n\t  this file with scripts/dtc/of_unittest_expect to reduce the\n\t  verbosity, test whether expected output is present, and to\n\t  summarize the results.\n\n\t  If unsure, say N here. This option is not safe to enable.\n\nconfig OF_KUNIT_TEST\n\ttristate \"Devicetree KUnit Test\" if !KUNIT_ALL_TESTS\n\tdepends on KUNIT\n\tdefault KUNIT_ALL_TESTS\n\thelp\n\t  This option builds KUnit unit tests for device tree infrastructure.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_ALL_DTBS\n\tbool \"Build all Device Tree Blobs\"\n\tdepends on COMPILE_TEST\n\tselect DTC\n\thelp\n\t  This option builds all possible Device Tree Blobs (DTBs) for the\n\t  current architecture.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_FLATTREE\n\tbool\n\tselect DTC\n\tselect LIBFDT\n\tselect CRC32\n\nconfig OF_EARLY_FLATTREE\n\tdef_bool OF && !(SPARC || ALPHA || HEXAGON || M68K || PARISC || S390)\n\tselect DMA_DECLARE_COHERENT if HAS_DMA && HAS_IOMEM\n\tselect OF_FLATTREE\n\nconfig OF_PROMTREE\n\tbool\n\nconfig OF_KOBJ\n\tdef_bool SYSFS\n\n# Hardly any platforms need this.  It is safe to select, but only do so if you\n# need it.\nconfig OF_DYNAMIC\n\tbool \"Support for dynamic device trees\" if OF_UNITTEST\n\tselect OF_KOBJ\n\thelp\n\t  On some platforms, the device tree can be manipulated at runtime.\n\t  While this option is selected automatically on such platforms, you\n\t  can enable it manually to improve device tree unit test coverage.\n\nconfig OF_ADDRESS\n\tdef_bool y\n\tdepends on !SPARC && (HAS_IOMEM || UML)\n\nconfig OF_IRQ\n\tdef_bool y\n\tdepends on !SPARC && IRQ_DOMAIN\n\nconfig OF_RESERVED_MEM\n\tdef_bool OF_EARLY_FLATTREE\n\nconfig OF_RESOLVE\n\tbool\n\nconfig OF_OVERLAY\n\tbool \"Device Tree overlays\"\n\tselect OF_DYNAMIC\n\tselect OF_FLATTREE\n\tselect OF_RESOLVE\n\thelp\n\t  Overlays are a method to dynamically modify part of the kernel's\n\t  device tree with dynamically loaded data.\n\t  While this option is selected automatically when needed, you can\n\t  enable it manually to improve device tree unit test coverage.\n\nconfig OF_OVERLAY_KUNIT_TEST\n\ttristate \"Device Tree overlay KUnit tests\" if !KUNIT_ALL_TESTS\n\tdepends on KUNIT\n\tdefault KUNIT_ALL_TESTS\n\tselect OF_OVERLAY\n\thelp\n\t  This option builds KUnit unit tests for the device tree overlay code.\n\n\t  If unsure, say N here, but this option is safe to enable.\n\nconfig OF_NUMA\n\tbool\n\nendif # OF\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "fb97aeadde47e2ecac0260a3758b763bff62a40a6ff3432e3059e8b74a164fba",
+      "scope": "whole-file",
+      "line_count": 123,
+      "authoring_source": "course/file_units/of_kconfig.py",
+      "sections": [
+        "파일과 상위 메뉴",
+        "기존 runtime unittest",
+        "기본 OF KUnit 테스트",
+        "전체 DTB 빌드",
+        "Flattened tree 기반",
+        "PROM과 sysfs 표현",
+        "동적 트리의 표시 조건",
+        "주소·IRQ·예약 메모리",
+        "Resolver와 overlay",
+        "Overlay KUnit과 NUMA",
+        "그래프와 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/Kconfig"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "설정 메뉴의 규칙은 네 가지로 나눠 읽습니다. 켤 수 있는 조건, 다른 기능도 고르는 지시, 처음 값, 화면에 보이는 조건은 같은 일이 아닙니다.",
+    "meaning": "OF Kconfig의 depends on·select·default·prompt if를 구별하고 설정 연결을 따라갑니다.",
+    "exercise": "OF_OVERLAY에서 직접 선택하는 세 항목을 화살표로 그리고 EARLY_FLATTREE가 포함되는지 확인해 보세요."
+  },
+  "goal": "OF Kconfig의 depends on·select·default·prompt if를 구별하고 설정 연결을 따라갑니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "OF_OVERLAY에서 직접 선택하는 세 항목을 화살표로 그리고 EARLY_FLATTREE가 포함되는지 확인해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "30835e0d910f132a10ddb8f9a5041b90621a31a56ef1652757dca3443560a274",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

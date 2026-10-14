@@ -5,190 +5,247 @@
   "area": "PCI · 장치 트리 · IRQ · 자원 관리 · 정수 알고리즘",
   "track": "files",
   "kind": "kernel",
-  "intro": "CONFIG_PCI 내부의 모든 함수와 바깥의 링크 속도·슬롯 전력 도우미를 전체 분석합니다.",
+  "intro": "주석이 설명하는 목적과 실제 코드가 허용하는 값은 따로 확인해야 해요. 노드 참조, 주소 목록, IRQ 오류와 전력 단위가 각각 다른 규칙으로 움직여요.",
   "guide": [
-    "주석의 의도와 실제 분기, 자원 정리 범위, 정수 변환의 정보 손실을 각각 확인해야 합니다.",
-    "참조 소유권 이전, 계층 순회, 리스트 삭제, 비트 추출, 단위 변환과 포화 연산을 학습합니다."
+    "노드는 장치 트리의 한 칸이에요. get과 put은 그 칸을 쓰는 참조를 얻고 돌려주는 동작이에요.",
+    "MSI는 별도 신호선 대신 메시지로 알리는 인터럽트 방식이고 INTx는 기존 PCI 신호선 방식이에요.",
+    "changeset은 트리에 넣을 변경 묶음이에요. apply로 적용하고 revert로 되돌리며, 자료 해제와는 구별해요.",
+    "mW는 밀리와트예요. 1000mW가 1W이며 이 코드는 표현 가능한 전력으로 내림하거나 최댓값에 맞춰요."
   ],
   "deep_dive": [
     {
-      "title": "구성 경계와 노드 연결",
-      "text": "GPL-2.0+ 파일은 PCI: OF: 로그 접두사와 cleanup, IRQ 도메인, PCI, OF, 플랫폼 및 내부 PCI 헤더를 사용합니다. pci_set_of_node부터 동적 노드 함수까지 CONFIG_PCI 안에 있고 마지막 링크 속도·전력 함수는 밖에 있습니다. pci_set_of_node는 버스 노드나 자식 노드가 없으면 0입니다. 자식 node는 __free(device_node), 플랫폼 검색 결과 pdev는 __free(put_device)로 관리합니다. 플랫폼 장치가 있으면 dev->bus->dev.of_node_reused를 참으로 만들고 no_free_ptr(node)로 자동 해제 대상에서 제외해 장치에 노드를 연결합니다. 주석의 disabled일 때 -ENODEV 설명과 달리 이 본문에는 available 검사나 -ENODEV 반환이 없습니다."
+      "title": "장치와 트리 노드를 연결해요",
+      "text": "PCI: OF: 로그 접두사를 쓰며 노드 연결부터 동적 노드 기능까지는 CONFIG_PCI 안, 마지막 속도·전력 함수는 밖에 있어요. pci_set_of_node는 버스나 자식 노드가 없으면 0을 반환해요. 임시 노드와 플랫폼 장치는 자동 참조 정리 표시로 관리하고, 장치에 넘길 노드는 no_free_ptr로 자동 정리에서 빼요. 플랫폼 장치가 있으면 of_node_reused를 설정해요. 주석과 달리 disabled 검사나 -ENODEV 반환은 이 본문에 없어요."
     },
     {
-      "title": "버스 노드와 참조 해제",
-      "text": "pci_release_of_node와 pci_release_bus_of_node는 해당 노드 put 후 device_set_node로 NULL을 설정합니다. pci_set_bus_of_node는 루트 버스이면 pcibios_get_phb_of_node, 아니면 self 장치 노드를 get합니다. 후자의 노드에 external-facing이 있으면 self->external_facing을 참으로 설정합니다. weak pcibios 함수는 self나 parent가 있는 버스에 WARN_ON 후 NULL을 반환하고, 루트에서는 bridge 자체 노드, bridge 부모 노드 순서로 get하여 반환합니다."
+      "title": "버스 노드의 참조를 얻고 돌려줘요",
+      "text": "두 release 함수는 노드 참조를 put한 뒤 연결을 NULL로 바꿔요. 루트 버스는 pcibios_get_phb_of_node로, 나머지는 self 장치 노드를 get해서 연결해요. external-facing 속성이 있으면 외부 연결 표시를 켜요. weak 기본 호스트 조회는 self나 parent가 있으면 경고 후 NULL이고, 루트에서는 bridge 노드 다음 bridge 부모 노드를 찾아 참조를 얻어요."
     },
     {
-      "title": "MSI 도메인 선택",
-      "text": "pci_host_bridge_of_msi_domain은 IRQ_DOMAIN 지원과 버스 노드가 있을 때 of_msi_get_domain의 PCI_MSI 도메인을 먼저 구하고 실패하면 irq_find_matching_host, 다시 실패하면 irq_find_host를 호출합니다. 지원이 없으면 NULL입니다. pci_host_of_has_msi_map은 dev/node가 있으면 msi-map 속성 포인터의 참·거짓을 반환합니다. 속성 존재 검사는 매핑 내용 전체의 유효성 검사가 아닙니다."
+      "title": "MSI 번호 체계를 찾는 순서",
+      "text": "IRQ_DOMAIN 지원과 버스 노드가 있으면 of_msi_get_domain, irq_find_matching_host, irq_find_host 순으로 찾아요. 앞에서 찾으면 바로 반환하고 지원이 없으면 NULL이에요. 도메인은 장치의 인터럽트 번호를 관리하는 체계예요. pci_host_of_has_msi_map은 msi-map 속성 포인터가 있는지만 보며 그 내용 전체가 올바른지 검사하지 않아요."
     },
     {
-      "title": "장치·기능 번호와 자식 검색",
-      "text": "of_pci_get_devfn은 reg에서 u32 다섯 개를 읽고 오류를 전파하며 (reg[0]>>8)&0xff를 반환합니다. 비교 도우미는 음수 결과를 불일치로 처리합니다. find_child_device는 직접 자식을 먼저 검사하고 이름이 multifunc-device인 자식에 대해서만 그 자식들을 한 단계 더 확인합니다. 일반적인 무제한 재귀 탐색은 아닙니다. 내부 자식이 맞으면 바깥 node를 put하고 node2를 반환하며 반환된 일치 노드의 참조는 호출자에게 남습니다."
+      "title": "장치·기능 번호로 자식을 찾아요",
+      "text": "of_pci_get_devfn은 reg의 32비트 값 다섯 개를 읽고 첫 값에서 (reg[0] >> 8) & 0xff로 번호를 골라요. 읽기 실패는 오류를 돌려주고 비교에서는 불일치로 처리해요. 검색은 바로 아래 자식을 먼저 보고, multifunc-device라는 자식 안에서만 한 단계 더 찾아요. 끝없이 내려가는 검색은 아니에요. 안쪽에서 찾으면 바깥 참조를 put하고 찾은 노드의 참조는 호출자에게 넘겨요."
     },
     {
-      "title": "버스 범위와 도메인 번호",
-      "text": "parse_bus_range는 bus-range 두 셀을 읽어 name,start,end,IORESOURCE_BUS를 설정합니다. start<=end 검사는 없습니다. get_pci_domain_nr는 linux,pci-domain u32 읽기 오류를 전파하고 성공 시 u16으로 캐스팅합니다. 따라서 0도 유효 결과이며 0x10001은 1로 잘립니다. 문서의 성공 >0 표현이나 값 범위 설명만 보고 큰 값이 반드시 오류라고 판단하면 안 됩니다."
+      "title": "버스 범위와 잘릴 수 있는 도메인 번호",
+      "text": "bus-range의 두 값을 시작·끝으로 기록하고 IORESOURCE_BUS를 붙이지만 시작이 끝 이하인지는 검사하지 않아요. linux,pci-domain은 u32로 읽은 뒤 u16으로 바꿔요. 따라서 0도 성공 값이고 0x10001은 하위 16비트인 1만 남아요. 주석의 성공 >0이나 범위 설명만으로 큰 값이 반드시 오류라고 생각하면 안 돼요."
     },
     {
-      "title": "probe-only 정책의 fallback",
-      "text": "preserve_config는 NULL node이면 경고 후 of_chosen을 사용합니다. linux,pci-probe-only를 u32로 읽어 값이 0이 아니어야 true입니다. -ENODATA나 -EOVERFLOW는 경고 후 false이며 chosen으로 재시도하지 않습니다. -EINVAL이면 현재 노드가 chosen일 때 false, 아니면 chosen으로 바꿔 재시도합니다. 속성 존재만으로 true라는 주석보다 실제 값 검사를 우선해야 합니다. check_probe_only는 이 결과에 따라 PCI_PROBE_ONLY 플래그를 추가하거나 지웁니다."
+      "title": "probe-only는 값과 오류 종류를 봐요",
+      "text": "노드가 NULL이면 경고 후 of_chosen을 써요. linux,pci-probe-only를 읽어 0이 아닌 값이어야 true예요. -ENODATA·-EOVERFLOW면 경고 후 false로 끝나요. -EINVAL일 때만 아직 chosen이 아니면 그쪽으로 옮겨 재시도해요. 정상적으로 읽은 0은 재시도하지 않아요. check_probe_only는 결과에 따라 PCI_PROBE_ONLY 표시를 켜거나 꺼요."
     },
     {
-      "title": "호스트 자원 시작과 조기 반환",
-      "text": "devm_of_pci_get_host_bridge_resources는 io_base가 있으면 OF_BAD_ADDR로 초기화하고 bus_range를 devm_kzalloc합니다. bus-range 읽기 실패면 busno..bus_max를 사용하며 성공이면 end를 start+bus_max 이하로 제한합니다. 버스 자원을 목록에 추가한 후 ranges 파서 초기화가 실패하면 오류를 전파하지 않고 0을 반환합니다. 이 조기 반환은 아래 dma-ranges 처리에도 도달하지 않습니다."
+      "title": "호스트 주소 목록을 시작해요",
+      "text": "io_base 출력 칸이 있으면 OF_BAD_ADDR로 초기화하고 버스 범위 자료를 devm 방식으로 할당해요. devm은 장치 수명에 맞춰 정리하도록 등록하는 방식이에요. bus-range를 못 읽으면 busno부터 bus_max, 읽으면 끝을 start + bus_max 이하로 제한해요. 버스 자원을 목록에 넣은 뒤 ranges 파서 초기화가 실패하면 0으로 돌아와요. 이때 뒤의 dma-ranges까지 건너뛰어요."
     },
     {
-      "title": "출력 방향 ranges 처리",
-      "text": "각 range의 CPU 주소가 OF_BAD_ADDR이거나 size가 0이면 건너뜁니다. range_to_resource 실패도 건너뛰고 성공하면 resource를 devm_kmemdup합니다. I/O인데 io_base가 없으면 -EINVAL 실패이고 여러 I/O 범위면 경고 후 io_base를 마지막 CPU 주소로 덮습니다. 메모리 자원은 IORESOURCE_MEM_64를 지웁니다. resources에는 res->start-range.pci_addr를 오프셋으로 추가합니다. 복제 할당 실패는 -ENOMEM으로 실패 경로로 갑니다."
+      "title": "CPU에서 장치로 가는 주소 범위",
+      "text": "CPU 주소가 잘못됐거나 크기 0이면 건너뛰고, 자원 변환 실패도 건너뛰어요. 성공한 자료는 복제하며 할당 실패는 -ENOMEM이에요. I/O 범위인데 io_base가 없으면 -EINVAL, 여러 I/O 범위면 경고하고 마지막 CPU 주소로 덮어요. 메모리 자원에서는 MEM_64 표시를 지워요. 목록에는 res->start - range.pci_addr를 주소 차이로 함께 저장해요."
     },
     {
-      "title": "입력 방향 dma-ranges와 정리 범위",
-      "text": "ib_resources가 없거나 DMA 파서 초기화가 실패하면 0입니다. 입력 범위는 MEM 타입이며 CPU 주소가 유효하고 크기가 양수인 것만 처리합니다. 변환 실패는 건너뛰고 복제 후 ib_resources에 같은 방식의 오프셋으로 추가합니다. failed 레이블은 pci_free_resource_list(resources)만 호출합니다. ib_resources 목록 전체를 여기서 해제하는 코드는 없고 io_base 이전값을 복구하지도 않습니다. devm으로 관리하는 resource 본체와 목록 엔트리의 수명은 구분해야 합니다."
+      "title": "장치에서 메모리로 들어오는 범위",
+      "text": "ib_resources가 없거나 DMA 파서 시작이 실패하면 0을 반환해요. DMA는 장치가 메모리를 직접 읽고 쓰는 방식이에요. dma-ranges에서는 MEM 종류이고 CPU 주소가 유효하며 크기가 양수인 것만 변환·복제해 안쪽 목록에 넣어요. 실패 레이블은 resources 목록만 해제해요. ib_resources 전체나 io_base 옛 값을 되돌리는 코드는 없어요. devm 자원 본체와 목록 연결 항목의 수명도 구분해야 해요."
     },
     {
-      "title": "INTx 파싱의 우선 경로",
-      "text": "OF_IRQ 지원의 of_irq_parse_pci는 장치 노드가 있으면 of_irq_parse_one(dn,0)을 먼저 시도합니다. 실패하면 PCI_INTERRUPT_PIN 설정 바이트를 읽고 읽기 오류는 err로, pin=0은 로그 없이 -ENODEV로 반환합니다. 노드에 로컬 interrupt-map이 있으면 현재 장치 기준으로 pin을 swizzle하고 그 노드를 ppnode로 사용합니다. 콜백 wrapper로 전달받는 pin과 별개로 실제 설정 공간을 읽습니다."
+      "title": "INTx 정보는 장치 노드부터 찾아요",
+      "text": "OF_IRQ 지원에서는 먼저 of_irq_parse_one으로 장치 노드를 읽어요. 실패하면 설정 공간의 PCI_INTERRUPT_PIN을 직접 읽으며 읽기 오류는 오류 처리로 가요. pin 0이면 로그 없이 -ENODEV예요. 로컬 interrupt-map이 있으면 현재 장치 기준으로 pin을 돌려 그 노드를 사용해요. 바깥 콜백의 pin 인수를 그대로 쓰는 것이 아니에요."
     },
     {
-      "title": "PCI 계층을 오르는 INTx 탐색",
-      "text": "ppnode가 없으면 부모 PCI 장치를 확인합니다. 호스트 브리지에 도달하면 버스 OF 노드를 쓰고 없으면 -EINVAL입니다. 부모 브리지 노드가 발견되면 반복을 끝내며, 노드가 없는 P2P 브리지일 때만 현재 pin을 swizzle하고 pdev를 부모로 옮겨 반복합니다. out_irq에 부모 노드와 인수 하나인 pin을 쓰고 Linux 버스 번호<<16 및 devfn<<8로 빅엔디언 laddr 첫 셀을 구성합니다. 나머지 두 셀은 0입니다. 펌웨어와 Linux 버스 번호 차이는 주석에서도 주의점으로 남깁니다."
+      "title": "필요하면 PCI 다리를 따라 올라가요",
+      "text": "부모 PCI 장치의 노드를 찾고, 호스트에 닿으면 버스의 OF 노드를 써요. 그것도 없으면 -EINVAL이에요. 노드 없는 중간 다리에서만 pin을 돌려 부모로 올라가요. 찾은 뒤 out_irq에 부모 노드와 pin 인수 하나를 넣어요. Linux 버스 번호를 16비트, devfn을 8비트 왼쪽으로 옮겨 주소 첫 칸을 만들고 빅엔디언으로 저장해요. 나머지 두 칸은 0이에요. Linux와 펌웨어 버스 번호가 다를 수 있어요."
     },
     {
-      "title": "IRQ 오류 변환과 콜백 형태",
-      "text": "of_irq_parse_raw 오류가 -ENOENT이면 INTx 불가 경고와 한 번만 출력하는 추가 경고를, 다른 오류면 dev_err를 출력합니다. of_irq_parse_and_map_pci의 slot과 pin 인수는 사용하지 않으며 콜백 시그니처 호환을 위해 존재합니다. 내부 파싱 오류는 모두 NO_IRQ인 0으로 바꾸고 성공 시 irq_create_of_mapping 결과를 반환합니다. 내부 음수 오류와 외부 콜백 결과를 같은 계약으로 생각하면 안 됩니다."
+      "title": "안쪽 오류와 바깥 콜백 반환은 달라요",
+      "text": "raw 파서의 -ENOENT는 INTx를 못 쓴다는 경고와 한 번만 나오는 추가 경고를 남기고, 다른 오류는 오류 로그를 남겨요. of_irq_parse_and_map_pci의 slot·pin은 함수 형태를 맞추기 위한 인수라 쓰지 않아요. 내부 파싱이 실패하면 모두 0, 즉 NO_IRQ로 바꾸고 성공하면 irq_create_of_mapping 결과를 줘요. 음수 오류가 바깥까지 그대로 전달되는 것은 아니에요."
     },
     {
-      "title": "자원 요청과 안전한 목록 삭제",
-      "text": "pci_parse_request_of_pci_ranges는 windows와 dma_ranges 목록을 초기화하고 0..0xff 버스 범위로 파싱한 뒤 devm_request_pci_bus_resources를 호출합니다. 실패는 반환합니다. safe 반복자로 windows를 훑으며 I/O remap 실패 항목은 경고 후 목록에서 제거하지만 함수 전체를 실패시키지 않습니다. non-prefetch MEM 존재를 기록하고 그 크기가 32비트를 넘으면 경고합니다. 해당 MEM이 없어도 경고 후 최종 0입니다. devm_of_pci_bridge_init은 OF 노드가 없으면 0, 있으면 swizzle/map 콜백을 설정하고 이 경로를 호출합니다."
+      "title": "주소 목록을 요청하고 실패 항목을 빼요",
+      "text": "windows와 dma_ranges를 초기화하고 버스 0~0xff로 파싱한 다음 버스 자원을 요청해요. 이 단계 실패는 반환해요. 삭제에 안전한 반복 방식으로 목록을 훑고 I/O remap 실패 항목만 경고 후 제거해요. 미리 읽어도 되는 prefetch 종류가 아닌 메모리가 있는지 살피고, 그 크기가 32비트를 넘거나 그런 메모리가 없으면 경고해요. 그래도 끝은 0이에요. bridge_init은 OF 노드가 없으면 0, 있으면 swizzle·map 콜백을 지정하고 이 경로로 와요."
     },
     {
-      "title": "동적 노드 생성",
-      "text": "PCI_DYNAMIC_OF_NODES에서 make_dev_node는 이미 노드가 있거나 부모 노드가 없으면 반환합니다. 부모는 루트 버스 노드 또는 상위 PCI 장치 노드입니다. 브리지면 pci, 아니면 dev 접두사에 slot,function을 붙여 이름을 할당하고 changeset을 kmalloc·init합니다. create_node, add_properties, apply 순서가 성공하면 np->data에 cset을 보관하고 pdev->dev.of_node에 np를 직접 저장한 뒤 이름을 해제합니다. 실패 레이블은 진행 단계에 따라 node put, changeset destroy와 kfree, 이름 kfree를 수행합니다."
+      "title": "실행 중 새 노드를 만드는 순서",
+      "text": "PCI_DYNAMIC_OF_NODES에서는 이미 노드가 있거나 부모 노드가 없으면 만들지 않아요. 부모는 루트 버스 또는 상위 PCI 장치의 노드예요. 브리지면 pci, 아니면 dev에 슬롯·기능 번호를 붙여 이름을 만들어요. changeset을 할당·초기화하고 노드 만들기, 속성 추가, 적용 순으로 진행해요. 성공하면 np->data에 변경 묶음을, 장치에 np를 보관하고 이름을 해제해요. 실패 지점에 따라 노드 참조, 변경 묶음, 이름을 차례로 정리해요."
     },
     {
-      "title": "동적 노드 제거의 실제 본문",
-      "text": "remove_node는 노드가 없거나 OF_DYNAMIC이 아니면 반환합니다. 동적이면 pdev->dev.of_node를 NULL로 만든 뒤 np->data changeset의 revert, destroy, node put 순서로 진행합니다. revert 반환값을 검사하지 않으며 여기에는 별도 kfree(np->data) 호출이 없습니다. 이것만으로 외부 수명 처리를 모두 결론 내리지는 않되 생성 실패 경로의 명시적 kfree와 제거 경로의 차이를 기록해야 합니다."
+      "title": "동적 노드를 없애는 본문",
+      "text": "노드가 없거나 OF_DYNAMIC 표시가 없으면 그대로 돌아와요. 동적 노드이면 장치 연결을 NULL로 만든 뒤 변경 묶음을 revert, destroy하고 노드 참조를 put해요. revert 결과를 검사하거나 여기서 np->data를 별도로 kfree하는 코드는 없어요. 생성 실패 경로와 모양이 다르지만 외부 수명 처리까지 이 파일만으로 단정하면 안 돼요."
     },
     {
-      "title": "링크 속도 범위",
-      "text": "CONFIG_PCI 블록 밖의 get_max_link_speed는 max-link-speed 읽기 실패, 0, 4 초과를 모두 -EINVAL로 반환하고 1..4만 그대로 반환합니다. 이 v6.12 함수에서 허용하는 값의 범위이며 다른 PCI 코드나 하드웨어 세대의 전체 지원 범위와 같은 주장으로 확대하면 안 됩니다."
+      "title": "허용하는 링크 속도 값",
+      "text": "max-link-speed를 못 읽거나 값이 0 또는 4보다 크면 -EINVAL이에요. 1~4만 그대로 돌려줘요. 이것은 이 v6.12 함수가 받는 값의 범위이며 모든 PCI 하드웨어 세대의 지원 범위라는 뜻은 아니에요."
     },
     {
-      "title": "슬롯 전력의 낮은 구간",
-      "text": "get_slot_power_limit는 속성 읽기 실패 시 0으로 시작합니다. 0은 value=0,scale=0이며 1..255mW는 그대로 value에 넣고 scale=3입니다. 2550mW 이하는 10mW 단위로 내림해 scale=2, 25500mW 이하는 100mW 단위로 내림해 scale=1입니다. 239000mW 이하는 1000mW 단위로 내림해 scale=0입니다. 반환 밀리와트도 각 구간에서 표현 가능한 값으로 낮춥니다."
+      "title": "작은 전력 값은 단위에 맞춰 내려요",
+      "text": "slot-power-limit-milliwatt를 못 읽으면 0으로 시작해요. 0은 value 0·scale 0, 1~255mW는 그대로 value·scale 3이에요. 2550mW 이하는 10mW 단위와 scale 2, 25500mW 이하는 100mW 단위와 scale 1로 내려요. 239000mW 이하는 1000mW 단위와 scale 0이에요. 반환 밀리와트도 실제로 표현할 수 있는 값으로 내려가요."
     },
     {
-      "title": "슬롯 전력의 높은 구간과 출력",
-      "text": "239000 초과 250000 미만은 value=0xEF,scale=0,239000mW로 고정합니다. 250000..600000은 value=0xF0+(mW/1000-250)/25,scale=0이며 반환은 25000mW 단위 내림입니다. 그 초과는 value=0xFE와 600000mW로 포화합니다. value와 scale 출력 포인터는 각각 NULL이 아닐 때만 쓰며 반환값은 항상 양자화된 밀리와트입니다. 분기 경계, 정수 나눗셈, 최대값 제한이 결합한 알고리즘입니다."
+      "title": "큰 전력은 구간과 최댓값을 봐요",
+      "text": "239000 초과 250000 미만은 value 0xEF·scale 0·239000mW로 고정해요. 250000~600000은 value = 0xF0 + (mW / 1000 - 250) / 25, scale 0이며 반환값을 25000mW 단위로 내려요. 더 크면 value 0xFE와 600000mW로 제한해요. value·scale 출력 포인터는 각각 NULL이 아닐 때만 써요. 예를 들어 287000은 275000mW, 700000은 600000mW가 돼요."
     },
     {
-      "title": "전체 범위와 검증 한계",
-      "text": "노드 연결·해제, weak 호스트 조회, MSI, 자식 비교·탐색, reg·bus·domain 파싱, 정책, 자원 목록, INTx, 브리지 초기화, 동적 생성·제거, 속도·전력 함수 전체를 대조했습니다. GPL export는 자식 조회, devfn, bus-range, domain, probe-only, IRQ 콜백, 마지막 두 도우미에 명시됩니다. 실제 PCI 하드웨어·IRQ·동적 트리 동작이나 커널 구성별 빌드는 수행하지 않았습니다."
+      "title": "전체에서 확인한 것",
+      "text": "노드 연결·검색·해제, MSI와 INTx, 버스·도메인·정책·자원 목록, 동적 노드, 속도·전력의 모든 본문을 읽었어요. 자식 조회·devfn·버스 범위·도메인·probe-only·IRQ 콜백과 마지막 두 도우미에는 GPL 내보내기가 있어요. 실제 PCI 장치, IRQ나 동적 트리 실행, 구성별 커널 빌드를 시험한 결과는 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "pci_set_of_node가 disabled 노드를 -ENODEV로 거부한다는 주석은 본문에서도 구현되어 있는가?",
+      "prompt": "pci_set_of_node는 주석처럼 disabled 노드를 -ENODEV로 거절할까요?",
       "options": [
+        "아니요. 본문에 사용 가능 여부 검사와 -ENODEV 반환이 없어요.",
+        "네. 연결 전에 반드시 상태 속성을 검사해요."
+      ],
+      "answer": 0,
+      "explanation": "주석의 설명과 실제 분기를 따로 확인해야 해요.",
+      "original_prompt": "pci_set_of_node가 disabled 노드를 -ENODEV로 거부한다는 주석은 본문에서도 구현되어 있는가?",
+      "original_options": [
         "아니다. 본문에 available 검사와 -ENODEV 반환이 없다",
         "그렇다. 연결 전에 반드시 상태 속성을 검사한다"
       ],
-      "answer": 0,
-      "explanation": "실제 함수는 노드 부재일 때 0이며 찾은 노드를 연결한 뒤에도 0입니다. 문서와 구현의 차이를 숨기지 않고 구분해야 합니다."
+      "original_explanation": "실제 함수는 노드 부재일 때 0이며 찾은 노드를 연결한 뒤에도 0입니다. 문서와 구현의 차이를 숨기지 않고 구분해야 합니다."
     },
     {
-      "prompt": "reg[0]=0x00012b00이면 devfn 결과는?",
+      "prompt": "reg[0]이 0x00012b00이면 devfn은 얼마일까요?",
       "options": [
+        "0x12b예요.",
+        "0x2b예요."
+      ],
+      "answer": 1,
+      "explanation": "8비트 옮긴 뒤 0xff 마스크로 하위 8비트만 남겨요.",
+      "original_prompt": "reg[0]=0x00012b00이면 devfn 결과는?",
+      "original_options": [
         "0x12b",
         "0x2b"
       ],
-      "answer": 1,
-      "explanation": "8비트 오른쪽 이동 뒤 0xff 마스크를 적용합니다. 버스 번호 등 상위 비트는 결과에서 제거됩니다."
+      "original_explanation": "8비트 오른쪽 이동 뒤 0xff 마스크를 적용합니다. 버스 번호 등 상위 비트는 결과에서 제거됩니다."
     },
     {
-      "prompt": "linux,pci-domain=0x10001이면 반환은?",
+      "prompt": "linux,pci-domain 값 0x10001을 정상적으로 읽으면 무엇을 반환할까요?",
       "options": [
+        "1이에요.",
+        "반드시 -EOVERFLOW예요."
+      ],
+      "answer": 0,
+      "explanation": "u16으로 바꿀 때 위쪽 비트가 잘려요.",
+      "original_prompt": "linux,pci-domain=0x10001이면 반환은?",
+      "original_options": [
         "1",
         "반드시 -EOVERFLOW"
       ],
-      "answer": 0,
-      "explanation": "u32 읽기가 성공하면 u16으로 캐스팅합니다. 속성 파서의 길이 오류와 값의 하위 16비트 절단은 별개입니다."
+      "original_explanation": "u32 읽기가 성공하면 u16으로 캐스팅합니다. 속성 파서의 길이 오류와 값의 하위 16비트 절단은 별개입니다."
     },
     {
-      "prompt": "컨트롤러의 probe-only 값이 0이면 chosen의 1로 fallback하는가?",
+      "prompt": "컨트롤러의 probe-only 값 0을 읽으면 chosen의 1로 다시 시도할까요?",
       "options": [
+        "네. 0은 속성이 없는 것과 같아요.",
+        "아니요. 성공적으로 읽은 0은 false예요."
+      ],
+      "answer": 1,
+      "explanation": "chosen 재시도는 -EINVAL 오류 경로에 있어요.",
+      "original_prompt": "컨트롤러의 probe-only 값이 0이면 chosen의 1로 fallback하는가?",
+      "original_options": [
         "그렇다. 0은 언제나 속성 부재와 같다",
         "아니다. 읽기 성공한 0은 false다"
       ],
-      "answer": 1,
-      "explanation": "chosen 재시도는 -EINVAL 경로입니다. 값 0을 성공적으로 읽은 경우 재시도하지 않고 false로 끝납니다."
+      "original_explanation": "chosen 재시도는 -EINVAL 경로입니다. 값 0을 성공적으로 읽은 경우 재시도하지 않고 false로 끝납니다."
     },
     {
-      "prompt": "ranges 파서 초기화가 실패하면 dma-ranges 파싱은 계속되는가?",
+      "prompt": "ranges 파서 시작이 실패해도 dma-ranges를 계속 읽을까요?",
       "options": [
+        "아니요. 먼저 0을 반환해 아래로 가지 않아요.",
+        "네. 입력 범위는 항상 독립적으로 읽어요."
+      ],
+      "answer": 0,
+      "explanation": "조기 반환이 뒤의 전체 처리까지 건너뛰게 해요.",
+      "original_prompt": "ranges 파서 초기화가 실패하면 dma-ranges 파싱은 계속되는가?",
+      "original_options": [
         "아니다. 함수가 0을 반환해 아래 코드에 도달하지 않는다",
         "그렇다. inbound 범위는 항상 독립적으로 처리한다"
       ],
-      "answer": 0,
-      "explanation": "outbound parser init 직후 if(err)return 0이 있습니다. 이 조기 반환의 범위는 이후 모든 inbound 처리까지 포함합니다."
+      "original_explanation": "outbound parser init 직후 if(err)return 0이 있습니다. 이 조기 반환의 범위는 이후 모든 inbound 처리까지 포함합니다."
     },
     {
-      "prompt": "자원 파싱 failed 레이블이 두 목록을 모두 정리하는가?",
+      "prompt": "failed 레이블이 두 자원 목록을 모두 명시적으로 해제할까요?",
       "options": [
+        "네. ib_resources도 함께 해제해요.",
+        "아니요. resources만 해제해요."
+      ],
+      "answer": 1,
+      "explanation": "실제 호출은 pci_free_resource_list(resources) 하나예요.",
+      "original_prompt": "자원 파싱 failed 레이블이 두 목록을 모두 정리하는가?",
+      "original_options": [
         "그렇다. ib_resources도 같은 호출로 명시적으로 지운다",
         "아니다. resources만 명시적으로 해제한다"
       ],
-      "answer": 1,
-      "explanation": "본문에 pci_free_resource_list(resources)만 있습니다. 메모리 본체의 devm 관리와 별도 목록 엔트리를 구분해 정리 범위를 읽어야 합니다."
+      "original_explanation": "본문에 pci_free_resource_list(resources)만 있습니다. 메모리 본체의 devm 관리와 별도 목록 엔트리를 구분해 정리 범위를 읽어야 합니다."
     },
     {
-      "prompt": "IRQ 콜백의 slot과 pin은 실제 파싱 입력으로 쓰이는가?",
+      "prompt": "IRQ 콜백의 slot·pin을 실제 파싱에 쓸까요?",
       "options": [
+        "아니요. 안쪽 함수가 PCI 설정 공간에서 pin을 읽어요.",
+        "네. 받은 pin을 그대로 raw 파서에 줘요."
+      ],
+      "answer": 0,
+      "explanation": "두 인수는 콜백의 함수 모양을 맞추기 위해 있어요.",
+      "original_prompt": "IRQ 콜백의 slot과 pin은 실제 파싱 입력으로 쓰이는가?",
+      "original_options": [
         "아니다. 내부 함수가 PCI 설정 공간에서 pin을 읽는다",
         "그렇다. 전달받은 pin을 그대로 raw 파서에 준다"
       ],
-      "answer": 0,
-      "explanation": "두 인수는 map_irq 함수 포인터 형태에 맞추기 위한 것이며 본문에서 참조하지 않습니다. 파싱 실패도 콜백에서는 음수 대신 0으로 변환합니다."
+      "original_explanation": "두 인수는 map_irq 함수 포인터 형태에 맞추기 위한 것이며 본문에서 참조하지 않습니다. 파싱 실패도 콜백에서는 음수 대신 0으로 변환합니다."
     },
     {
-      "prompt": "non-prefetchable 메모리 자원이 없으면 자원 요청 도우미가 마지막에 실패하는가?",
+      "prompt": "non-prefetchable 메모리가 없으면 도우미가 마지막에 실패할까요?",
       "options": [
+        "네. 반드시 -EINVAL이에요.",
+        "아니요. 경고 후 0을 반환해요."
+      ],
+      "answer": 1,
+      "explanation": "경고 문구와 반환 동작은 서로 구별해서 읽어요.",
+      "original_prompt": "non-prefetchable 메모리 자원이 없으면 자원 요청 도우미가 마지막에 실패하는가?",
+      "original_options": [
         "그렇다. 반드시 -EINVAL을 반환한다",
         "아니다. 경고 후 0을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "res_valid가 거짓인 마지막 분기는 dev_warn뿐입니다. 로그의 required라는 표현과 반환 동작을 별도로 확인해야 합니다."
+      "original_explanation": "res_valid가 거짓인 마지막 분기는 dev_warn뿐입니다. 로그의 required라는 표현과 반환 동작을 별도로 확인해야 합니다."
     },
     {
-      "prompt": "슬롯 전력 245000mW의 반환값과 value는?",
+      "prompt": "전력 245000mW는 반환값과 value가 무엇일까요?",
       "options": [
+        "239000mW와 0xEF예요.",
+        "245000mW와 245예요."
+      ],
+      "answer": 0,
+      "explanation": "239000 초과 250000 미만은 별도 고정 구간이에요.",
+      "original_prompt": "슬롯 전력 245000mW의 반환값과 value는?",
+      "original_options": [
         "239000mW와 0xEF",
         "245000mW와 245"
       ],
-      "answer": 0,
-      "explanation": "239000 초과 250000 미만은 전용 분기로 239000에 고정합니다. 일반 1000mW 내림 구간을 그대로 연장하지 않습니다."
+      "original_explanation": "239000 초과 250000 미만은 전용 분기로 239000에 고정합니다. 일반 1000mW 내림 구간을 그대로 연장하지 않습니다."
     },
     {
-      "prompt": "슬롯 전력 287000mW와 700000mW는 각각 무엇으로 반환되는가?",
+      "prompt": "287000mW와 700000mW는 각각 얼마로 반환할까요?",
       "options": [
+        "287000mW와 700000mW예요.",
+        "275000mW와 600000mW예요."
+      ],
+      "answer": 1,
+      "explanation": "앞은 25000 단위로 내리고 뒤는 최댓값으로 제한해요.",
+      "original_prompt": "슬롯 전력 287000mW와 700000mW는 각각 무엇으로 반환되는가?",
+      "original_options": [
         "287000mW와 700000mW",
         "275000mW와 600000mW"
       ],
-      "answer": 1,
-      "explanation": "중간 높은 구간은 25000mW 단위 내림이고 최댓값 초과는 600000으로 포화합니다. 반환값 자체도 원래 속성값에서 달라집니다."
+      "original_explanation": "중간 높은 구간은 25000mW 단위 내림이고 최댓값 초과는 600000으로 포화합니다. 반환값 자체도 원래 속성값에서 달라집니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "도메인 값 0x10001, probe-only 값 0, 전력 245000mW를 넣었을 때 실제 분기와 결과를 하나씩 따라가 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * PCI <-> OF mapping helpers\n *\n * Copyright 2011 IBM Corp.\n */\n#define pr_fmt(fmt)\t\"PCI: OF: \" fmt\n\n#include <linux/cleanup.h>\n#include <linux/irqdomain.h>\n#include <linux/kernel.h>\n#include <linux/pci.h>\n#include <linux/of.h>\n#include <linux/of_irq.h>\n#include <linux/of_address.h>\n#include <linux/of_pci.h>\n#include <linux/platform_device.h>\n#include \"pci.h\"\n\n#ifdef CONFIG_PCI\n/**\n * pci_set_of_node - Find and set device's DT device_node\n * @dev: the PCI device structure to fill\n *\n * Returns 0 on success with of_node set or when no device is described in the\n * DT. Returns -ENODEV if the device is present, but disabled in the DT.\n */\nint pci_set_of_node(struct pci_dev *dev)\n{\n\tif (!dev->bus->dev.of_node)\n\t\treturn 0;\n\n\tstruct device_node *node __free(device_node) =\n\t\tof_pci_find_child_device(dev->bus->dev.of_node, dev->devfn);\n\tif (!node)\n\t\treturn 0;\n\n\tstruct device *pdev __free(put_device) =\n\t\tbus_find_device_by_of_node(&platform_bus_type, node);\n\tif (pdev)\n\t\tdev->bus->dev.of_node_reused = true;\n\n\tdevice_set_node(&dev->dev, of_fwnode_handle(no_free_ptr(node)));\n\treturn 0;\n}\n\nvoid pci_release_of_node(struct pci_dev *dev)\n{\n\tof_node_put(dev->dev.of_node);\n\tdevice_set_node(&dev->dev, NULL);\n}\n\nvoid pci_set_bus_of_node(struct pci_bus *bus)\n{\n\tstruct device_node *node;\n\n\tif (bus->self == NULL) {\n\t\tnode = pcibios_get_phb_of_node(bus);\n\t} else {\n\t\tnode = of_node_get(bus->self->dev.of_node);\n\t\tif (node && of_property_read_bool(node, \"external-facing\"))\n\t\t\tbus->self->external_facing = true;\n\t}\n\n\tdevice_set_node(&bus->dev, of_fwnode_handle(node));\n}\n\nvoid pci_release_bus_of_node(struct pci_bus *bus)\n{\n\tof_node_put(bus->dev.of_node);\n\tdevice_set_node(&bus->dev, NULL);\n}\n\nstruct device_node * __weak pcibios_get_phb_of_node(struct pci_bus *bus)\n{\n\t/* This should only be called for PHBs */\n\tif (WARN_ON(bus->self || bus->parent))\n\t\treturn NULL;\n\n\t/*\n\t * Look for a node pointer in either the intermediary device we\n\t * create above the root bus or its own parent. Normally only\n\t * the later is populated.\n\t */\n\tif (bus->bridge->of_node)\n\t\treturn of_node_get(bus->bridge->of_node);\n\tif (bus->bridge->parent && bus->bridge->parent->of_node)\n\t\treturn of_node_get(bus->bridge->parent->of_node);\n\treturn NULL;\n}\n\nstruct irq_domain *pci_host_bridge_of_msi_domain(struct pci_bus *bus)\n{\n#ifdef CONFIG_IRQ_DOMAIN\n\tstruct irq_domain *d;\n\n\tif (!bus->dev.of_node)\n\t\treturn NULL;\n\n\t/* Start looking for a phandle to an MSI controller. */\n\td = of_msi_get_domain(&bus->dev, bus->dev.of_node, DOMAIN_BUS_PCI_MSI);\n\tif (d)\n\t\treturn d;\n\n\t/*\n\t * If we don't have an msi-parent property, look for a domain\n\t * directly attached to the host bridge.\n\t */\n\td = irq_find_matching_host(bus->dev.of_node, DOMAIN_BUS_PCI_MSI);\n\tif (d)\n\t\treturn d;\n\n\treturn irq_find_host(bus->dev.of_node);\n#else\n\treturn NULL;\n#endif\n}\n\nbool pci_host_of_has_msi_map(struct device *dev)\n{\n\tif (dev && dev->of_node)\n\t\treturn of_get_property(dev->of_node, \"msi-map\", NULL);\n\treturn false;\n}\n\nstatic inline int __of_pci_pci_compare(struct device_node *node,\n\t\t\t\t       unsigned int data)\n{\n\tint devfn;\n\n\tdevfn = of_pci_get_devfn(node);\n\tif (devfn < 0)\n\t\treturn 0;\n\n\treturn devfn == data;\n}\n\nstruct device_node *of_pci_find_child_device(struct device_node *parent,\n\t\t\t\t\t     unsigned int devfn)\n{\n\tstruct device_node *node, *node2;\n\n\tfor_each_child_of_node(parent, node) {\n\t\tif (__of_pci_pci_compare(node, devfn))\n\t\t\treturn node;\n\t\t/*\n\t\t * Some OFs create a parent node \"multifunc-device\" as\n\t\t * a fake root for all functions of a multi-function\n\t\t * device we go down them as well.\n\t\t */\n\t\tif (of_node_name_eq(node, \"multifunc-device\")) {\n\t\t\tfor_each_child_of_node(node, node2) {\n\t\t\t\tif (__of_pci_pci_compare(node2, devfn)) {\n\t\t\t\t\tof_node_put(node);\n\t\t\t\t\treturn node2;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL_GPL(of_pci_find_child_device);\n\n/**\n * of_pci_get_devfn() - Get device and function numbers for a device node\n * @np: device node\n *\n * Parses a standard 5-cell PCI resource and returns an 8-bit value that can\n * be passed to the PCI_SLOT() and PCI_FUNC() macros to extract the device\n * and function numbers respectively. On error a negative error code is\n * returned.\n */\nint of_pci_get_devfn(struct device_node *np)\n{\n\tu32 reg[5];\n\tint error;\n\n\terror = of_property_read_u32_array(np, \"reg\", reg, ARRAY_SIZE(reg));\n\tif (error)\n\t\treturn error;\n\n\treturn (reg[0] >> 8) & 0xff;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_devfn);\n\n/**\n * of_pci_parse_bus_range() - parse the bus-range property of a PCI device\n * @node: device node\n * @res: address to a struct resource to return the bus-range\n *\n * Returns 0 on success or a negative error-code on failure.\n */\nint of_pci_parse_bus_range(struct device_node *node, struct resource *res)\n{\n\tu32 bus_range[2];\n\tint error;\n\n\terror = of_property_read_u32_array(node, \"bus-range\", bus_range,\n\t\t\t\t\t   ARRAY_SIZE(bus_range));\n\tif (error)\n\t\treturn error;\n\n\tres->name = node->name;\n\tres->start = bus_range[0];\n\tres->end = bus_range[1];\n\tres->flags = IORESOURCE_BUS;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(of_pci_parse_bus_range);\n\n/**\n * of_get_pci_domain_nr - Find the host bridge domain number\n *\t\t\t  of the given device node.\n * @node: Device tree node with the domain information.\n *\n * This function will try to obtain the host bridge domain number by finding\n * a property called \"linux,pci-domain\" of the given device node.\n *\n * Return:\n * * > 0\t- On success, an associated domain number.\n * * -EINVAL\t- The property \"linux,pci-domain\" does not exist.\n * * -ENODATA\t- The linux,pci-domain\" property does not have value.\n * * -EOVERFLOW\t- Invalid \"linux,pci-domain\" property value.\n *\n * Returns the associated domain number from DT in the range [0-0xffff], or\n * a negative value if the required property is not found.\n */\nint of_get_pci_domain_nr(struct device_node *node)\n{\n\tu32 domain;\n\tint error;\n\n\terror = of_property_read_u32(node, \"linux,pci-domain\", &domain);\n\tif (error)\n\t\treturn error;\n\n\treturn (u16)domain;\n}\nEXPORT_SYMBOL_GPL(of_get_pci_domain_nr);\n\n/**\n * of_pci_preserve_config - Return true if the boot configuration needs to\n *                          be preserved\n * @node: Device tree node.\n *\n * Look for \"linux,pci-probe-only\" property for a given PCI controller's\n * node and return true if found. Also look in the chosen node if the\n * property is not found in the given controller's node.  Having this\n * property ensures that the kernel doesn't reconfigure the BARs and bridge\n * windows that are already done by the platform firmware.\n *\n * Return: true if the property exists; false otherwise.\n */\nbool of_pci_preserve_config(struct device_node *node)\n{\n\tu32 val = 0;\n\tint ret;\n\n\tif (!node) {\n\t\tpr_warn(\"device node is NULL, trying with of_chosen\\n\");\n\t\tnode = of_chosen;\n\t}\n\nretry:\n\tret = of_property_read_u32(node, \"linux,pci-probe-only\", &val);\n\tif (ret) {\n\t\tif (ret == -ENODATA || ret == -EOVERFLOW) {\n\t\t\tpr_warn(\"Incorrect value for linux,pci-probe-only in %pOF, ignoring\\n\",\n\t\t\t\tnode);\n\t\t\treturn false;\n\t\t}\n\t\tif (ret == -EINVAL) {\n\t\t\tif (node == of_chosen)\n\t\t\t\treturn false;\n\n\t\t\tnode = of_chosen;\n\t\t\tgoto retry;\n\t\t}\n\t}\n\n\tif (val)\n\t\treturn true;\n\telse\n\t\treturn false;\n}\n\n/**\n * of_pci_check_probe_only - Setup probe only mode if linux,pci-probe-only\n *                           is present and valid\n */\nvoid of_pci_check_probe_only(void)\n{\n\tif (of_pci_preserve_config(of_chosen))\n\t\tpci_add_flags(PCI_PROBE_ONLY);\n\telse\n\t\tpci_clear_flags(PCI_PROBE_ONLY);\n}\nEXPORT_SYMBOL_GPL(of_pci_check_probe_only);\n\n/**\n * devm_of_pci_get_host_bridge_resources() - Resource-managed parsing of PCI\n *                                           host bridge resources from DT\n * @dev: host bridge device\n * @busno: bus number associated with the bridge root bus\n * @bus_max: maximum number of buses for this bridge\n * @resources: list where the range of resources will be added after DT parsing\n * @ib_resources: list where the range of inbound resources (with addresses\n *                from 'dma-ranges') will be added after DT parsing\n * @io_base: pointer to a variable that will contain on return the physical\n * address for the start of the I/O range. Can be NULL if the caller doesn't\n * expect I/O ranges to be present in the device tree.\n *\n * This function will parse the \"ranges\" property of a PCI host bridge device\n * node and setup the resource mapping based on its content. It is expected\n * that the property conforms with the Power ePAPR document.\n *\n * It returns zero if the range parsing has been successful or a standard error\n * value if it failed.\n */\nstatic int devm_of_pci_get_host_bridge_resources(struct device *dev,\n\t\t\tunsigned char busno, unsigned char bus_max,\n\t\t\tstruct list_head *resources,\n\t\t\tstruct list_head *ib_resources,\n\t\t\tresource_size_t *io_base)\n{\n\tstruct device_node *dev_node = dev->of_node;\n\tstruct resource *res, tmp_res;\n\tstruct resource *bus_range;\n\tstruct of_pci_range range;\n\tstruct of_pci_range_parser parser;\n\tconst char *range_type;\n\tint err;\n\n\tif (io_base)\n\t\t*io_base = (resource_size_t)OF_BAD_ADDR;\n\n\tbus_range = devm_kzalloc(dev, sizeof(*bus_range), GFP_KERNEL);\n\tif (!bus_range)\n\t\treturn -ENOMEM;\n\n\tdev_info(dev, \"host bridge %pOF ranges:\\n\", dev_node);\n\n\terr = of_pci_parse_bus_range(dev_node, bus_range);\n\tif (err) {\n\t\tbus_range->start = busno;\n\t\tbus_range->end = bus_max;\n\t\tbus_range->flags = IORESOURCE_BUS;\n\t\tdev_info(dev, \"  No bus range found for %pOF, using %pR\\n\",\n\t\t\t dev_node, bus_range);\n\t} else {\n\t\tif (bus_range->end > bus_range->start + bus_max)\n\t\t\tbus_range->end = bus_range->start + bus_max;\n\t}\n\tpci_add_resource(resources, bus_range);\n\n\t/* Check for ranges property */\n\terr = of_pci_range_parser_init(&parser, dev_node);\n\tif (err)\n\t\treturn 0;\n\n\tdev_dbg(dev, \"Parsing ranges property...\\n\");\n\tfor_each_of_pci_range(&parser, &range) {\n\t\t/* Read next ranges element */\n\t\tif ((range.flags & IORESOURCE_TYPE_BITS) == IORESOURCE_IO)\n\t\t\trange_type = \"IO\";\n\t\telse if ((range.flags & IORESOURCE_TYPE_BITS) == IORESOURCE_MEM)\n\t\t\trange_type = \"MEM\";\n\t\telse\n\t\t\trange_type = \"err\";\n\t\tdev_info(dev, \"  %6s %#012llx..%#012llx -> %#012llx\\n\",\n\t\t\t range_type, range.cpu_addr,\n\t\t\t range.cpu_addr + range.size - 1, range.pci_addr);\n\n\t\t/*\n\t\t * If we failed translation or got a zero-sized region\n\t\t * then skip this range\n\t\t */\n\t\tif (range.cpu_addr == OF_BAD_ADDR || range.size == 0)\n\t\t\tcontinue;\n\n\t\terr = of_pci_range_to_resource(&range, dev_node, &tmp_res);\n\t\tif (err)\n\t\t\tcontinue;\n\n\t\tres = devm_kmemdup(dev, &tmp_res, sizeof(tmp_res), GFP_KERNEL);\n\t\tif (!res) {\n\t\t\terr = -ENOMEM;\n\t\t\tgoto failed;\n\t\t}\n\n\t\tif (resource_type(res) == IORESOURCE_IO) {\n\t\t\tif (!io_base) {\n\t\t\t\tdev_err(dev, \"I/O range found for %pOF. Please provide an io_base pointer to save CPU base address\\n\",\n\t\t\t\t\tdev_node);\n\t\t\t\terr = -EINVAL;\n\t\t\t\tgoto failed;\n\t\t\t}\n\t\t\tif (*io_base != (resource_size_t)OF_BAD_ADDR)\n\t\t\t\tdev_warn(dev, \"More than one I/O resource converted for %pOF. CPU base address for old range lost!\\n\",\n\t\t\t\t\t dev_node);\n\t\t\t*io_base = range.cpu_addr;\n\t\t} else if (resource_type(res) == IORESOURCE_MEM) {\n\t\t\tres->flags &= ~IORESOURCE_MEM_64;\n\t\t}\n\n\t\tpci_add_resource_offset(resources, res,\tres->start - range.pci_addr);\n\t}\n\n\t/* Check for dma-ranges property */\n\tif (!ib_resources)\n\t\treturn 0;\n\terr = of_pci_dma_range_parser_init(&parser, dev_node);\n\tif (err)\n\t\treturn 0;\n\n\tdev_dbg(dev, \"Parsing dma-ranges property...\\n\");\n\tfor_each_of_pci_range(&parser, &range) {\n\t\t/*\n\t\t * If we failed translation or got a zero-sized region\n\t\t * then skip this range\n\t\t */\n\t\tif (((range.flags & IORESOURCE_TYPE_BITS) != IORESOURCE_MEM) ||\n\t\t    range.cpu_addr == OF_BAD_ADDR || range.size == 0)\n\t\t\tcontinue;\n\n\t\tdev_info(dev, \"  %6s %#012llx..%#012llx -> %#012llx\\n\",\n\t\t\t \"IB MEM\", range.cpu_addr,\n\t\t\t range.cpu_addr + range.size - 1, range.pci_addr);\n\n\n\t\terr = of_pci_range_to_resource(&range, dev_node, &tmp_res);\n\t\tif (err)\n\t\t\tcontinue;\n\n\t\tres = devm_kmemdup(dev, &tmp_res, sizeof(tmp_res), GFP_KERNEL);\n\t\tif (!res) {\n\t\t\terr = -ENOMEM;\n\t\t\tgoto failed;\n\t\t}\n\n\t\tpci_add_resource_offset(ib_resources, res,\n\t\t\t\t\tres->start - range.pci_addr);\n\t}\n\n\treturn 0;\n\nfailed:\n\tpci_free_resource_list(resources);\n\treturn err;\n}\n\n#if IS_ENABLED(CONFIG_OF_IRQ)\n/**\n * of_irq_parse_pci - Resolve the interrupt for a PCI device\n * @pdev:       the device whose interrupt is to be resolved\n * @out_irq:    structure of_phandle_args filled by this function\n *\n * This function resolves the PCI interrupt for a given PCI device. If a\n * device-node exists for a given pci_dev, it will use normal OF tree\n * walking. If not, it will implement standard swizzling and walk up the\n * PCI tree until an device-node is found, at which point it will finish\n * resolving using the OF tree walking.\n */\nstatic int of_irq_parse_pci(const struct pci_dev *pdev, struct of_phandle_args *out_irq)\n{\n\tstruct device_node *dn, *ppnode = NULL;\n\tstruct pci_dev *ppdev;\n\t__be32 laddr[3];\n\tu8 pin;\n\tint rc;\n\n\t/*\n\t * Check if we have a device node, if yes, fallback to standard\n\t * device tree parsing\n\t */\n\tdn = pci_device_to_OF_node(pdev);\n\tif (dn) {\n\t\trc = of_irq_parse_one(dn, 0, out_irq);\n\t\tif (!rc)\n\t\t\treturn rc;\n\t}\n\n\t/*\n\t * Ok, we don't, time to have fun. Let's start by building up an\n\t * interrupt spec.  we assume #interrupt-cells is 1, which is standard\n\t * for PCI. If you do different, then don't use that routine.\n\t */\n\trc = pci_read_config_byte(pdev, PCI_INTERRUPT_PIN, &pin);\n\tif (rc != 0)\n\t\tgoto err;\n\t/* No pin, exit with no error message. */\n\tif (pin == 0)\n\t\treturn -ENODEV;\n\n\t/* Local interrupt-map in the device node? Use it! */\n\tif (of_property_present(dn, \"interrupt-map\")) {\n\t\tpin = pci_swizzle_interrupt_pin(pdev, pin);\n\t\tppnode = dn;\n\t}\n\n\t/* Now we walk up the PCI tree */\n\twhile (!ppnode) {\n\t\t/* Get the pci_dev of our parent */\n\t\tppdev = pdev->bus->self;\n\n\t\t/* Ouch, it's a host bridge... */\n\t\tif (ppdev == NULL) {\n\t\t\tppnode = pci_bus_to_OF_node(pdev->bus);\n\n\t\t\t/* No node for host bridge ? give up */\n\t\t\tif (ppnode == NULL) {\n\t\t\t\trc = -EINVAL;\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t} else {\n\t\t\t/* We found a P2P bridge, check if it has a node */\n\t\t\tppnode = pci_device_to_OF_node(ppdev);\n\t\t}\n\n\t\t/*\n\t\t * Ok, we have found a parent with a device-node, hand over to\n\t\t * the OF parsing code.\n\t\t * We build a unit address from the linux device to be used for\n\t\t * resolution. Note that we use the linux bus number which may\n\t\t * not match your firmware bus numbering.\n\t\t * Fortunately, in most cases, interrupt-map-mask doesn't\n\t\t * include the bus number as part of the matching.\n\t\t * You should still be careful about that though if you intend\n\t\t * to rely on this function (you ship a firmware that doesn't\n\t\t * create device nodes for all PCI devices).\n\t\t */\n\t\tif (ppnode)\n\t\t\tbreak;\n\n\t\t/*\n\t\t * We can only get here if we hit a P2P bridge with no node;\n\t\t * let's do standard swizzling and try again\n\t\t */\n\t\tpin = pci_swizzle_interrupt_pin(pdev, pin);\n\t\tpdev = ppdev;\n\t}\n\n\tout_irq->np = ppnode;\n\tout_irq->args_count = 1;\n\tout_irq->args[0] = pin;\n\tladdr[0] = cpu_to_be32((pdev->bus->number << 16) | (pdev->devfn << 8));\n\tladdr[1] = laddr[2] = cpu_to_be32(0);\n\trc = of_irq_parse_raw(laddr, out_irq);\n\tif (rc)\n\t\tgoto err;\n\treturn 0;\nerr:\n\tif (rc == -ENOENT) {\n\t\tdev_warn(&pdev->dev,\n\t\t\t\"%s: no interrupt-map found, INTx interrupts not available\\n\",\n\t\t\t__func__);\n\t\tpr_warn_once(\"%s: possibly some PCI slots don't have level triggered interrupts capability\\n\",\n\t\t\t__func__);\n\t} else {\n\t\tdev_err(&pdev->dev, \"%s: failed with rc=%d\\n\", __func__, rc);\n\t}\n\treturn rc;\n}\n\n/**\n * of_irq_parse_and_map_pci() - Decode a PCI IRQ from the device tree and map to a VIRQ\n * @dev: The PCI device needing an IRQ\n * @slot: PCI slot number; passed when used as map_irq callback. Unused\n * @pin: PCI IRQ pin number; passed when used as map_irq callback. Unused\n *\n * @slot and @pin are unused, but included in the function so that this\n * function can be used directly as the map_irq callback to\n * pci_assign_irq() and struct pci_host_bridge.map_irq pointer\n */\nint of_irq_parse_and_map_pci(const struct pci_dev *dev, u8 slot, u8 pin)\n{\n\tstruct of_phandle_args oirq;\n\tint ret;\n\n\tret = of_irq_parse_pci(dev, &oirq);\n\tif (ret)\n\t\treturn 0; /* Proper return code 0 == NO_IRQ */\n\n\treturn irq_create_of_mapping(&oirq);\n}\nEXPORT_SYMBOL_GPL(of_irq_parse_and_map_pci);\n#endif\t/* CONFIG_OF_IRQ */\n\nstatic int pci_parse_request_of_pci_ranges(struct device *dev,\n\t\t\t\t\t   struct pci_host_bridge *bridge)\n{\n\tint err, res_valid = 0;\n\tresource_size_t iobase;\n\tstruct resource_entry *win, *tmp;\n\n\tINIT_LIST_HEAD(&bridge->windows);\n\tINIT_LIST_HEAD(&bridge->dma_ranges);\n\n\terr = devm_of_pci_get_host_bridge_resources(dev, 0, 0xff, &bridge->windows,\n\t\t\t\t\t\t    &bridge->dma_ranges, &iobase);\n\tif (err)\n\t\treturn err;\n\n\terr = devm_request_pci_bus_resources(dev, &bridge->windows);\n\tif (err)\n\t\treturn err;\n\n\tresource_list_for_each_entry_safe(win, tmp, &bridge->windows) {\n\t\tstruct resource *res = win->res;\n\n\t\tswitch (resource_type(res)) {\n\t\tcase IORESOURCE_IO:\n\t\t\terr = devm_pci_remap_iospace(dev, res, iobase);\n\t\t\tif (err) {\n\t\t\t\tdev_warn(dev, \"error %d: failed to map resource %pR\\n\",\n\t\t\t\t\t err, res);\n\t\t\t\tresource_list_destroy_entry(win);\n\t\t\t}\n\t\t\tbreak;\n\t\tcase IORESOURCE_MEM:\n\t\t\tres_valid |= !(res->flags & IORESOURCE_PREFETCH);\n\n\t\t\tif (!(res->flags & IORESOURCE_PREFETCH))\n\t\t\t\tif (upper_32_bits(resource_size(res)))\n\t\t\t\t\tdev_warn(dev, \"Memory resource size exceeds max for 32 bits\\n\");\n\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (!res_valid)\n\t\tdev_warn(dev, \"non-prefetchable memory resource required\\n\");\n\n\treturn 0;\n}\n\nint devm_of_pci_bridge_init(struct device *dev, struct pci_host_bridge *bridge)\n{\n\tif (!dev->of_node)\n\t\treturn 0;\n\n\tbridge->swizzle_irq = pci_common_swizzle;\n\tbridge->map_irq = of_irq_parse_and_map_pci;\n\n\treturn pci_parse_request_of_pci_ranges(dev, bridge);\n}\n\n#ifdef CONFIG_PCI_DYNAMIC_OF_NODES\n\nvoid of_pci_remove_node(struct pci_dev *pdev)\n{\n\tstruct device_node *np;\n\n\tnp = pci_device_to_OF_node(pdev);\n\tif (!np || !of_node_check_flag(np, OF_DYNAMIC))\n\t\treturn;\n\tpdev->dev.of_node = NULL;\n\n\tof_changeset_revert(np->data);\n\tof_changeset_destroy(np->data);\n\tof_node_put(np);\n}\n\nvoid of_pci_make_dev_node(struct pci_dev *pdev)\n{\n\tstruct device_node *ppnode, *np = NULL;\n\tconst char *pci_type;\n\tstruct of_changeset *cset;\n\tconst char *name;\n\tint ret;\n\n\t/*\n\t * If there is already a device tree node linked to this device,\n\t * return immediately.\n\t */\n\tif (pci_device_to_OF_node(pdev))\n\t\treturn;\n\n\t/* Check if there is device tree node for parent device */\n\tif (!pdev->bus->self)\n\t\tppnode = pdev->bus->dev.of_node;\n\telse\n\t\tppnode = pdev->bus->self->dev.of_node;\n\tif (!ppnode)\n\t\treturn;\n\n\tif (pci_is_bridge(pdev))\n\t\tpci_type = \"pci\";\n\telse\n\t\tpci_type = \"dev\";\n\n\tname = kasprintf(GFP_KERNEL, \"%s@%x,%x\", pci_type,\n\t\t\t PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));\n\tif (!name)\n\t\treturn;\n\n\tcset = kmalloc(sizeof(*cset), GFP_KERNEL);\n\tif (!cset)\n\t\tgoto out_free_name;\n\tof_changeset_init(cset);\n\n\tnp = of_changeset_create_node(cset, ppnode, name);\n\tif (!np)\n\t\tgoto out_destroy_cset;\n\n\tret = of_pci_add_properties(pdev, cset, np);\n\tif (ret)\n\t\tgoto out_free_node;\n\n\tret = of_changeset_apply(cset);\n\tif (ret)\n\t\tgoto out_free_node;\n\n\tnp->data = cset;\n\tpdev->dev.of_node = np;\n\tkfree(name);\n\n\treturn;\n\nout_free_node:\n\tof_node_put(np);\nout_destroy_cset:\n\tof_changeset_destroy(cset);\n\tkfree(cset);\nout_free_name:\n\tkfree(name);\n}\n#endif\n\n#endif /* CONFIG_PCI */\n\n/**\n * of_pci_get_max_link_speed - Find the maximum link speed of the given device node.\n * @node: Device tree node with the maximum link speed information.\n *\n * This function will try to find the limitation of link speed by finding\n * a property called \"max-link-speed\" of the given device node.\n *\n * Return:\n * * > 0\t- On success, a maximum link speed.\n * * -EINVAL\t- Invalid \"max-link-speed\" property value, or failure to access\n *\t\t  the property of the device tree node.\n *\n * Returns the associated max link speed from DT, or a negative value if the\n * required property is not found or is invalid.\n */\nint of_pci_get_max_link_speed(struct device_node *node)\n{\n\tu32 max_link_speed;\n\n\tif (of_property_read_u32(node, \"max-link-speed\", &max_link_speed) ||\n\t    max_link_speed == 0 || max_link_speed > 4)\n\t\treturn -EINVAL;\n\n\treturn max_link_speed;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_max_link_speed);\n\n/**\n * of_pci_get_slot_power_limit - Parses the \"slot-power-limit-milliwatt\"\n *\t\t\t\t property.\n *\n * @node: device tree node with the slot power limit information\n * @slot_power_limit_value: pointer where the value should be stored in PCIe\n *\t\t\t    Slot Capabilities Register format\n * @slot_power_limit_scale: pointer where the scale should be stored in PCIe\n *\t\t\t    Slot Capabilities Register format\n *\n * Returns the slot power limit in milliwatts and if @slot_power_limit_value\n * and @slot_power_limit_scale pointers are non-NULL, fills in the value and\n * scale in format used by PCIe Slot Capabilities Register.\n *\n * If the property is not found or is invalid, returns 0.\n */\nu32 of_pci_get_slot_power_limit(struct device_node *node,\n\t\t\t\tu8 *slot_power_limit_value,\n\t\t\t\tu8 *slot_power_limit_scale)\n{\n\tu32 slot_power_limit_mw;\n\tu8 value, scale;\n\n\tif (of_property_read_u32(node, \"slot-power-limit-milliwatt\",\n\t\t\t\t &slot_power_limit_mw))\n\t\tslot_power_limit_mw = 0;\n\n\t/* Calculate Slot Power Limit Value and Slot Power Limit Scale */\n\tif (slot_power_limit_mw == 0) {\n\t\tvalue = 0x00;\n\t\tscale = 0;\n\t} else if (slot_power_limit_mw <= 255) {\n\t\tvalue = slot_power_limit_mw;\n\t\tscale = 3;\n\t} else if (slot_power_limit_mw <= 255*10) {\n\t\tvalue = slot_power_limit_mw / 10;\n\t\tscale = 2;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 10 * 10;\n\t} else if (slot_power_limit_mw <= 255*100) {\n\t\tvalue = slot_power_limit_mw / 100;\n\t\tscale = 1;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 100 * 100;\n\t} else if (slot_power_limit_mw <= 239*1000) {\n\t\tvalue = slot_power_limit_mw / 1000;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 1000 * 1000;\n\t} else if (slot_power_limit_mw < 250*1000) {\n\t\tvalue = 0xEF;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = 239*1000;\n\t} else if (slot_power_limit_mw <= 600*1000) {\n\t\tvalue = 0xF0 + (slot_power_limit_mw / 1000 - 250) / 25;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = slot_power_limit_mw / (1000*25) * (1000*25);\n\t} else {\n\t\tvalue = 0xFE;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = 600*1000;\n\t}\n\n\tif (slot_power_limit_value)\n\t\t*slot_power_limit_value = value;\n\n\tif (slot_power_limit_scale)\n\t\t*slot_power_limit_scale = scale;\n\n\treturn slot_power_limit_mw;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_slot_power_limit);\n",
   "source_review": {
@@ -225,5 +282,262 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/of.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c6d809b7c4e54a27",
+    "path": "drivers/pci/of.c",
+    "title": "PCI OF 구현: 노드 소유권·자원 목록·INTx·전력 양자화",
+    "area": "PCI · 장치 트리 · IRQ · 자원 관리 · 정수 알고리즘",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "CONFIG_PCI 내부의 모든 함수와 바깥의 링크 속도·슬롯 전력 도우미를 전체 분석합니다.",
+    "guide": [
+      "주석의 의도와 실제 분기, 자원 정리 범위, 정수 변환의 정보 손실을 각각 확인해야 합니다.",
+      "참조 소유권 이전, 계층 순회, 리스트 삭제, 비트 추출, 단위 변환과 포화 연산을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성 경계와 노드 연결",
+        "text": "GPL-2.0+ 파일은 PCI: OF: 로그 접두사와 cleanup, IRQ 도메인, PCI, OF, 플랫폼 및 내부 PCI 헤더를 사용합니다. pci_set_of_node부터 동적 노드 함수까지 CONFIG_PCI 안에 있고 마지막 링크 속도·전력 함수는 밖에 있습니다. pci_set_of_node는 버스 노드나 자식 노드가 없으면 0입니다. 자식 node는 __free(device_node), 플랫폼 검색 결과 pdev는 __free(put_device)로 관리합니다. 플랫폼 장치가 있으면 dev->bus->dev.of_node_reused를 참으로 만들고 no_free_ptr(node)로 자동 해제 대상에서 제외해 장치에 노드를 연결합니다. 주석의 disabled일 때 -ENODEV 설명과 달리 이 본문에는 available 검사나 -ENODEV 반환이 없습니다."
+      },
+      {
+        "title": "버스 노드와 참조 해제",
+        "text": "pci_release_of_node와 pci_release_bus_of_node는 해당 노드 put 후 device_set_node로 NULL을 설정합니다. pci_set_bus_of_node는 루트 버스이면 pcibios_get_phb_of_node, 아니면 self 장치 노드를 get합니다. 후자의 노드에 external-facing이 있으면 self->external_facing을 참으로 설정합니다. weak pcibios 함수는 self나 parent가 있는 버스에 WARN_ON 후 NULL을 반환하고, 루트에서는 bridge 자체 노드, bridge 부모 노드 순서로 get하여 반환합니다."
+      },
+      {
+        "title": "MSI 도메인 선택",
+        "text": "pci_host_bridge_of_msi_domain은 IRQ_DOMAIN 지원과 버스 노드가 있을 때 of_msi_get_domain의 PCI_MSI 도메인을 먼저 구하고 실패하면 irq_find_matching_host, 다시 실패하면 irq_find_host를 호출합니다. 지원이 없으면 NULL입니다. pci_host_of_has_msi_map은 dev/node가 있으면 msi-map 속성 포인터의 참·거짓을 반환합니다. 속성 존재 검사는 매핑 내용 전체의 유효성 검사가 아닙니다."
+      },
+      {
+        "title": "장치·기능 번호와 자식 검색",
+        "text": "of_pci_get_devfn은 reg에서 u32 다섯 개를 읽고 오류를 전파하며 (reg[0]>>8)&0xff를 반환합니다. 비교 도우미는 음수 결과를 불일치로 처리합니다. find_child_device는 직접 자식을 먼저 검사하고 이름이 multifunc-device인 자식에 대해서만 그 자식들을 한 단계 더 확인합니다. 일반적인 무제한 재귀 탐색은 아닙니다. 내부 자식이 맞으면 바깥 node를 put하고 node2를 반환하며 반환된 일치 노드의 참조는 호출자에게 남습니다."
+      },
+      {
+        "title": "버스 범위와 도메인 번호",
+        "text": "parse_bus_range는 bus-range 두 셀을 읽어 name,start,end,IORESOURCE_BUS를 설정합니다. start<=end 검사는 없습니다. get_pci_domain_nr는 linux,pci-domain u32 읽기 오류를 전파하고 성공 시 u16으로 캐스팅합니다. 따라서 0도 유효 결과이며 0x10001은 1로 잘립니다. 문서의 성공 >0 표현이나 값 범위 설명만 보고 큰 값이 반드시 오류라고 판단하면 안 됩니다."
+      },
+      {
+        "title": "probe-only 정책의 fallback",
+        "text": "preserve_config는 NULL node이면 경고 후 of_chosen을 사용합니다. linux,pci-probe-only를 u32로 읽어 값이 0이 아니어야 true입니다. -ENODATA나 -EOVERFLOW는 경고 후 false이며 chosen으로 재시도하지 않습니다. -EINVAL이면 현재 노드가 chosen일 때 false, 아니면 chosen으로 바꿔 재시도합니다. 속성 존재만으로 true라는 주석보다 실제 값 검사를 우선해야 합니다. check_probe_only는 이 결과에 따라 PCI_PROBE_ONLY 플래그를 추가하거나 지웁니다."
+      },
+      {
+        "title": "호스트 자원 시작과 조기 반환",
+        "text": "devm_of_pci_get_host_bridge_resources는 io_base가 있으면 OF_BAD_ADDR로 초기화하고 bus_range를 devm_kzalloc합니다. bus-range 읽기 실패면 busno..bus_max를 사용하며 성공이면 end를 start+bus_max 이하로 제한합니다. 버스 자원을 목록에 추가한 후 ranges 파서 초기화가 실패하면 오류를 전파하지 않고 0을 반환합니다. 이 조기 반환은 아래 dma-ranges 처리에도 도달하지 않습니다."
+      },
+      {
+        "title": "출력 방향 ranges 처리",
+        "text": "각 range의 CPU 주소가 OF_BAD_ADDR이거나 size가 0이면 건너뜁니다. range_to_resource 실패도 건너뛰고 성공하면 resource를 devm_kmemdup합니다. I/O인데 io_base가 없으면 -EINVAL 실패이고 여러 I/O 범위면 경고 후 io_base를 마지막 CPU 주소로 덮습니다. 메모리 자원은 IORESOURCE_MEM_64를 지웁니다. resources에는 res->start-range.pci_addr를 오프셋으로 추가합니다. 복제 할당 실패는 -ENOMEM으로 실패 경로로 갑니다."
+      },
+      {
+        "title": "입력 방향 dma-ranges와 정리 범위",
+        "text": "ib_resources가 없거나 DMA 파서 초기화가 실패하면 0입니다. 입력 범위는 MEM 타입이며 CPU 주소가 유효하고 크기가 양수인 것만 처리합니다. 변환 실패는 건너뛰고 복제 후 ib_resources에 같은 방식의 오프셋으로 추가합니다. failed 레이블은 pci_free_resource_list(resources)만 호출합니다. ib_resources 목록 전체를 여기서 해제하는 코드는 없고 io_base 이전값을 복구하지도 않습니다. devm으로 관리하는 resource 본체와 목록 엔트리의 수명은 구분해야 합니다."
+      },
+      {
+        "title": "INTx 파싱의 우선 경로",
+        "text": "OF_IRQ 지원의 of_irq_parse_pci는 장치 노드가 있으면 of_irq_parse_one(dn,0)을 먼저 시도합니다. 실패하면 PCI_INTERRUPT_PIN 설정 바이트를 읽고 읽기 오류는 err로, pin=0은 로그 없이 -ENODEV로 반환합니다. 노드에 로컬 interrupt-map이 있으면 현재 장치 기준으로 pin을 swizzle하고 그 노드를 ppnode로 사용합니다. 콜백 wrapper로 전달받는 pin과 별개로 실제 설정 공간을 읽습니다."
+      },
+      {
+        "title": "PCI 계층을 오르는 INTx 탐색",
+        "text": "ppnode가 없으면 부모 PCI 장치를 확인합니다. 호스트 브리지에 도달하면 버스 OF 노드를 쓰고 없으면 -EINVAL입니다. 부모 브리지 노드가 발견되면 반복을 끝내며, 노드가 없는 P2P 브리지일 때만 현재 pin을 swizzle하고 pdev를 부모로 옮겨 반복합니다. out_irq에 부모 노드와 인수 하나인 pin을 쓰고 Linux 버스 번호<<16 및 devfn<<8로 빅엔디언 laddr 첫 셀을 구성합니다. 나머지 두 셀은 0입니다. 펌웨어와 Linux 버스 번호 차이는 주석에서도 주의점으로 남깁니다."
+      },
+      {
+        "title": "IRQ 오류 변환과 콜백 형태",
+        "text": "of_irq_parse_raw 오류가 -ENOENT이면 INTx 불가 경고와 한 번만 출력하는 추가 경고를, 다른 오류면 dev_err를 출력합니다. of_irq_parse_and_map_pci의 slot과 pin 인수는 사용하지 않으며 콜백 시그니처 호환을 위해 존재합니다. 내부 파싱 오류는 모두 NO_IRQ인 0으로 바꾸고 성공 시 irq_create_of_mapping 결과를 반환합니다. 내부 음수 오류와 외부 콜백 결과를 같은 계약으로 생각하면 안 됩니다."
+      },
+      {
+        "title": "자원 요청과 안전한 목록 삭제",
+        "text": "pci_parse_request_of_pci_ranges는 windows와 dma_ranges 목록을 초기화하고 0..0xff 버스 범위로 파싱한 뒤 devm_request_pci_bus_resources를 호출합니다. 실패는 반환합니다. safe 반복자로 windows를 훑으며 I/O remap 실패 항목은 경고 후 목록에서 제거하지만 함수 전체를 실패시키지 않습니다. non-prefetch MEM 존재를 기록하고 그 크기가 32비트를 넘으면 경고합니다. 해당 MEM이 없어도 경고 후 최종 0입니다. devm_of_pci_bridge_init은 OF 노드가 없으면 0, 있으면 swizzle/map 콜백을 설정하고 이 경로를 호출합니다."
+      },
+      {
+        "title": "동적 노드 생성",
+        "text": "PCI_DYNAMIC_OF_NODES에서 make_dev_node는 이미 노드가 있거나 부모 노드가 없으면 반환합니다. 부모는 루트 버스 노드 또는 상위 PCI 장치 노드입니다. 브리지면 pci, 아니면 dev 접두사에 slot,function을 붙여 이름을 할당하고 changeset을 kmalloc·init합니다. create_node, add_properties, apply 순서가 성공하면 np->data에 cset을 보관하고 pdev->dev.of_node에 np를 직접 저장한 뒤 이름을 해제합니다. 실패 레이블은 진행 단계에 따라 node put, changeset destroy와 kfree, 이름 kfree를 수행합니다."
+      },
+      {
+        "title": "동적 노드 제거의 실제 본문",
+        "text": "remove_node는 노드가 없거나 OF_DYNAMIC이 아니면 반환합니다. 동적이면 pdev->dev.of_node를 NULL로 만든 뒤 np->data changeset의 revert, destroy, node put 순서로 진행합니다. revert 반환값을 검사하지 않으며 여기에는 별도 kfree(np->data) 호출이 없습니다. 이것만으로 외부 수명 처리를 모두 결론 내리지는 않되 생성 실패 경로의 명시적 kfree와 제거 경로의 차이를 기록해야 합니다."
+      },
+      {
+        "title": "링크 속도 범위",
+        "text": "CONFIG_PCI 블록 밖의 get_max_link_speed는 max-link-speed 읽기 실패, 0, 4 초과를 모두 -EINVAL로 반환하고 1..4만 그대로 반환합니다. 이 v6.12 함수에서 허용하는 값의 범위이며 다른 PCI 코드나 하드웨어 세대의 전체 지원 범위와 같은 주장으로 확대하면 안 됩니다."
+      },
+      {
+        "title": "슬롯 전력의 낮은 구간",
+        "text": "get_slot_power_limit는 속성 읽기 실패 시 0으로 시작합니다. 0은 value=0,scale=0이며 1..255mW는 그대로 value에 넣고 scale=3입니다. 2550mW 이하는 10mW 단위로 내림해 scale=2, 25500mW 이하는 100mW 단위로 내림해 scale=1입니다. 239000mW 이하는 1000mW 단위로 내림해 scale=0입니다. 반환 밀리와트도 각 구간에서 표현 가능한 값으로 낮춥니다."
+      },
+      {
+        "title": "슬롯 전력의 높은 구간과 출력",
+        "text": "239000 초과 250000 미만은 value=0xEF,scale=0,239000mW로 고정합니다. 250000..600000은 value=0xF0+(mW/1000-250)/25,scale=0이며 반환은 25000mW 단위 내림입니다. 그 초과는 value=0xFE와 600000mW로 포화합니다. value와 scale 출력 포인터는 각각 NULL이 아닐 때만 쓰며 반환값은 항상 양자화된 밀리와트입니다. 분기 경계, 정수 나눗셈, 최대값 제한이 결합한 알고리즘입니다."
+      },
+      {
+        "title": "전체 범위와 검증 한계",
+        "text": "노드 연결·해제, weak 호스트 조회, MSI, 자식 비교·탐색, reg·bus·domain 파싱, 정책, 자원 목록, INTx, 브리지 초기화, 동적 생성·제거, 속도·전력 함수 전체를 대조했습니다. GPL export는 자식 조회, devfn, bus-range, domain, probe-only, IRQ 콜백, 마지막 두 도우미에 명시됩니다. 실제 PCI 하드웨어·IRQ·동적 트리 동작이나 커널 구성별 빌드는 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "pci_set_of_node가 disabled 노드를 -ENODEV로 거부한다는 주석은 본문에서도 구현되어 있는가?",
+        "options": [
+          "아니다. 본문에 available 검사와 -ENODEV 반환이 없다",
+          "그렇다. 연결 전에 반드시 상태 속성을 검사한다"
+        ],
+        "answer": 0,
+        "explanation": "실제 함수는 노드 부재일 때 0이며 찾은 노드를 연결한 뒤에도 0입니다. 문서와 구현의 차이를 숨기지 않고 구분해야 합니다."
+      },
+      {
+        "prompt": "reg[0]=0x00012b00이면 devfn 결과는?",
+        "options": [
+          "0x12b",
+          "0x2b"
+        ],
+        "answer": 1,
+        "explanation": "8비트 오른쪽 이동 뒤 0xff 마스크를 적용합니다. 버스 번호 등 상위 비트는 결과에서 제거됩니다."
+      },
+      {
+        "prompt": "linux,pci-domain=0x10001이면 반환은?",
+        "options": [
+          "1",
+          "반드시 -EOVERFLOW"
+        ],
+        "answer": 0,
+        "explanation": "u32 읽기가 성공하면 u16으로 캐스팅합니다. 속성 파서의 길이 오류와 값의 하위 16비트 절단은 별개입니다."
+      },
+      {
+        "prompt": "컨트롤러의 probe-only 값이 0이면 chosen의 1로 fallback하는가?",
+        "options": [
+          "그렇다. 0은 언제나 속성 부재와 같다",
+          "아니다. 읽기 성공한 0은 false다"
+        ],
+        "answer": 1,
+        "explanation": "chosen 재시도는 -EINVAL 경로입니다. 값 0을 성공적으로 읽은 경우 재시도하지 않고 false로 끝납니다."
+      },
+      {
+        "prompt": "ranges 파서 초기화가 실패하면 dma-ranges 파싱은 계속되는가?",
+        "options": [
+          "아니다. 함수가 0을 반환해 아래 코드에 도달하지 않는다",
+          "그렇다. inbound 범위는 항상 독립적으로 처리한다"
+        ],
+        "answer": 0,
+        "explanation": "outbound parser init 직후 if(err)return 0이 있습니다. 이 조기 반환의 범위는 이후 모든 inbound 처리까지 포함합니다."
+      },
+      {
+        "prompt": "자원 파싱 failed 레이블이 두 목록을 모두 정리하는가?",
+        "options": [
+          "그렇다. ib_resources도 같은 호출로 명시적으로 지운다",
+          "아니다. resources만 명시적으로 해제한다"
+        ],
+        "answer": 1,
+        "explanation": "본문에 pci_free_resource_list(resources)만 있습니다. 메모리 본체의 devm 관리와 별도 목록 엔트리를 구분해 정리 범위를 읽어야 합니다."
+      },
+      {
+        "prompt": "IRQ 콜백의 slot과 pin은 실제 파싱 입력으로 쓰이는가?",
+        "options": [
+          "아니다. 내부 함수가 PCI 설정 공간에서 pin을 읽는다",
+          "그렇다. 전달받은 pin을 그대로 raw 파서에 준다"
+        ],
+        "answer": 0,
+        "explanation": "두 인수는 map_irq 함수 포인터 형태에 맞추기 위한 것이며 본문에서 참조하지 않습니다. 파싱 실패도 콜백에서는 음수 대신 0으로 변환합니다."
+      },
+      {
+        "prompt": "non-prefetchable 메모리 자원이 없으면 자원 요청 도우미가 마지막에 실패하는가?",
+        "options": [
+          "그렇다. 반드시 -EINVAL을 반환한다",
+          "아니다. 경고 후 0을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "res_valid가 거짓인 마지막 분기는 dev_warn뿐입니다. 로그의 required라는 표현과 반환 동작을 별도로 확인해야 합니다."
+      },
+      {
+        "prompt": "슬롯 전력 245000mW의 반환값과 value는?",
+        "options": [
+          "239000mW와 0xEF",
+          "245000mW와 245"
+        ],
+        "answer": 0,
+        "explanation": "239000 초과 250000 미만은 전용 분기로 239000에 고정합니다. 일반 1000mW 내림 구간을 그대로 연장하지 않습니다."
+      },
+      {
+        "prompt": "슬롯 전력 287000mW와 700000mW는 각각 무엇으로 반환되는가?",
+        "options": [
+          "287000mW와 700000mW",
+          "275000mW와 600000mW"
+        ],
+        "answer": 1,
+        "explanation": "중간 높은 구간은 25000mW 단위 내림이고 최댓값 초과는 600000으로 포화합니다. 반환값 자체도 원래 속성값에서 달라집니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/*\n * PCI <-> OF mapping helpers\n *\n * Copyright 2011 IBM Corp.\n */\n#define pr_fmt(fmt)\t\"PCI: OF: \" fmt\n\n#include <linux/cleanup.h>\n#include <linux/irqdomain.h>\n#include <linux/kernel.h>\n#include <linux/pci.h>\n#include <linux/of.h>\n#include <linux/of_irq.h>\n#include <linux/of_address.h>\n#include <linux/of_pci.h>\n#include <linux/platform_device.h>\n#include \"pci.h\"\n\n#ifdef CONFIG_PCI\n/**\n * pci_set_of_node - Find and set device's DT device_node\n * @dev: the PCI device structure to fill\n *\n * Returns 0 on success with of_node set or when no device is described in the\n * DT. Returns -ENODEV if the device is present, but disabled in the DT.\n */\nint pci_set_of_node(struct pci_dev *dev)\n{\n\tif (!dev->bus->dev.of_node)\n\t\treturn 0;\n\n\tstruct device_node *node __free(device_node) =\n\t\tof_pci_find_child_device(dev->bus->dev.of_node, dev->devfn);\n\tif (!node)\n\t\treturn 0;\n\n\tstruct device *pdev __free(put_device) =\n\t\tbus_find_device_by_of_node(&platform_bus_type, node);\n\tif (pdev)\n\t\tdev->bus->dev.of_node_reused = true;\n\n\tdevice_set_node(&dev->dev, of_fwnode_handle(no_free_ptr(node)));\n\treturn 0;\n}\n\nvoid pci_release_of_node(struct pci_dev *dev)\n{\n\tof_node_put(dev->dev.of_node);\n\tdevice_set_node(&dev->dev, NULL);\n}\n\nvoid pci_set_bus_of_node(struct pci_bus *bus)\n{\n\tstruct device_node *node;\n\n\tif (bus->self == NULL) {\n\t\tnode = pcibios_get_phb_of_node(bus);\n\t} else {\n\t\tnode = of_node_get(bus->self->dev.of_node);\n\t\tif (node && of_property_read_bool(node, \"external-facing\"))\n\t\t\tbus->self->external_facing = true;\n\t}\n\n\tdevice_set_node(&bus->dev, of_fwnode_handle(node));\n}\n\nvoid pci_release_bus_of_node(struct pci_bus *bus)\n{\n\tof_node_put(bus->dev.of_node);\n\tdevice_set_node(&bus->dev, NULL);\n}\n\nstruct device_node * __weak pcibios_get_phb_of_node(struct pci_bus *bus)\n{\n\t/* This should only be called for PHBs */\n\tif (WARN_ON(bus->self || bus->parent))\n\t\treturn NULL;\n\n\t/*\n\t * Look for a node pointer in either the intermediary device we\n\t * create above the root bus or its own parent. Normally only\n\t * the later is populated.\n\t */\n\tif (bus->bridge->of_node)\n\t\treturn of_node_get(bus->bridge->of_node);\n\tif (bus->bridge->parent && bus->bridge->parent->of_node)\n\t\treturn of_node_get(bus->bridge->parent->of_node);\n\treturn NULL;\n}\n\nstruct irq_domain *pci_host_bridge_of_msi_domain(struct pci_bus *bus)\n{\n#ifdef CONFIG_IRQ_DOMAIN\n\tstruct irq_domain *d;\n\n\tif (!bus->dev.of_node)\n\t\treturn NULL;\n\n\t/* Start looking for a phandle to an MSI controller. */\n\td = of_msi_get_domain(&bus->dev, bus->dev.of_node, DOMAIN_BUS_PCI_MSI);\n\tif (d)\n\t\treturn d;\n\n\t/*\n\t * If we don't have an msi-parent property, look for a domain\n\t * directly attached to the host bridge.\n\t */\n\td = irq_find_matching_host(bus->dev.of_node, DOMAIN_BUS_PCI_MSI);\n\tif (d)\n\t\treturn d;\n\n\treturn irq_find_host(bus->dev.of_node);\n#else\n\treturn NULL;\n#endif\n}\n\nbool pci_host_of_has_msi_map(struct device *dev)\n{\n\tif (dev && dev->of_node)\n\t\treturn of_get_property(dev->of_node, \"msi-map\", NULL);\n\treturn false;\n}\n\nstatic inline int __of_pci_pci_compare(struct device_node *node,\n\t\t\t\t       unsigned int data)\n{\n\tint devfn;\n\n\tdevfn = of_pci_get_devfn(node);\n\tif (devfn < 0)\n\t\treturn 0;\n\n\treturn devfn == data;\n}\n\nstruct device_node *of_pci_find_child_device(struct device_node *parent,\n\t\t\t\t\t     unsigned int devfn)\n{\n\tstruct device_node *node, *node2;\n\n\tfor_each_child_of_node(parent, node) {\n\t\tif (__of_pci_pci_compare(node, devfn))\n\t\t\treturn node;\n\t\t/*\n\t\t * Some OFs create a parent node \"multifunc-device\" as\n\t\t * a fake root for all functions of a multi-function\n\t\t * device we go down them as well.\n\t\t */\n\t\tif (of_node_name_eq(node, \"multifunc-device\")) {\n\t\t\tfor_each_child_of_node(node, node2) {\n\t\t\t\tif (__of_pci_pci_compare(node2, devfn)) {\n\t\t\t\t\tof_node_put(node);\n\t\t\t\t\treturn node2;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL_GPL(of_pci_find_child_device);\n\n/**\n * of_pci_get_devfn() - Get device and function numbers for a device node\n * @np: device node\n *\n * Parses a standard 5-cell PCI resource and returns an 8-bit value that can\n * be passed to the PCI_SLOT() and PCI_FUNC() macros to extract the device\n * and function numbers respectively. On error a negative error code is\n * returned.\n */\nint of_pci_get_devfn(struct device_node *np)\n{\n\tu32 reg[5];\n\tint error;\n\n\terror = of_property_read_u32_array(np, \"reg\", reg, ARRAY_SIZE(reg));\n\tif (error)\n\t\treturn error;\n\n\treturn (reg[0] >> 8) & 0xff;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_devfn);\n\n/**\n * of_pci_parse_bus_range() - parse the bus-range property of a PCI device\n * @node: device node\n * @res: address to a struct resource to return the bus-range\n *\n * Returns 0 on success or a negative error-code on failure.\n */\nint of_pci_parse_bus_range(struct device_node *node, struct resource *res)\n{\n\tu32 bus_range[2];\n\tint error;\n\n\terror = of_property_read_u32_array(node, \"bus-range\", bus_range,\n\t\t\t\t\t   ARRAY_SIZE(bus_range));\n\tif (error)\n\t\treturn error;\n\n\tres->name = node->name;\n\tres->start = bus_range[0];\n\tres->end = bus_range[1];\n\tres->flags = IORESOURCE_BUS;\n\n\treturn 0;\n}\nEXPORT_SYMBOL_GPL(of_pci_parse_bus_range);\n\n/**\n * of_get_pci_domain_nr - Find the host bridge domain number\n *\t\t\t  of the given device node.\n * @node: Device tree node with the domain information.\n *\n * This function will try to obtain the host bridge domain number by finding\n * a property called \"linux,pci-domain\" of the given device node.\n *\n * Return:\n * * > 0\t- On success, an associated domain number.\n * * -EINVAL\t- The property \"linux,pci-domain\" does not exist.\n * * -ENODATA\t- The linux,pci-domain\" property does not have value.\n * * -EOVERFLOW\t- Invalid \"linux,pci-domain\" property value.\n *\n * Returns the associated domain number from DT in the range [0-0xffff], or\n * a negative value if the required property is not found.\n */\nint of_get_pci_domain_nr(struct device_node *node)\n{\n\tu32 domain;\n\tint error;\n\n\terror = of_property_read_u32(node, \"linux,pci-domain\", &domain);\n\tif (error)\n\t\treturn error;\n\n\treturn (u16)domain;\n}\nEXPORT_SYMBOL_GPL(of_get_pci_domain_nr);\n\n/**\n * of_pci_preserve_config - Return true if the boot configuration needs to\n *                          be preserved\n * @node: Device tree node.\n *\n * Look for \"linux,pci-probe-only\" property for a given PCI controller's\n * node and return true if found. Also look in the chosen node if the\n * property is not found in the given controller's node.  Having this\n * property ensures that the kernel doesn't reconfigure the BARs and bridge\n * windows that are already done by the platform firmware.\n *\n * Return: true if the property exists; false otherwise.\n */\nbool of_pci_preserve_config(struct device_node *node)\n{\n\tu32 val = 0;\n\tint ret;\n\n\tif (!node) {\n\t\tpr_warn(\"device node is NULL, trying with of_chosen\\n\");\n\t\tnode = of_chosen;\n\t}\n\nretry:\n\tret = of_property_read_u32(node, \"linux,pci-probe-only\", &val);\n\tif (ret) {\n\t\tif (ret == -ENODATA || ret == -EOVERFLOW) {\n\t\t\tpr_warn(\"Incorrect value for linux,pci-probe-only in %pOF, ignoring\\n\",\n\t\t\t\tnode);\n\t\t\treturn false;\n\t\t}\n\t\tif (ret == -EINVAL) {\n\t\t\tif (node == of_chosen)\n\t\t\t\treturn false;\n\n\t\t\tnode = of_chosen;\n\t\t\tgoto retry;\n\t\t}\n\t}\n\n\tif (val)\n\t\treturn true;\n\telse\n\t\treturn false;\n}\n\n/**\n * of_pci_check_probe_only - Setup probe only mode if linux,pci-probe-only\n *                           is present and valid\n */\nvoid of_pci_check_probe_only(void)\n{\n\tif (of_pci_preserve_config(of_chosen))\n\t\tpci_add_flags(PCI_PROBE_ONLY);\n\telse\n\t\tpci_clear_flags(PCI_PROBE_ONLY);\n}\nEXPORT_SYMBOL_GPL(of_pci_check_probe_only);\n\n/**\n * devm_of_pci_get_host_bridge_resources() - Resource-managed parsing of PCI\n *                                           host bridge resources from DT\n * @dev: host bridge device\n * @busno: bus number associated with the bridge root bus\n * @bus_max: maximum number of buses for this bridge\n * @resources: list where the range of resources will be added after DT parsing\n * @ib_resources: list where the range of inbound resources (with addresses\n *                from 'dma-ranges') will be added after DT parsing\n * @io_base: pointer to a variable that will contain on return the physical\n * address for the start of the I/O range. Can be NULL if the caller doesn't\n * expect I/O ranges to be present in the device tree.\n *\n * This function will parse the \"ranges\" property of a PCI host bridge device\n * node and setup the resource mapping based on its content. It is expected\n * that the property conforms with the Power ePAPR document.\n *\n * It returns zero if the range parsing has been successful or a standard error\n * value if it failed.\n */\nstatic int devm_of_pci_get_host_bridge_resources(struct device *dev,\n\t\t\tunsigned char busno, unsigned char bus_max,\n\t\t\tstruct list_head *resources,\n\t\t\tstruct list_head *ib_resources,\n\t\t\tresource_size_t *io_base)\n{\n\tstruct device_node *dev_node = dev->of_node;\n\tstruct resource *res, tmp_res;\n\tstruct resource *bus_range;\n\tstruct of_pci_range range;\n\tstruct of_pci_range_parser parser;\n\tconst char *range_type;\n\tint err;\n\n\tif (io_base)\n\t\t*io_base = (resource_size_t)OF_BAD_ADDR;\n\n\tbus_range = devm_kzalloc(dev, sizeof(*bus_range), GFP_KERNEL);\n\tif (!bus_range)\n\t\treturn -ENOMEM;\n\n\tdev_info(dev, \"host bridge %pOF ranges:\\n\", dev_node);\n\n\terr = of_pci_parse_bus_range(dev_node, bus_range);\n\tif (err) {\n\t\tbus_range->start = busno;\n\t\tbus_range->end = bus_max;\n\t\tbus_range->flags = IORESOURCE_BUS;\n\t\tdev_info(dev, \"  No bus range found for %pOF, using %pR\\n\",\n\t\t\t dev_node, bus_range);\n\t} else {\n\t\tif (bus_range->end > bus_range->start + bus_max)\n\t\t\tbus_range->end = bus_range->start + bus_max;\n\t}\n\tpci_add_resource(resources, bus_range);\n\n\t/* Check for ranges property */\n\terr = of_pci_range_parser_init(&parser, dev_node);\n\tif (err)\n\t\treturn 0;\n\n\tdev_dbg(dev, \"Parsing ranges property...\\n\");\n\tfor_each_of_pci_range(&parser, &range) {\n\t\t/* Read next ranges element */\n\t\tif ((range.flags & IORESOURCE_TYPE_BITS) == IORESOURCE_IO)\n\t\t\trange_type = \"IO\";\n\t\telse if ((range.flags & IORESOURCE_TYPE_BITS) == IORESOURCE_MEM)\n\t\t\trange_type = \"MEM\";\n\t\telse\n\t\t\trange_type = \"err\";\n\t\tdev_info(dev, \"  %6s %#012llx..%#012llx -> %#012llx\\n\",\n\t\t\t range_type, range.cpu_addr,\n\t\t\t range.cpu_addr + range.size - 1, range.pci_addr);\n\n\t\t/*\n\t\t * If we failed translation or got a zero-sized region\n\t\t * then skip this range\n\t\t */\n\t\tif (range.cpu_addr == OF_BAD_ADDR || range.size == 0)\n\t\t\tcontinue;\n\n\t\terr = of_pci_range_to_resource(&range, dev_node, &tmp_res);\n\t\tif (err)\n\t\t\tcontinue;\n\n\t\tres = devm_kmemdup(dev, &tmp_res, sizeof(tmp_res), GFP_KERNEL);\n\t\tif (!res) {\n\t\t\terr = -ENOMEM;\n\t\t\tgoto failed;\n\t\t}\n\n\t\tif (resource_type(res) == IORESOURCE_IO) {\n\t\t\tif (!io_base) {\n\t\t\t\tdev_err(dev, \"I/O range found for %pOF. Please provide an io_base pointer to save CPU base address\\n\",\n\t\t\t\t\tdev_node);\n\t\t\t\terr = -EINVAL;\n\t\t\t\tgoto failed;\n\t\t\t}\n\t\t\tif (*io_base != (resource_size_t)OF_BAD_ADDR)\n\t\t\t\tdev_warn(dev, \"More than one I/O resource converted for %pOF. CPU base address for old range lost!\\n\",\n\t\t\t\t\t dev_node);\n\t\t\t*io_base = range.cpu_addr;\n\t\t} else if (resource_type(res) == IORESOURCE_MEM) {\n\t\t\tres->flags &= ~IORESOURCE_MEM_64;\n\t\t}\n\n\t\tpci_add_resource_offset(resources, res,\tres->start - range.pci_addr);\n\t}\n\n\t/* Check for dma-ranges property */\n\tif (!ib_resources)\n\t\treturn 0;\n\terr = of_pci_dma_range_parser_init(&parser, dev_node);\n\tif (err)\n\t\treturn 0;\n\n\tdev_dbg(dev, \"Parsing dma-ranges property...\\n\");\n\tfor_each_of_pci_range(&parser, &range) {\n\t\t/*\n\t\t * If we failed translation or got a zero-sized region\n\t\t * then skip this range\n\t\t */\n\t\tif (((range.flags & IORESOURCE_TYPE_BITS) != IORESOURCE_MEM) ||\n\t\t    range.cpu_addr == OF_BAD_ADDR || range.size == 0)\n\t\t\tcontinue;\n\n\t\tdev_info(dev, \"  %6s %#012llx..%#012llx -> %#012llx\\n\",\n\t\t\t \"IB MEM\", range.cpu_addr,\n\t\t\t range.cpu_addr + range.size - 1, range.pci_addr);\n\n\n\t\terr = of_pci_range_to_resource(&range, dev_node, &tmp_res);\n\t\tif (err)\n\t\t\tcontinue;\n\n\t\tres = devm_kmemdup(dev, &tmp_res, sizeof(tmp_res), GFP_KERNEL);\n\t\tif (!res) {\n\t\t\terr = -ENOMEM;\n\t\t\tgoto failed;\n\t\t}\n\n\t\tpci_add_resource_offset(ib_resources, res,\n\t\t\t\t\tres->start - range.pci_addr);\n\t}\n\n\treturn 0;\n\nfailed:\n\tpci_free_resource_list(resources);\n\treturn err;\n}\n\n#if IS_ENABLED(CONFIG_OF_IRQ)\n/**\n * of_irq_parse_pci - Resolve the interrupt for a PCI device\n * @pdev:       the device whose interrupt is to be resolved\n * @out_irq:    structure of_phandle_args filled by this function\n *\n * This function resolves the PCI interrupt for a given PCI device. If a\n * device-node exists for a given pci_dev, it will use normal OF tree\n * walking. If not, it will implement standard swizzling and walk up the\n * PCI tree until an device-node is found, at which point it will finish\n * resolving using the OF tree walking.\n */\nstatic int of_irq_parse_pci(const struct pci_dev *pdev, struct of_phandle_args *out_irq)\n{\n\tstruct device_node *dn, *ppnode = NULL;\n\tstruct pci_dev *ppdev;\n\t__be32 laddr[3];\n\tu8 pin;\n\tint rc;\n\n\t/*\n\t * Check if we have a device node, if yes, fallback to standard\n\t * device tree parsing\n\t */\n\tdn = pci_device_to_OF_node(pdev);\n\tif (dn) {\n\t\trc = of_irq_parse_one(dn, 0, out_irq);\n\t\tif (!rc)\n\t\t\treturn rc;\n\t}\n\n\t/*\n\t * Ok, we don't, time to have fun. Let's start by building up an\n\t * interrupt spec.  we assume #interrupt-cells is 1, which is standard\n\t * for PCI. If you do different, then don't use that routine.\n\t */\n\trc = pci_read_config_byte(pdev, PCI_INTERRUPT_PIN, &pin);\n\tif (rc != 0)\n\t\tgoto err;\n\t/* No pin, exit with no error message. */\n\tif (pin == 0)\n\t\treturn -ENODEV;\n\n\t/* Local interrupt-map in the device node? Use it! */\n\tif (of_property_present(dn, \"interrupt-map\")) {\n\t\tpin = pci_swizzle_interrupt_pin(pdev, pin);\n\t\tppnode = dn;\n\t}\n\n\t/* Now we walk up the PCI tree */\n\twhile (!ppnode) {\n\t\t/* Get the pci_dev of our parent */\n\t\tppdev = pdev->bus->self;\n\n\t\t/* Ouch, it's a host bridge... */\n\t\tif (ppdev == NULL) {\n\t\t\tppnode = pci_bus_to_OF_node(pdev->bus);\n\n\t\t\t/* No node for host bridge ? give up */\n\t\t\tif (ppnode == NULL) {\n\t\t\t\trc = -EINVAL;\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t} else {\n\t\t\t/* We found a P2P bridge, check if it has a node */\n\t\t\tppnode = pci_device_to_OF_node(ppdev);\n\t\t}\n\n\t\t/*\n\t\t * Ok, we have found a parent with a device-node, hand over to\n\t\t * the OF parsing code.\n\t\t * We build a unit address from the linux device to be used for\n\t\t * resolution. Note that we use the linux bus number which may\n\t\t * not match your firmware bus numbering.\n\t\t * Fortunately, in most cases, interrupt-map-mask doesn't\n\t\t * include the bus number as part of the matching.\n\t\t * You should still be careful about that though if you intend\n\t\t * to rely on this function (you ship a firmware that doesn't\n\t\t * create device nodes for all PCI devices).\n\t\t */\n\t\tif (ppnode)\n\t\t\tbreak;\n\n\t\t/*\n\t\t * We can only get here if we hit a P2P bridge with no node;\n\t\t * let's do standard swizzling and try again\n\t\t */\n\t\tpin = pci_swizzle_interrupt_pin(pdev, pin);\n\t\tpdev = ppdev;\n\t}\n\n\tout_irq->np = ppnode;\n\tout_irq->args_count = 1;\n\tout_irq->args[0] = pin;\n\tladdr[0] = cpu_to_be32((pdev->bus->number << 16) | (pdev->devfn << 8));\n\tladdr[1] = laddr[2] = cpu_to_be32(0);\n\trc = of_irq_parse_raw(laddr, out_irq);\n\tif (rc)\n\t\tgoto err;\n\treturn 0;\nerr:\n\tif (rc == -ENOENT) {\n\t\tdev_warn(&pdev->dev,\n\t\t\t\"%s: no interrupt-map found, INTx interrupts not available\\n\",\n\t\t\t__func__);\n\t\tpr_warn_once(\"%s: possibly some PCI slots don't have level triggered interrupts capability\\n\",\n\t\t\t__func__);\n\t} else {\n\t\tdev_err(&pdev->dev, \"%s: failed with rc=%d\\n\", __func__, rc);\n\t}\n\treturn rc;\n}\n\n/**\n * of_irq_parse_and_map_pci() - Decode a PCI IRQ from the device tree and map to a VIRQ\n * @dev: The PCI device needing an IRQ\n * @slot: PCI slot number; passed when used as map_irq callback. Unused\n * @pin: PCI IRQ pin number; passed when used as map_irq callback. Unused\n *\n * @slot and @pin are unused, but included in the function so that this\n * function can be used directly as the map_irq callback to\n * pci_assign_irq() and struct pci_host_bridge.map_irq pointer\n */\nint of_irq_parse_and_map_pci(const struct pci_dev *dev, u8 slot, u8 pin)\n{\n\tstruct of_phandle_args oirq;\n\tint ret;\n\n\tret = of_irq_parse_pci(dev, &oirq);\n\tif (ret)\n\t\treturn 0; /* Proper return code 0 == NO_IRQ */\n\n\treturn irq_create_of_mapping(&oirq);\n}\nEXPORT_SYMBOL_GPL(of_irq_parse_and_map_pci);\n#endif\t/* CONFIG_OF_IRQ */\n\nstatic int pci_parse_request_of_pci_ranges(struct device *dev,\n\t\t\t\t\t   struct pci_host_bridge *bridge)\n{\n\tint err, res_valid = 0;\n\tresource_size_t iobase;\n\tstruct resource_entry *win, *tmp;\n\n\tINIT_LIST_HEAD(&bridge->windows);\n\tINIT_LIST_HEAD(&bridge->dma_ranges);\n\n\terr = devm_of_pci_get_host_bridge_resources(dev, 0, 0xff, &bridge->windows,\n\t\t\t\t\t\t    &bridge->dma_ranges, &iobase);\n\tif (err)\n\t\treturn err;\n\n\terr = devm_request_pci_bus_resources(dev, &bridge->windows);\n\tif (err)\n\t\treturn err;\n\n\tresource_list_for_each_entry_safe(win, tmp, &bridge->windows) {\n\t\tstruct resource *res = win->res;\n\n\t\tswitch (resource_type(res)) {\n\t\tcase IORESOURCE_IO:\n\t\t\terr = devm_pci_remap_iospace(dev, res, iobase);\n\t\t\tif (err) {\n\t\t\t\tdev_warn(dev, \"error %d: failed to map resource %pR\\n\",\n\t\t\t\t\t err, res);\n\t\t\t\tresource_list_destroy_entry(win);\n\t\t\t}\n\t\t\tbreak;\n\t\tcase IORESOURCE_MEM:\n\t\t\tres_valid |= !(res->flags & IORESOURCE_PREFETCH);\n\n\t\t\tif (!(res->flags & IORESOURCE_PREFETCH))\n\t\t\t\tif (upper_32_bits(resource_size(res)))\n\t\t\t\t\tdev_warn(dev, \"Memory resource size exceeds max for 32 bits\\n\");\n\n\t\t\tbreak;\n\t\t}\n\t}\n\n\tif (!res_valid)\n\t\tdev_warn(dev, \"non-prefetchable memory resource required\\n\");\n\n\treturn 0;\n}\n\nint devm_of_pci_bridge_init(struct device *dev, struct pci_host_bridge *bridge)\n{\n\tif (!dev->of_node)\n\t\treturn 0;\n\n\tbridge->swizzle_irq = pci_common_swizzle;\n\tbridge->map_irq = of_irq_parse_and_map_pci;\n\n\treturn pci_parse_request_of_pci_ranges(dev, bridge);\n}\n\n#ifdef CONFIG_PCI_DYNAMIC_OF_NODES\n\nvoid of_pci_remove_node(struct pci_dev *pdev)\n{\n\tstruct device_node *np;\n\n\tnp = pci_device_to_OF_node(pdev);\n\tif (!np || !of_node_check_flag(np, OF_DYNAMIC))\n\t\treturn;\n\tpdev->dev.of_node = NULL;\n\n\tof_changeset_revert(np->data);\n\tof_changeset_destroy(np->data);\n\tof_node_put(np);\n}\n\nvoid of_pci_make_dev_node(struct pci_dev *pdev)\n{\n\tstruct device_node *ppnode, *np = NULL;\n\tconst char *pci_type;\n\tstruct of_changeset *cset;\n\tconst char *name;\n\tint ret;\n\n\t/*\n\t * If there is already a device tree node linked to this device,\n\t * return immediately.\n\t */\n\tif (pci_device_to_OF_node(pdev))\n\t\treturn;\n\n\t/* Check if there is device tree node for parent device */\n\tif (!pdev->bus->self)\n\t\tppnode = pdev->bus->dev.of_node;\n\telse\n\t\tppnode = pdev->bus->self->dev.of_node;\n\tif (!ppnode)\n\t\treturn;\n\n\tif (pci_is_bridge(pdev))\n\t\tpci_type = \"pci\";\n\telse\n\t\tpci_type = \"dev\";\n\n\tname = kasprintf(GFP_KERNEL, \"%s@%x,%x\", pci_type,\n\t\t\t PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));\n\tif (!name)\n\t\treturn;\n\n\tcset = kmalloc(sizeof(*cset), GFP_KERNEL);\n\tif (!cset)\n\t\tgoto out_free_name;\n\tof_changeset_init(cset);\n\n\tnp = of_changeset_create_node(cset, ppnode, name);\n\tif (!np)\n\t\tgoto out_destroy_cset;\n\n\tret = of_pci_add_properties(pdev, cset, np);\n\tif (ret)\n\t\tgoto out_free_node;\n\n\tret = of_changeset_apply(cset);\n\tif (ret)\n\t\tgoto out_free_node;\n\n\tnp->data = cset;\n\tpdev->dev.of_node = np;\n\tkfree(name);\n\n\treturn;\n\nout_free_node:\n\tof_node_put(np);\nout_destroy_cset:\n\tof_changeset_destroy(cset);\n\tkfree(cset);\nout_free_name:\n\tkfree(name);\n}\n#endif\n\n#endif /* CONFIG_PCI */\n\n/**\n * of_pci_get_max_link_speed - Find the maximum link speed of the given device node.\n * @node: Device tree node with the maximum link speed information.\n *\n * This function will try to find the limitation of link speed by finding\n * a property called \"max-link-speed\" of the given device node.\n *\n * Return:\n * * > 0\t- On success, a maximum link speed.\n * * -EINVAL\t- Invalid \"max-link-speed\" property value, or failure to access\n *\t\t  the property of the device tree node.\n *\n * Returns the associated max link speed from DT, or a negative value if the\n * required property is not found or is invalid.\n */\nint of_pci_get_max_link_speed(struct device_node *node)\n{\n\tu32 max_link_speed;\n\n\tif (of_property_read_u32(node, \"max-link-speed\", &max_link_speed) ||\n\t    max_link_speed == 0 || max_link_speed > 4)\n\t\treturn -EINVAL;\n\n\treturn max_link_speed;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_max_link_speed);\n\n/**\n * of_pci_get_slot_power_limit - Parses the \"slot-power-limit-milliwatt\"\n *\t\t\t\t property.\n *\n * @node: device tree node with the slot power limit information\n * @slot_power_limit_value: pointer where the value should be stored in PCIe\n *\t\t\t    Slot Capabilities Register format\n * @slot_power_limit_scale: pointer where the scale should be stored in PCIe\n *\t\t\t    Slot Capabilities Register format\n *\n * Returns the slot power limit in milliwatts and if @slot_power_limit_value\n * and @slot_power_limit_scale pointers are non-NULL, fills in the value and\n * scale in format used by PCIe Slot Capabilities Register.\n *\n * If the property is not found or is invalid, returns 0.\n */\nu32 of_pci_get_slot_power_limit(struct device_node *node,\n\t\t\t\tu8 *slot_power_limit_value,\n\t\t\t\tu8 *slot_power_limit_scale)\n{\n\tu32 slot_power_limit_mw;\n\tu8 value, scale;\n\n\tif (of_property_read_u32(node, \"slot-power-limit-milliwatt\",\n\t\t\t\t &slot_power_limit_mw))\n\t\tslot_power_limit_mw = 0;\n\n\t/* Calculate Slot Power Limit Value and Slot Power Limit Scale */\n\tif (slot_power_limit_mw == 0) {\n\t\tvalue = 0x00;\n\t\tscale = 0;\n\t} else if (slot_power_limit_mw <= 255) {\n\t\tvalue = slot_power_limit_mw;\n\t\tscale = 3;\n\t} else if (slot_power_limit_mw <= 255*10) {\n\t\tvalue = slot_power_limit_mw / 10;\n\t\tscale = 2;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 10 * 10;\n\t} else if (slot_power_limit_mw <= 255*100) {\n\t\tvalue = slot_power_limit_mw / 100;\n\t\tscale = 1;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 100 * 100;\n\t} else if (slot_power_limit_mw <= 239*1000) {\n\t\tvalue = slot_power_limit_mw / 1000;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = slot_power_limit_mw / 1000 * 1000;\n\t} else if (slot_power_limit_mw < 250*1000) {\n\t\tvalue = 0xEF;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = 239*1000;\n\t} else if (slot_power_limit_mw <= 600*1000) {\n\t\tvalue = 0xF0 + (slot_power_limit_mw / 1000 - 250) / 25;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = slot_power_limit_mw / (1000*25) * (1000*25);\n\t} else {\n\t\tvalue = 0xFE;\n\t\tscale = 0;\n\t\tslot_power_limit_mw = 600*1000;\n\t}\n\n\tif (slot_power_limit_value)\n\t\t*slot_power_limit_value = value;\n\n\tif (slot_power_limit_scale)\n\t\t*slot_power_limit_scale = scale;\n\n\treturn slot_power_limit_mw;\n}\nEXPORT_SYMBOL_GPL(of_pci_get_slot_power_limit);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "8e9453017fc723a7d05c956ac936787d5f8c30758fdec08d6fdf59917d4669ac",
+      "scope": "whole-file",
+      "line_count": 828,
+      "authoring_source": "course/file_units/pci_of_mapping.py",
+      "sections": [
+        "구성 경계와 노드 연결",
+        "버스 노드와 참조 해제",
+        "MSI 도메인 선택",
+        "장치·기능 번호와 자식 검색",
+        "버스 범위와 도메인 번호",
+        "probe-only 정책의 fallback",
+        "호스트 자원 시작과 조기 반환",
+        "출력 방향 ranges 처리",
+        "입력 방향 dma-ranges와 정리 범위",
+        "INTx 파싱의 우선 경로",
+        "PCI 계층을 오르는 INTx 탐색",
+        "IRQ 오류 변환과 콜백 형태",
+        "자원 요청과 안전한 목록 삭제",
+        "동적 노드 생성",
+        "동적 노드 제거의 실제 본문",
+        "링크 속도 범위",
+        "슬롯 전력의 낮은 구간",
+        "슬롯 전력의 높은 구간과 출력",
+        "전체 범위와 검증 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/of.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치 트리는 컴퓨터 부품과 연결을 적은 안내도예요. 이 파일은 PCI 장치가 그 안내도의 어느 칸에 해당하는지 찾고 주소·신호·전력 정보를 읽어요.",
+    "meaning": "주석이 설명하는 목적과 실제 코드가 허용하는 값은 따로 확인해야 해요. 노드 참조, 주소 목록, IRQ 오류와 전력 단위가 각각 다른 규칙으로 움직여요.",
+    "exercise": "도메인 값 0x10001, probe-only 값 0, 전력 245000mW를 넣었을 때 실제 분기와 결과를 하나씩 따라가 보세요."
+  },
+  "goal": "주석이 설명하는 목적과 실제 코드가 허용하는 값은 따로 확인해야 해요. 노드 참조, 주소 목록, IRQ 오류와 전력 단위가 각각 다른 규칙으로 움직여요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "도메인 값 0x10001, probe-only 값 0, 전력 245000mW를 넣었을 때 실제 분기와 결과를 하나씩 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "4fcb6e73288806fc0f5615d62a671739527af94a415e488f9a0cd0ccf7f20631",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 10,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

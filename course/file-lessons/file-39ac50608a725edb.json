@@ -5,117 +5,143 @@
   "area": "메모리 풀 · NUMA · 나머지 분배 · 정렬 · 참조 카운트 · 실패 정리",
   "track": "files",
   "kind": "kernel",
-  "intro": "객체 분배, vmalloc/kmalloc 선택, 초기화 실패와 drop/fini/free의 전체 흐름을 학습합니다.",
+  "intro": "CPU별 객체 분배와 연속 저장, 부분 초기화 실패 정리, 참조 감소 후 반환 상태를 이해합니다.",
   "guide": [
-    "객체 하나의 논리적 폐기와 그 객체가 속한 메모리 블록의 실제 해제는 다른 시점입니다.",
-    "rethook node가 아직 실행 중일 때 pool 해제가 늦어지는 이유를 이해합니다."
+    "객체들은 CPU별 큰 저장 블록 안에 이어 놓입니다. drop은 객체마다 kfree하는 함수가 아닙니다.",
+    "-EAGAIN은 이번 참조 감소가 안 됐다는 뜻이 아닙니다. 다른 참조가 남아 있다는 뜻이므로 같은 참조를 또 drop하면 안 됩니다.",
+    "초기화 오류 경로의 메모리 정리와 사용자 release 전달 함수의 호출 경로를 구별합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "GPL-2.0과 include 뒤 CPU slot 초기화 두 함수, slot 정리 함수, 공개 init/free/drop/fini가 있습니다. 공개 네 함수는 GPL 심볼로 export됩니다. pop/push의 원자적 링 연산은 objpool.h에 있으며 이 파일은 저장소 준비와 수명 종료를 담당합니다."
+      "title": "준비와 종료를 맡는 파일",
+      "text": "라이선스와 관련 헤더 뒤 CPU 슬롯 초기화 두 함수, 슬롯 정리, 공개 init·free·drop·fini가 있습니다. 공개 네 함수는 GPL 심볼입니다. 원형 줄의 pop·push 원자 연산은 헤더에 있으며 여기서는 저장소 준비와 수명 종료를 맡습니다."
     },
     {
-      "title": "입력 검사와 정렬",
-      "text": "init은 객체 수와 크기가 각각 양수이며 최대 상수 이하인지 검사하고 아니면 EINVAL입니다. 크기는 sizeof(long)에 맞춰 올림합니다. capacity는 총 nr_objs를 2의 거듭제곱으로 올린 값이며 0이면 EINVAL입니다. CPU별 초기 객체 수가 아니라 전체 객체 수를 기준으로 각 ring capacity를 정합니다. pool 포인터 자체의 NULL 검사는 이 함수에 없습니다."
+      "title": "입력과 용량 계산",
+      "text": "객체 수·크기가 양수이고 각 최대값 이하인지 검사해 아니면 -EINVAL입니다. 크기는 sizeof(long)에 맞춰 올리고 용량은 전체 객체 수를 2의 거듭제곱으로 올립니다. 용량 0도 거절합니다. 각 CPU의 초기 객체 수가 아니라 전체 수로 모든 슬롯의 원형 배열 용량을 정합니다. pool 주소 자체의 NULL 검사는 없습니다."
     },
     {
-      "title": "관리 구조 초기화",
-      "text": "입력 검사가 끝나면 pool 전체를 0으로 지우고 가능한 CPU 수, 정렬 크기, capacity, context와 release를 저장합니다. 저장 gfp에서는 __GFP_ZERO를 제거합니다. cpu_slots 메모리는 kzalloc으로 마련하는데 실제 식은 nr_cpu_ids*sizeof(struct objpool_slot)입니다. 포인터 배열이므로 당연히 sizeof(pointer)를 사용한다고 고쳐 읽으면 원본과 달라집니다."
+      "title": "관리 자료와 주소 배열 할당",
+      "text": "검사 뒤 pool을 0으로 하고 CPU 수·정렬 크기·용량·추가 자료·정리 함수를 저장합니다. gfp에서 자동 0 채움 __GFP_ZERO를 뺍니다. cpu_slots는 kzalloc으로 할당하지만 실제 크기 식은 nr_cpu_ids*sizeof(struct objpool_slot)입니다. 주소 배열이니 sizeof(pointer)겠지 하고 원문을 바꿔 읽지 않습니다."
     },
     {
-      "title": "CPU별 객체 분배",
-      "text": "nr_cpu_ids 범위를 돌되 cpu_possible이 아닌 ID는 건너뜁니다. 각 가능한 CPU에는 총 객체 수/가능 CPU 수의 몫을 주고, 앞의 나머지 개 CPU에 한 개씩 더 줍니다. 예를 들어 10개를 가능한 CPU 3개에 나누면 4,3,3입니다. 객체보다 CPU가 많으면 초기 객체 0개인 slot도 생길 수 있습니다. cpu_count와 실제 CPU ID를 구분합니다."
+      "title": "몫과 나머지로 나누기",
+      "text": "CPU ID 범위를 돌며 불가능한 CPU는 건너뜁니다. 전체 수를 가능한 CPU 수로 나눈 몫을 주고 앞의 나머지 개 CPU에 한 개씩 더 줍니다. 10개와 3개 CPU라면 4·3·3입니다. CPU가 더 많으면 초기 객체 0개인 슬롯도 있으며 처리한 CPU 개수와 실제 ID는 구별합니다."
     },
     {
-      "title": "하나의 연속 할당 블록",
-      "text": "slot 크기는 구조체와 capacity개 entry 포인터의 크기에 정렬 객체 크기*지역 객체 수를 더합니다. 객체 영역은 &slot->entries[capacity]에서 시작합니다. 따라서 pointer ring 뒤에 실제 객체들이 연속으로 배치됩니다. 크기는 int 지역 변수로 저장되며 이 파일이 모든 곱셈·합산을 별도 overflow 검사 API로 보호한다고 설명하지 않습니다."
+      "title": "포인터 배열 뒤의 실제 객체",
+      "text": "슬롯 크기는 구조체와 capacity개 주소 칸에 정렬 객체 크기*해당 CPU 객체 수를 더합니다. 실제 객체는 entries[capacity] 뒤부터 연속 배치합니다. 계산 결과는 int 변수에 저장하며 모든 곱셈·덧셈을 별도 범위 초과 검사 도구로 보호한다고 설명하지 않습니다."
     },
     {
-      "title": "할당 방식과 NUMA",
-      "text": "gfp mask 조건이 GFP_ATOMIC 경로에 해당하지 않으면 __vmalloc_node를 먼저 시도하고 실패하거나 건너뛰면 kmalloc_node를 사용합니다. 둘 다 cpu_to_node(i)를 전달합니다. 주석은 vmalloc의 page 단위 비용과 slab 압력 감소를 논의합니다. 성공 뒤 전체 slot과 객체 영역을 memset으로 0으로 채우고 cpu_slots[i]에 저장하므로 __GFP_ZERO 제거가 객체를 미초기화 상태로 둔다는 뜻은 아닙니다."
+      "title": "지역 메모리와 두 할당 방법",
+      "text": "gfp 조건이 GFP_ATOMIC 경로가 아니면 __vmalloc_node를 먼저 시도하고 실패하거나 생략되면 kmalloc_node를 씁니다. 둘 다 CPU의 NUMA 노드, 곧 가까운 메모리 영역을 지정합니다. 주석은 페이지 단위 vmalloc 비용과 slab 압력 감소를 설명합니다. 성공 뒤 전체 블록을 memset으로 0으로 하므로 __GFP_ZERO를 뺐어도 객체를 방치하지 않습니다."
     },
     {
-      "title": "각 객체 초기화와 등록",
-      "text": "slot mask는 capacity-1입니다. 각 객체에서 objinit이 있으면 먼저 호출하고 오류면 즉시 그 값을 반환합니다. 성공한 객체만 entries[tail&mask]에 넣고 객체 포인터를 obj_size만큼 옮기며 tail, last, pool->nr_objs를 증가시킵니다. 초기화 도중이므로 이 단계는 외부 동시 소비를 위한 일반 push 함수를 호출하지 않습니다."
+      "title": "객체별 처음 준비",
+      "text": "mask=capacity-1로 하고 각 객체의 objinit이 있으면 먼저 부릅니다. 오류면 즉시 그 결과를 반환합니다. 성공한 객체만 entries[tail&mask]에 넣고 주소를 obj_size만큼 옮기며 tail·last·전체 nr_objs를 늘립니다. 아직 초기화 중이라 일반 동시성 push를 호출하는 방식은 아닙니다."
     },
     {
-      "title": "실패 정리의 범위",
-      "text": "CPU slot 준비가 실패하면 init은 마련된 모든 cpu_slots 항목을 kvfree하고 배열을 kfree하는 정리 함수를 호출한 뒤 rc를 반환합니다. 이 정리 경로에는 개별 객체 destructor나 사용자 release callback 호출이 없습니다. objinit이 외부 자원을 따로 얻었다면 자동으로 모두 되돌려 준다고 가정하면 안 됩니다. 성공하면 ref를 실제 등록 객체 수+1로 설정합니다."
+      "title": "실패 때 정리하는 범위",
+      "text": "슬롯 준비 실패 시 이미 마련한 슬롯들을 kvfree하고 주소 배열을 kfree한 뒤 오류를 반환합니다. 개별 객체 소멸자나 사용자 release 함수는 이 실패 경로에서 부르지 않습니다. objinit이 외부 자원을 따로 얻었다면 자동으로 모두 회수된다고 생각하면 안 됩니다. 성공하면 참조 수는 실제 등록 객체 수+1입니다."
     },
     {
-      "title": "강제 free와 반복 호출 전제",
-      "text": "objpool_free는 cpu_slots가 NULL이면 반환하고 아니면 모든 slot과 배열을 해제한 뒤 release가 있으면 호출합니다. release의 int 반환값은 사용하지 않습니다. 이 함수는 ref를 검사해 대여 객체가 끝날 때까지 기다리지 않으며, 정리 helper도 cpu_slots를 NULL로 다시 쓰지 않습니다. 같은 pool에 임의로 free를 반복해도 안전하다는 계약으로 읽으면 안 됩니다."
+      "title": "강제 free의 조건",
+      "text": "cpu_slots가 NULL이면 돌아가고 아니면 모든 슬롯과 배열을 놓고 release가 있으면 부릅니다. release의 int 결과는 사용하지 않습니다. ref를 검사하거나 빌린 객체 완료를 기다리지 않으며 정리 뒤 cpu_slots를 NULL로 바꾸지도 않습니다. 같은 풀을 임의로 거듭 free해도 안전하다는 계약은 아닙니다."
     },
     {
-      "title": "Drop은 개별 kfree가 아님",
-      "text": "drop은 obj나 pool이 NULL이면 EINVAL입니다. 그 뒤 obj 주소의 소속을 검사하거나 역참조하지 않고 pool ref를 하나 감소시킵니다. 마지막 참조이면 free 후 0, 아니면 EAGAIN입니다. 따라서 EAGAIN이어도 해당 참조는 이미 감소했으므로 같은 객체를 재시도 명목으로 다시 drop하면 안 됩니다. 객체들이 slot 블록 안에 있으므로 개별 object kfree를 하지 않습니다."
+      "title": "drop은 참조 하나 포기",
+      "text": "obj나 pool이 NULL이면 -EINVAL입니다. 이후 객체 주소의 소속을 검사하거나 객체 내용을 읽지 않고 pool ref를 줄입니다. 마지막이면 free 후 0, 아니면 -EAGAIN입니다. -EAGAIN이어도 참조는 이미 줄었으므로 재시도라며 같은 객체를 또 drop하면 안 됩니다. 개별 객체를 kfree하지 않습니다."
     },
     {
-      "title": "Fini의 추가 참조",
-      "text": "fini는 count=1로 시작하여 pop으로 남은 free 객체를 모두 빼낼 때마다 count를 늘립니다. 그 합을 ref에서 빼고 0이면 free합니다. 처음의 1은 pool 자체의 추가 참조입니다. 대여 객체 참조가 남으면 실제 저장소는 이후 마지막 drop까지 유지됩니다. 진행 중 push가 없어야 한다는 호출자 계약은 헤더에 설명되어 있으며 여기서 RCU 대기를 직접 실행하지 않습니다."
+      "title": "fini의 추가 1",
+      "text": "count=1로 시작해 보관함에서 남은 객체를 pop할 때마다 늘립니다. 합계를 ref에서 빼 0이면 전체를 해제합니다. 처음 1은 풀 자체의 참조입니다. 빌린 객체가 남으면 마지막 drop까지 저장소를 유지합니다. 진행 중 push가 없어야 한다는 조건은 사용자가 보장하며 여기서 RCU 대기를 직접 하지 않습니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "균등 분배와 나머지 처리, 링 크기와 실제 객체 수의 차이, 저장 블록과 논리 객체 수명의 분리, 부분 초기화 정리, 참조를 소비한 뒤 반환하는 상태 코드의 의미를 학습합니다. 전체 소스 대조는 최대 입력의 모든 산술이나 실제 NUMA·메모리 부족 상황을 실행 검증한 것은 아닙니다."
+      "title": "논리 객체와 저장 블록",
+      "text": "균등 분배의 나머지, 원형 배열 용량과 실제 객체 수, 블록과 개별 참조 수명, 부분 초기화 정리와 이미 소비한 참조의 결과값을 배웁니다. 최대 입력 산술이나 실제 NUMA·메모리 부족을 모두 실행 시험한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "객체 10개와 가능한 CPU 3개이면 초기 분배는?",
+      "prompt": "객체 10개와 가능한 CPU 3개면 어떻게 나누나요?",
       "options": [
+        "4개·3개·3개입니다.",
+        "각 CPU에 10개씩 만듭니다."
+      ],
+      "answer": 0,
+      "explanation": "몫 3에 나머지 1을 앞 CPU에 더합니다. 원형 배열 용량과 초기 객체 분배는 다릅니다.",
+      "original_prompt": "객체 10개와 가능한 CPU 3개이면 초기 분배는?",
+      "original_options": [
         "4개, 3개, 3개이다",
         "각 CPU에 10개씩 만든다"
       ],
-      "answer": 0,
-      "explanation": "몫은 3이고 나머지 1을 앞의 가능한 CPU에 더합니다. ring capacity와 초기 객체 분배는 별개입니다."
+      "original_explanation": "몫은 3이고 나머지 1을 앞의 가능한 CPU에 더합니다. ring capacity와 초기 객체 분배는 별개입니다."
     },
     {
-      "prompt": "drop이 EAGAIN을 반환하면 같은 객체로 다시 호출해야 하는가?",
+      "prompt": "drop이 -EAGAIN이면 같은 객체로 재시도해야 하나요?",
       "options": [
+        "네. 아직 아무 처리도 하지 않았다는 뜻입니다.",
+        "아니요. 그 호출에서 참조는 이미 줄었습니다."
+      ],
+      "answer": 1,
+      "explanation": "다른 참조가 남았다는 상태입니다. 같은 참조를 두 번 포기하면 수명이 잘못 계산됩니다.",
+      "original_prompt": "drop이 EAGAIN을 반환하면 같은 객체로 다시 호출해야 하는가?",
+      "original_options": [
         "그렇다. 아직 아무 처리도 하지 않았다는 뜻이다",
         "아니다. 그 호출에서 참조는 이미 감소했다"
       ],
-      "answer": 1,
-      "explanation": "EAGAIN은 다른 참조가 남았다는 상태입니다. 같은 논리 참조를 두 번 포기하면 수명 계산을 망가뜨릴 수 있습니다."
+      "original_explanation": "EAGAIN은 다른 참조가 남았다는 상태입니다. 같은 논리 참조를 두 번 포기하면 수명 계산을 망가뜨릴 수 있습니다."
     },
     {
-      "prompt": "objinit 실패 정리는 사용자 release callback도 호출하는가?",
+      "prompt": "objinit 실패 정리는 release 함수도 부르나요?",
       "options": [
+        "아니요. 슬롯과 주소 배열 메모리만 정리합니다.",
+        "네. 모든 전달 함수를 거꾸로 실행합니다."
+      ],
+      "answer": 0,
+      "explanation": "오류 경로는 슬롯 정리 함수를 직접 부릅니다. release는 objpool_free에서 호출합니다.",
+      "original_prompt": "objinit 실패 정리는 사용자 release callback도 호출하는가?",
+      "original_options": [
         "아니다. 이 경로는 slot과 배열 메모리 정리만 한다",
         "그렇다. 모든 callback을 자동 역순 실행한다"
       ],
-      "answer": 0,
-      "explanation": "init의 오류 경로는 objpool_fini_percpu_slots를 직접 호출합니다. 사용자 release는 objpool_free에서 호출합니다."
+      "original_explanation": "init의 오류 경로는 objpool_fini_percpu_slots를 직접 호출합니다. 사용자 release는 objpool_free에서 호출합니다."
     },
     {
-      "prompt": "성공 초기화의 참조 수에 추가되는 1은 무엇인가?",
+      "prompt": "초기 참조 수의 추가 1은 무엇인가요?",
       "options": [
+        "존재하지 않는 가짜 객체입니다.",
+        "풀 자체가 유지하는 참조입니다."
+      ],
+      "answer": 1,
+      "explanation": "fini의 count=1과 대응합니다. 객체 참조와 풀 유지 참조를 함께 셉니다.",
+      "original_prompt": "성공 초기화의 참조 수에 추가되는 1은 무엇인가?",
+      "original_options": [
         "존재하지 않는 가짜 객체 하나이다",
         "pool 자체가 유지하는 추가 참조이다"
       ],
-      "answer": 1,
-      "explanation": "fini의 count=1이 대응합니다. 객체 참조와 pool 유지 참조를 함께 관리하여 대여 객체의 지연 종료를 지원합니다."
+      "original_explanation": "fini의 count=1이 대응합니다. 객체 참조와 pool 유지 참조를 함께 관리하여 대여 객체의 지연 종료를 지원합니다."
     },
     {
-      "prompt": "objpool_drop이 개별 객체 주소의 소속을 검증하는가?",
+      "prompt": "drop이 객체가 이 풀 소속인지 확인하나요?",
       "options": [
+        "아니요. NULL 검사 뒤 풀 참조를 줄입니다.",
+        "네. 모든 CPU 슬롯 범위를 뒤집니다."
+      ],
+      "answer": 0,
+      "explanation": "주소 검색이나 obj 역참조가 없습니다. 맞는 객체를 단 한 번 drop하는 것은 사용자 책임입니다.",
+      "original_prompt": "objpool_drop이 개별 객체 주소의 소속을 검증하는가?",
+      "original_options": [
         "아니다. NULL 검사 뒤 pool 참조를 감소시킨다",
         "그렇다. 모든 CPU slot 범위를 순회해 확인한다"
       ],
-      "answer": 0,
-      "explanation": "본문에는 주소 검색이나 obj 역참조가 없습니다. 유효한 객체와 단 한 번의 drop은 호출자가 지켜야 합니다."
+      "original_explanation": "본문에는 주소 검색이나 obj 역참조가 없습니다. 유효한 객체와 단 한 번의 drop은 호출자가 지켜야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "객체 10개를 CPU 3개에 나누고, 성공 초기 ref=11에서 fini가 남은 객체와 추가 1을 빼는 이유를 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n#include <linux/objpool.h>\n#include <linux/slab.h>\n#include <linux/vmalloc.h>\n#include <linux/atomic.h>\n#include <linux/irqflags.h>\n#include <linux/cpumask.h>\n#include <linux/log2.h>\n\n/*\n * objpool: ring-array based lockless MPMC/FIFO queues\n *\n * Copyright: wuqiang.matt@bytedance.com,mhiramat@kernel.org\n */\n\n/* initialize percpu objpool_slot */\nstatic int\nobjpool_init_percpu_slot(struct objpool_head *pool,\n\t\t\t struct objpool_slot *slot,\n\t\t\t int nodes, void *context,\n\t\t\t objpool_init_obj_cb objinit)\n{\n\tvoid *obj = (void *)&slot->entries[pool->capacity];\n\tint i;\n\n\t/* initialize elements of percpu objpool_slot */\n\tslot->mask = pool->capacity - 1;\n\n\tfor (i = 0; i < nodes; i++) {\n\t\tif (objinit) {\n\t\t\tint rc = objinit(obj, context);\n\t\t\tif (rc)\n\t\t\t\treturn rc;\n\t\t}\n\t\tslot->entries[slot->tail & slot->mask] = obj;\n\t\tobj = obj + pool->obj_size;\n\t\tslot->tail++;\n\t\tslot->last = slot->tail;\n\t\tpool->nr_objs++;\n\t}\n\n\treturn 0;\n}\n\n/* allocate and initialize percpu slots */\nstatic int\nobjpool_init_percpu_slots(struct objpool_head *pool, int nr_objs,\n\t\t\t  void *context, objpool_init_obj_cb objinit)\n{\n\tint i, cpu_count = 0;\n\n\tfor (i = 0; i < nr_cpu_ids; i++) {\n\n\t\tstruct objpool_slot *slot;\n\t\tint nodes, size, rc;\n\n\t\t/* skip the cpu node which could never be present */\n\t\tif (!cpu_possible(i))\n\t\t\tcontinue;\n\n\t\t/* compute how many objects to be allocated with this slot */\n\t\tnodes = nr_objs / pool->nr_possible_cpus;\n\t\tif (cpu_count < (nr_objs % pool->nr_possible_cpus))\n\t\t\tnodes++;\n\t\tcpu_count++;\n\n\t\tsize = struct_size(slot, entries, pool->capacity) +\n\t\t\tpool->obj_size * nodes;\n\n\t\t/*\n\t\t * here we allocate percpu-slot & objs together in a single\n\t\t * allocation to make it more compact, taking advantage of\n\t\t * warm caches and TLB hits. in default vmalloc is used to\n\t\t * reduce the pressure of kernel slab system. as we know,\n\t\t * mimimal size of vmalloc is one page since vmalloc would\n\t\t * always align the requested size to page size.\n\t\t * but if vmalloc fails or it is not available (e.g. GFP_ATOMIC)\n\t\t * allocate percpu slot with kmalloc.\n\t\t */\n\t\tslot = NULL;\n\n\t\tif ((pool->gfp & (GFP_ATOMIC | GFP_KERNEL)) != GFP_ATOMIC)\n\t\t\tslot = __vmalloc_node(size, sizeof(void *), pool->gfp,\n\t\t\t\tcpu_to_node(i), __builtin_return_address(0));\n\n\t\tif (!slot) {\n\t\t\tslot = kmalloc_node(size, pool->gfp, cpu_to_node(i));\n\t\t\tif (!slot)\n\t\t\t\treturn -ENOMEM;\n\t\t}\n\t\tmemset(slot, 0, size);\n\t\tpool->cpu_slots[i] = slot;\n\n\t\t/* initialize the objpool_slot of cpu node i */\n\t\trc = objpool_init_percpu_slot(pool, slot, nodes, context, objinit);\n\t\tif (rc)\n\t\t\treturn rc;\n\t}\n\n\treturn 0;\n}\n\n/* cleanup all percpu slots of the object pool */\nstatic void objpool_fini_percpu_slots(struct objpool_head *pool)\n{\n\tint i;\n\n\tif (!pool->cpu_slots)\n\t\treturn;\n\n\tfor (i = 0; i < nr_cpu_ids; i++)\n\t\tkvfree(pool->cpu_slots[i]);\n\tkfree(pool->cpu_slots);\n}\n\n/* initialize object pool and pre-allocate objects */\nint objpool_init(struct objpool_head *pool, int nr_objs, int object_size,\n\t\tgfp_t gfp, void *context, objpool_init_obj_cb objinit,\n\t\tobjpool_fini_cb release)\n{\n\tint rc, capacity, slot_size;\n\n\t/* check input parameters */\n\tif (nr_objs <= 0 || nr_objs > OBJPOOL_NR_OBJECT_MAX ||\n\t    object_size <= 0 || object_size > OBJPOOL_OBJECT_SIZE_MAX)\n\t\treturn -EINVAL;\n\n\t/* align up to unsigned long size */\n\tobject_size = ALIGN(object_size, sizeof(long));\n\n\t/* calculate capacity of percpu objpool_slot */\n\tcapacity = roundup_pow_of_two(nr_objs);\n\tif (!capacity)\n\t\treturn -EINVAL;\n\n\t/* initialize objpool pool */\n\tmemset(pool, 0, sizeof(struct objpool_head));\n\tpool->nr_possible_cpus = num_possible_cpus();\n\tpool->obj_size = object_size;\n\tpool->capacity = capacity;\n\tpool->gfp = gfp & ~__GFP_ZERO;\n\tpool->context = context;\n\tpool->release = release;\n\tslot_size = nr_cpu_ids * sizeof(struct objpool_slot);\n\tpool->cpu_slots = kzalloc(slot_size, pool->gfp);\n\tif (!pool->cpu_slots)\n\t\treturn -ENOMEM;\n\n\t/* initialize per-cpu slots */\n\trc = objpool_init_percpu_slots(pool, nr_objs, context, objinit);\n\tif (rc)\n\t\tobjpool_fini_percpu_slots(pool);\n\telse\n\t\trefcount_set(&pool->ref, pool->nr_objs + 1);\n\n\treturn rc;\n}\nEXPORT_SYMBOL_GPL(objpool_init);\n\n/* release whole objpool forcely */\nvoid objpool_free(struct objpool_head *pool)\n{\n\tif (!pool->cpu_slots)\n\t\treturn;\n\n\t/* release percpu slots */\n\tobjpool_fini_percpu_slots(pool);\n\n\t/* call user's cleanup callback if provided */\n\tif (pool->release)\n\t\tpool->release(pool, pool->context);\n}\nEXPORT_SYMBOL_GPL(objpool_free);\n\n/* drop the allocated object, rather reclaim it to objpool */\nint objpool_drop(void *obj, struct objpool_head *pool)\n{\n\tif (!obj || !pool)\n\t\treturn -EINVAL;\n\n\tif (refcount_dec_and_test(&pool->ref)) {\n\t\tobjpool_free(pool);\n\t\treturn 0;\n\t}\n\n\treturn -EAGAIN;\n}\nEXPORT_SYMBOL_GPL(objpool_drop);\n\n/* drop unused objects and defref objpool for releasing */\nvoid objpool_fini(struct objpool_head *pool)\n{\n\tint count = 1; /* extra ref for objpool itself */\n\n\t/* drop all remained objects from objpool */\n\twhile (objpool_pop(pool))\n\t\tcount++;\n\n\tif (refcount_sub_and_test(count, &pool->ref))\n\t\tobjpool_free(pool);\n}\nEXPORT_SYMBOL_GPL(objpool_fini);\n",
   "source_review": {
@@ -145,5 +171,182 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/objpool.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-39ac50608a725edb",
+    "path": "lib/objpool.c",
+    "title": "Objpool 구현: CPU별 연속 배치와 마지막 참조 해제",
+    "area": "메모리 풀 · NUMA · 나머지 분배 · 정렬 · 참조 카운트 · 실패 정리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "객체 분배, vmalloc/kmalloc 선택, 초기화 실패와 drop/fini/free의 전체 흐름을 학습합니다.",
+    "guide": [
+      "객체 하나의 논리적 폐기와 그 객체가 속한 메모리 블록의 실제 해제는 다른 시점입니다.",
+      "rethook node가 아직 실행 중일 때 pool 해제가 늦어지는 이유를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "GPL-2.0과 include 뒤 CPU slot 초기화 두 함수, slot 정리 함수, 공개 init/free/drop/fini가 있습니다. 공개 네 함수는 GPL 심볼로 export됩니다. pop/push의 원자적 링 연산은 objpool.h에 있으며 이 파일은 저장소 준비와 수명 종료를 담당합니다."
+      },
+      {
+        "title": "입력 검사와 정렬",
+        "text": "init은 객체 수와 크기가 각각 양수이며 최대 상수 이하인지 검사하고 아니면 EINVAL입니다. 크기는 sizeof(long)에 맞춰 올림합니다. capacity는 총 nr_objs를 2의 거듭제곱으로 올린 값이며 0이면 EINVAL입니다. CPU별 초기 객체 수가 아니라 전체 객체 수를 기준으로 각 ring capacity를 정합니다. pool 포인터 자체의 NULL 검사는 이 함수에 없습니다."
+      },
+      {
+        "title": "관리 구조 초기화",
+        "text": "입력 검사가 끝나면 pool 전체를 0으로 지우고 가능한 CPU 수, 정렬 크기, capacity, context와 release를 저장합니다. 저장 gfp에서는 __GFP_ZERO를 제거합니다. cpu_slots 메모리는 kzalloc으로 마련하는데 실제 식은 nr_cpu_ids*sizeof(struct objpool_slot)입니다. 포인터 배열이므로 당연히 sizeof(pointer)를 사용한다고 고쳐 읽으면 원본과 달라집니다."
+      },
+      {
+        "title": "CPU별 객체 분배",
+        "text": "nr_cpu_ids 범위를 돌되 cpu_possible이 아닌 ID는 건너뜁니다. 각 가능한 CPU에는 총 객체 수/가능 CPU 수의 몫을 주고, 앞의 나머지 개 CPU에 한 개씩 더 줍니다. 예를 들어 10개를 가능한 CPU 3개에 나누면 4,3,3입니다. 객체보다 CPU가 많으면 초기 객체 0개인 slot도 생길 수 있습니다. cpu_count와 실제 CPU ID를 구분합니다."
+      },
+      {
+        "title": "하나의 연속 할당 블록",
+        "text": "slot 크기는 구조체와 capacity개 entry 포인터의 크기에 정렬 객체 크기*지역 객체 수를 더합니다. 객체 영역은 &slot->entries[capacity]에서 시작합니다. 따라서 pointer ring 뒤에 실제 객체들이 연속으로 배치됩니다. 크기는 int 지역 변수로 저장되며 이 파일이 모든 곱셈·합산을 별도 overflow 검사 API로 보호한다고 설명하지 않습니다."
+      },
+      {
+        "title": "할당 방식과 NUMA",
+        "text": "gfp mask 조건이 GFP_ATOMIC 경로에 해당하지 않으면 __vmalloc_node를 먼저 시도하고 실패하거나 건너뛰면 kmalloc_node를 사용합니다. 둘 다 cpu_to_node(i)를 전달합니다. 주석은 vmalloc의 page 단위 비용과 slab 압력 감소를 논의합니다. 성공 뒤 전체 slot과 객체 영역을 memset으로 0으로 채우고 cpu_slots[i]에 저장하므로 __GFP_ZERO 제거가 객체를 미초기화 상태로 둔다는 뜻은 아닙니다."
+      },
+      {
+        "title": "각 객체 초기화와 등록",
+        "text": "slot mask는 capacity-1입니다. 각 객체에서 objinit이 있으면 먼저 호출하고 오류면 즉시 그 값을 반환합니다. 성공한 객체만 entries[tail&mask]에 넣고 객체 포인터를 obj_size만큼 옮기며 tail, last, pool->nr_objs를 증가시킵니다. 초기화 도중이므로 이 단계는 외부 동시 소비를 위한 일반 push 함수를 호출하지 않습니다."
+      },
+      {
+        "title": "실패 정리의 범위",
+        "text": "CPU slot 준비가 실패하면 init은 마련된 모든 cpu_slots 항목을 kvfree하고 배열을 kfree하는 정리 함수를 호출한 뒤 rc를 반환합니다. 이 정리 경로에는 개별 객체 destructor나 사용자 release callback 호출이 없습니다. objinit이 외부 자원을 따로 얻었다면 자동으로 모두 되돌려 준다고 가정하면 안 됩니다. 성공하면 ref를 실제 등록 객체 수+1로 설정합니다."
+      },
+      {
+        "title": "강제 free와 반복 호출 전제",
+        "text": "objpool_free는 cpu_slots가 NULL이면 반환하고 아니면 모든 slot과 배열을 해제한 뒤 release가 있으면 호출합니다. release의 int 반환값은 사용하지 않습니다. 이 함수는 ref를 검사해 대여 객체가 끝날 때까지 기다리지 않으며, 정리 helper도 cpu_slots를 NULL로 다시 쓰지 않습니다. 같은 pool에 임의로 free를 반복해도 안전하다는 계약으로 읽으면 안 됩니다."
+      },
+      {
+        "title": "Drop은 개별 kfree가 아님",
+        "text": "drop은 obj나 pool이 NULL이면 EINVAL입니다. 그 뒤 obj 주소의 소속을 검사하거나 역참조하지 않고 pool ref를 하나 감소시킵니다. 마지막 참조이면 free 후 0, 아니면 EAGAIN입니다. 따라서 EAGAIN이어도 해당 참조는 이미 감소했으므로 같은 객체를 재시도 명목으로 다시 drop하면 안 됩니다. 객체들이 slot 블록 안에 있으므로 개별 object kfree를 하지 않습니다."
+      },
+      {
+        "title": "Fini의 추가 참조",
+        "text": "fini는 count=1로 시작하여 pop으로 남은 free 객체를 모두 빼낼 때마다 count를 늘립니다. 그 합을 ref에서 빼고 0이면 free합니다. 처음의 1은 pool 자체의 추가 참조입니다. 대여 객체 참조가 남으면 실제 저장소는 이후 마지막 drop까지 유지됩니다. 진행 중 push가 없어야 한다는 호출자 계약은 헤더에 설명되어 있으며 여기서 RCU 대기를 직접 실행하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "균등 분배와 나머지 처리, 링 크기와 실제 객체 수의 차이, 저장 블록과 논리 객체 수명의 분리, 부분 초기화 정리, 참조를 소비한 뒤 반환하는 상태 코드의 의미를 학습합니다. 전체 소스 대조는 최대 입력의 모든 산술이나 실제 NUMA·메모리 부족 상황을 실행 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "객체 10개와 가능한 CPU 3개이면 초기 분배는?",
+        "options": [
+          "4개, 3개, 3개이다",
+          "각 CPU에 10개씩 만든다"
+        ],
+        "answer": 0,
+        "explanation": "몫은 3이고 나머지 1을 앞의 가능한 CPU에 더합니다. ring capacity와 초기 객체 분배는 별개입니다."
+      },
+      {
+        "prompt": "drop이 EAGAIN을 반환하면 같은 객체로 다시 호출해야 하는가?",
+        "options": [
+          "그렇다. 아직 아무 처리도 하지 않았다는 뜻이다",
+          "아니다. 그 호출에서 참조는 이미 감소했다"
+        ],
+        "answer": 1,
+        "explanation": "EAGAIN은 다른 참조가 남았다는 상태입니다. 같은 논리 참조를 두 번 포기하면 수명 계산을 망가뜨릴 수 있습니다."
+      },
+      {
+        "prompt": "objinit 실패 정리는 사용자 release callback도 호출하는가?",
+        "options": [
+          "아니다. 이 경로는 slot과 배열 메모리 정리만 한다",
+          "그렇다. 모든 callback을 자동 역순 실행한다"
+        ],
+        "answer": 0,
+        "explanation": "init의 오류 경로는 objpool_fini_percpu_slots를 직접 호출합니다. 사용자 release는 objpool_free에서 호출합니다."
+      },
+      {
+        "prompt": "성공 초기화의 참조 수에 추가되는 1은 무엇인가?",
+        "options": [
+          "존재하지 않는 가짜 객체 하나이다",
+          "pool 자체가 유지하는 추가 참조이다"
+        ],
+        "answer": 1,
+        "explanation": "fini의 count=1이 대응합니다. 객체 참조와 pool 유지 참조를 함께 관리하여 대여 객체의 지연 종료를 지원합니다."
+      },
+      {
+        "prompt": "objpool_drop이 개별 객체 주소의 소속을 검증하는가?",
+        "options": [
+          "아니다. NULL 검사 뒤 pool 참조를 감소시킨다",
+          "그렇다. 모든 CPU slot 범위를 순회해 확인한다"
+        ],
+        "answer": 0,
+        "explanation": "본문에는 주소 검색이나 obj 역참조가 없습니다. 유효한 객체와 단 한 번의 drop은 호출자가 지켜야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n#include <linux/objpool.h>\n#include <linux/slab.h>\n#include <linux/vmalloc.h>\n#include <linux/atomic.h>\n#include <linux/irqflags.h>\n#include <linux/cpumask.h>\n#include <linux/log2.h>\n\n/*\n * objpool: ring-array based lockless MPMC/FIFO queues\n *\n * Copyright: wuqiang.matt@bytedance.com,mhiramat@kernel.org\n */\n\n/* initialize percpu objpool_slot */\nstatic int\nobjpool_init_percpu_slot(struct objpool_head *pool,\n\t\t\t struct objpool_slot *slot,\n\t\t\t int nodes, void *context,\n\t\t\t objpool_init_obj_cb objinit)\n{\n\tvoid *obj = (void *)&slot->entries[pool->capacity];\n\tint i;\n\n\t/* initialize elements of percpu objpool_slot */\n\tslot->mask = pool->capacity - 1;\n\n\tfor (i = 0; i < nodes; i++) {\n\t\tif (objinit) {\n\t\t\tint rc = objinit(obj, context);\n\t\t\tif (rc)\n\t\t\t\treturn rc;\n\t\t}\n\t\tslot->entries[slot->tail & slot->mask] = obj;\n\t\tobj = obj + pool->obj_size;\n\t\tslot->tail++;\n\t\tslot->last = slot->tail;\n\t\tpool->nr_objs++;\n\t}\n\n\treturn 0;\n}\n\n/* allocate and initialize percpu slots */\nstatic int\nobjpool_init_percpu_slots(struct objpool_head *pool, int nr_objs,\n\t\t\t  void *context, objpool_init_obj_cb objinit)\n{\n\tint i, cpu_count = 0;\n\n\tfor (i = 0; i < nr_cpu_ids; i++) {\n\n\t\tstruct objpool_slot *slot;\n\t\tint nodes, size, rc;\n\n\t\t/* skip the cpu node which could never be present */\n\t\tif (!cpu_possible(i))\n\t\t\tcontinue;\n\n\t\t/* compute how many objects to be allocated with this slot */\n\t\tnodes = nr_objs / pool->nr_possible_cpus;\n\t\tif (cpu_count < (nr_objs % pool->nr_possible_cpus))\n\t\t\tnodes++;\n\t\tcpu_count++;\n\n\t\tsize = struct_size(slot, entries, pool->capacity) +\n\t\t\tpool->obj_size * nodes;\n\n\t\t/*\n\t\t * here we allocate percpu-slot & objs together in a single\n\t\t * allocation to make it more compact, taking advantage of\n\t\t * warm caches and TLB hits. in default vmalloc is used to\n\t\t * reduce the pressure of kernel slab system. as we know,\n\t\t * mimimal size of vmalloc is one page since vmalloc would\n\t\t * always align the requested size to page size.\n\t\t * but if vmalloc fails or it is not available (e.g. GFP_ATOMIC)\n\t\t * allocate percpu slot with kmalloc.\n\t\t */\n\t\tslot = NULL;\n\n\t\tif ((pool->gfp & (GFP_ATOMIC | GFP_KERNEL)) != GFP_ATOMIC)\n\t\t\tslot = __vmalloc_node(size, sizeof(void *), pool->gfp,\n\t\t\t\tcpu_to_node(i), __builtin_return_address(0));\n\n\t\tif (!slot) {\n\t\t\tslot = kmalloc_node(size, pool->gfp, cpu_to_node(i));\n\t\t\tif (!slot)\n\t\t\t\treturn -ENOMEM;\n\t\t}\n\t\tmemset(slot, 0, size);\n\t\tpool->cpu_slots[i] = slot;\n\n\t\t/* initialize the objpool_slot of cpu node i */\n\t\trc = objpool_init_percpu_slot(pool, slot, nodes, context, objinit);\n\t\tif (rc)\n\t\t\treturn rc;\n\t}\n\n\treturn 0;\n}\n\n/* cleanup all percpu slots of the object pool */\nstatic void objpool_fini_percpu_slots(struct objpool_head *pool)\n{\n\tint i;\n\n\tif (!pool->cpu_slots)\n\t\treturn;\n\n\tfor (i = 0; i < nr_cpu_ids; i++)\n\t\tkvfree(pool->cpu_slots[i]);\n\tkfree(pool->cpu_slots);\n}\n\n/* initialize object pool and pre-allocate objects */\nint objpool_init(struct objpool_head *pool, int nr_objs, int object_size,\n\t\tgfp_t gfp, void *context, objpool_init_obj_cb objinit,\n\t\tobjpool_fini_cb release)\n{\n\tint rc, capacity, slot_size;\n\n\t/* check input parameters */\n\tif (nr_objs <= 0 || nr_objs > OBJPOOL_NR_OBJECT_MAX ||\n\t    object_size <= 0 || object_size > OBJPOOL_OBJECT_SIZE_MAX)\n\t\treturn -EINVAL;\n\n\t/* align up to unsigned long size */\n\tobject_size = ALIGN(object_size, sizeof(long));\n\n\t/* calculate capacity of percpu objpool_slot */\n\tcapacity = roundup_pow_of_two(nr_objs);\n\tif (!capacity)\n\t\treturn -EINVAL;\n\n\t/* initialize objpool pool */\n\tmemset(pool, 0, sizeof(struct objpool_head));\n\tpool->nr_possible_cpus = num_possible_cpus();\n\tpool->obj_size = object_size;\n\tpool->capacity = capacity;\n\tpool->gfp = gfp & ~__GFP_ZERO;\n\tpool->context = context;\n\tpool->release = release;\n\tslot_size = nr_cpu_ids * sizeof(struct objpool_slot);\n\tpool->cpu_slots = kzalloc(slot_size, pool->gfp);\n\tif (!pool->cpu_slots)\n\t\treturn -ENOMEM;\n\n\t/* initialize per-cpu slots */\n\trc = objpool_init_percpu_slots(pool, nr_objs, context, objinit);\n\tif (rc)\n\t\tobjpool_fini_percpu_slots(pool);\n\telse\n\t\trefcount_set(&pool->ref, pool->nr_objs + 1);\n\n\treturn rc;\n}\nEXPORT_SYMBOL_GPL(objpool_init);\n\n/* release whole objpool forcely */\nvoid objpool_free(struct objpool_head *pool)\n{\n\tif (!pool->cpu_slots)\n\t\treturn;\n\n\t/* release percpu slots */\n\tobjpool_fini_percpu_slots(pool);\n\n\t/* call user's cleanup callback if provided */\n\tif (pool->release)\n\t\tpool->release(pool, pool->context);\n}\nEXPORT_SYMBOL_GPL(objpool_free);\n\n/* drop the allocated object, rather reclaim it to objpool */\nint objpool_drop(void *obj, struct objpool_head *pool)\n{\n\tif (!obj || !pool)\n\t\treturn -EINVAL;\n\n\tif (refcount_dec_and_test(&pool->ref)) {\n\t\tobjpool_free(pool);\n\t\treturn 0;\n\t}\n\n\treturn -EAGAIN;\n}\nEXPORT_SYMBOL_GPL(objpool_drop);\n\n/* drop unused objects and defref objpool for releasing */\nvoid objpool_fini(struct objpool_head *pool)\n{\n\tint count = 1; /* extra ref for objpool itself */\n\n\t/* drop all remained objects from objpool */\n\twhile (objpool_pop(pool))\n\t\tcount++;\n\n\tif (refcount_sub_and_test(count, &pool->ref))\n\t\tobjpool_free(pool);\n}\nEXPORT_SYMBOL_GPL(objpool_fini);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "6bd32b412cc1c0ba24eaac975abd713ec9a7edcf6c0e30ba6f7dbb078b8cca95",
+      "scope": "whole-file",
+      "line_count": 203,
+      "authoring_source": "course/file_units/object_pool_lifecycle.py",
+      "sections": [
+        "전체 파일",
+        "입력 검사와 정렬",
+        "관리 구조 초기화",
+        "CPU별 객체 분배",
+        "하나의 연속 할당 블록",
+        "할당 방식과 NUMA",
+        "각 객체 초기화와 등록",
+        "실패 정리의 범위",
+        "강제 free와 반복 호출 전제",
+        "Drop은 개별 kfree가 아님",
+        "Fini의 추가 참조",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/objpool.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공구 하나를 더는 안 쓰겠다고 신고하는 때와 공구함 전체를 버리는 때는 다릅니다. 이 구현은 남은 참조를 세어 마지막 사용자가 끝난 뒤 저장 블록을 정리합니다.",
+    "meaning": "CPU별 객체 분배와 연속 저장, 부분 초기화 실패 정리, 참조 감소 후 반환 상태를 이해합니다.",
+    "exercise": "객체 10개를 CPU 3개에 나누고, 성공 초기 ref=11에서 fini가 남은 객체와 추가 1을 빼는 이유를 설명해 보세요."
+  },
+  "goal": "CPU별 객체 분배와 연속 저장, 부분 초기화 실패 정리, 참조 감소 후 반환 상태를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "객체 10개를 CPU 3개에 나누고, 성공 초기 ref=11에서 fini가 남은 객체와 추가 1을 빼는 이유를 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "6d36ff8584d6a6c7c81a385e5284015e29afe6bf3af5d85f69221a49a099d1b9",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

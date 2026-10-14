@@ -5,92 +5,112 @@
   "area": "장치 트리 · 플랫폼 버스 · 테이블 · 자원 수명 · 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "이름·platform_data 보조 테이블,장치 수명 API와 모든 조건부 stub을 분석합니다.",
+  "intro": "이 헤더는 장치 트리에서 플랫폼 장치를 찾고 만드는 함수의 약속을 모아요. 기능을 빌드하지 않은 경우의 반환값도 각각 확인해야 해요.",
   "guide": [
-    "장치 트리 기술과 Linux 내부 장치 이름을 연결하는 보조 정보는 일반적인 속성 조회와 구분됩니다.",
-    "sentinel 배열,지정 초기화,장치 생성과 등록의 분리,조건부 API를 학습합니다."
+    "장치 트리의 한 항목을 노드라고 불러요. 플랫폼 장치는 리눅스가 부품을 관리하는 장치 객체예요.",
+    "auxdata는 노드를 찾을 조건과 찾은 뒤 붙일 이름·데이터 주소를 연결하는 보조 표예요. 일반적인 노드 속성 읽기와는 달라요.",
+    "stub은 기능을 빌드하지 않았을 때 대신 들어가는 짧은 함수예요. 아무 작업을 하지 않는 것과 성공을 반환하는 것은 구분해야 해요."
   ],
   "deep_dive": [
     {
-      "title": "헤더와 자료구조",
-      "text": "GPL-2.0+ guard 안에서 mod_devicetable.h를 포함하고 device,device_node,of_device_id,platform_device를 전방 선언합니다. of_dev_auxdata는 char *compatible,resource_size_t phys_addr,char *name,void *platform_data로 이루어집니다. 노드 매칭에 쓸 compatible과 레지스터 시작 주소,매칭 뒤 부여할 이름과 데이터 포인터를 분리한 구조입니다."
+      "title": "자료를 담는 구조체와 선언",
+      "text": "헤더를 중복해서 읽지 않도록 guard가 있고 mod_devicetable.h를 포함해요. device와 device_node 등의 전방 선언은 이런 타입이 있다는 사실을 미리 알려 줘요. of_dev_auxdata는 compatible 문자열과 레지스터 시작 주소로 노드를 찾고, name과 platform_data 주소로 찾은 뒤 줄 정보를 저장해요. 찾는 조건과 부여할 정보가 분리돼 있어요."
     },
     {
-      "title": "Auxdata 문서 계약",
-      "text": "문서는 of_platform_populate 호출자가 장치 이름을 바꾸고 platform_data를 설정할 수 있다고 설명하며 테이블은 빈 항목으로 끝내라고 요구합니다. 일부 Linux 기반 구조가 장치 이름으로 대상을 찾지만 그런 이름은 DT에 기록되지 않는 상황을 연결합니다. DT 전환 시 최후 수단으로 고려하고 보통 드라이버는 익명 platform_data보다 노드에서 데이터를 얻으라는 지침도 있습니다."
+      "title": "보조 표의 끝과 사용 목적",
+      "text": "auxdata 표는 빈 항목으로 끝나야 해요. 예를 들어 여러 이름표 뒤에 내용 없는 칸을 두어 끝을 알리는 방식이에요. 리눅스가 특정 이름으로 부품을 찾지만 그 이름이 장치 트리에 없을 때 연결해 줄 수 있어요. 다만 문서는 장치 트리로 전환할 때 최후 수단으로 고려하라고 해요. 보통 드라이버는 이름 없는 platform_data보다 노드의 속성에서 정보를 얻는 편을 따르도록 안내해요."
     },
     {
-      "title": "초기화 매크로와 기본 테이블",
-      "text": "OF_DEV_AUXDATA는 네 인수를 구조체의 네 필드에 designated initializer로 넣는 매크로입니다. 메모리를 할당하거나 문자열을 복제하지 않습니다. of_default_bus_match_table은 const of_device_id 배열의 extern 선언이며 실제 항목들은 여기서 정의하지 않습니다."
+      "title": "매크로가 하는 일",
+      "text": "OF_DEV_AUXDATA는 네 인자를 네 필드에 넣는 초기화 표현식을 만들어요. .name처럼 필드 이름을 적어 값을 지정하는 방식을 지정 초기화라고 해요. 메모리를 새로 얻거나 문자열을 복사하는 함수가 아니에요. of_default_bus_match_table은 다른 곳에 정의된 기본 매칭 표를 알리는 extern 선언이며 표의 실제 항목은 이 파일에 없어요."
     },
     {
-      "title": "장치 수명 기본 API",
-      "text": "of_device_alloc은 node,bus_id,parent를 받아 platform_device *를 반환합니다. add와 register는 int,unregister는 void입니다. 이 네 선언과 of_platform_bus_probe의 root,matches,parent 선언은 여기서 CONFIG_OF_ADDRESS 분기 밖에 있습니다. 선언만으로 alloc·add·register의 세부 호출 관계나 실패 회수를 동일하게 취급하면 안 됩니다."
+      "title": "장치의 생성과 등록 약속",
+      "text": "of_device_alloc은 노드, 장치 이름, 부모를 받아 장치 포인터를 반환하는 선언이에요. add와 register는 정수 결과, unregister는 결과값 없는 void예요. 이 선언들과 of_platform_bus_probe는 CONFIG_OF_ADDRESS 조건 밖에 있어요. 선언만 보고 alloc이 add를 언제 부르는지, 실패했을 때 무엇을 해제하는지까지 같다고 추측하지 마세요."
     },
     {
-      "title": "노드로 장치 찾기",
-      "text": "of_find_device_by_node는 CONFIG_OF일 때 외부 선언이고 비활성일 때 NULL 반환 stub입니다. 이 분기는 아래의 CONFIG_OF_ADDRESS와 다릅니다. 검색 API의 활성 여부와 플랫폼 장치 생성 helper의 활성 조건을 하나로 합쳐 설명할 수 없습니다."
+      "title": "노드에 대응하는 장치 찾기",
+      "text": "of_find_device_by_node는 CONFIG_OF가 있으면 실제 함수를 외부 선언해요. 없으면 NULL을 반환하는 대체 함수예요. NULL은 여기서 찾은 장치 포인터가 없다는 값이에요. 이 조건은 아래 생성 함수의 CONFIG_OF_ADDRESS와 다르므로 하나의 스위치로 뭉뚱그리면 안 돼요."
     },
     {
-      "title": "주소 지원 구성의 생성·구성",
-      "text": "CONFIG_OF_ADDRESS이면 create와 destroy를 선언합니다. create는 node,bus_id,parent, destroy는 device와 void *data를 받습니다. populate는 root,matches,auxdata lookup,parent를 받고 default_populate는 matches 인수 없이 나머지를 받습니다. depopulate는 parent를 받는 void 함수입니다. 헤더에는 실제 재귀 생성이나 순회 본문이 없습니다."
+      "title": "주소 기능이 있을 때",
+      "text": "CONFIG_OF_ADDRESS가 있으면 create와 destroy 등 실제 함수의 사용법을 선언해요. create는 노드·이름·부모를, destroy는 장치와 추가 데이터 주소를 받아요. populate는 시작 노드, 매칭 표, auxdata 표, 부모를 받아 장치 구성을 요청해요. default_populate는 매칭 표 인자가 없고 depopulate는 부모를 받아 정리를 요청해요. 실제 재귀 순회, 즉 자식으로 내려가며 반복하는 본문은 이 헤더에 없어요."
     },
     {
-      "title": "Managed API와 비지원 반환",
-      "text": "devm_of_platform_populate와 depopulate는 device를 받으며 각각 int,void입니다. 주소 지원 비활성 stub에서 create는 NULL,destroy·populate·default_populate·devm_populate는 -ENODEV입니다. 두 depopulate는 빈 함수입니다. 비지원 시 모두 성공하는 no-op이라고 일반화하면 안 됩니다."
+      "title": "자동 정리와 기능이 없을 때",
+      "text": "devm 함수의 관리는 장치 수명에 맞춘 자원 정리를 뜻해요. populate는 정수 결과를, depopulate는 void를 사용해요. 주소 기능을 빌드하지 않으면 create는 NULL을, destroy와 populate 및 default_populate와 devm_populate는 -ENODEV를 반환해요. -ENODEV는 사용할 장치나 지원이 없음을 알리는 오류예요. 일반·devm depopulate는 아무 작업도 하지 않는 빈 함수예요. 모든 대체 함수가 성공한다고 말하면 틀려요."
     },
     {
-      "title": "전체 범위와 한계",
-      "text": "구조체와 문서,초기화 매크로,기본 테이블,기본 수명 선언,검색 분기,주소 지원 분기와 대체 함수 전체를 확인했습니다. auxdata 포인터의 저장소 수명과 활성 구현의 참조 소유권은 호출부·구현에서 확인해야 합니다. 실제 플랫폼 장치 생성이나 구성별 컴파일 실험은 실행하지 않았습니다."
+      "title": "이 파일에서 확인한 범위",
+      "text": "구조체, 설명 주석, 매크로, 기본 표 선언, 장치 수명 함수, 두 설정 분기와 대체 함수를 모두 읽었어요. 저장한 포인터가 가리키는 메모리를 언제까지 유지해야 하는지와 실제 함수의 참조 소유권은 구현·호출부를 더 확인해야 해요. 이 수업의 설명은 원문 읽기이며 실제 장치 생성이나 설정별 컴파일 실험을 했다는 뜻은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "Auxdata 테이블의 종료 표시는?",
+      "prompt": "auxdata 표의 마지막은 무엇으로 표시하나요?",
       "options": [
+        "내용이 없는 빈 항목으로 표시해요.",
+        "반드시 별도의 전역 길이 변수를 둬요."
+      ],
+      "answer": 0,
+      "explanation": "원문 주석이 빈 항목으로 표를 끝내도록 요구해요.",
+      "original_prompt": "Auxdata 테이블의 종료 표시는?",
+      "original_options": [
         "빈 항목",
         "반드시 별도 전역 길이 변수"
       ],
-      "answer": 0,
-      "explanation": "문서가 empty entry 종료를 명시합니다. 테이블 레이아웃과 이를 사용하는 순회 계약을 연결합니다."
+      "original_explanation": "문서가 empty entry 종료를 명시합니다. 테이블 레이아웃과 이를 사용하는 순회 계약을 연결합니다."
     },
     {
-      "prompt": "OF_DEV_AUXDATA가 이름 문자열을 복제하는가?",
+      "prompt": "OF_DEV_AUXDATA가 이름 문자열을 새로 복사하나요?",
       "options": [
+        "네. 항상 kstrdup을 불러 복사해요.",
+        "아니요. 필드에 값을 넣는 초기화 표현식만 만들어요."
+      ],
+      "answer": 1,
+      "explanation": "포인터 값을 적는 것과 그 주소의 문자열을 새로 복제하는 일은 달라요.",
+      "original_prompt": "OF_DEV_AUXDATA가 이름 문자열을 복제하는가?",
+      "original_options": [
         "그렇다. 내부에서 항상 kstrdup한다",
         "아니다. 필드 초기화 표현식만 만든다"
       ],
-      "answer": 1,
-      "explanation": "매크로에는 지정 초기화만 있습니다. 포인터 값 저장과 저장소 소유권 이전은 다릅니다."
+      "original_explanation": "매크로에는 지정 초기화만 있습니다. 포인터 값 저장과 저장소 소유권 이전은 다릅니다."
     },
     {
-      "prompt": "노드 검색과 플랫폼 생성의 조건부 설정은 동일한가?",
+      "prompt": "노드 검색과 플랫폼 생성 helper의 설정 조건은 같나요?",
       "options": [
+        "아니요. 검색은 CONFIG_OF, 생성은 CONFIG_OF_ADDRESS 분기예요.",
+        "네. 둘 다 KUNIT 설정만 확인해요."
+      ],
+      "answer": 0,
+      "explanation": "각 #ifdef에 적힌 직접 조건을 따로 읽어야 해요.",
+      "original_prompt": "노드 검색과 플랫폼 생성의 조건부 설정은 동일한가?",
+      "original_options": [
         "아니다. 검색은 OF,생성 helper는 OF_ADDRESS 분기다",
         "그렇다. 둘 다 KUNIT 설정만 본다"
       ],
-      "answer": 0,
-      "explanation": "각 #ifdef를 따로 읽어야 합니다. 상위 Kconfig 관계와 이 헤더의 직접 분기도 구분합니다."
+      "original_explanation": "각 #ifdef를 따로 읽어야 합니다. 상위 Kconfig 관계와 이 헤더의 직접 분기도 구분합니다."
     },
     {
-      "prompt": "OF_ADDRESS 비활성일 때 populate와 depopulate는?",
+      "prompt": "주소 기능이 없으면 populate와 depopulate는 어떻게 되나요?",
       "options": [
+        "둘 다 장치를 성공적으로 만들어요.",
+        "populate는 -ENODEV이고 depopulate는 빈 동작이에요."
+      ],
+      "answer": 1,
+      "explanation": "오류를 반환하는 함수와 아무 작업 없는 void 함수의 차이를 지켜요.",
+      "original_prompt": "OF_ADDRESS 비활성일 때 populate와 depopulate는?",
+      "original_options": [
         "둘 다 성공적으로 장치를 생성한다",
         "populate는 -ENODEV,depopulate는 빈 동작이다"
       ],
-      "answer": 1,
-      "explanation": "작업을 수행하지 않는 것과 성공을 반환하는 것은 같지 않습니다. int와 void API의 stub이 다릅니다."
+      "original_explanation": "작업을 수행하지 않는 것과 성공을 반환하는 것은 같지 않습니다. int와 void API의 stub이 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "CONFIG_OF와 CONFIG_OF_ADDRESS를 두 열로 적고 검색, 생성, 정리 함수가 어떤 값을 돌려주는지 비교해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0+ */\n#ifndef _LINUX_OF_PLATFORM_H\n#define _LINUX_OF_PLATFORM_H\n/*\n *    Copyright (C) 2006 Benjamin Herrenschmidt, IBM Corp.\n *\t\t\t <benh@kernel.crashing.org>\n */\n\n#include <linux/mod_devicetable.h>\n\nstruct device;\nstruct device_node;\nstruct of_device_id;\nstruct platform_device;\n\n/**\n * struct of_dev_auxdata - lookup table entry for device names & platform_data\n * @compatible: compatible value of node to match against node\n * @phys_addr: Start address of registers to match against node\n * @name: Name to assign for matching nodes\n * @platform_data: platform_data to assign for matching nodes\n *\n * This lookup table allows the caller of of_platform_populate() to override\n * the names of devices when creating devices from the device tree.  The table\n * should be terminated with an empty entry.  It also allows the platform_data\n * pointer to be set.\n *\n * The reason for this functionality is that some Linux infrastructure uses\n * the device name to look up a specific device, but the Linux-specific names\n * are not encoded into the device tree, so the kernel needs to provide specific\n * values.\n *\n * Note: Using an auxdata lookup table should be considered a last resort when\n * converting a platform to use the DT.  Normally the automatically generated\n * device name will not matter, and drivers should obtain data from the device\n * node instead of from an anonymous platform_data pointer.\n */\nstruct of_dev_auxdata {\n\tchar *compatible;\n\tresource_size_t phys_addr;\n\tchar *name;\n\tvoid *platform_data;\n};\n\n/* Macro to simplify populating a lookup table */\n#define OF_DEV_AUXDATA(_compat,_phys,_name,_pdata) \\\n\t{ .compatible = _compat, .phys_addr = _phys, .name = _name, \\\n\t  .platform_data = _pdata }\n\nextern const struct of_device_id of_default_bus_match_table[];\n\n/* Platform drivers register/unregister */\nextern struct platform_device *of_device_alloc(struct device_node *np,\n\t\t\t\t\t const char *bus_id,\n\t\t\t\t\t struct device *parent);\n\nextern int of_device_add(struct platform_device *pdev);\nextern int of_device_register(struct platform_device *ofdev);\nextern void of_device_unregister(struct platform_device *ofdev);\n\n#ifdef CONFIG_OF\nextern struct platform_device *of_find_device_by_node(struct device_node *np);\n#else\nstatic inline struct platform_device *of_find_device_by_node(struct device_node *np)\n{\n\treturn NULL;\n}\n#endif\n\nextern int of_platform_bus_probe(struct device_node *root,\n\t\t\t\t const struct of_device_id *matches,\n\t\t\t\t struct device *parent);\n\n#ifdef CONFIG_OF_ADDRESS\n/* Platform devices and busses creation */\nextern struct platform_device *of_platform_device_create(struct device_node *np,\n\t\t\t\t\t\t   const char *bus_id,\n\t\t\t\t\t\t   struct device *parent);\n\nextern int of_platform_device_destroy(struct device *dev, void *data);\n\nextern int of_platform_populate(struct device_node *root,\n\t\t\t\tconst struct of_device_id *matches,\n\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\tstruct device *parent);\nextern int of_platform_default_populate(struct device_node *root,\n\t\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\t\tstruct device *parent);\nextern void of_platform_depopulate(struct device *parent);\n\nextern int devm_of_platform_populate(struct device *dev);\n\nextern void devm_of_platform_depopulate(struct device *dev);\n#else\n/* Platform devices and busses creation */\nstatic inline struct platform_device *of_platform_device_create(struct device_node *np,\n\t\t\t\t\t\t\t\tconst char *bus_id,\n\t\t\t\t\t\t\t\tstruct device *parent)\n{\n\treturn NULL;\n}\nstatic inline int of_platform_device_destroy(struct device *dev, void *data)\n{\n\treturn -ENODEV;\n}\n\nstatic inline int of_platform_populate(struct device_node *root,\n\t\t\t\t\tconst struct of_device_id *matches,\n\t\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\t\tstruct device *parent)\n{\n\treturn -ENODEV;\n}\nstatic inline int of_platform_default_populate(struct device_node *root,\n\t\t\t\t\t       const struct of_dev_auxdata *lookup,\n\t\t\t\t\t       struct device *parent)\n{\n\treturn -ENODEV;\n}\nstatic inline void of_platform_depopulate(struct device *parent) { }\n\nstatic inline int devm_of_platform_populate(struct device *dev)\n{\n\treturn -ENODEV;\n}\n\nstatic inline void devm_of_platform_depopulate(struct device *dev) { }\n#endif\n\n#endif\t/* _LINUX_OF_PLATFORM_H */\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_platform.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-09c48dba33c15be5",
+    "path": "include/linux/of_platform.h",
+    "title": "OF 플랫폼 인터페이스: auxdata와 구성별 장치 생성 계약",
+    "area": "장치 트리 · 플랫폼 버스 · 테이블 · 자원 수명 · 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "이름·platform_data 보조 테이블,장치 수명 API와 모든 조건부 stub을 분석합니다.",
+    "guide": [
+      "장치 트리 기술과 Linux 내부 장치 이름을 연결하는 보조 정보는 일반적인 속성 조회와 구분됩니다.",
+      "sentinel 배열,지정 초기화,장치 생성과 등록의 분리,조건부 API를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더와 자료구조",
+        "text": "GPL-2.0+ guard 안에서 mod_devicetable.h를 포함하고 device,device_node,of_device_id,platform_device를 전방 선언합니다. of_dev_auxdata는 char *compatible,resource_size_t phys_addr,char *name,void *platform_data로 이루어집니다. 노드 매칭에 쓸 compatible과 레지스터 시작 주소,매칭 뒤 부여할 이름과 데이터 포인터를 분리한 구조입니다."
+      },
+      {
+        "title": "Auxdata 문서 계약",
+        "text": "문서는 of_platform_populate 호출자가 장치 이름을 바꾸고 platform_data를 설정할 수 있다고 설명하며 테이블은 빈 항목으로 끝내라고 요구합니다. 일부 Linux 기반 구조가 장치 이름으로 대상을 찾지만 그런 이름은 DT에 기록되지 않는 상황을 연결합니다. DT 전환 시 최후 수단으로 고려하고 보통 드라이버는 익명 platform_data보다 노드에서 데이터를 얻으라는 지침도 있습니다."
+      },
+      {
+        "title": "초기화 매크로와 기본 테이블",
+        "text": "OF_DEV_AUXDATA는 네 인수를 구조체의 네 필드에 designated initializer로 넣는 매크로입니다. 메모리를 할당하거나 문자열을 복제하지 않습니다. of_default_bus_match_table은 const of_device_id 배열의 extern 선언이며 실제 항목들은 여기서 정의하지 않습니다."
+      },
+      {
+        "title": "장치 수명 기본 API",
+        "text": "of_device_alloc은 node,bus_id,parent를 받아 platform_device *를 반환합니다. add와 register는 int,unregister는 void입니다. 이 네 선언과 of_platform_bus_probe의 root,matches,parent 선언은 여기서 CONFIG_OF_ADDRESS 분기 밖에 있습니다. 선언만으로 alloc·add·register의 세부 호출 관계나 실패 회수를 동일하게 취급하면 안 됩니다."
+      },
+      {
+        "title": "노드로 장치 찾기",
+        "text": "of_find_device_by_node는 CONFIG_OF일 때 외부 선언이고 비활성일 때 NULL 반환 stub입니다. 이 분기는 아래의 CONFIG_OF_ADDRESS와 다릅니다. 검색 API의 활성 여부와 플랫폼 장치 생성 helper의 활성 조건을 하나로 합쳐 설명할 수 없습니다."
+      },
+      {
+        "title": "주소 지원 구성의 생성·구성",
+        "text": "CONFIG_OF_ADDRESS이면 create와 destroy를 선언합니다. create는 node,bus_id,parent, destroy는 device와 void *data를 받습니다. populate는 root,matches,auxdata lookup,parent를 받고 default_populate는 matches 인수 없이 나머지를 받습니다. depopulate는 parent를 받는 void 함수입니다. 헤더에는 실제 재귀 생성이나 순회 본문이 없습니다."
+      },
+      {
+        "title": "Managed API와 비지원 반환",
+        "text": "devm_of_platform_populate와 depopulate는 device를 받으며 각각 int,void입니다. 주소 지원 비활성 stub에서 create는 NULL,destroy·populate·default_populate·devm_populate는 -ENODEV입니다. 두 depopulate는 빈 함수입니다. 비지원 시 모두 성공하는 no-op이라고 일반화하면 안 됩니다."
+      },
+      {
+        "title": "전체 범위와 한계",
+        "text": "구조체와 문서,초기화 매크로,기본 테이블,기본 수명 선언,검색 분기,주소 지원 분기와 대체 함수 전체를 확인했습니다. auxdata 포인터의 저장소 수명과 활성 구현의 참조 소유권은 호출부·구현에서 확인해야 합니다. 실제 플랫폼 장치 생성이나 구성별 컴파일 실험은 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "Auxdata 테이블의 종료 표시는?",
+        "options": [
+          "빈 항목",
+          "반드시 별도 전역 길이 변수"
+        ],
+        "answer": 0,
+        "explanation": "문서가 empty entry 종료를 명시합니다. 테이블 레이아웃과 이를 사용하는 순회 계약을 연결합니다."
+      },
+      {
+        "prompt": "OF_DEV_AUXDATA가 이름 문자열을 복제하는가?",
+        "options": [
+          "그렇다. 내부에서 항상 kstrdup한다",
+          "아니다. 필드 초기화 표현식만 만든다"
+        ],
+        "answer": 1,
+        "explanation": "매크로에는 지정 초기화만 있습니다. 포인터 값 저장과 저장소 소유권 이전은 다릅니다."
+      },
+      {
+        "prompt": "노드 검색과 플랫폼 생성의 조건부 설정은 동일한가?",
+        "options": [
+          "아니다. 검색은 OF,생성 helper는 OF_ADDRESS 분기다",
+          "그렇다. 둘 다 KUNIT 설정만 본다"
+        ],
+        "answer": 0,
+        "explanation": "각 #ifdef를 따로 읽어야 합니다. 상위 Kconfig 관계와 이 헤더의 직접 분기도 구분합니다."
+      },
+      {
+        "prompt": "OF_ADDRESS 비활성일 때 populate와 depopulate는?",
+        "options": [
+          "둘 다 성공적으로 장치를 생성한다",
+          "populate는 -ENODEV,depopulate는 빈 동작이다"
+        ],
+        "answer": 1,
+        "explanation": "작업을 수행하지 않는 것과 성공을 반환하는 것은 같지 않습니다. int와 void API의 stub이 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0+ */\n#ifndef _LINUX_OF_PLATFORM_H\n#define _LINUX_OF_PLATFORM_H\n/*\n *    Copyright (C) 2006 Benjamin Herrenschmidt, IBM Corp.\n *\t\t\t <benh@kernel.crashing.org>\n */\n\n#include <linux/mod_devicetable.h>\n\nstruct device;\nstruct device_node;\nstruct of_device_id;\nstruct platform_device;\n\n/**\n * struct of_dev_auxdata - lookup table entry for device names & platform_data\n * @compatible: compatible value of node to match against node\n * @phys_addr: Start address of registers to match against node\n * @name: Name to assign for matching nodes\n * @platform_data: platform_data to assign for matching nodes\n *\n * This lookup table allows the caller of of_platform_populate() to override\n * the names of devices when creating devices from the device tree.  The table\n * should be terminated with an empty entry.  It also allows the platform_data\n * pointer to be set.\n *\n * The reason for this functionality is that some Linux infrastructure uses\n * the device name to look up a specific device, but the Linux-specific names\n * are not encoded into the device tree, so the kernel needs to provide specific\n * values.\n *\n * Note: Using an auxdata lookup table should be considered a last resort when\n * converting a platform to use the DT.  Normally the automatically generated\n * device name will not matter, and drivers should obtain data from the device\n * node instead of from an anonymous platform_data pointer.\n */\nstruct of_dev_auxdata {\n\tchar *compatible;\n\tresource_size_t phys_addr;\n\tchar *name;\n\tvoid *platform_data;\n};\n\n/* Macro to simplify populating a lookup table */\n#define OF_DEV_AUXDATA(_compat,_phys,_name,_pdata) \\\n\t{ .compatible = _compat, .phys_addr = _phys, .name = _name, \\\n\t  .platform_data = _pdata }\n\nextern const struct of_device_id of_default_bus_match_table[];\n\n/* Platform drivers register/unregister */\nextern struct platform_device *of_device_alloc(struct device_node *np,\n\t\t\t\t\t const char *bus_id,\n\t\t\t\t\t struct device *parent);\n\nextern int of_device_add(struct platform_device *pdev);\nextern int of_device_register(struct platform_device *ofdev);\nextern void of_device_unregister(struct platform_device *ofdev);\n\n#ifdef CONFIG_OF\nextern struct platform_device *of_find_device_by_node(struct device_node *np);\n#else\nstatic inline struct platform_device *of_find_device_by_node(struct device_node *np)\n{\n\treturn NULL;\n}\n#endif\n\nextern int of_platform_bus_probe(struct device_node *root,\n\t\t\t\t const struct of_device_id *matches,\n\t\t\t\t struct device *parent);\n\n#ifdef CONFIG_OF_ADDRESS\n/* Platform devices and busses creation */\nextern struct platform_device *of_platform_device_create(struct device_node *np,\n\t\t\t\t\t\t   const char *bus_id,\n\t\t\t\t\t\t   struct device *parent);\n\nextern int of_platform_device_destroy(struct device *dev, void *data);\n\nextern int of_platform_populate(struct device_node *root,\n\t\t\t\tconst struct of_device_id *matches,\n\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\tstruct device *parent);\nextern int of_platform_default_populate(struct device_node *root,\n\t\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\t\tstruct device *parent);\nextern void of_platform_depopulate(struct device *parent);\n\nextern int devm_of_platform_populate(struct device *dev);\n\nextern void devm_of_platform_depopulate(struct device *dev);\n#else\n/* Platform devices and busses creation */\nstatic inline struct platform_device *of_platform_device_create(struct device_node *np,\n\t\t\t\t\t\t\t\tconst char *bus_id,\n\t\t\t\t\t\t\t\tstruct device *parent)\n{\n\treturn NULL;\n}\nstatic inline int of_platform_device_destroy(struct device *dev, void *data)\n{\n\treturn -ENODEV;\n}\n\nstatic inline int of_platform_populate(struct device_node *root,\n\t\t\t\t\tconst struct of_device_id *matches,\n\t\t\t\t\tconst struct of_dev_auxdata *lookup,\n\t\t\t\t\tstruct device *parent)\n{\n\treturn -ENODEV;\n}\nstatic inline int of_platform_default_populate(struct device_node *root,\n\t\t\t\t\t       const struct of_dev_auxdata *lookup,\n\t\t\t\t\t       struct device *parent)\n{\n\treturn -ENODEV;\n}\nstatic inline void of_platform_depopulate(struct device *parent) { }\n\nstatic inline int devm_of_platform_populate(struct device *dev)\n{\n\treturn -ENODEV;\n}\n\nstatic inline void devm_of_platform_depopulate(struct device *dev) { }\n#endif\n\n#endif\t/* _LINUX_OF_PLATFORM_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "805da7601f0c9a36360acbdfde9292c54f52a98c1e5330263fdebda087828692",
+      "scope": "whole-file",
+      "line_count": 130,
+      "authoring_source": "course/file_units/of_platform_interface.py",
+      "sections": [
+        "헤더와 자료구조",
+        "Auxdata 문서 계약",
+        "초기화 매크로와 기본 테이블",
+        "장치 수명 기본 API",
+        "노드로 장치 찾기",
+        "주소 지원 구성의 생성·구성",
+        "Managed API와 비지원 반환",
+        "전체 범위와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_platform.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치 트리는 컴퓨터 안의 부품을 적은 안내도예요. 안내도의 부품 이름과 리눅스가 찾는 이름이 다르면 보조 이름표가 필요할 수 있어요.",
+    "meaning": "이 헤더는 장치 트리에서 플랫폼 장치를 찾고 만드는 함수의 약속을 모아요. 기능을 빌드하지 않은 경우의 반환값도 각각 확인해야 해요.",
+    "exercise": "CONFIG_OF와 CONFIG_OF_ADDRESS를 두 열로 적고 검색, 생성, 정리 함수가 어떤 값을 돌려주는지 비교해 보세요."
+  },
+  "goal": "이 헤더는 장치 트리에서 플랫폼 장치를 찾고 만드는 함수의 약속을 모아요. 기능을 빌드하지 않은 경우의 반환값도 각각 확인해야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "CONFIG_OF와 CONFIG_OF_ADDRESS를 두 열로 적고 검색, 생성, 정리 함수가 어떤 값을 돌려주는지 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "0529b0e39debac6eed2f26da89cfa57572090e23c7fbd0009961931fc8f1cd34",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

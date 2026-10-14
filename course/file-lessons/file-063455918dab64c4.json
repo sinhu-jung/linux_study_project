@@ -5,122 +5,154 @@
   "area": "Rust · FFI · KUnit · macro · 메모리 수명 · assertion",
   "track": "files",
   "kind": "kernel",
-  "intro": "로그 helper 두 개와 assertion 매크로 두 개의 모든 분기·자료형·안전성 주석을 분석합니다.",
+  "intro": "Rust assertion이 KUnit에 실패를 전달하는 경로와 현재 구현의 안전성 한계를 구별합니다.",
   "guide": [
-    "FFI로 테스트 실패를 연결할 때 포인터 수명뿐 아니라 task 문맥과 언어의 스택 정리 규칙도 고려해야 합니다.",
-    "Rust macro, C 문자열, 정적 수명과 Sync, 원본 위치 보정, abort와 Drop의 차이를 학습합니다."
+    "FFI는 서로 다른 언어로 만든 함수끼리 호출하는 연결입니다.",
+    "static은 프로그램 실행 동안 유지되는 자료이며 C 문자열은 끝에 NUL이라는 0 문자가 있습니다.",
+    "Drop과 destructor는 값이 사라질 때 자원을 정리하는 처리입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성과 노출 범위",
-      "text": "GPL-2.0 모듈은 core의 c_void와 fmt를 사용합니다. err와 info는 pub이지만 doc(hidden)이며 생성된 KUnit 코드용이라는 문서가 있습니다. kunit_assert와 kunit_assert_eq는 macro_export 및 doc(hidden)입니다. 문서에서 숨기는 속성이 호출을 보안상 금지하거나 private 접근 제어를 만드는 것은 아닙니다."
+      "text": "이 모듈은 Rust의 c_void와 fmt를 쓰며 err와 info를 공개합니다. 문서에서 숨기는 doc(hidden)은 생성된 시험 코드용이라는 안내이지 private 접근 제한이나 보안 장벽은 아닙니다. 두 assertion 매크로도 밖에서 쓸 수 있게 내보내되 문서에서는 숨깁니다."
     },
     {
       "title": "출력 helper와 PRINTK",
-      "text": "err는 C 문자열의 제어 prefix와 3 레벨, info는 6 레벨을 써 _printk에 %pA 형식과 fmt::Arguments 주소를 c_void 포인터로 전달합니다. C 문자열은 NUL 종료이며 Rust 포맷 인수와 해당 formatter 계약을 맞춥니다. unsafe 호출 블록은 CONFIG_PRINTK일 때만 존재합니다. 설정이 없으면 이 함수 본문에 다른 fallback 출력 경로가 없습니다."
+      "text": "err는 오류 수준 3, info는 정보 수준 6으로 _printk를 호출합니다. %pA는 fmt::Arguments의 주소를 해석하기로 정한 출력 형식이며 문자열은 NUL로 끝납니다. CONFIG_PRINTK일 때만 이 unsafe 출력 코드가 들어가며 설정이 꺼졌을 때 대신 출력하는 다른 경로는 없습니다."
     },
     {
       "title": "Assertion 인수와 성공 경로",
-      "text": "kunit_assert는 name literal,file literal,diff expression,condition expression과 선택적 trailing comma를 받습니다. 이름 붙은 out 블록에서 condition이 true이면 바로 break합니다. 따라서 성공 때는 현재 KUnit 포인터 조회나 실패 메시지 출력이 없습니다. condition은 if 위치에서 평가하고 stringify는 식의 텍스트를 만드는 별도 컴파일 단계입니다."
+      "text": "kunit_assert는 시험 이름, 파일 이름, 줄 번호 차이, 조건식을 받으며 마지막 쉼표도 허용합니다. 조건이 참이면 out 블록을 바로 벗어나므로 시험 포인터를 찾거나 실패 메시지를 만들지 않습니다. 조건 실행과 stringify가 식의 글자를 만드는 컴파일 작업은 서로 다릅니다."
     },
     {
       "title": "원본 위치와 조건 텍스트",
-      "text": "FILE은 c_str!(file), LINE은 core::line!() as i32-diff, CONDITION은 stringify!(condition)을 C 문자열로 바꾼 static입니다. 생성 소스의 줄과 원본 문서 줄 차이를 diff로 보정합니다. diff가 macro 패턴상 expr이라고 임의 런타임 값이 static 초기화에 허용되는 것은 아닙니다. 실제 생성기는 정적으로 계산할 수 있는 anchor 표현을 제공합니다."
+      "text": "FILE은 C 문자열, LINE은 생성 코드의 줄 번호에서 diff를 뺀 값, CONDITION은 조건식 글자를 담은 C 문자열입니다. 예를 들어 생성 과정에서 20줄이 늘었다면 그 차이를 보정해 원래 문서 위치를 가리킵니다. diff가 식 문법이라고 아무 실행 중 값이나 정적 초기화에 쓸 수 있는 것은 아닙니다."
     },
     {
       "title": "현재 task 문맥 없음",
-      "text": "실패하면 kunit_get_current_test를 FFI로 호출합니다. NULL이면 테스트 이름과 원본 위치, 기대 조건, KUnit에 실패를 보고하지 못했다는 세 메시지를 err로 출력하고 블록을 벗어납니다. 이 분기에는 __kunit_abort가 없습니다. 예제가 만든 다른 task나 잘못된 비테스트 호출일 수 있으며 원래 테스트 상태가 자동으로 실패하는 보장은 없습니다. PRINTK까지 꺼져 있으면 이 err 호출들의 실제 printk도 없습니다."
+      "text": "조건이 거짓이면 현재 태스크의 KUnit 시험을 찾습니다. NULL이면 시험 이름·위치, 기대 조건, 실패를 KUnit에 보고할 수 없다는 세 메시지를 시도하고 블록을 끝냅니다. 이 경로는 abort하지 않습니다. 새로 만든 다른 태스크의 실패가 부모 시험 결과까지 자동으로 실패시킨다고 보장하지 않으며 PRINTK가 꺼지면 실제 출력도 없습니다."
     },
     {
       "title": "정적 C 자료와 transparent wrapper",
-      "text": "문맥이 있으면 bindings의 kunit_loc와 kunit_unary_assert를 각각 Location,UnaryAssert #[repr(transparent)] wrapper로 다룹니다. 각 wrapper에 unsafe impl Sync가 있습니다. 안전성 주석은 정적 인스턴스의 포인터가 불변 C 문자열을 가리킨다는 구체적인 근거를 듭니다. raw pointer를 가진 모든 구조체가 일반적으로 Sync라고 자동 보장되는 것은 아닙니다."
+      "text": "유효한 시험이 있으면 C의 위치·조건 구조체를 transparent wrapper로 감쌉니다. 이 표시는 내부 자료와 맞는 표현을 유지합니다. Sync를 unsafe로 구현한 근거는 여기의 정적 포인터가 바뀌지 않는 C 문자열을 가리킨다는 점입니다. 모든 날포인터 구조체가 여러 스레드에 안전하다는 뜻은 아닙니다."
     },
     {
       "title": "LOCATION과 ASSERTION 초기화",
-      "text": "LOCATION은 FILE의 char 포인터와 LINE을 저장합니다. ASSERTION은 빈 공통 kunit_assert, 조건 문자열 포인터, expected_true=true를 저장합니다. 이 static들이 FFI 호출 중과 그 후에도 유효한 주소를 제공합니다. 로컬 임시 문자열의 버퍼를 C에 넘기는 패턴이 아닙니다."
+      "text": "LOCATION은 파일 주소와 줄 번호를, ASSERTION은 공통 assertion 자료와 조건 문자열 주소 및 기대값 true를 담습니다. 둘 다 static이므로 C 호출 도중이나 그 뒤에도 주소가 유효합니다. 금방 사라질 임시 문자열 주소를 전달하는 방식과 다릅니다."
     },
     {
       "title": "실패 보고 FFI",
-      "text": "__kunit_do_failed_assertion에 현재 test,LOCATION 내부 주소,KUNIT_ASSERTION 종류,ASSERTION의 공통 assert 주소,Some(kunit_unary_assert_format),NULL format 포인터를 전달합니다. addr_of!로 내부 주소를 얻습니다. 주석은 test pointer 유효성, NUL 종료 문자열, 정적 수명, 올바른 callback과 허용된 NULL format을 설명합니다. 사용자 포맷 문자열을 무검사로 실행하는 임의 호출이 아닙니다."
+      "text": "실패 보고 함수에는 현재 시험, 위치, assertion 종류, 조건 자료, 올바른 출력 함수와 NULL 형식 문자열을 전달합니다. addr_of!는 내부 자료의 주소를 얻습니다. 유효한 시험 포인터, NUL 종료, 정적 수명과 맞는 콜백이라는 조건을 함께 지켜야 하는 호출입니다."
     },
     {
       "title": "중단과 명시된 안전성 한계",
-      "text": "실패 보고 뒤 __kunit_abort를 호출합니다. 원본 안전성 주석은 thread 중단 시 destructor를 실행하지 않는 문제와 extern C 경계를 강제 외부 unwind처럼 넘는 UB 문제를 명시합니다. 따라서 core assert의 panic을 쓰지 않는다는 사실만으로 완전히 안전한 Rust unwind라고 설명하면 안 됩니다. 주석은 stack pinning도 주의하고 KUnit의 비production 테스트 문맥에서 현재 구현을 수용하는 배경을 밝힙니다. 이 자료는 그 한계를 없다고 숨기지 않습니다."
+      "text": "보고 뒤 __kunit_abort로 시험 스레드를 멈춥니다. 원본 주석은 정리 함수가 실행되지 않는 문제와 extern C 호출 경계를 강제로 되감는 동작의 정의되지 않은 동작 위험을 밝힙니다. panic을 쓰지 않는다고 정상적인 Rust 스택 정리가 되는 것은 아닙니다. 스택에 고정한 값도 주의 대상이며 실제 서비스용이 아닌 KUnit 시험 환경이라는 배경에서 현재 방식을 설명합니다."
     },
     {
       "title": "동등성 assertion의 구현 범위",
-      "text": "kunit_assert_eq는 left==right 식을 kunit_assert로 전달합니다. 주석은 KUnit binary assertion이 몇몇 자료형만 지원해 지금은 expression assertion으로 연결한다고 설명합니다. 따라서 모든 값의 Debug 내용을 별도로 출력하는 core assert_eq와 같은 진단 구현은 아닙니다. PartialEq 기반 비교식을 사용하며 좌우 값을 여러 번 출력하기 위한 별도 평가도 없습니다."
+      "text": "kunit_assert_eq는 왼쪽과 오른쪽을 ==로 비교한 참·거짓 식을 kunit_assert에 넘깁니다. 동등성 비교인 PartialEq를 이용하며 모든 자료형의 두 값을 자세히 출력하는 일반 assert_eq와 같은 구현은 아닙니다. C의 이항 assertion이 일부 형식만 지원하기 때문에 이 경로를 사용합니다."
     },
     {
       "title": "제어 흐름과 검토 범위",
-      "text": "true는 즉시 통과, false와 NULL 문맥은 로그 후 블록 종료, false와 유효 문맥은 실패 보고와 abort로 나뉩니다. 네 항목 전체와 cfg 조건, static 자료, FFI 인수, unsafe 근거 및 제한을 원본에 대조했습니다. 실제 커널에서 assertion 실패·외부 task·Drop 동작을 실행 검증한 결과는 아닙니다."
+      "text": "참이면 즉시 끝내고, 거짓이며 시험이 없으면 로그를 시도하고, 거짓이며 시험이 있으면 보고 후 중단합니다. 설정 조건과 정적 자료, 언어 간 호출의 근거 및 한계를 원본과 함께 읽습니다. 실제 커널에서 Drop이나 다른 태스크의 실패를 실행 시험한 결과로 확대하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "조건이 true이면 kunit_get_current_test를 호출하는가?",
+      "prompt": "조건이 참일 때 현재 KUnit 시험을 찾나요?",
       "options": [
+        "아니요. 앞에서 out 블록을 벗어납니다.",
+        "네. 성공해도 실패 자료를 항상 기록합니다."
+      ],
+      "answer": 0,
+      "explanation": "문맥 조회와 실패 보고는 조건이 거짓인 쪽에 있습니다.",
+      "original_prompt": "조건이 true이면 kunit_get_current_test를 호출하는가?",
+      "original_options": [
         "아니다. 앞에서 out 블록을 벗어난다",
         "그렇다. 성공해도 항상 실패 자료를 기록한다"
       ],
-      "answer": 0,
-      "explanation": "첫 if가 성공 경로를 끝냅니다. 뒤 문맥 조회와 FFI는 실패 경로입니다."
+      "original_explanation": "첫 if가 성공 경로를 끝냅니다. 뒤 문맥 조회와 FFI는 실패 경로입니다."
     },
     {
-      "prompt": "조건이 false지만 현재 KUnit 포인터가 NULL이면?",
+      "prompt": "조건은 거짓인데 현재 시험 포인터가 NULL이면 어떻게 하나요?",
       "options": [
+        "항상 부모 시험을 강제로 중단합니다.",
+        "오류 메시지를 시도한 뒤 abort 없이 블록을 끝냅니다."
+      ],
+      "answer": 1,
+      "explanation": "이 태스크가 KUnit 시험이 아니므로 직접 실패 보고를 할 수 없는 경로입니다.",
+      "original_prompt": "조건이 false지만 현재 KUnit 포인터가 NULL이면?",
+      "original_options": [
         "항상 원래 부모 테스트를 abort한다",
         "오류 메시지를 시도하고 abort 없이 블록을 종료한다"
       ],
-      "answer": 1,
-      "explanation": "NULL 분기의 끝은 break out입니다. 다른 task의 실패와 원래 테스트 결과 사이의 제한을 보여 줍니다."
+      "original_explanation": "NULL 분기의 끝은 break out입니다. 다른 task의 실패와 원래 테스트 결과 사이의 제한을 보여 줍니다."
     },
     {
-      "prompt": "LINE 계산에서 diff의 역할은?",
+      "prompt": "LINE에서 diff를 빼는 이유는 무엇인가요?",
       "options": [
+        "생성 코드의 위치를 원래 문서 줄 번호로 맞추기 위해서입니다.",
+        "조건식의 실행 시간을 구하기 위해서입니다."
+      ],
+      "answer": 0,
+      "explanation": "diff는 생성 과정에서 생긴 줄 위치 차이입니다.",
+      "original_prompt": "LINE 계산에서 diff의 역할은?",
+      "original_options": [
         "생성 코드 줄 번호를 원본 문서 위치로 보정한다",
         "조건식의 실행 시간을 계산한다"
       ],
-      "answer": 0,
-      "explanation": "core::line!()에서 생성기가 제공한 차이를 뺍니다. 시간이나 CPU 정보와 무관합니다."
+      "original_explanation": "core::line!()에서 생성기가 제공한 차이를 뺍니다. 시간이나 CPU 정보와 무관합니다."
     },
     {
-      "prompt": "unsafe impl Sync의 원본 근거는?",
+      "prompt": "여기의 unsafe impl Sync를 설명하는 근거는 무엇인가요?",
       "options": [
+        "모든 C 포인터는 자동으로 스레드에 안전합니다.",
+        "정적 자료의 포인터가 바뀌지 않는 C 문자열을 가리킵니다."
+      ],
+      "answer": 1,
+      "explanation": "특정 자료의 수명과 불변성에 기대는 근거입니다.",
+      "original_prompt": "unsafe impl Sync의 원본 근거는?",
+      "original_options": [
         "모든 C raw pointer는 자동으로 thread-safe다",
         "정적 인스턴스의 포인터가 불변 C 문자열을 가리킨다"
       ],
-      "answer": 1,
-      "explanation": "구체적인 자료의 불변성과 수명에 의존하는 설명입니다. 임의 raw pointer 구조체에 일반화할 수 없습니다."
+      "original_explanation": "구체적인 자료의 불변성과 수명에 의존하는 설명입니다. 임의 raw pointer 구조체에 일반화할 수 없습니다."
     },
     {
-      "prompt": "KUnit abort가 Rust destructor를 정상 unwind처럼 모두 실행한다고 보장하는가?",
+      "prompt": "KUnit abort가 모든 Rust 정리 함수를 정상 실행하나요?",
       "options": [
+        "아니요. 주석에 정리 생략과 언어 경계 되감기 문제가 적혀 있습니다.",
+        "네. panic이 아니므로 모든 Drop이 보장됩니다."
+      ],
+      "answer": 0,
+      "explanation": "실패를 보고하는 기능과 Rust 자원 정리를 보장하는 것은 다릅니다.",
+      "original_prompt": "KUnit abort가 Rust destructor를 정상 unwind처럼 모두 실행한다고 보장하는가?",
+      "original_options": [
         "아니다. 원본 주석이 destructor 생략과 FFI unwind 문제를 명시한다",
         "그렇다. panic이 아니므로 모든 Drop이 보장된다"
       ],
-      "answer": 0,
-      "explanation": "panic 미사용과 정상적인 Rust 스택 정리는 다른 문제입니다. 테스트 실패 경로의 제한을 함께 읽어야 합니다."
+      "original_explanation": "panic 미사용과 정상적인 Rust 스택 정리는 다른 문제입니다. 테스트 실패 경로의 제한을 함께 읽어야 합니다."
     },
     {
-      "prompt": "kunit_assert_eq가 내부적으로 전달하는 것은?",
+      "prompt": "kunit_assert_eq는 무엇을 넘기나요?",
       "options": [
+        "모든 형식을 C 이항 assertion용으로 직렬화한 값입니다.",
+        "left == right의 참·거짓 조건식입니다."
+      ],
+      "answer": 1,
+      "explanation": "현재 구현은 조건 검사 매크로에 비교식을 맡깁니다.",
+      "original_prompt": "kunit_assert_eq가 내부적으로 전달하는 것은?",
+      "original_options": [
         "모든 자료형을 별도 C binary assertion으로 직렬화한 값",
         "left==right라는 boolean assertion"
       ],
-      "answer": 1,
-      "explanation": "현재 구현은 kunit_assert로 위임합니다. 값별 상세 formatter를 갖춘 일반 assert_eq와 동일하다고 가정하지 않습니다."
+      "original_explanation": "현재 구현은 kunit_assert로 위임합니다. 값별 상세 formatter를 갖춘 일반 assert_eq와 동일하다고 가정하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "조건 참, 조건 거짓이지만 현재 시험 없음, 조건 거짓이며 시험 있음의 세 갈래를 그려 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n//! KUnit-based macros for Rust unit tests.\n//!\n//! C header: [`include/kunit/test.h`](srctree/include/kunit/test.h)\n//!\n//! Reference: <https://docs.kernel.org/dev-tools/kunit/index.html>\n\nuse core::{ffi::c_void, fmt};\n\n/// Prints a KUnit error-level message.\n///\n/// Public but hidden since it should only be used from KUnit generated code.\n#[doc(hidden)]\npub fn err(args: fmt::Arguments<'_>) {\n    // SAFETY: The format string is null-terminated and the `%pA` specifier matches the argument we\n    // are passing.\n    #[cfg(CONFIG_PRINTK)]\n    unsafe {\n        bindings::_printk(\n            c\"\\x013%pA\".as_ptr() as _,\n            &args as *const _ as *const c_void,\n        );\n    }\n}\n\n/// Prints a KUnit info-level message.\n///\n/// Public but hidden since it should only be used from KUnit generated code.\n#[doc(hidden)]\npub fn info(args: fmt::Arguments<'_>) {\n    // SAFETY: The format string is null-terminated and the `%pA` specifier matches the argument we\n    // are passing.\n    #[cfg(CONFIG_PRINTK)]\n    unsafe {\n        bindings::_printk(\n            c\"\\x016%pA\".as_ptr() as _,\n            &args as *const _ as *const c_void,\n        );\n    }\n}\n\n/// Asserts that a boolean expression is `true` at runtime.\n///\n/// Public but hidden since it should only be used from generated tests.\n///\n/// Unlike the one in `core`, this one does not panic; instead, it is mapped to the KUnit\n/// facilities. See [`assert!`] for more details.\n#[doc(hidden)]\n#[macro_export]\nmacro_rules! kunit_assert {\n    ($name:literal, $file:literal, $diff:expr, $condition:expr $(,)?) => {\n        'out: {\n            // Do nothing if the condition is `true`.\n            if $condition {\n                break 'out;\n            }\n\n            static FILE: &'static $crate::str::CStr = $crate::c_str!($file);\n            static LINE: i32 = core::line!() as i32 - $diff;\n            static CONDITION: &'static $crate::str::CStr = $crate::c_str!(stringify!($condition));\n\n            // SAFETY: FFI call without safety requirements.\n            let kunit_test = unsafe { $crate::bindings::kunit_get_current_test() };\n            if kunit_test.is_null() {\n                // The assertion failed but this task is not running a KUnit test, so we cannot call\n                // KUnit, but at least print an error to the kernel log. This may happen if this\n                // macro is called from an spawned thread in a test (see\n                // `scripts/rustdoc_test_gen.rs`) or if some non-test code calls this macro by\n                // mistake (it is hidden to prevent that).\n                //\n                // This mimics KUnit's failed assertion format.\n                $crate::kunit::err(format_args!(\n                    \"    # {}: ASSERTION FAILED at {FILE}:{LINE}\\n\",\n                    $name\n                ));\n                $crate::kunit::err(format_args!(\n                    \"    Expected {CONDITION} to be true, but is false\\n\"\n                ));\n                $crate::kunit::err(format_args!(\n                    \"    Failure not reported to KUnit since this is a non-KUnit task\\n\"\n                ));\n                break 'out;\n            }\n\n            #[repr(transparent)]\n            struct Location($crate::bindings::kunit_loc);\n\n            #[repr(transparent)]\n            struct UnaryAssert($crate::bindings::kunit_unary_assert);\n\n            // SAFETY: There is only a static instance and in that one the pointer field points to\n            // an immutable C string.\n            unsafe impl Sync for Location {}\n\n            // SAFETY: There is only a static instance and in that one the pointer field points to\n            // an immutable C string.\n            unsafe impl Sync for UnaryAssert {}\n\n            static LOCATION: Location = Location($crate::bindings::kunit_loc {\n                file: FILE.as_char_ptr(),\n                line: LINE,\n            });\n            static ASSERTION: UnaryAssert = UnaryAssert($crate::bindings::kunit_unary_assert {\n                assert: $crate::bindings::kunit_assert {},\n                condition: CONDITION.as_char_ptr(),\n                expected_true: true,\n            });\n\n            // SAFETY:\n            //   - FFI call.\n            //   - The `kunit_test` pointer is valid because we got it from\n            //     `kunit_get_current_test()` and it was not null. This means we are in a KUnit\n            //     test, and that the pointer can be passed to KUnit functions and assertions.\n            //   - The string pointers (`file` and `condition` above) point to null-terminated\n            //     strings since they are `CStr`s.\n            //   - The function pointer (`format`) points to the proper function.\n            //   - The pointers passed will remain valid since they point to `static`s.\n            //   - The format string is allowed to be null.\n            //   - There are, however, problems with this: first of all, this will end up stopping\n            //     the thread, without running destructors. While that is problematic in itself,\n            //     it is considered UB to have what is effectively a forced foreign unwind\n            //     with `extern \"C\"` ABI. One could observe the stack that is now gone from\n            //     another thread. We should avoid pinning stack variables to prevent library UB,\n            //     too. For the moment, given that test failures are reported immediately before the\n            //     next test runs, that test failures should be fixed and that KUnit is explicitly\n            //     documented as not suitable for production environments, we feel it is reasonable.\n            unsafe {\n                $crate::bindings::__kunit_do_failed_assertion(\n                    kunit_test,\n                    core::ptr::addr_of!(LOCATION.0),\n                    $crate::bindings::kunit_assert_type_KUNIT_ASSERTION,\n                    core::ptr::addr_of!(ASSERTION.0.assert),\n                    Some($crate::bindings::kunit_unary_assert_format),\n                    core::ptr::null(),\n                );\n            }\n\n            // SAFETY: FFI call; the `test` pointer is valid because this hidden macro should only\n            // be called by the generated documentation tests which forward the test pointer given\n            // by KUnit.\n            unsafe {\n                $crate::bindings::__kunit_abort(kunit_test);\n            }\n        }\n    };\n}\n\n/// Asserts that two expressions are equal to each other (using [`PartialEq`]).\n///\n/// Public but hidden since it should only be used from generated tests.\n///\n/// Unlike the one in `core`, this one does not panic; instead, it is mapped to the KUnit\n/// facilities. See [`assert!`] for more details.\n#[doc(hidden)]\n#[macro_export]\nmacro_rules! kunit_assert_eq {\n    ($name:literal, $file:literal, $diff:expr, $left:expr, $right:expr $(,)?) => {{\n        // For the moment, we just forward to the expression assert because, for binary asserts,\n        // KUnit supports only a few types (e.g. integers).\n        $crate::kunit_assert!($name, $file, $diff, $left == $right);\n    }};\n}\n",
   "source_review": {
@@ -149,5 +181,186 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/rust/kernel/kunit.rs"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-063455918dab64c4",
+    "path": "rust/kernel/kunit.rs",
+    "title": "Rust KUnit assertion: 현재 task 문맥·정적 FFI 자료·실패 중단",
+    "area": "Rust · FFI · KUnit · macro · 메모리 수명 · assertion",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "로그 helper 두 개와 assertion 매크로 두 개의 모든 분기·자료형·안전성 주석을 분석합니다.",
+    "guide": [
+      "FFI로 테스트 실패를 연결할 때 포인터 수명뿐 아니라 task 문맥과 언어의 스택 정리 규칙도 고려해야 합니다.",
+      "Rust macro, C 문자열, 정적 수명과 Sync, 원본 위치 보정, abort와 Drop의 차이를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 노출 범위",
+        "text": "GPL-2.0 모듈은 core의 c_void와 fmt를 사용합니다. err와 info는 pub이지만 doc(hidden)이며 생성된 KUnit 코드용이라는 문서가 있습니다. kunit_assert와 kunit_assert_eq는 macro_export 및 doc(hidden)입니다. 문서에서 숨기는 속성이 호출을 보안상 금지하거나 private 접근 제어를 만드는 것은 아닙니다."
+      },
+      {
+        "title": "출력 helper와 PRINTK",
+        "text": "err는 C 문자열의 제어 prefix와 3 레벨, info는 6 레벨을 써 _printk에 %pA 형식과 fmt::Arguments 주소를 c_void 포인터로 전달합니다. C 문자열은 NUL 종료이며 Rust 포맷 인수와 해당 formatter 계약을 맞춥니다. unsafe 호출 블록은 CONFIG_PRINTK일 때만 존재합니다. 설정이 없으면 이 함수 본문에 다른 fallback 출력 경로가 없습니다."
+      },
+      {
+        "title": "Assertion 인수와 성공 경로",
+        "text": "kunit_assert는 name literal,file literal,diff expression,condition expression과 선택적 trailing comma를 받습니다. 이름 붙은 out 블록에서 condition이 true이면 바로 break합니다. 따라서 성공 때는 현재 KUnit 포인터 조회나 실패 메시지 출력이 없습니다. condition은 if 위치에서 평가하고 stringify는 식의 텍스트를 만드는 별도 컴파일 단계입니다."
+      },
+      {
+        "title": "원본 위치와 조건 텍스트",
+        "text": "FILE은 c_str!(file), LINE은 core::line!() as i32-diff, CONDITION은 stringify!(condition)을 C 문자열로 바꾼 static입니다. 생성 소스의 줄과 원본 문서 줄 차이를 diff로 보정합니다. diff가 macro 패턴상 expr이라고 임의 런타임 값이 static 초기화에 허용되는 것은 아닙니다. 실제 생성기는 정적으로 계산할 수 있는 anchor 표현을 제공합니다."
+      },
+      {
+        "title": "현재 task 문맥 없음",
+        "text": "실패하면 kunit_get_current_test를 FFI로 호출합니다. NULL이면 테스트 이름과 원본 위치, 기대 조건, KUnit에 실패를 보고하지 못했다는 세 메시지를 err로 출력하고 블록을 벗어납니다. 이 분기에는 __kunit_abort가 없습니다. 예제가 만든 다른 task나 잘못된 비테스트 호출일 수 있으며 원래 테스트 상태가 자동으로 실패하는 보장은 없습니다. PRINTK까지 꺼져 있으면 이 err 호출들의 실제 printk도 없습니다."
+      },
+      {
+        "title": "정적 C 자료와 transparent wrapper",
+        "text": "문맥이 있으면 bindings의 kunit_loc와 kunit_unary_assert를 각각 Location,UnaryAssert #[repr(transparent)] wrapper로 다룹니다. 각 wrapper에 unsafe impl Sync가 있습니다. 안전성 주석은 정적 인스턴스의 포인터가 불변 C 문자열을 가리킨다는 구체적인 근거를 듭니다. raw pointer를 가진 모든 구조체가 일반적으로 Sync라고 자동 보장되는 것은 아닙니다."
+      },
+      {
+        "title": "LOCATION과 ASSERTION 초기화",
+        "text": "LOCATION은 FILE의 char 포인터와 LINE을 저장합니다. ASSERTION은 빈 공통 kunit_assert, 조건 문자열 포인터, expected_true=true를 저장합니다. 이 static들이 FFI 호출 중과 그 후에도 유효한 주소를 제공합니다. 로컬 임시 문자열의 버퍼를 C에 넘기는 패턴이 아닙니다."
+      },
+      {
+        "title": "실패 보고 FFI",
+        "text": "__kunit_do_failed_assertion에 현재 test,LOCATION 내부 주소,KUNIT_ASSERTION 종류,ASSERTION의 공통 assert 주소,Some(kunit_unary_assert_format),NULL format 포인터를 전달합니다. addr_of!로 내부 주소를 얻습니다. 주석은 test pointer 유효성, NUL 종료 문자열, 정적 수명, 올바른 callback과 허용된 NULL format을 설명합니다. 사용자 포맷 문자열을 무검사로 실행하는 임의 호출이 아닙니다."
+      },
+      {
+        "title": "중단과 명시된 안전성 한계",
+        "text": "실패 보고 뒤 __kunit_abort를 호출합니다. 원본 안전성 주석은 thread 중단 시 destructor를 실행하지 않는 문제와 extern C 경계를 강제 외부 unwind처럼 넘는 UB 문제를 명시합니다. 따라서 core assert의 panic을 쓰지 않는다는 사실만으로 완전히 안전한 Rust unwind라고 설명하면 안 됩니다. 주석은 stack pinning도 주의하고 KUnit의 비production 테스트 문맥에서 현재 구현을 수용하는 배경을 밝힙니다. 이 자료는 그 한계를 없다고 숨기지 않습니다."
+      },
+      {
+        "title": "동등성 assertion의 구현 범위",
+        "text": "kunit_assert_eq는 left==right 식을 kunit_assert로 전달합니다. 주석은 KUnit binary assertion이 몇몇 자료형만 지원해 지금은 expression assertion으로 연결한다고 설명합니다. 따라서 모든 값의 Debug 내용을 별도로 출력하는 core assert_eq와 같은 진단 구현은 아닙니다. PartialEq 기반 비교식을 사용하며 좌우 값을 여러 번 출력하기 위한 별도 평가도 없습니다."
+      },
+      {
+        "title": "제어 흐름과 검토 범위",
+        "text": "true는 즉시 통과, false와 NULL 문맥은 로그 후 블록 종료, false와 유효 문맥은 실패 보고와 abort로 나뉩니다. 네 항목 전체와 cfg 조건, static 자료, FFI 인수, unsafe 근거 및 제한을 원본에 대조했습니다. 실제 커널에서 assertion 실패·외부 task·Drop 동작을 실행 검증한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "조건이 true이면 kunit_get_current_test를 호출하는가?",
+        "options": [
+          "아니다. 앞에서 out 블록을 벗어난다",
+          "그렇다. 성공해도 항상 실패 자료를 기록한다"
+        ],
+        "answer": 0,
+        "explanation": "첫 if가 성공 경로를 끝냅니다. 뒤 문맥 조회와 FFI는 실패 경로입니다."
+      },
+      {
+        "prompt": "조건이 false지만 현재 KUnit 포인터가 NULL이면?",
+        "options": [
+          "항상 원래 부모 테스트를 abort한다",
+          "오류 메시지를 시도하고 abort 없이 블록을 종료한다"
+        ],
+        "answer": 1,
+        "explanation": "NULL 분기의 끝은 break out입니다. 다른 task의 실패와 원래 테스트 결과 사이의 제한을 보여 줍니다."
+      },
+      {
+        "prompt": "LINE 계산에서 diff의 역할은?",
+        "options": [
+          "생성 코드 줄 번호를 원본 문서 위치로 보정한다",
+          "조건식의 실행 시간을 계산한다"
+        ],
+        "answer": 0,
+        "explanation": "core::line!()에서 생성기가 제공한 차이를 뺍니다. 시간이나 CPU 정보와 무관합니다."
+      },
+      {
+        "prompt": "unsafe impl Sync의 원본 근거는?",
+        "options": [
+          "모든 C raw pointer는 자동으로 thread-safe다",
+          "정적 인스턴스의 포인터가 불변 C 문자열을 가리킨다"
+        ],
+        "answer": 1,
+        "explanation": "구체적인 자료의 불변성과 수명에 의존하는 설명입니다. 임의 raw pointer 구조체에 일반화할 수 없습니다."
+      },
+      {
+        "prompt": "KUnit abort가 Rust destructor를 정상 unwind처럼 모두 실행한다고 보장하는가?",
+        "options": [
+          "아니다. 원본 주석이 destructor 생략과 FFI unwind 문제를 명시한다",
+          "그렇다. panic이 아니므로 모든 Drop이 보장된다"
+        ],
+        "answer": 0,
+        "explanation": "panic 미사용과 정상적인 Rust 스택 정리는 다른 문제입니다. 테스트 실패 경로의 제한을 함께 읽어야 합니다."
+      },
+      {
+        "prompt": "kunit_assert_eq가 내부적으로 전달하는 것은?",
+        "options": [
+          "모든 자료형을 별도 C binary assertion으로 직렬화한 값",
+          "left==right라는 boolean assertion"
+        ],
+        "answer": 1,
+        "explanation": "현재 구현은 kunit_assert로 위임합니다. 값별 상세 formatter를 갖춘 일반 assert_eq와 동일하다고 가정하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n\n//! KUnit-based macros for Rust unit tests.\n//!\n//! C header: [`include/kunit/test.h`](srctree/include/kunit/test.h)\n//!\n//! Reference: <https://docs.kernel.org/dev-tools/kunit/index.html>\n\nuse core::{ffi::c_void, fmt};\n\n/// Prints a KUnit error-level message.\n///\n/// Public but hidden since it should only be used from KUnit generated code.\n#[doc(hidden)]\npub fn err(args: fmt::Arguments<'_>) {\n    // SAFETY: The format string is null-terminated and the `%pA` specifier matches the argument we\n    // are passing.\n    #[cfg(CONFIG_PRINTK)]\n    unsafe {\n        bindings::_printk(\n            c\"\\x013%pA\".as_ptr() as _,\n            &args as *const _ as *const c_void,\n        );\n    }\n}\n\n/// Prints a KUnit info-level message.\n///\n/// Public but hidden since it should only be used from KUnit generated code.\n#[doc(hidden)]\npub fn info(args: fmt::Arguments<'_>) {\n    // SAFETY: The format string is null-terminated and the `%pA` specifier matches the argument we\n    // are passing.\n    #[cfg(CONFIG_PRINTK)]\n    unsafe {\n        bindings::_printk(\n            c\"\\x016%pA\".as_ptr() as _,\n            &args as *const _ as *const c_void,\n        );\n    }\n}\n\n/// Asserts that a boolean expression is `true` at runtime.\n///\n/// Public but hidden since it should only be used from generated tests.\n///\n/// Unlike the one in `core`, this one does not panic; instead, it is mapped to the KUnit\n/// facilities. See [`assert!`] for more details.\n#[doc(hidden)]\n#[macro_export]\nmacro_rules! kunit_assert {\n    ($name:literal, $file:literal, $diff:expr, $condition:expr $(,)?) => {\n        'out: {\n            // Do nothing if the condition is `true`.\n            if $condition {\n                break 'out;\n            }\n\n            static FILE: &'static $crate::str::CStr = $crate::c_str!($file);\n            static LINE: i32 = core::line!() as i32 - $diff;\n            static CONDITION: &'static $crate::str::CStr = $crate::c_str!(stringify!($condition));\n\n            // SAFETY: FFI call without safety requirements.\n            let kunit_test = unsafe { $crate::bindings::kunit_get_current_test() };\n            if kunit_test.is_null() {\n                // The assertion failed but this task is not running a KUnit test, so we cannot call\n                // KUnit, but at least print an error to the kernel log. This may happen if this\n                // macro is called from an spawned thread in a test (see\n                // `scripts/rustdoc_test_gen.rs`) or if some non-test code calls this macro by\n                // mistake (it is hidden to prevent that).\n                //\n                // This mimics KUnit's failed assertion format.\n                $crate::kunit::err(format_args!(\n                    \"    # {}: ASSERTION FAILED at {FILE}:{LINE}\\n\",\n                    $name\n                ));\n                $crate::kunit::err(format_args!(\n                    \"    Expected {CONDITION} to be true, but is false\\n\"\n                ));\n                $crate::kunit::err(format_args!(\n                    \"    Failure not reported to KUnit since this is a non-KUnit task\\n\"\n                ));\n                break 'out;\n            }\n\n            #[repr(transparent)]\n            struct Location($crate::bindings::kunit_loc);\n\n            #[repr(transparent)]\n            struct UnaryAssert($crate::bindings::kunit_unary_assert);\n\n            // SAFETY: There is only a static instance and in that one the pointer field points to\n            // an immutable C string.\n            unsafe impl Sync for Location {}\n\n            // SAFETY: There is only a static instance and in that one the pointer field points to\n            // an immutable C string.\n            unsafe impl Sync for UnaryAssert {}\n\n            static LOCATION: Location = Location($crate::bindings::kunit_loc {\n                file: FILE.as_char_ptr(),\n                line: LINE,\n            });\n            static ASSERTION: UnaryAssert = UnaryAssert($crate::bindings::kunit_unary_assert {\n                assert: $crate::bindings::kunit_assert {},\n                condition: CONDITION.as_char_ptr(),\n                expected_true: true,\n            });\n\n            // SAFETY:\n            //   - FFI call.\n            //   - The `kunit_test` pointer is valid because we got it from\n            //     `kunit_get_current_test()` and it was not null. This means we are in a KUnit\n            //     test, and that the pointer can be passed to KUnit functions and assertions.\n            //   - The string pointers (`file` and `condition` above) point to null-terminated\n            //     strings since they are `CStr`s.\n            //   - The function pointer (`format`) points to the proper function.\n            //   - The pointers passed will remain valid since they point to `static`s.\n            //   - The format string is allowed to be null.\n            //   - There are, however, problems with this: first of all, this will end up stopping\n            //     the thread, without running destructors. While that is problematic in itself,\n            //     it is considered UB to have what is effectively a forced foreign unwind\n            //     with `extern \"C\"` ABI. One could observe the stack that is now gone from\n            //     another thread. We should avoid pinning stack variables to prevent library UB,\n            //     too. For the moment, given that test failures are reported immediately before the\n            //     next test runs, that test failures should be fixed and that KUnit is explicitly\n            //     documented as not suitable for production environments, we feel it is reasonable.\n            unsafe {\n                $crate::bindings::__kunit_do_failed_assertion(\n                    kunit_test,\n                    core::ptr::addr_of!(LOCATION.0),\n                    $crate::bindings::kunit_assert_type_KUNIT_ASSERTION,\n                    core::ptr::addr_of!(ASSERTION.0.assert),\n                    Some($crate::bindings::kunit_unary_assert_format),\n                    core::ptr::null(),\n                );\n            }\n\n            // SAFETY: FFI call; the `test` pointer is valid because this hidden macro should only\n            // be called by the generated documentation tests which forward the test pointer given\n            // by KUnit.\n            unsafe {\n                $crate::bindings::__kunit_abort(kunit_test);\n            }\n        }\n    };\n}\n\n/// Asserts that two expressions are equal to each other (using [`PartialEq`]).\n///\n/// Public but hidden since it should only be used from generated tests.\n///\n/// Unlike the one in `core`, this one does not panic; instead, it is mapped to the KUnit\n/// facilities. See [`assert!`] for more details.\n#[doc(hidden)]\n#[macro_export]\nmacro_rules! kunit_assert_eq {\n    ($name:literal, $file:literal, $diff:expr, $left:expr, $right:expr $(,)?) => {{\n        // For the moment, we just forward to the expression assert because, for binary asserts,\n        // KUnit supports only a few types (e.g. integers).\n        $crate::kunit_assert!($name, $file, $diff, $left == $right);\n    }};\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "82cbfe04768cc91e063e88e30a7109aceaffd01331a64a1ae949c24cab13b87d",
+      "scope": "whole-file",
+      "line_count": 163,
+      "authoring_source": "course/file_units/rust_kunit_assertions.py",
+      "sections": [
+        "전체 구성과 노출 범위",
+        "출력 helper와 PRINTK",
+        "Assertion 인수와 성공 경로",
+        "원본 위치와 조건 텍스트",
+        "현재 task 문맥 없음",
+        "정적 C 자료와 transparent wrapper",
+        "LOCATION과 ASSERTION 초기화",
+        "실패 보고 FFI",
+        "중단과 명시된 안전성 한계",
+        "동등성 assertion의 구현 범위",
+        "제어 흐름과 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/rust/kernel/kunit.rs"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "Rust로 쓴 작은 시험이 틀렸을 때 C로 만든 KUnit 시험 담당자에게 위치와 이유를 전합니다. 말만 전하면 끝이 아니라 문자열이 살아 있는 시간과 중단 방식까지 맞춰야 합니다.",
+    "meaning": "Rust assertion이 KUnit에 실패를 전달하는 경로와 현재 구현의 안전성 한계를 구별합니다.",
+    "exercise": "조건 참, 조건 거짓이지만 현재 시험 없음, 조건 거짓이며 시험 있음의 세 갈래를 그려 보세요."
+  },
+  "goal": "Rust assertion이 KUnit에 실패를 전달하는 경로와 현재 구현의 안전성 한계를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "조건 참, 조건 거짓이지만 현재 시험 없음, 조건 거짓이며 시험 있음의 세 갈래를 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "4bfa6d1c3f69b7a55c220cf0541713629acd2d5ed095de3d806f1eca508f1ee4",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,100 +5,120 @@
   "area": "문자열 검색 · KMP · 함수 포인터 · 모듈 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "이미 맞춘 접두사 정보를 재사용해 입력을 뒤로 되돌리지 않는 문자열 검색 알고리즘입니다.",
+  "intro": "KMP의 접두사 표, 블록 사이 상태와 다음 검색의 시작 위치를 이해해요.",
   "guide": [
-    "prefix_tbl은 각 패턴 접두사의 가장 긴 진접두사이면서 접미사인 길이를 저장합니다. 불일치하면 그 길이로 상태를 줄이고 현재 문자를 다시 비교합니다.",
-    "공통 prepare 경로가 길이 0을 거부한다는 전제와 할당 메모리가 0으로 초기화된다는 전제를 함께 읽어야 합니다. 이 파일의 init만 따로 호출하는 계약으로 오해하지 않습니다."
+    "접두사는 맨 앞부분, 접미사는 맨 뒷부분이에요. KMP의 prefix_tbl은 지금까지 본 패턴 부분에서 자기 전체를 제외하고 앞뒤가 같은 가장 긴 길이를 저장해요.",
+    "불일치하면 맞춘 길이 q를 이 표가 알려 주는 더 짧은 길이로 줄여 현재 입력 문자를 다시 비교해요. 입력 위치 자체를 뒤로 되돌리지는 않아요.",
+    "공통 prepare가 길이 0을 거절하고 공통 할당이 메모리를 0으로 채운다는 전제가 있어요. 이 파일의 init만 아무 조건 없이 독립 호출해도 된다는 뜻은 아니에요."
   ],
   "deep_dive": [
     {
       "title": "전체 파일 구조",
-      "text": "GPL SPDX, 작성자와 KMP·전이 함수 설명, module/types/string/ctype/textsearch 포함 뒤에 사설 구조체와 검색·접두사 전처리·초기화·조회 함수가 있습니다. kmp_ops가 이 함수들을 연결하고 init/exit에서 공통 등록 API를 호출합니다. 모듈 설명과 GPL 라이선스도 포함됩니다."
+      "text": "파일은 GPL 사용 조건을 나타내는 SPDX, 작성자와 알고리즘 설명으로 시작해요. 필요한 module·types·string·ctype·textsearch 헤더 다음에 KMP 전용 자료와 검색·표 계산·초기화·조회 함수가 있어요. kmp_ops가 함수들을 연결하고 모듈 시작·종료 함수가 공통 등록·해제를 호출해요. 끝의 설명과 라이선스도 파일 구성의 일부예요."
     },
     {
       "title": "사설 데이터의 메모리 배치",
-      "text": "ts_kmp은 패턴 포인터, 패턴 길이, flexible array인 unsigned int prefix_tbl[]을 가집니다. 할당 크기는 구조체+표+패턴 데이터이며 패턴은 표 바로 뒤에 둡니다. 한 번의 공통 할당으로 관리하므로 별도 destroy 콜백이 없습니다. prefix_tbl_len이 unsigned int 곱셈이라는 점 때문에 임의의 거대한 길이까지 산술 안전성이 보장된다고 해석하면 안 됩니다."
+      "text": "전용 구조체 ts_kmp에는 패턴 주소와 길이, 끝에 길이가 정해지지 않은 prefix_tbl[]이 있어요. 이를 flexible array라 해요. 구조체+표+패턴만큼 한 번에 확보하고 패턴을 표 바로 뒤에 놓아요. 별도 자원을 따로 만들지 않아 destroy callback도 없어요. 다만 prefix_tbl_len 계산이 unsigned int 곱셈이어서 어떤 거대한 길이도 넘침 없이 안전하다고 보장하는 것은 아니에요."
     },
     {
       "title": "접두사 표 계산",
-      "text": "compute_prefix_tbl은 q=1부터 진행합니다. pattern[k]와 pattern[q]가 다르면 k=prefix_tbl[k-1]로 더 짧은 후보를 찾고 같으면 k를 늘립니다. prefix_tbl[q]=k입니다. 예를 들어 ababaca의 표는 0,0,1,2,3,0,1입니다. q0을 직접 쓰지 않으며 alloc_ts_config의 kzalloc 초기화로 첫 원소 0이 제공됩니다."
+      "text": "compute_prefix_tbl은 두 번째 문자 위치 q=1부터 시작해요. pattern[k]와 pattern[q]가 다르면 k=prefix_tbl[k-1]로 더 짧은 앞부분을 살펴보고 같으면 k를 하나 늘려 표에 적어요. ababaca는 0,0,1,2,3,0,1이에요. 첫 칸은 여기서 직접 쓰지 않지만 alloc_ts_config의 kzalloc이 전체를 0으로 만들므로 0이에요."
     },
     {
       "title": "대소문자 무시의 일관성",
-      "text": "TS_IGNORECASE면 표를 만들 때 양쪽 문자를 toupper로 비교하고 저장 패턴도 대문자로 바꿉니다. 검색할 때는 입력 문자만 변환해 저장 패턴과 비교합니다. 따라서 접두사 표와 실제 비교가 같은 동등성 규칙을 사용합니다. 이 처리는 커널의 바이트 문자 분류이며 유니코드 정규화나 locale 전체 규칙은 아닙니다."
+      "text": "TS_IGNORECASE는 영문 대소문자를 구별하지 않는 옵션이에요. 표 계산 때 양쪽을 toupper로 비교하고 저장 패턴도 대문자로 바꿔요. 검색 때는 입력만 대문자로 바꿔 비교하므로 표와 실제 검색의 같음 규칙이 맞아요. 이는 커널의 바이트 문자 분류이며 모든 언어의 유니코드 정규화나 지역별 규칙을 처리한다는 뜻은 아니에요."
     },
     {
       "title": "검색 상태 q",
-      "text": "q는 현재까지 일치한 패턴 앞부분의 길이입니다. 불일치 시 prefix_tbl[q-1]로 줄이고 같은 현재 입력 문자를 재평가합니다. 일치하면 q를 하나 늘려 패턴 길이에 도달했는지 검사합니다. 한 입력 문자에서 여러 감소가 있어도 전체 감소는 앞선 증가로 상쇄되므로 전처리 O(m), 검색 O(n), 표 공간 O(m)입니다."
+      "text": "q는 패턴 맨 앞에서 지금까지 맞춘 문자 수예요. 불일치하면 prefix_tbl[q-1]로 줄이고 같은 입력 문자를 다시 보며, 맞으면 하나 늘려 패턴 길이에 닿는지 확인해요. 한 문자에서 여러 번 줄어도 전체 감소는 앞서 증가한 만큼과 연결돼요. 패턴 길이 m, 입력 길이 n이면 준비 시간 O(m), 검색 O(n), 표 공간 O(m)이에요. O(n)은 입력 길이에 비례하는 규모라는 뜻이에요."
     },
     {
       "title": "블록 경계를 넘는 이유",
-      "text": "q는 바깥 블록 반복 전에 한 번만 0으로 초기화합니다. 블록을 다 읽은 뒤 consumed만 text_len만큼 늘리고 다음 블록에서도 q를 유지합니다. 패턴 abc가 첫 블록의 ab와 다음 블록의 c에 걸쳐 있어도 찾을 수 있습니다. get_next_block이 0을 반환하면 종료하고 UINT_MAX를 반환합니다."
+      "text": "q=0 초기화는 블록을 받는 바깥 반복 전에 한 번만 해요. 한 블록을 읽으면 consumed를 그 길이만큼 늘리고 q는 유지해요. 첫 블록 ab, 다음 c에서 abc를 찾을 수 있는 이유예요. get_next_block이 길이 0을 주면 입력이 끝나 UINT_MAX라는 미발견 표식을 반환해요."
     },
     {
       "title": "성공 위치와 다음 검색",
-      "text": "성공 시 state->offset=consumed+i+1로 일치 끝 다음 위치를 저장하고 시작 위치는 offset-pattern_len으로 반환합니다. 다음 kmp_find 호출은 q0과 이 offset에서 시작하므로 겹치는 일치를 자동으로 모두 열거하지 않습니다. ababa에서 aba를 찾은 뒤 next를 호출하면 offset3에서 시작하므로 위치2의 겹친 aba는 건너뜁니다. 실패 경로는 state->offset을 별도 갱신하지 않습니다."
+      "text": "찾으면 state->offset에 consumed+i+1, 즉 일치 끝 다음 위치를 적고 시작 위치 offset-pattern_len을 반환해요. 다음 kmp_find는 이 offset과 q=0에서 새로 시작해요. ababa에서 첫 aba를 찾으면 offset은 3이라 위치 2의 겹친 aba를 자동으로 다시 찾지 않아요. 실패 때는 offset을 별도로 바꾸지 않아요."
     },
     {
       "title": "초기화와 오류",
-      "text": "kmp_init은 필요한 크기로 alloc_ts_config를 호출하고 IS_ERR면 그대로 반환합니다. 성공하면 flags, 길이, 표, 패턴 포인터와 복사 데이터를 설정합니다. 패턴은 길이로 다루며 NUL 종료 문자열만 지원하는 것은 아닙니다. get_pattern은 저장된 패턴 주소를, get_pattern_len은 길이를 돌려줍니다."
+      "text": "kmp_init은 계산한 크기로 alloc_ts_config를 호출하고 IS_ERR이면 오류 포인터를 그대로 반환해요. 성공하면 flags와 길이, 표, 패턴 주소와 복사 데이터를 준비해요. 패턴은 길이로 다루므로 끝에 NUL이 있는 문자열만 지원하는 것은 아니에요. get_pattern은 저장 주소, get_pattern_len은 길이를 알려 줘요."
     },
     {
       "title": "등록과 수명",
-      "text": "kmp_ops의 이름은 kmp이며 owner는 THIS_MODULE, list는 LIST_HEAD_INIT으로 초기화합니다. init_kmp은 textsearch_register 결과를 반환하고 exit_kmp은 unregister합니다. 설정 메모리의 할당·해제와 알고리즘 모듈 참조는 공통 textsearch 코드와 결합해 관리됩니다."
+      "text": "kmp_ops 이름은 kmp이고 owner=THIS_MODULE은 코드를 제공한 모듈이에요. list는 LIST_HEAD_INIT으로 준비해요. init_kmp은 textsearch_register 결과를 반환하고 exit_kmp은 unregister해요. 설정 메모리와 알고리즘 모듈의 사용 참조는 공통 textsearch 코드가 함께 관리하므로 이 파일만으로 수명 전체를 설명하지 않아요."
     },
     {
       "title": "CS 연결",
-      "text": "실패 함수, 상태 전이의 지연 계산, 분할 입력 처리, flexible array 배치, 콜백 기반 알고리즘 교체, 초기화 전제를 학습합니다. 원본 대조는 실제 커널의 동시성·할당 실패 전체를 실행 검증한 것과 다릅니다."
+      "text": "이 예는 불일치 후 갈 길을 알려 주는 실패 함수, 필요할 때 상태 전이를 계산하는 방식, 조각 입력의 상태 유지, 유연 배열 배치와 callback 교체를 연결해요. callback은 나중에 부를 함수를 등록한 것이에요. 원본과 설명을 대조하는 검토는 실제 커널의 모든 동시 실행과 메모리 실패를 실행 시험한 것과는 달라요."
     }
   ],
   "questions": [
     {
-      "prompt": "ababaca의 접두사 표는?",
+      "prompt": "ababaca의 접두사 표는 무엇인가요?",
       "options": [
+        "0,0,1,2,3,0,1이에요.",
+        "0,1,2,3,4,5,6이에요."
+      ],
+      "answer": 0,
+      "explanation": "ababa의 앞뒤에 같은 가장 긴 진부분은 aba라 3이에요. c를 붙이면 후보가 없어 0, 마지막 a는 길이 1이에요.",
+      "original_prompt": "ababaca의 접두사 표는?",
+      "original_options": [
         "0,0,1,2,3,0,1이다",
         "0,1,2,3,4,5,6이다"
       ],
-      "answer": 0,
-      "explanation": "ababa의 가장 긴 진접두사이자 접미사는 aba여서 3입니다. c를 붙이면 적절한 후보가 없어 0, 마지막 a에서는 1입니다."
+      "original_explanation": "ababa의 가장 긴 진접두사이자 접미사는 aba여서 3입니다. c를 붙이면 적절한 후보가 없어 0, 마지막 a에서는 1입니다."
     },
     {
-      "prompt": "입력 블록이 바뀔 때 q를 0으로 초기화하는가?",
+      "prompt": "입력이 다음 블록으로 바뀌면 q를 다시 0으로 만드나요?",
       "options": [
+        "네. 각 블록을 독립해서 찾아요.",
+        "아니요. 앞에서 맞춘 길이를 유지해 경계를 넘어 찾아요."
+      ],
+      "answer": 1,
+      "explanation": "q는 블록 반복문 전에 한 번 초기화돼요. 블록 사이에도 유지돼 ab와 c를 이어 abc로 찾을 수 있어요.",
+      "original_prompt": "입력 블록이 바뀔 때 q를 0으로 초기화하는가?",
+      "original_options": [
         "그렇다. 각 블록은 독립 검색이다",
         "아니다. 유지하여 경계를 넘는 패턴을 찾는다"
       ],
-      "answer": 1,
-      "explanation": "q 초기화는 바깥 무한 반복 전에 있습니다. 새 블록을 받더라도 앞 블록에서 맞춘 접두사 상태를 유지합니다."
+      "original_explanation": "q 초기화는 바깥 무한 반복 전에 있습니다. 새 블록을 받더라도 앞 블록에서 맞춘 접두사 상태를 유지합니다."
     },
     {
-      "prompt": "ababa에서 aba를 찾고 바로 next를 호출하면 위치2도 찾는가?",
+      "prompt": "ababa에서 aba를 찾고 바로 next를 부르면 위치 2의 겹친 aba도 찾나요?",
       "options": [
+        "아니요. 첫 일치 끝 다음인 위치 3부터 시작해요.",
+        "네. 모든 겹친 일치를 자동으로 나열해요."
+      ],
+      "answer": 0,
+      "explanation": "성공하면 다음 offset은 3이고 새 호출의 q는 0이에요. 겹친 일치 전체를 나열하는 계약이 아니에요.",
+      "original_prompt": "ababa에서 aba를 찾고 바로 next를 호출하면 위치2도 찾는가?",
+      "original_options": [
         "아니다. 첫 일치 끝 다음인 위치3에서 재시작한다",
         "그렇다. 모든 겹치는 일치를 자동 열거한다"
       ],
-      "answer": 0,
-      "explanation": "성공 시 offset을 일치 끝 다음으로 저장하고 새 호출에서 q0으로 시작합니다. 겹치는 일치의 열거와는 다른 계약입니다."
+      "original_explanation": "성공 시 offset을 일치 끝 다음으로 저장하고 새 호출에서 q0으로 시작합니다. 겹치는 일치의 열거와는 다른 계약입니다."
     },
     {
-      "prompt": "prefix_tbl[0]을 명시적으로 쓰지 않아도 0인 근거는?",
+      "prompt": "prefix_tbl[0]을 직접 대입하지 않아도 0인 이유는 무엇인가요?",
       "options": [
+        "C의 flexible array 문법이 자동으로 0을 만들어요.",
+        "공통 할당 함수가 kzalloc으로 메모리를 0 초기화해요."
+      ],
+      "answer": 1,
+      "explanation": "동적 배열 문법 자체는 0 초기화를 보장하지 않아요. textsearch.h의 공통 할당 구현이 그 전제를 제공해요.",
+      "original_prompt": "prefix_tbl[0]을 명시적으로 쓰지 않아도 0인 근거는?",
+      "original_options": [
         "flexible array는 C 언어에서 자동으로 0이 된다",
         "공통 할당 함수가 kzalloc으로 메모리를 0 초기화한다"
       ],
-      "answer": 1,
-      "explanation": "동적 배열의 문법 자체가 초기화를 보장하지 않습니다. include/linux/textsearch.h의 alloc_ts_config 구현과 함께 확인해야 합니다."
+      "original_explanation": "동적 배열의 문법 자체가 초기화를 보장하지 않습니다. include/linux/textsearch.h의 alloc_ts_config 구현과 함께 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "ababaca의 표를 구하고, ab와 c 두 블록에서 abc를 찾는 상태 q를 따라가세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/ts_kmp.c\t\tKnuth-Morris-Pratt text search implementation\n *\n * Authors:\tThomas Graf <tgraf@suug.ch>\n *\n * ==========================================================================\n * \n *   Implements a linear-time string-matching algorithm due to Knuth,\n *   Morris, and Pratt [1]. Their algorithm avoids the explicit\n *   computation of the transition function DELTA altogether. Its\n *   matching time is O(n), for n being length(text), using just an\n *   auxiliary function PI[1..m], for m being length(pattern),\n *   precomputed from the pattern in time O(m). The array PI allows\n *   the transition function DELTA to be computed efficiently\n *   \"on the fly\" as needed. Roughly speaking, for any state\n *   \"q\" = 0,1,...,m and any character \"a\" in SIGMA, the value\n *   PI[\"q\"] contains the information that is independent of \"a\" and\n *   is needed to compute DELTA(\"q\", \"a\") [2]. Since the array PI\n *   has only m entries, whereas DELTA has O(m|SIGMA|) entries, we\n *   save a factor of |SIGMA| in the preprocessing time by computing\n *   PI rather than DELTA.\n *\n *   [1] Cormen, Leiserson, Rivest, Stein\n *       Introdcution to Algorithms, 2nd Edition, MIT Press\n *   [2] See finite automaton theory\n */\n\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/textsearch.h>\n\nstruct ts_kmp\n{\n\tu8 *\t\tpattern;\n\tunsigned int\tpattern_len;\n\tunsigned int\tprefix_tbl[];\n};\n\nstatic unsigned int kmp_find(struct ts_config *conf, struct ts_state *state)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\tunsigned int i, q = 0, text_len, consumed = state->offset;\n\tconst u8 *text;\n\tconst int icase = conf->flags & TS_IGNORECASE;\n\n\tfor (;;) {\n\t\ttext_len = conf->get_next_block(consumed, &text, conf, state);\n\n\t\tif (unlikely(text_len == 0))\n\t\t\tbreak;\n\n\t\tfor (i = 0; i < text_len; i++) {\n\t\t\twhile (q > 0 && kmp->pattern[q]\n\t\t\t    != (icase ? toupper(text[i]) : text[i]))\n\t\t\t\tq = kmp->prefix_tbl[q - 1];\n\t\t\tif (kmp->pattern[q]\n\t\t\t    == (icase ? toupper(text[i]) : text[i]))\n\t\t\t\tq++;\n\t\t\tif (unlikely(q == kmp->pattern_len)) {\n\t\t\t\tstate->offset = consumed + i + 1;\n\t\t\t\treturn state->offset - kmp->pattern_len;\n\t\t\t}\n\t\t}\n\n\t\tconsumed += text_len;\n\t}\n\n\treturn UINT_MAX;\n}\n\nstatic inline void compute_prefix_tbl(const u8 *pattern, unsigned int len,\n\t\t\t\t      unsigned int *prefix_tbl, int flags)\n{\n\tunsigned int k, q;\n\tconst u8 icase = flags & TS_IGNORECASE;\n\n\tfor (k = 0, q = 1; q < len; q++) {\n\t\twhile (k > 0 && (icase ? toupper(pattern[k]) : pattern[k])\n\t\t    != (icase ? toupper(pattern[q]) : pattern[q]))\n\t\t\tk = prefix_tbl[k-1];\n\t\tif ((icase ? toupper(pattern[k]) : pattern[k])\n\t\t    == (icase ? toupper(pattern[q]) : pattern[q]))\n\t\t\tk++;\n\t\tprefix_tbl[q] = k;\n\t}\n}\n\nstatic struct ts_config *kmp_init(const void *pattern, unsigned int len,\n\t\t\t\t  gfp_t gfp_mask, int flags)\n{\n\tstruct ts_config *conf;\n\tstruct ts_kmp *kmp;\n\tint i;\n\tunsigned int prefix_tbl_len = len * sizeof(unsigned int);\n\tsize_t priv_size = sizeof(*kmp) + len + prefix_tbl_len;\n\n\tconf = alloc_ts_config(priv_size, gfp_mask);\n\tif (IS_ERR(conf))\n\t\treturn conf;\n\n\tconf->flags = flags;\n\tkmp = ts_config_priv(conf);\n\tkmp->pattern_len = len;\n\tcompute_prefix_tbl(pattern, len, kmp->prefix_tbl, flags);\n\tkmp->pattern = (u8 *) kmp->prefix_tbl + prefix_tbl_len;\n\tif (flags & TS_IGNORECASE)\n\t\tfor (i = 0; i < len; i++)\n\t\t\tkmp->pattern[i] = toupper(((u8 *)pattern)[i]);\n\telse\n\t\tmemcpy(kmp->pattern, pattern, len);\n\n\treturn conf;\n}\n\nstatic void *kmp_get_pattern(struct ts_config *conf)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\treturn kmp->pattern;\n}\n\nstatic unsigned int kmp_get_pattern_len(struct ts_config *conf)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\treturn kmp->pattern_len;\n}\n\nstatic struct ts_ops kmp_ops = {\n\t.name\t\t  = \"kmp\",\n\t.find\t\t  = kmp_find,\n\t.init\t\t  = kmp_init,\n\t.get_pattern\t  = kmp_get_pattern,\n\t.get_pattern_len  = kmp_get_pattern_len,\n\t.owner\t\t  = THIS_MODULE,\n\t.list\t\t  = LIST_HEAD_INIT(kmp_ops.list)\n};\n\nstatic int __init init_kmp(void)\n{\n\treturn textsearch_register(&kmp_ops);\n}\n\nstatic void __exit exit_kmp(void)\n{\n\ttextsearch_unregister(&kmp_ops);\n}\n\nMODULE_DESCRIPTION(\"Knuth-Morris-Pratt text search implementation\");\nMODULE_LICENSE(\"GPL\");\n\nmodule_init(init_kmp);\nmodule_exit(exit_kmp);\n",
   "source_review": {
@@ -126,5 +146,163 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ts_kmp.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-9e9649ec7588c9b4",
+    "path": "lib/ts_kmp.c",
+    "title": "KMP 전체 구현: 접두사 표와 블록 경계를 넘는 검색",
+    "area": "문자열 검색 · KMP · 함수 포인터 · 모듈 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "이미 맞춘 접두사 정보를 재사용해 입력을 뒤로 되돌리지 않는 문자열 검색 알고리즘입니다.",
+    "guide": [
+      "prefix_tbl은 각 패턴 접두사의 가장 긴 진접두사이면서 접미사인 길이를 저장합니다. 불일치하면 그 길이로 상태를 줄이고 현재 문자를 다시 비교합니다.",
+      "공통 prepare 경로가 길이 0을 거부한다는 전제와 할당 메모리가 0으로 초기화된다는 전제를 함께 읽어야 합니다. 이 파일의 init만 따로 호출하는 계약으로 오해하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구조",
+        "text": "GPL SPDX, 작성자와 KMP·전이 함수 설명, module/types/string/ctype/textsearch 포함 뒤에 사설 구조체와 검색·접두사 전처리·초기화·조회 함수가 있습니다. kmp_ops가 이 함수들을 연결하고 init/exit에서 공통 등록 API를 호출합니다. 모듈 설명과 GPL 라이선스도 포함됩니다."
+      },
+      {
+        "title": "사설 데이터의 메모리 배치",
+        "text": "ts_kmp은 패턴 포인터, 패턴 길이, flexible array인 unsigned int prefix_tbl[]을 가집니다. 할당 크기는 구조체+표+패턴 데이터이며 패턴은 표 바로 뒤에 둡니다. 한 번의 공통 할당으로 관리하므로 별도 destroy 콜백이 없습니다. prefix_tbl_len이 unsigned int 곱셈이라는 점 때문에 임의의 거대한 길이까지 산술 안전성이 보장된다고 해석하면 안 됩니다."
+      },
+      {
+        "title": "접두사 표 계산",
+        "text": "compute_prefix_tbl은 q=1부터 진행합니다. pattern[k]와 pattern[q]가 다르면 k=prefix_tbl[k-1]로 더 짧은 후보를 찾고 같으면 k를 늘립니다. prefix_tbl[q]=k입니다. 예를 들어 ababaca의 표는 0,0,1,2,3,0,1입니다. q0을 직접 쓰지 않으며 alloc_ts_config의 kzalloc 초기화로 첫 원소 0이 제공됩니다."
+      },
+      {
+        "title": "대소문자 무시의 일관성",
+        "text": "TS_IGNORECASE면 표를 만들 때 양쪽 문자를 toupper로 비교하고 저장 패턴도 대문자로 바꿉니다. 검색할 때는 입력 문자만 변환해 저장 패턴과 비교합니다. 따라서 접두사 표와 실제 비교가 같은 동등성 규칙을 사용합니다. 이 처리는 커널의 바이트 문자 분류이며 유니코드 정규화나 locale 전체 규칙은 아닙니다."
+      },
+      {
+        "title": "검색 상태 q",
+        "text": "q는 현재까지 일치한 패턴 앞부분의 길이입니다. 불일치 시 prefix_tbl[q-1]로 줄이고 같은 현재 입력 문자를 재평가합니다. 일치하면 q를 하나 늘려 패턴 길이에 도달했는지 검사합니다. 한 입력 문자에서 여러 감소가 있어도 전체 감소는 앞선 증가로 상쇄되므로 전처리 O(m), 검색 O(n), 표 공간 O(m)입니다."
+      },
+      {
+        "title": "블록 경계를 넘는 이유",
+        "text": "q는 바깥 블록 반복 전에 한 번만 0으로 초기화합니다. 블록을 다 읽은 뒤 consumed만 text_len만큼 늘리고 다음 블록에서도 q를 유지합니다. 패턴 abc가 첫 블록의 ab와 다음 블록의 c에 걸쳐 있어도 찾을 수 있습니다. get_next_block이 0을 반환하면 종료하고 UINT_MAX를 반환합니다."
+      },
+      {
+        "title": "성공 위치와 다음 검색",
+        "text": "성공 시 state->offset=consumed+i+1로 일치 끝 다음 위치를 저장하고 시작 위치는 offset-pattern_len으로 반환합니다. 다음 kmp_find 호출은 q0과 이 offset에서 시작하므로 겹치는 일치를 자동으로 모두 열거하지 않습니다. ababa에서 aba를 찾은 뒤 next를 호출하면 offset3에서 시작하므로 위치2의 겹친 aba는 건너뜁니다. 실패 경로는 state->offset을 별도 갱신하지 않습니다."
+      },
+      {
+        "title": "초기화와 오류",
+        "text": "kmp_init은 필요한 크기로 alloc_ts_config를 호출하고 IS_ERR면 그대로 반환합니다. 성공하면 flags, 길이, 표, 패턴 포인터와 복사 데이터를 설정합니다. 패턴은 길이로 다루며 NUL 종료 문자열만 지원하는 것은 아닙니다. get_pattern은 저장된 패턴 주소를, get_pattern_len은 길이를 돌려줍니다."
+      },
+      {
+        "title": "등록과 수명",
+        "text": "kmp_ops의 이름은 kmp이며 owner는 THIS_MODULE, list는 LIST_HEAD_INIT으로 초기화합니다. init_kmp은 textsearch_register 결과를 반환하고 exit_kmp은 unregister합니다. 설정 메모리의 할당·해제와 알고리즘 모듈 참조는 공통 textsearch 코드와 결합해 관리됩니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "실패 함수, 상태 전이의 지연 계산, 분할 입력 처리, flexible array 배치, 콜백 기반 알고리즘 교체, 초기화 전제를 학습합니다. 원본 대조는 실제 커널의 동시성·할당 실패 전체를 실행 검증한 것과 다릅니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ababaca의 접두사 표는?",
+        "options": [
+          "0,0,1,2,3,0,1이다",
+          "0,1,2,3,4,5,6이다"
+        ],
+        "answer": 0,
+        "explanation": "ababa의 가장 긴 진접두사이자 접미사는 aba여서 3입니다. c를 붙이면 적절한 후보가 없어 0, 마지막 a에서는 1입니다."
+      },
+      {
+        "prompt": "입력 블록이 바뀔 때 q를 0으로 초기화하는가?",
+        "options": [
+          "그렇다. 각 블록은 독립 검색이다",
+          "아니다. 유지하여 경계를 넘는 패턴을 찾는다"
+        ],
+        "answer": 1,
+        "explanation": "q 초기화는 바깥 무한 반복 전에 있습니다. 새 블록을 받더라도 앞 블록에서 맞춘 접두사 상태를 유지합니다."
+      },
+      {
+        "prompt": "ababa에서 aba를 찾고 바로 next를 호출하면 위치2도 찾는가?",
+        "options": [
+          "아니다. 첫 일치 끝 다음인 위치3에서 재시작한다",
+          "그렇다. 모든 겹치는 일치를 자동 열거한다"
+        ],
+        "answer": 0,
+        "explanation": "성공 시 offset을 일치 끝 다음으로 저장하고 새 호출에서 q0으로 시작합니다. 겹치는 일치의 열거와는 다른 계약입니다."
+      },
+      {
+        "prompt": "prefix_tbl[0]을 명시적으로 쓰지 않아도 0인 근거는?",
+        "options": [
+          "flexible array는 C 언어에서 자동으로 0이 된다",
+          "공통 할당 함수가 kzalloc으로 메모리를 0 초기화한다"
+        ],
+        "answer": 1,
+        "explanation": "동적 배열의 문법 자체가 초기화를 보장하지 않습니다. include/linux/textsearch.h의 alloc_ts_config 구현과 함께 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/ts_kmp.c\t\tKnuth-Morris-Pratt text search implementation\n *\n * Authors:\tThomas Graf <tgraf@suug.ch>\n *\n * ==========================================================================\n * \n *   Implements a linear-time string-matching algorithm due to Knuth,\n *   Morris, and Pratt [1]. Their algorithm avoids the explicit\n *   computation of the transition function DELTA altogether. Its\n *   matching time is O(n), for n being length(text), using just an\n *   auxiliary function PI[1..m], for m being length(pattern),\n *   precomputed from the pattern in time O(m). The array PI allows\n *   the transition function DELTA to be computed efficiently\n *   \"on the fly\" as needed. Roughly speaking, for any state\n *   \"q\" = 0,1,...,m and any character \"a\" in SIGMA, the value\n *   PI[\"q\"] contains the information that is independent of \"a\" and\n *   is needed to compute DELTA(\"q\", \"a\") [2]. Since the array PI\n *   has only m entries, whereas DELTA has O(m|SIGMA|) entries, we\n *   save a factor of |SIGMA| in the preprocessing time by computing\n *   PI rather than DELTA.\n *\n *   [1] Cormen, Leiserson, Rivest, Stein\n *       Introdcution to Algorithms, 2nd Edition, MIT Press\n *   [2] See finite automaton theory\n */\n\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/string.h>\n#include <linux/ctype.h>\n#include <linux/textsearch.h>\n\nstruct ts_kmp\n{\n\tu8 *\t\tpattern;\n\tunsigned int\tpattern_len;\n\tunsigned int\tprefix_tbl[];\n};\n\nstatic unsigned int kmp_find(struct ts_config *conf, struct ts_state *state)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\tunsigned int i, q = 0, text_len, consumed = state->offset;\n\tconst u8 *text;\n\tconst int icase = conf->flags & TS_IGNORECASE;\n\n\tfor (;;) {\n\t\ttext_len = conf->get_next_block(consumed, &text, conf, state);\n\n\t\tif (unlikely(text_len == 0))\n\t\t\tbreak;\n\n\t\tfor (i = 0; i < text_len; i++) {\n\t\t\twhile (q > 0 && kmp->pattern[q]\n\t\t\t    != (icase ? toupper(text[i]) : text[i]))\n\t\t\t\tq = kmp->prefix_tbl[q - 1];\n\t\t\tif (kmp->pattern[q]\n\t\t\t    == (icase ? toupper(text[i]) : text[i]))\n\t\t\t\tq++;\n\t\t\tif (unlikely(q == kmp->pattern_len)) {\n\t\t\t\tstate->offset = consumed + i + 1;\n\t\t\t\treturn state->offset - kmp->pattern_len;\n\t\t\t}\n\t\t}\n\n\t\tconsumed += text_len;\n\t}\n\n\treturn UINT_MAX;\n}\n\nstatic inline void compute_prefix_tbl(const u8 *pattern, unsigned int len,\n\t\t\t\t      unsigned int *prefix_tbl, int flags)\n{\n\tunsigned int k, q;\n\tconst u8 icase = flags & TS_IGNORECASE;\n\n\tfor (k = 0, q = 1; q < len; q++) {\n\t\twhile (k > 0 && (icase ? toupper(pattern[k]) : pattern[k])\n\t\t    != (icase ? toupper(pattern[q]) : pattern[q]))\n\t\t\tk = prefix_tbl[k-1];\n\t\tif ((icase ? toupper(pattern[k]) : pattern[k])\n\t\t    == (icase ? toupper(pattern[q]) : pattern[q]))\n\t\t\tk++;\n\t\tprefix_tbl[q] = k;\n\t}\n}\n\nstatic struct ts_config *kmp_init(const void *pattern, unsigned int len,\n\t\t\t\t  gfp_t gfp_mask, int flags)\n{\n\tstruct ts_config *conf;\n\tstruct ts_kmp *kmp;\n\tint i;\n\tunsigned int prefix_tbl_len = len * sizeof(unsigned int);\n\tsize_t priv_size = sizeof(*kmp) + len + prefix_tbl_len;\n\n\tconf = alloc_ts_config(priv_size, gfp_mask);\n\tif (IS_ERR(conf))\n\t\treturn conf;\n\n\tconf->flags = flags;\n\tkmp = ts_config_priv(conf);\n\tkmp->pattern_len = len;\n\tcompute_prefix_tbl(pattern, len, kmp->prefix_tbl, flags);\n\tkmp->pattern = (u8 *) kmp->prefix_tbl + prefix_tbl_len;\n\tif (flags & TS_IGNORECASE)\n\t\tfor (i = 0; i < len; i++)\n\t\t\tkmp->pattern[i] = toupper(((u8 *)pattern)[i]);\n\telse\n\t\tmemcpy(kmp->pattern, pattern, len);\n\n\treturn conf;\n}\n\nstatic void *kmp_get_pattern(struct ts_config *conf)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\treturn kmp->pattern;\n}\n\nstatic unsigned int kmp_get_pattern_len(struct ts_config *conf)\n{\n\tstruct ts_kmp *kmp = ts_config_priv(conf);\n\treturn kmp->pattern_len;\n}\n\nstatic struct ts_ops kmp_ops = {\n\t.name\t\t  = \"kmp\",\n\t.find\t\t  = kmp_find,\n\t.init\t\t  = kmp_init,\n\t.get_pattern\t  = kmp_get_pattern,\n\t.get_pattern_len  = kmp_get_pattern_len,\n\t.owner\t\t  = THIS_MODULE,\n\t.list\t\t  = LIST_HEAD_INIT(kmp_ops.list)\n};\n\nstatic int __init init_kmp(void)\n{\n\treturn textsearch_register(&kmp_ops);\n}\n\nstatic void __exit exit_kmp(void)\n{\n\ttextsearch_unregister(&kmp_ops);\n}\n\nMODULE_DESCRIPTION(\"Knuth-Morris-Pratt text search implementation\");\nMODULE_LICENSE(\"GPL\");\n\nmodule_init(init_kmp);\nmodule_exit(exit_kmp);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f75de15e1ae7751650d38b14c99e596cafe03068070daf8ef03664d9b6fac131",
+      "scope": "whole-file",
+      "line_count": 154,
+      "authoring_source": "course/file_units/text_search.py",
+      "sections": [
+        "전체 파일 구조",
+        "사설 데이터의 메모리 배치",
+        "접두사 표 계산",
+        "대소문자 무시의 일관성",
+        "검색 상태 q",
+        "블록 경계를 넘는 이유",
+        "성공 위치와 다음 검색",
+        "초기화와 오류",
+        "등록과 수명",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ts_kmp.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "긴 문장에서 찾던 글자들이 중간까지 맞았다면 그 정보를 기억해 다시 처음부터 비교하지 않을 수 있어요. 입력이 두 조각으로 나뉘어 와도 기억을 이어 가요.",
+    "meaning": "KMP의 접두사 표, 블록 사이 상태와 다음 검색의 시작 위치를 이해해요.",
+    "exercise": "ababaca의 표를 구하고, ab와 c 두 블록에서 abc를 찾는 상태 q를 따라가세요."
+  },
+  "goal": "KMP의 접두사 표, 블록 사이 상태와 다음 검색의 시작 위치를 이해해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "ababaca의 표를 구하고, ab와 c 두 블록에서 abc를 찾는 상태 q를 따라가세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_f.json",
+    "authoring_sha256": "4a7d75c682a27f35a00da08b676a5f028d8f92de54525315692bfe7474a8f0ad",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

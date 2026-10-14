@@ -5,71 +5,85 @@
   "area": "비트 알고리즘 · 병렬 합산·정렬",
   "track": "files",
   "kind": "kernel",
-  "intro": "비트가 1인 개수를 하나씩 반복하지 않고 작은 묶음의 합으로 누적합니다.",
+  "intro": "hweight 함수들은 8·16·32·64비트 값에서 1인 비트의 개수를 마스크·이동·덧셈으로 셉니다.",
   "guide": [
-    "__sw_hweight8/16/32/64 네 함수가 해당 폭의 1비트 수를 계산합니다. 0x55...로 2비트 묶음 수를 만들고 0x33...으로 4비트 묶음을 합치며 0x0f...로 바이트별 합을 만듭니다. 32·64비트는 설정에 따라 곱셈 또는 추가 이동·덧셈으로 전체 합을 얻습니다.",
-    "대상 폭에 맞는 값을 전달하고 반환값은 0..N의 개수라는 점을 기억합니다. BITS_PER_LONG==32인 64비트 함수는 상·하위 32비트의 결과를 더합니다. 실행 분기는 커널 빌드 설정에 의해 정해집니다."
+    "Hamming weight는 값의 크기가 아니라 켜진 비트의 개수입니다. N비트에서는 결과가 0~N입니다.",
+    "SWAR는 정수 하나 안의 작은 구획들을 마스크로 나눠 동시에 계산하는 방법입니다.",
+    "곱셈이 빠른 CPU용 경로와 덧셈·이동 경로는 구현만 다르고 목표 결과는 같습니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구성",
-      "text": "SPDX, export/bitops/asm types 헤더, 네 함수와 각 EXPORT_SYMBOL이 전부입니다. 8·16비트 함수는 단일 구현이며 32비트와 64비트의 빠른 곱셈 경로가 CONFIG_ARCH_HAS_FAST_MULTIPLIER로 구분됩니다. 64비트 함수에는 BITS_PER_LONG의 32/64 분기도 있습니다."
+      "title": "네 함수와 설정 분기",
+      "text": "SPDX와 export·bitops·asm types 포함 뒤 네 함수와 각 export가 있습니다. 8·16비트는 한 구현, 32·64비트는 FAST_MULTIPLIER 설정에 따라 곱셈을 고릅니다. 64비트 함수는 long이 32비트인지 64비트인지도 나눕니다."
     },
     {
-      "title": "2비트와 4비트 묶음",
-      "text": "w-((w>>1)&0x55...)는 각 두 비트 00,01,10,11을 각각 개수 0,1,1,2로 바꿉니다. 이 두 비트 결과들을 0x33... 마스크와 이동으로 합치면 각 네 비트 안의 개수가 됩니다. 작은 묶음에 필요한 값 범위가 확보되어 인접 묶음이 섞이지 않도록 설계된 연산입니다."
+      "title": "작은 묶음부터 개수 만들기",
+      "text": "w-((w>>1)&0x55...)는 두 비트 00·01·10·11을 개수 0·1·1·2로 바꿉니다. 0x33... 마스크와 이동으로 이웃 두 묶음을 합치면 네 비트마다 개수가 됩니다. 필요한 수가 그 구획에 들어가도록 설계해 이웃 합이 섞이지 않게 합니다."
     },
     {
-      "title": "바이트 합에서 전체 합으로",
-      "text": "(res+(res>>4))&0x0f...는 바이트마다 0..8의 합을 남깁니다. 빠른 곱셈 경로의 0x01010101 또는 64비트 대응 상수는 바이트 합을 높은 바이트로 누적하고 오른쪽 이동으로 결과를 고릅니다. 다른 경로는 8·16·32비트 이동 덧셈과 마지막 마스크로 전체 개수를 모읍니다."
+      "title": "바이트별 합을 전체로",
+      "text": "res+(res>>4)를 0x0f...로 가르면 바이트마다 0~8의 수가 남습니다. 빠른 경로는 0x01010101 또는 64비트 대응값을 곱해 높은 바이트로 합을 모읍니다. 다른 경로는 8·16·32비트 이동 덧셈과 마지막 마스크로 모읍니다."
     },
     {
-      "title": "숫자 예제와 경계",
-      "text": "0xB5=10110101₂는 1이 5개입니다. 전부 0인 N비트 값은 0, 전부 1이면 N입니다. 64비트 값 0x8000000100000001은 상위 32비트에 두 개, 하위에 한 개여서 합계 3입니다. 부호가 아니라 고정 폭 비트 패턴을 세는 함수입니다."
+      "title": "예와 폭의 경계",
+      "text": "0xB5는 10110101로 1이 다섯 개입니다. N비트가 모두 0이면 0, 모두 1이면 N입니다. 0x8000000100000001은 높은 32비트 두 개와 낮은 한 개를 더해 3입니다. 부호 의미가 아니라 정해진 폭의 비트 무늬를 셉니다."
     },
     {
-      "title": "CS 연결",
-      "text": "SWAR는 한 정수 안의 작은 구획들을 마스크로 병렬 처리하는 기법입니다. 고정 폭 API는 고정 횟수 연산이며, 임의 길이 비트열 전체를 세려면 여러 워드를 처리해야 합니다. 곱셈을 사용한다고 항상 모든 CPU에서 더 빠르다고 가정하지 않고 설정별 구현을 나눈 이유를 봅니다."
+      "title": "고정 폭과 긴 자료",
+      "text": "각 함수는 고정된 수의 연산으로 한 정수의 비트를 셉니다. 임의 길이 자료는 여러 워드에 대해 반복해야 합니다. 곱셈이 모든 CPU에서 항상 빠르다고 가정하지 않고 빌드 설정별 선택 이유를 읽습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "0xB5의 8비트 Hamming weight는?",
+      "prompt": "0xB5의 8비트 weight는 얼마인가요?",
       "options": [
+        "5입니다.",
+        "4입니다."
+      ],
+      "answer": 0,
+      "explanation": "7·5·4·2·0번 비트가 켜져 있습니다.",
+      "original_prompt": "0xB5의 8비트 Hamming weight는?",
+      "original_options": [
         "5",
         "4"
       ],
-      "answer": 0,
-      "explanation": "10110101의 1은 위치 7,5,4,2,0에 있어 다섯 개입니다. 숫자 크기나 로그 값과는 다른 측정입니다."
+      "original_explanation": "10110101의 1은 위치 7,5,4,2,0에 있어 다섯 개입니다. 숫자 크기나 로그 값과는 다른 측정입니다."
     },
     {
-      "prompt": "BITS_PER_LONG==32에서 __sw_hweight64는 어떻게 합산하는가?",
+      "prompt": "long이 32비트일 때 64비트 weight는 어떻게 구하나요?",
       "options": [
+        "높은 32비트를 버립니다.",
+        "높은·낮은 32비트를 각각 세어 더합니다."
+      ],
+      "answer": 1,
+      "explanation": "두 조각을 모두 포함하므로 전체 64비트를 빠뜨리지 않습니다.",
+      "original_prompt": "BITS_PER_LONG==32에서 __sw_hweight64는 어떻게 합산하는가?",
+      "original_options": [
         "상위 32비트를 버리고 하위만 센다",
         "상·하위 32비트의 __sw_hweight32 결과를 더한다"
       ],
-      "answer": 1,
-      "explanation": "w>>32와 unsigned int 변환으로 나눈 두 조각을 각각 계산하여 더합니다. 전체 64비트를 빠짐없이 포함합니다."
+      "original_explanation": "w>>32와 unsigned int 변환으로 나눈 두 조각을 각각 계산하여 더합니다. 전체 64비트를 빠짐없이 포함합니다."
     },
     {
-      "prompt": "빠른 곱셈 경로가 꺼지면 계산 결과 정의가 바뀌는가?",
+      "prompt": "빠른 곱셈 경로를 끄면 결과 정의가 바뀌나요?",
       "options": [
+        "아니요. 같은 개수를 다른 연산으로 구합니다.",
+        "예. 절반 비트만 셉니다."
+      ],
+      "answer": 0,
+      "explanation": "설정은 방법 선택이며 세려는 대상과 결과는 같습니다.",
+      "original_prompt": "빠른 곱셈 경로가 꺼지면 계산 결과 정의가 바뀌는가?",
+      "original_options": [
         "아니다. 같은 비트 수를 다른 연산 조합으로 계산한다",
         "그렇다. 절반의 비트만 센다"
       ],
-      "answer": 0,
-      "explanation": "설정은 구현 선택입니다. 이동·덧셈 경로와 곱셈 경로 모두 동일한 Hamming weight를 목표로 합니다."
+      "original_explanation": "설정은 구현 선택입니다. 이동·덧셈 경로와 곱셈 경로 모두 동일한 Hamming weight를 목표로 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0xB5의 10110101에서 켜진 다섯 자리를 직접 세어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/export.h>\n#include <linux/bitops.h>\n#include <asm/types.h>\n\n/**\n * hweightN - returns the hamming weight of a N-bit word\n * @x: the word to weigh\n *\n * The Hamming Weight of a number is the total number of bits set in it.\n */\n\nunsigned int __sw_hweight32(unsigned int w)\n{\n#ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER\n\tw -= (w >> 1) & 0x55555555;\n\tw =  (w & 0x33333333) + ((w >> 2) & 0x33333333);\n\tw =  (w + (w >> 4)) & 0x0f0f0f0f;\n\treturn (w * 0x01010101) >> 24;\n#else\n\tunsigned int res = w - ((w >> 1) & 0x55555555);\n\tres = (res & 0x33333333) + ((res >> 2) & 0x33333333);\n\tres = (res + (res >> 4)) & 0x0F0F0F0F;\n\tres = res + (res >> 8);\n\treturn (res + (res >> 16)) & 0x000000FF;\n#endif\n}\nEXPORT_SYMBOL(__sw_hweight32);\n\nunsigned int __sw_hweight16(unsigned int w)\n{\n\tunsigned int res = w - ((w >> 1) & 0x5555);\n\tres = (res & 0x3333) + ((res >> 2) & 0x3333);\n\tres = (res + (res >> 4)) & 0x0F0F;\n\treturn (res + (res >> 8)) & 0x00FF;\n}\nEXPORT_SYMBOL(__sw_hweight16);\n\nunsigned int __sw_hweight8(unsigned int w)\n{\n\tunsigned int res = w - ((w >> 1) & 0x55);\n\tres = (res & 0x33) + ((res >> 2) & 0x33);\n\treturn (res + (res >> 4)) & 0x0F;\n}\nEXPORT_SYMBOL(__sw_hweight8);\n\nunsigned long __sw_hweight64(__u64 w)\n{\n#if BITS_PER_LONG == 32\n\treturn __sw_hweight32((unsigned int)(w >> 32)) +\n\t       __sw_hweight32((unsigned int)w);\n#elif BITS_PER_LONG == 64\n#ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER\n\tw -= (w >> 1) & 0x5555555555555555ul;\n\tw =  (w & 0x3333333333333333ul) + ((w >> 2) & 0x3333333333333333ul);\n\tw =  (w + (w >> 4)) & 0x0f0f0f0f0f0f0f0ful;\n\treturn (w * 0x0101010101010101ul) >> 56;\n#else\n\t__u64 res = w - ((w >> 1) & 0x5555555555555555ul);\n\tres = (res & 0x3333333333333333ul) + ((res >> 2) & 0x3333333333333333ul);\n\tres = (res + (res >> 4)) & 0x0F0F0F0F0F0F0F0Ful;\n\tres = res + (res >> 8);\n\tres = res + (res >> 16);\n\treturn (res + (res >> 32)) & 0x00000000000000FFul;\n#endif\n#endif\n}\nEXPORT_SYMBOL(__sw_hweight64);\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/hweight.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0020c1d96de26012",
+    "path": "lib/hweight.c",
+    "title": "Hamming weight 전체: 마스크로 작은 합을 병렬 계산하기",
+    "area": "비트 알고리즘 · 병렬 합산·정렬",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "비트가 1인 개수를 하나씩 반복하지 않고 작은 묶음의 합으로 누적합니다.",
+    "guide": [
+      "__sw_hweight8/16/32/64 네 함수가 해당 폭의 1비트 수를 계산합니다. 0x55...로 2비트 묶음 수를 만들고 0x33...으로 4비트 묶음을 합치며 0x0f...로 바이트별 합을 만듭니다. 32·64비트는 설정에 따라 곱셈 또는 추가 이동·덧셈으로 전체 합을 얻습니다.",
+      "대상 폭에 맞는 값을 전달하고 반환값은 0..N의 개수라는 점을 기억합니다. BITS_PER_LONG==32인 64비트 함수는 상·하위 32비트의 결과를 더합니다. 실행 분기는 커널 빌드 설정에 의해 정해집니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "SPDX, export/bitops/asm types 헤더, 네 함수와 각 EXPORT_SYMBOL이 전부입니다. 8·16비트 함수는 단일 구현이며 32비트와 64비트의 빠른 곱셈 경로가 CONFIG_ARCH_HAS_FAST_MULTIPLIER로 구분됩니다. 64비트 함수에는 BITS_PER_LONG의 32/64 분기도 있습니다."
+      },
+      {
+        "title": "2비트와 4비트 묶음",
+        "text": "w-((w>>1)&0x55...)는 각 두 비트 00,01,10,11을 각각 개수 0,1,1,2로 바꿉니다. 이 두 비트 결과들을 0x33... 마스크와 이동으로 합치면 각 네 비트 안의 개수가 됩니다. 작은 묶음에 필요한 값 범위가 확보되어 인접 묶음이 섞이지 않도록 설계된 연산입니다."
+      },
+      {
+        "title": "바이트 합에서 전체 합으로",
+        "text": "(res+(res>>4))&0x0f...는 바이트마다 0..8의 합을 남깁니다. 빠른 곱셈 경로의 0x01010101 또는 64비트 대응 상수는 바이트 합을 높은 바이트로 누적하고 오른쪽 이동으로 결과를 고릅니다. 다른 경로는 8·16·32비트 이동 덧셈과 마지막 마스크로 전체 개수를 모읍니다."
+      },
+      {
+        "title": "숫자 예제와 경계",
+        "text": "0xB5=10110101₂는 1이 5개입니다. 전부 0인 N비트 값은 0, 전부 1이면 N입니다. 64비트 값 0x8000000100000001은 상위 32비트에 두 개, 하위에 한 개여서 합계 3입니다. 부호가 아니라 고정 폭 비트 패턴을 세는 함수입니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "SWAR는 한 정수 안의 작은 구획들을 마스크로 병렬 처리하는 기법입니다. 고정 폭 API는 고정 횟수 연산이며, 임의 길이 비트열 전체를 세려면 여러 워드를 처리해야 합니다. 곱셈을 사용한다고 항상 모든 CPU에서 더 빠르다고 가정하지 않고 설정별 구현을 나눈 이유를 봅니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "0xB5의 8비트 Hamming weight는?",
+        "options": [
+          "5",
+          "4"
+        ],
+        "answer": 0,
+        "explanation": "10110101의 1은 위치 7,5,4,2,0에 있어 다섯 개입니다. 숫자 크기나 로그 값과는 다른 측정입니다."
+      },
+      {
+        "prompt": "BITS_PER_LONG==32에서 __sw_hweight64는 어떻게 합산하는가?",
+        "options": [
+          "상위 32비트를 버리고 하위만 센다",
+          "상·하위 32비트의 __sw_hweight32 결과를 더한다"
+        ],
+        "answer": 1,
+        "explanation": "w>>32와 unsigned int 변환으로 나눈 두 조각을 각각 계산하여 더합니다. 전체 64비트를 빠짐없이 포함합니다."
+      },
+      {
+        "prompt": "빠른 곱셈 경로가 꺼지면 계산 결과 정의가 바뀌는가?",
+        "options": [
+          "아니다. 같은 비트 수를 다른 연산 조합으로 계산한다",
+          "그렇다. 절반의 비트만 센다"
+        ],
+        "answer": 0,
+        "explanation": "설정은 구현 선택입니다. 이동·덧셈 경로와 곱셈 경로 모두 동일한 Hamming weight를 목표로 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/export.h>\n#include <linux/bitops.h>\n#include <asm/types.h>\n\n/**\n * hweightN - returns the hamming weight of a N-bit word\n * @x: the word to weigh\n *\n * The Hamming Weight of a number is the total number of bits set in it.\n */\n\nunsigned int __sw_hweight32(unsigned int w)\n{\n#ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER\n\tw -= (w >> 1) & 0x55555555;\n\tw =  (w & 0x33333333) + ((w >> 2) & 0x33333333);\n\tw =  (w + (w >> 4)) & 0x0f0f0f0f;\n\treturn (w * 0x01010101) >> 24;\n#else\n\tunsigned int res = w - ((w >> 1) & 0x55555555);\n\tres = (res & 0x33333333) + ((res >> 2) & 0x33333333);\n\tres = (res + (res >> 4)) & 0x0F0F0F0F;\n\tres = res + (res >> 8);\n\treturn (res + (res >> 16)) & 0x000000FF;\n#endif\n}\nEXPORT_SYMBOL(__sw_hweight32);\n\nunsigned int __sw_hweight16(unsigned int w)\n{\n\tunsigned int res = w - ((w >> 1) & 0x5555);\n\tres = (res & 0x3333) + ((res >> 2) & 0x3333);\n\tres = (res + (res >> 4)) & 0x0F0F;\n\treturn (res + (res >> 8)) & 0x00FF;\n}\nEXPORT_SYMBOL(__sw_hweight16);\n\nunsigned int __sw_hweight8(unsigned int w)\n{\n\tunsigned int res = w - ((w >> 1) & 0x55);\n\tres = (res & 0x33) + ((res >> 2) & 0x33);\n\treturn (res + (res >> 4)) & 0x0F;\n}\nEXPORT_SYMBOL(__sw_hweight8);\n\nunsigned long __sw_hweight64(__u64 w)\n{\n#if BITS_PER_LONG == 32\n\treturn __sw_hweight32((unsigned int)(w >> 32)) +\n\t       __sw_hweight32((unsigned int)w);\n#elif BITS_PER_LONG == 64\n#ifdef CONFIG_ARCH_HAS_FAST_MULTIPLIER\n\tw -= (w >> 1) & 0x5555555555555555ul;\n\tw =  (w & 0x3333333333333333ul) + ((w >> 2) & 0x3333333333333333ul);\n\tw =  (w + (w >> 4)) & 0x0f0f0f0f0f0f0f0ful;\n\treturn (w * 0x0101010101010101ul) >> 56;\n#else\n\t__u64 res = w - ((w >> 1) & 0x5555555555555555ul);\n\tres = (res & 0x3333333333333333ul) + ((res >> 2) & 0x3333333333333333ul);\n\tres = (res + (res >> 4)) & 0x0F0F0F0F0F0F0F0Ful;\n\tres = res + (res >> 8);\n\tres = res + (res >> 16);\n\treturn (res + (res >> 32)) & 0x00000000000000FFul;\n#endif\n#endif\n}\nEXPORT_SYMBOL(__sw_hweight64);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c4da85f3aab22244a6029b5745e3d74efdc310a5227951ef82df4219af4f9931",
+      "scope": "whole-file",
+      "line_count": 68,
+      "authoring_source": "course/file_units/bit_counting.py",
+      "sections": [
+        "파일 전체 구성",
+        "2비트와 4비트 묶음",
+        "바이트 합에서 전체 합으로",
+        "숫자 예제와 경계",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/hweight.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "여러 칸에 켜진 전등 수를 둘씩 세고, 그 합을 넷씩, 다시 여덟씩 모아 전체 수를 구합니다.",
+    "meaning": "hweight 함수들은 8·16·32·64비트 값에서 1인 비트의 개수를 마스크·이동·덧셈으로 셉니다.",
+    "exercise": "0xB5의 10110101에서 켜진 다섯 자리를 직접 세어 보세요."
+  },
+  "goal": "hweight 함수들은 8·16·32·64비트 값에서 1인 비트의 개수를 마스크·이동·덧셈으로 셉니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0xB5의 10110101에서 켜진 다섯 자리를 직접 세어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "d3ec878b217be746f9d6c26c6574af957aeb79b04c007d4f085ecd698d952111",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

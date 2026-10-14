@@ -5,75 +5,89 @@
   "area": "문자 분류 · 비트 집합·정수 변환·인코딩",
   "track": "files",
   "kind": "kernel",
-  "intro": "하나의 문자 코드에 여러 속성을 비트 OR로 저장합니다.",
+  "intro": "256개 표 항목의 속성 비트를 보고 문자 분류의 범위를 이해합니다.",
   "guide": [
-    "_ctype의각인덱스는한바이트값이고 원소는대문자·소문자·숫자·제어·구두점·공백·16진문자·출력공백속성의조합입니다. 헤더의분류매크로가필요한비트를검사합니다.",
-    "UTF-8 문자열전체나Unicode코드포인트를해석하지않습니다.128이상도고정바이트표로처리하며사용자locale에따라동적으로바뀌지않습니다."
+    "표의 위치 번호는 바이트 값입니다.",
+    "분류 함수가 어떤 속성들을 검사하는지도 함께 봅니다.",
+    "이 표는 UTF-8 문장 전체를 해석하는 도구가 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체",
-      "text": "SPDX,역사적파일명·저작권,ctype/compiler/export include,상수unsigned char배열하나,EXPORT_SYMBOL로끝납니다. 함수·초기화·동적상태는없고실제값은256개입니다."
+      "title": "표 하나인 파일",
+      "text": "라이선스와 옛 파일명·저작권, 세 헤더 다음에 const unsigned char _ctype 배열이 있습니다. 실제 항목은 256개이며 EXPORT_SYMBOL로 다른 코드에 공개합니다. 실행 함수나 초기화 과정, 바뀌는 상태는 없습니다."
     },
     {
-      "title": "0부터31과127",
-      "text": "0..31은제어속성_C이며9..13은공백_S도갖습니다.127도제어입니다. NUL0은공백이아니므로문자열종료를공백으로계속건너뛰지않습니다. 탭과줄바꿈은공백이면서제어문자일수있다는중첩분류를보여줍니다."
+      "title": "제어 문자",
+      "text": "0..31과 127은 화면 글자 대신 제어에 쓰는 _C입니다. 9..13에는 공백 속성 _S도 있습니다. 탭이나 줄바꿈은 제어이면서 공백일 수 있습니다. 문자열 끝을 뜻하는 NUL 0에는 _S가 없으므로 공백처럼 계속 건너뛰지 않습니다."
     },
     {
-      "title": "ASCII 출력 영역",
-      "text": "32는_S|_SP이고구두점구간은_P입니다.48..57은_D,A..F와a..f는각각대소문자속성에_X를더합니다. 나머지영문자는_U또는_L입니다. 숫자에는_X가없어도isxdigit이_D|_X를검사하므로16진숫자로인정됩니다."
+      "title": "익숙한 문자 영역",
+      "text": "32는 공백 _S와 출력 공백 _SP, 구두점은 _P, 48..57의 숫자는 _D입니다. A..F와 a..f에는 대·소문자 표시 _U·_L에 16진 글자 _X가 붙습니다. 다른 영문자는 _U나 _L입니다. 숫자에 _X가 없어도 isxdigit이 _D 또는 _X를 검사하므로 0..9도 16진 숫자입니다."
     },
     {
-      "title": "128부터191",
-      "text": "128..159는모두0입니다.160은_S|_SP이고161..191은_P입니다. _SP주석의0x20예시만보고160의출력공백설정을놓치면안됩니다. 이표를ASCII만있다고요약하는것도정확하지않습니다."
+      "title": "128에서 191까지",
+      "text": "128..159는 속성이 모두 0입니다. 160은 _S|_SP이고 161..191은 _P입니다. _SP 주석의 0x20 예만 보고 160도 출력 공백임을 놓치면 안 됩니다. 표가 ASCII 바이트만 분류한다고 말해도 틀립니다."
     },
     {
-      "title": "192부터255",
-      "text": "192..214는_U,215는_P,216..222는_U,223은_L입니다.224..246은_L,247은_P,248..255는_L입니다. 고정단일바이트분류이며문자변환helper의32차이산술과결합됩니다. 현대Unicode대소문자규칙과동일하다고보장하지않습니다."
+      "title": "192에서 255까지",
+      "text": "192..214는 _U, 215는 _P, 216..222는 _U, 223은 _L입니다. 224..246은 _L, 247은 _P, 248..255는 _L입니다. 정해진 한 바이트 표이며 문자 변환의 32 차이 계산과 이어집니다. 현대 Unicode의 모든 대소문자 규칙과 같지는 않습니다."
     },
     {
-      "title": "CS 연결",
-      "text": "8비트속성집합과O(1)조회,여러집합의합집합검사,문자값과문자열인코딩의구분을학습합니다. 속성비트검사결과만으로입력전체의UTF-8유효성이나언어학적문자분류를판정할수없습니다."
+      "title": "작은 비트 이름표",
+      "text": "8비트 안에 여러 속성을 묶어 두면 바이트 값으로 바로 찾아 일정한 단계에 분류할 수 있습니다. 필요한 속성 중 하나라도 있는지 검사할 수도 있습니다. 그러나 문자 값 하나와 여러 바이트로 된 인코딩은 다릅니다. 이 표만으로 UTF-8 전체의 올바름이나 모든 언어의 문자를 판단할 수 없고 사용자 locale에 따라 표가 바뀌지도 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "숫자0..9의 표에 _X가없어도 isxdigit이참인 이유는?",
+      "prompt": "숫자 항목에 _X가 없어도 isxdigit이 참인 까닭은?",
       "options": [
+        "_D와 _X 중 하나가 있는지 검사해서",
+        "실행 중 표에 _X를 덧붙여서"
+      ],
+      "answer": 0,
+      "explanation": "저장된 숫자 속성 _D가 검사 조건 _D|_X에 들어갑니다.",
+      "original_prompt": "숫자0..9의 표에 _X가없어도 isxdigit이참인 이유는?",
+      "original_options": [
         "헤더가 _D와_X의합집합을검사하기때문이다",
         "실행중표를수정해_X를추가하기때문이다"
       ],
-      "answer": 0,
-      "explanation": "표의숫자는_D이고isxdigit은_D|_X를사용합니다. 저장속성과질의마스크를함께봐야합니다."
+      "original_explanation": "표의숫자는_D이고isxdigit은_D|_X를사용합니다. 저장속성과질의마스크를함께봐야합니다."
     },
     {
-      "prompt": "바이트0은isspace에서참인가?",
+      "prompt": "바이트 0은 isspace에서 참인가요?",
       "options": [
+        "참이다",
+        "거짓이다"
+      ],
+      "answer": 1,
+      "explanation": "0은 _C만 있고 공백 _S는 없습니다. 문자열 끝과 공백은 다릅니다.",
+      "original_prompt": "바이트0은isspace에서참인가?",
+      "original_options": [
         "참",
         "거짓"
       ],
-      "answer": 1,
-      "explanation": "0의표값은_C뿐이며_S가없습니다. 문자열종료바이트와공백은구분됩니다."
+      "original_explanation": "0의표값은_C뿐이며_S가없습니다. 문자열종료바이트와공백은구분됩니다."
     },
     {
-      "prompt": "바이트160의 분류는?",
+      "prompt": "바이트 160에는 어떤 속성이 있나요?",
       "options": [
+        "공백이면서 출력 가능한 공백이다",
+        "속성이 전부 0이다"
+      ],
+      "answer": 0,
+      "explanation": "160에는 _S|_SP가 있습니다. 128..159와 같은 구간으로 묶으면 안 됩니다.",
+      "original_prompt": "바이트160의 분류는?",
+      "original_options": [
         "공백이며출력가능공백이다",
         "모든속성이0이다"
       ],
-      "answer": 0,
-      "explanation": "원문은160에_S|_SP를저장합니다.128..159의0구간을모든비ASCII바이트로확대하면안됩니다."
+      "original_explanation": "원문은160에_S|_SP를저장합니다.128..159의0구간을모든비ASCII바이트로확대하면안됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "탭에는 제어와 공백이 함께 붙고 NUL에는 제어만 붙는 이유를 표에서 찾아보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n *  linux/lib/ctype.c\n *\n *  Copyright (C) 1991, 1992  Linus Torvalds\n */\n\n#include <linux/ctype.h>\n#include <linux/compiler.h>\n#include <linux/export.h>\n\nconst unsigned char _ctype[] = {\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 0-7 */\n_C,_C|_S,_C|_S,_C|_S,_C|_S,_C|_S,_C,_C,\t\t\t/* 8-15 */\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 16-23 */\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 24-31 */\n_S|_SP,_P,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 32-39 */\n_P,_P,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 40-47 */\n_D,_D,_D,_D,_D,_D,_D,_D,\t\t\t\t/* 48-55 */\n_D,_D,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 56-63 */\n_P,_U|_X,_U|_X,_U|_X,_U|_X,_U|_X,_U|_X,_U,\t\t/* 64-71 */\n_U,_U,_U,_U,_U,_U,_U,_U,\t\t\t\t/* 72-79 */\n_U,_U,_U,_U,_U,_U,_U,_U,\t\t\t\t/* 80-87 */\n_U,_U,_U,_P,_P,_P,_P,_P,\t\t\t\t/* 88-95 */\n_P,_L|_X,_L|_X,_L|_X,_L|_X,_L|_X,_L|_X,_L,\t\t/* 96-103 */\n_L,_L,_L,_L,_L,_L,_L,_L,\t\t\t\t/* 104-111 */\n_L,_L,_L,_L,_L,_L,_L,_L,\t\t\t\t/* 112-119 */\n_L,_L,_L,_P,_P,_P,_P,_C,\t\t\t\t/* 120-127 */\n0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\t\t\t/* 128-143 */\n0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\t\t\t/* 144-159 */\n_S|_SP,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,\t/* 160-175 */\n_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,\t/* 176-191 */\n_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,\t/* 192-207 */\n_U,_U,_U,_U,_U,_U,_U,_P,_U,_U,_U,_U,_U,_U,_U,_L,\t/* 208-223 */\n_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,\t/* 224-239 */\n_L,_L,_L,_L,_L,_L,_L,_P,_L,_L,_L,_L,_L,_L,_L,_L};\t/* 240-255 */\n\nEXPORT_SYMBOL(_ctype);\n",
   "source_review": {
@@ -97,5 +111,134 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ctype.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-097b765cece7e7ab",
+    "path": "lib/ctype.c",
+    "title": "문자 분류표 전체: 256바이트의 속성 비트 집합",
+    "area": "문자 분류 · 비트 집합·정수 변환·인코딩",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "하나의 문자 코드에 여러 속성을 비트 OR로 저장합니다.",
+    "guide": [
+      "_ctype의각인덱스는한바이트값이고 원소는대문자·소문자·숫자·제어·구두점·공백·16진문자·출력공백속성의조합입니다. 헤더의분류매크로가필요한비트를검사합니다.",
+      "UTF-8 문자열전체나Unicode코드포인트를해석하지않습니다.128이상도고정바이트표로처리하며사용자locale에따라동적으로바뀌지않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "SPDX,역사적파일명·저작권,ctype/compiler/export include,상수unsigned char배열하나,EXPORT_SYMBOL로끝납니다. 함수·초기화·동적상태는없고실제값은256개입니다."
+      },
+      {
+        "title": "0부터31과127",
+        "text": "0..31은제어속성_C이며9..13은공백_S도갖습니다.127도제어입니다. NUL0은공백이아니므로문자열종료를공백으로계속건너뛰지않습니다. 탭과줄바꿈은공백이면서제어문자일수있다는중첩분류를보여줍니다."
+      },
+      {
+        "title": "ASCII 출력 영역",
+        "text": "32는_S|_SP이고구두점구간은_P입니다.48..57은_D,A..F와a..f는각각대소문자속성에_X를더합니다. 나머지영문자는_U또는_L입니다. 숫자에는_X가없어도isxdigit이_D|_X를검사하므로16진숫자로인정됩니다."
+      },
+      {
+        "title": "128부터191",
+        "text": "128..159는모두0입니다.160은_S|_SP이고161..191은_P입니다. _SP주석의0x20예시만보고160의출력공백설정을놓치면안됩니다. 이표를ASCII만있다고요약하는것도정확하지않습니다."
+      },
+      {
+        "title": "192부터255",
+        "text": "192..214는_U,215는_P,216..222는_U,223은_L입니다.224..246은_L,247은_P,248..255는_L입니다. 고정단일바이트분류이며문자변환helper의32차이산술과결합됩니다. 현대Unicode대소문자규칙과동일하다고보장하지않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "8비트속성집합과O(1)조회,여러집합의합집합검사,문자값과문자열인코딩의구분을학습합니다. 속성비트검사결과만으로입력전체의UTF-8유효성이나언어학적문자분류를판정할수없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "숫자0..9의 표에 _X가없어도 isxdigit이참인 이유는?",
+        "options": [
+          "헤더가 _D와_X의합집합을검사하기때문이다",
+          "실행중표를수정해_X를추가하기때문이다"
+        ],
+        "answer": 0,
+        "explanation": "표의숫자는_D이고isxdigit은_D|_X를사용합니다. 저장속성과질의마스크를함께봐야합니다."
+      },
+      {
+        "prompt": "바이트0은isspace에서참인가?",
+        "options": [
+          "참",
+          "거짓"
+        ],
+        "answer": 1,
+        "explanation": "0의표값은_C뿐이며_S가없습니다. 문자열종료바이트와공백은구분됩니다."
+      },
+      {
+        "prompt": "바이트160의 분류는?",
+        "options": [
+          "공백이며출력가능공백이다",
+          "모든속성이0이다"
+        ],
+        "answer": 0,
+        "explanation": "원문은160에_S|_SP를저장합니다.128..159의0구간을모든비ASCII바이트로확대하면안됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n *  linux/lib/ctype.c\n *\n *  Copyright (C) 1991, 1992  Linus Torvalds\n */\n\n#include <linux/ctype.h>\n#include <linux/compiler.h>\n#include <linux/export.h>\n\nconst unsigned char _ctype[] = {\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 0-7 */\n_C,_C|_S,_C|_S,_C|_S,_C|_S,_C|_S,_C,_C,\t\t\t/* 8-15 */\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 16-23 */\n_C,_C,_C,_C,_C,_C,_C,_C,\t\t\t\t/* 24-31 */\n_S|_SP,_P,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 32-39 */\n_P,_P,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 40-47 */\n_D,_D,_D,_D,_D,_D,_D,_D,\t\t\t\t/* 48-55 */\n_D,_D,_P,_P,_P,_P,_P,_P,\t\t\t\t/* 56-63 */\n_P,_U|_X,_U|_X,_U|_X,_U|_X,_U|_X,_U|_X,_U,\t\t/* 64-71 */\n_U,_U,_U,_U,_U,_U,_U,_U,\t\t\t\t/* 72-79 */\n_U,_U,_U,_U,_U,_U,_U,_U,\t\t\t\t/* 80-87 */\n_U,_U,_U,_P,_P,_P,_P,_P,\t\t\t\t/* 88-95 */\n_P,_L|_X,_L|_X,_L|_X,_L|_X,_L|_X,_L|_X,_L,\t\t/* 96-103 */\n_L,_L,_L,_L,_L,_L,_L,_L,\t\t\t\t/* 104-111 */\n_L,_L,_L,_L,_L,_L,_L,_L,\t\t\t\t/* 112-119 */\n_L,_L,_L,_P,_P,_P,_P,_C,\t\t\t\t/* 120-127 */\n0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\t\t\t/* 128-143 */\n0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,\t\t\t/* 144-159 */\n_S|_SP,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,\t/* 160-175 */\n_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,_P,\t/* 176-191 */\n_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,_U,\t/* 192-207 */\n_U,_U,_U,_U,_U,_U,_U,_P,_U,_U,_U,_U,_U,_U,_U,_L,\t/* 208-223 */\n_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,_L,\t/* 224-239 */\n_L,_L,_L,_L,_L,_L,_L,_P,_L,_L,_L,_L,_L,_L,_L,_L};\t/* 240-255 */\n\nEXPORT_SYMBOL(_ctype);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1675d7654e76e66979b031d05570f73438f1f3808fca8c6f1d51274181ad2d59",
+      "scope": "whole-file",
+      "line_count": 38,
+      "authoring_source": "course/file_units/character_classes.py",
+      "sections": [
+        "파일 전체",
+        "0부터31과127",
+        "ASCII 출력 영역",
+        "128부터191",
+        "192부터255",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/ctype.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "각 바이트에 숫자·글자·공백 같은 이름표를 붙인 표를 읽어 봅시다. 하나의 바이트에 이름표가 여러 개 붙을 수도 있습니다.",
+    "meaning": "256개 표 항목의 속성 비트를 보고 문자 분류의 범위를 이해합니다.",
+    "exercise": "탭에는 제어와 공백이 함께 붙고 NUL에는 제어만 붙는 이유를 표에서 찾아보세요."
+  },
+  "goal": "256개 표 항목의 속성 비트를 보고 문자 분류의 범위를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "탭에는 제어와 공백이 함께 붙고 NUL에는 제어만 붙는 이유를 표에서 찾아보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "25378be115cd14225d5f4a4291555e3e8db9ee69d79868e91097ec6c4ab0db71",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

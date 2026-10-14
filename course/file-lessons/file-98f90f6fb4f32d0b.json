@@ -5,71 +5,87 @@
   "area": "주소 재배치 · ASLR · 전처리 토큰 결합 · GNU C statement expression · 외부 배열 선언",
   "track": "files",
   "kind": "kernel",
-  "intro": "링크 기준 주소, vvar 페이지 수, 생성된 offset을 사용하는 심볼 주소 매크로를 분석합니다.",
+  "intro": "vDSO의 실행 위치가 바뀌어도 기준 주소에 함수까지의 거리를 더해 실제 주소를 구해요. 주소를 계산하는 것과 그곳의 내용을 읽는 것은 달라요.",
   "guide": [
-    "위치가 바뀌는 공유 코드의 심볼 주소는 링크 시 오프셋과 실행 시 매핑 기준 주소를 합쳐 구할 수 있습니다.",
-    "VDSO_SYMBOL의 토큰 결합과 주소 산술을 해석하고 이미지 경계 선언을 구별합니다."
+    "vDSO의 실행 위치가 바뀌어도 기준 주소에 함수까지의 거리를 더해 실제 주소를 구해요. 주소를 계산하는 것과 그곳의 내용을 읽는 것은 달라요."
   ],
   "deep_dive": [
     {
-      "title": "전체 상수와 가시성",
-      "text": "GPL-2.0-only include guard 아래 VDSO_LBASE=0x0, __VVAR_PAGES=2를 정의합니다. 주석은 vDSO 매핑 위치를 무작위화하므로 사전 링크 주소를 정하려는 실익이 적다고 설명합니다. 이 두 상수는 !__ASSEMBLY__ 구역보다 앞이어서 assembly 문맥에서도 보입니다. 이 파일 자체가 난수 주소를 선택하거나 페이지를 매핑하지 않습니다."
+      "title": "원문 읽기 1",
+      "text": "이 헤더는 VDSO_LBASE를 0x0, __VVAR_PAGES를 2로 정해요. 앞은 링크 때 기준 주소, 뒤는 배치에 쓸 페이지 개수예요. 실제 실행 위치를 무작위로 고르는 일이나 두 페이지를 할당하는 일을 이 상수 정의가 직접 하지는 않아요."
     },
     {
-      "title": "생성 헤더와 이름 결합",
-      "text": "C 구역에서는 generated/vdso-offsets.h를 포함합니다. VDSO_SYMBOL(base,name)은 vdso_offset_##name으로 생성된 offset 심볼 이름을 만듭니다. name은 런타임 문자열 검색 인수가 아니라 전처리 토큰으로 쓰입니다. 생성 헤더가 있어야 각 이름의 offset 정의를 사용할 수 있습니다."
+      "title": "원문 읽기 2",
+      "text": "두 상수는 __ASSEMBLY__ 조건보다 앞에 있어 어셈블리에서도 볼 수 있어요. C용 구역에서는 빌드가 만든 generated/vdso-offsets.h를 가져와 이름마다 정해진 거리를 사용해요."
     },
     {
-      "title": "주소 식과 예시",
-      "text": "매크로는 GNU C statement expression ({ ... }) 안에서 (void *)(vdso_offset_name - VDSO_LBASE + (unsigned long)base)를 계산합니다. base가 0x70000000이고 offset이 0x120이면 현재 LBASE=0 조건에서 0x70000120입니다. 여기서 메모리를 역참조하거나 함수 호출을 실행하지 않습니다. base 식은 매크로 본문에서 한 번만 나타납니다."
+      "title": "원문 읽기 3",
+      "text": "VDSO_SYMBOL(base,name)의 ##는 이름 조각을 붙여요. name이 foo라면 vdso_offset_foo라는 코드 이름을 만들어요. 실행 중 문자열 \"foo\"를 검색하는 함수가 아니에요."
     },
     {
-      "title": "이미지 경계의 선언",
-      "text": "extern char vdso_start[], vdso_end[], vdso32_start[], vdso32_end[]는 native와 compat 이미지 경계 심볼의 외부 배열 선언입니다. 배열 크기나 이미지 내용을 여기서 정의하지 않으며 메모리를 할당하지도 않습니다. 선언이 있다는 사실만으로 모든 빌드에서 모든 심볼 정의가 사용된다고 단정하지 않습니다."
+      "title": "원문 읽기 4",
+      "text": "계산은 vdso_offset_name - VDSO_LBASE + base예요. 지금 LBASE는 0이므로 base가 0x70000000이고 거리가 0x120이면 결과 주소는 0x70000120이에요. (void *)는 그 결과를 주소 형식으로 바꿔요. 그 주소의 값을 읽거나 함수를 실행하지는 않아요."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "전체 상수·매크로·선언·조건부 포함을 설명했습니다. 링크 기준과 실행 기준의 차이, 주소 산술과 역참조의 차이, 생성 파일 의존성이 핵심입니다. 매크로에는 이름 존재·범위·NULL 검사가 없으므로 올바른 이미지와 생성 offset을 사용하는 것은 호출 문맥의 책임입니다. 실제 무작위 매핑 실행 검증을 수행한 것은 아닙니다."
+      "title": "원문 읽기 5",
+      "text": "base 식은 본문에 한 번 나타나요. 다만 올바른 이름과 이미지 기준 주소를 주는 것은 부르는 쪽의 책임이에요. NULL이나 범위를 확인하는 코드는 이 매크로에 없어요."
+    },
+    {
+      "title": "원문 읽기 6",
+      "text": "vdso_start·vdso_end와 vdso32_start·vdso32_end는 다른 곳에 정의된 이미지의 경계를 알리는 extern 배열 선언이에요. 선언만으로 이미지 내용을 채우거나 메모리를 새로 만들지 않아요."
     }
   ],
   "questions": [
     {
-      "prompt": "현재 LBASE=0, base=0x70000000, offset=0x120일 때 VDSO_SYMBOL 결과는?",
+      "prompt": "LBASE=0, base=0x70000000, offset=0x120이면 계산한 주소는 무엇인가요?",
       "options": [
+        "0x70000120이에요",
+        "0x120 주소에서 읽어 온 메모리 값이에요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 시작 주소와 안쪽 거리를 더해요. 이 식에는 메모리 내용을 읽는 역참조가 없으므로 결과는 주소예요.",
+      "original_prompt": "현재 LBASE=0, base=0x70000000, offset=0x120일 때 VDSO_SYMBOL 결과는?",
+      "original_options": [
         "주소 0x70000120이다",
         "주소 0x120을 역참조한 메모리 값이다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 실행 시 기준 주소에 offset을 더해 void *를 만듭니다. 주소 계산과 해당 주소에서 값을 읽는 연산은 다릅니다."
+      "original_explanation": "매크로는 실행 시 기준 주소에 offset을 더해 void *를 만듭니다. 주소 계산과 해당 주소에서 값을 읽는 연산은 다릅니다."
     },
     {
-      "prompt": "VDSO_SYMBOL의 name은 런타임 함수 이름 문자열인가?",
+      "prompt": "VDSO_SYMBOL의 name은 실행 중 검색하는 문자열인가요?",
       "options": [
+        "네. 호출할 때마다 이름 목록을 검색해요",
+        "아니요. vdso_offset_과 붙일 코드 이름 조각이에요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. ##는 전처리 때 이름을 붙이는 기호예요. 예를 들어 foo를 붙여 vdso_offset_foo를 만들며 문자열 검색 반복문은 없어요.",
+      "original_prompt": "VDSO_SYMBOL의 name은 런타임 함수 이름 문자열인가?",
+      "original_options": [
         "그렇다. 매 호출마다 ELF 문자열표를 검색한다",
         "아니다. vdso_offset_과 결합할 전처리 토큰이다"
       ],
-      "answer": 1,
-      "explanation": "## 연산이 식별자를 만듭니다. 이 매크로에는 문자열 비교나 심볼 검색 루프가 없습니다."
+      "original_explanation": "## 연산이 식별자를 만듭니다. 이 매크로에는 문자열 비교나 심볼 검색 루프가 없습니다."
     },
     {
-      "prompt": "__VVAR_PAGES=2 선언이 실제로 두 페이지를 할당하는가?",
+      "prompt": "__VVAR_PAGES를 2로 정하면 그 순간 두 페이지가 할당되나요?",
       "options": [
+        "아니요. 배치 계산에 사용할 개수를 정해요",
+        "네. 헤더를 가져올 때마다 두 페이지가 생겨요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 숫자를 정의하는 것과 메모리를 마련하는 실행 동작은 달라요. 실제 할당과 연결은 다른 구현이 맡아요.",
+      "original_prompt": "__VVAR_PAGES=2 선언이 실제로 두 페이지를 할당하는가?",
+      "original_options": [
         "아니다. 레이아웃에 사용할 페이지 수 상수이다",
         "그렇다. 헤더를 포함할 때마다 두 페이지가 할당된다"
       ],
-      "answer": 0,
-      "explanation": "전처리 상수 정의는 실행 시 메모리 할당이 아닙니다. 실제 매핑과 수명은 다른 구현에서 관리합니다."
+      "original_explanation": "전처리 상수 정의는 실행 시 메모리 할당이 아닙니다. 실제 매핑과 수명은 다른 구현에서 관리합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0x70000000 + 0x120 = 0x70000120을 적고 앞의 수에는 기준 주소, 뒤의 수에는 안쪽 거리라고 표시하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2012 ARM Limited\n */\n#ifndef __ASM_VDSO_H\n#define __ASM_VDSO_H\n\n/*\n * Default link address for the vDSO.\n * Since we randomise the VDSO mapping, there's little point in trying\n * to prelink this.\n */\n#define VDSO_LBASE\t0x0\n\n#define __VVAR_PAGES    2\n\n#ifndef __ASSEMBLY__\n\n#include <generated/vdso-offsets.h>\n\n#define VDSO_SYMBOL(base, name)\t\t\t\t\t\t   \\\n({\t\t\t\t\t\t\t\t\t   \\\n\t(void *)(vdso_offset_##name - VDSO_LBASE + (unsigned long)(base)); \\\n})\n\nextern char vdso_start[], vdso_end[];\nextern char vdso32_start[], vdso32_end[];\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_H */\n",
   "source_review": {
@@ -92,5 +108,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-98f90f6fb4f32d0b",
+    "path": "arch/arm64/include/asm/vdso.h",
+    "title": "ARM64 vDSO 주소 계산: 링크 기준과 실행 시 매핑 기준",
+    "area": "주소 재배치 · ASLR · 전처리 토큰 결합 · GNU C statement expression · 외부 배열 선언",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "링크 기준 주소, vvar 페이지 수, 생성된 offset을 사용하는 심볼 주소 매크로를 분석합니다.",
+    "guide": [
+      "위치가 바뀌는 공유 코드의 심볼 주소는 링크 시 오프셋과 실행 시 매핑 기준 주소를 합쳐 구할 수 있습니다.",
+      "VDSO_SYMBOL의 토큰 결합과 주소 산술을 해석하고 이미지 경계 선언을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 상수와 가시성",
+        "text": "GPL-2.0-only include guard 아래 VDSO_LBASE=0x0, __VVAR_PAGES=2를 정의합니다. 주석은 vDSO 매핑 위치를 무작위화하므로 사전 링크 주소를 정하려는 실익이 적다고 설명합니다. 이 두 상수는 !__ASSEMBLY__ 구역보다 앞이어서 assembly 문맥에서도 보입니다. 이 파일 자체가 난수 주소를 선택하거나 페이지를 매핑하지 않습니다."
+      },
+      {
+        "title": "생성 헤더와 이름 결합",
+        "text": "C 구역에서는 generated/vdso-offsets.h를 포함합니다. VDSO_SYMBOL(base,name)은 vdso_offset_##name으로 생성된 offset 심볼 이름을 만듭니다. name은 런타임 문자열 검색 인수가 아니라 전처리 토큰으로 쓰입니다. 생성 헤더가 있어야 각 이름의 offset 정의를 사용할 수 있습니다."
+      },
+      {
+        "title": "주소 식과 예시",
+        "text": "매크로는 GNU C statement expression ({ ... }) 안에서 (void *)(vdso_offset_name - VDSO_LBASE + (unsigned long)base)를 계산합니다. base가 0x70000000이고 offset이 0x120이면 현재 LBASE=0 조건에서 0x70000120입니다. 여기서 메모리를 역참조하거나 함수 호출을 실행하지 않습니다. base 식은 매크로 본문에서 한 번만 나타납니다."
+      },
+      {
+        "title": "이미지 경계의 선언",
+        "text": "extern char vdso_start[], vdso_end[], vdso32_start[], vdso32_end[]는 native와 compat 이미지 경계 심볼의 외부 배열 선언입니다. 배열 크기나 이미지 내용을 여기서 정의하지 않으며 메모리를 할당하지도 않습니다. 선언이 있다는 사실만으로 모든 빌드에서 모든 심볼 정의가 사용된다고 단정하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "전체 상수·매크로·선언·조건부 포함을 설명했습니다. 링크 기준과 실행 기준의 차이, 주소 산술과 역참조의 차이, 생성 파일 의존성이 핵심입니다. 매크로에는 이름 존재·범위·NULL 검사가 없으므로 올바른 이미지와 생성 offset을 사용하는 것은 호출 문맥의 책임입니다. 실제 무작위 매핑 실행 검증을 수행한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "현재 LBASE=0, base=0x70000000, offset=0x120일 때 VDSO_SYMBOL 결과는?",
+        "options": [
+          "주소 0x70000120이다",
+          "주소 0x120을 역참조한 메모리 값이다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 실행 시 기준 주소에 offset을 더해 void *를 만듭니다. 주소 계산과 해당 주소에서 값을 읽는 연산은 다릅니다."
+      },
+      {
+        "prompt": "VDSO_SYMBOL의 name은 런타임 함수 이름 문자열인가?",
+        "options": [
+          "그렇다. 매 호출마다 ELF 문자열표를 검색한다",
+          "아니다. vdso_offset_과 결합할 전처리 토큰이다"
+        ],
+        "answer": 1,
+        "explanation": "## 연산이 식별자를 만듭니다. 이 매크로에는 문자열 비교나 심볼 검색 루프가 없습니다."
+      },
+      {
+        "prompt": "__VVAR_PAGES=2 선언이 실제로 두 페이지를 할당하는가?",
+        "options": [
+          "아니다. 레이아웃에 사용할 페이지 수 상수이다",
+          "그렇다. 헤더를 포함할 때마다 두 페이지가 할당된다"
+        ],
+        "answer": 0,
+        "explanation": "전처리 상수 정의는 실행 시 메모리 할당이 아닙니다. 실제 매핑과 수명은 다른 구현에서 관리합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2012 ARM Limited\n */\n#ifndef __ASM_VDSO_H\n#define __ASM_VDSO_H\n\n/*\n * Default link address for the vDSO.\n * Since we randomise the VDSO mapping, there's little point in trying\n * to prelink this.\n */\n#define VDSO_LBASE\t0x0\n\n#define __VVAR_PAGES    2\n\n#ifndef __ASSEMBLY__\n\n#include <generated/vdso-offsets.h>\n\n#define VDSO_SYMBOL(base, name)\t\t\t\t\t\t   \\\n({\t\t\t\t\t\t\t\t\t   \\\n\t(void *)(vdso_offset_##name - VDSO_LBASE + (unsigned long)(base)); \\\n})\n\nextern char vdso_start[], vdso_end[];\nextern char vdso32_start[], vdso32_end[];\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "6f53eacfdd87cca9bf1f9c5cacb794a06f6e9884c17015ab10553ec228af4e24",
+      "scope": "whole-file",
+      "line_count": 31,
+      "authoring_source": "course/file_units/arm64_sigreturn_address.py",
+      "sections": [
+        "전체 상수와 가시성",
+        "생성 헤더와 이름 결합",
+        "주소 식과 예시",
+        "이미지 경계의 선언",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "이동식 도서관이 다른 장소에 주차해도 입구에서 세 칸 뒤의 책장은 같은 곳에 있어요. 새 입구 위치와 안쪽 거리를 합하면 책장을 찾을 수 있어요.",
+    "meaning": "vDSO의 실행 위치가 바뀌어도 기준 주소에 함수까지의 거리를 더해 실제 주소를 구해요. 주소를 계산하는 것과 그곳의 내용을 읽는 것은 달라요.",
+    "exercise": "0x70000000 + 0x120 = 0x70000120을 적고 앞의 수에는 기준 주소, 뒤의 수에는 안쪽 거리라고 표시하세요."
+  },
+  "goal": "vDSO의 실행 위치가 바뀌어도 기준 주소에 함수까지의 거리를 더해 실제 주소를 구해요. 주소를 계산하는 것과 그곳의 내용을 읽는 것은 달라요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0x70000000 + 0x120 = 0x70000120을 적고 앞의 수에는 기준 주소, 뒤의 수에는 안쪽 거리라고 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "14a4e3b8c76fdcdafc005d0a00b6bc7bcb43222d08ba41caf26c0335c6f81e55",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

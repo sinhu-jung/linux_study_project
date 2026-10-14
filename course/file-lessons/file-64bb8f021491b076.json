@@ -5,232 +5,300 @@
   "area": "네임스페이스 · 객체 그래프 · refcount · RCU · syscall · 준비 상태 · 오류 경로",
   "track": "files",
   "kind": "kernel",
-  "intro": "파일 전체의 생성·회수·clone·unshare·exec·setns 제어 흐름과 참조 소유권을 분석합니다.",
+  "intro": "새 namespace 묶음의 생성·참조 정리·작업 연결과 setns의 준비·검증·최종 반영을 각 실패 경로까지 따라갑니다.",
   "guide": [
-    "여러 객체를 함께 교체할 때는 새 상태의 준비, 검증, 실제 반영, 실패 자원 정리를 분리해서 추적해야 합니다.",
-    "오류 포인터, 역순 회수, RCU와 task lock, 조건부 컴파일, 소유권 이전을 실제 코드에서 읽습니다."
+    "참조는 객체를 보유한 몫입니다. 묶음 참조와 내부 공간 참조, 임시 설치 자료의 참조를 따로 셉니다.",
+    "오류 포인터 ERR_PTR는 정상 주소 대신 오류를 담은 값입니다. 실패한 칸을 정상 객체처럼 put하지 않습니다.",
+    "RCU는 읽는 동안 객체 접근을 보호하는 방식이고 task_lock은 작업의 포인터 교체와 맞물립니다. 구간 밖에서 계속 쓸 참조는 별도로 얻습니다."
   ],
   "deep_dive": [
     {
-      "title": "구성과 초기 proxy",
-      "text": "GPL-2.0-only 파일은 slab·namespace·task·파일·syscall·perf 등의 헤더를 포함하고 static nsproxy_cachep를 둡니다. init_nsproxy는 count=1, uts=&init_uts_ns, mnt=NULL, 자식용 PID=&init_pid_ns입니다. IPC는 POSIX_MQUEUE 또는 SYSVIPC, net은 CONFIG_NET, cgroup은 CONFIG_CGROUPS, 두 시간 필드는 CONFIG_TIME_NS일 때 초기 객체를 가리킵니다. 이 초기화의 CONFIG_NET과 뒤 setns의 CONFIG_NET_NS를 같은 매크로라고 설명하면 안 됩니다."
+      "title": "초기 묶음과 설정",
+      "text": "관련 공간·작업·할당·파일·시스템 호출·성능 이벤트 헤더를 포함하고 묶음용 메모리 풀 nsproxy_cachep를 둡니다. init_nsproxy는 count=1, 초기 UTS와 자식용 PID를 가리키며 mnt=NULL입니다. IPC는 POSIX_MQUEUE 또는 SYSVIPC, net은 CONFIG_NET, cgroup은 CONFIG_CGROUPS, 두 시간 칸은 CONFIG_TIME_NS 조건입니다. 뒤 setns의 CONFIG_NET_NS와 CONFIG_NET은 다른 이름입니다."
     },
     {
-      "title": "Slab 할당과 초기화 범위",
-      "text": "create_nsproxy는 kmem_cache_alloc(nsproxy_cachep,GFP_KERNEL)로 할당하고 성공하면 count만 1로 설정합니다. 모든 필드를 0으로 초기화하는 kzalloc이 아닙니다. nsproxy_cache_init은 KMEM_CACHE(nsproxy,SLAB_PANIC|SLAB_ACCOUNT)로 cache를 만들고 0을 반환하는 __init 함수입니다. SLAB_PANIC 정책을 사용하는 초기 cache 생성과 일반 객체 할당의 NULL 반환을 구분합니다."
+      "title": "메모리 풀에서 묶음 얻기",
+      "text": "create_nsproxy는 GFP_KERNEL 방식으로 kmem_cache_alloc하고 성공하면 count만 1로 만듭니다. 모든 칸을 0으로 채우는 kzalloc이 아닙니다. 초기 cache 생성은 KMEM_CACHE에 SLAB_PANIC|SLAB_ACCOUNT를 주고 0을 반환합니다. 초기 풀 생성 실패 정책과 개별 객체 할당의 NULL 실패를 구별합니다."
     },
     {
-      "title": "새 묶음의 생성 순서",
-      "text": "create_new_namespaces는 새 proxy 할당 후 mount→UTS→IPC→자식용 PID→cgroup→net→자식용 time 순서로 각각 copy helper를 부릅니다. 각 helper에 flags와 필요한 owner·기존 객체를 전달하며 mount에는 new_fs도 전달합니다. 이름이 create라고 해서 모든 개별 namespace를 항상 복제하는 것은 아닙니다. helper는 flags에 따라 기존 객체를 공유할 수 있습니다. 마지막 현재 time_ns는 기존 현재 시간 객체를 get_time_ns로 얻습니다."
+      "title": "새 묶음의 준비 순서",
+      "text": "묶음 할당 뒤 mount→UTS→IPC→자식용 PID→cgroup→net→자식용 time의 copy 함수를 부릅니다. flags와 소유 user 공간·기존 객체를 넘기며 mount에는 new_fs도 줍니다. copy라는 이름이어도 flags에 따라 기존 공간을 공유할 수 있습니다. 마지막 현재 time_ns는 기존 현재 시간 공간을 get해 보유합니다."
     },
     {
-      "title": "생성과 task 연결의 분리",
-      "text": "각 copy 결과가 ERR_PTR이면 PTR_ERR를 보존해 해당 회수 라벨로 갑니다. 성공 시 반환한 proxy를 task에 붙이지 않습니다. 주석은 적절한 연결과 잠금을 호출자 책임으로 명시합니다. 새 proxy 메모리 할당 실패는 ERR_PTR(-ENOMEM)입니다. 현재 time_ns 참조 획득은 실패를 검사하는 자식용 time copy가 성공한 뒤 마지막에 수행합니다."
+      "title": "준비한 묶음은 아직 연결 전",
+      "text": "copy 결과가 ERR_PTR이면 오류를 보관하고 해당 정리 지점으로 갑니다. 묶음 할당 실패는 ERR_PTR(-ENOMEM)입니다. 성공해도 task의 주소를 여기서 바꾸지 않으며 알맞은 잠금과 연결은 호출자 몫입니다. 현재 time_ns 참조는 실패할 수 있는 자식용 시간 copy가 성공한 뒤 마지막에 얻습니다."
     },
     {
-      "title": "실패 라벨의 역순 회수",
-      "text": "time copy 실패는 net put부터, net 실패는 cgroup put부터, cgroup 실패는 자식용 PID put부터 시작합니다. 이후 IPC→UTS→mount를 거쳐 cache 객체를 해제합니다. PID·IPC·UTS·mount에는 NULL 검사가 있고 net·cgroup 호출에는 같은 위치의 명시적 NULL 검사가 없습니다. 실패한 ERR_PTR 필드를 정상 객체처럼 put하지 않고 앞서 성공한 필드만 정리하는 라벨 위치가 중요합니다. 아직 전체 객체가 완성되지 않았으므로 무조건 free_nsproxy를 부르는 경로가 아닙니다."
+      "title": "실패한 곳에서 거꾸로 돌려주기",
+      "text": "시간 copy 실패는 net부터, net 실패는 cgroup부터, cgroup 실패는 자식용 PID부터 놓습니다. 이어 IPC→UTS→mount를 놓고 묶음 공간을 반환합니다. PID·IPC·UTS·mount에는 NULL 검사가 있고 그 위치의 net·cgroup에는 없습니다. 실패한 오류 주소는 놓지 않고 앞서 성공한 칸만 정리합니다. 덜 준비된 객체에 무조건 free_nsproxy를 쓰지 않는 이유입니다."
     },
     {
-      "title": "Clone의 기존 묶음 공유 조건",
-      "text": "copy_namespaces는 tsk->nsproxy와 tsk 자격 증명의 user_ns를 얻습니다. 일곱 종류의 NEWNS·NEWUTS·NEWIPC·NEWPID·NEWNET·NEWCGROUP·NEWTIME 요청이 없고, CLONE_VM이 있거나 현재 time과 자식용 time이 같으면 old proxy를 get하고 0을 반환합니다. 새 namespace flag가 없어도 CLONE_VM이 없고 시간 포인터가 다르면 새 묶음 준비로 진행합니다. 목록에는 CLONE_NEWUSER가 직접 포함되지 않습니다."
+      "title": "clone에서 기존 묶음을 나눠 쓰기",
+      "text": "새 mount·UTS·IPC·PID·net·cgroup·time 요청이 없고 CLONE_VM이 있거나 현재 시간과 자식용 시간이 같으면 옛 묶음 참조를 늘려 끝냅니다. 새 공간 요청이 없어도 CLONE_VM이 없고 두 시간 주소가 다르면 새 묶음이 필요합니다. 이 일곱 비트 목록에 CLONE_NEWUSER는 직접 들어 있지 않습니다."
     },
     {
-      "title": "Clone 권한과 IPC 조합",
-      "text": "위 새 namespace flag가 하나라도 있으면 ns_capable(user_ns,CAP_SYS_ADMIN)이 없을 때 -EPERM입니다. 그 다음 CLONE_NEWIPC와 CLONE_SYSVSEM을 함께 요청하면 -EINVAL입니다. 새 IPC namespace에서는 옛 semaphore 배열에 접근할 수 없는데 undo 목록을 공유하려는 조합이기 때문입니다. 이 파일의 검사 순서상 권한 오류가 먼저 나올 수 있습니다."
+      "title": "권한과 IPC의 금지 조합",
+      "text": "새 공간 요청이 하나라도 있으면 해당 user 공간의 CAP_SYS_ADMIN 권한을 검사해 없으면 -EPERM입니다. 다음으로 NEWIPC와 SYSVSEM을 함께 요청하면 -EINVAL입니다. 새 IPC에서는 옛 세마포어 배열에 닿지 못하는데 옛 취소 기록을 공유하려는 모순을 막습니다. 코드 순서상 권한 오류가 먼저 나올 수 있습니다."
     },
     {
-      "title": "Clone 생성 후 시간 처리",
-      "text": "copy_namespaces는 create_new_namespaces(flags,tsk,user_ns,tsk->fs)를 호출하고 오류를 전달합니다. CLONE_VM이 없을 때만 timens_on_fork(new_ns,tsk)를 호출한 뒤 tsk->nsproxy=new_ns로 대입합니다. 이 경로에는 switch_task_namespaces나 old proxy put이 직접 없습니다. clone 중 새 task의 포인터와 참조 인계 계약을 일반적인 현재 task 교체와 동일시하지 않습니다."
+      "title": "clone에서 새 묶음 연결",
+      "text": "create_new_namespaces에 flags·tsk·user 공간·tsk->fs를 넘기고 실패를 전달합니다. CLONE_VM이 없을 때만 timens_on_fork를 부른 뒤 tsk->nsproxy에 대입합니다. 이 경로는 switch_task_namespaces나 옛 묶음 put을 직접 부르지 않습니다. 새 자식 작업의 참조 인계를 현재 작업 교체와 같은 절차라고 보지 않습니다."
     },
     {
-      "title": "완성된 묶음 해제",
-      "text": "free_nsproxy는 mount,UTS,IPC,자식용 PID,현재 time,자식용 time에 대해 포인터가 있으면 각각 put합니다. 이어 cgroup과 net을 put하고 proxy를 cache에 반환합니다. 같은 시간 객체가 두 필드에 있더라도 각 필드의 보유 참조를 해제합니다. 이 함수 자체가 proxy count를 먼저 감소시키는 것은 아니며 마지막 count 판단은 put_nsproxy 같은 호출자에서 합니다."
+      "title": "완성된 묶음의 정리",
+      "text": "mount·UTS·IPC·자식용 PID·현재 time·자식용 time은 주소가 있으면 각각 put합니다. cgroup과 net도 놓고 묶음을 풀에 돌려줍니다. 두 시간 칸이 같은 객체여도 각 칸이 보유한 참조를 놓습니다. free_nsproxy 자체는 묶음 count를 먼저 줄이지 않으며 마지막인지는 put_nsproxy 같은 호출자가 판단합니다."
     },
     {
-      "title": "Unshare의 준비 결과",
-      "text": "unshare_nsproxy_namespaces는 관련 일곱 flag가 없으면 0을 반환하고 *new_nsp를 대입하지 않습니다. owner는 new_cred가 있으면 그 user_ns, 없으면 current_user_ns이며 CAP_SYS_ADMIN을 검사합니다. 새 fs가 있으면 그것을, 없으면 current->fs를 create_new_namespaces에 넘깁니다. 오류 시 *new_nsp에는 ERR_PTR 결과가 남고 정수 오류를 반환합니다. 성공해도 여기서 current의 proxy를 직접 바꾸거나 timens_on_fork를 호출하지 않습니다."
+      "title": "unshare는 결과만 준비",
+      "text": "관련 일곱 비트가 없으면 출력 *new_nsp를 건드리지 않고 0입니다. 새 자격 증명이 있으면 그 user 공간, 없으면 현재 user 공간으로 관리 권한을 검사합니다. 새 fs 또는 현재 fs로 묶음을 만들며 실패하면 출력에 ERR_PTR가 남고 정수 오류를 반환합니다. 성공해도 여기서 현재 묶음을 바꾸거나 timens_on_fork를 부르지는 않습니다."
     },
     {
-      "title": "현재 task 전환과 종료",
-      "text": "switch_task_namespaces는 might_sleep 뒤 task_lock 아래 옛 포인터를 저장하고 새 포인터를 대입한 뒤 unlock합니다. 옛 proxy가 있으면 잠금 밖에서 put합니다. 새 proxy에 get을 추가하지 않으므로 호출자가 보유한 참조를 인계하는 방식입니다. exit_task_namespaces는 new=NULL로 이 함수를 호출합니다. 오래 걸릴 수 있는 마지막 해제와 task lock의 범위를 분리합니다."
+      "title": "현재 작업 교체와 종료",
+      "text": "switch_task_namespaces는 잠들 수 있는 문맥을 확인하고 task_lock 안에서 옛 주소를 보관한 뒤 새 주소로 바꿉니다. 잠금을 푼 뒤 옛 묶음 참조를 놓습니다. 새 묶음을 추가 get하지 않고 받은 참조를 인계받습니다. exit는 새 값 NULL로 이 함수를 부릅니다. 오래 걸릴 수 있는 마지막 해제를 task 잠금 밖에 둡니다."
     },
     {
-      "title": "Exec의 시간 namespace 적용",
-      "text": "exec_task_namespaces는 현재 time과 자식용 time이 같으면 0입니다. 다르면 flags=0으로 새 proxy를 만들고 실패를 전달합니다. 성공하면 timens_on_fork로 준비된 자식용 time을 적용하고 switch_task_namespaces로 연결합니다. 새 namespace를 생성하는 flag 없이도 별도 proxy가 필요한 이유를 보여 줍니다."
+      "title": "exec 때 시간 공간 적용",
+      "text": "현재 시간과 자식용 시간이 같으면 바로 성공합니다. 다르면 flags=0으로 새 묶음을 준비하고 오류를 전달합니다. 성공하면 timens_on_fork로 준비한 자식용 시간을 적용하고 switch_task_namespaces로 연결합니다. 새 공간 생성 비트가 없어도 별도 묶음이 필요한 예입니다."
     },
     {
-      "title": "Pidfd setns flag 검증",
-      "text": "check_setns_flags는 0 또는 허용된 여덟 CLONE_NEW 비트 밖의 값이면 -EINVAL입니다. USER·PID·UTS·IPC·CGROUPS·NET_NS·TIME_NS 각각의 CONFIG가 없을 때 해당 요청도 -EINVAL입니다. NEWNS는 허용 mask에 있으나 같은 형태의 CONFIG별 분기가 여기에는 없습니다. 이 helper는 여러 요청 비트 조합을 허용하며 뒤 pidfd 경로에서 사용합니다."
+      "title": "pidfd 요청 비트 검사",
+      "text": "check_setns_flags는 0이나 허용된 여덟 NEW 비트 밖의 값을 -EINVAL로 거절합니다. USER·PID·UTS·IPC·CGROUPS·NET_NS·TIME_NS 설정이 없으면 해당 요청도 거절합니다. NEWNS는 허용 목록에 있지만 같은 형태의 설정 검사는 여기 없습니다. 여러 비트 조합을 허용하며 뒤 pidfd 경로가 이 검사를 사용합니다."
     },
     {
-      "title": "Nsset 준비의 proxy와 자격 증명",
-      "text": "prepare_nsset은 flags=0으로 현재 상태를 공유하는 새 proxy부터 준비합니다. 실패하면 즉시 오류 반환합니다. NEWUSER이면 prepare_creds, 아니면 current_cred를 저장하고 NULL이면 실패 라벨로 갑니다. 정확히 NEWNS만 있으면 현재 fs를 빌리고, NEWNS와 다른 종류를 함께 요청하면 copy_fs_struct로 임시 fs를 만듭니다. NEWNS가 없으면 syscall에서 0으로 초기화한 fs 필드를 유지합니다."
+      "title": "설치 준비의 묶음과 자격 증명",
+      "text": "prepare_nsset은 flags=0으로 현재 상태를 공유하는 새 묶음을 먼저 만듭니다. 실패하면 바로 반환합니다. NEWUSER이면 새 자격 증명을 준비하고 아니면 현재 것을 기록하며 NULL이면 정리로 갑니다. 정확히 NEWNS만이면 현재 fs를 빌리고 다른 종류와 함께 NEWNS가 있으면 fs를 임시 복사합니다. NEWNS가 없으면 처음 0으로 만든 fs 칸을 유지합니다."
     },
     {
-      "title": "Nsset flags 대입 시점과 정리 범위",
-      "text": "prepare_nsset의 nsset->flags=flags 대입은 모든 준비가 성공한 끝부분입니다. put_nsset은 저장된 flags에 NEWUSER가 있을 때만 put_cred, fs가 있고 NEWNS와 다른 비트가 함께 있을 때만 free_fs_struct, proxy가 있으면 free_nsproxy를 합니다. 따라서 준비 실패 때도 모든 요청 비트가 nsset에 이미 저장됐다고 가정하면 틀립니다. 이 syscall의 nsset={}에서는 준비 도중 실패 시 flags가 여전히 0일 수 있습니다. 특히 cred 준비 후 fs 복사 실패 경로를 자동으로 완전 회수된다고 단정해서는 안 됩니다. 원본 대입 순서와 조건을 그대로 추적해야 합니다."
+      "title": "flags를 늦게 쓰는 점 주의",
+      "text": "nsset->flags는 모든 준비가 성공한 맨 끝에 기록합니다. put_nsset은 저장된 flags에 NEWUSER가 있어야 cred를 놓고 NEWNS와 다른 비트가 함께 있어야 임시 fs를 해제하며 묶음이 있으면 정리합니다. 준비 실패 때 요청 비트가 이미 저장됐다고 생각하면 안 됩니다. 초기값 0인 상태에서 cred 준비 뒤 fs 복사가 실패하면 flags 조건 때문에 완전 회수된다고 단정할 수 없습니다. 원문의 대입 시점과 조건을 그대로 따릅니다."
     },
     {
-      "title": "단일 namespace 검증 callback",
-      "text": "validate_ns는 ns->ops->install(nsset,ns)를 호출해 int를 그대로 반환합니다. 이름은 validate지만 callback은 준비 중인 nsset의 객체와 참조를 바꿀 수 있습니다. 단순히 읽기 전용 boolean 검사를 수행한다고 설명하면 안 됩니다. 개별 namespace의 권한과 계층 제한은 각 install 구현의 책임입니다."
+      "title": "검증이라는 이름의 설치 호출",
+      "text": "validate_ns는 공간 동작 표의 install(nsset,ns)을 불러 정수 결과를 그대로 줍니다. install은 준비 묶음의 객체나 참조를 바꿀 수 있으므로 읽기만 하는 참·거짓 검사는 아닙니다. 개별 종류의 권한·계층 제한은 각 install이 맡습니다."
     },
     {
-      "title": "Pidfd 대상 task의 상태 획득",
-      "text": "validate_nsset은 rcu_read_lock 아래 pid_task(pid,PIDTYPE_PID)를 찾고 없으면 -ESRCH입니다. ptrace_may_access의 PTRACE_MODE_READ_REALCREDS 검사가 실패하면 -EPERM입니다. task_lock 아래 대상 nsproxy를 읽어 있으면 get한 후 unlock하고, 없으면 RCU를 풀고 -ESRCH입니다. RCU 읽기 구간만으로 잠금 밖의 proxy 수명이 자동 보장되는 것이 아니라 별도 참조를 얻습니다."
+      "title": "pidfd 대상 작업 찾기",
+      "text": "RCU 읽기 구간에서 PID로 작업을 찾고 없으면 -ESRCH, 실제 자격 증명으로 읽을 ptrace 권한이 없으면 -EPERM입니다. task_lock 안에서 대상 nsproxy를 읽고 존재하면 참조를 늘립니다. 없으면 RCU를 끝내고 -ESRCH입니다. RCU 구간 밖에서도 묶음을 쓰려면 이 별도 참조가 필요합니다."
     },
     {
-      "title": "PID·user 객체는 별도로 확보",
-      "text": "NEWPID 요청이면 target의 task_active_pid_ns를 찾아 get합니다. 자식용 PID 포인터를 그대로 쓰는 것이 아닙니다. NEWUSER이면 __task_cred(tsk)->user_ns를 get합니다. 그 뒤 RCU 구간을 끝냅니다. PID를 찾지 못한 경로는 RCU를 풀고 공통 회수로 가며 이미 획득한 proxy 참조를 놓습니다. 여러 필드를 시스템 전체의 원자적 스냅샷으로 읽는다고 확대하지 않습니다."
+      "title": "PID와 user 공간은 따로 얻기",
+      "text": "NEWPID이면 대상의 활성 PID 공간을 task_active_pid_ns로 찾아 참조를 얻습니다. 묶음의 자식용 PID 칸을 그대로 쓰지 않습니다. NEWUSER이면 대상 자격 증명의 user 공간을 get한 뒤 RCU를 끝냅니다. PID를 못 찾는 길은 RCU를 풀고 이미 얻은 묶음도 정리합니다. 이를 시스템 전체의 모든 값이 동시에 고정된 사진이라고 확대하지 않습니다."
     },
     {
-      "title": "복수 namespace 설치 순서",
-      "text": "요청된 항목을 USER→mount→UTS→IPC→PID→cgroup→net→time 순서로 validate_ns에 넘깁니다. mount는 from_mnt_ns로 공통 객체를 얻고 time은 대상의 time_ns를 쓰며 time_ns_for_children이 아닙니다. 각 호출이 실패하면 이후 항목은 실행하지 않고 회수합니다. 지원 CONFIG 여부는 앞 check_setns_flags가 검사한다는 계약이며 이 함수의 #ifdef에 없는 요청을 여기서 다시 오류 처리하지 않습니다."
+      "title": "여러 공간의 설치 순서",
+      "text": "요청한 항목을 USER→mount→UTS→IPC→PID→cgroup→net→time 순서로 install에 넘깁니다. mount는 from_mnt_ns, time은 현재 time_ns를 쓰며 자식용 시간이 아닙니다. 하나라도 실패하면 뒤 항목은 하지 않고 정리합니다. 빌드 지원 여부는 앞 check_setns_flags가 확인했다는 계약이며 여기서 지원하지 않는 요청을 다시 검사하는 구조는 아닙니다."
     },
     {
-      "title": "대상 참조의 정리",
-      "text": "validate_nsset의 out은 별도로 얻은 pid_ns가 있으면 put, nsp가 있으면 put_nsproxy, user_ns는 put_user_ns를 호출하고 ret를 반환합니다. 대상 task에서 읽은 상태 참조와 nsset이 설치 과정에서 보유하게 된 참조는 다릅니다. 대상 스냅샷을 놓는 것만으로 준비한 nsset을 해제하는 것은 아니며 syscall이 put_nsset을 별도로 호출합니다."
+      "title": "대상에서 빌린 참조 반환",
+      "text": "끝에서는 따로 얻은 PID가 있으면 put, 묶음이 있으면 put_nsproxy, user 공간은 put_user_ns로 놓습니다. 대상 작업에서 빌린 참조와 설치 준비 nsset이 갖게 된 참조는 다릅니다. 대상 참조를 정리했다고 준비 묶음도 정리된 것은 아니므로 시스템 호출이 put_nsset을 따로 부릅니다."
     },
     {
-      "title": "최종 반영의 자격 증명과 fs",
-      "text": "commit_nsset은 되돌아가지 않는 반영 지점이라는 주석을 가집니다. NEWUSER이면 commit_creds(nsset_cred(nsset))로 소유권을 넘긴 뒤 cred=NULL로 합니다. NEWNS와 다른 종류를 함께 요청한 경우 임시 fs의 root,pwd를 현재 fs에 set합니다. NEWNS 단독 경로는 임시 복사본이 없으므로 여기서 다시 복사하지 않습니다."
+      "title": "되돌리지 않는 반영: 권한과 fs",
+      "text": "commit_nsset은 최종 반영 지점입니다. NEWUSER이면 commit_creds에 자격 증명 책임을 넘긴 뒤 준비 칸을 NULL로 합니다. NEWNS와 다른 종류를 함께 요청했다면 임시 fs의 root와 pwd를 현재 fs에 옮깁니다. NEWNS만인 경우는 임시 복사본이 없으므로 이 단계에서 다시 복사하지 않습니다."
     },
     {
-      "title": "최종 반영의 IPC·시간·proxy",
-      "text": "IPC 설정과 요청이 있으면 exit_sem으로 undo 상태를 정리하고 TIME_NS와 요청이 있으면 준비 proxy의 time_ns로 timens_commit을 호출합니다. 마지막 switch_task_namespaces로 proxy 소유권을 넘기고 nsset->nsproxy=NULL로 만들어 이후 정리에서 다시 해제하지 않게 합니다. commit은 void이며 이 함수 안에는 실패를 되돌리는 rollback 분기가 없습니다."
+      "title": "되돌리지 않는 반영: IPC와 시간",
+      "text": "IPC 설정과 요청이 있으면 exit_sem으로 세마포어 취소 상태를 정리합니다. 시간 설정과 요청이 있으면 준비 묶음의 time_ns를 timens_commit에 넘깁니다. 마지막으로 새 묶음을 현재 작업에 인계하고 nsset의 주소를 NULL로 해 후속 정리에서 다시 놓지 않게 합니다. commit은 void이며 실패를 되돌리는 분기는 없습니다."
     },
     {
-      "title": "Setns의 FD 종류별 입력 규칙",
-      "text": "syscall은 fdget으로 파일을 얻고 없으면 -EBADF입니다. namespace 파일이면 inode에서 ns를 얻고 flags가 0이 아니면서 ops->type과 정확히 다를 때 -EINVAL입니다. 그 뒤 flags를 실제 type으로 설정합니다. pidfd이면 check_setns_flags를 사용하므로 0을 허용하지 않고 여러 종류의 bitmask를 허용합니다. 둘 다 아니면 -EINVAL입니다. namespace 파일의 flags=0과 pidfd의 flags=0을 같은 결과로 설명하면 안 됩니다."
+      "title": "FD 종류에 따라 다른 flags",
+      "text": "fdget으로 파일을 못 얻으면 -EBADF입니다. namespace 파일이면 flags가 0이 아니면서 실제 종류와 정확히 다를 때 -EINVAL이고 그 뒤 실제 종류로 flags를 정합니다. pidfd이면 별도 비트 검사라 0을 거절하고 여러 종류 조합을 허용합니다. 둘 다 아니면 -EINVAL입니다. namespace FD의 0과 pidfd의 0은 결과가 다릅니다."
     },
     {
-      "title": "Setns 준비·검증·통지·정리",
-      "text": "입력 검사가 통과하면 prepare_nsset, 이어 namespace 파일은 validate_ns, pidfd는 validate_nsset을 호출합니다. 검증이 성공했을 때만 commit_nsset 후 perf_event_namespaces(current)로 통지합니다. 준비 성공 이후에는 성공·검증 실패 모두 put_nsset을 부르며 공통 out에서 fdput합니다. 준비 실패는 prepare 함수 내부 정리 계약을 따른 뒤 fdput으로 갑니다. 이 경로에는 get_proc_ns 직후 별도 get callback 호출이 없고 열린 파일 참조의 수명과 연결됩니다."
+      "title": "준비에서 통지와 정리까지",
+      "text": "입력 검사 뒤 prepare_nsset을 하고 일반 공간 파일이면 validate_ns, pidfd이면 validate_nsset을 부릅니다. 성공했을 때만 commit 뒤 성능 관찰 도구에 namespace 변경을 알립니다. 준비 성공 뒤에는 검증 성공·실패 모두 put_nsset, 마지막에 fdput을 합니다. 준비 실패는 준비 함수 내부 정리 뒤 fdput으로 갑니다. get_proc_ns 뒤 별도 get 호출은 없고 열린 파일 수명과 연결됩니다."
     },
     {
-      "title": "학습 범위와 확인의 한계",
-      "text": "전체 생성·실패 라벨·clone·unshare·switch·exit·exec·setns flag 검사·준비·대상 검증·반영·cache 초기화를 모두 원본과 대조했습니다. 핵심 CS 주제는 서로 다른 수명의 참조를 구분하는 객체 그래프, 자원 획득의 역순 회수, RCU와 task lock의 역할 분담, 준비 상태의 소유권 이전입니다. 개별 namespace install 구현과 실제 커널의 오류 주입·동시 실행을 모두 검증한 것은 아닙니다."
+      "title": "전체 흐름에서 배운 것",
+      "text": "생성·실패 정리·clone·unshare·교체·종료·exec·setns 검사와 준비·설치·반영·풀 초기화를 읽었습니다. 서로 다른 참조 수명, 거꾸로 회수하는 순서, RCU와 task 잠금, 준비 객체의 소유권 인계가 핵심입니다. 각 종류의 install 전체와 실제 커널 오류 주입·동시 실행을 모두 시험한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "create_new_namespaces가 성공하면 task->nsproxy도 즉시 교체되는가?",
+      "prompt": "create_new_namespaces가 성공하면 작업의 묶음도 바로 교체되나요?",
       "options": [
+        "아니요. 새 묶음을 반환하고 호출자가 연결합니다.",
+        "네. 모든 호출에서 current를 바로 바꿉니다."
+      ],
+      "answer": 0,
+      "explanation": "생성과 연결은 분리되어 있습니다. 준비된 객체와 실제 적용된 객체를 구별합니다.",
+      "original_prompt": "create_new_namespaces가 성공하면 task->nsproxy도 즉시 교체되는가?",
+      "original_options": [
         "아니다. 새 묶음을 반환하고 연결은 호출자가 수행한다",
         "그렇다. 모든 호출에서 current를 즉시 바꾼다"
       ],
-      "answer": 0,
-      "explanation": "함수 주석과 본문 모두 생성과 연결을 분리합니다. 따라서 준비 과정의 객체와 task에 적용된 객체를 구분해야 합니다."
+      "original_explanation": "함수 주석과 본문 모두 생성과 연결을 분리합니다. 따라서 준비 과정의 객체와 task에 적용된 객체를 구분해야 합니다."
     },
     {
-      "prompt": "새 namespace flag가 없어도 clone에서 새 proxy를 만들 수 있는 경우는?",
+      "prompt": "새 공간 비트가 없어도 clone이 새 묶음을 만드는 경우는?",
       "options": [
+        "옛 묶음 참조 수가 정확히 1일 때뿐입니다.",
+        "CLONE_VM이 없고 현재 시간과 자식용 시간이 다를 때입니다."
+      ],
+      "answer": 1,
+      "explanation": "빠른 공유 조건은 CLONE_VM 또는 두 시간 주소가 같은 경우입니다. 참조 수 검사 조건은 없습니다.",
+      "original_prompt": "새 namespace flag가 없어도 clone에서 새 proxy를 만들 수 있는 경우는?",
+      "original_options": [
         "old proxy의 참조 수가 정확히 1일 때만",
         "CLONE_VM이 없고 현재 time과 자식용 time이 다를 때"
       ],
-      "answer": 1,
-      "explanation": "빠른 공유 경로의 조건은 CLONE_VM 또는 시간 포인터 동일성입니다. 참조 수를 검사하는 조건은 없습니다."
+      "original_explanation": "빠른 공유 경로의 조건은 CLONE_VM 또는 시간 포인터 동일성입니다. 참조 수를 검사하는 조건은 없습니다."
     },
     {
-      "prompt": "CLONE_NEWIPC와 CLONE_SYSVSEM의 동시 요청을 거절하는 이유는?",
+      "prompt": "NEWIPC와 SYSVSEM을 함께 못 쓰게 하는 이유는?",
       "options": [
+        "새 IPC에서 옛 세마포어 취소 목록을 공유하려는 조합을 막습니다.",
+        "두 비트의 숫자가 같기 때문입니다."
+      ],
+      "answer": 0,
+      "explanation": "새 공간에서 옛 세마포어 배열에 접근할 수 없습니다. 권한 통과 후 이 조합은 -EINVAL입니다.",
+      "original_prompt": "CLONE_NEWIPC와 CLONE_SYSVSEM의 동시 요청을 거절하는 이유는?",
+      "original_options": [
         "새 IPC 공간에서 옛 semaphore undo 목록을 공유하는 조합을 막기 위해서다",
         "두 flag가 같은 숫자이기 때문이다"
       ],
-      "answer": 0,
-      "explanation": "새 공간에서는 옛 semaphore 배열이 도달 불가능해집니다. 권한 검사를 통과한 해당 조합은 -EINVAL입니다."
+      "original_explanation": "새 공간에서는 옛 semaphore 배열이 도달 불가능해집니다. 권한 검사를 통과한 해당 조합은 -EINVAL입니다."
     },
     {
-      "prompt": "switch_task_namespaces는 새 proxy의 참조를 추가로 증가시키는가?",
+      "prompt": "switch_task_namespaces는 새 묶음 참조를 더 늘리나요?",
       "options": [
+        "네. 내부 공간 참조도 모두 늘립니다.",
+        "아니요. 받은 참조를 연결하고 옛 참조를 놓습니다."
+      ],
+      "answer": 1,
+      "explanation": "잠금 아래 주소를 바꾸고 밖에서 옛 묶음을 put합니다. 준비한 참조가 인계됩니다.",
+      "original_prompt": "switch_task_namespaces는 새 proxy의 참조를 추가로 증가시키는가?",
+      "original_options": [
         "그렇다. 새 proxy의 모든 namespace count를 증가시킨다",
         "아니다. 전달받은 참조를 연결하고 옛 참조를 놓는다"
       ],
-      "answer": 1,
-      "explanation": "본문은 잠금 아래 포인터 교체, 잠금 밖 옛 proxy put입니다. 호출자가 준비한 소유권의 이전을 추적해야 합니다."
+      "original_explanation": "본문은 잠금 아래 포인터 교체, 잠금 밖 옛 proxy put입니다. 호출자가 준비한 소유권의 이전을 추적해야 합니다."
     },
     {
-      "prompt": "pidfd 기반 setns에 flags=0을 주면?",
+      "prompt": "pidfd로 setns하면서 flags=0이면 결과는?",
       "options": [
+        "-EINVAL입니다.",
+        "대상의 모든 공간에 자동 가입합니다."
+      ],
+      "answer": 0,
+      "explanation": "비트 검사에서 !flags를 거절합니다. 일반 namespace 파일에서는 0을 실제 종류로 정할 수 있습니다.",
+      "original_prompt": "pidfd 기반 setns에 flags=0을 주면?",
+      "original_options": [
         "-EINVAL",
         "대상 task의 모든 namespace에 자동 가입한다"
       ],
-      "answer": 0,
-      "explanation": "check_setns_flags가 !flags를 거절합니다. namespace 파일 FD에서는 0을 실제 타입으로 바꿀 수 있어 규칙이 다릅니다."
+      "original_explanation": "check_setns_flags가 !flags를 거절합니다. namespace 파일 FD에서는 0을 실제 타입으로 바꿀 수 있어 규칙이 다릅니다."
     },
     {
-      "prompt": "Pidfd NEWPID 요청은 대상의 어느 PID namespace를 사용하는가?",
+      "prompt": "pidfd의 NEWPID는 대상의 어느 공간을 쓰나요?",
       "options": [
+        "언제나 pid_ns_for_children입니다.",
+        "task_active_pid_ns로 얻은 활성 공간입니다."
+      ],
+      "answer": 1,
+      "explanation": "활성 PID 객체를 별도 참조로 얻습니다. 묶음의 자식용 주소를 그대로 쓰지 않습니다.",
+      "original_prompt": "Pidfd NEWPID 요청은 대상의 어느 PID namespace를 사용하는가?",
+      "original_options": [
         "항상 pid_ns_for_children",
         "task_active_pid_ns로 얻은 활성 namespace"
       ],
-      "answer": 1,
-      "explanation": "validate_nsset은 PID 객체를 별도 참조로 얻습니다. proxy에 든 자식용 PID 필드를 그대로 사용하는 코드가 아닙니다."
+      "original_explanation": "validate_nsset은 PID 객체를 별도 참조로 얻습니다. proxy에 든 자식용 PID 필드를 그대로 사용하는 코드가 아닙니다."
     },
     {
-      "prompt": "NEWNS와 NEWNET을 함께 setns할 때 fs 준비는?",
+      "prompt": "NEWNS와 NEWNET을 함께 바꿀 때 fs 준비는?",
       "options": [
+        "임시 복사 후 반영할 때 root와 pwd를 옮깁니다.",
+        "NEWNS만일 때처럼 언제나 현재 fs만 빌립니다."
+      ],
+      "answer": 0,
+      "explanation": "NEWNS 단독과 다른 비트와 함께인 경우를 나눠 복합 변경의 준비 상태를 유지합니다.",
+      "original_prompt": "NEWNS와 NEWNET을 함께 setns할 때 fs 준비는?",
+      "original_options": [
         "현재 fs를 임시 복사하고 최종 반영에서 root와 pwd를 옮긴다",
         "NEWNS 단독 때와 똑같이 무조건 현재 fs만 빌린다"
       ],
-      "answer": 0,
-      "explanation": "정확히 NEWNS만인 경우와 다른 비트가 함께 있는 경우를 분리합니다. 복합 변경의 준비 상태를 따로 유지하기 위한 분기입니다."
+      "original_explanation": "정확히 NEWNS만인 경우와 다른 비트가 함께 있는 경우를 분리합니다. 복합 변경의 준비 상태를 따로 유지하기 위한 분기입니다."
     },
     {
-      "prompt": "prepare_nsset에서 nsset->flags가 기록되는 시점은?",
+      "prompt": "prepare_nsset이 nsset->flags를 쓰는 때는?",
       "options": [
+        "함수에 들어오자마자입니다.",
+        "묶음·자격 증명·필요한 fs 준비가 모두 성공한 뒤입니다."
+      ],
+      "answer": 1,
+      "explanation": "정리 함수가 이 저장값을 보므로 실패 분석에서 중요합니다. 요청 인수와 저장 칸은 아직 다를 수 있습니다.",
+      "original_prompt": "prepare_nsset에서 nsset->flags가 기록되는 시점은?",
+      "original_options": [
         "함수에 진입하자마자",
         "proxy·cred·필요한 fs 준비가 모두 성공한 뒤"
       ],
-      "answer": 1,
-      "explanation": "정리 함수가 저장된 flags를 조건으로 쓰므로 이 순서는 실패 분석에 중요합니다. 요청 인수 flags와 저장 필드를 같은 시점의 값으로 보면 안 됩니다."
+      "original_explanation": "정리 함수가 저장된 flags를 조건으로 쓰므로 이 순서는 실패 분석에 중요합니다. 요청 인수 flags와 저장 필드를 같은 시점의 값으로 보면 안 됩니다."
     },
     {
-      "prompt": "validate_ns라는 이름의 helper는 실제로 무엇을 호출하는가?",
+      "prompt": "validate_ns가 실제로 부르는 것은?",
       "options": [
+        "공간 동작 표의 install 함수입니다.",
+        "언제나 읽기 전용 ns_match입니다."
+      ],
+      "answer": 0,
+      "explanation": "install은 준비 객체와 참조를 바꿀 수 있습니다. 이름만으로 부작용이 없다고 가정하지 않습니다.",
+      "original_prompt": "validate_ns라는 이름의 helper는 실제로 무엇을 호출하는가?",
+      "original_options": [
         "namespace operation의 install callback",
         "항상 읽기 전용 ns_match 비교"
       ],
-      "answer": 0,
-      "explanation": "install은 준비 객체를 변경하거나 참조를 교체할 수 있습니다. 함수 이름만으로 부작용이 없다고 가정하면 안 됩니다."
+      "original_explanation": "install은 준비 객체를 변경하거나 참조를 교체할 수 있습니다. 함수 이름만으로 부작용이 없다고 가정하면 안 됩니다."
     },
     {
-      "prompt": "commit_nsset에서 proxy를 넘긴 뒤 NULL로 만드는 이유는?",
+      "prompt": "반영 뒤 nsset의 묶음 주소를 NULL로 만드는 이유는?",
       "options": [
+        "사용자에게 NULL 공간을 설치하려는 것입니다.",
+        "이미 인계한 묶음을 후속 정리가 다시 해제하지 않게 합니다."
+      ],
+      "answer": 1,
+      "explanation": "현재 작업에는 새 묶음이 설치되어 있습니다. 비우는 것은 준비 자료의 소유 주소입니다.",
+      "original_prompt": "commit_nsset에서 proxy를 넘긴 뒤 NULL로 만드는 이유는?",
+      "original_options": [
         "사용자 공간에 NULL namespace를 설치하기 위해서다",
         "이후 put_nsset이 인계한 proxy를 다시 해제하지 않도록 하기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "current에는 switch_task_namespaces가 새 proxy를 설치했습니다. 비우는 것은 준비용 nsset의 소유 포인터입니다."
+      "original_explanation": "current에는 switch_task_namespaces가 새 proxy를 설치했습니다. 비우는 것은 준비용 nsset의 소유 포인터입니다."
     },
     {
-      "prompt": "검증이 실패한 setns도 perf namespace 이벤트를 통지하는가?",
+      "prompt": "검증 실패에도 perf 변경 이벤트를 알리나요?",
       "options": [
+        "아니요. 성공적으로 반영한 뒤에만 알립니다.",
+        "네. fdget 직후 언제나 알립니다."
+      ],
+      "answer": 0,
+      "explanation": "perf_event_namespaces는 성공 조건 안의 commit 다음입니다. 시도와 실제 전환은 다릅니다.",
+      "original_prompt": "검증이 실패한 setns도 perf namespace 이벤트를 통지하는가?",
+      "original_options": [
         "아니다. 성공적으로 commit한 경우에만 통지한다",
         "그렇다. fdget 직후 항상 통지한다"
       ],
-      "answer": 0,
-      "explanation": "perf_event_namespaces는 if (!err) 안에서 commit 뒤에 있습니다. 요청 시도와 실제 전환을 구분합니다."
+      "original_explanation": "perf_event_namespaces는 if (!err) 안에서 commit 뒤에 있습니다. 요청 시도와 실제 전환을 구분합니다."
     },
     {
-      "prompt": "Unshare helper에 관련 namespace flag가 없으면 출력 포인터는?",
+      "prompt": "unshare helper에 관련 공간 비트가 없으면 출력 주소는?",
       "options": [
+        "반드시 NULL로 초기화합니다.",
+        "대입하지 않고 0을 반환합니다."
+      ],
+      "answer": 1,
+      "explanation": "첫 조건에서 바로 return 0입니다. 성공 상태와 출력 초기화는 같은 보장이 아닙니다.",
+      "original_prompt": "Unshare helper에 관련 namespace flag가 없으면 출력 포인터는?",
+      "original_options": [
         "반드시 NULL로 초기화한다",
         "이 함수에서 대입하지 않고 0을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "첫 분기는 즉시 return 0입니다. 반환 성공과 출력 매개변수 초기화를 같은 보장으로 해석하면 안 됩니다."
+      "original_explanation": "첫 분기는 즉시 return 0입니다. 반환 성공과 출력 매개변수 초기화를 같은 보장으로 해석하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "prepare_nsset의 요청 flags와 저장된 nsset->flags가 같아지는 줄을 찾아 그 앞의 실패 정리에 어떤 영향을 주는지 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  Copyright (C) 2006 IBM Corporation\n *\n *  Author: Serge Hallyn <serue@us.ibm.com>\n *\n *  Jun 2006 - namespaces support\n *             OpenVZ, SWsoft Inc.\n *             Pavel Emelianov <xemul@openvz.org>\n */\n\n#include <linux/slab.h>\n#include <linux/export.h>\n#include <linux/nsproxy.h>\n#include <linux/init_task.h>\n#include <linux/mnt_namespace.h>\n#include <linux/utsname.h>\n#include <linux/pid_namespace.h>\n#include <net/net_namespace.h>\n#include <linux/ipc_namespace.h>\n#include <linux/time_namespace.h>\n#include <linux/fs_struct.h>\n#include <linux/proc_fs.h>\n#include <linux/proc_ns.h>\n#include <linux/file.h>\n#include <linux/syscalls.h>\n#include <linux/cgroup.h>\n#include <linux/perf_event.h>\n\nstatic struct kmem_cache *nsproxy_cachep;\n\nstruct nsproxy init_nsproxy = {\n\t.count\t\t\t= REFCOUNT_INIT(1),\n\t.uts_ns\t\t\t= &init_uts_ns,\n#if defined(CONFIG_POSIX_MQUEUE) || defined(CONFIG_SYSVIPC)\n\t.ipc_ns\t\t\t= &init_ipc_ns,\n#endif\n\t.mnt_ns\t\t\t= NULL,\n\t.pid_ns_for_children\t= &init_pid_ns,\n#ifdef CONFIG_NET\n\t.net_ns\t\t\t= &init_net,\n#endif\n#ifdef CONFIG_CGROUPS\n\t.cgroup_ns\t\t= &init_cgroup_ns,\n#endif\n#ifdef CONFIG_TIME_NS\n\t.time_ns\t\t= &init_time_ns,\n\t.time_ns_for_children\t= &init_time_ns,\n#endif\n};\n\nstatic inline struct nsproxy *create_nsproxy(void)\n{\n\tstruct nsproxy *nsproxy;\n\n\tnsproxy = kmem_cache_alloc(nsproxy_cachep, GFP_KERNEL);\n\tif (nsproxy)\n\t\trefcount_set(&nsproxy->count, 1);\n\treturn nsproxy;\n}\n\n/*\n * Create new nsproxy and all of its the associated namespaces.\n * Return the newly created nsproxy.  Do not attach this to the task,\n * leave it to the caller to do proper locking and attach it to task.\n */\nstatic struct nsproxy *create_new_namespaces(unsigned long flags,\n\tstruct task_struct *tsk, struct user_namespace *user_ns,\n\tstruct fs_struct *new_fs)\n{\n\tstruct nsproxy *new_nsp;\n\tint err;\n\n\tnew_nsp = create_nsproxy();\n\tif (!new_nsp)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\tnew_nsp->mnt_ns = copy_mnt_ns(flags, tsk->nsproxy->mnt_ns, user_ns, new_fs);\n\tif (IS_ERR(new_nsp->mnt_ns)) {\n\t\terr = PTR_ERR(new_nsp->mnt_ns);\n\t\tgoto out_ns;\n\t}\n\n\tnew_nsp->uts_ns = copy_utsname(flags, user_ns, tsk->nsproxy->uts_ns);\n\tif (IS_ERR(new_nsp->uts_ns)) {\n\t\terr = PTR_ERR(new_nsp->uts_ns);\n\t\tgoto out_uts;\n\t}\n\n\tnew_nsp->ipc_ns = copy_ipcs(flags, user_ns, tsk->nsproxy->ipc_ns);\n\tif (IS_ERR(new_nsp->ipc_ns)) {\n\t\terr = PTR_ERR(new_nsp->ipc_ns);\n\t\tgoto out_ipc;\n\t}\n\n\tnew_nsp->pid_ns_for_children =\n\t\tcopy_pid_ns(flags, user_ns, tsk->nsproxy->pid_ns_for_children);\n\tif (IS_ERR(new_nsp->pid_ns_for_children)) {\n\t\terr = PTR_ERR(new_nsp->pid_ns_for_children);\n\t\tgoto out_pid;\n\t}\n\n\tnew_nsp->cgroup_ns = copy_cgroup_ns(flags, user_ns,\n\t\t\t\t\t    tsk->nsproxy->cgroup_ns);\n\tif (IS_ERR(new_nsp->cgroup_ns)) {\n\t\terr = PTR_ERR(new_nsp->cgroup_ns);\n\t\tgoto out_cgroup;\n\t}\n\n\tnew_nsp->net_ns = copy_net_ns(flags, user_ns, tsk->nsproxy->net_ns);\n\tif (IS_ERR(new_nsp->net_ns)) {\n\t\terr = PTR_ERR(new_nsp->net_ns);\n\t\tgoto out_net;\n\t}\n\n\tnew_nsp->time_ns_for_children = copy_time_ns(flags, user_ns,\n\t\t\t\t\ttsk->nsproxy->time_ns_for_children);\n\tif (IS_ERR(new_nsp->time_ns_for_children)) {\n\t\terr = PTR_ERR(new_nsp->time_ns_for_children);\n\t\tgoto out_time;\n\t}\n\tnew_nsp->time_ns = get_time_ns(tsk->nsproxy->time_ns);\n\n\treturn new_nsp;\n\nout_time:\n\tput_net(new_nsp->net_ns);\nout_net:\n\tput_cgroup_ns(new_nsp->cgroup_ns);\nout_cgroup:\n\tif (new_nsp->pid_ns_for_children)\n\t\tput_pid_ns(new_nsp->pid_ns_for_children);\nout_pid:\n\tif (new_nsp->ipc_ns)\n\t\tput_ipc_ns(new_nsp->ipc_ns);\nout_ipc:\n\tif (new_nsp->uts_ns)\n\t\tput_uts_ns(new_nsp->uts_ns);\nout_uts:\n\tif (new_nsp->mnt_ns)\n\t\tput_mnt_ns(new_nsp->mnt_ns);\nout_ns:\n\tkmem_cache_free(nsproxy_cachep, new_nsp);\n\treturn ERR_PTR(err);\n}\n\n/*\n * called from clone.  This now handles copy for nsproxy and all\n * namespaces therein.\n */\nint copy_namespaces(unsigned long flags, struct task_struct *tsk)\n{\n\tstruct nsproxy *old_ns = tsk->nsproxy;\n\tstruct user_namespace *user_ns = task_cred_xxx(tsk, user_ns);\n\tstruct nsproxy *new_ns;\n\n\tif (likely(!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t      CLONE_NEWPID | CLONE_NEWNET |\n\t\t\t      CLONE_NEWCGROUP | CLONE_NEWTIME)))) {\n\t\tif ((flags & CLONE_VM) ||\n\t\t    likely(old_ns->time_ns_for_children == old_ns->time_ns)) {\n\t\t\tget_nsproxy(old_ns);\n\t\t\treturn 0;\n\t\t}\n\t} else if (!ns_capable(user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\t/*\n\t * CLONE_NEWIPC must detach from the undolist: after switching\n\t * to a new ipc namespace, the semaphore arrays from the old\n\t * namespace are unreachable.  In clone parlance, CLONE_SYSVSEM\n\t * means share undolist with parent, so we must forbid using\n\t * it along with CLONE_NEWIPC.\n\t */\n\tif ((flags & (CLONE_NEWIPC | CLONE_SYSVSEM)) ==\n\t\t(CLONE_NEWIPC | CLONE_SYSVSEM))\n\t\treturn -EINVAL;\n\n\tnew_ns = create_new_namespaces(flags, tsk, user_ns, tsk->fs);\n\tif (IS_ERR(new_ns))\n\t\treturn  PTR_ERR(new_ns);\n\n\tif ((flags & CLONE_VM) == 0)\n\t\ttimens_on_fork(new_ns, tsk);\n\n\ttsk->nsproxy = new_ns;\n\treturn 0;\n}\n\nvoid free_nsproxy(struct nsproxy *ns)\n{\n\tif (ns->mnt_ns)\n\t\tput_mnt_ns(ns->mnt_ns);\n\tif (ns->uts_ns)\n\t\tput_uts_ns(ns->uts_ns);\n\tif (ns->ipc_ns)\n\t\tput_ipc_ns(ns->ipc_ns);\n\tif (ns->pid_ns_for_children)\n\t\tput_pid_ns(ns->pid_ns_for_children);\n\tif (ns->time_ns)\n\t\tput_time_ns(ns->time_ns);\n\tif (ns->time_ns_for_children)\n\t\tput_time_ns(ns->time_ns_for_children);\n\tput_cgroup_ns(ns->cgroup_ns);\n\tput_net(ns->net_ns);\n\tkmem_cache_free(nsproxy_cachep, ns);\n}\n\n/*\n * Called from unshare. Unshare all the namespaces part of nsproxy.\n * On success, returns the new nsproxy.\n */\nint unshare_nsproxy_namespaces(unsigned long unshare_flags,\n\tstruct nsproxy **new_nsp, struct cred *new_cred, struct fs_struct *new_fs)\n{\n\tstruct user_namespace *user_ns;\n\tint err = 0;\n\n\tif (!(unshare_flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t       CLONE_NEWNET | CLONE_NEWPID | CLONE_NEWCGROUP |\n\t\t\t       CLONE_NEWTIME)))\n\t\treturn 0;\n\n\tuser_ns = new_cred ? new_cred->user_ns : current_user_ns();\n\tif (!ns_capable(user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\t*new_nsp = create_new_namespaces(unshare_flags, current, user_ns,\n\t\t\t\t\t new_fs ? new_fs : current->fs);\n\tif (IS_ERR(*new_nsp)) {\n\t\terr = PTR_ERR(*new_nsp);\n\t\tgoto out;\n\t}\n\nout:\n\treturn err;\n}\n\nvoid switch_task_namespaces(struct task_struct *p, struct nsproxy *new)\n{\n\tstruct nsproxy *ns;\n\n\tmight_sleep();\n\n\ttask_lock(p);\n\tns = p->nsproxy;\n\tp->nsproxy = new;\n\ttask_unlock(p);\n\n\tif (ns)\n\t\tput_nsproxy(ns);\n}\n\nvoid exit_task_namespaces(struct task_struct *p)\n{\n\tswitch_task_namespaces(p, NULL);\n}\n\nint exec_task_namespaces(void)\n{\n\tstruct task_struct *tsk = current;\n\tstruct nsproxy *new;\n\n\tif (tsk->nsproxy->time_ns_for_children == tsk->nsproxy->time_ns)\n\t\treturn 0;\n\n\tnew = create_new_namespaces(0, tsk, current_user_ns(), tsk->fs);\n\tif (IS_ERR(new))\n\t\treturn PTR_ERR(new);\n\n\ttimens_on_fork(new, tsk);\n\tswitch_task_namespaces(tsk, new);\n\treturn 0;\n}\n\nstatic int check_setns_flags(unsigned long flags)\n{\n\tif (!flags || (flags & ~(CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t\t CLONE_NEWNET | CLONE_NEWTIME | CLONE_NEWUSER |\n\t\t\t\t CLONE_NEWPID | CLONE_NEWCGROUP)))\n\t\treturn -EINVAL;\n\n#ifndef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_UTS_NS\n\tif (flags & CLONE_NEWUTS)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_CGROUPS\n\tif (flags & CLONE_NEWCGROUP)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_NET_NS\n\tif (flags & CLONE_NEWNET)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME)\n\t\treturn -EINVAL;\n#endif\n\n\treturn 0;\n}\n\nstatic void put_nsset(struct nsset *nsset)\n{\n\tunsigned flags = nsset->flags;\n\n\tif (flags & CLONE_NEWUSER)\n\t\tput_cred(nsset_cred(nsset));\n\t/*\n\t * We only created a temporary copy if we attached to more than just\n\t * the mount namespace.\n\t */\n\tif (nsset->fs && (flags & CLONE_NEWNS) && (flags & ~CLONE_NEWNS))\n\t\tfree_fs_struct(nsset->fs);\n\tif (nsset->nsproxy)\n\t\tfree_nsproxy(nsset->nsproxy);\n}\n\nstatic int prepare_nsset(unsigned flags, struct nsset *nsset)\n{\n\tstruct task_struct *me = current;\n\n\tnsset->nsproxy = create_new_namespaces(0, me, current_user_ns(), me->fs);\n\tif (IS_ERR(nsset->nsproxy))\n\t\treturn PTR_ERR(nsset->nsproxy);\n\n\tif (flags & CLONE_NEWUSER)\n\t\tnsset->cred = prepare_creds();\n\telse\n\t\tnsset->cred = current_cred();\n\tif (!nsset->cred)\n\t\tgoto out;\n\n\t/* Only create a temporary copy of fs_struct if we really need to. */\n\tif (flags == CLONE_NEWNS) {\n\t\tnsset->fs = me->fs;\n\t} else if (flags & CLONE_NEWNS) {\n\t\tnsset->fs = copy_fs_struct(me->fs);\n\t\tif (!nsset->fs)\n\t\t\tgoto out;\n\t}\n\n\tnsset->flags = flags;\n\treturn 0;\n\nout:\n\tput_nsset(nsset);\n\treturn -ENOMEM;\n}\n\nstatic inline int validate_ns(struct nsset *nsset, struct ns_common *ns)\n{\n\treturn ns->ops->install(nsset, ns);\n}\n\n/*\n * This is the inverse operation to unshare().\n * Ordering is equivalent to the standard ordering used everywhere else\n * during unshare and process creation. The switch to the new set of\n * namespaces occurs at the point of no return after installation of\n * all requested namespaces was successful in commit_nsset().\n */\nstatic int validate_nsset(struct nsset *nsset, struct pid *pid)\n{\n\tint ret = 0;\n\tunsigned flags = nsset->flags;\n\tstruct user_namespace *user_ns = NULL;\n\tstruct pid_namespace *pid_ns = NULL;\n\tstruct nsproxy *nsp;\n\tstruct task_struct *tsk;\n\n\t/* Take a \"snapshot\" of the target task's namespaces. */\n\trcu_read_lock();\n\ttsk = pid_task(pid, PIDTYPE_PID);\n\tif (!tsk) {\n\t\trcu_read_unlock();\n\t\treturn -ESRCH;\n\t}\n\n\tif (!ptrace_may_access(tsk, PTRACE_MODE_READ_REALCREDS)) {\n\t\trcu_read_unlock();\n\t\treturn -EPERM;\n\t}\n\n\ttask_lock(tsk);\n\tnsp = tsk->nsproxy;\n\tif (nsp)\n\t\tget_nsproxy(nsp);\n\ttask_unlock(tsk);\n\tif (!nsp) {\n\t\trcu_read_unlock();\n\t\treturn -ESRCH;\n\t}\n\n#ifdef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID) {\n\t\tpid_ns = task_active_pid_ns(tsk);\n\t\tif (unlikely(!pid_ns)) {\n\t\t\trcu_read_unlock();\n\t\t\tret = -ESRCH;\n\t\t\tgoto out;\n\t\t}\n\t\tget_pid_ns(pid_ns);\n\t}\n#endif\n\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER)\n\t\tuser_ns = get_user_ns(__task_cred(tsk)->user_ns);\n#endif\n\trcu_read_unlock();\n\n\t/*\n\t * Install requested namespaces. The caller will have\n\t * verified earlier that the requested namespaces are\n\t * supported on this kernel. We don't report errors here\n\t * if a namespace is requested that isn't supported.\n\t */\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER) {\n\t\tret = validate_ns(nsset, &user_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n\tif (flags & CLONE_NEWNS) {\n\t\tret = validate_ns(nsset, from_mnt_ns(nsp->mnt_ns));\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n\n#ifdef CONFIG_UTS_NS\n\tif (flags & CLONE_NEWUTS) {\n\t\tret = validate_ns(nsset, &nsp->uts_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC) {\n\t\tret = validate_ns(nsset, &nsp->ipc_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID) {\n\t\tret = validate_ns(nsset, &pid_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_CGROUPS\n\tif (flags & CLONE_NEWCGROUP) {\n\t\tret = validate_ns(nsset, &nsp->cgroup_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_NET_NS\n\tif (flags & CLONE_NEWNET) {\n\t\tret = validate_ns(nsset, &nsp->net_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME) {\n\t\tret = validate_ns(nsset, &nsp->time_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\nout:\n\tif (pid_ns)\n\t\tput_pid_ns(pid_ns);\n\tif (nsp)\n\t\tput_nsproxy(nsp);\n\tput_user_ns(user_ns);\n\n\treturn ret;\n}\n\n/*\n * This is the point of no return. There are just a few namespaces\n * that do some actual work here and it's sufficiently minimal that\n * a separate ns_common operation seems unnecessary for now.\n * Unshare is doing the same thing. If we'll end up needing to do\n * more in a given namespace or a helper here is ultimately not\n * exported anymore a simple commit handler for each namespace\n * should be added to ns_common.\n */\nstatic void commit_nsset(struct nsset *nsset)\n{\n\tunsigned flags = nsset->flags;\n\tstruct task_struct *me = current;\n\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER) {\n\t\t/* transfer ownership */\n\t\tcommit_creds(nsset_cred(nsset));\n\t\tnsset->cred = NULL;\n\t}\n#endif\n\n\t/* We only need to commit if we have used a temporary fs_struct. */\n\tif ((flags & CLONE_NEWNS) && (flags & ~CLONE_NEWNS)) {\n\t\tset_fs_root(me->fs, &nsset->fs->root);\n\t\tset_fs_pwd(me->fs, &nsset->fs->pwd);\n\t}\n\n#ifdef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC)\n\t\texit_sem(me);\n#endif\n\n#ifdef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME)\n\t\ttimens_commit(me, nsset->nsproxy->time_ns);\n#endif\n\n\t/* transfer ownership */\n\tswitch_task_namespaces(me, nsset->nsproxy);\n\tnsset->nsproxy = NULL;\n}\n\nSYSCALL_DEFINE2(setns, int, fd, int, flags)\n{\n\tstruct fd f = fdget(fd);\n\tstruct ns_common *ns = NULL;\n\tstruct nsset nsset = {};\n\tint err = 0;\n\n\tif (!fd_file(f))\n\t\treturn -EBADF;\n\n\tif (proc_ns_file(fd_file(f))) {\n\t\tns = get_proc_ns(file_inode(fd_file(f)));\n\t\tif (flags && (ns->ops->type != flags))\n\t\t\terr = -EINVAL;\n\t\tflags = ns->ops->type;\n\t} else if (!IS_ERR(pidfd_pid(fd_file(f)))) {\n\t\terr = check_setns_flags(flags);\n\t} else {\n\t\terr = -EINVAL;\n\t}\n\tif (err)\n\t\tgoto out;\n\n\terr = prepare_nsset(flags, &nsset);\n\tif (err)\n\t\tgoto out;\n\n\tif (proc_ns_file(fd_file(f)))\n\t\terr = validate_ns(&nsset, ns);\n\telse\n\t\terr = validate_nsset(&nsset, pidfd_pid(fd_file(f)));\n\tif (!err) {\n\t\tcommit_nsset(&nsset);\n\t\tperf_event_namespaces(current);\n\t}\n\tput_nsset(&nsset);\nout:\n\tfdput(f);\n\treturn err;\n}\n\nint __init nsproxy_cache_init(void)\n{\n\tnsproxy_cachep = KMEM_CACHE(nsproxy, SLAB_PANIC|SLAB_ACCOUNT);\n\treturn 0;\n}\n",
   "source_review": {
@@ -273,5 +341,310 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/nsproxy.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-64bb8f021491b076",
+    "path": "kernel/nsproxy.c",
+    "title": "nsproxy 구현: namespace 복제·전환과 setns 준비·반영",
+    "area": "네임스페이스 · 객체 그래프 · refcount · RCU · syscall · 준비 상태 · 오류 경로",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "파일 전체의 생성·회수·clone·unshare·exec·setns 제어 흐름과 참조 소유권을 분석합니다.",
+    "guide": [
+      "여러 객체를 함께 교체할 때는 새 상태의 준비, 검증, 실제 반영, 실패 자원 정리를 분리해서 추적해야 합니다.",
+      "오류 포인터, 역순 회수, RCU와 task lock, 조건부 컴파일, 소유권 이전을 실제 코드에서 읽습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성과 초기 proxy",
+        "text": "GPL-2.0-only 파일은 slab·namespace·task·파일·syscall·perf 등의 헤더를 포함하고 static nsproxy_cachep를 둡니다. init_nsproxy는 count=1, uts=&init_uts_ns, mnt=NULL, 자식용 PID=&init_pid_ns입니다. IPC는 POSIX_MQUEUE 또는 SYSVIPC, net은 CONFIG_NET, cgroup은 CONFIG_CGROUPS, 두 시간 필드는 CONFIG_TIME_NS일 때 초기 객체를 가리킵니다. 이 초기화의 CONFIG_NET과 뒤 setns의 CONFIG_NET_NS를 같은 매크로라고 설명하면 안 됩니다."
+      },
+      {
+        "title": "Slab 할당과 초기화 범위",
+        "text": "create_nsproxy는 kmem_cache_alloc(nsproxy_cachep,GFP_KERNEL)로 할당하고 성공하면 count만 1로 설정합니다. 모든 필드를 0으로 초기화하는 kzalloc이 아닙니다. nsproxy_cache_init은 KMEM_CACHE(nsproxy,SLAB_PANIC|SLAB_ACCOUNT)로 cache를 만들고 0을 반환하는 __init 함수입니다. SLAB_PANIC 정책을 사용하는 초기 cache 생성과 일반 객체 할당의 NULL 반환을 구분합니다."
+      },
+      {
+        "title": "새 묶음의 생성 순서",
+        "text": "create_new_namespaces는 새 proxy 할당 후 mount→UTS→IPC→자식용 PID→cgroup→net→자식용 time 순서로 각각 copy helper를 부릅니다. 각 helper에 flags와 필요한 owner·기존 객체를 전달하며 mount에는 new_fs도 전달합니다. 이름이 create라고 해서 모든 개별 namespace를 항상 복제하는 것은 아닙니다. helper는 flags에 따라 기존 객체를 공유할 수 있습니다. 마지막 현재 time_ns는 기존 현재 시간 객체를 get_time_ns로 얻습니다."
+      },
+      {
+        "title": "생성과 task 연결의 분리",
+        "text": "각 copy 결과가 ERR_PTR이면 PTR_ERR를 보존해 해당 회수 라벨로 갑니다. 성공 시 반환한 proxy를 task에 붙이지 않습니다. 주석은 적절한 연결과 잠금을 호출자 책임으로 명시합니다. 새 proxy 메모리 할당 실패는 ERR_PTR(-ENOMEM)입니다. 현재 time_ns 참조 획득은 실패를 검사하는 자식용 time copy가 성공한 뒤 마지막에 수행합니다."
+      },
+      {
+        "title": "실패 라벨의 역순 회수",
+        "text": "time copy 실패는 net put부터, net 실패는 cgroup put부터, cgroup 실패는 자식용 PID put부터 시작합니다. 이후 IPC→UTS→mount를 거쳐 cache 객체를 해제합니다. PID·IPC·UTS·mount에는 NULL 검사가 있고 net·cgroup 호출에는 같은 위치의 명시적 NULL 검사가 없습니다. 실패한 ERR_PTR 필드를 정상 객체처럼 put하지 않고 앞서 성공한 필드만 정리하는 라벨 위치가 중요합니다. 아직 전체 객체가 완성되지 않았으므로 무조건 free_nsproxy를 부르는 경로가 아닙니다."
+      },
+      {
+        "title": "Clone의 기존 묶음 공유 조건",
+        "text": "copy_namespaces는 tsk->nsproxy와 tsk 자격 증명의 user_ns를 얻습니다. 일곱 종류의 NEWNS·NEWUTS·NEWIPC·NEWPID·NEWNET·NEWCGROUP·NEWTIME 요청이 없고, CLONE_VM이 있거나 현재 time과 자식용 time이 같으면 old proxy를 get하고 0을 반환합니다. 새 namespace flag가 없어도 CLONE_VM이 없고 시간 포인터가 다르면 새 묶음 준비로 진행합니다. 목록에는 CLONE_NEWUSER가 직접 포함되지 않습니다."
+      },
+      {
+        "title": "Clone 권한과 IPC 조합",
+        "text": "위 새 namespace flag가 하나라도 있으면 ns_capable(user_ns,CAP_SYS_ADMIN)이 없을 때 -EPERM입니다. 그 다음 CLONE_NEWIPC와 CLONE_SYSVSEM을 함께 요청하면 -EINVAL입니다. 새 IPC namespace에서는 옛 semaphore 배열에 접근할 수 없는데 undo 목록을 공유하려는 조합이기 때문입니다. 이 파일의 검사 순서상 권한 오류가 먼저 나올 수 있습니다."
+      },
+      {
+        "title": "Clone 생성 후 시간 처리",
+        "text": "copy_namespaces는 create_new_namespaces(flags,tsk,user_ns,tsk->fs)를 호출하고 오류를 전달합니다. CLONE_VM이 없을 때만 timens_on_fork(new_ns,tsk)를 호출한 뒤 tsk->nsproxy=new_ns로 대입합니다. 이 경로에는 switch_task_namespaces나 old proxy put이 직접 없습니다. clone 중 새 task의 포인터와 참조 인계 계약을 일반적인 현재 task 교체와 동일시하지 않습니다."
+      },
+      {
+        "title": "완성된 묶음 해제",
+        "text": "free_nsproxy는 mount,UTS,IPC,자식용 PID,현재 time,자식용 time에 대해 포인터가 있으면 각각 put합니다. 이어 cgroup과 net을 put하고 proxy를 cache에 반환합니다. 같은 시간 객체가 두 필드에 있더라도 각 필드의 보유 참조를 해제합니다. 이 함수 자체가 proxy count를 먼저 감소시키는 것은 아니며 마지막 count 판단은 put_nsproxy 같은 호출자에서 합니다."
+      },
+      {
+        "title": "Unshare의 준비 결과",
+        "text": "unshare_nsproxy_namespaces는 관련 일곱 flag가 없으면 0을 반환하고 *new_nsp를 대입하지 않습니다. owner는 new_cred가 있으면 그 user_ns, 없으면 current_user_ns이며 CAP_SYS_ADMIN을 검사합니다. 새 fs가 있으면 그것을, 없으면 current->fs를 create_new_namespaces에 넘깁니다. 오류 시 *new_nsp에는 ERR_PTR 결과가 남고 정수 오류를 반환합니다. 성공해도 여기서 current의 proxy를 직접 바꾸거나 timens_on_fork를 호출하지 않습니다."
+      },
+      {
+        "title": "현재 task 전환과 종료",
+        "text": "switch_task_namespaces는 might_sleep 뒤 task_lock 아래 옛 포인터를 저장하고 새 포인터를 대입한 뒤 unlock합니다. 옛 proxy가 있으면 잠금 밖에서 put합니다. 새 proxy에 get을 추가하지 않으므로 호출자가 보유한 참조를 인계하는 방식입니다. exit_task_namespaces는 new=NULL로 이 함수를 호출합니다. 오래 걸릴 수 있는 마지막 해제와 task lock의 범위를 분리합니다."
+      },
+      {
+        "title": "Exec의 시간 namespace 적용",
+        "text": "exec_task_namespaces는 현재 time과 자식용 time이 같으면 0입니다. 다르면 flags=0으로 새 proxy를 만들고 실패를 전달합니다. 성공하면 timens_on_fork로 준비된 자식용 time을 적용하고 switch_task_namespaces로 연결합니다. 새 namespace를 생성하는 flag 없이도 별도 proxy가 필요한 이유를 보여 줍니다."
+      },
+      {
+        "title": "Pidfd setns flag 검증",
+        "text": "check_setns_flags는 0 또는 허용된 여덟 CLONE_NEW 비트 밖의 값이면 -EINVAL입니다. USER·PID·UTS·IPC·CGROUPS·NET_NS·TIME_NS 각각의 CONFIG가 없을 때 해당 요청도 -EINVAL입니다. NEWNS는 허용 mask에 있으나 같은 형태의 CONFIG별 분기가 여기에는 없습니다. 이 helper는 여러 요청 비트 조합을 허용하며 뒤 pidfd 경로에서 사용합니다."
+      },
+      {
+        "title": "Nsset 준비의 proxy와 자격 증명",
+        "text": "prepare_nsset은 flags=0으로 현재 상태를 공유하는 새 proxy부터 준비합니다. 실패하면 즉시 오류 반환합니다. NEWUSER이면 prepare_creds, 아니면 current_cred를 저장하고 NULL이면 실패 라벨로 갑니다. 정확히 NEWNS만 있으면 현재 fs를 빌리고, NEWNS와 다른 종류를 함께 요청하면 copy_fs_struct로 임시 fs를 만듭니다. NEWNS가 없으면 syscall에서 0으로 초기화한 fs 필드를 유지합니다."
+      },
+      {
+        "title": "Nsset flags 대입 시점과 정리 범위",
+        "text": "prepare_nsset의 nsset->flags=flags 대입은 모든 준비가 성공한 끝부분입니다. put_nsset은 저장된 flags에 NEWUSER가 있을 때만 put_cred, fs가 있고 NEWNS와 다른 비트가 함께 있을 때만 free_fs_struct, proxy가 있으면 free_nsproxy를 합니다. 따라서 준비 실패 때도 모든 요청 비트가 nsset에 이미 저장됐다고 가정하면 틀립니다. 이 syscall의 nsset={}에서는 준비 도중 실패 시 flags가 여전히 0일 수 있습니다. 특히 cred 준비 후 fs 복사 실패 경로를 자동으로 완전 회수된다고 단정해서는 안 됩니다. 원본 대입 순서와 조건을 그대로 추적해야 합니다."
+      },
+      {
+        "title": "단일 namespace 검증 callback",
+        "text": "validate_ns는 ns->ops->install(nsset,ns)를 호출해 int를 그대로 반환합니다. 이름은 validate지만 callback은 준비 중인 nsset의 객체와 참조를 바꿀 수 있습니다. 단순히 읽기 전용 boolean 검사를 수행한다고 설명하면 안 됩니다. 개별 namespace의 권한과 계층 제한은 각 install 구현의 책임입니다."
+      },
+      {
+        "title": "Pidfd 대상 task의 상태 획득",
+        "text": "validate_nsset은 rcu_read_lock 아래 pid_task(pid,PIDTYPE_PID)를 찾고 없으면 -ESRCH입니다. ptrace_may_access의 PTRACE_MODE_READ_REALCREDS 검사가 실패하면 -EPERM입니다. task_lock 아래 대상 nsproxy를 읽어 있으면 get한 후 unlock하고, 없으면 RCU를 풀고 -ESRCH입니다. RCU 읽기 구간만으로 잠금 밖의 proxy 수명이 자동 보장되는 것이 아니라 별도 참조를 얻습니다."
+      },
+      {
+        "title": "PID·user 객체는 별도로 확보",
+        "text": "NEWPID 요청이면 target의 task_active_pid_ns를 찾아 get합니다. 자식용 PID 포인터를 그대로 쓰는 것이 아닙니다. NEWUSER이면 __task_cred(tsk)->user_ns를 get합니다. 그 뒤 RCU 구간을 끝냅니다. PID를 찾지 못한 경로는 RCU를 풀고 공통 회수로 가며 이미 획득한 proxy 참조를 놓습니다. 여러 필드를 시스템 전체의 원자적 스냅샷으로 읽는다고 확대하지 않습니다."
+      },
+      {
+        "title": "복수 namespace 설치 순서",
+        "text": "요청된 항목을 USER→mount→UTS→IPC→PID→cgroup→net→time 순서로 validate_ns에 넘깁니다. mount는 from_mnt_ns로 공통 객체를 얻고 time은 대상의 time_ns를 쓰며 time_ns_for_children이 아닙니다. 각 호출이 실패하면 이후 항목은 실행하지 않고 회수합니다. 지원 CONFIG 여부는 앞 check_setns_flags가 검사한다는 계약이며 이 함수의 #ifdef에 없는 요청을 여기서 다시 오류 처리하지 않습니다."
+      },
+      {
+        "title": "대상 참조의 정리",
+        "text": "validate_nsset의 out은 별도로 얻은 pid_ns가 있으면 put, nsp가 있으면 put_nsproxy, user_ns는 put_user_ns를 호출하고 ret를 반환합니다. 대상 task에서 읽은 상태 참조와 nsset이 설치 과정에서 보유하게 된 참조는 다릅니다. 대상 스냅샷을 놓는 것만으로 준비한 nsset을 해제하는 것은 아니며 syscall이 put_nsset을 별도로 호출합니다."
+      },
+      {
+        "title": "최종 반영의 자격 증명과 fs",
+        "text": "commit_nsset은 되돌아가지 않는 반영 지점이라는 주석을 가집니다. NEWUSER이면 commit_creds(nsset_cred(nsset))로 소유권을 넘긴 뒤 cred=NULL로 합니다. NEWNS와 다른 종류를 함께 요청한 경우 임시 fs의 root,pwd를 현재 fs에 set합니다. NEWNS 단독 경로는 임시 복사본이 없으므로 여기서 다시 복사하지 않습니다."
+      },
+      {
+        "title": "최종 반영의 IPC·시간·proxy",
+        "text": "IPC 설정과 요청이 있으면 exit_sem으로 undo 상태를 정리하고 TIME_NS와 요청이 있으면 준비 proxy의 time_ns로 timens_commit을 호출합니다. 마지막 switch_task_namespaces로 proxy 소유권을 넘기고 nsset->nsproxy=NULL로 만들어 이후 정리에서 다시 해제하지 않게 합니다. commit은 void이며 이 함수 안에는 실패를 되돌리는 rollback 분기가 없습니다."
+      },
+      {
+        "title": "Setns의 FD 종류별 입력 규칙",
+        "text": "syscall은 fdget으로 파일을 얻고 없으면 -EBADF입니다. namespace 파일이면 inode에서 ns를 얻고 flags가 0이 아니면서 ops->type과 정확히 다를 때 -EINVAL입니다. 그 뒤 flags를 실제 type으로 설정합니다. pidfd이면 check_setns_flags를 사용하므로 0을 허용하지 않고 여러 종류의 bitmask를 허용합니다. 둘 다 아니면 -EINVAL입니다. namespace 파일의 flags=0과 pidfd의 flags=0을 같은 결과로 설명하면 안 됩니다."
+      },
+      {
+        "title": "Setns 준비·검증·통지·정리",
+        "text": "입력 검사가 통과하면 prepare_nsset, 이어 namespace 파일은 validate_ns, pidfd는 validate_nsset을 호출합니다. 검증이 성공했을 때만 commit_nsset 후 perf_event_namespaces(current)로 통지합니다. 준비 성공 이후에는 성공·검증 실패 모두 put_nsset을 부르며 공통 out에서 fdput합니다. 준비 실패는 prepare 함수 내부 정리 계약을 따른 뒤 fdput으로 갑니다. 이 경로에는 get_proc_ns 직후 별도 get callback 호출이 없고 열린 파일 참조의 수명과 연결됩니다."
+      },
+      {
+        "title": "학습 범위와 확인의 한계",
+        "text": "전체 생성·실패 라벨·clone·unshare·switch·exit·exec·setns flag 검사·준비·대상 검증·반영·cache 초기화를 모두 원본과 대조했습니다. 핵심 CS 주제는 서로 다른 수명의 참조를 구분하는 객체 그래프, 자원 획득의 역순 회수, RCU와 task lock의 역할 분담, 준비 상태의 소유권 이전입니다. 개별 namespace install 구현과 실제 커널의 오류 주입·동시 실행을 모두 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "create_new_namespaces가 성공하면 task->nsproxy도 즉시 교체되는가?",
+        "options": [
+          "아니다. 새 묶음을 반환하고 연결은 호출자가 수행한다",
+          "그렇다. 모든 호출에서 current를 즉시 바꾼다"
+        ],
+        "answer": 0,
+        "explanation": "함수 주석과 본문 모두 생성과 연결을 분리합니다. 따라서 준비 과정의 객체와 task에 적용된 객체를 구분해야 합니다."
+      },
+      {
+        "prompt": "새 namespace flag가 없어도 clone에서 새 proxy를 만들 수 있는 경우는?",
+        "options": [
+          "old proxy의 참조 수가 정확히 1일 때만",
+          "CLONE_VM이 없고 현재 time과 자식용 time이 다를 때"
+        ],
+        "answer": 1,
+        "explanation": "빠른 공유 경로의 조건은 CLONE_VM 또는 시간 포인터 동일성입니다. 참조 수를 검사하는 조건은 없습니다."
+      },
+      {
+        "prompt": "CLONE_NEWIPC와 CLONE_SYSVSEM의 동시 요청을 거절하는 이유는?",
+        "options": [
+          "새 IPC 공간에서 옛 semaphore undo 목록을 공유하는 조합을 막기 위해서다",
+          "두 flag가 같은 숫자이기 때문이다"
+        ],
+        "answer": 0,
+        "explanation": "새 공간에서는 옛 semaphore 배열이 도달 불가능해집니다. 권한 검사를 통과한 해당 조합은 -EINVAL입니다."
+      },
+      {
+        "prompt": "switch_task_namespaces는 새 proxy의 참조를 추가로 증가시키는가?",
+        "options": [
+          "그렇다. 새 proxy의 모든 namespace count를 증가시킨다",
+          "아니다. 전달받은 참조를 연결하고 옛 참조를 놓는다"
+        ],
+        "answer": 1,
+        "explanation": "본문은 잠금 아래 포인터 교체, 잠금 밖 옛 proxy put입니다. 호출자가 준비한 소유권의 이전을 추적해야 합니다."
+      },
+      {
+        "prompt": "pidfd 기반 setns에 flags=0을 주면?",
+        "options": [
+          "-EINVAL",
+          "대상 task의 모든 namespace에 자동 가입한다"
+        ],
+        "answer": 0,
+        "explanation": "check_setns_flags가 !flags를 거절합니다. namespace 파일 FD에서는 0을 실제 타입으로 바꿀 수 있어 규칙이 다릅니다."
+      },
+      {
+        "prompt": "Pidfd NEWPID 요청은 대상의 어느 PID namespace를 사용하는가?",
+        "options": [
+          "항상 pid_ns_for_children",
+          "task_active_pid_ns로 얻은 활성 namespace"
+        ],
+        "answer": 1,
+        "explanation": "validate_nsset은 PID 객체를 별도 참조로 얻습니다. proxy에 든 자식용 PID 필드를 그대로 사용하는 코드가 아닙니다."
+      },
+      {
+        "prompt": "NEWNS와 NEWNET을 함께 setns할 때 fs 준비는?",
+        "options": [
+          "현재 fs를 임시 복사하고 최종 반영에서 root와 pwd를 옮긴다",
+          "NEWNS 단독 때와 똑같이 무조건 현재 fs만 빌린다"
+        ],
+        "answer": 0,
+        "explanation": "정확히 NEWNS만인 경우와 다른 비트가 함께 있는 경우를 분리합니다. 복합 변경의 준비 상태를 따로 유지하기 위한 분기입니다."
+      },
+      {
+        "prompt": "prepare_nsset에서 nsset->flags가 기록되는 시점은?",
+        "options": [
+          "함수에 진입하자마자",
+          "proxy·cred·필요한 fs 준비가 모두 성공한 뒤"
+        ],
+        "answer": 1,
+        "explanation": "정리 함수가 저장된 flags를 조건으로 쓰므로 이 순서는 실패 분석에 중요합니다. 요청 인수 flags와 저장 필드를 같은 시점의 값으로 보면 안 됩니다."
+      },
+      {
+        "prompt": "validate_ns라는 이름의 helper는 실제로 무엇을 호출하는가?",
+        "options": [
+          "namespace operation의 install callback",
+          "항상 읽기 전용 ns_match 비교"
+        ],
+        "answer": 0,
+        "explanation": "install은 준비 객체를 변경하거나 참조를 교체할 수 있습니다. 함수 이름만으로 부작용이 없다고 가정하면 안 됩니다."
+      },
+      {
+        "prompt": "commit_nsset에서 proxy를 넘긴 뒤 NULL로 만드는 이유는?",
+        "options": [
+          "사용자 공간에 NULL namespace를 설치하기 위해서다",
+          "이후 put_nsset이 인계한 proxy를 다시 해제하지 않도록 하기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "current에는 switch_task_namespaces가 새 proxy를 설치했습니다. 비우는 것은 준비용 nsset의 소유 포인터입니다."
+      },
+      {
+        "prompt": "검증이 실패한 setns도 perf namespace 이벤트를 통지하는가?",
+        "options": [
+          "아니다. 성공적으로 commit한 경우에만 통지한다",
+          "그렇다. fdget 직후 항상 통지한다"
+        ],
+        "answer": 0,
+        "explanation": "perf_event_namespaces는 if (!err) 안에서 commit 뒤에 있습니다. 요청 시도와 실제 전환을 구분합니다."
+      },
+      {
+        "prompt": "Unshare helper에 관련 namespace flag가 없으면 출력 포인터는?",
+        "options": [
+          "반드시 NULL로 초기화한다",
+          "이 함수에서 대입하지 않고 0을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "첫 분기는 즉시 return 0입니다. 반환 성공과 출력 매개변수 초기화를 같은 보장으로 해석하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  Copyright (C) 2006 IBM Corporation\n *\n *  Author: Serge Hallyn <serue@us.ibm.com>\n *\n *  Jun 2006 - namespaces support\n *             OpenVZ, SWsoft Inc.\n *             Pavel Emelianov <xemul@openvz.org>\n */\n\n#include <linux/slab.h>\n#include <linux/export.h>\n#include <linux/nsproxy.h>\n#include <linux/init_task.h>\n#include <linux/mnt_namespace.h>\n#include <linux/utsname.h>\n#include <linux/pid_namespace.h>\n#include <net/net_namespace.h>\n#include <linux/ipc_namespace.h>\n#include <linux/time_namespace.h>\n#include <linux/fs_struct.h>\n#include <linux/proc_fs.h>\n#include <linux/proc_ns.h>\n#include <linux/file.h>\n#include <linux/syscalls.h>\n#include <linux/cgroup.h>\n#include <linux/perf_event.h>\n\nstatic struct kmem_cache *nsproxy_cachep;\n\nstruct nsproxy init_nsproxy = {\n\t.count\t\t\t= REFCOUNT_INIT(1),\n\t.uts_ns\t\t\t= &init_uts_ns,\n#if defined(CONFIG_POSIX_MQUEUE) || defined(CONFIG_SYSVIPC)\n\t.ipc_ns\t\t\t= &init_ipc_ns,\n#endif\n\t.mnt_ns\t\t\t= NULL,\n\t.pid_ns_for_children\t= &init_pid_ns,\n#ifdef CONFIG_NET\n\t.net_ns\t\t\t= &init_net,\n#endif\n#ifdef CONFIG_CGROUPS\n\t.cgroup_ns\t\t= &init_cgroup_ns,\n#endif\n#ifdef CONFIG_TIME_NS\n\t.time_ns\t\t= &init_time_ns,\n\t.time_ns_for_children\t= &init_time_ns,\n#endif\n};\n\nstatic inline struct nsproxy *create_nsproxy(void)\n{\n\tstruct nsproxy *nsproxy;\n\n\tnsproxy = kmem_cache_alloc(nsproxy_cachep, GFP_KERNEL);\n\tif (nsproxy)\n\t\trefcount_set(&nsproxy->count, 1);\n\treturn nsproxy;\n}\n\n/*\n * Create new nsproxy and all of its the associated namespaces.\n * Return the newly created nsproxy.  Do not attach this to the task,\n * leave it to the caller to do proper locking and attach it to task.\n */\nstatic struct nsproxy *create_new_namespaces(unsigned long flags,\n\tstruct task_struct *tsk, struct user_namespace *user_ns,\n\tstruct fs_struct *new_fs)\n{\n\tstruct nsproxy *new_nsp;\n\tint err;\n\n\tnew_nsp = create_nsproxy();\n\tif (!new_nsp)\n\t\treturn ERR_PTR(-ENOMEM);\n\n\tnew_nsp->mnt_ns = copy_mnt_ns(flags, tsk->nsproxy->mnt_ns, user_ns, new_fs);\n\tif (IS_ERR(new_nsp->mnt_ns)) {\n\t\terr = PTR_ERR(new_nsp->mnt_ns);\n\t\tgoto out_ns;\n\t}\n\n\tnew_nsp->uts_ns = copy_utsname(flags, user_ns, tsk->nsproxy->uts_ns);\n\tif (IS_ERR(new_nsp->uts_ns)) {\n\t\terr = PTR_ERR(new_nsp->uts_ns);\n\t\tgoto out_uts;\n\t}\n\n\tnew_nsp->ipc_ns = copy_ipcs(flags, user_ns, tsk->nsproxy->ipc_ns);\n\tif (IS_ERR(new_nsp->ipc_ns)) {\n\t\terr = PTR_ERR(new_nsp->ipc_ns);\n\t\tgoto out_ipc;\n\t}\n\n\tnew_nsp->pid_ns_for_children =\n\t\tcopy_pid_ns(flags, user_ns, tsk->nsproxy->pid_ns_for_children);\n\tif (IS_ERR(new_nsp->pid_ns_for_children)) {\n\t\terr = PTR_ERR(new_nsp->pid_ns_for_children);\n\t\tgoto out_pid;\n\t}\n\n\tnew_nsp->cgroup_ns = copy_cgroup_ns(flags, user_ns,\n\t\t\t\t\t    tsk->nsproxy->cgroup_ns);\n\tif (IS_ERR(new_nsp->cgroup_ns)) {\n\t\terr = PTR_ERR(new_nsp->cgroup_ns);\n\t\tgoto out_cgroup;\n\t}\n\n\tnew_nsp->net_ns = copy_net_ns(flags, user_ns, tsk->nsproxy->net_ns);\n\tif (IS_ERR(new_nsp->net_ns)) {\n\t\terr = PTR_ERR(new_nsp->net_ns);\n\t\tgoto out_net;\n\t}\n\n\tnew_nsp->time_ns_for_children = copy_time_ns(flags, user_ns,\n\t\t\t\t\ttsk->nsproxy->time_ns_for_children);\n\tif (IS_ERR(new_nsp->time_ns_for_children)) {\n\t\terr = PTR_ERR(new_nsp->time_ns_for_children);\n\t\tgoto out_time;\n\t}\n\tnew_nsp->time_ns = get_time_ns(tsk->nsproxy->time_ns);\n\n\treturn new_nsp;\n\nout_time:\n\tput_net(new_nsp->net_ns);\nout_net:\n\tput_cgroup_ns(new_nsp->cgroup_ns);\nout_cgroup:\n\tif (new_nsp->pid_ns_for_children)\n\t\tput_pid_ns(new_nsp->pid_ns_for_children);\nout_pid:\n\tif (new_nsp->ipc_ns)\n\t\tput_ipc_ns(new_nsp->ipc_ns);\nout_ipc:\n\tif (new_nsp->uts_ns)\n\t\tput_uts_ns(new_nsp->uts_ns);\nout_uts:\n\tif (new_nsp->mnt_ns)\n\t\tput_mnt_ns(new_nsp->mnt_ns);\nout_ns:\n\tkmem_cache_free(nsproxy_cachep, new_nsp);\n\treturn ERR_PTR(err);\n}\n\n/*\n * called from clone.  This now handles copy for nsproxy and all\n * namespaces therein.\n */\nint copy_namespaces(unsigned long flags, struct task_struct *tsk)\n{\n\tstruct nsproxy *old_ns = tsk->nsproxy;\n\tstruct user_namespace *user_ns = task_cred_xxx(tsk, user_ns);\n\tstruct nsproxy *new_ns;\n\n\tif (likely(!(flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t      CLONE_NEWPID | CLONE_NEWNET |\n\t\t\t      CLONE_NEWCGROUP | CLONE_NEWTIME)))) {\n\t\tif ((flags & CLONE_VM) ||\n\t\t    likely(old_ns->time_ns_for_children == old_ns->time_ns)) {\n\t\t\tget_nsproxy(old_ns);\n\t\t\treturn 0;\n\t\t}\n\t} else if (!ns_capable(user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\t/*\n\t * CLONE_NEWIPC must detach from the undolist: after switching\n\t * to a new ipc namespace, the semaphore arrays from the old\n\t * namespace are unreachable.  In clone parlance, CLONE_SYSVSEM\n\t * means share undolist with parent, so we must forbid using\n\t * it along with CLONE_NEWIPC.\n\t */\n\tif ((flags & (CLONE_NEWIPC | CLONE_SYSVSEM)) ==\n\t\t(CLONE_NEWIPC | CLONE_SYSVSEM))\n\t\treturn -EINVAL;\n\n\tnew_ns = create_new_namespaces(flags, tsk, user_ns, tsk->fs);\n\tif (IS_ERR(new_ns))\n\t\treturn  PTR_ERR(new_ns);\n\n\tif ((flags & CLONE_VM) == 0)\n\t\ttimens_on_fork(new_ns, tsk);\n\n\ttsk->nsproxy = new_ns;\n\treturn 0;\n}\n\nvoid free_nsproxy(struct nsproxy *ns)\n{\n\tif (ns->mnt_ns)\n\t\tput_mnt_ns(ns->mnt_ns);\n\tif (ns->uts_ns)\n\t\tput_uts_ns(ns->uts_ns);\n\tif (ns->ipc_ns)\n\t\tput_ipc_ns(ns->ipc_ns);\n\tif (ns->pid_ns_for_children)\n\t\tput_pid_ns(ns->pid_ns_for_children);\n\tif (ns->time_ns)\n\t\tput_time_ns(ns->time_ns);\n\tif (ns->time_ns_for_children)\n\t\tput_time_ns(ns->time_ns_for_children);\n\tput_cgroup_ns(ns->cgroup_ns);\n\tput_net(ns->net_ns);\n\tkmem_cache_free(nsproxy_cachep, ns);\n}\n\n/*\n * Called from unshare. Unshare all the namespaces part of nsproxy.\n * On success, returns the new nsproxy.\n */\nint unshare_nsproxy_namespaces(unsigned long unshare_flags,\n\tstruct nsproxy **new_nsp, struct cred *new_cred, struct fs_struct *new_fs)\n{\n\tstruct user_namespace *user_ns;\n\tint err = 0;\n\n\tif (!(unshare_flags & (CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t       CLONE_NEWNET | CLONE_NEWPID | CLONE_NEWCGROUP |\n\t\t\t       CLONE_NEWTIME)))\n\t\treturn 0;\n\n\tuser_ns = new_cred ? new_cred->user_ns : current_user_ns();\n\tif (!ns_capable(user_ns, CAP_SYS_ADMIN))\n\t\treturn -EPERM;\n\n\t*new_nsp = create_new_namespaces(unshare_flags, current, user_ns,\n\t\t\t\t\t new_fs ? new_fs : current->fs);\n\tif (IS_ERR(*new_nsp)) {\n\t\terr = PTR_ERR(*new_nsp);\n\t\tgoto out;\n\t}\n\nout:\n\treturn err;\n}\n\nvoid switch_task_namespaces(struct task_struct *p, struct nsproxy *new)\n{\n\tstruct nsproxy *ns;\n\n\tmight_sleep();\n\n\ttask_lock(p);\n\tns = p->nsproxy;\n\tp->nsproxy = new;\n\ttask_unlock(p);\n\n\tif (ns)\n\t\tput_nsproxy(ns);\n}\n\nvoid exit_task_namespaces(struct task_struct *p)\n{\n\tswitch_task_namespaces(p, NULL);\n}\n\nint exec_task_namespaces(void)\n{\n\tstruct task_struct *tsk = current;\n\tstruct nsproxy *new;\n\n\tif (tsk->nsproxy->time_ns_for_children == tsk->nsproxy->time_ns)\n\t\treturn 0;\n\n\tnew = create_new_namespaces(0, tsk, current_user_ns(), tsk->fs);\n\tif (IS_ERR(new))\n\t\treturn PTR_ERR(new);\n\n\ttimens_on_fork(new, tsk);\n\tswitch_task_namespaces(tsk, new);\n\treturn 0;\n}\n\nstatic int check_setns_flags(unsigned long flags)\n{\n\tif (!flags || (flags & ~(CLONE_NEWNS | CLONE_NEWUTS | CLONE_NEWIPC |\n\t\t\t\t CLONE_NEWNET | CLONE_NEWTIME | CLONE_NEWUSER |\n\t\t\t\t CLONE_NEWPID | CLONE_NEWCGROUP)))\n\t\treturn -EINVAL;\n\n#ifndef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_UTS_NS\n\tif (flags & CLONE_NEWUTS)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_CGROUPS\n\tif (flags & CLONE_NEWCGROUP)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_NET_NS\n\tif (flags & CLONE_NEWNET)\n\t\treturn -EINVAL;\n#endif\n#ifndef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME)\n\t\treturn -EINVAL;\n#endif\n\n\treturn 0;\n}\n\nstatic void put_nsset(struct nsset *nsset)\n{\n\tunsigned flags = nsset->flags;\n\n\tif (flags & CLONE_NEWUSER)\n\t\tput_cred(nsset_cred(nsset));\n\t/*\n\t * We only created a temporary copy if we attached to more than just\n\t * the mount namespace.\n\t */\n\tif (nsset->fs && (flags & CLONE_NEWNS) && (flags & ~CLONE_NEWNS))\n\t\tfree_fs_struct(nsset->fs);\n\tif (nsset->nsproxy)\n\t\tfree_nsproxy(nsset->nsproxy);\n}\n\nstatic int prepare_nsset(unsigned flags, struct nsset *nsset)\n{\n\tstruct task_struct *me = current;\n\n\tnsset->nsproxy = create_new_namespaces(0, me, current_user_ns(), me->fs);\n\tif (IS_ERR(nsset->nsproxy))\n\t\treturn PTR_ERR(nsset->nsproxy);\n\n\tif (flags & CLONE_NEWUSER)\n\t\tnsset->cred = prepare_creds();\n\telse\n\t\tnsset->cred = current_cred();\n\tif (!nsset->cred)\n\t\tgoto out;\n\n\t/* Only create a temporary copy of fs_struct if we really need to. */\n\tif (flags == CLONE_NEWNS) {\n\t\tnsset->fs = me->fs;\n\t} else if (flags & CLONE_NEWNS) {\n\t\tnsset->fs = copy_fs_struct(me->fs);\n\t\tif (!nsset->fs)\n\t\t\tgoto out;\n\t}\n\n\tnsset->flags = flags;\n\treturn 0;\n\nout:\n\tput_nsset(nsset);\n\treturn -ENOMEM;\n}\n\nstatic inline int validate_ns(struct nsset *nsset, struct ns_common *ns)\n{\n\treturn ns->ops->install(nsset, ns);\n}\n\n/*\n * This is the inverse operation to unshare().\n * Ordering is equivalent to the standard ordering used everywhere else\n * during unshare and process creation. The switch to the new set of\n * namespaces occurs at the point of no return after installation of\n * all requested namespaces was successful in commit_nsset().\n */\nstatic int validate_nsset(struct nsset *nsset, struct pid *pid)\n{\n\tint ret = 0;\n\tunsigned flags = nsset->flags;\n\tstruct user_namespace *user_ns = NULL;\n\tstruct pid_namespace *pid_ns = NULL;\n\tstruct nsproxy *nsp;\n\tstruct task_struct *tsk;\n\n\t/* Take a \"snapshot\" of the target task's namespaces. */\n\trcu_read_lock();\n\ttsk = pid_task(pid, PIDTYPE_PID);\n\tif (!tsk) {\n\t\trcu_read_unlock();\n\t\treturn -ESRCH;\n\t}\n\n\tif (!ptrace_may_access(tsk, PTRACE_MODE_READ_REALCREDS)) {\n\t\trcu_read_unlock();\n\t\treturn -EPERM;\n\t}\n\n\ttask_lock(tsk);\n\tnsp = tsk->nsproxy;\n\tif (nsp)\n\t\tget_nsproxy(nsp);\n\ttask_unlock(tsk);\n\tif (!nsp) {\n\t\trcu_read_unlock();\n\t\treturn -ESRCH;\n\t}\n\n#ifdef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID) {\n\t\tpid_ns = task_active_pid_ns(tsk);\n\t\tif (unlikely(!pid_ns)) {\n\t\t\trcu_read_unlock();\n\t\t\tret = -ESRCH;\n\t\t\tgoto out;\n\t\t}\n\t\tget_pid_ns(pid_ns);\n\t}\n#endif\n\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER)\n\t\tuser_ns = get_user_ns(__task_cred(tsk)->user_ns);\n#endif\n\trcu_read_unlock();\n\n\t/*\n\t * Install requested namespaces. The caller will have\n\t * verified earlier that the requested namespaces are\n\t * supported on this kernel. We don't report errors here\n\t * if a namespace is requested that isn't supported.\n\t */\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER) {\n\t\tret = validate_ns(nsset, &user_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n\tif (flags & CLONE_NEWNS) {\n\t\tret = validate_ns(nsset, from_mnt_ns(nsp->mnt_ns));\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n\n#ifdef CONFIG_UTS_NS\n\tif (flags & CLONE_NEWUTS) {\n\t\tret = validate_ns(nsset, &nsp->uts_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC) {\n\t\tret = validate_ns(nsset, &nsp->ipc_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_PID_NS\n\tif (flags & CLONE_NEWPID) {\n\t\tret = validate_ns(nsset, &pid_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_CGROUPS\n\tif (flags & CLONE_NEWCGROUP) {\n\t\tret = validate_ns(nsset, &nsp->cgroup_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_NET_NS\n\tif (flags & CLONE_NEWNET) {\n\t\tret = validate_ns(nsset, &nsp->net_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\n#ifdef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME) {\n\t\tret = validate_ns(nsset, &nsp->time_ns->ns);\n\t\tif (ret)\n\t\t\tgoto out;\n\t}\n#endif\n\nout:\n\tif (pid_ns)\n\t\tput_pid_ns(pid_ns);\n\tif (nsp)\n\t\tput_nsproxy(nsp);\n\tput_user_ns(user_ns);\n\n\treturn ret;\n}\n\n/*\n * This is the point of no return. There are just a few namespaces\n * that do some actual work here and it's sufficiently minimal that\n * a separate ns_common operation seems unnecessary for now.\n * Unshare is doing the same thing. If we'll end up needing to do\n * more in a given namespace or a helper here is ultimately not\n * exported anymore a simple commit handler for each namespace\n * should be added to ns_common.\n */\nstatic void commit_nsset(struct nsset *nsset)\n{\n\tunsigned flags = nsset->flags;\n\tstruct task_struct *me = current;\n\n#ifdef CONFIG_USER_NS\n\tif (flags & CLONE_NEWUSER) {\n\t\t/* transfer ownership */\n\t\tcommit_creds(nsset_cred(nsset));\n\t\tnsset->cred = NULL;\n\t}\n#endif\n\n\t/* We only need to commit if we have used a temporary fs_struct. */\n\tif ((flags & CLONE_NEWNS) && (flags & ~CLONE_NEWNS)) {\n\t\tset_fs_root(me->fs, &nsset->fs->root);\n\t\tset_fs_pwd(me->fs, &nsset->fs->pwd);\n\t}\n\n#ifdef CONFIG_IPC_NS\n\tif (flags & CLONE_NEWIPC)\n\t\texit_sem(me);\n#endif\n\n#ifdef CONFIG_TIME_NS\n\tif (flags & CLONE_NEWTIME)\n\t\ttimens_commit(me, nsset->nsproxy->time_ns);\n#endif\n\n\t/* transfer ownership */\n\tswitch_task_namespaces(me, nsset->nsproxy);\n\tnsset->nsproxy = NULL;\n}\n\nSYSCALL_DEFINE2(setns, int, fd, int, flags)\n{\n\tstruct fd f = fdget(fd);\n\tstruct ns_common *ns = NULL;\n\tstruct nsset nsset = {};\n\tint err = 0;\n\n\tif (!fd_file(f))\n\t\treturn -EBADF;\n\n\tif (proc_ns_file(fd_file(f))) {\n\t\tns = get_proc_ns(file_inode(fd_file(f)));\n\t\tif (flags && (ns->ops->type != flags))\n\t\t\terr = -EINVAL;\n\t\tflags = ns->ops->type;\n\t} else if (!IS_ERR(pidfd_pid(fd_file(f)))) {\n\t\terr = check_setns_flags(flags);\n\t} else {\n\t\terr = -EINVAL;\n\t}\n\tif (err)\n\t\tgoto out;\n\n\terr = prepare_nsset(flags, &nsset);\n\tif (err)\n\t\tgoto out;\n\n\tif (proc_ns_file(fd_file(f)))\n\t\terr = validate_ns(&nsset, ns);\n\telse\n\t\terr = validate_nsset(&nsset, pidfd_pid(fd_file(f)));\n\tif (!err) {\n\t\tcommit_nsset(&nsset);\n\t\tperf_event_namespaces(current);\n\t}\n\tput_nsset(&nsset);\nout:\n\tfdput(f);\n\treturn err;\n}\n\nint __init nsproxy_cache_init(void)\n{\n\tnsproxy_cachep = KMEM_CACHE(nsproxy, SLAB_PANIC|SLAB_ACCOUNT);\n\treturn 0;\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "18b12e1cc16dbe67c73c4b9c66f9c910a1c9385ae6eef19bf6a49db118d4e880",
+      "scope": "whole-file",
+      "line_count": 591,
+      "authoring_source": "course/file_units/namespace_proxy_implementation.py",
+      "sections": [
+        "구성과 초기 proxy",
+        "Slab 할당과 초기화 범위",
+        "새 묶음의 생성 순서",
+        "생성과 task 연결의 분리",
+        "실패 라벨의 역순 회수",
+        "Clone의 기존 묶음 공유 조건",
+        "Clone 권한과 IPC 조합",
+        "Clone 생성 후 시간 처리",
+        "완성된 묶음 해제",
+        "Unshare의 준비 결과",
+        "현재 task 전환과 종료",
+        "Exec의 시간 namespace 적용",
+        "Pidfd setns flag 검증",
+        "Nsset 준비의 proxy와 자격 증명",
+        "Nsset flags 대입 시점과 정리 범위",
+        "단일 namespace 검증 callback",
+        "Pidfd 대상 task의 상태 획득",
+        "PID·user 객체는 별도로 확보",
+        "복수 namespace 설치 순서",
+        "대상 참조의 정리",
+        "최종 반영의 자격 증명과 fs",
+        "최종 반영의 IPC·시간·proxy",
+        "Setns의 FD 종류별 입력 규칙",
+        "Setns 준비·검증·통지·정리",
+        "학습 범위와 확인의 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/nsproxy.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "이사할 때 새 방의 열쇠들을 먼저 준비하고 점검한 뒤 한꺼번에 내 열쇠 꾸러미로 바꿉니다. 중간에 실패하면 이미 받은 것부터 되돌려 줘야 합니다. namespace 전환도 준비와 반영을 나눕니다.",
+    "meaning": "새 namespace 묶음의 생성·참조 정리·작업 연결과 setns의 준비·검증·최종 반영을 각 실패 경로까지 따라갑니다.",
+    "exercise": "prepare_nsset의 요청 flags와 저장된 nsset->flags가 같아지는 줄을 찾아 그 앞의 실패 정리에 어떤 영향을 주는지 설명해 보세요."
+  },
+  "goal": "새 namespace 묶음의 생성·참조 정리·작업 연결과 setns의 준비·검증·최종 반영을 각 실패 경로까지 따라갑니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "prepare_nsset의 요청 flags와 저장된 nsset->flags가 같아지는 줄을 찾아 그 앞의 실패 정리에 어떤 영향을 주는지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "9d497e3e8a055c8684f1a513c3dc5a117cc9f47535f81f25f04a9cdc4a2b55bc",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 12,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

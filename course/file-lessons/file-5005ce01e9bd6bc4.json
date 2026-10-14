@@ -5,76 +5,96 @@
   "area": "CRC · 비트 연산 · 오류 검출",
   "track": "files",
   "kind": "kernel",
-  "intro": "64비트 정수의 일부 비트에서 4비트 체크값을 구하는 작은 함수입니다. 표를 사용하는 최적화와 C 시프트의 정의 범위를 함께 배웁니다.",
+  "intro": "CRC4의 마스크·0 채움 순서와 표 갱신을 계산합니다.",
   "guide": [
-    "crc4_tab은 다항식 0b10111에 대한 16가지 4비트 전이입니다. x를 (1ull << bits)-1로 가린 뒤 bits를 4의 배수로 올림합니다. 높은 nibble부터 c XOR nibble을 인덱스로 사용해 상태를 갱신합니다.",
-    "c는 0..15 범위의 유효한 CRC 상태여야 합니다. 이 구현의 마스크 식 때문에 bits는 0..63 범위에서 해석해야 합니다. bits=64를 지원한다고 추측하면 안 됩니다. 결과를 다음 호출의 초기 상태로 쓸 때는 nibble 패딩 규칙도 맞춰야 합니다."
+    "처음 c는 0..15, bits는 0..63이어야 합니다.",
+    "상위 비트를 지운 뒤 반복 길이를 네 비트 단위로 올립니다.",
+    "CRC는 실수 검출용이며 암호 인증은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구성",
-      "text": "SPDX와 주석은 파일의 메타데이터입니다. crc4.h는 함수 선언과 형식, module.h는 export 및 모듈 메타데이터 매크로를 제공합니다. static const crc4_tab은 이 번역 단위 내부의 읽기 전용 전이 표입니다. 함수 뒤의 EXPORT_SYMBOL_GPL은 커널 심볼 공개이고 사용자 공간 syscall을 만드는 구문이 아닙니다. MODULE_DESCRIPTION과 MODULE_LICENSE는 연산 단계가 아닙니다."
+      "title": "구성과 표",
+      "text": "라이선스와 설명은 메타데이터입니다. crc4 헤더는 형식을, module 헤더는 공개·모듈 표시를 제공합니다. 내부 읽기 전용 16칸 표는 다항식 0b10111의 네 비트 전이입니다. GPL export는 커널 심볼 공개이지 시스템 호출 생성은 아닙니다. 설명·라이선스 매크로도 계산 단계가 아닙니다."
     },
     {
-      "title": "실행 순서와 경계",
-      "text": "bits=5이면 낮은 5비트만 남기고 루프 길이를 8로 만듭니다. 따라서 상위 nibble에는 0으로 채워진 비트가 포함됩니다. bits=0이면 x=0이고 i=-4로 시작해 루프가 없습니다. c가 그대로 반환됩니다. bits=64이면 64비트 값의 폭만큼 왼쪽 시프트하므로 C에서 정의되지 않은 동작입니다. 함수 안에 입력 검증이나 오류 반환 경로는 없습니다."
+      "title": "순서와 경계",
+      "text": "bits=5면 먼저 낮은 다섯 비트만 남긴 뒤 반복 폭을 8로 올려 위쪽은 0으로 채웁니다. bits=0이면 x=0, 시작 i=-4라 반복 없이 c를 줍니다. bits=64면 1ull을 형식 폭만큼 이동하여 C에서 정의되지 않습니다. 입력 검사와 오류 반환이 없으므로 올바른 범위를 지켜야 합니다."
     },
     {
-      "title": "손으로 계산하기",
-      "text": "c=0, x=0xAB, bits=8이면 첫 인덱스는 0 XOR 0xA=0xA이고 표 값은 0xF입니다. 다음 인덱스는 0xF XOR 0xB=4이고 결과는 0xB입니다. x=0xAB, bits=5면 먼저 x=0xB가 되고 두 nibble 0,0xB를 처리하여 결과 0x8입니다."
+      "title": "손계산",
+      "text": "c=0,x=0xAB,bits=8이면 첫 인덱스 A의 표 값 F, 다음 인덱스 F XOR B=4의 표 값 B입니다. 5비트면 x가 B로 잘려 두 묶음 0과 B를 처리하므로 8입니다. 높은 네 비트부터 c XOR 묶음으로 갱신합니다."
     },
     {
-      "title": "CS 연결과 비용",
-      "text": "CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다. 입력 bits에 대해 ceil(bits/4)번 표를 조회합니다. 이 API는 bits가 최대 63인 고정 폭이므로 유효 입력의 반복 횟수는 최대 16회입니다. 임의 길이 입력의 점근적 분석과 고정 폭 API의 상한을 구분하세요."
+      "title": "원리와 비용",
+      "text": "CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신합니다. 여기의 더하기·빼기는 자리올림 없는 XOR입니다. 악의적 변경을 막는 인증은 아니며 초기값·비트 방향·마지막 XOR·전송 표현이 다르면 결과도 달라집니다. ceil(bits/4)번 조회하며 이 고정 폭 API는 최대 16회입니다. 다음 호출로 c를 이을 때도 네 비트 0 채움 규칙을 맞춰야 합니다."
     }
   ],
   "questions": [
     {
-      "prompt": "c=0, x=0xAB, bits=8의 결과는?",
+      "prompt": "0, 0xAB, 8비트의 결과는?",
       "options": [
         "0xB",
         "0x8"
       ],
       "answer": 0,
-      "explanation": "첫 상태는 tab[0xA]=0xF, 두 번째 상태는 tab[0xF XOR 0xB]=tab[4]=0xB입니다. 0x8은 bits=5로 마스크한 다른 입력의 결과입니다."
+      "explanation": "tab[A]=F, tab[F XOR B]=tab[4]=B입니다.",
+      "original_prompt": "c=0, x=0xAB, bits=8의 결과는?",
+      "original_options": [
+        "0xB",
+        "0x8"
+      ],
+      "original_explanation": "첫 상태는 tab[0xA]=0xF, 두 번째 상태는 tab[0xF XOR 0xB]=tab[4]=0xB입니다. 0x8은 bits=5로 마스크한 다른 입력의 결과입니다."
     },
     {
-      "prompt": "bits=5를 8로 올린다는 것은 원래 상위 비트를 되살린다는 뜻인가?",
+      "prompt": "5비트를 8로 올리면 지운 상위 비트가 살아나나요?",
       "options": [
+        "그렇다. 원래 위 세 비트도 포함한다",
+        "아니다. 먼저 지우고 0 채운 묶음을 처리한다"
+      ],
+      "answer": 1,
+      "explanation": "올림은 반복 경계만 바꾸며 제거한 값은 돌아오지 않습니다.",
+      "original_prompt": "bits=5를 8로 올린다는 것은 원래 상위 비트를 되살린다는 뜻인가?",
+      "original_options": [
         "그렇다. x의 원래 상위 3비트도 포함한다",
         "아니다. 먼저 5비트 마스크를 적용한 뒤 0 패딩된 nibble을 처리한다"
       ],
-      "answer": 1,
-      "explanation": "마스크 대입이 올림보다 먼저 실행됩니다. 제거된 상위 비트는 복구되지 않고 올림은 반복문의 경계만 바꿉니다."
+      "original_explanation": "마스크 대입이 올림보다 먼저 실행됩니다. 제거된 상위 비트는 복구되지 않고 올림은 반복문의 경계만 바꿉니다."
     },
     {
-      "prompt": "bits=64에 대한 이 구현의 문제는?",
+      "prompt": "bits=64의 문제는?",
       "options": [
+        "형식 폭만큼 1ull을 이동해 정의되지 않은 동작이다",
+        "알아서 모든 비트 1인 마스크가 된다"
+      ],
+      "answer": 0,
+      "explanation": "수학적 2^64-1과 C의 시프트 허용 범위는 다릅니다.",
+      "original_prompt": "bits=64에 대한 이 구현의 문제는?",
+      "original_options": [
         "1ull을 형식 폭만큼 시프트하여 정의되지 않은 동작이 된다",
         "자동으로 모든 비트가 1인 마스크가 된다"
       ],
-      "answer": 0,
-      "explanation": "C의 시프트 수는 승격된 왼쪽 피연산자의 비트 폭보다 작아야 합니다. 수학적 2^64-1 계산과 실제 C 표현식은 다릅니다."
+      "original_explanation": "C의 시프트 수는 승격된 왼쪽 피연산자의 비트 폭보다 작아야 합니다. 수학적 2^64-1 계산과 실제 C 표현식은 다릅니다."
     },
     {
-      "prompt": "초기 c=0x80을 넘겨도 함수가 4비트로 자동 제한하는가?",
+      "prompt": "c=0x80도 자동으로 4비트가 되나요?",
       "options": [
+        "그렇다. uint8_t라 네 비트가 된다",
+        "아니다. 표 범위를 벗어날 수 있다"
+      ],
+      "answer": 1,
+      "explanation": "uint8_t는 여덟 비트이며 c에 &0xf를 하지 않습니다.",
+      "original_prompt": "초기 c=0x80을 넘겨도 함수가 4비트로 자동 제한하는가?",
+      "original_options": [
         "그렇다. 반환 형식 uint8_t가 입력을 4비트로 만든다",
         "아니다. 표 인덱스가 범위를 벗어날 수 있다"
       ],
-      "answer": 1,
-      "explanation": "c 자체에 &0xf를 하지 않습니다. uint8_t는 8비트이므로 0x80을 유지하며 nibble과 XOR해도 16칸 표의 유효 인덱스가 되지 않습니다."
+      "original_explanation": "c 자체에 &0xf를 하지 않습니다. uint8_t는 8비트이므로 0x80을 유지하며 nibble과 XOR해도 16칸 표의 유효 인덱스가 되지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0xAB를 8비트와 5비트로 처리해 결과 0xB와 0x8을 비교하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * crc4.c - simple crc-4 calculations.\n */\n\n#include <linux/crc4.h>\n#include <linux/module.h>\n\nstatic const uint8_t crc4_tab[] = {\n\t0x0, 0x7, 0xe, 0x9, 0xb, 0xc, 0x5, 0x2,\n\t0x1, 0x6, 0xf, 0x8, 0xa, 0xd, 0x4, 0x3,\n};\n\n/**\n * crc4 - calculate the 4-bit crc of a value.\n * @c:    starting crc4\n * @x:    value to checksum\n * @bits: number of bits in @x to checksum\n *\n * Returns the crc4 value of @x, using polynomial 0b10111.\n *\n * The @x value is treated as left-aligned, and bits above @bits are ignored\n * in the crc calculations.\n */\nuint8_t crc4(uint8_t c, uint64_t x, int bits)\n{\n\tint i;\n\n\t/* mask off anything above the top bit */\n\tx &= (1ull << bits) - 1;\n\n\t/* Align to 4-bits */\n\tbits = (bits + 3) & ~0x3;\n\n\t/* Calculate crc4 over four-bit nibbles, starting at the MSbit */\n\tfor (i = bits - 4; i >= 0; i -= 4)\n\t\tc = crc4_tab[c ^ ((x >> i) & 0xf)];\n\n\treturn c;\n}\nEXPORT_SYMBOL_GPL(crc4);\n\nMODULE_DESCRIPTION(\"CRC4 calculations\");\nMODULE_LICENSE(\"GPL\");\n",
   "source_review": {
@@ -96,5 +116,133 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc4.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-5005ce01e9bd6bc4",
+    "path": "lib/crc4.c",
+    "title": "CRC4 전체 구현: 4비트 표와 시프트의 경계",
+    "area": "CRC · 비트 연산 · 오류 검출",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "64비트 정수의 일부 비트에서 4비트 체크값을 구하는 작은 함수입니다. 표를 사용하는 최적화와 C 시프트의 정의 범위를 함께 배웁니다.",
+    "guide": [
+      "crc4_tab은 다항식 0b10111에 대한 16가지 4비트 전이입니다. x를 (1ull << bits)-1로 가린 뒤 bits를 4의 배수로 올림합니다. 높은 nibble부터 c XOR nibble을 인덱스로 사용해 상태를 갱신합니다.",
+      "c는 0..15 범위의 유효한 CRC 상태여야 합니다. 이 구현의 마스크 식 때문에 bits는 0..63 범위에서 해석해야 합니다. bits=64를 지원한다고 추측하면 안 됩니다. 결과를 다음 호출의 초기 상태로 쓸 때는 nibble 패딩 규칙도 맞춰야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구성",
+        "text": "SPDX와 주석은 파일의 메타데이터입니다. crc4.h는 함수 선언과 형식, module.h는 export 및 모듈 메타데이터 매크로를 제공합니다. static const crc4_tab은 이 번역 단위 내부의 읽기 전용 전이 표입니다. 함수 뒤의 EXPORT_SYMBOL_GPL은 커널 심볼 공개이고 사용자 공간 syscall을 만드는 구문이 아닙니다. MODULE_DESCRIPTION과 MODULE_LICENSE는 연산 단계가 아닙니다."
+      },
+      {
+        "title": "실행 순서와 경계",
+        "text": "bits=5이면 낮은 5비트만 남기고 루프 길이를 8로 만듭니다. 따라서 상위 nibble에는 0으로 채워진 비트가 포함됩니다. bits=0이면 x=0이고 i=-4로 시작해 루프가 없습니다. c가 그대로 반환됩니다. bits=64이면 64비트 값의 폭만큼 왼쪽 시프트하므로 C에서 정의되지 않은 동작입니다. 함수 안에 입력 검증이나 오류 반환 경로는 없습니다."
+      },
+      {
+        "title": "손으로 계산하기",
+        "text": "c=0, x=0xAB, bits=8이면 첫 인덱스는 0 XOR 0xA=0xA이고 표 값은 0xF입니다. 다음 인덱스는 0xF XOR 0xB=4이고 결과는 0xB입니다. x=0xAB, bits=5면 먼저 x=0xB가 되고 두 nibble 0,0xB를 처리하여 결과 0x8입니다."
+      },
+      {
+        "title": "CS 연결과 비용",
+        "text": "CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다. 입력 bits에 대해 ceil(bits/4)번 표를 조회합니다. 이 API는 bits가 최대 63인 고정 폭이므로 유효 입력의 반복 횟수는 최대 16회입니다. 임의 길이 입력의 점근적 분석과 고정 폭 API의 상한을 구분하세요."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "c=0, x=0xAB, bits=8의 결과는?",
+        "options": [
+          "0xB",
+          "0x8"
+        ],
+        "answer": 0,
+        "explanation": "첫 상태는 tab[0xA]=0xF, 두 번째 상태는 tab[0xF XOR 0xB]=tab[4]=0xB입니다. 0x8은 bits=5로 마스크한 다른 입력의 결과입니다."
+      },
+      {
+        "prompt": "bits=5를 8로 올린다는 것은 원래 상위 비트를 되살린다는 뜻인가?",
+        "options": [
+          "그렇다. x의 원래 상위 3비트도 포함한다",
+          "아니다. 먼저 5비트 마스크를 적용한 뒤 0 패딩된 nibble을 처리한다"
+        ],
+        "answer": 1,
+        "explanation": "마스크 대입이 올림보다 먼저 실행됩니다. 제거된 상위 비트는 복구되지 않고 올림은 반복문의 경계만 바꿉니다."
+      },
+      {
+        "prompt": "bits=64에 대한 이 구현의 문제는?",
+        "options": [
+          "1ull을 형식 폭만큼 시프트하여 정의되지 않은 동작이 된다",
+          "자동으로 모든 비트가 1인 마스크가 된다"
+        ],
+        "answer": 0,
+        "explanation": "C의 시프트 수는 승격된 왼쪽 피연산자의 비트 폭보다 작아야 합니다. 수학적 2^64-1 계산과 실제 C 표현식은 다릅니다."
+      },
+      {
+        "prompt": "초기 c=0x80을 넘겨도 함수가 4비트로 자동 제한하는가?",
+        "options": [
+          "그렇다. 반환 형식 uint8_t가 입력을 4비트로 만든다",
+          "아니다. 표 인덱스가 범위를 벗어날 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "c 자체에 &0xf를 하지 않습니다. uint8_t는 8비트이므로 0x80을 유지하며 nibble과 XOR해도 16칸 표의 유효 인덱스가 되지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * crc4.c - simple crc-4 calculations.\n */\n\n#include <linux/crc4.h>\n#include <linux/module.h>\n\nstatic const uint8_t crc4_tab[] = {\n\t0x0, 0x7, 0xe, 0x9, 0xb, 0xc, 0x5, 0x2,\n\t0x1, 0x6, 0xf, 0x8, 0xa, 0xd, 0x4, 0x3,\n};\n\n/**\n * crc4 - calculate the 4-bit crc of a value.\n * @c:    starting crc4\n * @x:    value to checksum\n * @bits: number of bits in @x to checksum\n *\n * Returns the crc4 value of @x, using polynomial 0b10111.\n *\n * The @x value is treated as left-aligned, and bits above @bits are ignored\n * in the crc calculations.\n */\nuint8_t crc4(uint8_t c, uint64_t x, int bits)\n{\n\tint i;\n\n\t/* mask off anything above the top bit */\n\tx &= (1ull << bits) - 1;\n\n\t/* Align to 4-bits */\n\tbits = (bits + 3) & ~0x3;\n\n\t/* Calculate crc4 over four-bit nibbles, starting at the MSbit */\n\tfor (i = bits - 4; i >= 0; i -= 4)\n\t\tc = crc4_tab[c ^ ((x >> i) & 0xf)];\n\n\treturn c;\n}\nEXPORT_SYMBOL_GPL(crc4);\n\nMODULE_DESCRIPTION(\"CRC4 calculations\");\nMODULE_LICENSE(\"GPL\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1352fd64259c5531f5a26c3bfd8ac67f6ea902170778baaee7d2b824a9337a19",
+      "scope": "whole-file",
+      "line_count": 44,
+      "authoring_source": "course/file_units/crc_fundamentals.py",
+      "sections": [
+        "전체 파일 구성",
+        "실행 순서와 경계",
+        "손으로 계산하기",
+        "CS 연결과 비용"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc4.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "데이터가 실수로 바뀌었는지 찾을 작은 4비트 검사값을 만듭니다. 네 비트씩 표에 넣되 입력 길이와 처음 상태의 범위를 지켜야 합니다.",
+    "meaning": "CRC4의 마스크·0 채움 순서와 표 갱신을 계산합니다.",
+    "exercise": "0xAB를 8비트와 5비트로 처리해 결과 0xB와 0x8을 비교하세요."
+  },
+  "goal": "CRC4의 마스크·0 채움 순서와 표 갱신을 계산합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0xAB를 8비트와 5비트로 처리해 결과 0xB와 0x8을 비교하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "0eccd1cdb49991892367745c1e2287d97c3525903433395613d1d80c0aa446c4",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

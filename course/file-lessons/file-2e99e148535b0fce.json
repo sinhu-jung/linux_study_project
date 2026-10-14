@@ -5,63 +5,77 @@
   "area": "도구 탐지 · shell · 버전 인코딩 · 문자열 치환",
   "track": "files",
   "kind": "kernel",
-  "intro": "도구 발견 실패와 버전 출력 가공의 전체 제어 흐름을 분석합니다.",
+  "intro": "pahole-version.sh는 실행 가능한 도구를 확인한 뒤 버전 문자열 일부를 sed로 이어 붙입니다. 숫자 형식 전체를 검증하지는 않습니다.",
   "guide": [
-    "버전 문자열을 정수처럼 표현하는 규칙과 실제 산술 변환은 서로 다를 수 있습니다.",
-    "command -v, 실행 가능 검사, 전체 인수 전달, sed 치환 범위를 학습합니다."
+    "pahole은 빌드에 쓰이는 도구이며 command -v는 사용할 명령 위치를 찾는 데 쓰입니다. -x는 실행 가능한 파일인지 묻습니다.",
+    "문자 치환은 맞는 부분만 바꾸는 작업입니다. 버전 전체를 해석해 정상 숫자라고 인증하는 것은 아닙니다.",
+    "도구가 실행 가능하다는 확인과 --version 실행이 성공했다는 확인은 별개입니다."
   ],
   "deep_dive": [
     {
-      "title": "용도와 사전 검사",
-      "text": "#!/bin/sh, GPL-2.0 주석은 pahole 경로를 인수로 받고 v1.19를 119처럼 출력한다고 설명합니다. command -v \"$@\"의 결과에 -x 검사를 적용합니다. 실행 가능 파일로 확인하지 못하면 stdout에 0을 출력하고 exit 1입니다. 오류 sentinel과 실패 종료 상태를 함께 반환합니다."
+      "title": "사전 확인과 실패 신호",
+      "text": "sh·GPL 주석은 pahole 경로를 받고 v1.19를 119처럼 표시한다고 안내합니다. command -v에 전달받은 인수를 주고 그 결과를 -x로 검사합니다. 확인하지 못하면 0을 출력하며 exit 1로 실패합니다. 숫자 0만 보고 성공으로 해석하면 안 됩니다."
     },
     {
-      "title": "도구 실행과 치환",
-      "text": "검사를 통과하면 \"$@\" --version으로 전달받은 명령과 인수를 실행하고 sed -E로 v(숫자).(숫자)를 두 그룹의 단순 연결로 바꿉니다. v1.19는 119지만 v1.9는 19이며 세 자리로 zero padding하는 산술 변환은 아닙니다. 버전 문자열 시작·끝 앵커가 없어 접두·접미의 다른 문자를 전부 지우는 식도 아닙니다."
+      "title": "실행과 두 그룹 연결",
+      "text": "통과하면 전달받은 명령·인수에 --version을 붙여 실행합니다. sed -E는 v숫자.숫자를 두 숫자 그룹의 연결로 바꿉니다. v1.9는 109가 아니라 19입니다. 시작·끝에 맞추는 앵커가 없어 다른 앞뒤 글자까지 모두 없애는 규칙도 아닙니다."
     },
     {
-      "title": "실패 처리의 한계",
-      "text": "버전 형식이 맞지 않으면 sed가 원문을 남길 수 있고 숫자만인지 다시 검사하지 않습니다. set -e나 pipefail이 없으며 pipeline의 앞 도구 실패를 별도로 검사하지 않습니다. command -v로 실행 가능성을 확인한 사실과 --version 실행 성공은 별개입니다. 전체 파일을 검토했으며 실제 pahole을 이 환경에서 실행한 검증은 아닙니다."
+      "title": "실패 전파와 검증 범위",
+      "text": "형식이 안 맞으면 sed가 원문을 그대로 남길 수 있고 숫자인지 다시 검사하지 않습니다. set -e·pipefail이나 앞 명령의 실패를 따로 보는 코드도 없습니다. 실행 가능 검사 뒤 실제 버전 명령이 실패할 수 있습니다. 실제 pahole 실행 검증을 한 것이 아니라 전체 소스를 분석한 것입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "실행 가능한 pahole을 찾지 못하면 출력과 종료 상태는?",
+      "prompt": "실행 가능한 도구를 못 찾으면 어떻게 되나요?",
       "options": [
+        "0을 출력하고 상태 1로 끝납니다.",
+        "출력 없이 상태 0으로 성공합니다."
+      ],
+      "answer": 0,
+      "explanation": "echo 0과 exit 1을 함께 봐야 합니다.",
+      "original_prompt": "실행 가능한 pahole을 찾지 못하면 출력과 종료 상태는?",
+      "original_options": [
         "0 출력, 종료 상태 1",
         "아무 출력 없이 성공 0"
       ],
-      "answer": 0,
-      "explanation": "if 분기에 echo 0과 exit 1이 모두 있습니다. 값만 읽고 성공으로 오해하면 안 됩니다."
+      "original_explanation": "if 분기에 echo 0과 exit 1이 모두 있습니다. 값만 읽고 성공으로 오해하면 안 됩니다."
     },
     {
-      "prompt": "치환식이 v1.9에 적용되면 결과는?",
+      "prompt": "v1.9의 치환 결과는 무엇인가요?",
       "options": [
+        "109입니다.",
+        "19입니다."
+      ],
+      "answer": 1,
+      "explanation": "두 그룹을 그대로 붙이며 0을 채우지 않습니다.",
+      "original_prompt": "치환식이 v1.9에 적용되면 결과는?",
+      "original_options": [
         "109",
         "19"
       ],
-      "answer": 1,
-      "explanation": "두 숫자 그룹을 그대로 연결합니다. 주석의 세 자리 예시는 한 자리 minor에 대한 padding 구현이 아닙니다."
+      "original_explanation": "두 숫자 그룹을 그대로 연결합니다. 주석의 세 자리 예시는 한 자리 minor에 대한 padding 구현이 아닙니다."
     },
     {
-      "prompt": "버전 출력에 다른 접미사가 있으면 자동으로 모두 제거되는가?",
+      "prompt": "다른 접미사도 모두 자동 제거되나요?",
       "options": [
+        "아니요. 맞는 v숫자.숫자 부분만 바꿉니다.",
+        "예. 전체 줄을 정수 해석기로 처리합니다."
+      ],
+      "answer": 0,
+      "explanation": "부분 치환과 전체 형식 검증은 다릅니다.",
+      "original_prompt": "버전 출력에 다른 접미사가 있으면 자동으로 모두 제거되는가?",
+      "original_options": [
         "아니다. 일치하는 v숫자.숫자 부분만 치환한다",
         "그렇다. 출력 전체를 정수 parser가 처리한다"
       ],
-      "answer": 0,
-      "explanation": "sed 식에는 전체 줄을 감싸는 앵커나 정수 검증이 없습니다. 치환과 검증을 구분합니다."
+      "original_explanation": "sed 식에는 전체 줄을 감싸는 앵커나 정수 검증이 없습니다. 치환과 검증을 구분합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "v1.19→119와 v1.9→19를 비교해 0을 채우는 규칙이 없음을 확인하세요."
   },
   "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n#\n# Usage: $ ./pahole-version.sh pahole\n#\n# Prints pahole's version in a 3-digit form, such as 119 for v1.19.\n\nif [ ! -x \"$(command -v \"$@\")\" ]; then\n\techo 0\n\texit 1\nfi\n\n\"$@\" --version | sed -E 's/v([0-9]+)\\.([0-9]+)/\\1\\2/'\n",
   "source_review": {
@@ -82,5 +96,119 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/pahole-version.sh"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-2e99e148535b0fce",
+    "path": "scripts/pahole-version.sh",
+    "title": "Pahole 버전 probe: 실행 파일 확인과 문자열 치환",
+    "area": "도구 탐지 · shell · 버전 인코딩 · 문자열 치환",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "도구 발견 실패와 버전 출력 가공의 전체 제어 흐름을 분석합니다.",
+    "guide": [
+      "버전 문자열을 정수처럼 표현하는 규칙과 실제 산술 변환은 서로 다를 수 있습니다.",
+      "command -v, 실행 가능 검사, 전체 인수 전달, sed 치환 범위를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "용도와 사전 검사",
+        "text": "#!/bin/sh, GPL-2.0 주석은 pahole 경로를 인수로 받고 v1.19를 119처럼 출력한다고 설명합니다. command -v \"$@\"의 결과에 -x 검사를 적용합니다. 실행 가능 파일로 확인하지 못하면 stdout에 0을 출력하고 exit 1입니다. 오류 sentinel과 실패 종료 상태를 함께 반환합니다."
+      },
+      {
+        "title": "도구 실행과 치환",
+        "text": "검사를 통과하면 \"$@\" --version으로 전달받은 명령과 인수를 실행하고 sed -E로 v(숫자).(숫자)를 두 그룹의 단순 연결로 바꿉니다. v1.19는 119지만 v1.9는 19이며 세 자리로 zero padding하는 산술 변환은 아닙니다. 버전 문자열 시작·끝 앵커가 없어 접두·접미의 다른 문자를 전부 지우는 식도 아닙니다."
+      },
+      {
+        "title": "실패 처리의 한계",
+        "text": "버전 형식이 맞지 않으면 sed가 원문을 남길 수 있고 숫자만인지 다시 검사하지 않습니다. set -e나 pipefail이 없으며 pipeline의 앞 도구 실패를 별도로 검사하지 않습니다. command -v로 실행 가능성을 확인한 사실과 --version 실행 성공은 별개입니다. 전체 파일을 검토했으며 실제 pahole을 이 환경에서 실행한 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "실행 가능한 pahole을 찾지 못하면 출력과 종료 상태는?",
+        "options": [
+          "0 출력, 종료 상태 1",
+          "아무 출력 없이 성공 0"
+        ],
+        "answer": 0,
+        "explanation": "if 분기에 echo 0과 exit 1이 모두 있습니다. 값만 읽고 성공으로 오해하면 안 됩니다."
+      },
+      {
+        "prompt": "치환식이 v1.9에 적용되면 결과는?",
+        "options": [
+          "109",
+          "19"
+        ],
+        "answer": 1,
+        "explanation": "두 숫자 그룹을 그대로 연결합니다. 주석의 세 자리 예시는 한 자리 minor에 대한 padding 구현이 아닙니다."
+      },
+      {
+        "prompt": "버전 출력에 다른 접미사가 있으면 자동으로 모두 제거되는가?",
+        "options": [
+          "아니다. 일치하는 v숫자.숫자 부분만 치환한다",
+          "그렇다. 출력 전체를 정수 parser가 처리한다"
+        ],
+        "answer": 0,
+        "explanation": "sed 식에는 전체 줄을 감싸는 앵커나 정수 검증이 없습니다. 치환과 검증을 구분합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "#!/bin/sh\n# SPDX-License-Identifier: GPL-2.0\n#\n# Usage: $ ./pahole-version.sh pahole\n#\n# Prints pahole's version in a 3-digit form, such as 119 for v1.19.\n\nif [ ! -x \"$(command -v \"$@\")\" ]; then\n\techo 0\n\texit 1\nfi\n\n\"$@\" --version | sed -E 's/v([0-9]+)\\.([0-9]+)/\\1\\2/'\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "7640978c9f22186f8305f7574c5713a731ce5ad9dca6dc2e762f214208208ecc",
+      "scope": "whole-file",
+      "line_count": 13,
+      "authoring_source": "course/file_units/btf_build_helpers.py",
+      "sections": [
+        "용도와 사전 검사",
+        "도구 실행과 치환",
+        "실패 처리의 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/pahole-version.sh"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "버전표의 점을 빼고 두 숫자 덩어리를 붙이는 작업은 자릿수를 맞춰 계산하는 것과 다릅니다.",
+    "meaning": "pahole-version.sh는 실행 가능한 도구를 확인한 뒤 버전 문자열 일부를 sed로 이어 붙입니다. 숫자 형식 전체를 검증하지는 않습니다.",
+    "exercise": "v1.19→119와 v1.9→19를 비교해 0을 채우는 규칙이 없음을 확인하세요."
+  },
+  "goal": "pahole-version.sh는 실행 가능한 도구를 확인한 뒤 버전 문자열 일부를 sed로 이어 붙입니다. 숫자 형식 전체를 검증하지는 않습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "v1.19→119와 v1.9→19를 비교해 0을 채우는 규칙이 없음을 확인하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "722f21df07ef266baecd3eaacae437eabac2a31e0f9b330edb00e41f69e0b216",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

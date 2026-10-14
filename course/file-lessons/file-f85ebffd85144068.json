@@ -5,100 +5,120 @@
   "area": "비트맵 · 이진 정렬 · 반열린 구간 · 메모리 단편화 · 조건부 컴파일",
   "track": "files",
   "kind": "kernel",
-  "intro": "여러 페이지에 공유되는 플래그의 폭, 블록 크기, 정렬과 compaction skip 인터페이스를 읽습니다.",
+  "intro": "이 헤더는 페이지 묶음의 이동 유형과 compaction 건너뛰기 표시를 다뤄요. 올림 정렬과 현재 블록의 끝도 구별해야 해요.",
   "guide": [
-    "개별 페이지의 상태와 페이지 블록 전체의 상태를 구분하고, 포함 구간의 끝과 단순 올림 정렬을 구분합니다.",
-    "메모리 단편화와 compaction을 학습하기 전에 블록 메타데이터의 단위를 확립합니다."
+    "PFN은 물리 페이지 번호예요. 페이지 블록은 여러 페이지를 한 묶음으로 관리하는 단위예요.",
+    "compaction은 흩어진 빈 메모리를 모으기 위해 페이지 배치를 조정하는 작업이에요. 이 파일은 그 알고리즘 자체를 실행하지 않아요.",
+    "배타적 끝은 그 구간에 들어가지 않는 첫 위치예요. [16,24)는 16부터 23까지이고 24는 다음 블록이에요."
   ],
   "deep_dive": [
     {
-      "title": "전체 범위와 선언",
-      "text": "GPL-2.0-only, 저작권·작성자 주석, guard와 types.h 뒤에 비트 열거형, 구성별 order, PFN 경계 매크로, get/set 선언, skip wrapper가 있습니다. 이 헤더는 메모리 압축이나 페이지 이동을 실행하지 않습니다. struct page는 전방 선언이며 실제 플래그 저장 위치와 get/set 구현은 mm/page_alloc.c에 있습니다."
+      "title": "파일이 다루는 범위",
+      "text": "비트 번호, 설정별 order, PFN 경계 매크로, get/set 선언과 skip wrapper가 있어요. struct page는 전방 선언이고 실제 저장 위치와 접근 구현은 mm/page_alloc.c에 있어요. 메모리 압축이나 페이지 이동을 수행하는 함수 본문은 아니에요."
     },
     {
-      "title": "4비트 블록 레코드",
-      "text": "PB_migratetype_bits는 3입니다. enum의 PB_migrate는 0, PB_migrate_end는 2, PB_migrate_skip은 3, NR_PAGEBLOCK_BITS는 4입니다. 처음 세 비트는 이동 유형, 네 번째는 compaction에서 건너뛰는 표시입니다. 3비트의 표현 가능 조합이 8개라는 사실과 실제 정의된 이동 유형 개수는 다릅니다. 주석은 레코드 비트들이 word 경계를 가로지르지 않는 배치 전제를 밝히며, 전제가 바뀌면 접근 함수를 수정해야 한다고 합니다."
+      "title": "블록당 네 비트",
+      "text": "이동 유형은 3비트로 PB_migrate=0부터 PB_migrate_end=2까지예요. skip은 3번이고 전체 NR_PAGEBLOCK_BITS는 4예요. 3비트가 여덟 조합을 만든다고 실제 이동 유형 정의가 꼭 여덟이라는 뜻은 아니에요. 주석은 한 레코드가 word 경계를 가로지르지 않는 배치를 전제로 하며 바뀌면 접근 함수도 바꿔야 한다고 해요."
     },
     {
-      "title": "HugeTLB의 우선 분기",
-      "text": "CONFIG_HUGETLB_PAGE가 먼저 검사됩니다. 그 안에서 HUGETLB_PAGE_SIZE_VARIABLE이면 pageblock_order는 extern unsigned int 변수이고 이 파일에 초기화 본문은 없습니다. 그렇지 않으면 HUGETLB_PAGE_ORDER와 MAX_PAGE_ORDER의 unsigned int 최소값입니다. 가변 크기 분기에는 이 헤더 안의 min 연산이 없으므로 변수도 여기서 자동 제한한다고 설명하면 틀립니다."
+      "title": "HugeTLB가 먼저인 분기",
+      "text": "HUGETLB_PAGE부터 확인해요. 그 안에서 크기가 가변이면 pageblock_order는 외부 unsigned int 변수이고 초기값 본문은 여기 없어요. 고정이면 HUGETLB_PAGE_ORDER와 MAX_PAGE_ORDER의 작은 값을 써요. 가변 변수도 이 헤더의 min으로 자동 제한된다고 말하면 안 돼요."
     },
     {
-      "title": "THP와 기본 크기",
-      "text": "HugeTLB 분기에 들어가지 않고 TRANSPARENT_HUGEPAGE이면 HPAGE_PMD_ORDER와 MAX_PAGE_ORDER의 최소값을 사용합니다. 둘 다 아니면 MAX_PAGE_ORDER입니다. 두 기능이 함께 켜졌을 때 두 크기를 서로 비교하는 코드가 아니라 HugeTLB 분기가 우선하는 #if/#elif 구조입니다. pageblock_nr_pages는 1UL<<pageblock_order이며 바이트 수가 아닌 페이지 수입니다."
+      "title": "THP와 기본 order",
+      "text": "HugeTLB가 없고 TRANSPARENT_HUGEPAGE이면 HPAGE_PMD_ORDER와 MAX_PAGE_ORDER의 작은 값이에요. 둘 다 없으면 MAX_PAGE_ORDER예요. 두 기능이 함께 켜져도 두 huge order를 같이 비교하지 않고 먼저 HugeTLB 분기로 가요. pageblock_nr_pages는 1UL<<order이며 바이트가 아닌 페이지 수예요."
     },
     {
-      "title": "네 가지 경계 연산",
-      "text": "pageblock_align은 PFN을 블록 크기의 배수로 올림하고 이미 정렬되어 있으면 그대로입니다. pageblock_aligned는 배수 여부를 검사합니다. pageblock_start_pfn은 내림하여 현재 블록 시작을 얻습니다. pageblock_end_pfn은 PFN에 먼저 1을 더한 뒤 올림하므로 현재 블록의 배타적 끝을 얻습니다. 크기 8이면 PFN 16에서 align=16, start=16, end=24이며 PFN 23에서도 end=24입니다. 끝값은 현재 블록에 속하지 않습니다."
+      "title": "네 가지 경계 계산",
+      "text": "align은 블록 배수로 올리되 이미 배수이면 그대로예요. aligned는 배수인지 확인하고 start는 내림해 현재 블록 시작을 구해요. end는 먼저 PFN+1한 뒤 올려 현재 블록의 배타적 끝을 구해요. 크기 8에서 PFN 16은 align=16, start=16, end=24이고 23도 end=24예요."
     },
     {
-      "title": "연산의 입력 전제",
-      "text": "경계 계산은 유효한 PFN과 적절한 order를 전제로 하며 페이지가 실제로 존재하는지 검사하지 않습니다. 특히 pfn+1이나 올림 과정의 정수 오버플로를 따로 검출하지 않습니다. 매크로 이름을 메모리 할당, PFN 유효성 판별, 범위 검사로 오해하지 않습니다."
+      "title": "계산에 필요한 전제",
+      "text": "유효한 PFN과 알맞은 order를 전제로 해요. 실제 페이지 존재 여부나 PFN 범위를 검사하는 함수가 아니에요. PFN+1 또는 올림에서 정수의 최대값을 넘는 overflow를 따로 잡지도 않아요. 주소 계산과 메모리 할당을 혼동하지 마세요."
     },
     {
-      "title": "Masked get/set 계약",
-      "text": "get_pfnblock_flags_mask는 const page 포인터, 대상 PFN, mask를 받아 unsigned long을 반환합니다. set은 page, flags, PFN, mask 순서로 받고 void입니다. 관련 구현을 대조하면 get은 word를 READ_ONCE로 읽어 블록 위치만큼 이동하고 mask를 적용합니다. set은 word의 기존 mask 영역을 지우고 flags를 OR하는 compare-exchange 재시도를 사용합니다. flags를 mask로 자동 제한하는 식은 아니므로 호출자의 flags가 적절해야 합니다. 이 구현 대조는 page_alloc.c 전체 완료를 의미하지 않습니다."
+      "title": "마스크로 읽고 쓰기",
+      "text": "get은 page, PFN, mask를 받아 unsigned long을 반환하고 set은 page, flags, PFN, mask 순서예요. 관련 구현은 word를 한 번 읽고 위치 이동 후 mask로 읽을 비트를 골라요. set은 기존 mask 부분을 지우고 flags를 OR하는 비교 교환을 재시도해요. flags를 mask로 자동 잘라 주는 식은 아니므로 적절한 flags가 필요해요. 이 일부 구현 대조가 page_alloc.c 전체 검토는 아니에요."
     },
     {
-      "title": "Compaction skip 설정",
-      "text": "COMPACTION이 켜지면 get_pageblock_skip은 page_to_pfn과 1<<PB_migrate_skip, 즉 8을 get에 넘깁니다. 따라서 get의 결과는 비트가 있으면 8이며 반드시 정규화된 1인 것은 아닙니다. clear는 flags=0, set은 flags=8을 mask=8과 함께 전달합니다. 이 wrapper의 page 인자는 직접 전달과 page_to_pfn에서 반복 사용되므로 부작용이 있는 표현식을 넘기지 않아야 합니다."
+      "title": "건너뛰기 비트 값",
+      "text": "COMPACTION이면 get_pageblock_skip은 PFN과 mask=1<<3, 즉 8을 넘겨요. 결과도 설정돼 있으면 8일 수 있어 bool 1만 반환한다고 말하면 안 돼요. clear는 flags=0, set은 flags=8을 mask=8과 함께 전달해요. 매크로의 page는 두 번 사용되므로 증가 연산 같은 부수효과가 있는 인자를 주면 안 돼요."
     },
     {
-      "title": "기능이 꺼졌을 때",
-      "text": "COMPACTION이 없으면 get은 bool false, clear/set은 빈 inline 함수입니다. 호출 코드의 형태를 유지할 수 있지만 skip 정보가 저장되지는 않습니다. 구성에 따라 활성 분기는 매크로, 비활성 분기는 함수이며 반환형과 인자 평가 방식까지 동일한 구현이라고 가정하면 안 됩니다."
+      "title": "compaction이 없을 때",
+      "text": "get은 bool false, clear/set은 빈 함수예요. 호출 모양은 유지하지만 skip 정보를 저장하지 않아요. 활성 때는 매크로이고 비활성 때는 함수여서 반환형과 인자 평가 방식까지 완전히 같다고 생각하면 안 돼요."
     },
     {
-      "title": "CS 관점",
-      "text": "고정 폭 레코드를 word 비트맵에 압축하는 공간 효율, 2의 거듭제곱 정렬, [start,end) 구간, 데이터 단위 구분, 컴파일 시 기능 제거를 연결합니다. skip 비트 하나는 전체 압축 알고리즘의 성공 여부나 영구적인 이동 불가능 판정이 아닙니다. 여기의 원본 대조는 실제 compaction 실행 테스트와 구분합니다."
+      "title": "학습과 한계",
+      "text": "비트맵에 작은 레코드를 압축해 넣기, 2의 거듭제곱 정렬, 시작 포함·끝 제외 구간, 페이지와 바이트 단위, 설정별 기능 제거를 읽었어요. skip 한 비트가 압축 성공이나 영원히 이동 불가능하다는 뜻은 아니에요. 원문 대조는 실제 compaction 실행 시험과 달라요."
     }
   ],
   "questions": [
     {
-      "prompt": "페이지 블록의 이동 유형과 skip을 합친 NR_PAGEBLOCK_BITS는?",
+      "prompt": "이동 유형과 skip을 합한 비트 수는 얼마인가요?",
       "options": [
+        "4비트예요.",
+        "8비트예요."
+      ],
+      "answer": 0,
+      "explanation": "이동 유형 세 비트와 skip 한 비트를 더해요.",
+      "original_prompt": "페이지 블록의 이동 유형과 skip을 합친 NR_PAGEBLOCK_BITS는?",
+      "original_options": [
         "4이다",
         "8이다"
       ],
-      "answer": 0,
-      "explanation": "3개 이동 유형 비트의 마지막 인덱스는 2이고 skip은 3, 다음 enum 값은 4입니다. 8은 이동 유형 3비트의 조합 수입니다."
+      "original_explanation": "3개 이동 유형 비트의 마지막 인덱스는 2이고 skip은 3, 다음 enum 값은 4입니다. 8은 이동 유형 3비트의 조합 수입니다."
     },
     {
-      "prompt": "블록 크기 8에서 PFN 16의 pageblock_align과 pageblock_end_pfn은?",
+      "prompt": "크기 8에서 PFN 16의 align과 end는 각각 얼마인가요?",
       "options": [
+        "둘 다 16이에요.",
+        "16과 24예요."
+      ],
+      "answer": 1,
+      "explanation": "align은 그대로지만 end는 17을 올려 24가 돼요.",
+      "original_prompt": "블록 크기 8에서 PFN 16의 pageblock_align과 pageblock_end_pfn은?",
+      "original_options": [
         "둘 다 16이다",
         "각각 16과 24이다"
       ],
-      "answer": 1,
-      "explanation": "align은 정렬된 입력을 유지하지만 end는 16+1을 올림하여 현재 블록의 배타적 끝 24를 반환합니다."
+      "original_explanation": "align은 정렬된 입력을 유지하지만 end는 16+1을 올림하여 현재 블록의 배타적 끝 24를 반환합니다."
     },
     {
-      "prompt": "HugeTLB와 THP가 모두 켜지면 두 huge page order의 최소값을 고르는가?",
+      "prompt": "HugeTLB와 THP가 함께 있으면 두 order의 최소값을 고르나요?",
       "options": [
+        "아니요. 먼저 HugeTLB 분기를 따라요.",
+        "네. 세 order를 언제나 함께 비교해요."
+      ],
+      "answer": 0,
+      "explanation": "THP는 elif라 앞 분기가 맞으면 실행되지 않아요.",
+      "original_prompt": "HugeTLB와 THP가 모두 켜지면 두 huge page order의 최소값을 고르는가?",
+      "original_options": [
         "아니다. 먼저 HugeTLB 분기를 따른다",
         "그렇다. 세 order를 항상 함께 비교한다"
       ],
-      "answer": 0,
-      "explanation": "THP는 #elif입니다. HugeTLB의 가변 크기 설정 여부에 따라 extern 변수 또는 HugeTLB와 최대 order의 최소값을 사용합니다."
+      "original_explanation": "THP는 #elif입니다. HugeTLB의 가변 크기 설정 여부에 따라 extern 변수 또는 HugeTLB와 최대 order의 최소값을 사용합니다."
     },
     {
-      "prompt": "COMPACTION 활성 시 get_pageblock_skip의 설정된 비트 결과는 반드시 1인가?",
+      "prompt": "활성 get_pageblock_skip의 설정 결과는 반드시 1인가요?",
       "options": [
+        "네. 항상 bool 함수예요.",
+        "아니요. 마스크 비트값 8일 수 있어요."
+      ],
+      "answer": 1,
+      "explanation": "활성 분기는 unsigned long 결과를 그대로 쓰는 매크로예요.",
+      "original_prompt": "COMPACTION 활성 시 get_pageblock_skip의 설정된 비트 결과는 반드시 1인가?",
+      "original_options": [
         "그렇다. bool 함수이므로 항상 1이다",
         "아니다. mask에 해당하는 8을 반환할 수 있다"
       ],
-      "answer": 1,
-      "explanation": "활성 분기는 unsigned long get의 결과를 그대로 사용하는 매크로입니다. 비활성 분기의 bool inline 함수와 혼동하면 안 됩니다."
+      "original_explanation": "활성 분기는 unsigned long get의 결과를 그대로 사용하는 매크로입니다. 비활성 분기의 bool inline 함수와 혼동하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "블록 크기 8에서 PFN 16과 23의 start·align·end를 각각 계산해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Macros for manipulating and testing flags related to a\n * pageblock_nr_pages number of pages.\n *\n * Copyright (C) IBM Corporation, 2006\n *\n * Original author, Mel Gorman\n * Major cleanups and reduction of bit operations, Andy Whitcroft\n */\n#ifndef PAGEBLOCK_FLAGS_H\n#define PAGEBLOCK_FLAGS_H\n\n#include <linux/types.h>\n\n#define PB_migratetype_bits 3\n/* Bit indices that affect a whole block of pages */\nenum pageblock_bits {\n\tPB_migrate,\n\tPB_migrate_end = PB_migrate + PB_migratetype_bits - 1,\n\t\t\t/* 3 bits required for migrate types */\n\tPB_migrate_skip,/* If set the block is skipped by compaction */\n\n\t/*\n\t * Assume the bits will always align on a word. If this assumption\n\t * changes then get/set pageblock needs updating.\n\t */\n\tNR_PAGEBLOCK_BITS\n};\n\n#if defined(CONFIG_HUGETLB_PAGE)\n\n#ifdef CONFIG_HUGETLB_PAGE_SIZE_VARIABLE\n\n/* Huge page sizes are variable */\nextern unsigned int pageblock_order;\n\n#else /* CONFIG_HUGETLB_PAGE_SIZE_VARIABLE */\n\n/*\n * Huge pages are a constant size, but don't exceed the maximum allocation\n * granularity.\n */\n#define pageblock_order\t\tMIN_T(unsigned int, HUGETLB_PAGE_ORDER, MAX_PAGE_ORDER)\n\n#endif /* CONFIG_HUGETLB_PAGE_SIZE_VARIABLE */\n\n#elif defined(CONFIG_TRANSPARENT_HUGEPAGE)\n\n#define pageblock_order\t\tMIN_T(unsigned int, HPAGE_PMD_ORDER, MAX_PAGE_ORDER)\n\n#else /* CONFIG_TRANSPARENT_HUGEPAGE */\n\n/* If huge pages are not used, group by MAX_ORDER_NR_PAGES */\n#define pageblock_order\t\tMAX_PAGE_ORDER\n\n#endif /* CONFIG_HUGETLB_PAGE */\n\n#define pageblock_nr_pages\t(1UL << pageblock_order)\n#define pageblock_align(pfn)\tALIGN((pfn), pageblock_nr_pages)\n#define pageblock_aligned(pfn)\tIS_ALIGNED((pfn), pageblock_nr_pages)\n#define pageblock_start_pfn(pfn)\tALIGN_DOWN((pfn), pageblock_nr_pages)\n#define pageblock_end_pfn(pfn)\t\tALIGN((pfn) + 1, pageblock_nr_pages)\n\n/* Forward declaration */\nstruct page;\n\nunsigned long get_pfnblock_flags_mask(const struct page *page,\n\t\t\t\tunsigned long pfn,\n\t\t\t\tunsigned long mask);\n\nvoid set_pfnblock_flags_mask(struct page *page,\n\t\t\t\tunsigned long flags,\n\t\t\t\tunsigned long pfn,\n\t\t\t\tunsigned long mask);\n\n/* Declarations for getting and setting flags. See mm/page_alloc.c */\n#ifdef CONFIG_COMPACTION\n#define get_pageblock_skip(page) \\\n\tget_pfnblock_flags_mask(page, page_to_pfn(page),\t\\\n\t\t\t(1 << (PB_migrate_skip)))\n#define clear_pageblock_skip(page) \\\n\tset_pfnblock_flags_mask(page, 0, page_to_pfn(page),\t\\\n\t\t\t(1 << PB_migrate_skip))\n#define set_pageblock_skip(page) \\\n\tset_pfnblock_flags_mask(page, (1 << PB_migrate_skip),\t\\\n\t\t\tpage_to_pfn(page),\t\t\t\\\n\t\t\t(1 << PB_migrate_skip))\n#else\nstatic inline bool get_pageblock_skip(struct page *page)\n{\n\treturn false;\n}\nstatic inline void clear_pageblock_skip(struct page *page)\n{\n}\nstatic inline void set_pageblock_skip(struct page *page)\n{\n}\n#endif /* CONFIG_COMPACTION */\n\n#endif\t/* PAGEBLOCK_FLAGS_H */\n",
   "source_review": {
@@ -126,5 +146,163 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/pageblock-flags.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f85ebffd85144068",
+    "path": "include/linux/pageblock-flags.h",
+    "title": "페이지 블록: 이동 유형 비트와 PFN 경계",
+    "area": "비트맵 · 이진 정렬 · 반열린 구간 · 메모리 단편화 · 조건부 컴파일",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "여러 페이지에 공유되는 플래그의 폭, 블록 크기, 정렬과 compaction skip 인터페이스를 읽습니다.",
+    "guide": [
+      "개별 페이지의 상태와 페이지 블록 전체의 상태를 구분하고, 포함 구간의 끝과 단순 올림 정렬을 구분합니다.",
+      "메모리 단편화와 compaction을 학습하기 전에 블록 메타데이터의 단위를 확립합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 범위와 선언",
+        "text": "GPL-2.0-only, 저작권·작성자 주석, guard와 types.h 뒤에 비트 열거형, 구성별 order, PFN 경계 매크로, get/set 선언, skip wrapper가 있습니다. 이 헤더는 메모리 압축이나 페이지 이동을 실행하지 않습니다. struct page는 전방 선언이며 실제 플래그 저장 위치와 get/set 구현은 mm/page_alloc.c에 있습니다."
+      },
+      {
+        "title": "4비트 블록 레코드",
+        "text": "PB_migratetype_bits는 3입니다. enum의 PB_migrate는 0, PB_migrate_end는 2, PB_migrate_skip은 3, NR_PAGEBLOCK_BITS는 4입니다. 처음 세 비트는 이동 유형, 네 번째는 compaction에서 건너뛰는 표시입니다. 3비트의 표현 가능 조합이 8개라는 사실과 실제 정의된 이동 유형 개수는 다릅니다. 주석은 레코드 비트들이 word 경계를 가로지르지 않는 배치 전제를 밝히며, 전제가 바뀌면 접근 함수를 수정해야 한다고 합니다."
+      },
+      {
+        "title": "HugeTLB의 우선 분기",
+        "text": "CONFIG_HUGETLB_PAGE가 먼저 검사됩니다. 그 안에서 HUGETLB_PAGE_SIZE_VARIABLE이면 pageblock_order는 extern unsigned int 변수이고 이 파일에 초기화 본문은 없습니다. 그렇지 않으면 HUGETLB_PAGE_ORDER와 MAX_PAGE_ORDER의 unsigned int 최소값입니다. 가변 크기 분기에는 이 헤더 안의 min 연산이 없으므로 변수도 여기서 자동 제한한다고 설명하면 틀립니다."
+      },
+      {
+        "title": "THP와 기본 크기",
+        "text": "HugeTLB 분기에 들어가지 않고 TRANSPARENT_HUGEPAGE이면 HPAGE_PMD_ORDER와 MAX_PAGE_ORDER의 최소값을 사용합니다. 둘 다 아니면 MAX_PAGE_ORDER입니다. 두 기능이 함께 켜졌을 때 두 크기를 서로 비교하는 코드가 아니라 HugeTLB 분기가 우선하는 #if/#elif 구조입니다. pageblock_nr_pages는 1UL<<pageblock_order이며 바이트 수가 아닌 페이지 수입니다."
+      },
+      {
+        "title": "네 가지 경계 연산",
+        "text": "pageblock_align은 PFN을 블록 크기의 배수로 올림하고 이미 정렬되어 있으면 그대로입니다. pageblock_aligned는 배수 여부를 검사합니다. pageblock_start_pfn은 내림하여 현재 블록 시작을 얻습니다. pageblock_end_pfn은 PFN에 먼저 1을 더한 뒤 올림하므로 현재 블록의 배타적 끝을 얻습니다. 크기 8이면 PFN 16에서 align=16, start=16, end=24이며 PFN 23에서도 end=24입니다. 끝값은 현재 블록에 속하지 않습니다."
+      },
+      {
+        "title": "연산의 입력 전제",
+        "text": "경계 계산은 유효한 PFN과 적절한 order를 전제로 하며 페이지가 실제로 존재하는지 검사하지 않습니다. 특히 pfn+1이나 올림 과정의 정수 오버플로를 따로 검출하지 않습니다. 매크로 이름을 메모리 할당, PFN 유효성 판별, 범위 검사로 오해하지 않습니다."
+      },
+      {
+        "title": "Masked get/set 계약",
+        "text": "get_pfnblock_flags_mask는 const page 포인터, 대상 PFN, mask를 받아 unsigned long을 반환합니다. set은 page, flags, PFN, mask 순서로 받고 void입니다. 관련 구현을 대조하면 get은 word를 READ_ONCE로 읽어 블록 위치만큼 이동하고 mask를 적용합니다. set은 word의 기존 mask 영역을 지우고 flags를 OR하는 compare-exchange 재시도를 사용합니다. flags를 mask로 자동 제한하는 식은 아니므로 호출자의 flags가 적절해야 합니다. 이 구현 대조는 page_alloc.c 전체 완료를 의미하지 않습니다."
+      },
+      {
+        "title": "Compaction skip 설정",
+        "text": "COMPACTION이 켜지면 get_pageblock_skip은 page_to_pfn과 1<<PB_migrate_skip, 즉 8을 get에 넘깁니다. 따라서 get의 결과는 비트가 있으면 8이며 반드시 정규화된 1인 것은 아닙니다. clear는 flags=0, set은 flags=8을 mask=8과 함께 전달합니다. 이 wrapper의 page 인자는 직접 전달과 page_to_pfn에서 반복 사용되므로 부작용이 있는 표현식을 넘기지 않아야 합니다."
+      },
+      {
+        "title": "기능이 꺼졌을 때",
+        "text": "COMPACTION이 없으면 get은 bool false, clear/set은 빈 inline 함수입니다. 호출 코드의 형태를 유지할 수 있지만 skip 정보가 저장되지는 않습니다. 구성에 따라 활성 분기는 매크로, 비활성 분기는 함수이며 반환형과 인자 평가 방식까지 동일한 구현이라고 가정하면 안 됩니다."
+      },
+      {
+        "title": "CS 관점",
+        "text": "고정 폭 레코드를 word 비트맵에 압축하는 공간 효율, 2의 거듭제곱 정렬, [start,end) 구간, 데이터 단위 구분, 컴파일 시 기능 제거를 연결합니다. skip 비트 하나는 전체 압축 알고리즘의 성공 여부나 영구적인 이동 불가능 판정이 아닙니다. 여기의 원본 대조는 실제 compaction 실행 테스트와 구분합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "페이지 블록의 이동 유형과 skip을 합친 NR_PAGEBLOCK_BITS는?",
+        "options": [
+          "4이다",
+          "8이다"
+        ],
+        "answer": 0,
+        "explanation": "3개 이동 유형 비트의 마지막 인덱스는 2이고 skip은 3, 다음 enum 값은 4입니다. 8은 이동 유형 3비트의 조합 수입니다."
+      },
+      {
+        "prompt": "블록 크기 8에서 PFN 16의 pageblock_align과 pageblock_end_pfn은?",
+        "options": [
+          "둘 다 16이다",
+          "각각 16과 24이다"
+        ],
+        "answer": 1,
+        "explanation": "align은 정렬된 입력을 유지하지만 end는 16+1을 올림하여 현재 블록의 배타적 끝 24를 반환합니다."
+      },
+      {
+        "prompt": "HugeTLB와 THP가 모두 켜지면 두 huge page order의 최소값을 고르는가?",
+        "options": [
+          "아니다. 먼저 HugeTLB 분기를 따른다",
+          "그렇다. 세 order를 항상 함께 비교한다"
+        ],
+        "answer": 0,
+        "explanation": "THP는 #elif입니다. HugeTLB의 가변 크기 설정 여부에 따라 extern 변수 또는 HugeTLB와 최대 order의 최소값을 사용합니다."
+      },
+      {
+        "prompt": "COMPACTION 활성 시 get_pageblock_skip의 설정된 비트 결과는 반드시 1인가?",
+        "options": [
+          "그렇다. bool 함수이므로 항상 1이다",
+          "아니다. mask에 해당하는 8을 반환할 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "활성 분기는 unsigned long get의 결과를 그대로 사용하는 매크로입니다. 비활성 분기의 bool inline 함수와 혼동하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Macros for manipulating and testing flags related to a\n * pageblock_nr_pages number of pages.\n *\n * Copyright (C) IBM Corporation, 2006\n *\n * Original author, Mel Gorman\n * Major cleanups and reduction of bit operations, Andy Whitcroft\n */\n#ifndef PAGEBLOCK_FLAGS_H\n#define PAGEBLOCK_FLAGS_H\n\n#include <linux/types.h>\n\n#define PB_migratetype_bits 3\n/* Bit indices that affect a whole block of pages */\nenum pageblock_bits {\n\tPB_migrate,\n\tPB_migrate_end = PB_migrate + PB_migratetype_bits - 1,\n\t\t\t/* 3 bits required for migrate types */\n\tPB_migrate_skip,/* If set the block is skipped by compaction */\n\n\t/*\n\t * Assume the bits will always align on a word. If this assumption\n\t * changes then get/set pageblock needs updating.\n\t */\n\tNR_PAGEBLOCK_BITS\n};\n\n#if defined(CONFIG_HUGETLB_PAGE)\n\n#ifdef CONFIG_HUGETLB_PAGE_SIZE_VARIABLE\n\n/* Huge page sizes are variable */\nextern unsigned int pageblock_order;\n\n#else /* CONFIG_HUGETLB_PAGE_SIZE_VARIABLE */\n\n/*\n * Huge pages are a constant size, but don't exceed the maximum allocation\n * granularity.\n */\n#define pageblock_order\t\tMIN_T(unsigned int, HUGETLB_PAGE_ORDER, MAX_PAGE_ORDER)\n\n#endif /* CONFIG_HUGETLB_PAGE_SIZE_VARIABLE */\n\n#elif defined(CONFIG_TRANSPARENT_HUGEPAGE)\n\n#define pageblock_order\t\tMIN_T(unsigned int, HPAGE_PMD_ORDER, MAX_PAGE_ORDER)\n\n#else /* CONFIG_TRANSPARENT_HUGEPAGE */\n\n/* If huge pages are not used, group by MAX_ORDER_NR_PAGES */\n#define pageblock_order\t\tMAX_PAGE_ORDER\n\n#endif /* CONFIG_HUGETLB_PAGE */\n\n#define pageblock_nr_pages\t(1UL << pageblock_order)\n#define pageblock_align(pfn)\tALIGN((pfn), pageblock_nr_pages)\n#define pageblock_aligned(pfn)\tIS_ALIGNED((pfn), pageblock_nr_pages)\n#define pageblock_start_pfn(pfn)\tALIGN_DOWN((pfn), pageblock_nr_pages)\n#define pageblock_end_pfn(pfn)\t\tALIGN((pfn) + 1, pageblock_nr_pages)\n\n/* Forward declaration */\nstruct page;\n\nunsigned long get_pfnblock_flags_mask(const struct page *page,\n\t\t\t\tunsigned long pfn,\n\t\t\t\tunsigned long mask);\n\nvoid set_pfnblock_flags_mask(struct page *page,\n\t\t\t\tunsigned long flags,\n\t\t\t\tunsigned long pfn,\n\t\t\t\tunsigned long mask);\n\n/* Declarations for getting and setting flags. See mm/page_alloc.c */\n#ifdef CONFIG_COMPACTION\n#define get_pageblock_skip(page) \\\n\tget_pfnblock_flags_mask(page, page_to_pfn(page),\t\\\n\t\t\t(1 << (PB_migrate_skip)))\n#define clear_pageblock_skip(page) \\\n\tset_pfnblock_flags_mask(page, 0, page_to_pfn(page),\t\\\n\t\t\t(1 << PB_migrate_skip))\n#define set_pageblock_skip(page) \\\n\tset_pfnblock_flags_mask(page, (1 << PB_migrate_skip),\t\\\n\t\t\tpage_to_pfn(page),\t\t\t\\\n\t\t\t(1 << PB_migrate_skip))\n#else\nstatic inline bool get_pageblock_skip(struct page *page)\n{\n\treturn false;\n}\nstatic inline void clear_pageblock_skip(struct page *page)\n{\n}\nstatic inline void set_pageblock_skip(struct page *page)\n{\n}\n#endif /* CONFIG_COMPACTION */\n\n#endif\t/* PAGEBLOCK_FLAGS_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "99bfd531b04b6e014719071363f93154002999af9ee7a922937ad842418abf50",
+      "scope": "whole-file",
+      "line_count": 102,
+      "authoring_source": "course/file_units/pageblock_and_idle.py",
+      "sections": [
+        "전체 범위와 선언",
+        "4비트 블록 레코드",
+        "HugeTLB의 우선 분기",
+        "THP와 기본 크기",
+        "네 가지 경계 연산",
+        "연산의 입력 전제",
+        "Masked get/set 계약",
+        "Compaction skip 설정",
+        "기능이 꺼졌을 때",
+        "CS 관점"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/pageblock-flags.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "한 학생의 표지와 반 전체의 표지는 다르듯, 페이지 하나와 페이지 블록 전체의 상태도 단위가 달라요.",
+    "meaning": "이 헤더는 페이지 묶음의 이동 유형과 compaction 건너뛰기 표시를 다뤄요. 올림 정렬과 현재 블록의 끝도 구별해야 해요.",
+    "exercise": "블록 크기 8에서 PFN 16과 23의 start·align·end를 각각 계산해 보세요."
+  },
+  "goal": "이 헤더는 페이지 묶음의 이동 유형과 compaction 건너뛰기 표시를 다뤄요. 올림 정렬과 현재 블록의 끝도 구별해야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "블록 크기 8에서 PFN 16과 23의 start·align·end를 각각 계산해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "0115f4a632f74a44ab633a56e17f636170d0c4153f082ca00b74b4bc02bbaff0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,96 +5,114 @@
   "area": "LTO · 주소 의존성 · RCpc acquire · 인라인 asm · 타입 크기",
   "track": "files",
   "kind": "kernel",
-  "intro": "LTO 구성에서 RCpc acquire 읽기를 제공하는 크기별 asm과 generic 계층 연결을 해설합니다.",
+  "intro": "ARM64에서는 특정 빌드 조건일 때 READ_ONCE의 읽기를 바꾸어 필요한 순서를 지켜요. 모든 빌드와 모든 크기에 같은 규칙을 넣는 것은 아니에요.",
   "guide": [
-    "compiler 변환이 주소 의존성을 약하게 만들 수 있는 상황을 아키텍처 읽기 명령으로 보완합니다.",
-    "공통 rwonce.h와 비교하며 모든 ARM64 빌드에 동일한 override가 적용되는 것은 아님을 확인합니다."
+    "ARM64에서는 특정 빌드 조건일 때 READ_ONCE의 읽기를 바꾸어 필요한 순서를 지켜요. 모든 빌드와 모든 크기에 같은 규칙을 넣는 것은 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "파일 구성과 세 조건",
-      "text": "GPL-2.0·저작권·guard 뒤 CONFIG_LTO이면서 비어셈블리일 때 compiler_types.h와 alternative-macros.h를 포함합니다. 그 안에서도 BUILD_VDSO가 아닐 때만 명령 생성과 __READ_ONCE를 정의합니다. 마지막 asm-generic/rwonce.h 포함은 이 조건들 밖에 있습니다. 비LTO 또는 VDSO에서는 이 파일의 override가 생기지 않습니다."
+      "title": "원문 읽기 1",
+      "text": "LTO는 여러 소스를 연결하는 단계까지 살펴 최적화하는 방식이에요. 컴파일러는 코드를 기계어로 바꾸는 도구예요. 이 최적화 중에 주소에 의존하는 읽기가 조건에 의존하는 모양으로 바뀌면 CPU가 일을 처리하는 순서에 문제가 생길 수 있다고 원문 주석이 설명해요."
     },
     {
-      "title": "LTO에 대한 설계 이유",
-      "text": "주석은 LTO에서 READ_ONCE가 시작한 주소 의존성을 compiler가 제어 의존성으로 바꿀 위험이 커진다고 설명합니다. CPU가 허용하는 순서가 달라져 문제가 될 수 있으므로 LTO 빌드의 읽기에 RCpc acquire 의미를 제공합니다. 주석은 위험의 증가를 설명하며 모든 LTO 최적화가 반드시 이런 변환을 한다고 단정하지 않습니다."
+      "title": "원문 읽기 2",
+      "text": "새 __READ_ONCE 규칙은 CONFIG_LTO가 켜지고 __ASSEMBLY__가 아니며 BUILD_VDSO도 아닐 때만 생겨요. vDSO는 사용자 프로그램에 제공할 특수 코드예요. 마지막 asm-generic/rwonce.h 포함은 이 조건 밖에 있으므로 다른 경우에도 공통 규칙을 가져와요."
     },
     {
-      "title": "명령 선택의 두 단계",
-      "text": "CONFIG_AS_HAS_LDAPR가 있으면 __LOAD_RCPC는 기본 ldar와 rcpc 확장 지정 뒤 ldapr를 ALTERNATIVE로 구성하며 ARM64_HAS_LDAPR를 기능 조건으로 사용합니다. assembler 지원 구성과 실제 CPU 기능 선택은 다른 단계입니다. assembler 지원이 없으면 ldar 문자열만 생성합니다. 컴파일 옵션 하나만으로 모든 CPU에서 ldapr를 실행한다고 설명하면 틀립니다."
+      "title": "원문 읽기 3",
+      "text": "이 읽기는 RCpc acquire라는 순서 성질을 제공하도록 만들어져요. 뒤따르는 관련 접근의 순서를 다루는 약속이며 모든 메모리 동작을 막는 완전한 장벽과 같다고 생각하면 안 돼요. 컴파일러가 언제나 위험한 변환을 한다는 뜻도 아니에요."
     },
     {
-      "title": "주소와 결과 보관",
-      "text": "__READ_ONCE는 &(x)를 typeof(&(x))의 __x에 보관하고 int atomic을1로 초기화합니다. 결과 union은 원래 값의 한정자를 제거한 __val과 char __c[1] 뷰를 가집니다. union의 전체 크기는 char 배열 길이1만으로 정해지는 것이 아니라 다른 멤버까지 반영합니다. atomic이라는 이름은 여기의 지역 분기 표지이며 atomic_t 객체나 런타임 원자성 검사가 아닙니다."
+      "title": "원문 읽기 4",
+      "text": "CONFIG_AS_HAS_LDAPR는 명령을 번역하는 도구가 ldapr를 아는지에 관한 설정이에요. 켜져 있으면 기본 ldar와 CPU의 ARM64_HAS_LDAPR 기능에 따라 쓸 ldapr를 ALTERNATIVE로 준비해요. 도구의 지원과 실제 CPU 지원은 별개예요. 설정이 없으면 ldar만 준비해요."
     },
     {
-      "title": "1·2바이트 읽기",
-      "text": "sizeof(x)가1이면 b 접미사와 %w0를,2이면 h 접미사와 %w0를 사용합니다. 출력은 __u.__c를 각각 __u8·__u16 포인터로 보아 기록합니다. 입력은 Q 제약의 *__x, 출력은 레지스터 제약, clobber는 memory입니다. volatile asm과 명령 선택이 실제 접근을 표현합니다."
+      "title": "원문 읽기 5",
+      "text": "__x에는 읽을 대상 x의 주소를 담아요. 결과는 union이라는 겹쳐 쓰는 저장 공간에 담아요. char __c[1]만 보고 전체 공간이 한 바이트라고 생각하면 안 돼요. 다른 멤버 __val도 들어갈 만큼의 크기가 필요해요."
     },
     {
-      "title": "4·8바이트 읽기",
-      "text": "4바이트는 접미사 없이 %w0와 __u32 결과 뷰를 사용하고8바이트는 %0와 __u64를 사용합니다. 네 경우 모두 성공 분기에서 break합니다. 최종 conditional expression은 atomic이 참이면 union의 __val을 원래 대상 타입으로 변환하여 반환합니다. 별도의 값 재읽기는 하지 않습니다."
+      "title": "원문 읽기 6",
+      "text": "sizeof(x)는 읽을 크기를 바이트로 알려 줘요. 1바이트는 b와 %w0, 2바이트는 h와 %w0를 쓰고, 4바이트는 접미사 없이 %w0를 써요. 8바이트는 접미사 없이 %0를 써요. 저장할 값을 보는 형식도 각각 __u8, __u16, __u32, __u64로 맞춰요."
     },
     {
-      "title": "그 밖의 크기와 generic 검사",
-      "text": "default는 atomic=0으로 바꿉니다. 이때 마지막 식의 다른 피연산자인 (*(volatile typeof(__x))__x)를 선택하므로 그 경로에는 __LOAD_RCPC 명령이 없습니다. 이 표현의 typeof(__x)는 포인터 타입이라는 점도 유의해야 합니다. 모든 fallback이 같은 acquire 보장을 준다고 설명하지 않습니다. public READ_ONCE는 뒤에 포함한 generic 헤더의 크기 검사를 거치며 내부 __READ_ONCE 직접 사용과 구별해야 합니다."
+      "title": "원문 읽기 7",
+      "text": "각 asm은 volatile 표시와 memory 정보를 갖고 실제 읽기를 표현해요. 정상 크기에서는 읽은 값을 union에 보관한 뒤 그 값을 반환해요. 마지막에 같은 대상을 다시 읽는 방식은 아니에요."
     },
     {
-      "title": "공통 계층과 분업",
-      "text": "generic 헤더는 __READ_ONCE가 이미 있으면 이를 유지하고 public READ_ONCE와 WRITE_ONCE 등의 공통 인터페이스를 제공합니다. 이 ARM64 파일은 WRITE_ONCE를 별도로 재정의하지 않습니다. 읽기 구현이 강화됐다고 저장도 자동으로 release가 된다고 추론하면 안 됩니다."
+      "title": "원문 읽기 8",
+      "text": "atomic은 여기서 길을 고르는 지역 변수 이름이에요. 처음 1이고 1·2·4·8 이외 크기의 default에서만 0이 돼요. CPU가 경쟁을 검사해 실패했다고 알려 준 결과가 아니에요. 이 경우 마지막 식은 별도의 volatile 접근을 고르므로 RCpc 명령과 같은 보장을 가정하지 않아요."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "주소 의존성과 제어 의존성, 링크 시간 최적화, assembler와 CPU 기능 분리, union 표현, 조건부 평가와 명령 폭을 학습합니다. 이 소스 해설은 모든 ARM64 CPU에서 실행한 시험이나 RCpc를 full barrier와 동일시하는 설명이 아닙니다."
+      "title": "원문 읽기 9",
+      "text": "공개 READ_ONCE에는 공통 헤더의 크기 검사도 있으므로 내부 __READ_ONCE를 직접 쓰는 것과 구별해요. 이 ARM64 파일은 WRITE_ONCE를 새로 정의하지 않아요. 읽기를 강화했다고 쓰기까지 자동으로 순서 보장이 늘어나는 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "CONFIG_LTO가 켜져도 BUILD_VDSO이면 이 파일의 __READ_ONCE override가 정의되는가?",
+      "prompt": "LTO가 켜져 있어도 BUILD_VDSO라면 이 파일의 새 __READ_ONCE 규칙을 쓰나요?",
       "options": [
+        "아니요. BUILD_VDSO가 아닐 때만 만들어요",
+        "네. LTO만 켜져 있으면 충분해요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 원문에는 LTO 조건 안에 #ifndef BUILD_VDSO라는 문이 하나 더 있어요. 그 문을 통과하지 못해도 마지막 공통 헤더는 계속 포함해요.",
+      "original_prompt": "CONFIG_LTO가 켜져도 BUILD_VDSO이면 이 파일의 __READ_ONCE override가 정의되는가?",
+      "original_options": [
         "아니다. BUILD_VDSO가 아닌 경우만 정의한다",
         "그렇다. LTO 조건 하나로 충분하다"
       ],
-      "answer": 0,
-      "explanation": "바깥 LTO·비어셈블리 조건 안에 별도의 #ifndef BUILD_VDSO가 있습니다. 마지막 generic 헤더는 계속 포함됩니다."
+      "original_explanation": "바깥 LTO·비어셈블리 조건 안에 별도의 #ifndef BUILD_VDSO가 있습니다. 마지막 generic 헤더는 계속 포함됩니다."
     },
     {
-      "prompt": "CONFIG_AS_HAS_LDAPR가 있으면 기본 명령도 무조건 ldapr인가?",
+      "prompt": "CONFIG_AS_HAS_LDAPR가 있으면 모든 CPU에서 처음부터 ldapr만 쓰나요?",
       "options": [
+        "네. 기본 ldar는 모두 없어져요",
+        "아니요. 기본 ldar와 CPU 기능에 따른 ldapr 대체를 준비해요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. 번역 도구가 명령을 안다는 것과 CPU가 지원한다는 것은 달라요. ALTERNATIVE에는 기본 ldar와 ARM64_HAS_LDAPR 조건의 ldapr가 함께 있어요.",
+      "original_prompt": "CONFIG_AS_HAS_LDAPR가 있으면 기본 명령도 무조건 ldapr인가?",
+      "original_options": [
         "그렇다. 모든 ldar 문자열을 제거한다",
         "아니다. ldar와 ldapr 대체를 CPU 기능 조건과 함께 구성한다"
       ],
-      "answer": 1,
-      "explanation": "ALTERNATIVE의 첫 문자열은 ldar이며 ARM64_HAS_LDAPR 조건의 대체 문자열이 ldapr입니다. assembler 지원과 CPU 지원은 구분해야 합니다."
+      "original_explanation": "ALTERNATIVE의 첫 문자열은 ldar이며 ARM64_HAS_LDAPR 조건의 대체 문자열이 ldapr입니다. assembler 지원과 CPU 지원은 구분해야 합니다."
     },
     {
-      "prompt": "8바이트 경로의 출력 레지스터 표기는?",
+      "prompt": "8바이트를 읽는 길에서 결과 레지스터는 어떻게 적나요?",
       "options": [
+        "%0로 적어요",
+        "%w0로 적어요"
+      ],
+      "answer": 0,
+      "explanation": "첫 번째예요. 8바이트 길에는 %0와 __u64 결과 형식을 써요. 더 작은 1·2·4바이트 길의 %w0 표기와 구분하세요.",
+      "original_prompt": "8바이트 경로의 출력 레지스터 표기는?",
+      "original_options": [
         "%0이다",
         "%w0이다"
       ],
-      "answer": 0,
-      "explanation": "1·2·4바이트 경로는 %w0,8바이트 경로는 %0입니다. 출력 저장 뷰도 각각 크기에 맞춰 __u8/__u16/__u32/__u64를 사용합니다."
+      "original_explanation": "1·2·4바이트 경로는 %w0,8바이트 경로는 %0입니다. 출력 저장 뷰도 각각 크기에 맞춰 __u8/__u16/__u32/__u64를 사용합니다."
     },
     {
-      "prompt": "지역 변수 atomic이0이 되는 것은 무엇을 의미하는가?",
+      "prompt": "지역 변수 atomic이 0이 되었다면 어떤 경우인가요?",
       "options": [
+        "CPU가 실행 중 원자성 실패를 보고한 것이에요",
+        "크기가 1·2·4·8바이트 중 하나가 아니에요"
+      ],
+      "answer": 1,
+      "explanation": "두 번째예요. switch에서 네 크기에 해당하지 않는 default만 atomic=0을 실행해요. 변수 이름이 atomic이어도 실제 경쟁을 탐지한 결과가 아니라 분기를 고르는 표시예요.",
+      "original_prompt": "지역 변수 atomic이0이 되는 것은 무엇을 의미하는가?",
+      "original_options": [
         "CPU가 원자성 실패를 런타임으로 보고했다는 뜻이다",
         "크기 switch의1·2·4·8에 해당하지 않았다는 뜻이다"
       ],
-      "answer": 1,
-      "explanation": "default에서만0을 대입합니다. 메모리 경쟁 검출 결과나 원자 연산 반환값이 아니라 구현 경로 선택용 표지입니다."
+      "original_explanation": "default에서만0을 대입합니다. 메모리 경쟁 검출 결과나 원자 연산 반환값이 아니라 구현 경로 선택용 표지입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "LTO 켜짐, 어셈블리 아님, BUILD_VDSO 아님이라는 문 세 개를 그리세요. 모두 통과한 뒤 1·2·4·8바이트 중 어디로 가는지 표로 적으세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2020 Google LLC.\n */\n#ifndef __ASM_RWONCE_H\n#define __ASM_RWONCE_H\n\n#if defined(CONFIG_LTO) && !defined(__ASSEMBLY__)\n\n#include <linux/compiler_types.h>\n#include <asm/alternative-macros.h>\n\n#ifndef BUILD_VDSO\n\n#ifdef CONFIG_AS_HAS_LDAPR\n#define __LOAD_RCPC(sfx, regs...)\t\t\t\t\t\\\n\tALTERNATIVE(\t\t\t\t\t\t\t\\\n\t\t\"ldar\"\t#sfx \"\\t\" #regs,\t\t\t\t\\\n\t\t\".arch_extension rcpc\\n\"\t\t\t\t\\\n\t\t\"ldapr\"\t#sfx \"\\t\" #regs,\t\t\t\t\\\n\tARM64_HAS_LDAPR)\n#else\n#define __LOAD_RCPC(sfx, regs...)\t\"ldar\" #sfx \"\\t\" #regs\n#endif /* CONFIG_AS_HAS_LDAPR */\n\n/*\n * When building with LTO, there is an increased risk of the compiler\n * converting an address dependency headed by a READ_ONCE() invocation\n * into a control dependency and consequently allowing for harmful\n * reordering by the CPU.\n *\n * Ensure that such transformations are harmless by overriding the generic\n * READ_ONCE() definition with one that provides RCpc acquire semantics\n * when building with LTO.\n */\n#define __READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\ttypeof(&(x)) __x = &(x);\t\t\t\t\t\\\n\tint atomic = 1;\t\t\t\t\t\t\t\\\n\tunion { __unqual_scalar_typeof(*__x) __val; char __c[1]; } __u;\t\\\n\tswitch (sizeof(x)) {\t\t\t\t\t\t\\\n\tcase 1:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(b, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u8 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 2:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(h, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u16 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 4:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u32 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 8:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(, %0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u64 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tdefault:\t\t\t\t\t\t\t\\\n\t\tatomic = 0;\t\t\t\t\t\t\\\n\t}\t\t\t\t\t\t\t\t\\\n\tatomic ? (typeof(*__x))__u.__val : (*(volatile typeof(__x))__x);\\\n})\n\n#endif\t/* !BUILD_VDSO */\n#endif\t/* CONFIG_LTO && !__ASSEMBLY__ */\n\n#include <asm-generic/rwonce.h>\n\n#endif\t/* __ASM_RWONCE_H */\n",
   "source_review": {
@@ -121,5 +139,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/rwonce.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-63e4e314be3c7ea0",
+    "path": "arch/arm64/include/asm/rwonce.h",
+    "title": "ARM64 READ_ONCE 전체: LTO와 주소 의존성 보호",
+    "area": "LTO · 주소 의존성 · RCpc acquire · 인라인 asm · 타입 크기",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "LTO 구성에서 RCpc acquire 읽기를 제공하는 크기별 asm과 generic 계층 연결을 해설합니다.",
+    "guide": [
+      "compiler 변환이 주소 의존성을 약하게 만들 수 있는 상황을 아키텍처 읽기 명령으로 보완합니다.",
+      "공통 rwonce.h와 비교하며 모든 ARM64 빌드에 동일한 override가 적용되는 것은 아님을 확인합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 구성과 세 조건",
+        "text": "GPL-2.0·저작권·guard 뒤 CONFIG_LTO이면서 비어셈블리일 때 compiler_types.h와 alternative-macros.h를 포함합니다. 그 안에서도 BUILD_VDSO가 아닐 때만 명령 생성과 __READ_ONCE를 정의합니다. 마지막 asm-generic/rwonce.h 포함은 이 조건들 밖에 있습니다. 비LTO 또는 VDSO에서는 이 파일의 override가 생기지 않습니다."
+      },
+      {
+        "title": "LTO에 대한 설계 이유",
+        "text": "주석은 LTO에서 READ_ONCE가 시작한 주소 의존성을 compiler가 제어 의존성으로 바꿀 위험이 커진다고 설명합니다. CPU가 허용하는 순서가 달라져 문제가 될 수 있으므로 LTO 빌드의 읽기에 RCpc acquire 의미를 제공합니다. 주석은 위험의 증가를 설명하며 모든 LTO 최적화가 반드시 이런 변환을 한다고 단정하지 않습니다."
+      },
+      {
+        "title": "명령 선택의 두 단계",
+        "text": "CONFIG_AS_HAS_LDAPR가 있으면 __LOAD_RCPC는 기본 ldar와 rcpc 확장 지정 뒤 ldapr를 ALTERNATIVE로 구성하며 ARM64_HAS_LDAPR를 기능 조건으로 사용합니다. assembler 지원 구성과 실제 CPU 기능 선택은 다른 단계입니다. assembler 지원이 없으면 ldar 문자열만 생성합니다. 컴파일 옵션 하나만으로 모든 CPU에서 ldapr를 실행한다고 설명하면 틀립니다."
+      },
+      {
+        "title": "주소와 결과 보관",
+        "text": "__READ_ONCE는 &(x)를 typeof(&(x))의 __x에 보관하고 int atomic을1로 초기화합니다. 결과 union은 원래 값의 한정자를 제거한 __val과 char __c[1] 뷰를 가집니다. union의 전체 크기는 char 배열 길이1만으로 정해지는 것이 아니라 다른 멤버까지 반영합니다. atomic이라는 이름은 여기의 지역 분기 표지이며 atomic_t 객체나 런타임 원자성 검사가 아닙니다."
+      },
+      {
+        "title": "1·2바이트 읽기",
+        "text": "sizeof(x)가1이면 b 접미사와 %w0를,2이면 h 접미사와 %w0를 사용합니다. 출력은 __u.__c를 각각 __u8·__u16 포인터로 보아 기록합니다. 입력은 Q 제약의 *__x, 출력은 레지스터 제약, clobber는 memory입니다. volatile asm과 명령 선택이 실제 접근을 표현합니다."
+      },
+      {
+        "title": "4·8바이트 읽기",
+        "text": "4바이트는 접미사 없이 %w0와 __u32 결과 뷰를 사용하고8바이트는 %0와 __u64를 사용합니다. 네 경우 모두 성공 분기에서 break합니다. 최종 conditional expression은 atomic이 참이면 union의 __val을 원래 대상 타입으로 변환하여 반환합니다. 별도의 값 재읽기는 하지 않습니다."
+      },
+      {
+        "title": "그 밖의 크기와 generic 검사",
+        "text": "default는 atomic=0으로 바꿉니다. 이때 마지막 식의 다른 피연산자인 (*(volatile typeof(__x))__x)를 선택하므로 그 경로에는 __LOAD_RCPC 명령이 없습니다. 이 표현의 typeof(__x)는 포인터 타입이라는 점도 유의해야 합니다. 모든 fallback이 같은 acquire 보장을 준다고 설명하지 않습니다. public READ_ONCE는 뒤에 포함한 generic 헤더의 크기 검사를 거치며 내부 __READ_ONCE 직접 사용과 구별해야 합니다."
+      },
+      {
+        "title": "공통 계층과 분업",
+        "text": "generic 헤더는 __READ_ONCE가 이미 있으면 이를 유지하고 public READ_ONCE와 WRITE_ONCE 등의 공통 인터페이스를 제공합니다. 이 ARM64 파일은 WRITE_ONCE를 별도로 재정의하지 않습니다. 읽기 구현이 강화됐다고 저장도 자동으로 release가 된다고 추론하면 안 됩니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "주소 의존성과 제어 의존성, 링크 시간 최적화, assembler와 CPU 기능 분리, union 표현, 조건부 평가와 명령 폭을 학습합니다. 이 소스 해설은 모든 ARM64 CPU에서 실행한 시험이나 RCpc를 full barrier와 동일시하는 설명이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CONFIG_LTO가 켜져도 BUILD_VDSO이면 이 파일의 __READ_ONCE override가 정의되는가?",
+        "options": [
+          "아니다. BUILD_VDSO가 아닌 경우만 정의한다",
+          "그렇다. LTO 조건 하나로 충분하다"
+        ],
+        "answer": 0,
+        "explanation": "바깥 LTO·비어셈블리 조건 안에 별도의 #ifndef BUILD_VDSO가 있습니다. 마지막 generic 헤더는 계속 포함됩니다."
+      },
+      {
+        "prompt": "CONFIG_AS_HAS_LDAPR가 있으면 기본 명령도 무조건 ldapr인가?",
+        "options": [
+          "그렇다. 모든 ldar 문자열을 제거한다",
+          "아니다. ldar와 ldapr 대체를 CPU 기능 조건과 함께 구성한다"
+        ],
+        "answer": 1,
+        "explanation": "ALTERNATIVE의 첫 문자열은 ldar이며 ARM64_HAS_LDAPR 조건의 대체 문자열이 ldapr입니다. assembler 지원과 CPU 지원은 구분해야 합니다."
+      },
+      {
+        "prompt": "8바이트 경로의 출력 레지스터 표기는?",
+        "options": [
+          "%0이다",
+          "%w0이다"
+        ],
+        "answer": 0,
+        "explanation": "1·2·4바이트 경로는 %w0,8바이트 경로는 %0입니다. 출력 저장 뷰도 각각 크기에 맞춰 __u8/__u16/__u32/__u64를 사용합니다."
+      },
+      {
+        "prompt": "지역 변수 atomic이0이 되는 것은 무엇을 의미하는가?",
+        "options": [
+          "CPU가 원자성 실패를 런타임으로 보고했다는 뜻이다",
+          "크기 switch의1·2·4·8에 해당하지 않았다는 뜻이다"
+        ],
+        "answer": 1,
+        "explanation": "default에서만0을 대입합니다. 메모리 경쟁 검출 결과나 원자 연산 반환값이 아니라 구현 경로 선택용 표지입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Copyright (C) 2020 Google LLC.\n */\n#ifndef __ASM_RWONCE_H\n#define __ASM_RWONCE_H\n\n#if defined(CONFIG_LTO) && !defined(__ASSEMBLY__)\n\n#include <linux/compiler_types.h>\n#include <asm/alternative-macros.h>\n\n#ifndef BUILD_VDSO\n\n#ifdef CONFIG_AS_HAS_LDAPR\n#define __LOAD_RCPC(sfx, regs...)\t\t\t\t\t\\\n\tALTERNATIVE(\t\t\t\t\t\t\t\\\n\t\t\"ldar\"\t#sfx \"\\t\" #regs,\t\t\t\t\\\n\t\t\".arch_extension rcpc\\n\"\t\t\t\t\\\n\t\t\"ldapr\"\t#sfx \"\\t\" #regs,\t\t\t\t\\\n\tARM64_HAS_LDAPR)\n#else\n#define __LOAD_RCPC(sfx, regs...)\t\"ldar\" #sfx \"\\t\" #regs\n#endif /* CONFIG_AS_HAS_LDAPR */\n\n/*\n * When building with LTO, there is an increased risk of the compiler\n * converting an address dependency headed by a READ_ONCE() invocation\n * into a control dependency and consequently allowing for harmful\n * reordering by the CPU.\n *\n * Ensure that such transformations are harmless by overriding the generic\n * READ_ONCE() definition with one that provides RCpc acquire semantics\n * when building with LTO.\n */\n#define __READ_ONCE(x)\t\t\t\t\t\t\t\\\n({\t\t\t\t\t\t\t\t\t\\\n\ttypeof(&(x)) __x = &(x);\t\t\t\t\t\\\n\tint atomic = 1;\t\t\t\t\t\t\t\\\n\tunion { __unqual_scalar_typeof(*__x) __val; char __c[1]; } __u;\t\\\n\tswitch (sizeof(x)) {\t\t\t\t\t\t\\\n\tcase 1:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(b, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u8 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 2:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(h, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u16 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 4:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(, %w0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u32 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tcase 8:\t\t\t\t\t\t\t\t\\\n\t\tasm volatile(__LOAD_RCPC(, %0, %1)\t\t\t\\\n\t\t\t: \"=r\" (*(__u64 *)__u.__c)\t\t\t\\\n\t\t\t: \"Q\" (*__x) : \"memory\");\t\t\t\\\n\t\tbreak;\t\t\t\t\t\t\t\\\n\tdefault:\t\t\t\t\t\t\t\\\n\t\tatomic = 0;\t\t\t\t\t\t\\\n\t}\t\t\t\t\t\t\t\t\\\n\tatomic ? (typeof(*__x))__u.__val : (*(volatile typeof(__x))__x);\\\n})\n\n#endif\t/* !BUILD_VDSO */\n#endif\t/* CONFIG_LTO && !__ASSEMBLY__ */\n\n#include <asm-generic/rwonce.h>\n\n#endif\t/* __ASM_RWONCE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "02dbbf5016236fb490a864fd8e3d396dd48b6647ac98758dd91ee5b639ed2aee",
+      "scope": "whole-file",
+      "line_count": 73,
+      "authoring_source": "course/file_units/architecture_rwonce.py",
+      "sections": [
+        "파일 구성과 세 조건",
+        "LTO에 대한 설계 이유",
+        "명령 선택의 두 단계",
+        "주소와 결과 보관",
+        "1·2바이트 읽기",
+        "4·8바이트 읽기",
+        "그 밖의 크기와 generic 검사",
+        "공통 계층과 분업",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/rwonce.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "주소가 적힌 쪽지를 읽은 뒤 그 주소로 찾아가야 해요. 순서를 마음대로 바꾸면 잘못된 곳을 찾을 수 있어요. 컴퓨터도 일부 읽기의 순서를 지켜야 해요.",
+    "meaning": "ARM64에서는 특정 빌드 조건일 때 READ_ONCE의 읽기를 바꾸어 필요한 순서를 지켜요. 모든 빌드와 모든 크기에 같은 규칙을 넣는 것은 아니에요.",
+    "exercise": "LTO 켜짐, 어셈블리 아님, BUILD_VDSO 아님이라는 문 세 개를 그리세요. 모두 통과한 뒤 1·2·4·8바이트 중 어디로 가는지 표로 적으세요."
+  },
+  "goal": "ARM64에서는 특정 빌드 조건일 때 READ_ONCE의 읽기를 바꾸어 필요한 순서를 지켜요. 모든 빌드와 모든 크기에 같은 규칙을 넣는 것은 아니에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "LTO 켜짐, 어셈블리 아님, BUILD_VDSO 아님이라는 문 세 개를 그리세요. 모두 통과한 뒤 1·2·4·8바이트 중 어디로 가는지 표로 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "996c3179f3978eda72d929b824c03db618a576e5c7ed7181fa77624b0fa45a69",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

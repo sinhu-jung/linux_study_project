@@ -5,71 +5,85 @@
   "area": "아키텍처 추상화 · 메모리 장벽 · 이벤트 대기 · MCS",
   "track": "files",
   "kind": "kernel",
-  "intro": "ARM의 SMP 구성에서 MCS 경합 대기와 인계를 아키텍처별 매크로로 대체합니다.",
+  "intro": "CPU 이벤트 알림과 잠금 인계 표시를 구별하고 acquire 읽기·release 저장이 놓인 순서를 따라갑니다.",
   "guide": [
-    "플래그의 acquire/release 순서와 CPU 이벤트 대기·알림을 결합합니다. 이벤트에서 깨어났다는 사실만으로 소유권을 인정하지 않고 플래그를 다시 읽습니다.",
-    "이 파일은 ARM용이며 ARM64 파일이라고 부르지 않습니다. 실제 큐 연결은 generic MCS 구현이 담당하고 여기서는 경합 플래그 대기와 인계만 바꿉니다."
+    "MCS 잠금은 대기자가 줄을 서는 잠금입니다. 이 파일은 줄 연결 전체가 아니라 기다림과 인계 부분만 바꿉니다.",
+    "acquire 읽기는 이후 접근의 순서를 지키며 표시를 읽고 release 저장은 앞선 접근의 순서를 지키며 표시를 공개합니다.",
+    "ARM용 파일입니다. ARM64로 바꿔 부르지 않으며 실제 기계 실행을 검증한 것은 아닙니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0과 guard 안에 CONFIG_SMP 분기, asm/spinlock.h 포함, arch_mcs_spin_lock_contended와 unlock_contended 두 매크로가 전부입니다. SMP가 아니면 이 파일에서 두 매크로를 정의하지 않으므로 포함 측 generic fallback과 연결해 읽어야 합니다."
+      "title": "여러 CPU일 때만 정의",
+      "text": "라이선스와 중복 포함 방지 안에 CONFIG_SMP 조건, spinlock.h 포함, 경합 시 기다림과 인계 매크로 두 개가 있습니다. 여러 CPU 설정이 꺼지면 이 파일에서는 두 매크로를 정의하지 않습니다. 그때 포함하는 공통 코드가 기본 방법을 제공하는지 함께 읽습니다."
     },
     {
-      "title": "대기 전 장벽",
-      "text": "lock_contended는 먼저 smp_mb를 실행합니다. 주석은 WFE에 들어가기 전에 앞선 저장이 관측되도록 하기 위한 것이라고 설명합니다. 이 단계와 반복 안의 acquire 읽기는 목적이 다르므로 acquire 하나만 있으면 앞선 장벽이 불필요하다고 임의로 결론 내리지 않습니다."
+      "title": "기다리기 전에 앞선 쓰기 알리기",
+      "text": "기다림 매크로는 smp_mb 장벽을 먼저 실행합니다. 주석은 WFE로 이벤트를 기다리기 전에 앞선 쓰기가 관찰되도록 한다고 설명합니다. 이것과 반복 안의 acquire 읽기는 목적이 달라서 읽기가 있으니 앞 장벽은 불필요하다고 단정하지 않습니다."
     },
     {
-      "title": "플래그와 WFE 루프",
-      "text": "smp_load_acquire(lock)가0인 동안 wfe를 실행하고 다시 검사합니다. 처음부터1이면 WFE 없이 통과합니다. WFE는 커널 태스크를 대기 큐에 넣어 schedule하는 함수와 다르며, 이벤트 발생이 곧 플래그 참이라는 뜻도 아닙니다. 실제 획득 판정은 acquire 읽기 결과입니다."
+      "title": "깨어난 뒤 표시 다시 읽기",
+      "text": "smp_load_acquire(lock)가 0인 동안 wfe를 실행하고 다시 검사합니다. 처음부터 1이면 WFE 없이 지나갑니다. WFE는 CPU 이벤트 대기 명령으로, 커널 작업을 대기 줄에 넣고 schedule하는 함수와 다릅니다. 알림이 왔다는 것만으로 차례가 온 것은 아니며 읽은 표시가 참이어야 통과합니다."
     },
     {
-      "title": "인계와 알림",
-      "text": "unlock_contended는 smp_store_release(lock,1) 뒤 dsb_sev를 호출합니다. 데이터 순서를 가진 플래그 저장과 이벤트 알림을 함께 제공하는 구조입니다. 이 헤더에는 dsb_sev 자체의 본문이 없으므로 그 내부 명령 나열까지 여기에서 직접 검증했다고 주장하지 않습니다."
+      "title": "표시를 바꾸고 알림 보내기",
+      "text": "인계 매크로는 smp_store_release(lock,1) 뒤 dsb_sev를 호출합니다. 앞선 자료 접근과 순서를 지켜 차례 표시를 쓰고 이벤트를 알리는 두 역할입니다. dsb_sev의 실제 몸체는 이 헤더에 없으므로 내부 명령까지 여기서 읽었다고 하지는 않습니다."
     },
     {
-      "title": "generic 연결과 CS",
-      "text": "generic MCS 헤더는 아키텍처 매크로가 없을 때만 기본 대기·인계 구현을 정의합니다. 이 파일은 큐 꼬리 교환이나 next 연결 알고리즘을 복제하지 않고 필요한 부분만 대체합니다. 조건 재검사, acquire/release, 장벽과 알림의 분리, 빌드 설정에 따른 fallback을 학습합니다. ARM에서 실제 실행한 검증은 아닙니다."
+      "title": "공통 줄서기와 연결",
+      "text": "공통 MCS 헤더는 CPU 전용 매크로가 없을 때만 기본 대기·인계 코드를 만듭니다. 이 파일은 줄 끝 교환이나 다음 사람 연결 방법을 복제하지 않습니다. 조건 재검사, 접근 순서와 알림의 차이, 설정에 따른 기본 구현 선택을 배웁니다."
     }
   ],
   "questions": [
     {
-      "prompt": "WFE에서 돌아왔으면 잠금을 획득한 것인가?",
+      "prompt": "WFE에서 돌아오면 바로 잠금을 얻은 것인가요?",
       "options": [
+        "아니요. acquire로 플래그가 참인지 다시 읽습니다.",
+        "네. 모든 이벤트는 자기 차례를 뜻합니다."
+      ],
+      "answer": 0,
+      "explanation": "while이 표시를 다시 검사합니다. 알림과 조건 만족은 달라서 깨어났다는 이유만으로 보호 구역에 들어가지 않습니다.",
+      "original_prompt": "WFE에서 돌아왔으면 잠금을 획득한 것인가?",
+      "original_options": [
         "아니다. acquire로 읽은 플래그가 참인지 다시 확인한다",
         "그렇다. 이벤트는 언제나 자신의 잠금 인계만 의미한다"
       ],
-      "answer": 0,
-      "explanation": "while 조건이 smp_load_acquire 결과를 재검사합니다. 알림과 조건 만족은 다른 사실이므로 깨어남만으로 임계구역에 들어가지 않습니다."
+      "original_explanation": "while 조건이 smp_load_acquire 결과를 재검사합니다. 알림과 조건 만족은 다른 사실이므로 깨어남만으로 임계구역에 들어가지 않습니다."
     },
     {
-      "prompt": "인계 매크로의 순서는?",
+      "prompt": "차례를 넘길 때의 순서는 무엇인가요?",
       "options": [
+        "알림부터 보내고 플래그 쓰기는 생략합니다.",
+        "release로 1을 쓴 다음 dsb_sev를 부릅니다."
+      ],
+      "answer": 1,
+      "explanation": "플래그의 상태와 이벤트 알림을 함께 제공하며 다음 대기자는 실제 상태를 읽어 확인합니다.",
+      "original_prompt": "인계 매크로의 순서는?",
+      "original_options": [
         "이벤트를 먼저 보내고 플래그 저장은 생략",
         "release로1 저장 후 dsb_sev 호출"
       ],
-      "answer": 1,
-      "explanation": "원문은 smp_store_release 다음 dsb_sev입니다. 플래그 상태와 이벤트 통지를 결합하며 후속 대기자가 플래그를 확인하도록 합니다."
+      "original_explanation": "원문은 smp_store_release 다음 dsb_sev입니다. 플래그 상태와 이벤트 통지를 결합하며 후속 대기자가 플래그를 확인하도록 합니다."
     },
     {
-      "prompt": "CONFIG_SMP가 꺼져도 이 파일이 동일한 경합 매크로를 정의하는가?",
+      "prompt": "CONFIG_SMP가 꺼져도 이 파일이 같은 매크로를 정의하나요?",
       "options": [
+        "아니요. 정의는 모두 CONFIG_SMP 안에 있습니다.",
+        "네. SMP 조건은 주석에만 있습니다."
+      ],
+      "answer": 0,
+      "explanation": "비활성 설정에서는 여기의 특별 구현이 없으므로 공통 MCS 헤더의 ifndef 기본 구현을 함께 확인합니다.",
+      "original_prompt": "CONFIG_SMP가 꺼져도 이 파일이 동일한 경합 매크로를 정의하는가?",
+      "original_options": [
         "아니다. 정의 전체가 CONFIG_SMP 안에 있다",
         "그렇다. SMP 분기는 주석에만 있다"
       ],
-      "answer": 0,
-      "explanation": "비SMP에서는 이 헤더의 override가 없어 generic MCS의 ifndef fallback을 함께 봐야 합니다."
+      "original_explanation": "비SMP에서는 이 헤더의 override가 없어 generic MCS의 ifndef fallback을 함께 봐야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "처음 플래그가 1일 때와 0일 때 while문이 WFE를 실행하는지 나누어 설명해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_MCS_LOCK_H\n#define __ASM_MCS_LOCK_H\n\n#ifdef CONFIG_SMP\n#include <asm/spinlock.h>\n\n/* MCS spin-locking. */\n#define arch_mcs_spin_lock_contended(lock)\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\t/* Ensure prior stores are observed before we enter wfe. */\t\\\n\tsmp_mb();\t\t\t\t\t\t\t\\\n\twhile (!(smp_load_acquire(lock)))\t\t\t\t\\\n\t\twfe();\t\t\t\t\t\t\t\\\n} while (0)\t\t\t\t\t\t\t\t\\\n\n#define arch_mcs_spin_unlock_contended(lock)\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tsmp_store_release(lock, 1);\t\t\t\t\t\\\n\tdsb_sev();\t\t\t\t\t\t\t\\\n} while (0)\n\n#endif\t/* CONFIG_SMP */\n#endif\t/* __ASM_MCS_LOCK_H */\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/mcs_spinlock.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-312336a463bff423",
+    "path": "arch/arm/include/asm/mcs_spinlock.h",
+    "title": "ARM MCS 대기 헤더 전체: WFE와 이벤트 알림",
+    "area": "아키텍처 추상화 · 메모리 장벽 · 이벤트 대기 · MCS",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "ARM의 SMP 구성에서 MCS 경합 대기와 인계를 아키텍처별 매크로로 대체합니다.",
+    "guide": [
+      "플래그의 acquire/release 순서와 CPU 이벤트 대기·알림을 결합합니다. 이벤트에서 깨어났다는 사실만으로 소유권을 인정하지 않고 플래그를 다시 읽습니다.",
+      "이 파일은 ARM용이며 ARM64 파일이라고 부르지 않습니다. 실제 큐 연결은 generic MCS 구현이 담당하고 여기서는 경합 플래그 대기와 인계만 바꿉니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0과 guard 안에 CONFIG_SMP 분기, asm/spinlock.h 포함, arch_mcs_spin_lock_contended와 unlock_contended 두 매크로가 전부입니다. SMP가 아니면 이 파일에서 두 매크로를 정의하지 않으므로 포함 측 generic fallback과 연결해 읽어야 합니다."
+      },
+      {
+        "title": "대기 전 장벽",
+        "text": "lock_contended는 먼저 smp_mb를 실행합니다. 주석은 WFE에 들어가기 전에 앞선 저장이 관측되도록 하기 위한 것이라고 설명합니다. 이 단계와 반복 안의 acquire 읽기는 목적이 다르므로 acquire 하나만 있으면 앞선 장벽이 불필요하다고 임의로 결론 내리지 않습니다."
+      },
+      {
+        "title": "플래그와 WFE 루프",
+        "text": "smp_load_acquire(lock)가0인 동안 wfe를 실행하고 다시 검사합니다. 처음부터1이면 WFE 없이 통과합니다. WFE는 커널 태스크를 대기 큐에 넣어 schedule하는 함수와 다르며, 이벤트 발생이 곧 플래그 참이라는 뜻도 아닙니다. 실제 획득 판정은 acquire 읽기 결과입니다."
+      },
+      {
+        "title": "인계와 알림",
+        "text": "unlock_contended는 smp_store_release(lock,1) 뒤 dsb_sev를 호출합니다. 데이터 순서를 가진 플래그 저장과 이벤트 알림을 함께 제공하는 구조입니다. 이 헤더에는 dsb_sev 자체의 본문이 없으므로 그 내부 명령 나열까지 여기에서 직접 검증했다고 주장하지 않습니다."
+      },
+      {
+        "title": "generic 연결과 CS",
+        "text": "generic MCS 헤더는 아키텍처 매크로가 없을 때만 기본 대기·인계 구현을 정의합니다. 이 파일은 큐 꼬리 교환이나 next 연결 알고리즘을 복제하지 않고 필요한 부분만 대체합니다. 조건 재검사, acquire/release, 장벽과 알림의 분리, 빌드 설정에 따른 fallback을 학습합니다. ARM에서 실제 실행한 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "WFE에서 돌아왔으면 잠금을 획득한 것인가?",
+        "options": [
+          "아니다. acquire로 읽은 플래그가 참인지 다시 확인한다",
+          "그렇다. 이벤트는 언제나 자신의 잠금 인계만 의미한다"
+        ],
+        "answer": 0,
+        "explanation": "while 조건이 smp_load_acquire 결과를 재검사합니다. 알림과 조건 만족은 다른 사실이므로 깨어남만으로 임계구역에 들어가지 않습니다."
+      },
+      {
+        "prompt": "인계 매크로의 순서는?",
+        "options": [
+          "이벤트를 먼저 보내고 플래그 저장은 생략",
+          "release로1 저장 후 dsb_sev 호출"
+        ],
+        "answer": 1,
+        "explanation": "원문은 smp_store_release 다음 dsb_sev입니다. 플래그 상태와 이벤트 통지를 결합하며 후속 대기자가 플래그를 확인하도록 합니다."
+      },
+      {
+        "prompt": "CONFIG_SMP가 꺼져도 이 파일이 동일한 경합 매크로를 정의하는가?",
+        "options": [
+          "아니다. 정의 전체가 CONFIG_SMP 안에 있다",
+          "그렇다. SMP 분기는 주석에만 있다"
+        ],
+        "answer": 0,
+        "explanation": "비SMP에서는 이 헤더의 override가 없어 generic MCS의 ifndef fallback을 함께 봐야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_MCS_LOCK_H\n#define __ASM_MCS_LOCK_H\n\n#ifdef CONFIG_SMP\n#include <asm/spinlock.h>\n\n/* MCS spin-locking. */\n#define arch_mcs_spin_lock_contended(lock)\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\t/* Ensure prior stores are observed before we enter wfe. */\t\\\n\tsmp_mb();\t\t\t\t\t\t\t\\\n\twhile (!(smp_load_acquire(lock)))\t\t\t\t\\\n\t\twfe();\t\t\t\t\t\t\t\\\n} while (0)\t\t\t\t\t\t\t\t\\\n\n#define arch_mcs_spin_unlock_contended(lock)\t\t\t\t\\\ndo {\t\t\t\t\t\t\t\t\t\\\n\tsmp_store_release(lock, 1);\t\t\t\t\t\\\n\tdsb_sev();\t\t\t\t\t\t\t\\\n} while (0)\n\n#endif\t/* CONFIG_SMP */\n#endif\t/* __ASM_MCS_LOCK_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "68ca36baca0562fc5275efb7d367074c5a91735c1cf6b47d0c0aaecdfd22a926",
+      "scope": "whole-file",
+      "line_count": 24,
+      "authoring_source": "course/file_units/mcs_arch_headers.py",
+      "sections": [
+        "전체 구성",
+        "대기 전 장벽",
+        "플래그와 WFE 루프",
+        "인계와 알림",
+        "generic 연결과 CS"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/include/asm/mcs_spinlock.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "차례를 기다리던 사람이 알림 소리를 들었다고 바로 들어가면 안 됩니다. 정말 자기 차례라는 표시를 다시 확인해야 합니다. ARM의 이 잠금 대기도 같은 원리입니다.",
+    "meaning": "CPU 이벤트 알림과 잠금 인계 표시를 구별하고 acquire 읽기·release 저장이 놓인 순서를 따라갑니다.",
+    "exercise": "처음 플래그가 1일 때와 0일 때 while문이 WFE를 실행하는지 나누어 설명해 보세요."
+  },
+  "goal": "CPU 이벤트 알림과 잠금 인계 표시를 구별하고 acquire 읽기·release 저장이 놓인 순서를 따라갑니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "처음 플래그가 1일 때와 0일 때 while문이 WFE를 실행하는지 나누어 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "1d45b26039c46e62d2b3583f0b1bb99d46a7adb0e4c5b8fa9ed82c6cbee8ade4",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

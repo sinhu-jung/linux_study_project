@@ -5,121 +5,147 @@
   "area": "큐 잠금 · 취소 · per-CPU · 포인터 경쟁 · 메모리 순서",
   "track": "files",
   "kind": "kernel",
-  "intro": "CPU별 정적 노드로 큐를 만들고 재스케줄이나 선행 vCPU 선점 시 대기를 취소할 수 있는 MCS 계열 구현입니다.",
+  "intro": "OSQ는 실제 mutex를 기다리며 잠깐 돌고 있는 실행들의 순서를 정하는 보조 줄이에요. 취소와 차례 인계가 겹치는 경우까지 다뤄요.",
   "guide": [
-    "취소할 때 이전 연결을 끊고 다음 노드를 안정화한 뒤 양쪽을 이어야 합니다. 취소를 시작했어도 동시에 인계를 받았다면 획득 성공으로 처리합니다.",
-    "mutex·rwsem의 낙관적 스핀을 직렬화하는 보조 큐로 이해합니다. OSQ 획득이 보호할 실제 mutex까지 획득했다는 뜻은 아닙니다."
+    "스핀은 잠들지 않고 상태를 반복 확인하며 기다리는 방식이에요. mutex와 rwsem은 필요하면 잠들 수 있는 상위 잠금이에요.",
+    "선점은 실행하던 CPU 작업이 다른 작업에 자리를 내주는 일이에요. 이 코드는 스핀 중 선점이 꺼졌다는 호출 환경의 약속을 사용해요.",
+    "원자적 교환은 값을 바꾸고 이전 값을 받는 일을 하나의 끊기지 않는 연산으로 해요. 메모리 장벽은 다른 CPU에 읽기·쓰기 순서가 알맞게 보이도록 조정해요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0, percpu/sched/osq_lock 포함, 노드와 per-CPU 저장소, CPU encode/node_cpu/decode helper, osq_wait_next, osq_lock의 진입·취소 A/B/C, osq_unlock로 구성됩니다. 별도 동적 할당이나 export 선언은 이 파일에 없습니다."
+      "title": "파일의 전체 흐름",
+      "text": "percpu, sched, osq_lock 헤더 뒤에 노드와 CPU별 저장소를 두어요. CPU 번호 변환, 다음 노드 확보, 줄 진입, 취소 A/B/C, 해제로 이어져요. 이 파일 안에는 별도의 동적 메모리 할당이나 export 선언이 없어요."
     },
     {
-      "title": "노드 수명과 실행 전제",
-      "text": "노드는 next/prev, locked, 인코딩된 cpu를 갖고 DEFINE_PER_CPU_SHARED_ALIGNED로 CPU마다 하나씩 존재합니다. 주석은 수면 잠금을 IRQ에서 호출하지 않고 스핀 동안 선점이 꺼져 있다는 전제로 단일 CPU 노드 재사용을 정당화합니다. osq_lock 자체에는 preempt_disable 호출이 없으므로 호출 문맥의 계약입니다."
+      "title": "CPU마다 한 노드",
+      "text": "노드는 next·prev 연결 주소, 차례를 받았는지의 locked, 변환한 cpu 값을 담아요. CPU마다 정적으로 하나씩 있어요. 주석은 수면 잠금을 인터럽트 문맥에서 부르지 않고 스핀 동안 선점이 꺼진다는 전제를 설명해요. osq_lock 안에서 직접 preempt_disable을 부르는 것은 아니므로 호출자가 지킬 조건이에요."
     },
     {
-      "title": "CPU 인코딩",
-      "text": "encode_cpu는 CPU번호+1, node_cpu는 저장값-1, decode_cpu는 인코딩값-1의 per_cpu_ptr를 반환합니다.0은 빈 큐를 위한 예약값이므로 decode_cpu(0)를 유효 CPU 해석으로 사용하지 않습니다. tail은 노드 포인터 대신 인코딩된 CPU 번호를 원자 정수로 저장합니다."
+      "title": "빈 줄과 CPU 0 구별",
+      "text": "encode_cpu는 CPU 번호에 1을 더해요. node_cpu와 decode_cpu는 1을 빼 원래 CPU를 알아내요. CPU 0은 값 1로 저장되고 0은 빈 줄 표시예요. tail은 노드 주소가 아니라 이 번호를 원자 정수로 담아요. decode_cpu(0)을 정상 CPU처럼 사용하면 안 돼요."
     },
     {
-      "title": "진입과 꼬리 교환",
-      "text": "osq_lock은 현재 CPU 노드의 locked0,nextNULL,cpu를 초기화한 뒤 atomic_xchg로 tail을 교체합니다. 이전 tail0이면 즉시 true입니다. 주석은 이 교환에 이전 해제와 연결되는 acquire 및 초기화 공개를 위한 release가 필요하다고 설명합니다. 무경합 성공에서 locked를1로 쓰지는 않습니다."
+      "title": "꼬리에 들어가기",
+      "text": "현재 노드의 locked=0, next=NULL, cpu를 먼저 준비하고 atomic_xchg로 tail을 바꿔요. 이전 tail이 0이면 곧바로 true예요. 이 빠른 성공 경로는 locked를 1로 다시 쓰지 않아요. 교환은 앞선 해제와 맞물리는 acquire와 자기 초기값을 공개하는 release 역할이 필요하다는 주석이 있어요."
     },
     {
-      "title": "선행 노드 연결 순서",
-      "text": "기존 꼬리가 있으면 decode한 prev를 node->prev에 기록하고 smp_wmb 후 WRITE_ONCE(prev->next,node)를 수행합니다. 취소 C단계가 같은 node->prev를 바꾸는 상황에서 저장 순서가 뒤집혀 리스트를 손상하지 않도록 하는 관계입니다. 노드가 정적 per-CPU 저장소라 prev의 메모리가 사라지지 않는 점이 일반 스택 MCS와 다릅니다."
+      "title": "앞사람과 연결하는 순서",
+      "text": "앞 노드가 있으면 node->prev를 먼저 쓰고 smp_wmb 뒤 prev->next를 WRITE_ONCE로 연결해요. WRITE_ONCE는 그 접근을 한 번의 지정된 접근으로 다루도록 하는 도구예요. 취소 C 단계도 같은 연결을 바꿀 수 있어 순서가 뒤집히면 안 돼요. 노드가 정적 CPU별 저장소라서 앞 노드 메모리가 사라지지 않는 점도 중요해요."
     },
     {
-      "title": "스핀 종료와 반환값",
-      "text": "smp_cond_load_relaxed는 locked가 참이거나 need_resched 또는 선행 CPU의 vcpu_is_preempted 조건까지 기다립니다. if에서 사용하는 반환값은 읽은 locked 값이므로 취소 조건 때문에 대기가 끝났다고 자동 true가 되는 것은 아닙니다. locked가 참이면 획득 성공, 거짓이면 unqueue로 진행합니다. 주석은 need_resched의 IPI와 vCPU 선점의 polling 차이도 주의시킵니다."
+      "title": "대기를 끝내는 이유와 성공",
+      "text": "조건 대기는 locked가 참이거나 재스케줄 필요, 앞 CPU의 가상 CPU 선점 상태를 만나면 끝나요. 하지만 반환하는 값은 읽은 locked예요. 재스케줄 때문에 멈췄고 locked=0이면 성공이 아니라 취소로 가요. need_resched는 CPU 간 알림 IPI와 관련되고 가상 CPU 선점 확인은 반복 확인에 의존한다는 차이도 주석이 지적해요."
     },
     {
-      "title": "취소 A: 이전 연결 안정화",
-      "text": "prev->next가 자신이면 cmpxchg로 NULL로 바꾸려 합니다. 성공하면 이전 노드의 해제·취소가 새 next를 기다리게 되어 prev를 안정화합니다. 실패 중 smp_load_acquire(locked)가 참이면 이미 인계받았으므로 true입니다. 그렇지 않으면 cpu_relax 후 node->prev를 다시 읽어 선행 노드 취소가 갱신한 prev에 대응합니다."
+      "title": "취소 A: 앞 연결 붙잡기",
+      "text": "prev->next가 자신이면 cmpxchg로 NULL로 바꾸려 해요. 비교 교환은 예상값이 맞을 때만 바꾸는 원자 연산이에요. 성공하면 앞 노드는 다음 연결을 기다려야 하므로 안정돼요. 실패하며 locked가 참으로 보이면 이미 차례를 받은 것이므로 true를 반환해요. 아니면 cpu_relax 후 node->prev를 다시 읽어 앞 노드의 취소가 바꾼 연결에 대응해요."
     },
     {
-      "title": "공통 next 확보: 꼬리 되돌리기",
-      "text": "osq_wait_next는 현재 CPU가 tail이고 비교 교환 acquire까지 성공하면 tail을 old_cpu로 바꾸고 NULL을 반환합니다. 취소에서는 old_cpu가 이전 노드의 인코딩 cpu라 큐를 이전 노드로 되돌리고, unlock에서는0이라 큐를 비웁니다. 매개변수 이름만 보고 원시 CPU 번호를 넘기는 것으로 해석하지 않습니다."
+      "title": "다음 노드 확보와 꼬리 복원",
+      "text": "osq_wait_next는 자신이 꼬리이며 비교 교환에도 성공하면 tail을 old_cpu로 바꾸고 NULL을 반환해요. 취소에서는 old_cpu가 앞 노드의 변환된 cpu여서 줄을 앞사람까지 되돌려요. 해제에서는 0을 넣어 줄을 비워요. old_cpu라는 이름만 보고 원래 CPU 번호를 넘긴다고 생각하면 안 돼요."
     },
     {
-      "title": "공통 next 확보: 연결 소유권",
-      "text": "꼬리를 되돌릴 수 없으면 node->next를 xchg로 NULL과 교환해 안정된 next를 확보합니다. 단순 읽기로 남겨두면 후속 노드의 취소 A단계가 아직 이전 연결을 소유한다고 판단할 수 있습니다. 경쟁 취소가 먼저 진행하면 tail이 자신을 가리키거나 새로운 next가 연결될 때까지 cpu_relax로 반복합니다."
+      "title": "다음 연결을 가져오는 교환",
+      "text": "꼬리를 되돌릴 수 없으면 node->next를 xchg로 NULL과 바꾸며 다음 노드를 가져와요. 그냥 읽어 남겨 두면 뒤 노드의 취소가 앞 연결을 아직 자기 것으로 판단할 수 있어요. 경쟁하는 취소가 먼저 진행했다면 tail이 자신으로 돌아오거나 새로운 next가 연결될 때까지 반복해요."
     },
     {
-      "title": "취소 B와 C",
-      "text": "B단계는 osq_wait_next(lock,node,prev->cpu)를 호출합니다. NULL이면 꼬리 복원이 끝났으므로 false로 종료합니다. next가 있으면 C단계에서 next->prev=prev 다음 prev->next=next를 WRITE_ONCE로 이어 자신을 우회시키고 false입니다. 양쪽 안정화 없이 포인터 두 개만 덮는 단순 삭제가 아닙니다."
+      "title": "취소 B와 C: 자신을 우회하기",
+      "text": "B는 osq_wait_next에 prev->cpu를 넘겨 뒤쪽을 안정시켜요. NULL이면 꼬리 복원이 끝나 false예요. 뒤 노드가 있으면 C에서 next->prev를 앞 노드로, prev->next를 뒤 노드로 이어 자신을 건너뛰게 하고 false를 반환해요. 양쪽을 먼저 안정시켜야 하는 삭제이지 주소 두 개를 아무 때나 덮는 작업이 아니에요."
     },
     {
-      "title": "해제의 세 경로",
-      "text": "osq_unlock은 먼저 tail이 현재 CPU이면 release 비교 교환으로0을 만들고 종료합니다. 실패하면 현재 노드 next를 xchg로 가져와 있으면 next->locked=1을 WRITE_ONCE로 인계합니다. 아직 next가 없으면 osq_wait_next의 old_cpu0 경로로 안정화하고 반환된 후속이 있을 때만 locked를 설정합니다."
+      "title": "잠금 해제의 세 길",
+      "text": "먼저 자신이 꼬리이면 release 비교 교환으로 tail을 0으로 만들고 끝내요. 실패하면 next를 교환으로 얻어 있고, 있으면 그 locked에 1을 써 차례를 넘겨요. 아직 연결이 없으면 old_cpu=0으로 osq_wait_next를 불러 안정시켜요. 돌려받은 뒤 노드가 있을 때만 locked를 설정해요."
     },
     {
-      "title": "일반 MCS와 순서 차이",
-      "text": "경합 대기는 relaxed conditional load이고 일반 인계는 WRITE_ONCE입니다. 앞서 본 generic MCS의 acquire 대기·release 플래그 저장과 동일한 코드라고 복사해 설명하면 안 됩니다. OSQ는 수면 잠금의 spinner 제어를 위한 것이며 실제 보호 데이터의 획득·해제 순서는 상위 mutex/rwsem 구현과 함께 판단합니다."
+      "title": "보통 MCS와 다른 역할",
+      "text": "이 경합 대기는 relaxed 읽기이고 일반 차례 인계는 WRITE_ONCE예요. generic MCS의 acquire 대기·release 플래그 저장과 같은 코드라고 설명하면 안 돼요. OSQ 성공은 낙관적 스피너 줄의 차례이며 실제 mutex 획득은 별도예요. 보호 데이터의 메모리 순서는 상위 mutex/rwsem까지 함께 봐야 해요."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "per-CPU 노드 재사용, 예약값 인코딩, 비교 교환과 포인터 공개 순서, 취소와 성공 인계의 경쟁, doubly linked queue의 안전한 우회, 정적 메모리 수명을 학습합니다. 원본 각 경로를 설명한 수업이며 모든 가상 CPU 선점과 약한 메모리 실행을 실험 검증한 것은 아닙니다."
+      "title": "검토한 범위",
+      "text": "CPU별 재사용, 빈 값 인코딩, 비교 교환, 쓰기 공개 순서, 취소와 인계의 경쟁, 양방향 줄 우회를 원문 경로별로 읽었어요. 모든 가상 CPU 선점 상황이나 약한 메모리 순서에서 실제 실행 실험을 했다는 뜻은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "CPU0의 tail 인코딩은?",
+      "prompt": "CPU 0은 tail에 어떻게 저장하나요?",
       "options": [
+        "1로 저장하고 0은 빈 줄로 남겨요.",
+        "0으로 저장해 빈 줄과 구별하지 않아요."
+      ],
+      "answer": 0,
+      "explanation": "CPU 번호에 1을 더하는 인코딩이에요.",
+      "original_prompt": "CPU0의 tail 인코딩은?",
+      "original_options": [
         "1이다.0은 빈 큐를 뜻한다",
         "0이다. 빈 큐와 CPU0을 별도 구분하지 않는다"
       ],
-      "answer": 0,
-      "explanation": "encode_cpu는 cpu_nr+1을 반환하고 decode는1을 뺍니다. 예약값을 확보하기 위해 원시 CPU 번호와 구별합니다."
+      "original_explanation": "encode_cpu는 cpu_nr+1을 반환하고 decode는1을 뺍니다. 예약값을 확보하기 위해 원시 CPU 번호와 구별합니다."
     },
     {
-      "prompt": "need_resched로 조건 대기가 끝났지만 locked가0이면 osq_lock은 곧바로 true인가?",
+      "prompt": "재스케줄 조건으로 대기를 끝냈지만 locked=0이면 바로 true인가요?",
       "options": [
+        "네. 대기 조건 하나가 참이면 성공이에요.",
+        "아니요. 취소 경로로 들어가요."
+      ],
+      "answer": 1,
+      "explanation": "대기 종료 이유와 반환한 locked 값은 달라요.",
+      "original_prompt": "need_resched로 조건 대기가 끝났지만 locked가0이면 osq_lock은 곧바로 true인가?",
+      "original_options": [
         "그렇다. 조건식 중 하나만 참이면 획득 성공이다",
         "아니다. 취소 경로에 들어간다"
       ],
-      "answer": 1,
-      "explanation": "conditional load가 돌려주는 값은 읽은 locked 값입니다. 종료 이유와 획득 여부를 구분해야 합니다."
+      "original_explanation": "conditional load가 돌려주는 값은 읽은 locked 값입니다. 종료 이유와 획득 여부를 구분해야 합니다."
     },
     {
-      "prompt": "취소 A단계 중 locked가 참으로 바뀌면 어떻게 처리하는가?",
+      "prompt": "취소 A 도중 locked가 참이 되면 어떻게 하나요?",
       "options": [
+        "차례를 받은 것으로 보고 true를 반환해요.",
+        "취소를 시작했으므로 반드시 false예요."
+      ],
+      "answer": 0,
+      "explanation": "동시에 이뤄진 인계를 놓치지 않도록 성공으로 처리해요.",
+      "original_prompt": "취소 A단계 중 locked가 참으로 바뀌면 어떻게 처리하는가?",
+      "original_options": [
         "인계를 받은 것으로 보고 true를 반환한다",
         "이미 취소를 시작했으므로 무조건 false를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "취소와 선행 unlock이 경쟁할 수 있습니다. 획득을 관측했다면 소유권을 잃어버리지 않도록 성공으로 처리합니다."
+      "original_explanation": "취소와 선행 unlock이 경쟁할 수 있습니다. 획득을 관측했다면 소유권을 잃어버리지 않도록 성공으로 처리합니다."
     },
     {
-      "prompt": "osq_wait_next에서 node->next를 읽기만 하지 않고 xchg로 NULL로 만드는 이유는?",
+      "prompt": "next를 읽기만 하지 않고 NULL과 교환하는 이유는 무엇인가요?",
       "options": [
+        "C에서는 포인터를 읽을 수 없기 때문이에요.",
+        "뒤 노드 취소와 앞 연결의 소유 관계가 경쟁하기 때문이에요."
+      ],
+      "answer": 1,
+      "explanation": "연결을 가져와야 안정된 뒤 노드에 인계하거나 자신을 우회시킬 수 있어요.",
+      "original_prompt": "osq_wait_next에서 node->next를 읽기만 하지 않고 xchg로 NULL로 만드는 이유는?",
+      "original_options": [
         "포인터 읽기는 C 언어에서 불가능하기 때문에",
         "후속 취소가 이전 연결을 여전히 유효하다고 판단하는 경쟁을 조정하기 위해"
       ],
-      "answer": 1,
-      "explanation": "후속의 A단계와 현재 해제·취소가 같은 연결에 관여합니다. 교환으로 연결을 가져와야 안정된 next를 기준으로 인계 또는 우회를 진행할 수 있습니다."
+      "original_explanation": "후속의 A단계와 현재 해제·취소가 같은 연결에 관여합니다. 교환으로 연결을 가져와야 안정된 next를 기준으로 인계 또는 우회를 진행할 수 있습니다."
     },
     {
-      "prompt": "osq_lock이 true면 실제 mutex도 획득한 것인가?",
+      "prompt": "osq_lock의 true는 실제 mutex도 얻었다는 뜻인가요?",
       "options": [
+        "아니요. 스피너 줄의 차례이고 실제 mutex는 별도예요.",
+        "네. OSQ 상태와 mutex 소유자는 언제나 같아요."
+      ],
+      "answer": 0,
+      "explanation": "OSQ는 수면 잠금 구현의 보조 큐예요.",
+      "original_prompt": "osq_lock이 true면 실제 mutex도 획득한 것인가?",
+      "original_options": [
         "아니다. 낙관적 spinner 큐의 획득이며 실제 mutex 획득은 별도다",
         "그렇다. OSQ는 mutex owner와 동일한 상태다"
       ],
-      "answer": 0,
-      "explanation": "OSQ는 sleeping lock 구현을 위한 보조 큐입니다. 일반 경합 인계의 메모리 순서도 generic MCS와 다르므로 상위 잠금의 데이터 보호 계약을 함께 확인해야 합니다."
+      "original_explanation": "OSQ는 sleeping lock 구현을 위한 보조 큐입니다. 일반 경합 인계의 메모리 순서도 generic MCS와 다르므로 상위 잠금의 데이터 보호 계약을 함께 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "A–B–C가 줄 서 있을 때 B가 취소하는 그림을 그리고, A가 동시에 차례를 넘기면 B가 무엇을 반환하는지 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/percpu.h>\n#include <linux/sched.h>\n#include <linux/osq_lock.h>\n\n/*\n * An MCS like lock especially tailored for optimistic spinning for sleeping\n * lock implementations (mutex, rwsem, etc).\n *\n * Using a single mcs node per CPU is safe because sleeping locks should not be\n * called from interrupt context and we have preemption disabled while\n * spinning.\n */\n\nstruct optimistic_spin_node {\n\tstruct optimistic_spin_node *next, *prev;\n\tint locked; /* 1 if lock acquired */\n\tint cpu; /* encoded CPU # + 1 value */\n};\n\nstatic DEFINE_PER_CPU_SHARED_ALIGNED(struct optimistic_spin_node, osq_node);\n\n/*\n * We use the value 0 to represent \"no CPU\", thus the encoded value\n * will be the CPU number incremented by 1.\n */\nstatic inline int encode_cpu(int cpu_nr)\n{\n\treturn cpu_nr + 1;\n}\n\nstatic inline int node_cpu(struct optimistic_spin_node *node)\n{\n\treturn node->cpu - 1;\n}\n\nstatic inline struct optimistic_spin_node *decode_cpu(int encoded_cpu_val)\n{\n\tint cpu_nr = encoded_cpu_val - 1;\n\n\treturn per_cpu_ptr(&osq_node, cpu_nr);\n}\n\n/*\n * Get a stable @node->next pointer, either for unlock() or unqueue() purposes.\n * Can return NULL in case we were the last queued and we updated @lock instead.\n *\n * If osq_lock() is being cancelled there must be a previous node\n * and 'old_cpu' is its CPU #.\n * For osq_unlock() there is never a previous node and old_cpu is\n * set to OSQ_UNLOCKED_VAL.\n */\nstatic inline struct optimistic_spin_node *\nosq_wait_next(struct optimistic_spin_queue *lock,\n\t      struct optimistic_spin_node *node,\n\t      int old_cpu)\n{\n\tint curr = encode_cpu(smp_processor_id());\n\n\tfor (;;) {\n\t\tif (atomic_read(&lock->tail) == curr &&\n\t\t    atomic_cmpxchg_acquire(&lock->tail, curr, old_cpu) == curr) {\n\t\t\t/*\n\t\t\t * We were the last queued, we moved @lock back. @prev\n\t\t\t * will now observe @lock and will complete its\n\t\t\t * unlock()/unqueue().\n\t\t\t */\n\t\t\treturn NULL;\n\t\t}\n\n\t\t/*\n\t\t * We must xchg() the @node->next value, because if we were to\n\t\t * leave it in, a concurrent unlock()/unqueue() from\n\t\t * @node->next might complete Step-A and think its @prev is\n\t\t * still valid.\n\t\t *\n\t\t * If the concurrent unlock()/unqueue() wins the race, we'll\n\t\t * wait for either @lock to point to us, through its Step-B, or\n\t\t * wait for a new @node->next from its Step-C.\n\t\t */\n\t\tif (node->next) {\n\t\t\tstruct optimistic_spin_node *next;\n\n\t\t\tnext = xchg(&node->next, NULL);\n\t\t\tif (next)\n\t\t\t\treturn next;\n\t\t}\n\n\t\tcpu_relax();\n\t}\n}\n\nbool osq_lock(struct optimistic_spin_queue *lock)\n{\n\tstruct optimistic_spin_node *node = this_cpu_ptr(&osq_node);\n\tstruct optimistic_spin_node *prev, *next;\n\tint curr = encode_cpu(smp_processor_id());\n\tint old;\n\n\tnode->locked = 0;\n\tnode->next = NULL;\n\tnode->cpu = curr;\n\n\t/*\n\t * We need both ACQUIRE (pairs with corresponding RELEASE in\n\t * unlock() uncontended, or fastpath) and RELEASE (to publish\n\t * the node fields we just initialised) semantics when updating\n\t * the lock tail.\n\t */\n\told = atomic_xchg(&lock->tail, curr);\n\tif (old == OSQ_UNLOCKED_VAL)\n\t\treturn true;\n\n\tprev = decode_cpu(old);\n\tnode->prev = prev;\n\n\t/*\n\t * osq_lock()\t\t\tunqueue\n\t *\n\t * node->prev = prev\t\tosq_wait_next()\n\t * WMB\t\t\t\tMB\n\t * prev->next = node\t\tnext->prev = prev // unqueue-C\n\t *\n\t * Here 'node->prev' and 'next->prev' are the same variable and we need\n\t * to ensure these stores happen in-order to avoid corrupting the list.\n\t */\n\tsmp_wmb();\n\n\tWRITE_ONCE(prev->next, node);\n\n\t/*\n\t * Normally @prev is untouchable after the above store; because at that\n\t * moment unlock can proceed and wipe the node element from stack.\n\t *\n\t * However, since our nodes are static per-cpu storage, we're\n\t * guaranteed their existence -- this allows us to apply\n\t * cmpxchg in an attempt to undo our queueing.\n\t */\n\n\t/*\n\t * Wait to acquire the lock or cancellation. Note that need_resched()\n\t * will come with an IPI, which will wake smp_cond_load_relaxed() if it\n\t * is implemented with a monitor-wait. vcpu_is_preempted() relies on\n\t * polling, be careful.\n\t */\n\tif (smp_cond_load_relaxed(&node->locked, VAL || need_resched() ||\n\t\t\t\t  vcpu_is_preempted(node_cpu(node->prev))))\n\t\treturn true;\n\n\t/* unqueue */\n\t/*\n\t * Step - A  -- stabilize @prev\n\t *\n\t * Undo our @prev->next assignment; this will make @prev's\n\t * unlock()/unqueue() wait for a next pointer since @lock points to us\n\t * (or later).\n\t */\n\n\tfor (;;) {\n\t\t/*\n\t\t * cpu_relax() below implies a compiler barrier which would\n\t\t * prevent this comparison being optimized away.\n\t\t */\n\t\tif (data_race(prev->next) == node &&\n\t\t    cmpxchg(&prev->next, node, NULL) == node)\n\t\t\tbreak;\n\n\t\t/*\n\t\t * We can only fail the cmpxchg() racing against an unlock(),\n\t\t * in which case we should observe @node->locked becoming\n\t\t * true.\n\t\t */\n\t\tif (smp_load_acquire(&node->locked))\n\t\t\treturn true;\n\n\t\tcpu_relax();\n\n\t\t/*\n\t\t * Or we race against a concurrent unqueue()'s step-B, in which\n\t\t * case its step-C will write us a new @node->prev pointer.\n\t\t */\n\t\tprev = READ_ONCE(node->prev);\n\t}\n\n\t/*\n\t * Step - B -- stabilize @next\n\t *\n\t * Similar to unlock(), wait for @node->next or move @lock from @node\n\t * back to @prev.\n\t */\n\n\tnext = osq_wait_next(lock, node, prev->cpu);\n\tif (!next)\n\t\treturn false;\n\n\t/*\n\t * Step - C -- unlink\n\t *\n\t * @prev is stable because its still waiting for a new @prev->next\n\t * pointer, @next is stable because our @node->next pointer is NULL and\n\t * it will wait in Step-A.\n\t */\n\n\tWRITE_ONCE(next->prev, prev);\n\tWRITE_ONCE(prev->next, next);\n\n\treturn false;\n}\n\nvoid osq_unlock(struct optimistic_spin_queue *lock)\n{\n\tstruct optimistic_spin_node *node, *next;\n\tint curr = encode_cpu(smp_processor_id());\n\n\t/*\n\t * Fast path for the uncontended case.\n\t */\n\tif (likely(atomic_cmpxchg_release(&lock->tail, curr,\n\t\t\t\t\t  OSQ_UNLOCKED_VAL) == curr))\n\t\treturn;\n\n\t/*\n\t * Second most likely case.\n\t */\n\tnode = this_cpu_ptr(&osq_node);\n\tnext = xchg(&node->next, NULL);\n\tif (next) {\n\t\tWRITE_ONCE(next->locked, 1);\n\t\treturn;\n\t}\n\n\tnext = osq_wait_next(lock, node, OSQ_UNLOCKED_VAL);\n\tif (next)\n\t\tWRITE_ONCE(next->locked, 1);\n}\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/osq_lock.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e550c35d3594a3f1",
+    "path": "kernel/locking/osq_lock.c",
+    "title": "OSQ 구현 전체: 낙관적 스핀 큐의 안전한 취소",
+    "area": "큐 잠금 · 취소 · per-CPU · 포인터 경쟁 · 메모리 순서",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "CPU별 정적 노드로 큐를 만들고 재스케줄이나 선행 vCPU 선점 시 대기를 취소할 수 있는 MCS 계열 구현입니다.",
+    "guide": [
+      "취소할 때 이전 연결을 끊고 다음 노드를 안정화한 뒤 양쪽을 이어야 합니다. 취소를 시작했어도 동시에 인계를 받았다면 획득 성공으로 처리합니다.",
+      "mutex·rwsem의 낙관적 스핀을 직렬화하는 보조 큐로 이해합니다. OSQ 획득이 보호할 실제 mutex까지 획득했다는 뜻은 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0, percpu/sched/osq_lock 포함, 노드와 per-CPU 저장소, CPU encode/node_cpu/decode helper, osq_wait_next, osq_lock의 진입·취소 A/B/C, osq_unlock로 구성됩니다. 별도 동적 할당이나 export 선언은 이 파일에 없습니다."
+      },
+      {
+        "title": "노드 수명과 실행 전제",
+        "text": "노드는 next/prev, locked, 인코딩된 cpu를 갖고 DEFINE_PER_CPU_SHARED_ALIGNED로 CPU마다 하나씩 존재합니다. 주석은 수면 잠금을 IRQ에서 호출하지 않고 스핀 동안 선점이 꺼져 있다는 전제로 단일 CPU 노드 재사용을 정당화합니다. osq_lock 자체에는 preempt_disable 호출이 없으므로 호출 문맥의 계약입니다."
+      },
+      {
+        "title": "CPU 인코딩",
+        "text": "encode_cpu는 CPU번호+1, node_cpu는 저장값-1, decode_cpu는 인코딩값-1의 per_cpu_ptr를 반환합니다.0은 빈 큐를 위한 예약값이므로 decode_cpu(0)를 유효 CPU 해석으로 사용하지 않습니다. tail은 노드 포인터 대신 인코딩된 CPU 번호를 원자 정수로 저장합니다."
+      },
+      {
+        "title": "진입과 꼬리 교환",
+        "text": "osq_lock은 현재 CPU 노드의 locked0,nextNULL,cpu를 초기화한 뒤 atomic_xchg로 tail을 교체합니다. 이전 tail0이면 즉시 true입니다. 주석은 이 교환에 이전 해제와 연결되는 acquire 및 초기화 공개를 위한 release가 필요하다고 설명합니다. 무경합 성공에서 locked를1로 쓰지는 않습니다."
+      },
+      {
+        "title": "선행 노드 연결 순서",
+        "text": "기존 꼬리가 있으면 decode한 prev를 node->prev에 기록하고 smp_wmb 후 WRITE_ONCE(prev->next,node)를 수행합니다. 취소 C단계가 같은 node->prev를 바꾸는 상황에서 저장 순서가 뒤집혀 리스트를 손상하지 않도록 하는 관계입니다. 노드가 정적 per-CPU 저장소라 prev의 메모리가 사라지지 않는 점이 일반 스택 MCS와 다릅니다."
+      },
+      {
+        "title": "스핀 종료와 반환값",
+        "text": "smp_cond_load_relaxed는 locked가 참이거나 need_resched 또는 선행 CPU의 vcpu_is_preempted 조건까지 기다립니다. if에서 사용하는 반환값은 읽은 locked 값이므로 취소 조건 때문에 대기가 끝났다고 자동 true가 되는 것은 아닙니다. locked가 참이면 획득 성공, 거짓이면 unqueue로 진행합니다. 주석은 need_resched의 IPI와 vCPU 선점의 polling 차이도 주의시킵니다."
+      },
+      {
+        "title": "취소 A: 이전 연결 안정화",
+        "text": "prev->next가 자신이면 cmpxchg로 NULL로 바꾸려 합니다. 성공하면 이전 노드의 해제·취소가 새 next를 기다리게 되어 prev를 안정화합니다. 실패 중 smp_load_acquire(locked)가 참이면 이미 인계받았으므로 true입니다. 그렇지 않으면 cpu_relax 후 node->prev를 다시 읽어 선행 노드 취소가 갱신한 prev에 대응합니다."
+      },
+      {
+        "title": "공통 next 확보: 꼬리 되돌리기",
+        "text": "osq_wait_next는 현재 CPU가 tail이고 비교 교환 acquire까지 성공하면 tail을 old_cpu로 바꾸고 NULL을 반환합니다. 취소에서는 old_cpu가 이전 노드의 인코딩 cpu라 큐를 이전 노드로 되돌리고, unlock에서는0이라 큐를 비웁니다. 매개변수 이름만 보고 원시 CPU 번호를 넘기는 것으로 해석하지 않습니다."
+      },
+      {
+        "title": "공통 next 확보: 연결 소유권",
+        "text": "꼬리를 되돌릴 수 없으면 node->next를 xchg로 NULL과 교환해 안정된 next를 확보합니다. 단순 읽기로 남겨두면 후속 노드의 취소 A단계가 아직 이전 연결을 소유한다고 판단할 수 있습니다. 경쟁 취소가 먼저 진행하면 tail이 자신을 가리키거나 새로운 next가 연결될 때까지 cpu_relax로 반복합니다."
+      },
+      {
+        "title": "취소 B와 C",
+        "text": "B단계는 osq_wait_next(lock,node,prev->cpu)를 호출합니다. NULL이면 꼬리 복원이 끝났으므로 false로 종료합니다. next가 있으면 C단계에서 next->prev=prev 다음 prev->next=next를 WRITE_ONCE로 이어 자신을 우회시키고 false입니다. 양쪽 안정화 없이 포인터 두 개만 덮는 단순 삭제가 아닙니다."
+      },
+      {
+        "title": "해제의 세 경로",
+        "text": "osq_unlock은 먼저 tail이 현재 CPU이면 release 비교 교환으로0을 만들고 종료합니다. 실패하면 현재 노드 next를 xchg로 가져와 있으면 next->locked=1을 WRITE_ONCE로 인계합니다. 아직 next가 없으면 osq_wait_next의 old_cpu0 경로로 안정화하고 반환된 후속이 있을 때만 locked를 설정합니다."
+      },
+      {
+        "title": "일반 MCS와 순서 차이",
+        "text": "경합 대기는 relaxed conditional load이고 일반 인계는 WRITE_ONCE입니다. 앞서 본 generic MCS의 acquire 대기·release 플래그 저장과 동일한 코드라고 복사해 설명하면 안 됩니다. OSQ는 수면 잠금의 spinner 제어를 위한 것이며 실제 보호 데이터의 획득·해제 순서는 상위 mutex/rwsem 구현과 함께 판단합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "per-CPU 노드 재사용, 예약값 인코딩, 비교 교환과 포인터 공개 순서, 취소와 성공 인계의 경쟁, doubly linked queue의 안전한 우회, 정적 메모리 수명을 학습합니다. 원본 각 경로를 설명한 수업이며 모든 가상 CPU 선점과 약한 메모리 실행을 실험 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CPU0의 tail 인코딩은?",
+        "options": [
+          "1이다.0은 빈 큐를 뜻한다",
+          "0이다. 빈 큐와 CPU0을 별도 구분하지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "encode_cpu는 cpu_nr+1을 반환하고 decode는1을 뺍니다. 예약값을 확보하기 위해 원시 CPU 번호와 구별합니다."
+      },
+      {
+        "prompt": "need_resched로 조건 대기가 끝났지만 locked가0이면 osq_lock은 곧바로 true인가?",
+        "options": [
+          "그렇다. 조건식 중 하나만 참이면 획득 성공이다",
+          "아니다. 취소 경로에 들어간다"
+        ],
+        "answer": 1,
+        "explanation": "conditional load가 돌려주는 값은 읽은 locked 값입니다. 종료 이유와 획득 여부를 구분해야 합니다."
+      },
+      {
+        "prompt": "취소 A단계 중 locked가 참으로 바뀌면 어떻게 처리하는가?",
+        "options": [
+          "인계를 받은 것으로 보고 true를 반환한다",
+          "이미 취소를 시작했으므로 무조건 false를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "취소와 선행 unlock이 경쟁할 수 있습니다. 획득을 관측했다면 소유권을 잃어버리지 않도록 성공으로 처리합니다."
+      },
+      {
+        "prompt": "osq_wait_next에서 node->next를 읽기만 하지 않고 xchg로 NULL로 만드는 이유는?",
+        "options": [
+          "포인터 읽기는 C 언어에서 불가능하기 때문에",
+          "후속 취소가 이전 연결을 여전히 유효하다고 판단하는 경쟁을 조정하기 위해"
+        ],
+        "answer": 1,
+        "explanation": "후속의 A단계와 현재 해제·취소가 같은 연결에 관여합니다. 교환으로 연결을 가져와야 안정된 next를 기준으로 인계 또는 우회를 진행할 수 있습니다."
+      },
+      {
+        "prompt": "osq_lock이 true면 실제 mutex도 획득한 것인가?",
+        "options": [
+          "아니다. 낙관적 spinner 큐의 획득이며 실제 mutex 획득은 별도다",
+          "그렇다. OSQ는 mutex owner와 동일한 상태다"
+        ],
+        "answer": 0,
+        "explanation": "OSQ는 sleeping lock 구현을 위한 보조 큐입니다. 일반 경합 인계의 메모리 순서도 generic MCS와 다르므로 상위 잠금의 데이터 보호 계약을 함께 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/percpu.h>\n#include <linux/sched.h>\n#include <linux/osq_lock.h>\n\n/*\n * An MCS like lock especially tailored for optimistic spinning for sleeping\n * lock implementations (mutex, rwsem, etc).\n *\n * Using a single mcs node per CPU is safe because sleeping locks should not be\n * called from interrupt context and we have preemption disabled while\n * spinning.\n */\n\nstruct optimistic_spin_node {\n\tstruct optimistic_spin_node *next, *prev;\n\tint locked; /* 1 if lock acquired */\n\tint cpu; /* encoded CPU # + 1 value */\n};\n\nstatic DEFINE_PER_CPU_SHARED_ALIGNED(struct optimistic_spin_node, osq_node);\n\n/*\n * We use the value 0 to represent \"no CPU\", thus the encoded value\n * will be the CPU number incremented by 1.\n */\nstatic inline int encode_cpu(int cpu_nr)\n{\n\treturn cpu_nr + 1;\n}\n\nstatic inline int node_cpu(struct optimistic_spin_node *node)\n{\n\treturn node->cpu - 1;\n}\n\nstatic inline struct optimistic_spin_node *decode_cpu(int encoded_cpu_val)\n{\n\tint cpu_nr = encoded_cpu_val - 1;\n\n\treturn per_cpu_ptr(&osq_node, cpu_nr);\n}\n\n/*\n * Get a stable @node->next pointer, either for unlock() or unqueue() purposes.\n * Can return NULL in case we were the last queued and we updated @lock instead.\n *\n * If osq_lock() is being cancelled there must be a previous node\n * and 'old_cpu' is its CPU #.\n * For osq_unlock() there is never a previous node and old_cpu is\n * set to OSQ_UNLOCKED_VAL.\n */\nstatic inline struct optimistic_spin_node *\nosq_wait_next(struct optimistic_spin_queue *lock,\n\t      struct optimistic_spin_node *node,\n\t      int old_cpu)\n{\n\tint curr = encode_cpu(smp_processor_id());\n\n\tfor (;;) {\n\t\tif (atomic_read(&lock->tail) == curr &&\n\t\t    atomic_cmpxchg_acquire(&lock->tail, curr, old_cpu) == curr) {\n\t\t\t/*\n\t\t\t * We were the last queued, we moved @lock back. @prev\n\t\t\t * will now observe @lock and will complete its\n\t\t\t * unlock()/unqueue().\n\t\t\t */\n\t\t\treturn NULL;\n\t\t}\n\n\t\t/*\n\t\t * We must xchg() the @node->next value, because if we were to\n\t\t * leave it in, a concurrent unlock()/unqueue() from\n\t\t * @node->next might complete Step-A and think its @prev is\n\t\t * still valid.\n\t\t *\n\t\t * If the concurrent unlock()/unqueue() wins the race, we'll\n\t\t * wait for either @lock to point to us, through its Step-B, or\n\t\t * wait for a new @node->next from its Step-C.\n\t\t */\n\t\tif (node->next) {\n\t\t\tstruct optimistic_spin_node *next;\n\n\t\t\tnext = xchg(&node->next, NULL);\n\t\t\tif (next)\n\t\t\t\treturn next;\n\t\t}\n\n\t\tcpu_relax();\n\t}\n}\n\nbool osq_lock(struct optimistic_spin_queue *lock)\n{\n\tstruct optimistic_spin_node *node = this_cpu_ptr(&osq_node);\n\tstruct optimistic_spin_node *prev, *next;\n\tint curr = encode_cpu(smp_processor_id());\n\tint old;\n\n\tnode->locked = 0;\n\tnode->next = NULL;\n\tnode->cpu = curr;\n\n\t/*\n\t * We need both ACQUIRE (pairs with corresponding RELEASE in\n\t * unlock() uncontended, or fastpath) and RELEASE (to publish\n\t * the node fields we just initialised) semantics when updating\n\t * the lock tail.\n\t */\n\told = atomic_xchg(&lock->tail, curr);\n\tif (old == OSQ_UNLOCKED_VAL)\n\t\treturn true;\n\n\tprev = decode_cpu(old);\n\tnode->prev = prev;\n\n\t/*\n\t * osq_lock()\t\t\tunqueue\n\t *\n\t * node->prev = prev\t\tosq_wait_next()\n\t * WMB\t\t\t\tMB\n\t * prev->next = node\t\tnext->prev = prev // unqueue-C\n\t *\n\t * Here 'node->prev' and 'next->prev' are the same variable and we need\n\t * to ensure these stores happen in-order to avoid corrupting the list.\n\t */\n\tsmp_wmb();\n\n\tWRITE_ONCE(prev->next, node);\n\n\t/*\n\t * Normally @prev is untouchable after the above store; because at that\n\t * moment unlock can proceed and wipe the node element from stack.\n\t *\n\t * However, since our nodes are static per-cpu storage, we're\n\t * guaranteed their existence -- this allows us to apply\n\t * cmpxchg in an attempt to undo our queueing.\n\t */\n\n\t/*\n\t * Wait to acquire the lock or cancellation. Note that need_resched()\n\t * will come with an IPI, which will wake smp_cond_load_relaxed() if it\n\t * is implemented with a monitor-wait. vcpu_is_preempted() relies on\n\t * polling, be careful.\n\t */\n\tif (smp_cond_load_relaxed(&node->locked, VAL || need_resched() ||\n\t\t\t\t  vcpu_is_preempted(node_cpu(node->prev))))\n\t\treturn true;\n\n\t/* unqueue */\n\t/*\n\t * Step - A  -- stabilize @prev\n\t *\n\t * Undo our @prev->next assignment; this will make @prev's\n\t * unlock()/unqueue() wait for a next pointer since @lock points to us\n\t * (or later).\n\t */\n\n\tfor (;;) {\n\t\t/*\n\t\t * cpu_relax() below implies a compiler barrier which would\n\t\t * prevent this comparison being optimized away.\n\t\t */\n\t\tif (data_race(prev->next) == node &&\n\t\t    cmpxchg(&prev->next, node, NULL) == node)\n\t\t\tbreak;\n\n\t\t/*\n\t\t * We can only fail the cmpxchg() racing against an unlock(),\n\t\t * in which case we should observe @node->locked becoming\n\t\t * true.\n\t\t */\n\t\tif (smp_load_acquire(&node->locked))\n\t\t\treturn true;\n\n\t\tcpu_relax();\n\n\t\t/*\n\t\t * Or we race against a concurrent unqueue()'s step-B, in which\n\t\t * case its step-C will write us a new @node->prev pointer.\n\t\t */\n\t\tprev = READ_ONCE(node->prev);\n\t}\n\n\t/*\n\t * Step - B -- stabilize @next\n\t *\n\t * Similar to unlock(), wait for @node->next or move @lock from @node\n\t * back to @prev.\n\t */\n\n\tnext = osq_wait_next(lock, node, prev->cpu);\n\tif (!next)\n\t\treturn false;\n\n\t/*\n\t * Step - C -- unlink\n\t *\n\t * @prev is stable because its still waiting for a new @prev->next\n\t * pointer, @next is stable because our @node->next pointer is NULL and\n\t * it will wait in Step-A.\n\t */\n\n\tWRITE_ONCE(next->prev, prev);\n\tWRITE_ONCE(prev->next, next);\n\n\treturn false;\n}\n\nvoid osq_unlock(struct optimistic_spin_queue *lock)\n{\n\tstruct optimistic_spin_node *node, *next;\n\tint curr = encode_cpu(smp_processor_id());\n\n\t/*\n\t * Fast path for the uncontended case.\n\t */\n\tif (likely(atomic_cmpxchg_release(&lock->tail, curr,\n\t\t\t\t\t  OSQ_UNLOCKED_VAL) == curr))\n\t\treturn;\n\n\t/*\n\t * Second most likely case.\n\t */\n\tnode = this_cpu_ptr(&osq_node);\n\tnext = xchg(&node->next, NULL);\n\tif (next) {\n\t\tWRITE_ONCE(next->locked, 1);\n\t\treturn;\n\t}\n\n\tnext = osq_wait_next(lock, node, OSQ_UNLOCKED_VAL);\n\tif (next)\n\t\tWRITE_ONCE(next->locked, 1);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b9785598693519849831ea96bbff8136bb7fabe69aed99ac65e63c0991f6b324",
+      "scope": "whole-file",
+      "line_count": 235,
+      "authoring_source": "course/file_units/osq_implementation.py",
+      "sections": [
+        "전체 구성",
+        "노드 수명과 실행 전제",
+        "CPU 인코딩",
+        "진입과 꼬리 교환",
+        "선행 노드 연결 순서",
+        "스핀 종료와 반환값",
+        "취소 A: 이전 연결 안정화",
+        "공통 next 확보: 꼬리 되돌리기",
+        "공통 next 확보: 연결 소유권",
+        "취소 B와 C",
+        "해제의 세 경로",
+        "일반 MCS와 순서 차이",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/osq_lock.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "줄을 서다가 빠지려는 순간 앞사람이 차례를 넘겨줄 수도 있어요. 그냥 빠졌다고 말하면 받은 차례가 사라지므로 두 상황을 구별해야 해요.",
+    "meaning": "OSQ는 실제 mutex를 기다리며 잠깐 돌고 있는 실행들의 순서를 정하는 보조 줄이에요. 취소와 차례 인계가 겹치는 경우까지 다뤄요.",
+    "exercise": "A–B–C가 줄 서 있을 때 B가 취소하는 그림을 그리고, A가 동시에 차례를 넘기면 B가 무엇을 반환하는지 적어 보세요."
+  },
+  "goal": "OSQ는 실제 mutex를 기다리며 잠깐 돌고 있는 실행들의 순서를 정하는 보조 줄이에요. 취소와 차례 인계가 겹치는 경우까지 다뤄요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "A–B–C가 줄 서 있을 때 B가 취소하는 그림을 그리고, A가 동시에 차례를 넘기면 B가 무엇을 반환하는지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "b99b06c15d7af856ab4d1031a0dbac46707add8368ea355f0f1ea39155752940",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

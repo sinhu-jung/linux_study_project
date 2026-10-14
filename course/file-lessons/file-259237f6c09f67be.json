@@ -5,92 +5,112 @@
   "area": "메타데이터 간접화 · 비트 연산 · 원자적 상태 전이 · 자원 수명 · folio",
   "track": "files",
   "kind": "kernel",
-  "intro": "page flags 공간이 부족한 구성에서 folio의 young·idle 상태를 page_ext 비트로 읽고 갱신하는 여섯 함수를 해설합니다.",
+  "intro": "비트를 읽기만 하는 함수와 읽으며 지우는 함수를 구별해요. false는 비트가 0인 경우뿐 아니라 확장 정보를 얻지 못한 경우도 뜻해요.",
   "guide": [
-    "상태 조회와 원자적 test-and-clear를 구분하고, 외부 메타데이터 접근의 획득·해제 및 실패 경로를 대응시킵니다.",
-    "메모리 접근 추적 기능이 아키텍처의 비트 공간 제약을 처리하는 방식을 이해합니다."
+    "folio는 한 개 이상의 기본 페이지를 묶어 다루는 메모리 단위예요. 이 helper는 &folio->page에 대응하는 확장 정보를 얻어요.",
+    "test_and_clear_bit는 이전 비트를 확인하고 지우기를 하나의 원자적 연산으로 해요. 별도 읽기 후 나중 지우기와 달라요.",
+    "young과 idle은 소프트웨어가 관리하는 상태 표시예요. 이름만 보고 언제나 서로 반대값이라고 생각하면 안 돼요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성 조건",
-      "text": "GPL-2.0과 guard 뒤에 bitops.h, page-flags.h, page_ext.h를 포함합니다. 여섯 inline 함수는 PAGE_IDLE_FLAG가 정의되어 있고 64BIT가 정의되지 않았을 때만 제공됩니다. 다른 구성에 대한 else stub은 이 파일에 없습니다. 주석은 Idle과 Young 비트를 page flags에 넣을 공간이 부족하므로 확장 플래그를 쓴다고 설명합니다."
+      "title": "정의되는 설정",
+      "text": "bitops, page-flags, page_ext를 포함하고 PAGE_IDLE_FLAG가 있으며 64BIT는 아닐 때 여섯 함수를 정의해요. 페이지 flags에 비트 공간이 부족해 확장 flags를 쓰는 이유가 주석에 있어요. 다른 구성용 else stub은 이 파일에 없어요."
     },
     {
-      "title": "접근 단위와 수명",
-      "text": "각 함수는 &folio->page로 page_ext_get을 호출합니다. folio 전체의 각 하위 페이지를 순회하는 반복문은 없습니다. 얻은 page_ext가 NULL이면 즉시 반환하며, 성공하면 page_ext->flags의 비트에 접근한 뒤 반드시 page_ext_put을 호출합니다. 이 헤더만으로 get이 메타데이터를 새로 할당한다거나 참조 카운터 하나만 증가시킨다고 단정할 수 없습니다. 보호 방식의 구현은 별도로 읽어야 합니다."
+      "title": "접근을 얻고 돌려주기",
+      "text": "각 함수는 &folio->page로 page_ext_get을 불러요. folio의 모든 하위 페이지를 순회하지는 않아요. NULL이면 바로 끝내고 성공하면 flags에 접근한 뒤 반드시 put해요. 이름만 보고 새 할당이나 단순 참조 수 증가라고 단정하지 말고 보호 방식은 구현을 읽어야 해요."
     },
     {
-      "title": "Young 조회와 설정",
-      "text": "folio_test_young은 PAGE_EXT_YOUNG를 test_bit하고 bool 지역 변수에 저장한 뒤 put하여 반환합니다. folio_set_young은 같은 비트를 set_bit한 뒤 put합니다. 전자는 조회만 하며 비트를 지우지 않습니다. 후자는 void이고 page_ext를 얻지 못하면 오류 코드를 보고하지 않은 채 아무 동작 없이 끝납니다."
+      "title": "young 읽기와 설정",
+      "text": "test_young은 test_bit 결과를 bool에 저장하고 put 뒤 반환해요. 읽기만 하고 지우지 않아요. set_young은 같은 비트를 set_bit로 설정하고 put해요. void 함수라 확장 정보가 없으면 오류 번호 없이 아무 일도 하지 않고 끝나요."
     },
     {
-      "title": "조회하면서 지우기",
-      "text": "folio_test_clear_young은 test_and_clear_bit의 이전 상태를 bool로 저장하고 put한 뒤 반환합니다. 상태를 읽고 나중에 별개의 clear_bit를 호출하는 두 동작과 다릅니다. 비트 자체의 원자적 read-modify-write를 통해 이전 값을 반환하고 지웁니다. 그러나 다른 CPU가 이후 다시 set할 수 있으므로 함수 반환 시점부터 계속 0이 유지된다는 보장은 아닙니다."
+      "title": "읽으며 지우기",
+      "text": "test_clear_young은 test_and_clear_bit의 이전 상태를 bool로 받아 put 후 반환해요. 읽기와 지우기를 따로 호출하는 두 단계가 아니라 비트 자체의 원자적 변경이에요. 그 뒤 다른 CPU가 다시 설정할 수 있으므로 반환 후 계속 0이라는 보장은 아니에요."
     },
     {
-      "title": "Idle의 세 함수",
-      "text": "folio_test_idle은 PAGE_EXT_IDLE를 읽어 bool로 반환합니다. folio_set_idle은 그 비트를 설정하고 folio_clear_idle은 지웁니다. clear는 이전 값을 반환하지 않습니다. 세 함수 모두 young과 같은 get/NULL 확인/비트 접근/put 패턴입니다. idle 조작이 young 비트를 함께 수정하거나 실제 페이지 테이블 accessed 비트를 직접 지우는 코드는 없습니다."
+      "title": "idle의 세 동작",
+      "text": "test_idle은 PAGE_EXT_IDLE을 읽고 set_idle은 설정하며 clear_idle은 지워요. clear는 이전 값을 반환하지 않아요. 모두 get, NULL 확인, 비트 작업, put 순서예요. idle 조작이 young도 바꾸거나 실제 페이지 테이블의 접근 표시를 직접 지우는 코드는 없어요."
     },
     {
-      "title": "정보 없음과 false",
-      "text": "young 조회, young test-clear, idle 조회는 page_ext가 없으면 false입니다. 따라서 false만으로 메타데이터가 존재하고 해당 비트가 확실히 0이었다고 구분할 수 없습니다. setter/clearer 역시 NULL일 때 조용히 돌아옵니다. unlikely는 실패 분기에 대한 예상 힌트이며 NULL 경로를 불가능하게 만들지 않습니다."
+      "title": "false에 담긴 두 경우",
+      "text": "young 조회·test-clear와 idle 조회는 확장 정보가 없을 때도 false예요. 결과만 보고 공간이 있었고 비트가 확실히 0이었다고 구별할 수 없어요. 설정·지우기도 NULL이면 조용히 끝나요. unlikely는 흔하지 않을 경로라는 힌트이지 실패가 불가능하다는 뜻은 아니에요."
     },
     {
       "title": "관측과 정책의 경계",
-      "text": "이 헤더의 helper들은 소프트웨어 메타데이터만 다룹니다. 실제 메모리 접근을 감지하거나 페이지 테이블을 순회하고 working set 크기를 계산하는 알고리즘은 들어 있지 않습니다. young과 idle이라는 이름만으로 둘이 항상 논리적 부정 관계라고 추정해서도 안 됩니다. 본문에는 두 비트를 함께 갱신하는 코드가 없습니다."
+      "text": "이 helper들은 소프트웨어 메타데이터만 만져요. 실제 접근 감지, 페이지 테이블 순회, 자주 쓰는 메모리 집합 크기 계산 알고리즘은 없어요. 두 비트를 함께 갱신하지 않으므로 young과 idle의 추가 관계를 함수 이름만으로 만들지 마세요."
     },
     {
-      "title": "CS 연결",
-      "text": "부족한 인라인 비트를 외부 메타데이터로 옮기는 공간·간접 접근의 절충, 성공과 실패 경로의 자원 대응, 원자적 비트 상태 전이와 장기 불변식의 차이를 학습합니다. 원본 및 데이터 구조 검증은 동시 실행이나 실제 페이지 idle 추적의 하드웨어 시험을 대신하지 않습니다."
+      "title": "학습과 검증 범위",
+      "text": "공간이 부족한 표시를 외부로 옮기는 절충, 성공 시 get/put 대응, 한 번의 원자적 변화와 오래 유지되는 조건의 차이를 읽었어요. 원문 대조는 여러 CPU의 실제 경쟁이나 하드웨어 idle 추적 실험과 달라요."
     }
   ],
   "questions": [
     {
-      "prompt": "이 파일의 여섯 helper가 정의되는 구성은?",
+      "prompt": "여섯 함수가 정의되는 조건은 무엇인가요?",
       "options": [
+        "PAGE_IDLE_FLAG가 있고 64BIT가 아닌 구성이에요.",
+        "PAGE_IDLE_FLAG가 있는 모든 64비트 구성이에요."
+      ],
+      "answer": 0,
+      "explanation": "조건은 기능 켜짐과 64비트 아님의 AND예요.",
+      "original_prompt": "이 파일의 여섯 helper가 정의되는 구성은?",
+      "original_options": [
         "PAGE_IDLE_FLAG가 켜지고 64BIT가 아닌 구성이다",
         "PAGE_IDLE_FLAG가 켜진 모든 64비트 구성이다"
       ],
-      "answer": 0,
-      "explanation": "전처리 조건은 PAGE_IDLE_FLAG && !64BIT입니다. 다른 구성의 구현을 이 파일의 빈 else 함수로 설명하면 틀립니다."
+      "original_explanation": "전처리 조건은 PAGE_IDLE_FLAG && !64BIT입니다. 다른 구성의 구현을 이 파일의 빈 else 함수로 설명하면 틀립니다."
     },
     {
-      "prompt": "folio_test_clear_young이 true를 반환하면 무엇을 의미하는가?",
+      "prompt": "test_clear_young의 true는 무엇을 뜻하나요?",
       "options": [
+        "이후 어떤 CPU도 다시 설정할 수 없어요.",
+        "그 원자 연산이 본 이전 young 비트가 1이었어요."
+      ],
+      "answer": 1,
+      "explanation": "이전 상태를 알려 주는 것이지 이후 설정을 금지하는 잠금은 아니에요.",
+      "original_prompt": "folio_test_clear_young이 true를 반환하면 무엇을 의미하는가?",
+      "original_options": [
         "이후 어떤 CPU도 young 비트를 다시 설정할 수 없다",
         "test_and_clear_bit가 관측한 이전 young 비트가 설정되어 있었다"
       ],
-      "answer": 1,
-      "explanation": "원자적인 조회·지우기는 그 연산의 이전 상태를 돌려줍니다. 다른 실행 주체의 뒤이은 설정을 금지하는 잠금 정책은 아닙니다."
+      "original_explanation": "원자적인 조회·지우기는 그 연산의 이전 상태를 돌려줍니다. 다른 실행 주체의 뒤이은 설정을 금지하는 잠금 정책은 아닙니다."
     },
     {
-      "prompt": "folio_test_idle의 false 결과로 page_ext가 존재했음을 알 수 있는가?",
+      "prompt": "test_idle의 false만 보고 확장 정보가 있었다고 알 수 있나요?",
       "options": [
+        "아니요. 얻기 실패도 false예요.",
+        "네. 실패하면 음수 오류예요."
+      ],
+      "answer": 0,
+      "explanation": "bool 반환은 두 경우를 구별하지 않아요.",
+      "original_prompt": "folio_test_idle의 false 결과로 page_ext가 존재했음을 알 수 있는가?",
+      "original_options": [
         "아니다. page_ext_get 실패도 false로 반환한다",
         "그렇다. 실패하면 음수 오류를 반환한다"
       ],
-      "answer": 0,
-      "explanation": "반환형은 bool이고 NULL 경로에서 false를 반환합니다. 상태 비트 0과 메타데이터를 얻지 못한 경우를 결과만으로 구분할 수 없습니다."
+      "original_explanation": "반환형은 bool이고 NULL 경로에서 false를 반환합니다. 상태 비트 0과 메타데이터를 얻지 못한 경우를 결과만으로 구분할 수 없습니다."
     },
     {
-      "prompt": "folio_set_idle은 young도 지우는가?",
+      "prompt": "set_idle이 young도 지우나요?",
       "options": [
+        "네. 두 비트는 항상 반대로 유지해요.",
+        "아니요. idle 비트만 설정해요."
+      ],
+      "answer": 1,
+      "explanation": "본문에 없는 상태 정책을 덧붙이면 안 돼요.",
+      "original_prompt": "folio_set_idle은 young도 지우는가?",
+      "original_options": [
         "그렇다. 두 비트를 항상 반대 값으로 유지한다",
         "아니다. PAGE_EXT_IDLE 비트만 설정한다"
       ],
-      "answer": 1,
-      "explanation": "본문은 set_bit(PAGE_EXT_IDLE, ...)과 접근 수명 처리뿐입니다. 서로 다른 두 메타데이터 비트 사이의 추가 정책을 이름만으로 추정하면 안 됩니다."
+      "original_explanation": "본문은 set_bit(PAGE_EXT_IDLE, ...)과 접근 수명 처리뿐입니다. 서로 다른 두 메타데이터 비트 사이의 추가 정책을 이름만으로 추정하면 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "young 비트가 1일 때 test와 test_clear를 각각 부르면 이전 값과 남은 값이 어떻게 다른지 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_MM_PAGE_IDLE_H\n#define _LINUX_MM_PAGE_IDLE_H\n\n#include <linux/bitops.h>\n#include <linux/page-flags.h>\n#include <linux/page_ext.h>\n\n#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)\n/*\n * If there is not enough space to store Idle and Young bits in page flags, use\n * page ext flags instead.\n */\nstatic inline bool folio_test_young(const struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_young;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_young = test_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_young;\n}\n\nstatic inline void folio_set_young(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tset_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n\nstatic inline bool folio_test_clear_young(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_young;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_young = test_and_clear_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_young;\n}\n\nstatic inline bool folio_test_idle(const struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_idle;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_idle = test_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_idle;\n}\n\nstatic inline void folio_set_idle(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tset_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n\nstatic inline void folio_clear_idle(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tclear_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n#endif /* CONFIG_PAGE_IDLE_FLAG && !64BIT */\n#endif /* _LINUX_MM_PAGE_IDLE_H */\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/page_idle.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-259237f6c09f67be",
+    "path": "include/linux/page_idle.h",
+    "title": "32비트 페이지 idle 추적: 확장 메타데이터 접근",
+    "area": "메타데이터 간접화 · 비트 연산 · 원자적 상태 전이 · 자원 수명 · folio",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "page flags 공간이 부족한 구성에서 folio의 young·idle 상태를 page_ext 비트로 읽고 갱신하는 여섯 함수를 해설합니다.",
+    "guide": [
+      "상태 조회와 원자적 test-and-clear를 구분하고, 외부 메타데이터 접근의 획득·해제 및 실패 경로를 대응시킵니다.",
+      "메모리 접근 추적 기능이 아키텍처의 비트 공간 제약을 처리하는 방식을 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성 조건",
+        "text": "GPL-2.0과 guard 뒤에 bitops.h, page-flags.h, page_ext.h를 포함합니다. 여섯 inline 함수는 PAGE_IDLE_FLAG가 정의되어 있고 64BIT가 정의되지 않았을 때만 제공됩니다. 다른 구성에 대한 else stub은 이 파일에 없습니다. 주석은 Idle과 Young 비트를 page flags에 넣을 공간이 부족하므로 확장 플래그를 쓴다고 설명합니다."
+      },
+      {
+        "title": "접근 단위와 수명",
+        "text": "각 함수는 &folio->page로 page_ext_get을 호출합니다. folio 전체의 각 하위 페이지를 순회하는 반복문은 없습니다. 얻은 page_ext가 NULL이면 즉시 반환하며, 성공하면 page_ext->flags의 비트에 접근한 뒤 반드시 page_ext_put을 호출합니다. 이 헤더만으로 get이 메타데이터를 새로 할당한다거나 참조 카운터 하나만 증가시킨다고 단정할 수 없습니다. 보호 방식의 구현은 별도로 읽어야 합니다."
+      },
+      {
+        "title": "Young 조회와 설정",
+        "text": "folio_test_young은 PAGE_EXT_YOUNG를 test_bit하고 bool 지역 변수에 저장한 뒤 put하여 반환합니다. folio_set_young은 같은 비트를 set_bit한 뒤 put합니다. 전자는 조회만 하며 비트를 지우지 않습니다. 후자는 void이고 page_ext를 얻지 못하면 오류 코드를 보고하지 않은 채 아무 동작 없이 끝납니다."
+      },
+      {
+        "title": "조회하면서 지우기",
+        "text": "folio_test_clear_young은 test_and_clear_bit의 이전 상태를 bool로 저장하고 put한 뒤 반환합니다. 상태를 읽고 나중에 별개의 clear_bit를 호출하는 두 동작과 다릅니다. 비트 자체의 원자적 read-modify-write를 통해 이전 값을 반환하고 지웁니다. 그러나 다른 CPU가 이후 다시 set할 수 있으므로 함수 반환 시점부터 계속 0이 유지된다는 보장은 아닙니다."
+      },
+      {
+        "title": "Idle의 세 함수",
+        "text": "folio_test_idle은 PAGE_EXT_IDLE를 읽어 bool로 반환합니다. folio_set_idle은 그 비트를 설정하고 folio_clear_idle은 지웁니다. clear는 이전 값을 반환하지 않습니다. 세 함수 모두 young과 같은 get/NULL 확인/비트 접근/put 패턴입니다. idle 조작이 young 비트를 함께 수정하거나 실제 페이지 테이블 accessed 비트를 직접 지우는 코드는 없습니다."
+      },
+      {
+        "title": "정보 없음과 false",
+        "text": "young 조회, young test-clear, idle 조회는 page_ext가 없으면 false입니다. 따라서 false만으로 메타데이터가 존재하고 해당 비트가 확실히 0이었다고 구분할 수 없습니다. setter/clearer 역시 NULL일 때 조용히 돌아옵니다. unlikely는 실패 분기에 대한 예상 힌트이며 NULL 경로를 불가능하게 만들지 않습니다."
+      },
+      {
+        "title": "관측과 정책의 경계",
+        "text": "이 헤더의 helper들은 소프트웨어 메타데이터만 다룹니다. 실제 메모리 접근을 감지하거나 페이지 테이블을 순회하고 working set 크기를 계산하는 알고리즘은 들어 있지 않습니다. young과 idle이라는 이름만으로 둘이 항상 논리적 부정 관계라고 추정해서도 안 됩니다. 본문에는 두 비트를 함께 갱신하는 코드가 없습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "부족한 인라인 비트를 외부 메타데이터로 옮기는 공간·간접 접근의 절충, 성공과 실패 경로의 자원 대응, 원자적 비트 상태 전이와 장기 불변식의 차이를 학습합니다. 원본 및 데이터 구조 검증은 동시 실행이나 실제 페이지 idle 추적의 하드웨어 시험을 대신하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 파일의 여섯 helper가 정의되는 구성은?",
+        "options": [
+          "PAGE_IDLE_FLAG가 켜지고 64BIT가 아닌 구성이다",
+          "PAGE_IDLE_FLAG가 켜진 모든 64비트 구성이다"
+        ],
+        "answer": 0,
+        "explanation": "전처리 조건은 PAGE_IDLE_FLAG && !64BIT입니다. 다른 구성의 구현을 이 파일의 빈 else 함수로 설명하면 틀립니다."
+      },
+      {
+        "prompt": "folio_test_clear_young이 true를 반환하면 무엇을 의미하는가?",
+        "options": [
+          "이후 어떤 CPU도 young 비트를 다시 설정할 수 없다",
+          "test_and_clear_bit가 관측한 이전 young 비트가 설정되어 있었다"
+        ],
+        "answer": 1,
+        "explanation": "원자적인 조회·지우기는 그 연산의 이전 상태를 돌려줍니다. 다른 실행 주체의 뒤이은 설정을 금지하는 잠금 정책은 아닙니다."
+      },
+      {
+        "prompt": "folio_test_idle의 false 결과로 page_ext가 존재했음을 알 수 있는가?",
+        "options": [
+          "아니다. page_ext_get 실패도 false로 반환한다",
+          "그렇다. 실패하면 음수 오류를 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "반환형은 bool이고 NULL 경로에서 false를 반환합니다. 상태 비트 0과 메타데이터를 얻지 못한 경우를 결과만으로 구분할 수 없습니다."
+      },
+      {
+        "prompt": "folio_set_idle은 young도 지우는가?",
+        "options": [
+          "그렇다. 두 비트를 항상 반대 값으로 유지한다",
+          "아니다. PAGE_EXT_IDLE 비트만 설정한다"
+        ],
+        "answer": 1,
+        "explanation": "본문은 set_bit(PAGE_EXT_IDLE, ...)과 접근 수명 처리뿐입니다. 서로 다른 두 메타데이터 비트 사이의 추가 정책을 이름만으로 추정하면 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_MM_PAGE_IDLE_H\n#define _LINUX_MM_PAGE_IDLE_H\n\n#include <linux/bitops.h>\n#include <linux/page-flags.h>\n#include <linux/page_ext.h>\n\n#if defined(CONFIG_PAGE_IDLE_FLAG) && !defined(CONFIG_64BIT)\n/*\n * If there is not enough space to store Idle and Young bits in page flags, use\n * page ext flags instead.\n */\nstatic inline bool folio_test_young(const struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_young;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_young = test_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_young;\n}\n\nstatic inline void folio_set_young(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tset_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n\nstatic inline bool folio_test_clear_young(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_young;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_young = test_and_clear_bit(PAGE_EXT_YOUNG, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_young;\n}\n\nstatic inline bool folio_test_idle(const struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\tbool page_idle;\n\n\tif (unlikely(!page_ext))\n\t\treturn false;\n\n\tpage_idle = test_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n\n\treturn page_idle;\n}\n\nstatic inline void folio_set_idle(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tset_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n\nstatic inline void folio_clear_idle(struct folio *folio)\n{\n\tstruct page_ext *page_ext = page_ext_get(&folio->page);\n\n\tif (unlikely(!page_ext))\n\t\treturn;\n\n\tclear_bit(PAGE_EXT_IDLE, &page_ext->flags);\n\tpage_ext_put(page_ext);\n}\n#endif /* CONFIG_PAGE_IDLE_FLAG && !64BIT */\n#endif /* _LINUX_MM_PAGE_IDLE_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a8ff7aac8905e1b2337c39ec1015e04e224c3a75df5690e3a72146207d93fe1a",
+      "scope": "whole-file",
+      "line_count": 89,
+      "authoring_source": "course/file_units/pageblock_and_idle.py",
+      "sections": [
+        "전체 구성 조건",
+        "접근 단위와 수명",
+        "Young 조회와 설정",
+        "조회하면서 지우기",
+        "Idle의 세 함수",
+        "정보 없음과 false",
+        "관측과 정책의 경계",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/page_idle.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "작은 이름표에 표시할 칸이 모자라면 별도 기록지에 적을 수 있어요. 이 함수들은 페이지의 young·idle 표시를 확장 정보에 두어요.",
+    "meaning": "비트를 읽기만 하는 함수와 읽으며 지우는 함수를 구별해요. false는 비트가 0인 경우뿐 아니라 확장 정보를 얻지 못한 경우도 뜻해요.",
+    "exercise": "young 비트가 1일 때 test와 test_clear를 각각 부르면 이전 값과 남은 값이 어떻게 다른지 적어 보세요."
+  },
+  "goal": "비트를 읽기만 하는 함수와 읽으며 지우는 함수를 구별해요. false는 비트가 0인 경우뿐 아니라 확장 정보를 얻지 못한 경우도 뜻해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "young 비트가 1일 때 test와 test_clear를 각각 부르면 이전 값과 남은 값이 어떻게 다른지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "52df6a2b2b56ba6fbb0088b5f98fed888b41195709b376fdf7e244a77081a9aa",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

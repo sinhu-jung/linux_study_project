@@ -5,92 +5,112 @@
   "area": "KUnit 자원 · 함수 대역 · refcount · 오류 경로",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 함수 주소를 KUnit 자원으로 관리하는 전체 구현과 오류 경로를 분석합니다.",
+  "intro": "대역 등록의 자원 식별·참조 정리와 NULL 분기의 실제 동작을 이해합니다.",
   "guide": [
-    "테스트 대역 등록도 객체 수명과 식별 규칙이 필요하며 주석의 의도보다 실제 인수 전달이 동작을 결정합니다.",
-    "resource callback, 포인터 식별, 참조 획득·반환, 실패 경로 분석을 학습합니다."
+    "대역 기록은 실제 함수 주소와 대신 부를 함수 주소 두 개를 저장합니다. 이 기록을 해제하는 것과 함수 실행 코드를 없애는 것은 다릅니다.",
+    "검색으로 얻은 자원에는 추가 참조가 있습니다. 필요한 주소값을 복사한 뒤 그 참조를 put하고 주소만 반환합니다.",
+    "원문 NULL 대역 분기는 의도한 주석과 실제 인수가 다릅니다. 코드를 임의로 고치지 않고 NULL assertion으로 이어지는 사실을 설명합니다."
   ],
   "deep_dive": [
     {
-      "title": "자료형과 free callback",
-      "text": "GPL-2.0 파일은 test,static_stub,내부 hooks-impl을 포함합니다. kunit_static_stub_ctx는 real_fn_addr와 replacement_addr 두 void *를 보관합니다. free callback은 res->data를 kfree합니다. 이 callback 자체가 함수의 실행 코드나 원래 함수 객체를 해제하는 것은 아닙니다."
+      "title": "두 함수 주소를 담는 자료",
+      "text": "GPL-2.0 파일은 test, static_stub와 hooks-impl 헤더를 포함합니다. context는 real_fn_addr와 replacement_addr 두 주소를 보관합니다. 정리 함수는 res->data를 kfree하여 기록만 없앱니다. 원래 함수나 대역의 실행 코드 자체를 해제하는 것은 아닙니다."
     },
     {
-      "title": "자원 종류와 주소 매칭",
-      "text": "match callback은 먼저 res->free가 static stub free callback과 같은지 확인하고 아니면 false입니다. 같은 종류일 때만 ctx->real_fn_addr와 요청 주소를 비교합니다. res->data를 ctx 변수에 넣는 것과 필드를 역참조하는 시점을 구분해야 합니다. test 인수는 본문에서 사용하지 않습니다. 별도 enum type tag 대신 free callback 동일성을 자원 종류 검사로 사용합니다."
+      "title": "자원 종류부터 확인",
+      "text": "비교 함수는 res->data를 context 포인터 변수에 담지만 먼저 res->free가 대역 전용 정리 함수인지 확인합니다. 다른 종류면 false이고 같은 종류일 때만 실제 함수 주소 필드를 읽어 비교합니다. 주소 대입과 필드 접근은 다른 순간입니다. 별도 종류 번호 대신 정리 함수 포인터를 식별 표지로 쓰며 test 인수는 사용하지 않습니다."
     },
     {
-      "title": "대체 주소 조회",
-      "text": "__kunit_get_static_stub_address_impl은 kunit_find_resource로 같은 real 주소의 자원을 찾고 없으면 NULL입니다. 있으면 replacement 주소를 로컬 변수로 복사한 뒤 kunit_put_resource로 찾기에서 얻은 참조를 놓고 주소값을 반환합니다. 자원 포인터 자체를 호출자에게 새 소유권으로 넘기는 함수가 아닙니다."
+      "title": "대역 주소 조회와 반납",
+      "text": "lookup은 같은 실제 주소의 자원을 찾고 없으면 NULL입니다. 찾으면 replacement 주소값을 지역 변수에 복사한 후 검색 참조를 put하여 반납하고 그 주소값만 반환합니다. 호출자에게 자원 상자의 소유 참조를 넘기는 함수가 아닙니다."
     },
     {
-      "title": "명시적 해제",
-      "text": "kunit_deactivate_static_stub는 real_fn_addr가 NULL이 아닌지 assertion하고 자원을 찾습니다. 없는 등록도 assertion 실패입니다. 찾은 경우 kunit_remove_resource로 테스트 자원 목록에서 제거하고 kunit_put_resource로 조회 참조를 놓습니다. 주석의 두 참조 반환은 remove의 소유권 처리와 별도 put을 함께 의미하며 코드에 put 호출이 두 줄 연속 있는 것은 아닙니다. 이 함수는 GPL export됩니다."
+      "title": "명시적으로 등록 끄기",
+      "text": "deactivate는 실제 주소가 NULL이 아니고 해당 등록도 존재하는지 ASSERT합니다. 찾으면 목록에서 remove하고 검색 참조를 put합니다. 주석의 두 참조 반납은 remove가 처리하는 목록 참조와 별도 put의 검색 참조를 합친 뜻입니다. put 문장 두 개가 연달아 있는 것은 아닙니다. 함수는 GPL로 공개됩니다."
     },
     {
-      "title": "활성화의 NULL 경로 불일치",
-      "text": "__kunit_activate_static_stub는 real 주소를 먼저 NULL 검사합니다. replacement가 NULL이면 주석은 해제를 의도하지만 실제 호출은 kunit_deactivate_static_stub(test,replacement_addr)입니다. 따라서 NULL을 전달해 해제 함수의 NULL assertion에 도달합니다. real_fn_addr로 정상 해제된다고 설명하면 원본과 다릅니다. 이 코드를 학습하기 위해 임의로 수정하지 않으며 제어 흐름 대조 결과를 명시합니다."
+      "title": "NULL 대역에서 주석과 다른 인수",
+      "text": "내부 activate는 실제 주소가 NULL이 아닌지 먼저 확인합니다. 대역이 NULL이면 주석은 해제를 말하지만 호출은 deactivate(test, replacement_addr)입니다. 실제 주소 대신 NULL을 전달하여 해제 함수의 NULL 필수 검사에 도달합니다. 원래 함수의 등록을 정상 해제한다고 바꿔 설명하면 원문과 다릅니다. 이 학습 작업은 실행 코드를 수정하지 않습니다."
     },
     {
-      "title": "기존 등록 갱신",
-      "text": "replacement가 non-NULL이면 기존 real 주소의 자원을 조회합니다. 있으면 ctx->replacement_addr만 새 값으로 바꾸고 조회 참조를 put합니다. 새 ctx를 항상 추가해 같은 real 주소의 등록을 계속 쌓는 구조가 아닙니다. 이 파일 자체에는 갱신을 둘러싼 별도 explicit lock이 없으므로 임의 다중 task 갱신의 안전성을 이 본문만으로 보장하지 않습니다."
+      "title": "이미 있는 등록 바꾸기",
+      "text": "대역이 NULL이 아니면 같은 실제 주소의 자원을 찾습니다. 있으면 replacement_addr 필드만 새 주소로 바꾸고 검색 참조를 put합니다. 매번 새 기록을 쌓는 방식이 아닙니다. 이 갱신을 둘러싼 별도 명시적 잠금은 없으므로 임의의 여러 작업이 동시에 갱신해도 안전하다고 이 파일만으로 보장하지 않습니다."
     },
     {
-      "title": "신규 등록",
-      "text": "없으면 GFP_KERNEL로 ctx를 kmalloc하고 NOT_ERR_OR_NULL assertion 뒤 두 주소를 저장합니다. kunit_alloc_resource에는 init callback NULL,static stub free callback,GFP_KERNEL,ctx를 넘깁니다. 반환 res를 이 분기에서 별도 검사하는 코드가 없으므로 모든 자원 등록 실패를 여기서 반드시 검출한다고 단정하지 않습니다. 내부 helper도 GPL export되며 문서는 타입 검사를 위해 매크로 사용을 요구합니다."
+      "title": "새 등록 만들기",
+      "text": "기존 기록이 없으면 GFP_KERNEL로 context를 할당하고 유효한지 ASSERT한 뒤 두 주소를 넣습니다. init=NULL, 전용 정리 함수와 context를 kunit_alloc_resource에 전달합니다. 이 호출 결과를 다시 검사하지 않으므로 모든 등록 실패를 반드시 검출한다고 할 수 없습니다. 내부 함수도 GPL 공개이며 타입 검사를 위해 바깥 매크로를 쓰라는 문서가 있습니다."
     },
     {
-      "title": "검토 범위",
-      "text": "구조체와 free·match·lookup·deactivate·activate 전체, 두 export 및 NULL·기존·신규 분기를 대조했습니다. 자원 목록 세부 알고리즘은 kunit_find_resource 구현의 책임이고 여기서 hash lookup이라고 추정하지 않습니다. 실제 NULL assertion·할당 실패·동시 접근을 실행 검증한 것은 아닙니다."
+      "title": "검토 범위와 하위 구현",
+      "text": "자료형, 정리·비교·조회·해제·활성화 전체와 공개 표시 둘, NULL·기존·신규 경로를 확인합니다. 자원 검색의 실제 목록 순서는 find 구현의 책임이며 여기서 해시 검색이라고 추측하지 않습니다. NULL 필수 검사나 메모리 부족·동시 접근을 실제로 실행해 확인한 결과를 뜻하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "자원이 static stub인지 확인하는 직접 조건은?",
+      "prompt": "자원이 대역 기록인지 먼저 확인하는 조건은 무엇인가요?",
       "options": [
+        "정리 함수 포인터가 전용 함수와 같은지입니다.",
+        "기록 안의 두 주소가 서로 같은지입니다."
+      ],
+      "answer": 0,
+      "explanation": "종류를 확인한 뒤에만 실제 주소 필드를 비교하여 다른 자료형의 필드 접근을 피합니다.",
+      "original_prompt": "자원이 static stub인지 확인하는 직접 조건은?",
+      "original_options": [
         "free callback 포인터 동일성",
         "ctx의 두 주소가 같은지 여부"
       ],
-      "answer": 0,
-      "explanation": "종류를 먼저 확인한 뒤 real 주소 필드를 비교합니다. 데이터 형식이 다른 자원의 필드 역참조를 피합니다."
+      "original_explanation": "종류를 먼저 확인한 뒤 real 주소 필드를 비교합니다. 데이터 형식이 다른 자원의 필드 역참조를 피합니다."
     },
     {
-      "prompt": "대체 주소 조회 성공 뒤 자원 참조는?",
+      "prompt": "대역 주소 조회 성공 뒤 검색 참조는 어떻게 하나요?",
       "options": [
+        "언제나 영구 보관합니다.",
+        "주소값을 복사한 뒤 put합니다."
+      ],
+      "answer": 1,
+      "explanation": "반환하는 것은 함수 주소값이며 검색 참조는 반납합니다.",
+      "original_prompt": "대체 주소 조회 성공 뒤 자원 참조는?",
+      "original_options": [
         "항상 영구적으로 보유한다",
         "주소값을 복사한 뒤 put한다"
       ],
-      "answer": 1,
-      "explanation": "찾기에서 얻은 참조를 반환하고 replacement 주소값만 돌려줍니다."
+      "original_explanation": "찾기에서 얻은 참조를 반환하고 replacement 주소값만 돌려줍니다."
     },
     {
-      "prompt": "이 원본에서 replacement=NULL로 내부 activate를 부르면?",
+      "prompt": "이 원본에서 대역 주소 NULL로 내부 활성화를 호출하면 어떻게 되나요?",
       "options": [
+        "NULL을 deactivate에 전달하여 NULL 필수 검사 경로로 갑니다.",
+        "실제 함수 등록을 정상 해제합니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 인수는 real_fn_addr가 아닌 replacement_addr이므로 주석의 의도와 다릅니다.",
+      "original_prompt": "이 원본에서 replacement=NULL로 내부 activate를 부르면?",
+      "original_options": [
         "NULL을 deactivate에 전달해 NULL assertion 경로에 도달한다",
         "real 함수의 등록을 정상 해제한다"
       ],
-      "answer": 0,
-      "explanation": "실제 인수는 real_fn_addr가 아니라 replacement_addr입니다. 주석의 의도와 호출을 구분합니다."
+      "original_explanation": "실제 인수는 real_fn_addr가 아니라 replacement_addr입니다. 주석의 의도와 호출을 구분합니다."
     },
     {
-      "prompt": "기존 real 주소 등록을 다시 활성화하면?",
+      "prompt": "이미 있는 실제 함수 등록을 다시 활성화하면 어떻게 되나요?",
       "options": [
+        "항상 별도 기록을 하나 더 쌓습니다.",
+        "대역 주소를 바꾸고 검색 참조를 반납합니다."
+      ],
+      "answer": 1,
+      "explanation": "기존 자원이 있는 분기에서는 한 필드만 갱신하며 새 할당은 없는 분기입니다.",
+      "original_prompt": "기존 real 주소 등록을 다시 활성화하면?",
+      "original_options": [
         "매번 별도 등록을 무조건 추가한다",
         "replacement 주소를 갱신하고 조회 참조를 놓는다"
       ],
-      "answer": 1,
-      "explanation": "res가 존재하는 분기에서 ctx의 한 필드를 갱신합니다. 신규 할당은 res가 없는 else입니다."
+      "original_explanation": "res가 존재하는 분기에서 ctx의 한 필드를 갱신합니다. 신규 할당은 res가 없는 else입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "replacement=NULL일 때 deactivate에 전달되는 실제 인수를 찾아 표시하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * KUnit function redirection (static stubbing) API.\n *\n * Copyright (C) 2022, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n\n#include <kunit/test.h>\n#include <kunit/static_stub.h>\n#include \"hooks-impl.h\"\n\n\n/* Context for a static stub. This is stored in the resource data. */\nstruct kunit_static_stub_ctx {\n\tvoid *real_fn_addr;\n\tvoid *replacement_addr;\n};\n\nstatic void __kunit_static_stub_resource_free(struct kunit_resource *res)\n{\n\tkfree(res->data);\n}\n\n/* Matching function for kunit_find_resource(). match_data is real_fn_addr. */\nstatic bool __kunit_static_stub_resource_match(struct kunit *test,\n\t\t\t\t\t\tstruct kunit_resource *res,\n\t\t\t\t\t\tvoid *match_real_fn_addr)\n{\n\t/* This pointer is only valid if res is a static stub resource. */\n\tstruct kunit_static_stub_ctx *ctx = res->data;\n\n\t/* Make sure the resource is a static stub resource. */\n\tif (res->free != &__kunit_static_stub_resource_free)\n\t\treturn false;\n\n\treturn ctx->real_fn_addr == match_real_fn_addr;\n}\n\n/* Hook to return the address of the replacement function. */\nvoid *__kunit_get_static_stub_address_impl(struct kunit *test, void *real_fn_addr)\n{\n\tstruct kunit_resource *res;\n\tstruct kunit_static_stub_ctx *ctx;\n\tvoid *replacement_addr;\n\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\n\tif (!res)\n\t\treturn NULL;\n\n\tctx = res->data;\n\treplacement_addr = ctx->replacement_addr;\n\tkunit_put_resource(res);\n\treturn replacement_addr;\n}\n\nvoid kunit_deactivate_static_stub(struct kunit *test, void *real_fn_addr)\n{\n\tstruct kunit_resource *res;\n\n\tKUNIT_ASSERT_PTR_NE_MSG(test, real_fn_addr, NULL,\n\t\t\t\t\"Tried to deactivate a NULL stub.\");\n\n\t/* Look up the existing stub for this function. */\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\n\t/* Error out if the stub doesn't exist. */\n\tKUNIT_ASSERT_PTR_NE_MSG(test, res, NULL,\n\t\t\t\t\"Tried to deactivate a nonexistent stub.\");\n\n\t/* Free the stub. We 'put' twice, as we got a reference\n\t * from kunit_find_resource()\n\t */\n\tkunit_remove_resource(test, res);\n\tkunit_put_resource(res);\n}\nEXPORT_SYMBOL_GPL(kunit_deactivate_static_stub);\n\n/* Helper function for kunit_activate_static_stub(). The macro does\n * typechecking, so use it instead.\n */\nvoid __kunit_activate_static_stub(struct kunit *test,\n\t\t\t\t  void *real_fn_addr,\n\t\t\t\t  void *replacement_addr)\n{\n\tstruct kunit_static_stub_ctx *ctx;\n\tstruct kunit_resource *res;\n\n\tKUNIT_ASSERT_PTR_NE_MSG(test, real_fn_addr, NULL,\n\t\t\t\t\"Tried to activate a stub for function NULL\");\n\n\t/* If the replacement address is NULL, deactivate the stub. */\n\tif (!replacement_addr) {\n\t\tkunit_deactivate_static_stub(test, replacement_addr);\n\t\treturn;\n\t}\n\n\t/* Look up any existing stubs for this function, and replace them. */\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\tif (res) {\n\t\tctx = res->data;\n\t\tctx->replacement_addr = replacement_addr;\n\n\t\t/* We got an extra reference from find_resource(), so put it. */\n\t\tkunit_put_resource(res);\n\t} else {\n\t\tctx = kmalloc(sizeof(*ctx), GFP_KERNEL);\n\t\tKUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);\n\t\tctx->real_fn_addr = real_fn_addr;\n\t\tctx->replacement_addr = replacement_addr;\n\t\tres = kunit_alloc_resource(test, NULL,\n\t\t\t\t     &__kunit_static_stub_resource_free,\n\t\t\t\t     GFP_KERNEL, ctx);\n\t}\n}\nEXPORT_SYMBOL_GPL(__kunit_activate_static_stub);\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/static_stub.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-658de18cbedcf845",
+    "path": "lib/kunit/static_stub.c",
+    "title": "Static stub 자원 구현: 주소 매칭·참조 반환·갱신·해제",
+    "area": "KUnit 자원 · 함수 대역 · refcount · 오류 경로",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 함수 주소를 KUnit 자원으로 관리하는 전체 구현과 오류 경로를 분석합니다.",
+    "guide": [
+      "테스트 대역 등록도 객체 수명과 식별 규칙이 필요하며 주석의 의도보다 실제 인수 전달이 동작을 결정합니다.",
+      "resource callback, 포인터 식별, 참조 획득·반환, 실패 경로 분석을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "자료형과 free callback",
+        "text": "GPL-2.0 파일은 test,static_stub,내부 hooks-impl을 포함합니다. kunit_static_stub_ctx는 real_fn_addr와 replacement_addr 두 void *를 보관합니다. free callback은 res->data를 kfree합니다. 이 callback 자체가 함수의 실행 코드나 원래 함수 객체를 해제하는 것은 아닙니다."
+      },
+      {
+        "title": "자원 종류와 주소 매칭",
+        "text": "match callback은 먼저 res->free가 static stub free callback과 같은지 확인하고 아니면 false입니다. 같은 종류일 때만 ctx->real_fn_addr와 요청 주소를 비교합니다. res->data를 ctx 변수에 넣는 것과 필드를 역참조하는 시점을 구분해야 합니다. test 인수는 본문에서 사용하지 않습니다. 별도 enum type tag 대신 free callback 동일성을 자원 종류 검사로 사용합니다."
+      },
+      {
+        "title": "대체 주소 조회",
+        "text": "__kunit_get_static_stub_address_impl은 kunit_find_resource로 같은 real 주소의 자원을 찾고 없으면 NULL입니다. 있으면 replacement 주소를 로컬 변수로 복사한 뒤 kunit_put_resource로 찾기에서 얻은 참조를 놓고 주소값을 반환합니다. 자원 포인터 자체를 호출자에게 새 소유권으로 넘기는 함수가 아닙니다."
+      },
+      {
+        "title": "명시적 해제",
+        "text": "kunit_deactivate_static_stub는 real_fn_addr가 NULL이 아닌지 assertion하고 자원을 찾습니다. 없는 등록도 assertion 실패입니다. 찾은 경우 kunit_remove_resource로 테스트 자원 목록에서 제거하고 kunit_put_resource로 조회 참조를 놓습니다. 주석의 두 참조 반환은 remove의 소유권 처리와 별도 put을 함께 의미하며 코드에 put 호출이 두 줄 연속 있는 것은 아닙니다. 이 함수는 GPL export됩니다."
+      },
+      {
+        "title": "활성화의 NULL 경로 불일치",
+        "text": "__kunit_activate_static_stub는 real 주소를 먼저 NULL 검사합니다. replacement가 NULL이면 주석은 해제를 의도하지만 실제 호출은 kunit_deactivate_static_stub(test,replacement_addr)입니다. 따라서 NULL을 전달해 해제 함수의 NULL assertion에 도달합니다. real_fn_addr로 정상 해제된다고 설명하면 원본과 다릅니다. 이 코드를 학습하기 위해 임의로 수정하지 않으며 제어 흐름 대조 결과를 명시합니다."
+      },
+      {
+        "title": "기존 등록 갱신",
+        "text": "replacement가 non-NULL이면 기존 real 주소의 자원을 조회합니다. 있으면 ctx->replacement_addr만 새 값으로 바꾸고 조회 참조를 put합니다. 새 ctx를 항상 추가해 같은 real 주소의 등록을 계속 쌓는 구조가 아닙니다. 이 파일 자체에는 갱신을 둘러싼 별도 explicit lock이 없으므로 임의 다중 task 갱신의 안전성을 이 본문만으로 보장하지 않습니다."
+      },
+      {
+        "title": "신규 등록",
+        "text": "없으면 GFP_KERNEL로 ctx를 kmalloc하고 NOT_ERR_OR_NULL assertion 뒤 두 주소를 저장합니다. kunit_alloc_resource에는 init callback NULL,static stub free callback,GFP_KERNEL,ctx를 넘깁니다. 반환 res를 이 분기에서 별도 검사하는 코드가 없으므로 모든 자원 등록 실패를 여기서 반드시 검출한다고 단정하지 않습니다. 내부 helper도 GPL export되며 문서는 타입 검사를 위해 매크로 사용을 요구합니다."
+      },
+      {
+        "title": "검토 범위",
+        "text": "구조체와 free·match·lookup·deactivate·activate 전체, 두 export 및 NULL·기존·신규 분기를 대조했습니다. 자원 목록 세부 알고리즘은 kunit_find_resource 구현의 책임이고 여기서 hash lookup이라고 추정하지 않습니다. 실제 NULL assertion·할당 실패·동시 접근을 실행 검증한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "자원이 static stub인지 확인하는 직접 조건은?",
+        "options": [
+          "free callback 포인터 동일성",
+          "ctx의 두 주소가 같은지 여부"
+        ],
+        "answer": 0,
+        "explanation": "종류를 먼저 확인한 뒤 real 주소 필드를 비교합니다. 데이터 형식이 다른 자원의 필드 역참조를 피합니다."
+      },
+      {
+        "prompt": "대체 주소 조회 성공 뒤 자원 참조는?",
+        "options": [
+          "항상 영구적으로 보유한다",
+          "주소값을 복사한 뒤 put한다"
+        ],
+        "answer": 1,
+        "explanation": "찾기에서 얻은 참조를 반환하고 replacement 주소값만 돌려줍니다."
+      },
+      {
+        "prompt": "이 원본에서 replacement=NULL로 내부 activate를 부르면?",
+        "options": [
+          "NULL을 deactivate에 전달해 NULL assertion 경로에 도달한다",
+          "real 함수의 등록을 정상 해제한다"
+        ],
+        "answer": 0,
+        "explanation": "실제 인수는 real_fn_addr가 아니라 replacement_addr입니다. 주석의 의도와 호출을 구분합니다."
+      },
+      {
+        "prompt": "기존 real 주소 등록을 다시 활성화하면?",
+        "options": [
+          "매번 별도 등록을 무조건 추가한다",
+          "replacement 주소를 갱신하고 조회 참조를 놓는다"
+        ],
+        "answer": 1,
+        "explanation": "res가 존재하는 분기에서 ctx의 한 필드를 갱신합니다. 신규 할당은 res가 없는 else입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * KUnit function redirection (static stubbing) API.\n *\n * Copyright (C) 2022, Google LLC.\n * Author: David Gow <davidgow@google.com>\n */\n\n#include <kunit/test.h>\n#include <kunit/static_stub.h>\n#include \"hooks-impl.h\"\n\n\n/* Context for a static stub. This is stored in the resource data. */\nstruct kunit_static_stub_ctx {\n\tvoid *real_fn_addr;\n\tvoid *replacement_addr;\n};\n\nstatic void __kunit_static_stub_resource_free(struct kunit_resource *res)\n{\n\tkfree(res->data);\n}\n\n/* Matching function for kunit_find_resource(). match_data is real_fn_addr. */\nstatic bool __kunit_static_stub_resource_match(struct kunit *test,\n\t\t\t\t\t\tstruct kunit_resource *res,\n\t\t\t\t\t\tvoid *match_real_fn_addr)\n{\n\t/* This pointer is only valid if res is a static stub resource. */\n\tstruct kunit_static_stub_ctx *ctx = res->data;\n\n\t/* Make sure the resource is a static stub resource. */\n\tif (res->free != &__kunit_static_stub_resource_free)\n\t\treturn false;\n\n\treturn ctx->real_fn_addr == match_real_fn_addr;\n}\n\n/* Hook to return the address of the replacement function. */\nvoid *__kunit_get_static_stub_address_impl(struct kunit *test, void *real_fn_addr)\n{\n\tstruct kunit_resource *res;\n\tstruct kunit_static_stub_ctx *ctx;\n\tvoid *replacement_addr;\n\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\n\tif (!res)\n\t\treturn NULL;\n\n\tctx = res->data;\n\treplacement_addr = ctx->replacement_addr;\n\tkunit_put_resource(res);\n\treturn replacement_addr;\n}\n\nvoid kunit_deactivate_static_stub(struct kunit *test, void *real_fn_addr)\n{\n\tstruct kunit_resource *res;\n\n\tKUNIT_ASSERT_PTR_NE_MSG(test, real_fn_addr, NULL,\n\t\t\t\t\"Tried to deactivate a NULL stub.\");\n\n\t/* Look up the existing stub for this function. */\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\n\t/* Error out if the stub doesn't exist. */\n\tKUNIT_ASSERT_PTR_NE_MSG(test, res, NULL,\n\t\t\t\t\"Tried to deactivate a nonexistent stub.\");\n\n\t/* Free the stub. We 'put' twice, as we got a reference\n\t * from kunit_find_resource()\n\t */\n\tkunit_remove_resource(test, res);\n\tkunit_put_resource(res);\n}\nEXPORT_SYMBOL_GPL(kunit_deactivate_static_stub);\n\n/* Helper function for kunit_activate_static_stub(). The macro does\n * typechecking, so use it instead.\n */\nvoid __kunit_activate_static_stub(struct kunit *test,\n\t\t\t\t  void *real_fn_addr,\n\t\t\t\t  void *replacement_addr)\n{\n\tstruct kunit_static_stub_ctx *ctx;\n\tstruct kunit_resource *res;\n\n\tKUNIT_ASSERT_PTR_NE_MSG(test, real_fn_addr, NULL,\n\t\t\t\t\"Tried to activate a stub for function NULL\");\n\n\t/* If the replacement address is NULL, deactivate the stub. */\n\tif (!replacement_addr) {\n\t\tkunit_deactivate_static_stub(test, replacement_addr);\n\t\treturn;\n\t}\n\n\t/* Look up any existing stubs for this function, and replace them. */\n\tres = kunit_find_resource(test,\n\t\t\t\t  __kunit_static_stub_resource_match,\n\t\t\t\t  real_fn_addr);\n\tif (res) {\n\t\tctx = res->data;\n\t\tctx->replacement_addr = replacement_addr;\n\n\t\t/* We got an extra reference from find_resource(), so put it. */\n\t\tkunit_put_resource(res);\n\t} else {\n\t\tctx = kmalloc(sizeof(*ctx), GFP_KERNEL);\n\t\tKUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);\n\t\tctx->real_fn_addr = real_fn_addr;\n\t\tctx->replacement_addr = replacement_addr;\n\t\tres = kunit_alloc_resource(test, NULL,\n\t\t\t\t     &__kunit_static_stub_resource_free,\n\t\t\t\t     GFP_KERNEL, ctx);\n\t}\n}\nEXPORT_SYMBOL_GPL(__kunit_activate_static_stub);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "80b19a483f9ca712ededa87ba42a441fe6eb3df3dd105799797bcecf4d49a471",
+      "scope": "whole-file",
+      "line_count": 123,
+      "authoring_source": "course/file_units/kunit_static_stubs.py",
+      "sections": [
+        "자료형과 free callback",
+        "자원 종류와 주소 매칭",
+        "대체 주소 조회",
+        "명시적 해제",
+        "활성화의 NULL 경로 불일치",
+        "기존 등록 갱신",
+        "신규 등록",
+        "검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kunit/static_stub.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "대역 함수도 시험 자원 목록에 이름표처럼 기록합니다. 설명 주석과 실제 전달한 주소가 다를 때는 실제 코드를 따라 결과를 판단해야 합니다.",
+    "meaning": "대역 등록의 자원 식별·참조 정리와 NULL 분기의 실제 동작을 이해합니다.",
+    "exercise": "replacement=NULL일 때 deactivate에 전달되는 실제 인수를 찾아 표시하세요."
+  },
+  "goal": "대역 등록의 자원 식별·참조 정리와 NULL 분기의 실제 동작을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "replacement=NULL일 때 deactivate에 전달되는 실제 인수를 찾아 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "9066dcdc6ae332d5b0f7f47f06307a04106650bdf000fb132ebcf99a4951d6e3",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

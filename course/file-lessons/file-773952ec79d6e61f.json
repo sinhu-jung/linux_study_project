@@ -5,113 +5,139 @@
   "area": "MMIO · 엔디언 · 인라인 asm · 메모리 순서 · pending 상태",
   "track": "files",
   "kind": "kernel",
-  "intro": "접근 폭,엔디언 변환,장치 순서와 일반 메모리 순서를 분리해 읽습니다.",
+  "intro": "RISC-V MMIO는 raw·CPU 변환·relaxed·일반 접근을 층별로 구분합니다.",
   "guide": [
-    "같은 load/store 명령을 사용해도 주변 변환과 장벽이 다르면 API의 계약이 달라집니다.",
-    "CLINT의 relaxed 시간 읽기와 장치 데이터의 readl/writel을 구별합니다."
+    "MMIO는 메모리 주소처럼 보이는 창구를 통해 장치를 읽고 쓰는 방식입니다. 일반 RAM 접근과 같은 규칙이라고 가정하면 안 됩니다.",
+    "엔디언은 여러 바이트 숫자의 저장 순서입니다. raw는 CPU 본래 순서, cpu 연결 매크로는 리틀엔디언 변환을 다룹니다.",
+    "fence는 접근 순서를 제한합니다. relaxed는 일반 메모리와의 순서 보장을 줄인 형태이며 장치 자체의 약속도 확인해야 합니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0-only·ARM 계열 기반 설명·저작권·guard 뒤 types/fence/mmiowb 헤더를 포함합니다. native-endian raw 함수,unordered cpu 매크로,relaxed 계층,일반 계층으로 구성됩니다. 모든 q 접근은 CONFIG_64BIT 안에서만 정의합니다. 이 파일 자체는32비트에서 q를 분할해 구현하지 않습니다."
+      "text": "라이선스·유래·헤더 뒤 raw 함수, unordered cpu 매크로, relaxed 접근, 일반 접근이 이어집니다. b,w,l은 8·16·32비트, q는 64비트입니다. q 정의는 CONFIG_64BIT 안에만 있고 이 파일은 32비트 환경에서 두 번으로 나누는 q 구현을 제공하지 않습니다."
     },
     {
       "title": "Raw 쓰기",
-      "text": "__raw_writeb/w/l은 u8/u16/u32 값과 volatile __iomem 주소를 받아 각각 sb/sh/sw를 사용합니다.64비트 q는u64와 sd입니다. asm은 volatile이고 값·주소를 레지스터 입력으로 받지만 이 raw 본문에는 memory clobber와 FENCE가 없습니다. 자기참조 매크로는 제공 여부를 표시합니다."
+      "text": "raw 쓰기는 u8,u16,u32와 장치 주소를 받아 sb,sh,sw 명령을 씁니다. 64비트 q는 u64와 sd입니다. asm은 volatile이며 값과 주소를 레지스터로 받지만 본문에 memory clobber나 FENCE는 없습니다. 자기참조 매크로는 해당 기능을 제공했다는 표시입니다."
     },
     {
       "title": "Raw 읽기",
-      "text": "__raw_readb/w/l은 lb/lh/lw로 읽어 각각 u8/u16/u32 변수에 담아 반환하며64비트 q는 ld와u64입니다. 명령의 레지스터 확장 동작과 C 반환 타입의 폭을 구분합니다. 예를 들어 byte의 하위8비트가0xff라면 u8 반환값은255이며 signed -1 반환 함수가 아닙니다. 입력은 const volatile __iomem 포인터입니다."
+      "text": "raw 읽기는 lb,lh,lw로 읽고 u8,u16,u32로 반환하며 q는 ld와 u64입니다. 명령이 레지스터 위쪽 비트를 어떻게 채우는지와 C의 반환 폭은 다릅니다. 아래 8비트가 0xff이면 readb의 u8 결과는 음수 -1이 아니라 255입니다. 주소는 const volatile 장치 포인터입니다."
     },
     {
       "title": "Native와 little-endian 변환",
-      "text": "raw 주석은 native-endian 접근이라고 명시합니다. readw_cpu/readl_cpu/readq_cpu는 raw 값에 le16/32/64_to_cpu를 적용하고 쓰기는 cpu_to_le16/32/64 뒤 raw를 호출합니다. byte에는 endian 변환이 필요하지 않습니다. __force는 타입 주석 변환이며 그 자체가 바이트 교환 명령이라는 뜻은 아닙니다."
+      "text": "raw 주석은 CPU 본래 바이트 순서라고 설명합니다. readw/l/q_cpu는 le16/32/64_to_cpu로 장치의 리틀엔디언 값을 CPU 표현으로 바꿉니다. 쓰기는 반대로 변환한 뒤 raw를 부릅니다. 한 바이트는 순서를 바꿀 필요가 없습니다. __force는 타입 분석용 변환 표시이며 자체 바이트 교환 명령은 아닙니다."
     },
     {
       "title": "Unordered 계층",
-      "text": "read/write*_cpu 주석은 relaxed보다도 약하며 연속 I/O 영역 접근 사이의 순서도 보장하지 않는다고 설명합니다. _cpu라는 접미사가 일반 RAM 전용 접근이나 자동 full barrier를 의미하지 않습니다. 이 계층은 엔디언 처리와 기본 접근을 조합하며 장치별 protocol을 검사하지 않습니다."
+      "text": "unordered cpu 계층은 연속 장치 접근 사이의 순서도 보장하지 않는다고 주석에 적혀 있습니다. _cpu라는 이름이 일반 RAM 전용이나 자동 전체 장벽을 뜻하지 않습니다. 기본 접근과 엔디언 처리를 결합할 뿐 장치별 통신 규칙을 검사하지 않습니다."
     },
     {
       "title": "Relaxed의 계약과 플랫폼 전제",
-      "text": "relaxed 주석은 같은 peripheral의 I/O 접근 순서는 따르지만 Normal 메모리와의 순서는 보장하지 않는다고 설명합니다. 플랫폼의 I/O 영역이 channel0에서 strongly ordered라는 전제 때문에 별도 fence가 필요하지 않다고 명시합니다. 이것을 모든 임의 RISC-V 장치 배치의 검증 결과로 확대하지 않습니다."
+      "text": "relaxed는 같은 장치에 대한 I/O 접근 순서는 따르지만 일반 메모리와의 순서는 보장하지 않습니다. 플랫폼의 I/O 영역이 channel 0에서 강한 순서를 지킨다는 전제로 추가 fence가 필요 없다고 설명합니다. 임의의 모든 RISC-V 장치 배치를 시험해 안전하다는 뜻은 아닙니다."
     },
     {
       "title": "Relaxed hook과 wrapper",
-      "text": "__io_rbr/rar/rbw/raw는 모두 빈 do-while입니다. relaxed 읽기는 앞 hook,cpu 읽기,뒤 hook,저장값 반환 순서이고 쓰기도 앞 hook,cpu 쓰기,뒤 hook입니다. 이 고정 버전에서는 hook이 비어 있으므로 본문이 cpu 접근과 유사해도 문서화된 사용 계약을 함께 읽어야 합니다. FIXME는 asm-generic과 같아졌다고 기록합니다."
+      "text": "relaxed 앞뒤 hook인 __io_rbr/rar/rbw/raw는 이 버전에서 모두 빈 do/while입니다. 읽기는 앞 hook→cpu 읽기→뒤 hook→값 반환, 쓰기도 앞뒤 hook 사이에서 수행합니다. 본문이 cpu 계층과 비슷해도 문서의 사용 계약은 함께 읽어야 합니다. FIXME는 공통 구현과 같아졌음을 적습니다."
     },
     {
       "title": "일반 읽기 장벽",
-      "text": "__io_br은 빈 함수형 매크로이고 __io_ar(v)는 RISCV_FENCE(i,ir)입니다. 일반 readb/w/l/q는 먼저 읽어 __v에 담고 그 뒤 장벽을 실행해 보관한 값을 반환합니다. hook 인자 v는 이 구현의 fence 본문에서 쓰지 않습니다. 주석은 뒤따르는 Normal 읽기와 delay loop에 대한 순서를 설명하며 모든 방향의 full barrier로 과장하지 않습니다."
+      "text": "일반 읽기의 앞 hook은 비었고 뒤 __io_ar(v)는 fence i,ir입니다. 값을 먼저 __v에 저장하고 장벽 뒤 그 값을 반환합니다. v 인자는 장벽 본문에서 쓰지 않습니다. 뒤 일반 메모리 읽기와 지연 반복의 순서를 다루며 모든 방향의 전체 장벽은 아닙니다."
     },
     {
       "title": "일반 쓰기 장벽과 pending",
-      "text": "__io_bw는 RISCV_FENCE(w,o),__io_aw는 mmiowb_set_pending입니다. 따라서 일반 쓰기는 앞선 Normal 쓰기와 I/O 출력을 순서화하는 fence,실제 쓰기,pending 표시 순서입니다. pending helper를 호출했다고 여기서 직접 장치 readback을 하거나 모든 posted write 완료를 기다린다고 설명하지 않습니다. helper 내부 구현은 별도 헤더의 범위입니다."
+      "text": "일반 쓰기는 fence w,o로 앞선 일반 메모리 쓰기를 장치 출력 앞에 둔 뒤 실제 쓰고 mmiowb_set_pending을 부릅니다. pending은 나중에 MMIO 쓰기 순서 처리가 필요함을 표시하는 역할입니다. 이 호출만으로 장치를 다시 읽거나 미뤄진 모든 쓰기 완료를 기다린다고 설명하면 안 됩니다."
     },
     {
       "title": "폭별 API와 적용 범위",
-      "text": "네 계층은8·16·32비트와 구성별64비트를 제공합니다. 장벽 유무와 endian 변환 여부를 접근 폭과 별도로 선택합니다. 이 파일에는 NULL·정렬·범위 검사,장치 소유권 확인,매핑 설치가 없습니다. readq가 존재하는64비트 구성이라는 사실만으로 모든 장치의64비트 bus 원자성이 보장되는 것도 아닙니다."
+      "text": "접근 폭, 바이트 순서 변환, 장벽 유무는 따로 구분해야 합니다. 이 파일은 NULL·정렬·주소 범위·장치 소유권 검사나 매핑 설치를 하지 않습니다. 64비트 구성에 readq가 있다고 모든 장치 버스가 64비트를 원자적으로 읽는다는 보장도 없습니다."
     },
     {
       "title": "CS 연결과 검증",
-      "text": "타입 폭과 레지스터 확장,하드웨어 접근과 endian 변환,플랫폼 순서 보장과 명시적 fence,compiler 계약과 CPU 계약,지연된 MMIO 동기화 표시를 학습합니다. 원본·구조 검사는 실제 플랫폼의 장치 순서나 모든 실행 문맥을 검증한 것이 아닙니다."
+      "text": "정수 폭과 레지스터 확장, 장치 읽기와 엔디언 변환, 플랫폼 전제와 명시적 장벽, 컴파일러와 CPU의 약속을 나누어 배웁니다. 원본 대조는 실제 장치 순서와 모든 실행 문맥의 시험을 대신하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "readl과 readl_relaxed의 명시적 장벽 차이는?",
+      "prompt": "readl과 readl_relaxed의 명시적 장벽 차이는 무엇인가요?",
       "options": [
+        "일반 readl은 읽기 뒤 fence i,ir을 합니다.",
+        "relaxed만 읽기 뒤 전체 장벽을 합니다."
+      ],
+      "answer": 0,
+      "explanation": "일반 읽기의 뒤 hook에는 장벽이 있고 relaxed의 앞뒤 hook은 비었습니다.",
+      "original_prompt": "readl과 readl_relaxed의 명시적 장벽 차이는?",
+      "original_options": [
         "일반 readl은 읽기 뒤 fence i,ir을 수행한다",
         "relaxed만 읽기 뒤 full fence를 수행한다"
       ],
-      "answer": 0,
-      "explanation": "일반 __io_ar은 RISCV_FENCE(i,ir)이고 relaxed 전후 hook은 빈 정의입니다. Normal 메모리 순서 계약도 다릅니다."
+      "original_explanation": "일반 __io_ar은 RISCV_FENCE(i,ir)이고 relaxed 전후 hook은 빈 정의입니다. Normal 메모리 순서 계약도 다릅니다."
     },
     {
-      "prompt": "readl_cpu는 raw와 달리 어떤 변환을 추가하는가?",
+      "prompt": "readl_cpu는 raw에 무엇을 더하나요?",
       "options": [
+        "가상 주소를 물리 주소로 번역합니다.",
+        "리틀엔디언 값을 CPU 표현으로 바꿉니다."
+      ],
+      "answer": 1,
+      "explanation": "le32_to_cpu를 쓰며 주소 매핑을 설치하는 기능은 아닙니다.",
+      "original_prompt": "readl_cpu는 raw와 달리 어떤 변환을 추가하는가?",
+      "original_options": [
         "가상주소를 물리주소로 번역한다",
         "little-endian 값을 CPU 표현으로 변환한다"
       ],
-      "answer": 1,
-      "explanation": "le32_to_cpu를 사용합니다. 주소 매핑이나 페이지 테이블 변환을 수행하는 함수가 아닙니다."
+      "original_explanation": "le32_to_cpu를 사용합니다. 주소 매핑이나 페이지 테이블 변환을 수행하는 함수가 아닙니다."
     },
     {
-      "prompt": "일반 writel의 순서는?",
+      "prompt": "일반 writel의 순서는 무엇인가요?",
       "options": [
+        "fence w,o→쓰기→mmiowb_set_pending입니다.",
+        "쓰기→다시 읽기→무조건 잠들기입니다."
+      ],
+      "answer": 0,
+      "explanation": "본문에는 장치 다시 읽기나 sleep이 없습니다.",
+      "original_prompt": "일반 writel의 순서는?",
+      "original_options": [
         "fence w,o → 쓰기 → mmiowb_set_pending이다",
         "쓰기 → readback → 무조건 sleep이다"
       ],
-      "answer": 0,
-      "explanation": "매크로의 __io_bw,writel_cpu,__io_aw를 확장하면 이 순서입니다. readback이나 sleep은 본문에 없습니다."
+      "original_explanation": "매크로의 __io_bw,writel_cpu,__io_aw를 확장하면 이 순서입니다. readback이나 sleep은 본문에 없습니다."
     },
     {
-      "prompt": "32비트 구성에서 이 파일 자체가 __raw_readq를 두 readl로 구현하는가?",
+      "prompt": "32비트에서 이 파일은 raw_readq를 두 readl로 만드나요?",
       "options": [
+        "네. 언제나 자동으로 나눕니다.",
+        "아니요. q 정의는 CONFIG_64BIT 안에 있습니다."
+      ],
+      "answer": 1,
+      "explanation": "별도의 비원자적 64비트 접근 헤더와 혼동하면 안 됩니다.",
+      "original_prompt": "32비트 구성에서 이 파일 자체가 __raw_readq를 두 readl로 구현하는가?",
+      "original_options": [
         "그렇다. 항상 자동 분할한다",
         "아니다. q 정의는 CONFIG_64BIT 안에 있다"
       ],
-      "answer": 1,
-      "explanation": "분할64비트 접근은 별도 nonatomic 헤더의 역할과 비교해야 합니다. 이 파일에 없는 fallback을 가정하면 틀립니다."
+      "original_explanation": "분할64비트 접근은 별도 nonatomic 헤더의 역할과 비교해야 합니다. 이 파일에 없는 fallback을 가정하면 틀립니다."
     },
     {
-      "prompt": "__raw_readb가 하위 byte0xff를 읽으면 C 반환값은?",
+      "prompt": "__raw_readb가 하위 바이트 0xff를 읽으면 C 결과는 무엇인가요?",
       "options": [
+        "u8 값 255입니다.",
+        "언제나 부호 있는 -1입니다."
+      ],
+      "answer": 0,
+      "explanation": "명령의 확장 방식과 최종 u8 반환 타입은 구분합니다.",
+      "original_prompt": "__raw_readb가 하위 byte0xff를 읽으면 C 반환값은?",
+      "original_options": [
         "u8 값255이다",
         "항상 signed 값-1이다"
       ],
-      "answer": 0,
-      "explanation": "lb의 레지스터 확장과 최종 u8 타입을 구분합니다. 함수의 반환 폭과 signedness는 선언에 명시되어 있습니다."
+      "original_explanation": "lb의 레지스터 확장과 최종 u8 타입을 구분합니다. 함수의 반환 폭과 signedness는 선언에 명시되어 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "일반 writel을 앞 장벽→실제 쓰기→pending 표시로 펼쳐 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * {read,write}{b,w,l,q} based on arch/arm64/include/asm/io.h\n *   which was based on arch/arm/include/io.h\n *\n * Copyright (C) 1996-2000 Russell King\n * Copyright (C) 2012 ARM Ltd.\n * Copyright (C) 2014 Regents of the University of California\n */\n\n#ifndef _ASM_RISCV_MMIO_H\n#define _ASM_RISCV_MMIO_H\n\n#include <linux/types.h>\n#include <asm/fence.h>\n#include <asm/mmiowb.h>\n\n/* Generic IO read/write.  These perform native-endian accesses. */\n#define __raw_writeb __raw_writeb\nstatic inline void __raw_writeb(u8 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sb %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#define __raw_writew __raw_writew\nstatic inline void __raw_writew(u16 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sh %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#define __raw_writel __raw_writel\nstatic inline void __raw_writel(u32 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sw %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#ifdef CONFIG_64BIT\n#define __raw_writeq __raw_writeq\nstatic inline void __raw_writeq(u64 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sd %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n#endif\n\n#define __raw_readb __raw_readb\nstatic inline u8 __raw_readb(const volatile void __iomem *addr)\n{\n\tu8 val;\n\n\tasm volatile(\"lb %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#define __raw_readw __raw_readw\nstatic inline u16 __raw_readw(const volatile void __iomem *addr)\n{\n\tu16 val;\n\n\tasm volatile(\"lh %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#define __raw_readl __raw_readl\nstatic inline u32 __raw_readl(const volatile void __iomem *addr)\n{\n\tu32 val;\n\n\tasm volatile(\"lw %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#ifdef CONFIG_64BIT\n#define __raw_readq __raw_readq\nstatic inline u64 __raw_readq(const volatile void __iomem *addr)\n{\n\tu64 val;\n\n\tasm volatile(\"ld %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n#endif\n\n/*\n * Unordered I/O memory access primitives.  These are even more relaxed than\n * the relaxed versions, as they don't even order accesses between successive\n * operations to the I/O regions.\n */\n#define readb_cpu(c)\t\t({ u8  __r = __raw_readb(c); __r; })\n#define readw_cpu(c)\t\t({ u16 __r = le16_to_cpu((__force __le16)__raw_readw(c)); __r; })\n#define readl_cpu(c)\t\t({ u32 __r = le32_to_cpu((__force __le32)__raw_readl(c)); __r; })\n\n#define writeb_cpu(v, c)\t((void)__raw_writeb((v), (c)))\n#define writew_cpu(v, c)\t((void)__raw_writew((__force u16)cpu_to_le16(v), (c)))\n#define writel_cpu(v, c)\t((void)__raw_writel((__force u32)cpu_to_le32(v), (c)))\n\n#ifdef CONFIG_64BIT\n#define readq_cpu(c)\t\t({ u64 __r = le64_to_cpu((__force __le64)__raw_readq(c)); __r; })\n#define writeq_cpu(v, c)\t((void)__raw_writeq((__force u64)cpu_to_le64(v), (c)))\n#endif\n\n/*\n * Relaxed I/O memory access primitives. These follow the Device memory\n * ordering rules but do not guarantee any ordering relative to Normal memory\n * accesses.  These are defined to order the indicated access (either a read or\n * write) with all other I/O memory accesses to the same peripheral. Since the\n * platform specification defines that all I/O regions are strongly ordered on\n * channel 0, no explicit fences are required to enforce this ordering.\n */\n/* FIXME: These are now the same as asm-generic */\n#define __io_rbr()\t\tdo {} while (0)\n#define __io_rar()\t\tdo {} while (0)\n#define __io_rbw()\t\tdo {} while (0)\n#define __io_raw()\t\tdo {} while (0)\n\n#define readb_relaxed(c)\t({ u8  __v; __io_rbr(); __v = readb_cpu(c); __io_rar(); __v; })\n#define readw_relaxed(c)\t({ u16 __v; __io_rbr(); __v = readw_cpu(c); __io_rar(); __v; })\n#define readl_relaxed(c)\t({ u32 __v; __io_rbr(); __v = readl_cpu(c); __io_rar(); __v; })\n\n#define writeb_relaxed(v, c)\t({ __io_rbw(); writeb_cpu((v), (c)); __io_raw(); })\n#define writew_relaxed(v, c)\t({ __io_rbw(); writew_cpu((v), (c)); __io_raw(); })\n#define writel_relaxed(v, c)\t({ __io_rbw(); writel_cpu((v), (c)); __io_raw(); })\n\n#ifdef CONFIG_64BIT\n#define readq_relaxed(c)\t({ u64 __v; __io_rbr(); __v = readq_cpu(c); __io_rar(); __v; })\n#define writeq_relaxed(v, c)\t({ __io_rbw(); writeq_cpu((v), (c)); __io_raw(); })\n#endif\n\n/*\n * I/O memory access primitives.  Reads are ordered relative to any following\n * Normal memory read and delay() loop.  Writes are ordered relative to any\n * prior Normal memory write.  The memory barriers here are necessary as RISC-V\n * doesn't define any ordering between the memory space and the I/O space.\n */\n#define __io_br()\tdo {} while (0)\n#define __io_ar(v)\tRISCV_FENCE(i, ir)\n#define __io_bw()\tRISCV_FENCE(w, o)\n#define __io_aw()\tmmiowb_set_pending()\n\n#define readb(c)\t({ u8  __v; __io_br(); __v = readb_cpu(c); __io_ar(__v); __v; })\n#define readw(c)\t({ u16 __v; __io_br(); __v = readw_cpu(c); __io_ar(__v); __v; })\n#define readl(c)\t({ u32 __v; __io_br(); __v = readl_cpu(c); __io_ar(__v); __v; })\n\n#define writeb(v, c)\t({ __io_bw(); writeb_cpu((v), (c)); __io_aw(); })\n#define writew(v, c)\t({ __io_bw(); writew_cpu((v), (c)); __io_aw(); })\n#define writel(v, c)\t({ __io_bw(); writel_cpu((v), (c)); __io_aw(); })\n\n#ifdef CONFIG_64BIT\n#define readq(c)\t({ u64 __v; __io_br(); __v = readq_cpu(c); __io_ar(__v); __v; })\n#define writeq(v, c)\t({ __io_bw(); writeq_cpu((v), (c)); __io_aw(); })\n#endif\n\n#endif /* _ASM_RISCV_MMIO_H */\n",
   "source_review": {
@@ -140,5 +166,177 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/mmio.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-773952ec79d6e61f",
+    "path": "arch/riscv/include/asm/mmio.h",
+    "title": "RISC-V MMIO 전체: raw·relaxed·일반 접근의 계층",
+    "area": "MMIO · 엔디언 · 인라인 asm · 메모리 순서 · pending 상태",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "접근 폭,엔디언 변환,장치 순서와 일반 메모리 순서를 분리해 읽습니다.",
+    "guide": [
+      "같은 load/store 명령을 사용해도 주변 변환과 장벽이 다르면 API의 계약이 달라집니다.",
+      "CLINT의 relaxed 시간 읽기와 장치 데이터의 readl/writel을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0-only·ARM 계열 기반 설명·저작권·guard 뒤 types/fence/mmiowb 헤더를 포함합니다. native-endian raw 함수,unordered cpu 매크로,relaxed 계층,일반 계층으로 구성됩니다. 모든 q 접근은 CONFIG_64BIT 안에서만 정의합니다. 이 파일 자체는32비트에서 q를 분할해 구현하지 않습니다."
+      },
+      {
+        "title": "Raw 쓰기",
+        "text": "__raw_writeb/w/l은 u8/u16/u32 값과 volatile __iomem 주소를 받아 각각 sb/sh/sw를 사용합니다.64비트 q는u64와 sd입니다. asm은 volatile이고 값·주소를 레지스터 입력으로 받지만 이 raw 본문에는 memory clobber와 FENCE가 없습니다. 자기참조 매크로는 제공 여부를 표시합니다."
+      },
+      {
+        "title": "Raw 읽기",
+        "text": "__raw_readb/w/l은 lb/lh/lw로 읽어 각각 u8/u16/u32 변수에 담아 반환하며64비트 q는 ld와u64입니다. 명령의 레지스터 확장 동작과 C 반환 타입의 폭을 구분합니다. 예를 들어 byte의 하위8비트가0xff라면 u8 반환값은255이며 signed -1 반환 함수가 아닙니다. 입력은 const volatile __iomem 포인터입니다."
+      },
+      {
+        "title": "Native와 little-endian 변환",
+        "text": "raw 주석은 native-endian 접근이라고 명시합니다. readw_cpu/readl_cpu/readq_cpu는 raw 값에 le16/32/64_to_cpu를 적용하고 쓰기는 cpu_to_le16/32/64 뒤 raw를 호출합니다. byte에는 endian 변환이 필요하지 않습니다. __force는 타입 주석 변환이며 그 자체가 바이트 교환 명령이라는 뜻은 아닙니다."
+      },
+      {
+        "title": "Unordered 계층",
+        "text": "read/write*_cpu 주석은 relaxed보다도 약하며 연속 I/O 영역 접근 사이의 순서도 보장하지 않는다고 설명합니다. _cpu라는 접미사가 일반 RAM 전용 접근이나 자동 full barrier를 의미하지 않습니다. 이 계층은 엔디언 처리와 기본 접근을 조합하며 장치별 protocol을 검사하지 않습니다."
+      },
+      {
+        "title": "Relaxed의 계약과 플랫폼 전제",
+        "text": "relaxed 주석은 같은 peripheral의 I/O 접근 순서는 따르지만 Normal 메모리와의 순서는 보장하지 않는다고 설명합니다. 플랫폼의 I/O 영역이 channel0에서 strongly ordered라는 전제 때문에 별도 fence가 필요하지 않다고 명시합니다. 이것을 모든 임의 RISC-V 장치 배치의 검증 결과로 확대하지 않습니다."
+      },
+      {
+        "title": "Relaxed hook과 wrapper",
+        "text": "__io_rbr/rar/rbw/raw는 모두 빈 do-while입니다. relaxed 읽기는 앞 hook,cpu 읽기,뒤 hook,저장값 반환 순서이고 쓰기도 앞 hook,cpu 쓰기,뒤 hook입니다. 이 고정 버전에서는 hook이 비어 있으므로 본문이 cpu 접근과 유사해도 문서화된 사용 계약을 함께 읽어야 합니다. FIXME는 asm-generic과 같아졌다고 기록합니다."
+      },
+      {
+        "title": "일반 읽기 장벽",
+        "text": "__io_br은 빈 함수형 매크로이고 __io_ar(v)는 RISCV_FENCE(i,ir)입니다. 일반 readb/w/l/q는 먼저 읽어 __v에 담고 그 뒤 장벽을 실행해 보관한 값을 반환합니다. hook 인자 v는 이 구현의 fence 본문에서 쓰지 않습니다. 주석은 뒤따르는 Normal 읽기와 delay loop에 대한 순서를 설명하며 모든 방향의 full barrier로 과장하지 않습니다."
+      },
+      {
+        "title": "일반 쓰기 장벽과 pending",
+        "text": "__io_bw는 RISCV_FENCE(w,o),__io_aw는 mmiowb_set_pending입니다. 따라서 일반 쓰기는 앞선 Normal 쓰기와 I/O 출력을 순서화하는 fence,실제 쓰기,pending 표시 순서입니다. pending helper를 호출했다고 여기서 직접 장치 readback을 하거나 모든 posted write 완료를 기다린다고 설명하지 않습니다. helper 내부 구현은 별도 헤더의 범위입니다."
+      },
+      {
+        "title": "폭별 API와 적용 범위",
+        "text": "네 계층은8·16·32비트와 구성별64비트를 제공합니다. 장벽 유무와 endian 변환 여부를 접근 폭과 별도로 선택합니다. 이 파일에는 NULL·정렬·범위 검사,장치 소유권 확인,매핑 설치가 없습니다. readq가 존재하는64비트 구성이라는 사실만으로 모든 장치의64비트 bus 원자성이 보장되는 것도 아닙니다."
+      },
+      {
+        "title": "CS 연결과 검증",
+        "text": "타입 폭과 레지스터 확장,하드웨어 접근과 endian 변환,플랫폼 순서 보장과 명시적 fence,compiler 계약과 CPU 계약,지연된 MMIO 동기화 표시를 학습합니다. 원본·구조 검사는 실제 플랫폼의 장치 순서나 모든 실행 문맥을 검증한 것이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "readl과 readl_relaxed의 명시적 장벽 차이는?",
+        "options": [
+          "일반 readl은 읽기 뒤 fence i,ir을 수행한다",
+          "relaxed만 읽기 뒤 full fence를 수행한다"
+        ],
+        "answer": 0,
+        "explanation": "일반 __io_ar은 RISCV_FENCE(i,ir)이고 relaxed 전후 hook은 빈 정의입니다. Normal 메모리 순서 계약도 다릅니다."
+      },
+      {
+        "prompt": "readl_cpu는 raw와 달리 어떤 변환을 추가하는가?",
+        "options": [
+          "가상주소를 물리주소로 번역한다",
+          "little-endian 값을 CPU 표현으로 변환한다"
+        ],
+        "answer": 1,
+        "explanation": "le32_to_cpu를 사용합니다. 주소 매핑이나 페이지 테이블 변환을 수행하는 함수가 아닙니다."
+      },
+      {
+        "prompt": "일반 writel의 순서는?",
+        "options": [
+          "fence w,o → 쓰기 → mmiowb_set_pending이다",
+          "쓰기 → readback → 무조건 sleep이다"
+        ],
+        "answer": 0,
+        "explanation": "매크로의 __io_bw,writel_cpu,__io_aw를 확장하면 이 순서입니다. readback이나 sleep은 본문에 없습니다."
+      },
+      {
+        "prompt": "32비트 구성에서 이 파일 자체가 __raw_readq를 두 readl로 구현하는가?",
+        "options": [
+          "그렇다. 항상 자동 분할한다",
+          "아니다. q 정의는 CONFIG_64BIT 안에 있다"
+        ],
+        "answer": 1,
+        "explanation": "분할64비트 접근은 별도 nonatomic 헤더의 역할과 비교해야 합니다. 이 파일에 없는 fallback을 가정하면 틀립니다."
+      },
+      {
+        "prompt": "__raw_readb가 하위 byte0xff를 읽으면 C 반환값은?",
+        "options": [
+          "u8 값255이다",
+          "항상 signed 값-1이다"
+        ],
+        "answer": 0,
+        "explanation": "lb의 레지스터 확장과 최종 u8 타입을 구분합니다. 함수의 반환 폭과 signedness는 선언에 명시되어 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * {read,write}{b,w,l,q} based on arch/arm64/include/asm/io.h\n *   which was based on arch/arm/include/io.h\n *\n * Copyright (C) 1996-2000 Russell King\n * Copyright (C) 2012 ARM Ltd.\n * Copyright (C) 2014 Regents of the University of California\n */\n\n#ifndef _ASM_RISCV_MMIO_H\n#define _ASM_RISCV_MMIO_H\n\n#include <linux/types.h>\n#include <asm/fence.h>\n#include <asm/mmiowb.h>\n\n/* Generic IO read/write.  These perform native-endian accesses. */\n#define __raw_writeb __raw_writeb\nstatic inline void __raw_writeb(u8 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sb %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#define __raw_writew __raw_writew\nstatic inline void __raw_writew(u16 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sh %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#define __raw_writel __raw_writel\nstatic inline void __raw_writel(u32 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sw %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n\n#ifdef CONFIG_64BIT\n#define __raw_writeq __raw_writeq\nstatic inline void __raw_writeq(u64 val, volatile void __iomem *addr)\n{\n\tasm volatile(\"sd %0, 0(%1)\" : : \"r\" (val), \"r\" (addr));\n}\n#endif\n\n#define __raw_readb __raw_readb\nstatic inline u8 __raw_readb(const volatile void __iomem *addr)\n{\n\tu8 val;\n\n\tasm volatile(\"lb %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#define __raw_readw __raw_readw\nstatic inline u16 __raw_readw(const volatile void __iomem *addr)\n{\n\tu16 val;\n\n\tasm volatile(\"lh %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#define __raw_readl __raw_readl\nstatic inline u32 __raw_readl(const volatile void __iomem *addr)\n{\n\tu32 val;\n\n\tasm volatile(\"lw %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n\n#ifdef CONFIG_64BIT\n#define __raw_readq __raw_readq\nstatic inline u64 __raw_readq(const volatile void __iomem *addr)\n{\n\tu64 val;\n\n\tasm volatile(\"ld %0, 0(%1)\" : \"=r\" (val) : \"r\" (addr));\n\treturn val;\n}\n#endif\n\n/*\n * Unordered I/O memory access primitives.  These are even more relaxed than\n * the relaxed versions, as they don't even order accesses between successive\n * operations to the I/O regions.\n */\n#define readb_cpu(c)\t\t({ u8  __r = __raw_readb(c); __r; })\n#define readw_cpu(c)\t\t({ u16 __r = le16_to_cpu((__force __le16)__raw_readw(c)); __r; })\n#define readl_cpu(c)\t\t({ u32 __r = le32_to_cpu((__force __le32)__raw_readl(c)); __r; })\n\n#define writeb_cpu(v, c)\t((void)__raw_writeb((v), (c)))\n#define writew_cpu(v, c)\t((void)__raw_writew((__force u16)cpu_to_le16(v), (c)))\n#define writel_cpu(v, c)\t((void)__raw_writel((__force u32)cpu_to_le32(v), (c)))\n\n#ifdef CONFIG_64BIT\n#define readq_cpu(c)\t\t({ u64 __r = le64_to_cpu((__force __le64)__raw_readq(c)); __r; })\n#define writeq_cpu(v, c)\t((void)__raw_writeq((__force u64)cpu_to_le64(v), (c)))\n#endif\n\n/*\n * Relaxed I/O memory access primitives. These follow the Device memory\n * ordering rules but do not guarantee any ordering relative to Normal memory\n * accesses.  These are defined to order the indicated access (either a read or\n * write) with all other I/O memory accesses to the same peripheral. Since the\n * platform specification defines that all I/O regions are strongly ordered on\n * channel 0, no explicit fences are required to enforce this ordering.\n */\n/* FIXME: These are now the same as asm-generic */\n#define __io_rbr()\t\tdo {} while (0)\n#define __io_rar()\t\tdo {} while (0)\n#define __io_rbw()\t\tdo {} while (0)\n#define __io_raw()\t\tdo {} while (0)\n\n#define readb_relaxed(c)\t({ u8  __v; __io_rbr(); __v = readb_cpu(c); __io_rar(); __v; })\n#define readw_relaxed(c)\t({ u16 __v; __io_rbr(); __v = readw_cpu(c); __io_rar(); __v; })\n#define readl_relaxed(c)\t({ u32 __v; __io_rbr(); __v = readl_cpu(c); __io_rar(); __v; })\n\n#define writeb_relaxed(v, c)\t({ __io_rbw(); writeb_cpu((v), (c)); __io_raw(); })\n#define writew_relaxed(v, c)\t({ __io_rbw(); writew_cpu((v), (c)); __io_raw(); })\n#define writel_relaxed(v, c)\t({ __io_rbw(); writel_cpu((v), (c)); __io_raw(); })\n\n#ifdef CONFIG_64BIT\n#define readq_relaxed(c)\t({ u64 __v; __io_rbr(); __v = readq_cpu(c); __io_rar(); __v; })\n#define writeq_relaxed(v, c)\t({ __io_rbw(); writeq_cpu((v), (c)); __io_raw(); })\n#endif\n\n/*\n * I/O memory access primitives.  Reads are ordered relative to any following\n * Normal memory read and delay() loop.  Writes are ordered relative to any\n * prior Normal memory write.  The memory barriers here are necessary as RISC-V\n * doesn't define any ordering between the memory space and the I/O space.\n */\n#define __io_br()\tdo {} while (0)\n#define __io_ar(v)\tRISCV_FENCE(i, ir)\n#define __io_bw()\tRISCV_FENCE(w, o)\n#define __io_aw()\tmmiowb_set_pending()\n\n#define readb(c)\t({ u8  __v; __io_br(); __v = readb_cpu(c); __io_ar(__v); __v; })\n#define readw(c)\t({ u16 __v; __io_br(); __v = readw_cpu(c); __io_ar(__v); __v; })\n#define readl(c)\t({ u32 __v; __io_br(); __v = readl_cpu(c); __io_ar(__v); __v; })\n\n#define writeb(v, c)\t({ __io_bw(); writeb_cpu((v), (c)); __io_aw(); })\n#define writew(v, c)\t({ __io_bw(); writew_cpu((v), (c)); __io_aw(); })\n#define writel(v, c)\t({ __io_bw(); writel_cpu((v), (c)); __io_aw(); })\n\n#ifdef CONFIG_64BIT\n#define readq(c)\t({ u64 __v; __io_br(); __v = readq_cpu(c); __io_ar(__v); __v; })\n#define writeq(v, c)\t({ __io_bw(); writeq_cpu((v), (c)); __io_aw(); })\n#endif\n\n#endif /* _ASM_RISCV_MMIO_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d8fd6c3f9ea4e99db9e07f98e4930c9a14f0e6c03fc36d2114a0e3b1c88d9d65",
+      "scope": "whole-file",
+      "line_count": 152,
+      "authoring_source": "course/file_units/riscv_mmio.py",
+      "sections": [
+        "전체 구성",
+        "Raw 쓰기",
+        "Raw 읽기",
+        "Native와 little-endian 변환",
+        "Unordered 계층",
+        "Relaxed의 계약과 플랫폼 전제",
+        "Relaxed hook과 wrapper",
+        "일반 읽기 장벽",
+        "일반 쓰기 장벽과 pending",
+        "폭별 API와 적용 범위",
+        "CS 연결과 검증"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/mmio.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치 창구에서 값을 읽는 기본 동작이 같아도, 숫자의 바이트 순서를 바꾸거나 앞뒤 차례를 지키는 규칙을 덧붙이면 사용 약속이 달라집니다.",
+    "meaning": "RISC-V MMIO는 raw·CPU 변환·relaxed·일반 접근을 층별로 구분합니다.",
+    "exercise": "일반 writel을 앞 장벽→실제 쓰기→pending 표시로 펼쳐 보세요."
+  },
+  "goal": "RISC-V MMIO는 raw·CPU 변환·relaxed·일반 접근을 층별로 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "일반 writel을 앞 장벽→실제 쓰기→pending 표시로 펼쳐 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "b694d21b751b1b186affbed802492b86a38b8f39c755c33fe1ce70b8b4cdf99a",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

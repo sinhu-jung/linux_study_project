@@ -5,67 +5,81 @@
   "area": "CRC · 비트 연산 · 오류 검출",
   "track": "files",
   "kind": "kernel",
-  "intro": "7비트 CRC를 바이트의 상위 7비트에 넣는 구현입니다. 수학적 값과 저장 표현을 구분합니다.",
+  "intro": "CRC7의 왼쪽 정렬 상태와 바이트별 누적을 이해합니다.",
   "guide": [
-    "crc7_be_syndrome_table은 x^7+x^3+1에 대한 바이트 전이 표입니다. 각 결과는 왼쪽 정렬되어 최하위 비트가 0입니다. crc7_be는 len개 바이트를 차례로 crc7_be_byte에 전달하고 마지막 상태를 반환합니다.",
-    "초기 crc와 결과는 왼쪽 정렬 표현으로 다룹니다. 함수는 초기화값이나 프로토콜의 마지막 stop bit를 자동 삽입하지 않습니다. len이 0이면 초기값을 그대로 반환합니다."
+    "이 CRC는 높은 비트부터 처리합니다.",
+    "초기값과 전송용 stop bit는 호출자가 정합니다.",
+    "길이 0이면 입력을 읽지 않고 초기값을 돌려줍니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구성",
-      "text": "types.h는 u8와 size_t 등의 형식, crc7.h는 한 바이트 helper와 공개 선언, module.h는 export 및 메타데이터를 제공합니다. 파일의 핵심 정의는 256개 u8 상수와 crc7_be 함수이며 두 심볼을 EXPORT_SYMBOL로 공개합니다. MODULE_DESCRIPTION/LICENSE는 계산에 참여하지 않습니다."
+      "title": "파일 구성",
+      "text": "types 헤더는 u8와 size_t, crc7 헤더는 한 바이트 도구와 선언, module은 공개·메타데이터를 제공합니다. 실제 정의는 256개 u8 표와 crc7_be 함수이고 둘 다 공개합니다. 모듈 설명과 라이선스는 계산을 바꾸지 않습니다."
     },
     {
-      "title": "전이 표와 표현",
-      "text": "표의 모든 원소가 짝수인 것은 7비트 나머지를 한 비트 왼쪽으로 정렬했기 때문입니다. crc7_be_byte의 인덱스는 crc XOR data입니다. 값 0x12는 저장 표현이고 정렬을 제거한 7비트 값은 0x09입니다. CPU 메모리의 리틀/빅 엔디언과 CRC의 비트 처리 방향을 동일시하지 않습니다."
+      "title": "짝수로 보이는 표",
+      "text": "다항식은 x^7+x^3+1입니다. 일곱 비트 나머지를 한 칸 왼쪽에 놓아 표 값의 최하위 비트는 0이며 모두 짝수입니다. 인덱스는 crc XOR data입니다. 저장값 0x12를 정렬 없이 읽으면 0x09입니다. CRC의 비트 처리 방향과 CPU 메모리의 바이트 순서는 별개입니다."
     },
     {
-      "title": "루프와 수명",
-      "text": "while(len--)는 바이트 하나마다 buffer를 증가시킵니다. len=0이면 버퍼를 읽지 않으며 crc를 반환합니다. 양수 len에는 그 길이의 읽을 수 있는 버퍼가 필요합니다. 표가 const이고 지역 상태만 변경하므로 유효한 읽기 버퍼를 공유하는 호출 간에 CRC 상태를 서로 덮어쓰지 않습니다."
+      "title": "한 바이트씩 읽기",
+      "text": "while(len--)마다 *buffer++ 한 바이트를 처리합니다. len=0이면 버퍼를 안 읽고 기존 crc를 줍니다. 양수라면 그 길이만큼 읽을 수 있는 버퍼가 필요합니다. 표는 const이고 상태는 각 호출의 지역값이라 안정적인 입력을 공유하는 호출끼리 CRC 상태를 덮어쓰지 않습니다."
     },
     {
-      "title": "숫자 예시와 비용",
-      "text": "초기값 0에 바이트 0x01을 넣으면 tab[1]=0x12입니다. 다음 바이트도 0x01이면 인덱스 0x13이고 tab[0x13]=0x04입니다. n바이트에 O(n) 시간, 상태 O(1), 공유 표 256바이트를 사용합니다. CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다."
+      "title": "손계산과 비용",
+      "text": "초기 0에 1을 넣으면 table[1]=0x12, 다시 1이면 table[0x13]=0x04입니다. n바이트 시간 O(n), 추가 상태 O(1), 공통 표 256바이트입니다. CRC는 비트 다항식의 나머지로 실수를 찾으며 GF(2)에서는 더하기·빼기가 자리올림 없는 XOR입니다. 암호 인증이 아니고 초기값·방향·마지막 XOR·전송 표현에 따라 결과가 달라집니다."
     }
   ],
   "questions": [
     {
-      "prompt": "초기 0에서 [0x01,0x01]을 처리한 저장 CRC는?",
+      "prompt": "초기 0으로 [1,1]을 처리한 저장값은?",
       "options": [
         "0x04",
         "0x12"
       ],
       "answer": 0,
-      "explanation": "첫 바이트 후 0x12, 두 번째 인덱스는 0x12 XOR 1=0x13이고 tab[19]=0x04입니다. 0x12는 첫 바이트만 처리한 값입니다."
+      "explanation": "첫 값은 0x12지만 둘째 조회는 0x12 XOR 1=0x13으로 0x04입니다.",
+      "original_prompt": "초기 0에서 [0x01,0x01]을 처리한 저장 CRC는?",
+      "original_options": [
+        "0x04",
+        "0x12"
+      ],
+      "original_explanation": "첫 바이트 후 0x12, 두 번째 인덱스는 0x12 XOR 1=0x13이고 tab[19]=0x04입니다. 0x12는 첫 바이트만 처리한 값입니다."
     },
     {
-      "prompt": "저장 결과의 최하위 비트가 0인 이유는?",
+      "prompt": "맨 아래 출력 비트가 0인 까닭은?",
       "options": [
+        "입력의 아래 비트를 모두 버려서",
+        "일곱 비트 CRC를 위쪽 일곱 칸에 정렬해서"
+      ],
+      "answer": 1,
+      "explanation": "입력은 전부 표 인덱스에 반영됩니다.",
+      "original_prompt": "저장 결과의 최하위 비트가 0인 이유는?",
+      "original_options": [
         "입력 데이터의 최하위 비트를 모두 버리기 때문",
         "7비트 CRC를 바이트의 상위 7비트에 정렬하기 때문"
       ],
-      "answer": 1,
-      "explanation": "입력은 표 인덱스에 전부 반영됩니다. 0인 비트는 출력 상태 표현의 남는 한 자리이지 무시한 입력 비트를 뜻하지 않습니다."
+      "original_explanation": "입력은 표 인덱스에 전부 반영됩니다. 0인 비트는 출력 상태 표현의 남는 한 자리이지 무시한 입력 비트를 뜻하지 않습니다."
     },
     {
-      "prompt": "crc7_be가 프로토콜의 마지막 stop bit까지 붙이는가?",
+      "prompt": "마지막 stop bit도 자동으로 붙이나요?",
       "options": [
+        "아니다. 호출자가 전송 형식을 완성한다",
+        "그렇다. 결과 아래 비트는 늘 1이다"
+      ],
+      "answer": 0,
+      "explanation": "결과 아래 비트는 0이며 stop bit를 넣는 코드는 없습니다.",
+      "original_prompt": "crc7_be가 프로토콜의 마지막 stop bit까지 붙이는가?",
+      "original_options": [
         "아니다. 호출자가 전송 형식을 완성해야 한다",
         "그렇다. 결과의 최하위 비트가 항상 1이다"
       ],
-      "answer": 0,
-      "explanation": "함수의 결과는 최하위 비트가 0인 왼쪽 정렬 상태입니다. 별도의 전송 비트를 덧붙이는 로직은 이 파일에 없습니다."
+      "original_explanation": "함수의 결과는 최하위 비트가 0인 왼쪽 정렬 상태입니다. 별도의 전송 비트를 덧붙이는 로직은 이 파일에 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "초기 0에 1,1을 차례로 넣어 0x12 다음 0x04가 되는 표 조회를 따라가세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *      crc7.c\n */\n\n#include <linux/types.h>\n#include <linux/module.h>\n#include <linux/crc7.h>\n\n\n/*\n * Table for CRC-7 (polynomial x^7 + x^3 + 1).\n * This is a big-endian CRC (msbit is highest power of x),\n * aligned so the msbit of the byte is the x^6 coefficient\n * and the lsbit is not used.\n */\nconst u8 crc7_be_syndrome_table[256] = {\n\t0x00, 0x12, 0x24, 0x36, 0x48, 0x5a, 0x6c, 0x7e,\n\t0x90, 0x82, 0xb4, 0xa6, 0xd8, 0xca, 0xfc, 0xee,\n\t0x32, 0x20, 0x16, 0x04, 0x7a, 0x68, 0x5e, 0x4c,\n\t0xa2, 0xb0, 0x86, 0x94, 0xea, 0xf8, 0xce, 0xdc,\n\t0x64, 0x76, 0x40, 0x52, 0x2c, 0x3e, 0x08, 0x1a,\n\t0xf4, 0xe6, 0xd0, 0xc2, 0xbc, 0xae, 0x98, 0x8a,\n\t0x56, 0x44, 0x72, 0x60, 0x1e, 0x0c, 0x3a, 0x28,\n\t0xc6, 0xd4, 0xe2, 0xf0, 0x8e, 0x9c, 0xaa, 0xb8,\n\t0xc8, 0xda, 0xec, 0xfe, 0x80, 0x92, 0xa4, 0xb6,\n\t0x58, 0x4a, 0x7c, 0x6e, 0x10, 0x02, 0x34, 0x26,\n\t0xfa, 0xe8, 0xde, 0xcc, 0xb2, 0xa0, 0x96, 0x84,\n\t0x6a, 0x78, 0x4e, 0x5c, 0x22, 0x30, 0x06, 0x14,\n\t0xac, 0xbe, 0x88, 0x9a, 0xe4, 0xf6, 0xc0, 0xd2,\n\t0x3c, 0x2e, 0x18, 0x0a, 0x74, 0x66, 0x50, 0x42,\n\t0x9e, 0x8c, 0xba, 0xa8, 0xd6, 0xc4, 0xf2, 0xe0,\n\t0x0e, 0x1c, 0x2a, 0x38, 0x46, 0x54, 0x62, 0x70,\n\t0x82, 0x90, 0xa6, 0xb4, 0xca, 0xd8, 0xee, 0xfc,\n\t0x12, 0x00, 0x36, 0x24, 0x5a, 0x48, 0x7e, 0x6c,\n\t0xb0, 0xa2, 0x94, 0x86, 0xf8, 0xea, 0xdc, 0xce,\n\t0x20, 0x32, 0x04, 0x16, 0x68, 0x7a, 0x4c, 0x5e,\n\t0xe6, 0xf4, 0xc2, 0xd0, 0xae, 0xbc, 0x8a, 0x98,\n\t0x76, 0x64, 0x52, 0x40, 0x3e, 0x2c, 0x1a, 0x08,\n\t0xd4, 0xc6, 0xf0, 0xe2, 0x9c, 0x8e, 0xb8, 0xaa,\n\t0x44, 0x56, 0x60, 0x72, 0x0c, 0x1e, 0x28, 0x3a,\n\t0x4a, 0x58, 0x6e, 0x7c, 0x02, 0x10, 0x26, 0x34,\n\t0xda, 0xc8, 0xfe, 0xec, 0x92, 0x80, 0xb6, 0xa4,\n\t0x78, 0x6a, 0x5c, 0x4e, 0x30, 0x22, 0x14, 0x06,\n\t0xe8, 0xfa, 0xcc, 0xde, 0xa0, 0xb2, 0x84, 0x96,\n\t0x2e, 0x3c, 0x0a, 0x18, 0x66, 0x74, 0x42, 0x50,\n\t0xbe, 0xac, 0x9a, 0x88, 0xf6, 0xe4, 0xd2, 0xc0,\n\t0x1c, 0x0e, 0x38, 0x2a, 0x54, 0x46, 0x70, 0x62,\n\t0x8c, 0x9e, 0xa8, 0xba, 0xc4, 0xd6, 0xe0, 0xf2\n};\nEXPORT_SYMBOL(crc7_be_syndrome_table);\n\n/**\n * crc7_be - update the CRC7 for the data buffer\n * @crc:     previous CRC7 value\n * @buffer:  data pointer\n * @len:     number of bytes in the buffer\n * Context: any\n *\n * Returns the updated CRC7 value.\n * The CRC7 is left-aligned in the byte (the lsbit is always 0), as that\n * makes the computation easier, and all callers want it in that form.\n *\n */\nu8 crc7_be(u8 crc, const u8 *buffer, size_t len)\n{\n\twhile (len--)\n\t\tcrc = crc7_be_byte(crc, *buffer++);\n\treturn crc;\n}\nEXPORT_SYMBOL(crc7_be);\n\nMODULE_DESCRIPTION(\"CRC7 calculations\");\nMODULE_LICENSE(\"GPL\");\n",
   "source_review": {
@@ -87,5 +101,124 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc7.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e7fc9cbae67cb02e",
+    "path": "lib/crc7.c",
+    "title": "CRC7 전체 구현: 왼쪽 정렬 상태와 256칸 전이 표",
+    "area": "CRC · 비트 연산 · 오류 검출",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "7비트 CRC를 바이트의 상위 7비트에 넣는 구현입니다. 수학적 값과 저장 표현을 구분합니다.",
+    "guide": [
+      "crc7_be_syndrome_table은 x^7+x^3+1에 대한 바이트 전이 표입니다. 각 결과는 왼쪽 정렬되어 최하위 비트가 0입니다. crc7_be는 len개 바이트를 차례로 crc7_be_byte에 전달하고 마지막 상태를 반환합니다.",
+      "초기 crc와 결과는 왼쪽 정렬 표현으로 다룹니다. 함수는 초기화값이나 프로토콜의 마지막 stop bit를 자동 삽입하지 않습니다. len이 0이면 초기값을 그대로 반환합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구성",
+        "text": "types.h는 u8와 size_t 등의 형식, crc7.h는 한 바이트 helper와 공개 선언, module.h는 export 및 메타데이터를 제공합니다. 파일의 핵심 정의는 256개 u8 상수와 crc7_be 함수이며 두 심볼을 EXPORT_SYMBOL로 공개합니다. MODULE_DESCRIPTION/LICENSE는 계산에 참여하지 않습니다."
+      },
+      {
+        "title": "전이 표와 표현",
+        "text": "표의 모든 원소가 짝수인 것은 7비트 나머지를 한 비트 왼쪽으로 정렬했기 때문입니다. crc7_be_byte의 인덱스는 crc XOR data입니다. 값 0x12는 저장 표현이고 정렬을 제거한 7비트 값은 0x09입니다. CPU 메모리의 리틀/빅 엔디언과 CRC의 비트 처리 방향을 동일시하지 않습니다."
+      },
+      {
+        "title": "루프와 수명",
+        "text": "while(len--)는 바이트 하나마다 buffer를 증가시킵니다. len=0이면 버퍼를 읽지 않으며 crc를 반환합니다. 양수 len에는 그 길이의 읽을 수 있는 버퍼가 필요합니다. 표가 const이고 지역 상태만 변경하므로 유효한 읽기 버퍼를 공유하는 호출 간에 CRC 상태를 서로 덮어쓰지 않습니다."
+      },
+      {
+        "title": "숫자 예시와 비용",
+        "text": "초기값 0에 바이트 0x01을 넣으면 tab[1]=0x12입니다. 다음 바이트도 0x01이면 인덱스 0x13이고 tab[0x13]=0x04입니다. n바이트에 O(n) 시간, 상태 O(1), 공유 표 256바이트를 사용합니다. CRC는 비트열을 GF(2) 다항식으로 보고 나머지를 갱신하는 오류 검출 방식입니다. 이 체계에서 덧셈과 뺄셈은 XOR이며 자리올림이 없습니다. CRC는 암호학적 인증 코드가 아니므로 악의적인 변경을 방지하려면 별도의 인증 설계가 필요합니다. 초기값·비트 방향·마지막 XOR·전송 표현이 달라지면 같은 입력의 최종 값도 달라집니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "초기 0에서 [0x01,0x01]을 처리한 저장 CRC는?",
+        "options": [
+          "0x04",
+          "0x12"
+        ],
+        "answer": 0,
+        "explanation": "첫 바이트 후 0x12, 두 번째 인덱스는 0x12 XOR 1=0x13이고 tab[19]=0x04입니다. 0x12는 첫 바이트만 처리한 값입니다."
+      },
+      {
+        "prompt": "저장 결과의 최하위 비트가 0인 이유는?",
+        "options": [
+          "입력 데이터의 최하위 비트를 모두 버리기 때문",
+          "7비트 CRC를 바이트의 상위 7비트에 정렬하기 때문"
+        ],
+        "answer": 1,
+        "explanation": "입력은 표 인덱스에 전부 반영됩니다. 0인 비트는 출력 상태 표현의 남는 한 자리이지 무시한 입력 비트를 뜻하지 않습니다."
+      },
+      {
+        "prompt": "crc7_be가 프로토콜의 마지막 stop bit까지 붙이는가?",
+        "options": [
+          "아니다. 호출자가 전송 형식을 완성해야 한다",
+          "그렇다. 결과의 최하위 비트가 항상 1이다"
+        ],
+        "answer": 0,
+        "explanation": "함수의 결과는 최하위 비트가 0인 왼쪽 정렬 상태입니다. 별도의 전송 비트를 덧붙이는 로직은 이 파일에 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *      crc7.c\n */\n\n#include <linux/types.h>\n#include <linux/module.h>\n#include <linux/crc7.h>\n\n\n/*\n * Table for CRC-7 (polynomial x^7 + x^3 + 1).\n * This is a big-endian CRC (msbit is highest power of x),\n * aligned so the msbit of the byte is the x^6 coefficient\n * and the lsbit is not used.\n */\nconst u8 crc7_be_syndrome_table[256] = {\n\t0x00, 0x12, 0x24, 0x36, 0x48, 0x5a, 0x6c, 0x7e,\n\t0x90, 0x82, 0xb4, 0xa6, 0xd8, 0xca, 0xfc, 0xee,\n\t0x32, 0x20, 0x16, 0x04, 0x7a, 0x68, 0x5e, 0x4c,\n\t0xa2, 0xb0, 0x86, 0x94, 0xea, 0xf8, 0xce, 0xdc,\n\t0x64, 0x76, 0x40, 0x52, 0x2c, 0x3e, 0x08, 0x1a,\n\t0xf4, 0xe6, 0xd0, 0xc2, 0xbc, 0xae, 0x98, 0x8a,\n\t0x56, 0x44, 0x72, 0x60, 0x1e, 0x0c, 0x3a, 0x28,\n\t0xc6, 0xd4, 0xe2, 0xf0, 0x8e, 0x9c, 0xaa, 0xb8,\n\t0xc8, 0xda, 0xec, 0xfe, 0x80, 0x92, 0xa4, 0xb6,\n\t0x58, 0x4a, 0x7c, 0x6e, 0x10, 0x02, 0x34, 0x26,\n\t0xfa, 0xe8, 0xde, 0xcc, 0xb2, 0xa0, 0x96, 0x84,\n\t0x6a, 0x78, 0x4e, 0x5c, 0x22, 0x30, 0x06, 0x14,\n\t0xac, 0xbe, 0x88, 0x9a, 0xe4, 0xf6, 0xc0, 0xd2,\n\t0x3c, 0x2e, 0x18, 0x0a, 0x74, 0x66, 0x50, 0x42,\n\t0x9e, 0x8c, 0xba, 0xa8, 0xd6, 0xc4, 0xf2, 0xe0,\n\t0x0e, 0x1c, 0x2a, 0x38, 0x46, 0x54, 0x62, 0x70,\n\t0x82, 0x90, 0xa6, 0xb4, 0xca, 0xd8, 0xee, 0xfc,\n\t0x12, 0x00, 0x36, 0x24, 0x5a, 0x48, 0x7e, 0x6c,\n\t0xb0, 0xa2, 0x94, 0x86, 0xf8, 0xea, 0xdc, 0xce,\n\t0x20, 0x32, 0x04, 0x16, 0x68, 0x7a, 0x4c, 0x5e,\n\t0xe6, 0xf4, 0xc2, 0xd0, 0xae, 0xbc, 0x8a, 0x98,\n\t0x76, 0x64, 0x52, 0x40, 0x3e, 0x2c, 0x1a, 0x08,\n\t0xd4, 0xc6, 0xf0, 0xe2, 0x9c, 0x8e, 0xb8, 0xaa,\n\t0x44, 0x56, 0x60, 0x72, 0x0c, 0x1e, 0x28, 0x3a,\n\t0x4a, 0x58, 0x6e, 0x7c, 0x02, 0x10, 0x26, 0x34,\n\t0xda, 0xc8, 0xfe, 0xec, 0x92, 0x80, 0xb6, 0xa4,\n\t0x78, 0x6a, 0x5c, 0x4e, 0x30, 0x22, 0x14, 0x06,\n\t0xe8, 0xfa, 0xcc, 0xde, 0xa0, 0xb2, 0x84, 0x96,\n\t0x2e, 0x3c, 0x0a, 0x18, 0x66, 0x74, 0x42, 0x50,\n\t0xbe, 0xac, 0x9a, 0x88, 0xf6, 0xe4, 0xd2, 0xc0,\n\t0x1c, 0x0e, 0x38, 0x2a, 0x54, 0x46, 0x70, 0x62,\n\t0x8c, 0x9e, 0xa8, 0xba, 0xc4, 0xd6, 0xe0, 0xf2\n};\nEXPORT_SYMBOL(crc7_be_syndrome_table);\n\n/**\n * crc7_be - update the CRC7 for the data buffer\n * @crc:     previous CRC7 value\n * @buffer:  data pointer\n * @len:     number of bytes in the buffer\n * Context: any\n *\n * Returns the updated CRC7 value.\n * The CRC7 is left-aligned in the byte (the lsbit is always 0), as that\n * makes the computation easier, and all callers want it in that form.\n *\n */\nu8 crc7_be(u8 crc, const u8 *buffer, size_t len)\n{\n\twhile (len--)\n\t\tcrc = crc7_be_byte(crc, *buffer++);\n\treturn crc;\n}\nEXPORT_SYMBOL(crc7_be);\n\nMODULE_DESCRIPTION(\"CRC7 calculations\");\nMODULE_LICENSE(\"GPL\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "6a368b9693559fd853ec72100ff368b4a5856cf928c5baf70b98ccc65f77d7af",
+      "scope": "whole-file",
+      "line_count": 74,
+      "authoring_source": "course/file_units/crc_fundamentals.py",
+      "sections": [
+        "전체 파일 구성",
+        "전이 표와 표현",
+        "루프와 수명",
+        "숫자 예시와 비용"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/crc7.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "일곱 비트 검사값을 한 바이트의 위쪽 일곱 칸에 담습니다. 맨 아래 빈 칸을 입력에서 버린 비트와 혼동하지 않습니다.",
+    "meaning": "CRC7의 왼쪽 정렬 상태와 바이트별 누적을 이해합니다.",
+    "exercise": "초기 0에 1,1을 차례로 넣어 0x12 다음 0x04가 되는 표 조회를 따라가세요."
+  },
+  "goal": "CRC7의 왼쪽 정렬 상태와 바이트별 누적을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "초기 0에 1,1을 차례로 넣어 0x12 다음 0x04가 되는 표 조회를 따라가세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "8b74292bcb9a72ce754d5ff9b71a1acf76eebdba60e6687ebd61893c9f05f0f5",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

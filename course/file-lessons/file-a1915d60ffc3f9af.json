@@ -5,71 +5,85 @@
   "area": "비트 알고리즘 · 병렬 합산·정렬",
   "track": "files",
   "kind": "kernel",
-  "intro": "같은 결과를 만드는 여러 구현을 고르는 헤더입니다. 특히 전체 32비트 반전과 바이트 순서를 유지하는 반전을 구분합니다.",
+  "intro": "bitrev.h는 고정 폭 전체 반전과 바이트별 반전을 제공하며 상수·실행 경로와 아키텍처 전용·표 기반 구현을 선택합니다.",
   "guide": [
-    "아키텍처 기능이 있으면 __bitrev8/16/32를 아키텍처 helper에 연결합니다. 없으면 바이트 표를 조회하고 16·32비트를 작은 단위 반전과 위치 교환으로 조합합니다. 공개 bitrev 매크로들은 임시 변수와 __builtin_constant_p로 상수 계산 경로 또는 실행 경로를 선택합니다.",
-    "bitrev32는 32비트 전체의 순서를 뒤집습니다. bitrev8x4는 네 바이트 각각의 비트만 뒤집고 바이트 순서는 유지합니다. 동적 8x4 경로는 swab32 후 전체 bitrev32를 수행하므로 사용 문맥에서 swab32도 사용 가능해야 합니다."
+    "비트 반전은 비트의 위치를 역순으로 바꾸는 순열입니다. 값 0·1을 바꾸는 NOT이 아닙니다.",
+    "작은 구획끼리 순서를 바꾸는 작업을 차례로 하면 큰 정수의 전체 순서를 뒤집을 수 있습니다.",
+    "공개 매크로는 원래 입력식을 임시 변수에 한 번 담아 반복 평가를 피합니다."
   ],
   "deep_dive": [
     {
-      "title": "헤더의 앞부분 전체",
-      "text": "SPDX·가드·types.h 포함 뒤 CONFIG_HAVE_ARCH_BITREVERSE 분기가 있습니다. 전용 경로는 asm/bitrev.h를 포함하고 세 이름을 별칭으로 연결합니다. fallback은 extern byte_rev_table과 세 inline helper를 정의합니다. 16비트는 낮은 바이트를 반전해 높은 자리로, 높은 바이트를 반전해 낮은 자리로 옮깁니다. 32비트도 같은 방식으로 16비트 두 조각을 처리합니다."
+      "title": "구현 선택과 조각 합치기",
+      "text": "SPDX·guard·types.h 뒤 아키텍처 기능이 있으면 asm/bitrev.h의 세 함수를 별칭으로 씁니다. 없으면 표 선언과 8·16·32비트 인라인 도우미입니다. 16비트는 낮은 바이트를 뒤집어 높은 자리로 옮기고 높은 바이트는 낮은 자리로 옮깁니다. 32비트는 같은 방법으로 두 16비트 조각을 처리합니다."
     },
     {
-      "title": "상수 반전 단계",
-      "text": "__constant_bitrev32는 16비트 반쪽 교환→바이트 교환→4비트 묶음 교환→2비트 교환→인접 비트 교환입니다. 16비트와 8비트 버전은 필요한 작은 단계부터 시작합니다. 마스크는 서로 섞이면 안 되는 묶음들을 골라 이동시키며 OR로 합칩니다. 고정 폭 임시 형식에 저장해 해당 폭의 결과를 유지합니다."
+      "title": "상수 반전의 여러 단계",
+      "text": "32비트는 16비트 반쪽, 바이트, 4비트, 2비트, 인접 1비트 순서로 교환합니다. 16·8비트는 해당 폭에 필요한 단계부터 시작합니다. 마스크는 서로 섞이면 안 되는 구획만 골라 이동하고 OR로 합칩니다. u32·u16·u8 임시값에 저장해 해당 폭 결과를 유지합니다."
     },
     {
-      "title": "8x4의 차이",
-      "text": "__constant_bitrev8x4는 바이트 순서를 바꾸는 16·8비트 교환 단계를 생략하고 4·2·1비트 교환만 수행합니다. 입력 0x01020408은 바이트별로 0x80402010이 됩니다. 전체 bitrev32는 0x10204080입니다. 동적 __bitrev8x4는 swab32로 미리 바이트 순서를 바꾼 뒤 전체 반전하여 같은 바이트별 결과를 얻습니다."
+      "title": "바이트 위치를 유지하는 8x4",
+      "text": "상수 8x4는 큰 반쪽과 바이트 교환을 빼고 각 바이트 내부의 4·2·1비트만 교환합니다. 01·02·04·08은 80·40·20·10이 됩니다. 동적 경로는 swab32로 바이트 순서를 먼저 바꾸고 전체 bitrev32를 해 같은 결과를 냅니다. 따라서 사용 문맥에서 swab32도 제공되어야 합니다."
     },
     {
-      "title": "공개 매크로와 평가",
-      "text": "bitrev8/16/32/8x4 각각은 x를 해당 폭의 지역 __x에 먼저 담습니다. 원래 인자 식을 한 번 평가한 뒤 그 값을 상수 판단과 선택된 경로에 전달합니다. __builtin_constant_p는 컴파일러가 상수로 판단할 수 있는지를 묻는 확장 기능이며 런타임 입력이 실제로 항상 같은 값이라는 증명이 아닙니다."
+      "title": "한 번 평가와 상수 판별",
+      "text": "네 공개 매크로는 x를 해당 폭의 지역 __x에 먼저 담습니다. 이후 상수 판별과 선택된 계산에는 이 복사값을 사용합니다. __builtin_constant_p는 컴파일러가 미리 값을 판단할 수 있는지 묻는 기능이지 실행 입력이 평생 같은 값이라는 증명이 아닙니다."
     },
     {
-      "title": "CS 연결과 검토 범위",
-      "text": "고정 폭 분할정복 순열, SWAR식 마스크 연산, 컴파일 시 최적화와 대체 구현 선택을 연결합니다. 이 헤더 전체의 선택·조합 로직을 설명하지만 각 아키텍처 명령 구현의 정확성까지 이 파일만으로 검증한 것으로 세지는 않습니다."
+      "title": "알고리즘과 검증 범위",
+      "text": "큰 비트열을 작은 묶음으로 나눠 교환하고 한 정수 안에서 여러 묶음을 병렬 처리하는 마스크 기법을 읽었습니다. 이 헤더의 선택·조합을 분석한 것이며 각 아키텍처 명령 구현의 정확성까지 이 파일만으로 검증하지는 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "0x01020408에 bitrev8x4를 적용하면?",
+      "prompt": "0x01020408의 bitrev8x4 결과는 무엇인가요?",
       "options": [
+        "0x80402010입니다.",
+        "0x10204080입니다."
+      ],
+      "answer": 0,
+      "explanation": "각 바이트는 뒤집지만 바이트가 놓인 순서는 유지합니다.",
+      "original_prompt": "0x01020408에 bitrev8x4를 적용하면?",
+      "original_options": [
         "0x80402010",
         "0x10204080"
       ],
-      "answer": 0,
-      "explanation": "각 바이트 01,02,04,08은 80,40,20,10으로 변하고 바이트 위치는 유지됩니다. 후자는 전체 32비트 역순 결과입니다."
+      "original_explanation": "각 바이트 01,02,04,08은 80,40,20,10으로 변하고 바이트 위치는 유지됩니다. 후자는 전체 32비트 역순 결과입니다."
     },
     {
-      "prompt": "상수 bitrev8x4가 전체 bitrev32와 달리 생략하는 단계는?",
+      "prompt": "8x4가 전체 32비트 반전과 달리 생략하는 단계는 무엇인가요?",
       "options": [
+        "바이트 안의 인접 비트 교환입니다.",
+        "바이트 순서를 바꾸는 큰 묶음 교환입니다."
+      ],
+      "answer": 1,
+      "explanation": "16·8비트 교환을 빼고 4·2·1비트 교환은 남깁니다.",
+      "original_prompt": "상수 bitrev8x4가 전체 bitrev32와 달리 생략하는 단계는?",
+      "original_options": [
         "각 바이트 내부의 인접 비트 교환",
         "바이트 순서를 바꾸는 큰 묶음 교환"
       ],
-      "answer": 1,
-      "explanation": "8x4는 바이트 위치를 유지해야 하므로 16비트 반쪽·8비트 바이트 교환을 하지 않습니다. 내부 4·2·1비트 교환은 필요합니다."
+      "original_explanation": "8x4는 바이트 위치를 유지해야 하므로 16비트 반쪽·8비트 바이트 교환을 하지 않습니다. 내부 4·2·1비트 교환은 필요합니다."
     },
     {
-      "prompt": "공개 bitrev 매크로가 x를 임시 변수에 담는 이유 중 하나는?",
+      "prompt": "입력을 임시 변수에 담는 이유는 무엇인가요?",
       "options": [
+        "원래 인수식을 여러 번 평가하지 않기 위해서입니다.",
+        "원본 메모리를 자동으로 수정하기 위해서입니다."
+      ],
+      "answer": 0,
+      "explanation": "초기화 뒤에는 지역 값만 사용하며 호출자 변수에 대입하지 않습니다.",
+      "original_prompt": "공개 bitrev 매크로가 x를 임시 변수에 담는 이유 중 하나는?",
+      "original_options": [
         "원래 인자 식을 반복 평가하지 않으려는 것",
         "x의 원본 메모리를 자동으로 수정하려는 것"
       ],
-      "answer": 0,
-      "explanation": "u32 __x=x 등의 초기화가 원래 인자 평가 지점입니다. 이후에는 지역 값을 사용하며 호출자 변수에 대입하는 매크로가 아닙니다."
+      "original_explanation": "u32 __x=x 등의 초기화가 원래 인자 평가 지점입니다. 이후에는 지역 값을 사용하며 호출자 변수에 대입하는 매크로가 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0x01020408의 전체 반전 0x10204080과 바이트별 반전 0x80402010을 비교하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_BITREV_H\n#define _LINUX_BITREV_H\n\n#include <linux/types.h>\n\n#ifdef CONFIG_HAVE_ARCH_BITREVERSE\n#include <asm/bitrev.h>\n\n#define __bitrev32 __arch_bitrev32\n#define __bitrev16 __arch_bitrev16\n#define __bitrev8 __arch_bitrev8\n\n#else\nextern u8 const byte_rev_table[256];\nstatic inline u8 __bitrev8(u8 byte)\n{\n\treturn byte_rev_table[byte];\n}\n\nstatic inline u16 __bitrev16(u16 x)\n{\n\treturn (__bitrev8(x & 0xff) << 8) | __bitrev8(x >> 8);\n}\n\nstatic inline u32 __bitrev32(u32 x)\n{\n\treturn (__bitrev16(x & 0xffff) << 16) | __bitrev16(x >> 16);\n}\n\n#endif /* CONFIG_HAVE_ARCH_BITREVERSE */\n\n#define __bitrev8x4(x)\t(__bitrev32(swab32(x)))\n\n#define __constant_bitrev32(x)\t\\\n({\t\t\t\t\t\\\n\tu32 ___x = x;\t\t\t\\\n\t___x = (___x >> 16) | (___x << 16);\t\\\n\t___x = ((___x & (u32)0xFF00FF00UL) >> 8) | ((___x & (u32)0x00FF00FFUL) << 8);\t\\\n\t___x = ((___x & (u32)0xF0F0F0F0UL) >> 4) | ((___x & (u32)0x0F0F0F0FUL) << 4);\t\\\n\t___x = ((___x & (u32)0xCCCCCCCCUL) >> 2) | ((___x & (u32)0x33333333UL) << 2);\t\\\n\t___x = ((___x & (u32)0xAAAAAAAAUL) >> 1) | ((___x & (u32)0x55555555UL) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev16(x)\t\\\n({\t\t\t\t\t\\\n\tu16 ___x = x;\t\t\t\\\n\t___x = (___x >> 8) | (___x << 8);\t\\\n\t___x = ((___x & (u16)0xF0F0U) >> 4) | ((___x & (u16)0x0F0FU) << 4);\t\\\n\t___x = ((___x & (u16)0xCCCCU) >> 2) | ((___x & (u16)0x3333U) << 2);\t\\\n\t___x = ((___x & (u16)0xAAAAU) >> 1) | ((___x & (u16)0x5555U) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev8x4(x) \\\n({\t\t\t\\\n\tu32 ___x = x;\t\\\n\t___x = ((___x & (u32)0xF0F0F0F0UL) >> 4) | ((___x & (u32)0x0F0F0F0FUL) << 4);\t\\\n\t___x = ((___x & (u32)0xCCCCCCCCUL) >> 2) | ((___x & (u32)0x33333333UL) << 2);\t\\\n\t___x = ((___x & (u32)0xAAAAAAAAUL) >> 1) | ((___x & (u32)0x55555555UL) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev8(x)\t\\\n({\t\t\t\t\t\\\n\tu8 ___x = x;\t\t\t\\\n\t___x = (___x >> 4) | (___x << 4);\t\\\n\t___x = ((___x & (u8)0xCCU) >> 2) | ((___x & (u8)0x33U) << 2);\t\\\n\t___x = ((___x & (u8)0xAAU) >> 1) | ((___x & (u8)0x55U) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define bitrev32(x) \\\n({\t\t\t\\\n\tu32 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev32(__x) :\t\t\t\\\n\t__bitrev32(__x);\t\t\t\t\\\n})\n\n#define bitrev16(x) \\\n({\t\t\t\\\n\tu16 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev16(__x) :\t\t\t\\\n\t__bitrev16(__x);\t\t\t\t\\\n })\n\n#define bitrev8x4(x) \\\n({\t\t\t\\\n\tu32 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev8x4(__x) :\t\t\t\\\n\t__bitrev8x4(__x);\t\t\t\t\\\n })\n\n#define bitrev8(x) \\\n({\t\t\t\\\n\tu8 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev8(__x) :\t\t\t\\\n\t__bitrev8(__x)\t;\t\t\t\\\n })\n#endif /* _LINUX_BITREV_H */\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/bitrev.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a1915d60ffc3f9af",
+    "path": "include/linux/bitrev.h",
+    "title": "비트 반전 헤더 전체: 상수 경로·표 경로·바이트별 반전",
+    "area": "비트 알고리즘 · 병렬 합산·정렬",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "같은 결과를 만드는 여러 구현을 고르는 헤더입니다. 특히 전체 32비트 반전과 바이트 순서를 유지하는 반전을 구분합니다.",
+    "guide": [
+      "아키텍처 기능이 있으면 __bitrev8/16/32를 아키텍처 helper에 연결합니다. 없으면 바이트 표를 조회하고 16·32비트를 작은 단위 반전과 위치 교환으로 조합합니다. 공개 bitrev 매크로들은 임시 변수와 __builtin_constant_p로 상수 계산 경로 또는 실행 경로를 선택합니다.",
+      "bitrev32는 32비트 전체의 순서를 뒤집습니다. bitrev8x4는 네 바이트 각각의 비트만 뒤집고 바이트 순서는 유지합니다. 동적 8x4 경로는 swab32 후 전체 bitrev32를 수행하므로 사용 문맥에서 swab32도 사용 가능해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더의 앞부분 전체",
+        "text": "SPDX·가드·types.h 포함 뒤 CONFIG_HAVE_ARCH_BITREVERSE 분기가 있습니다. 전용 경로는 asm/bitrev.h를 포함하고 세 이름을 별칭으로 연결합니다. fallback은 extern byte_rev_table과 세 inline helper를 정의합니다. 16비트는 낮은 바이트를 반전해 높은 자리로, 높은 바이트를 반전해 낮은 자리로 옮깁니다. 32비트도 같은 방식으로 16비트 두 조각을 처리합니다."
+      },
+      {
+        "title": "상수 반전 단계",
+        "text": "__constant_bitrev32는 16비트 반쪽 교환→바이트 교환→4비트 묶음 교환→2비트 교환→인접 비트 교환입니다. 16비트와 8비트 버전은 필요한 작은 단계부터 시작합니다. 마스크는 서로 섞이면 안 되는 묶음들을 골라 이동시키며 OR로 합칩니다. 고정 폭 임시 형식에 저장해 해당 폭의 결과를 유지합니다."
+      },
+      {
+        "title": "8x4의 차이",
+        "text": "__constant_bitrev8x4는 바이트 순서를 바꾸는 16·8비트 교환 단계를 생략하고 4·2·1비트 교환만 수행합니다. 입력 0x01020408은 바이트별로 0x80402010이 됩니다. 전체 bitrev32는 0x10204080입니다. 동적 __bitrev8x4는 swab32로 미리 바이트 순서를 바꾼 뒤 전체 반전하여 같은 바이트별 결과를 얻습니다."
+      },
+      {
+        "title": "공개 매크로와 평가",
+        "text": "bitrev8/16/32/8x4 각각은 x를 해당 폭의 지역 __x에 먼저 담습니다. 원래 인자 식을 한 번 평가한 뒤 그 값을 상수 판단과 선택된 경로에 전달합니다. __builtin_constant_p는 컴파일러가 상수로 판단할 수 있는지를 묻는 확장 기능이며 런타임 입력이 실제로 항상 같은 값이라는 증명이 아닙니다."
+      },
+      {
+        "title": "CS 연결과 검토 범위",
+        "text": "고정 폭 분할정복 순열, SWAR식 마스크 연산, 컴파일 시 최적화와 대체 구현 선택을 연결합니다. 이 헤더 전체의 선택·조합 로직을 설명하지만 각 아키텍처 명령 구현의 정확성까지 이 파일만으로 검증한 것으로 세지는 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "0x01020408에 bitrev8x4를 적용하면?",
+        "options": [
+          "0x80402010",
+          "0x10204080"
+        ],
+        "answer": 0,
+        "explanation": "각 바이트 01,02,04,08은 80,40,20,10으로 변하고 바이트 위치는 유지됩니다. 후자는 전체 32비트 역순 결과입니다."
+      },
+      {
+        "prompt": "상수 bitrev8x4가 전체 bitrev32와 달리 생략하는 단계는?",
+        "options": [
+          "각 바이트 내부의 인접 비트 교환",
+          "바이트 순서를 바꾸는 큰 묶음 교환"
+        ],
+        "answer": 1,
+        "explanation": "8x4는 바이트 위치를 유지해야 하므로 16비트 반쪽·8비트 바이트 교환을 하지 않습니다. 내부 4·2·1비트 교환은 필요합니다."
+      },
+      {
+        "prompt": "공개 bitrev 매크로가 x를 임시 변수에 담는 이유 중 하나는?",
+        "options": [
+          "원래 인자 식을 반복 평가하지 않으려는 것",
+          "x의 원본 메모리를 자동으로 수정하려는 것"
+        ],
+        "answer": 0,
+        "explanation": "u32 __x=x 등의 초기화가 원래 인자 평가 지점입니다. 이후에는 지역 값을 사용하며 호출자 변수에 대입하는 매크로가 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_BITREV_H\n#define _LINUX_BITREV_H\n\n#include <linux/types.h>\n\n#ifdef CONFIG_HAVE_ARCH_BITREVERSE\n#include <asm/bitrev.h>\n\n#define __bitrev32 __arch_bitrev32\n#define __bitrev16 __arch_bitrev16\n#define __bitrev8 __arch_bitrev8\n\n#else\nextern u8 const byte_rev_table[256];\nstatic inline u8 __bitrev8(u8 byte)\n{\n\treturn byte_rev_table[byte];\n}\n\nstatic inline u16 __bitrev16(u16 x)\n{\n\treturn (__bitrev8(x & 0xff) << 8) | __bitrev8(x >> 8);\n}\n\nstatic inline u32 __bitrev32(u32 x)\n{\n\treturn (__bitrev16(x & 0xffff) << 16) | __bitrev16(x >> 16);\n}\n\n#endif /* CONFIG_HAVE_ARCH_BITREVERSE */\n\n#define __bitrev8x4(x)\t(__bitrev32(swab32(x)))\n\n#define __constant_bitrev32(x)\t\\\n({\t\t\t\t\t\\\n\tu32 ___x = x;\t\t\t\\\n\t___x = (___x >> 16) | (___x << 16);\t\\\n\t___x = ((___x & (u32)0xFF00FF00UL) >> 8) | ((___x & (u32)0x00FF00FFUL) << 8);\t\\\n\t___x = ((___x & (u32)0xF0F0F0F0UL) >> 4) | ((___x & (u32)0x0F0F0F0FUL) << 4);\t\\\n\t___x = ((___x & (u32)0xCCCCCCCCUL) >> 2) | ((___x & (u32)0x33333333UL) << 2);\t\\\n\t___x = ((___x & (u32)0xAAAAAAAAUL) >> 1) | ((___x & (u32)0x55555555UL) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev16(x)\t\\\n({\t\t\t\t\t\\\n\tu16 ___x = x;\t\t\t\\\n\t___x = (___x >> 8) | (___x << 8);\t\\\n\t___x = ((___x & (u16)0xF0F0U) >> 4) | ((___x & (u16)0x0F0FU) << 4);\t\\\n\t___x = ((___x & (u16)0xCCCCU) >> 2) | ((___x & (u16)0x3333U) << 2);\t\\\n\t___x = ((___x & (u16)0xAAAAU) >> 1) | ((___x & (u16)0x5555U) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev8x4(x) \\\n({\t\t\t\\\n\tu32 ___x = x;\t\\\n\t___x = ((___x & (u32)0xF0F0F0F0UL) >> 4) | ((___x & (u32)0x0F0F0F0FUL) << 4);\t\\\n\t___x = ((___x & (u32)0xCCCCCCCCUL) >> 2) | ((___x & (u32)0x33333333UL) << 2);\t\\\n\t___x = ((___x & (u32)0xAAAAAAAAUL) >> 1) | ((___x & (u32)0x55555555UL) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define __constant_bitrev8(x)\t\\\n({\t\t\t\t\t\\\n\tu8 ___x = x;\t\t\t\\\n\t___x = (___x >> 4) | (___x << 4);\t\\\n\t___x = ((___x & (u8)0xCCU) >> 2) | ((___x & (u8)0x33U) << 2);\t\\\n\t___x = ((___x & (u8)0xAAU) >> 1) | ((___x & (u8)0x55U) << 1);\t\\\n\t___x;\t\t\t\t\t\t\t\t\\\n})\n\n#define bitrev32(x) \\\n({\t\t\t\\\n\tu32 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev32(__x) :\t\t\t\\\n\t__bitrev32(__x);\t\t\t\t\\\n})\n\n#define bitrev16(x) \\\n({\t\t\t\\\n\tu16 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev16(__x) :\t\t\t\\\n\t__bitrev16(__x);\t\t\t\t\\\n })\n\n#define bitrev8x4(x) \\\n({\t\t\t\\\n\tu32 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev8x4(__x) :\t\t\t\\\n\t__bitrev8x4(__x);\t\t\t\t\\\n })\n\n#define bitrev8(x) \\\n({\t\t\t\\\n\tu8 __x = x;\t\\\n\t__builtin_constant_p(__x) ?\t\\\n\t__constant_bitrev8(__x) :\t\t\t\\\n\t__bitrev8(__x)\t;\t\t\t\\\n })\n#endif /* _LINUX_BITREV_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "2804437147c0b1e96d7ce4b2bfae9e345278f2dba96ecef9d7e733072b1ca774",
+      "scope": "whole-file",
+      "line_count": 105,
+      "authoring_source": "course/file_units/bit_counting.py",
+      "sections": [
+        "헤더의 앞부분 전체",
+        "상수 반전 단계",
+        "8x4의 차이",
+        "공개 매크로와 평가",
+        "CS 연결과 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/bitrev.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "네 줄의 구슬을 통째로 뒤집는 것과 각 줄 안에서만 뒤집는 것은 결과가 다릅니다.",
+    "meaning": "bitrev.h는 고정 폭 전체 반전과 바이트별 반전을 제공하며 상수·실행 경로와 아키텍처 전용·표 기반 구현을 선택합니다.",
+    "exercise": "0x01020408의 전체 반전 0x10204080과 바이트별 반전 0x80402010을 비교하세요."
+  },
+  "goal": "bitrev.h는 고정 폭 전체 반전과 바이트별 반전을 제공하며 상수·실행 경로와 아키텍처 전용·표 기반 구현을 선택합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0x01020408의 전체 반전 0x10204080과 바이트별 반전 0x80402010을 비교하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "1461fa62ecab320971cbb593f88f6d99b61273c4a23ce2b839a955f595d2d122",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

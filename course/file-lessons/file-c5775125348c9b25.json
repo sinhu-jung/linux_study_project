@@ -5,117 +5,143 @@
   "area": "자료구조 · 해시 테이블 · 연결 리스트 · RCU",
   "track": "files",
   "kind": "kernel",
-  "intro": "고정 크기 버킷 배열과 객체 안의 hlist_node를 결합한 해시 테이블 인터페이스입니다.",
+  "intro": "정적 해시 테이블의 버킷 선택·실제 키 비교·노드 수명과 동기화 규칙을 설명합니다.",
   "guide": [
-    "키를 해시해 버킷 하나를 선택하고 그 버킷의 연결 리스트에 노드를 넣습니다. 같은 버킷에 들어온 여러 객체의 실제 키 비교는 호출자가 담당합니다.",
-    "배열 크기가 보이는 문맥에서 사용하고 삽입·조회 키의 타입과 값을 일관되게 유지합니다. safe 순회와 RCU 순회는 서로 다른 문제를 해결하며 자동 잠금이나 즉시 메모리 해제를 보장하지 않습니다."
+    "버킷은 같은 해시 위치로 분류된 객체를 담는 칸입니다.",
+    "충돌은 서로 다른 키가 같은 버킷에 들어가는 일입니다.",
+    "RCU는 읽는 사람이 기존 객체를 다 볼 때까지 메모리 회수를 미루는 동기화 방식입니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체 구성",
-      "text": "SPDX, 정적 크기 구현 설명, guard와 list/types/kernel/hash/rculist 의존성 뒤에 정의·선언·크기 매크로가 있습니다. 초기화, 일반/RCU 삽입, 연결·빈 테이블 확인, 삭제, 전체/후보/안전/RCU/notrace 순회가 이어집니다. 외부 함수 구현이나 동적 resize 코드는 없습니다."
+      "text": "이 헤더는 고정 크기 해시 배열의 선언·초기화·삽입·삭제·조회 매크로를 모읍니다. 일반, 삭제 중 순회, RCU, 추적 없는 순회를 제공하지만 외부 구현이나 자동 크기 변경은 없습니다."
     },
     {
       "title": "버킷 배열 생성",
-      "text": "DEFINE_HASHTABLE(name,bits)는 1<<bits개의 hlist_head 배열을 만들고 GNU 범위 지정 초기화로 모든 버킷에 HLIST_HEAD_INIT을 넣습니다. READ_MOSTLY 버전은 __read_mostly 배치 속성을 추가합니다. DECLARE_HASHTABLE은 이름과 달리 extern 전방 선언이 아니라 초기화 식 없는 배열 선언이므로 저장 기간에 따른 초기화 규칙을 고려해야 합니다. 특히 자동 지역 배열은 사용 전에 hash_init이 필요합니다."
+      "text": "DEFINE_HASHTABLE은 1<<bits개 버킷 배열을 만들고 모두 빈 목록으로 초기화합니다. READ_MOSTLY는 주로 읽는 자료의 배치 표시를 더합니다. DECLARE는 이름과 달리 extern만 알리는 것이 아니라 초기화식 없는 배열 선언입니다. 자동 지역 배열이면 사용 전에 hash_init이 필요합니다."
     },
     {
       "title": "크기와 배열 타입",
-      "text": "HASH_SIZE는 ARRAY_SIZE이고 HASH_BITS는 그 값의 ilog2입니다. bits4라면 버킷16개입니다. hash_init은 이를 __hash_init에 전달해 각 버킷을 INIT_HLIST_HEAD로 초기화합니다. 포인터만 전달된 함수 안에서는 원래 배열 길이를 복구할 수 없습니다. 주석의 전처리 시 계산이라는 표현은 배열 타입에 근거한 컴파일 시 크기 계산으로 이해해야 합니다."
+      "text": "HASH_SIZE는 배열 원소 수, HASH_BITS는 그 수의 밑이 2인 로그입니다. bits가 4면 16칸이며 hash_init은 각 칸을 비웁니다. 함수 인수로 포인터만 남으면 원래 배열 길이를 알 수 없습니다. 전처리 시 계산이라는 주석은 배열 타입에 따른 컴파일 시 크기 계산으로 이해합니다."
     },
     {
       "title": "키 타입에 따른 해시 선택",
-      "text": "hash_min은 sizeof(val)<=4이면 hash_32, 아니면 hash_long을 선택합니다. 따라서 숫자 값이 같더라도 64비트 환경에서 u32 키와 unsigned long 키가 서로 다른 경로를 탈 수 있습니다. 삽입과 조회에서 같은 타입의 키를 쓰는 것이 중요합니다. 32비트 long 환경에 임의의 u64를 주어 상위 비트까지 보존하는 범용64비트 키 해시라고 가정하면 안 됩니다."
+      "text": "hash_min은 키 크기가 4바이트 이하면 hash_32, 아니면 hash_long을 씁니다. 64비트 환경에서 값이 같은 u32와 unsigned long도 다른 경로일 수 있으므로 삽입·조회에서 타입을 맞춥니다. 32비트 long에 임의 u64를 주어 모든 상위 비트가 보존된다고 가정하지 않습니다."
     },
     {
       "title": "삽입과 충돌",
-      "text": "hash_add는 계산된 버킷의 맨 앞에 hlist_add_head로 노드를 연결합니다. hash_add_rcu는 RCU용 연결 함수를 사용합니다. 객체를 할당하거나 복사하지 않으며 키를 저장하는 별도 필드도 없습니다. 키 중복 검사도 없어서 서로 같은 키나 충돌하는 키가 같은 버킷 체인에 함께 존재할 수 있습니다."
+      "text": "삽입은 고른 버킷의 목록 맨 앞에 노드를 연결하고 RCU 변형은 그에 맞는 연결 함수를 씁니다. 객체 할당·복사나 키 저장·중복 검사를 하지 않습니다. 같은 키와 충돌한 다른 키가 한 목록에 함께 있을 수 있습니다."
     },
     {
       "title": "침입형 노드와 연결 여부",
-      "text": "객체는 hlist_node를 멤버로 포함하고 삽입 시 그 멤버 주소를 전달합니다. hash_hashed는 !hlist_unhashed(node)일 뿐 어느 테이블에 들어 있는지 식별하지 않습니다. 같은 노드를 여러 체인에 동시에 연결하려면 안 되며 여러 인덱스가 필요하면 별도 노드 멤버가 필요합니다. 연결 중인 키를 바꾸면 조회 버킷과 실제 위치가 달라질 수 있어 삭제 후 재삽입 같은 관리가 필요합니다."
+      "text": "객체 안에 hlist_node를 넣고 그 멤버 주소를 연결합니다. hash_hashed는 연결 여부만 보며 어느 테이블인지 알려 주지 않습니다. 같은 노드를 여러 줄에 동시에 넣으면 안 되고 여러 색인이 필요하면 노드도 따로 둡니다. 연결한 채 키를 바꾸면 잘못된 버킷에 남으므로 삭제·재삽입 같은 관리가 필요합니다."
     },
     {
       "title": "빈 테이블과 삭제",
-      "text": "__hash_empty는 모든 버킷을 검사하다 하나라도 비어 있지 않으면 false입니다. 따라서 버킷 수에 비례하는 검사가 될 수 있습니다. hash_del은 hlist_del_init, hash_del_rcu는 hlist_del_init_rcu를 호출합니다. 객체 메모리를 해제하지 않으며 RCU 삭제 후 독자가 끝나기 전 객체를 free해도 된다는 뜻이 아닙니다."
+      "text": "빈 테이블 확인은 버킷들을 살피므로 버킷 수만큼 걸릴 수 있습니다. 삭제는 연결을 떼고 노드를 초기화할 뿐 객체 메모리를 해제하지 않습니다. RCU 삭제도 독자가 끝나기 전에 즉시 free해도 된다는 허가가 아닙니다."
     },
     {
       "title": "전체 순회와 break",
-      "text": "hash_for_each는 버킷 루프와 각 hlist 루프를 결합합니다. 바깥 조건의 obj==NULL은 버킷 리스트를 끝까지 순회했는지 이용합니다. 내부에서 break하여 obj가 현재 객체를 가리키면 바깥 루프도 다음 조건에서 멈춥니다. 순서가 키의 정렬 순서라는 보장은 없습니다. RCU 전체 버전은 hlist_for_each_entry_rcu로 내부 루프를 바꿉니다."
+      "text": "전체 순회는 버킷 반복과 버킷 안 목록 반복을 합칩니다. 내부 break 후 obj가 현재 객체를 가리키면 바깥 조건도 멈춥니다. 순회 순서는 키 정렬 순서가 아니며 RCU 전체 변형은 안쪽 목록 순회를 RCU용으로 바꿉니다."
     },
     {
       "title": "후보 버킷 조회",
-      "text": "hash_for_each_possible은 키로 버킷 하나만 고르고 그 체인의 모든 객체를 순회합니다. possible은 실제 키가 같은 객체만 걸러준다는 뜻이 아닙니다. 예를 들어 key 찾기 루프 안에서 obj->key==key를 확인해야 합니다. 충돌 체인이 길어지면 선형 탐색 비용이 증가하고 자동 리사이징은 없습니다."
+      "text": "possible은 키로 고른 한 버킷의 모든 후보를 돌 뿐입니다. 실제로 같은 키인지 obj->key==key 같은 검사는 호출자가 합니다. 충돌 줄이 길어지면 한 명씩 더 확인해야 하며 자동으로 테이블이 커지지는 않습니다."
     },
     {
       "title": "삭제 안전 순회",
-      "text": "전체 safe와 possible_safe는 다음 노드를 tmp에 저장하는 hlist safe 순회를 사용하여 현재 항목 삭제 이후에도 진행할 수 있게 합니다. 임의의 다른 CPU가 자유롭게 노드를 삭제해도 안전하다는 동시성 보장은 아닙니다. 저장한 다음 노드의 수명도 호출자가 사용하는 동기화 규칙에 따라 유지해야 합니다."
+      "text": "safe 순회는 다음 노드를 임시 변수에 미리 저장해 현재 노드를 지워도 계속할 수 있게 합니다. 다른 CPU가 아무 때나 지우고 메모리를 돌려줘도 안전해지는 것은 아닙니다. 다음 노드의 수명도 외부 동기화로 지켜야 합니다."
     },
     {
       "title": "RCU 후보와 notrace",
-      "text": "possible_rcu는 선택적 cond 인자를 하위 RCU 순회 매크로에 전달합니다. notrace는 RCU 디버깅·추적을 하지 않는 순회 경로를 사용합니다. 이 차이는 RCU 읽기 보호나 객체 수명 규칙을 생략해도 된다는 뜻이 아닙니다. 이 헤더 자체에는 rcu_read_lock, 쓰기 잠금, grace period 대기 호출이 없습니다."
+      "text": "possible_rcu는 선택적인 조건 인수를 아래 RCU 순회에 넘깁니다. notrace는 RCU 진단·추적 없는 길을 쓰지만 읽기 보호와 객체 수명을 생략해도 된다는 뜻은 아닙니다. 이 헤더는 읽기 잠금, 쓰기 잠금, 독자 종료 대기를 직접 하지 않습니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "분리 체이닝, 적재율과 충돌, 배열 타입 소실, 객체 내 연결 노드, 외부 동기화, 논리 삭제와 메모리 회수의 분리를 학습합니다. 시간 복잡도는 좋은 분산과 적절한 적재율이라는 전제에서 평균 조회가 짧아지는 것이며 최악의 충돌 체인은 객체 수에 비례합니다. 이 수업은 전체 원본의 매크로 경로 대조이며 실제 RCU 경쟁 실행 검증은 아닙니다."
+      "text": "해시 분류와 연결 목록, 배열 타입이 포인터로 바뀔 때 잃는 크기 정보, 논리 삭제와 메모리 회수를 구별합니다. 잘 분산되고 적당히 채워지면 평균 탐색은 짧지만 최악 충돌은 객체 수만큼 걸립니다. 이 설명은 실제 RCU 경쟁 실행 시험 결과가 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "hash_for_each_possible은 같은 키의 객체만 돌려주는가?",
+      "prompt": "possible 순회는 같은 키만 골라 주나요?",
       "options": [
+        "아니요. 같은 버킷의 모든 후보를 봅니다.",
+        "네. 실제 키 비교도 자동으로 합니다."
+      ],
+      "answer": 0,
+      "explanation": "테이블은 객체의 키 필드 표현을 모르므로 호출자가 비교해야 합니다.",
+      "original_prompt": "hash_for_each_possible은 같은 키의 객체만 돌려주는가?",
+      "original_options": [
         "아니다. 같은 버킷의 모든 후보를 순회한다",
         "그렇다. 키 비교를 자동으로 수행한다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 hash_min으로 버킷만 선택하고 hlist를 순회합니다. 실제 키 저장 방식도 모르므로 호출자가 동등성을 검사해야 합니다."
+      "original_explanation": "매크로는 hash_min으로 버킷만 선택하고 hlist를 순회합니다. 실제 키 저장 방식도 모르므로 호출자가 동등성을 검사해야 합니다."
     },
     {
-      "prompt": "자동 지역 변수로 DECLARE_HASHTABLE을 썼다면?",
+      "prompt": "자동 지역 DECLARE_HASHTABLE을 쓰면 무엇이 필요한가요?",
       "options": [
+        "매크로가 항상 모든 버킷을 초기화합니다.",
+        "사용 전에 버킷 초기화가 필요합니다."
+      ],
+      "answer": 1,
+      "explanation": "초기화식을 가진 DEFINE과 구별해야 합니다.",
+      "original_prompt": "자동 지역 변수로 DECLARE_HASHTABLE을 썼다면?",
+      "original_options": [
         "매크로가 모든 버킷을 항상 초기화한다",
         "사용 전에 버킷들을 초기화해야 한다"
       ],
-      "answer": 1,
-      "explanation": "DECLARE 버전에는 초기화 식이 없습니다. DEFINE 버전의 HLIST_HEAD_INIT 범위 초기화와 구분해야 합니다."
+      "original_explanation": "DECLARE 버전에는 초기화 식이 없습니다. DEFINE 버전의 HLIST_HEAD_INIT 범위 초기화와 구분해야 합니다."
     },
     {
-      "prompt": "삽입 키가 u32이고 조회 키가 unsigned long이면 값만 같으면 충분한가?",
+      "prompt": "u32로 넣고 unsigned long으로 찾을 때 값만 같으면 충분한가요?",
       "options": [
+        "아니요. 64비트 환경에서 해시 경로가 다를 수 있습니다.",
+        "네. sizeof는 해시 선택에 영향이 없습니다."
+      ],
+      "answer": 0,
+      "explanation": "값뿐 아니라 타입도 일관되게 유지합니다.",
+      "original_prompt": "삽입 키가 u32이고 조회 키가 unsigned long이면 값만 같으면 충분한가?",
+      "original_options": [
         "아니다. 64비트 환경에서는 해시 경로가 달라질 수 있다",
         "그렇다. sizeof는 해시 선택에 영향을 주지 않는다"
       ],
-      "answer": 0,
-      "explanation": "hash_min은 sizeof에 따라 hash_32 또는 hash_long을 고릅니다. 값과 함께 키 타입도 일관되게 유지해야 합니다."
+      "original_explanation": "hash_min은 sizeof에 따라 hash_32 또는 hash_long을 고릅니다. 값과 함께 키 타입도 일관되게 유지해야 합니다."
     },
     {
-      "prompt": "safe 순회는 임의의 동시 삭제까지 자동으로 안전하게 하는가?",
+      "prompt": "safe 순회면 다른 CPU의 임의 삭제도 안전한가요?",
       "options": [
+        "네. 잠금과 수명 관리가 필요 없습니다.",
+        "아니요. 현재 항목을 지우며 순회를 계속하는 것을 돕습니다."
+      ],
+      "answer": 1,
+      "explanation": "다음 주소를 미리 저장하는 것만으로 동시 메모리 해제를 막지는 못합니다.",
+      "original_prompt": "safe 순회는 임의의 동시 삭제까지 자동으로 안전하게 하는가?",
+      "original_options": [
         "그렇다. 모든 잠금과 수명 관리가 불필요하다",
         "아니다. 현재 항목 삭제 중 순회 진행을 돕는 기능이다"
       ],
-      "answer": 1,
-      "explanation": "다음 노드를 미리 저장할 뿐 다른 CPU의 삭제와 메모리 회수를 자동으로 제어하지 않습니다."
+      "original_explanation": "다음 노드를 미리 저장할 뿐 다른 CPU의 삭제와 메모리 회수를 자동으로 제어하지 않습니다."
     },
     {
-      "prompt": "hash_del_rcu 직후 객체 메모리는 자동으로 해제되는가?",
+      "prompt": "hash_del_rcu가 곧바로 객체도 해제하나요?",
       "options": [
+        "아니요. 연결 삭제와 독자 종료 후 회수는 별도입니다.",
+        "네. 독자 종료 대기까지 모두 합니다."
+      ],
+      "answer": 0,
+      "explanation": "여기서는 hlist_del_init_rcu만 부릅니다.",
+      "original_prompt": "hash_del_rcu 직후 객체 메모리는 자동으로 해제되는가?",
+      "original_options": [
         "아니다. 삭제와 독자 종료 후 회수는 별도다",
         "그렇다. 삭제 함수가 grace period까지 처리한다"
       ],
-      "answer": 0,
-      "explanation": "이 wrapper는 hlist_del_init_rcu만 호출합니다. 객체 free나 독자 종료 대기는 이 헤더에 없습니다."
+      "original_explanation": "이 wrapper는 hlist_del_init_rcu만 호출합니다. 객체 free나 독자 종료 대기는 이 헤더에 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "키가 다른 두 객체가 같은 버킷에 들어갈 때 possible 순회 안에서 필요한 검사를 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Statically sized hash table implementation\n * (C) 2012  Sasha Levin <levinsasha928@gmail.com>\n */\n\n#ifndef _LINUX_HASHTABLE_H\n#define _LINUX_HASHTABLE_H\n\n#include <linux/list.h>\n#include <linux/types.h>\n#include <linux/kernel.h>\n#include <linux/hash.h>\n#include <linux/rculist.h>\n\n#define DEFINE_HASHTABLE(name, bits)\t\t\t\t\t\t\\\n\tstruct hlist_head name[1 << (bits)] =\t\t\t\t\t\\\n\t\t\t{ [0 ... ((1 << (bits)) - 1)] = HLIST_HEAD_INIT }\n\n#define DEFINE_READ_MOSTLY_HASHTABLE(name, bits)\t\t\t\t\\\n\tstruct hlist_head name[1 << (bits)] __read_mostly =\t\t\t\\\n\t\t\t{ [0 ... ((1 << (bits)) - 1)] = HLIST_HEAD_INIT }\n\n#define DECLARE_HASHTABLE(name, bits)                                   \t\\\n\tstruct hlist_head name[1 << (bits)]\n\n#define HASH_SIZE(name) (ARRAY_SIZE(name))\n#define HASH_BITS(name) ilog2(HASH_SIZE(name))\n\n/* Use hash_32 when possible to allow for fast 32bit hashing in 64bit kernels. */\n#define hash_min(val, bits)\t\t\t\t\t\t\t\\\n\t(sizeof(val) <= 4 ? hash_32(val, bits) : hash_long(val, bits))\n\nstatic inline void __hash_init(struct hlist_head *ht, unsigned int sz)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < sz; i++)\n\t\tINIT_HLIST_HEAD(&ht[i]);\n}\n\n/**\n * hash_init - initialize a hash table\n * @hashtable: hashtable to be initialized\n *\n * Calculates the size of the hashtable from the given parameter, otherwise\n * same as hash_init_size.\n *\n * This has to be a macro since HASH_BITS() will not work on pointers since\n * it calculates the size during preprocessing.\n */\n#define hash_init(hashtable) __hash_init(hashtable, HASH_SIZE(hashtable))\n\n/**\n * hash_add - add an object to a hashtable\n * @hashtable: hashtable to add to\n * @node: the &struct hlist_node of the object to be added\n * @key: the key of the object to be added\n */\n#define hash_add(hashtable, node, key)\t\t\t\t\t\t\\\n\thlist_add_head(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])\n\n/**\n * hash_add_rcu - add an object to a rcu enabled hashtable\n * @hashtable: hashtable to add to\n * @node: the &struct hlist_node of the object to be added\n * @key: the key of the object to be added\n */\n#define hash_add_rcu(hashtable, node, key)\t\t\t\t\t\\\n\thlist_add_head_rcu(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])\n\n/**\n * hash_hashed - check whether an object is in any hashtable\n * @node: the &struct hlist_node of the object to be checked\n */\nstatic inline bool hash_hashed(struct hlist_node *node)\n{\n\treturn !hlist_unhashed(node);\n}\n\nstatic inline bool __hash_empty(struct hlist_head *ht, unsigned int sz)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < sz; i++)\n\t\tif (!hlist_empty(&ht[i]))\n\t\t\treturn false;\n\n\treturn true;\n}\n\n/**\n * hash_empty - check whether a hashtable is empty\n * @hashtable: hashtable to check\n *\n * This has to be a macro since HASH_BITS() will not work on pointers since\n * it calculates the size during preprocessing.\n */\n#define hash_empty(hashtable) __hash_empty(hashtable, HASH_SIZE(hashtable))\n\n/**\n * hash_del - remove an object from a hashtable\n * @node: &struct hlist_node of the object to remove\n */\nstatic inline void hash_del(struct hlist_node *node)\n{\n\thlist_del_init(node);\n}\n\n/**\n * hash_del_rcu - remove an object from a rcu enabled hashtable\n * @node: &struct hlist_node of the object to remove\n */\nstatic inline void hash_del_rcu(struct hlist_node *node)\n{\n\thlist_del_init_rcu(node);\n}\n\n/**\n * hash_for_each - iterate over a hashtable\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each(name, bkt, obj, member)\t\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry(obj, &name[bkt], member)\n\n/**\n * hash_for_each_rcu - iterate over a rcu enabled hashtable\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each_rcu(name, bkt, obj, member)\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry_rcu(obj, &name[bkt], member)\n\n/**\n * hash_for_each_safe - iterate over a hashtable safe against removal of\n * hash entry\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @tmp: a &struct hlist_node used for temporary storage\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each_safe(name, bkt, tmp, obj, member)\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry_safe(obj, tmp, &name[bkt], member)\n\n/**\n * hash_for_each_possible - iterate over all possible objects hashing to the\n * same bucket\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible(name, obj, member, key)\t\t\t\\\n\thlist_for_each_entry(obj, &name[hash_min(key, HASH_BITS(name))], member)\n\n/**\n * hash_for_each_possible_rcu - iterate over all possible objects hashing to the\n * same bucket in an rcu enabled hashtable\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible_rcu(name, obj, member, key, cond...)\t\\\n\thlist_for_each_entry_rcu(obj, &name[hash_min(key, HASH_BITS(name))],\\\n\t\tmember, ## cond)\n\n/**\n * hash_for_each_possible_rcu_notrace - iterate over all possible objects hashing\n * to the same bucket in an rcu enabled hashtable in a rcu enabled hashtable\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n *\n * This is the same as hash_for_each_possible_rcu() except that it does\n * not do any RCU debugging or tracing.\n */\n#define hash_for_each_possible_rcu_notrace(name, obj, member, key) \\\n\thlist_for_each_entry_rcu_notrace(obj, \\\n\t\t&name[hash_min(key, HASH_BITS(name))], member)\n\n/**\n * hash_for_each_possible_safe - iterate over all possible objects hashing to the\n * same bucket safe against removals\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @tmp: a &struct hlist_node used for temporary storage\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible_safe(name, obj, tmp, member, key)\t\\\n\thlist_for_each_entry_safe(obj, tmp,\\\n\t\t&name[hash_min(key, HASH_BITS(name))], member)\n\n\n#endif\n",
   "source_review": {
@@ -145,5 +171,182 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/hashtable.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c5775125348c9b25",
+    "path": "include/linux/hashtable.h",
+    "title": "정적 해시 테이블 전체: 버킷 배열과 hlist 충돌 체인",
+    "area": "자료구조 · 해시 테이블 · 연결 리스트 · RCU",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "고정 크기 버킷 배열과 객체 안의 hlist_node를 결합한 해시 테이블 인터페이스입니다.",
+    "guide": [
+      "키를 해시해 버킷 하나를 선택하고 그 버킷의 연결 리스트에 노드를 넣습니다. 같은 버킷에 들어온 여러 객체의 실제 키 비교는 호출자가 담당합니다.",
+      "배열 크기가 보이는 문맥에서 사용하고 삽입·조회 키의 타입과 값을 일관되게 유지합니다. safe 순회와 RCU 순회는 서로 다른 문제를 해결하며 자동 잠금이나 즉시 메모리 해제를 보장하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "SPDX, 정적 크기 구현 설명, guard와 list/types/kernel/hash/rculist 의존성 뒤에 정의·선언·크기 매크로가 있습니다. 초기화, 일반/RCU 삽입, 연결·빈 테이블 확인, 삭제, 전체/후보/안전/RCU/notrace 순회가 이어집니다. 외부 함수 구현이나 동적 resize 코드는 없습니다."
+      },
+      {
+        "title": "버킷 배열 생성",
+        "text": "DEFINE_HASHTABLE(name,bits)는 1<<bits개의 hlist_head 배열을 만들고 GNU 범위 지정 초기화로 모든 버킷에 HLIST_HEAD_INIT을 넣습니다. READ_MOSTLY 버전은 __read_mostly 배치 속성을 추가합니다. DECLARE_HASHTABLE은 이름과 달리 extern 전방 선언이 아니라 초기화 식 없는 배열 선언이므로 저장 기간에 따른 초기화 규칙을 고려해야 합니다. 특히 자동 지역 배열은 사용 전에 hash_init이 필요합니다."
+      },
+      {
+        "title": "크기와 배열 타입",
+        "text": "HASH_SIZE는 ARRAY_SIZE이고 HASH_BITS는 그 값의 ilog2입니다. bits4라면 버킷16개입니다. hash_init은 이를 __hash_init에 전달해 각 버킷을 INIT_HLIST_HEAD로 초기화합니다. 포인터만 전달된 함수 안에서는 원래 배열 길이를 복구할 수 없습니다. 주석의 전처리 시 계산이라는 표현은 배열 타입에 근거한 컴파일 시 크기 계산으로 이해해야 합니다."
+      },
+      {
+        "title": "키 타입에 따른 해시 선택",
+        "text": "hash_min은 sizeof(val)<=4이면 hash_32, 아니면 hash_long을 선택합니다. 따라서 숫자 값이 같더라도 64비트 환경에서 u32 키와 unsigned long 키가 서로 다른 경로를 탈 수 있습니다. 삽입과 조회에서 같은 타입의 키를 쓰는 것이 중요합니다. 32비트 long 환경에 임의의 u64를 주어 상위 비트까지 보존하는 범용64비트 키 해시라고 가정하면 안 됩니다."
+      },
+      {
+        "title": "삽입과 충돌",
+        "text": "hash_add는 계산된 버킷의 맨 앞에 hlist_add_head로 노드를 연결합니다. hash_add_rcu는 RCU용 연결 함수를 사용합니다. 객체를 할당하거나 복사하지 않으며 키를 저장하는 별도 필드도 없습니다. 키 중복 검사도 없어서 서로 같은 키나 충돌하는 키가 같은 버킷 체인에 함께 존재할 수 있습니다."
+      },
+      {
+        "title": "침입형 노드와 연결 여부",
+        "text": "객체는 hlist_node를 멤버로 포함하고 삽입 시 그 멤버 주소를 전달합니다. hash_hashed는 !hlist_unhashed(node)일 뿐 어느 테이블에 들어 있는지 식별하지 않습니다. 같은 노드를 여러 체인에 동시에 연결하려면 안 되며 여러 인덱스가 필요하면 별도 노드 멤버가 필요합니다. 연결 중인 키를 바꾸면 조회 버킷과 실제 위치가 달라질 수 있어 삭제 후 재삽입 같은 관리가 필요합니다."
+      },
+      {
+        "title": "빈 테이블과 삭제",
+        "text": "__hash_empty는 모든 버킷을 검사하다 하나라도 비어 있지 않으면 false입니다. 따라서 버킷 수에 비례하는 검사가 될 수 있습니다. hash_del은 hlist_del_init, hash_del_rcu는 hlist_del_init_rcu를 호출합니다. 객체 메모리를 해제하지 않으며 RCU 삭제 후 독자가 끝나기 전 객체를 free해도 된다는 뜻이 아닙니다."
+      },
+      {
+        "title": "전체 순회와 break",
+        "text": "hash_for_each는 버킷 루프와 각 hlist 루프를 결합합니다. 바깥 조건의 obj==NULL은 버킷 리스트를 끝까지 순회했는지 이용합니다. 내부에서 break하여 obj가 현재 객체를 가리키면 바깥 루프도 다음 조건에서 멈춥니다. 순서가 키의 정렬 순서라는 보장은 없습니다. RCU 전체 버전은 hlist_for_each_entry_rcu로 내부 루프를 바꿉니다."
+      },
+      {
+        "title": "후보 버킷 조회",
+        "text": "hash_for_each_possible은 키로 버킷 하나만 고르고 그 체인의 모든 객체를 순회합니다. possible은 실제 키가 같은 객체만 걸러준다는 뜻이 아닙니다. 예를 들어 key 찾기 루프 안에서 obj->key==key를 확인해야 합니다. 충돌 체인이 길어지면 선형 탐색 비용이 증가하고 자동 리사이징은 없습니다."
+      },
+      {
+        "title": "삭제 안전 순회",
+        "text": "전체 safe와 possible_safe는 다음 노드를 tmp에 저장하는 hlist safe 순회를 사용하여 현재 항목 삭제 이후에도 진행할 수 있게 합니다. 임의의 다른 CPU가 자유롭게 노드를 삭제해도 안전하다는 동시성 보장은 아닙니다. 저장한 다음 노드의 수명도 호출자가 사용하는 동기화 규칙에 따라 유지해야 합니다."
+      },
+      {
+        "title": "RCU 후보와 notrace",
+        "text": "possible_rcu는 선택적 cond 인자를 하위 RCU 순회 매크로에 전달합니다. notrace는 RCU 디버깅·추적을 하지 않는 순회 경로를 사용합니다. 이 차이는 RCU 읽기 보호나 객체 수명 규칙을 생략해도 된다는 뜻이 아닙니다. 이 헤더 자체에는 rcu_read_lock, 쓰기 잠금, grace period 대기 호출이 없습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "분리 체이닝, 적재율과 충돌, 배열 타입 소실, 객체 내 연결 노드, 외부 동기화, 논리 삭제와 메모리 회수의 분리를 학습합니다. 시간 복잡도는 좋은 분산과 적절한 적재율이라는 전제에서 평균 조회가 짧아지는 것이며 최악의 충돌 체인은 객체 수에 비례합니다. 이 수업은 전체 원본의 매크로 경로 대조이며 실제 RCU 경쟁 실행 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "hash_for_each_possible은 같은 키의 객체만 돌려주는가?",
+        "options": [
+          "아니다. 같은 버킷의 모든 후보를 순회한다",
+          "그렇다. 키 비교를 자동으로 수행한다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 hash_min으로 버킷만 선택하고 hlist를 순회합니다. 실제 키 저장 방식도 모르므로 호출자가 동등성을 검사해야 합니다."
+      },
+      {
+        "prompt": "자동 지역 변수로 DECLARE_HASHTABLE을 썼다면?",
+        "options": [
+          "매크로가 모든 버킷을 항상 초기화한다",
+          "사용 전에 버킷들을 초기화해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "DECLARE 버전에는 초기화 식이 없습니다. DEFINE 버전의 HLIST_HEAD_INIT 범위 초기화와 구분해야 합니다."
+      },
+      {
+        "prompt": "삽입 키가 u32이고 조회 키가 unsigned long이면 값만 같으면 충분한가?",
+        "options": [
+          "아니다. 64비트 환경에서는 해시 경로가 달라질 수 있다",
+          "그렇다. sizeof는 해시 선택에 영향을 주지 않는다"
+        ],
+        "answer": 0,
+        "explanation": "hash_min은 sizeof에 따라 hash_32 또는 hash_long을 고릅니다. 값과 함께 키 타입도 일관되게 유지해야 합니다."
+      },
+      {
+        "prompt": "safe 순회는 임의의 동시 삭제까지 자동으로 안전하게 하는가?",
+        "options": [
+          "그렇다. 모든 잠금과 수명 관리가 불필요하다",
+          "아니다. 현재 항목 삭제 중 순회 진행을 돕는 기능이다"
+        ],
+        "answer": 1,
+        "explanation": "다음 노드를 미리 저장할 뿐 다른 CPU의 삭제와 메모리 회수를 자동으로 제어하지 않습니다."
+      },
+      {
+        "prompt": "hash_del_rcu 직후 객체 메모리는 자동으로 해제되는가?",
+        "options": [
+          "아니다. 삭제와 독자 종료 후 회수는 별도다",
+          "그렇다. 삭제 함수가 grace period까지 처리한다"
+        ],
+        "answer": 0,
+        "explanation": "이 wrapper는 hlist_del_init_rcu만 호출합니다. 객체 free나 독자 종료 대기는 이 헤더에 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Statically sized hash table implementation\n * (C) 2012  Sasha Levin <levinsasha928@gmail.com>\n */\n\n#ifndef _LINUX_HASHTABLE_H\n#define _LINUX_HASHTABLE_H\n\n#include <linux/list.h>\n#include <linux/types.h>\n#include <linux/kernel.h>\n#include <linux/hash.h>\n#include <linux/rculist.h>\n\n#define DEFINE_HASHTABLE(name, bits)\t\t\t\t\t\t\\\n\tstruct hlist_head name[1 << (bits)] =\t\t\t\t\t\\\n\t\t\t{ [0 ... ((1 << (bits)) - 1)] = HLIST_HEAD_INIT }\n\n#define DEFINE_READ_MOSTLY_HASHTABLE(name, bits)\t\t\t\t\\\n\tstruct hlist_head name[1 << (bits)] __read_mostly =\t\t\t\\\n\t\t\t{ [0 ... ((1 << (bits)) - 1)] = HLIST_HEAD_INIT }\n\n#define DECLARE_HASHTABLE(name, bits)                                   \t\\\n\tstruct hlist_head name[1 << (bits)]\n\n#define HASH_SIZE(name) (ARRAY_SIZE(name))\n#define HASH_BITS(name) ilog2(HASH_SIZE(name))\n\n/* Use hash_32 when possible to allow for fast 32bit hashing in 64bit kernels. */\n#define hash_min(val, bits)\t\t\t\t\t\t\t\\\n\t(sizeof(val) <= 4 ? hash_32(val, bits) : hash_long(val, bits))\n\nstatic inline void __hash_init(struct hlist_head *ht, unsigned int sz)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < sz; i++)\n\t\tINIT_HLIST_HEAD(&ht[i]);\n}\n\n/**\n * hash_init - initialize a hash table\n * @hashtable: hashtable to be initialized\n *\n * Calculates the size of the hashtable from the given parameter, otherwise\n * same as hash_init_size.\n *\n * This has to be a macro since HASH_BITS() will not work on pointers since\n * it calculates the size during preprocessing.\n */\n#define hash_init(hashtable) __hash_init(hashtable, HASH_SIZE(hashtable))\n\n/**\n * hash_add - add an object to a hashtable\n * @hashtable: hashtable to add to\n * @node: the &struct hlist_node of the object to be added\n * @key: the key of the object to be added\n */\n#define hash_add(hashtable, node, key)\t\t\t\t\t\t\\\n\thlist_add_head(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])\n\n/**\n * hash_add_rcu - add an object to a rcu enabled hashtable\n * @hashtable: hashtable to add to\n * @node: the &struct hlist_node of the object to be added\n * @key: the key of the object to be added\n */\n#define hash_add_rcu(hashtable, node, key)\t\t\t\t\t\\\n\thlist_add_head_rcu(node, &hashtable[hash_min(key, HASH_BITS(hashtable))])\n\n/**\n * hash_hashed - check whether an object is in any hashtable\n * @node: the &struct hlist_node of the object to be checked\n */\nstatic inline bool hash_hashed(struct hlist_node *node)\n{\n\treturn !hlist_unhashed(node);\n}\n\nstatic inline bool __hash_empty(struct hlist_head *ht, unsigned int sz)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < sz; i++)\n\t\tif (!hlist_empty(&ht[i]))\n\t\t\treturn false;\n\n\treturn true;\n}\n\n/**\n * hash_empty - check whether a hashtable is empty\n * @hashtable: hashtable to check\n *\n * This has to be a macro since HASH_BITS() will not work on pointers since\n * it calculates the size during preprocessing.\n */\n#define hash_empty(hashtable) __hash_empty(hashtable, HASH_SIZE(hashtable))\n\n/**\n * hash_del - remove an object from a hashtable\n * @node: &struct hlist_node of the object to remove\n */\nstatic inline void hash_del(struct hlist_node *node)\n{\n\thlist_del_init(node);\n}\n\n/**\n * hash_del_rcu - remove an object from a rcu enabled hashtable\n * @node: &struct hlist_node of the object to remove\n */\nstatic inline void hash_del_rcu(struct hlist_node *node)\n{\n\thlist_del_init_rcu(node);\n}\n\n/**\n * hash_for_each - iterate over a hashtable\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each(name, bkt, obj, member)\t\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry(obj, &name[bkt], member)\n\n/**\n * hash_for_each_rcu - iterate over a rcu enabled hashtable\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each_rcu(name, bkt, obj, member)\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry_rcu(obj, &name[bkt], member)\n\n/**\n * hash_for_each_safe - iterate over a hashtable safe against removal of\n * hash entry\n * @name: hashtable to iterate\n * @bkt: integer to use as bucket loop cursor\n * @tmp: a &struct hlist_node used for temporary storage\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n */\n#define hash_for_each_safe(name, bkt, tmp, obj, member)\t\t\t\\\n\tfor ((bkt) = 0, obj = NULL; obj == NULL && (bkt) < HASH_SIZE(name);\\\n\t\t\t(bkt)++)\\\n\t\thlist_for_each_entry_safe(obj, tmp, &name[bkt], member)\n\n/**\n * hash_for_each_possible - iterate over all possible objects hashing to the\n * same bucket\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible(name, obj, member, key)\t\t\t\\\n\thlist_for_each_entry(obj, &name[hash_min(key, HASH_BITS(name))], member)\n\n/**\n * hash_for_each_possible_rcu - iterate over all possible objects hashing to the\n * same bucket in an rcu enabled hashtable\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible_rcu(name, obj, member, key, cond...)\t\\\n\thlist_for_each_entry_rcu(obj, &name[hash_min(key, HASH_BITS(name))],\\\n\t\tmember, ## cond)\n\n/**\n * hash_for_each_possible_rcu_notrace - iterate over all possible objects hashing\n * to the same bucket in an rcu enabled hashtable in a rcu enabled hashtable\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n *\n * This is the same as hash_for_each_possible_rcu() except that it does\n * not do any RCU debugging or tracing.\n */\n#define hash_for_each_possible_rcu_notrace(name, obj, member, key) \\\n\thlist_for_each_entry_rcu_notrace(obj, \\\n\t\t&name[hash_min(key, HASH_BITS(name))], member)\n\n/**\n * hash_for_each_possible_safe - iterate over all possible objects hashing to the\n * same bucket safe against removals\n * @name: hashtable to iterate\n * @obj: the type * to use as a loop cursor for each entry\n * @tmp: a &struct hlist_node used for temporary storage\n * @member: the name of the hlist_node within the struct\n * @key: the key of the objects to iterate over\n */\n#define hash_for_each_possible_safe(name, obj, tmp, member, key)\t\\\n\thlist_for_each_entry_safe(obj, tmp,\\\n\t\t&name[hash_min(key, HASH_BITS(name))], member)\n\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "399a72ba6bf52f6b1a24f5d34b8f487fca8fa68f262ee0dd13d7c0c1f266a48e",
+      "scope": "whole-file",
+      "line_count": 209,
+      "authoring_source": "course/file_units/static_hashtable.py",
+      "sections": [
+        "파일 전체 구성",
+        "버킷 배열 생성",
+        "크기와 배열 타입",
+        "키 타입에 따른 해시 선택",
+        "삽입과 충돌",
+        "침입형 노드와 연결 여부",
+        "빈 테이블과 삭제",
+        "전체 순회와 break",
+        "후보 버킷 조회",
+        "삭제 안전 순회",
+        "RCU 후보와 notrace",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/hashtable.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "도서관 책을 몇 개의 바구니로 나눠 놓으면 찾을 바구니를 빨리 정할 수 있습니다. 하지만 같은 바구니에 다른 책도 있으므로 마지막에는 책 이름을 직접 비교해야 합니다.",
+    "meaning": "정적 해시 테이블의 버킷 선택·실제 키 비교·노드 수명과 동기화 규칙을 설명합니다.",
+    "exercise": "키가 다른 두 객체가 같은 버킷에 들어갈 때 possible 순회 안에서 필요한 검사를 적어 보세요."
+  },
+  "goal": "정적 해시 테이블의 버킷 선택·실제 키 비교·노드 수명과 동기화 규칙을 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "키가 다른 두 객체가 같은 버킷에 들어갈 때 possible 순회 안에서 필요한 검사를 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "76cd18ab3d3396ced2a1e0c545aefb889fde1ddd428a1e9b47b128348d8c5602",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,54 +5,62 @@
   "area": "명령 캐시 · 전처리 · SMP · 코드 공유",
   "track": "files",
   "kind": "kernel",
-  "intro": "공통 flush_icache 어셈블리에 연결하는 파일 전체를 분석합니다.",
+  "intro": "compat 명령 캐시 정리는 공통 소스의 SMP 분기를 재사용합니다.",
   "guide": [
-    "소스를 공유하면 조건부 동작도 공유되며, 호환 ABI라는 이유로 별도 알고리즘이 자동 추가되지는 않습니다.",
-    "CONFIG_SMP 조건의 위치와 역할을 파악합니다."
+    "명령 캐시는 CPU가 실행할 명령을 가까이 보관하는 곳입니다. 수정된 명령을 제대로 보게 하려면 동기화가 필요합니다.",
+    "SMP는 여러 CPU가 함께 동작하는 구성입니다. CONFIG_SMP는 빌드할 때 고르는 조건입니다.",
+    "fence.i는 명령 읽기를 맞추는 RISC-V 명령이며 ecall은 커널 서비스 요청입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 내용",
-      "text": "GPL-2.0-only 뒤 ../vdso/flush_icache.S를 include합니다. 이 파일에는 별도의 매크로 정의나 명령열이 없습니다."
+      "text": "라이선스 뒤 ../vdso/flush_icache.S를 포함합니다. 별도의 매크로나 명령열은 없습니다."
     },
     {
       "title": "공통 분기",
-      "text": "포함된 소스는 CONFIG_SMP이면 riscv_flush_icache syscall, 아니면 fence.i와 a0=0을 수행하고 ret합니다. 조건과 구현은 공통 파일에 있으며 이 wrapper가 매번 CPU 수를 검사하는 코드를 추가하지 않습니다."
+      "text": "공통 소스는 SMP이면 riscv_flush_icache 시스템 호출을 부릅니다. 아니면 fence.i 후 결과 레지스터 a0을 0으로 만들고 돌아갑니다. 이 연결 파일이 실행 때마다 CPU 수를 세는 반복문을 더하는 것은 아닙니다."
     },
     {
       "title": "범위",
-      "text": "호환 빌드가 같은 동작 소스를 별도 ISA·ABI 옵션으로 조립하도록 연결합니다. 실제 원격 CPU 동기화나 주소 범위 검증은 이 wrapper에서 구현하지 않습니다. 전체 파일은 include 연결로 설명되며 실제 실행 시험은 하지 않았습니다."
+      "text": "호환 빌드가 같은 소스를 별도 명령어·인자 전달 규격으로 조립하게 연결합니다. 다른 CPU 동기화의 실제 처리나 주소 범위 검사는 이 파일이 구현하지 않습니다. 실제 실행 시험과 포함 관계 독해는 별개입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "SMP 여부에 따른 분기는 어디에 있는가?",
+      "prompt": "SMP에 따른 분기는 어디에 있나요?",
       "options": [
+        "포함된 공통 flush_icache.S에 있습니다.",
+        "이 연결 파일의 별도 CPU 수 반복문에 있습니다."
+      ],
+      "answer": 0,
+      "explanation": "연결 파일에는 include만 있으며 조건부 명령은 공통 파일에 있습니다.",
+      "original_prompt": "SMP 여부에 따른 분기는 어디에 있는가?",
+      "original_options": [
         "포함되는 공통 flush_icache.S에 있다",
         "이 wrapper에 독립적인 runtime CPU 수 루프가 있다"
       ],
-      "answer": 0,
-      "explanation": "wrapper는 include 한 줄입니다. 실제 조건부 명령열은 포함 대상에서 제공됩니다."
+      "original_explanation": "wrapper는 include 한 줄입니다. 실제 조건부 명령열은 포함 대상에서 제공됩니다."
     },
     {
-      "prompt": "비SMP 공통 경로는 무엇을 수행하는가?",
+      "prompt": "비SMP 공통 경로는 무엇을 하나요?",
       "options": [
+        "언제나 ecall만 합니다.",
+        "fence.i 뒤 a0을 0으로 만듭니다."
+      ],
+      "answer": 1,
+      "explanation": "공통 파일의 설정별 명령열도 함께 재사용합니다.",
+      "original_prompt": "비SMP 공통 경로는 무엇을 수행하는가?",
+      "original_options": [
         "항상 ecall만 한다",
         "fence.i 후 a0을 0으로 설정한다"
       ],
-      "answer": 1,
-      "explanation": "소스 재사용은 공통 파일의 설정별 분기도 그대로 가져옵니다."
+      "original_explanation": "소스 재사용은 공통 파일의 설정별 분기도 그대로 가져옵니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "SMP 경로에는 syscall, 비SMP 경로에는 fence.i를 연결하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/flush_icache.S\"\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/flush_icache.S"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-0b4a06522ed990a3",
+    "path": "arch/riscv/kernel/compat_vdso/flush_icache.S",
+    "title": "Compat 명령 캐시 flush: 공통 SMP 분기의 재사용",
+    "area": "명령 캐시 · 전처리 · SMP · 코드 공유",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "공통 flush_icache 어셈블리에 연결하는 파일 전체를 분석합니다.",
+    "guide": [
+      "소스를 공유하면 조건부 동작도 공유되며, 호환 ABI라는 이유로 별도 알고리즘이 자동 추가되지는 않습니다.",
+      "CONFIG_SMP 조건의 위치와 역할을 파악합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 내용",
+        "text": "GPL-2.0-only 뒤 ../vdso/flush_icache.S를 include합니다. 이 파일에는 별도의 매크로 정의나 명령열이 없습니다."
+      },
+      {
+        "title": "공통 분기",
+        "text": "포함된 소스는 CONFIG_SMP이면 riscv_flush_icache syscall, 아니면 fence.i와 a0=0을 수행하고 ret합니다. 조건과 구현은 공통 파일에 있으며 이 wrapper가 매번 CPU 수를 검사하는 코드를 추가하지 않습니다."
+      },
+      {
+        "title": "범위",
+        "text": "호환 빌드가 같은 동작 소스를 별도 ISA·ABI 옵션으로 조립하도록 연결합니다. 실제 원격 CPU 동기화나 주소 범위 검증은 이 wrapper에서 구현하지 않습니다. 전체 파일은 include 연결로 설명되며 실제 실행 시험은 하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "SMP 여부에 따른 분기는 어디에 있는가?",
+        "options": [
+          "포함되는 공통 flush_icache.S에 있다",
+          "이 wrapper에 독립적인 runtime CPU 수 루프가 있다"
+        ],
+        "answer": 0,
+        "explanation": "wrapper는 include 한 줄입니다. 실제 조건부 명령열은 포함 대상에서 제공됩니다."
+      },
+      {
+        "prompt": "비SMP 공통 경로는 무엇을 수행하는가?",
+        "options": [
+          "항상 ecall만 한다",
+          "fence.i 후 a0을 0으로 설정한다"
+        ],
+        "answer": 1,
+        "explanation": "소스 재사용은 공통 파일의 설정별 분기도 그대로 가져옵니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#include \"../vdso/flush_icache.S\"\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "021d5d2058dea71cd5c5c34233c9b630f9a77e6e9332dd0cea4e2d21fff9ad0f",
+      "scope": "whole-file",
+      "line_count": 3,
+      "authoring_source": "course/file_units/riscv_compat_wrappers.py",
+      "sections": [
+        "전체 내용",
+        "공통 분기",
+        "범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/flush_icache.S"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공통 안내문을 쓰면 그 안의 “여럿일 때”와 “하나일 때” 규칙도 그대로 가져옵니다.",
+    "meaning": "compat 명령 캐시 정리는 공통 소스의 SMP 분기를 재사용합니다.",
+    "exercise": "SMP 경로에는 syscall, 비SMP 경로에는 fence.i를 연결하세요."
+  },
+  "goal": "compat 명령 캐시 정리는 공통 소스의 SMP 분기를 재사용합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "SMP 경로에는 syscall, 비SMP 경로에는 fence.i를 연결하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "baf5b6af514896f885bd3d9c7876fbb5a06e10fb6f70f773475ee87cd698e277",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

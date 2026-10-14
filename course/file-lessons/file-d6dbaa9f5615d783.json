@@ -5,97 +5,123 @@
   "area": "PCI 호스트 · ECAM · devres · probe · 자원 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 내부 도우미와 공개 probe/remove 전체를 기존 ECAM·루트 제거 자료에 연결합니다.",
+  "intro": "공통 PCI probe는 ECAM 자원을 만들고 장치 수명에 맞춘 정리 작업에 연결해요. remove의 명시적 중지·제거와 관리형 자원 해제를 구별해요.",
   "guide": [
-    "자원 획득을 관리형 해제 작업에 등록하는 시점과 실패 시 즉시 정리 여부를 함께 추적해야 합니다.",
-    "오류 포인터, 콜백 어댑터, 관리형 자원 수명과 잠금 안의 두 단계 제거를 학습합니다."
+    "probe는 드라이버가 장치를 준비해 맡는 시작 과정이에요. ECAM은 PCI 설정 공간에 접근할 주소 창이에요.",
+    "devm 관리형 자원은 장치 정리와 수명을 연결한 자원이에요. 콜백은 나중에 실행할 정리 함수 주소예요.",
+    "오류 포인터는 음수 오류 번호를 포인터 형태에 담은 값이며 PTR_ERR로 다시 정수 오류를 얻어요."
   ],
   "deep_dive": [
     {
-      "title": "파일 역할과 해제 어댑터",
-      "text": "GPL-2.0 파일은 kernel,module,OF,OF address,OF PCI,pci-ecam,platform_device를 포함합니다. gen_pci_unmap_cfg는 void *를 pci_config_window *로 캐스팅해 pci_ecam_free에 전달하는 어댑터입니다. 관리 작업의 일반 포인터 콜백 형태를 ECAM 전용 해제 함수와 연결하며 이 함수에서 별도 객체를 할당하지 않습니다."
+      "title": "해제 함수 모양 맞추기",
+      "text": "gen_pci_unmap_cfg는 일반 void 주소를 pci_config_window 주소로 해석해 pci_ecam_free에 넘겨요. 관리 작업이 요구하는 콜백 형식과 ECAM 전용 함수를 연결하는 adapter예요. 여기서 새 객체를 만들지는 않아요. 파일은 필요한 OF·PCI·플랫폼 헤더를 포함해요."
     },
     {
-      "title": "설정 공간 입력과 버스 자원",
-      "text": "gen_pci_init은 of_address_to_resource(dev->of_node,0,&cfgres)로 첫 주소 자원을 구합니다. 실패하면 missing reg 로그와 ERR_PTR(err)를 반환합니다. 해당 로그만으로 모든 실패 원인이 반드시 속성 부재라고 단정할 수는 없습니다. bridge->windows에서 IORESOURCE_BUS인 첫 항목을 찾고 없으면 ERR_PTR(-ENODEV)입니다. 이 함수가 창 목록을 새로 파싱하는 것은 아니며 이미 마련된 버스 자원을 사용합니다."
+      "title": "주소 자원과 버스 범위",
+      "text": "gen_pci_init은 장치 트리의 주소 자원 0번을 cfgres로 읽어요. 실패하면 missing reg 로그와 같은 오류 포인터를 반환해요. 메시지만으로 모든 원인이 반드시 속성 없음이라고 단정하지는 않아요. 버스 범위는 이미 준비된 bridge->windows의 첫 IORESOURCE_BUS에서 얻고 없으면 -ENODEV예요. 기본 0..255를 새로 만들지 않아요."
     },
     {
-      "title": "생성 후 관리형 정리 등록",
-      "text": "pci_ecam_create(dev,&cfgres,bus->res,ops)의 오류 포인터는 그대로 반환합니다. 성공하면 devm_add_action_or_reset에 해제 어댑터와 cfg를 등록합니다. 이 API는 작업 등록 실패 시 reset 동작으로 해제 콜백을 실행하므로 이 경로에서 별도의 pci_ecam_free를 중복 호출하지 않습니다. 등록 실패는 ERR_PTR(err),성공은 cfg입니다. ECAM 매핑 수명이 device의 관리 자원 정리와 연결되는 시점입니다."
+      "title": "생성 뒤 자동 정리 등록",
+      "text": "pci_ecam_create 오류는 그대로 반환해요. 성공하면 devm_add_action_or_reset에 해제 함수와 cfg를 등록해요. 이 API는 등록 실패 때도 reset으로 전달한 해제 함수를 실행해요. 그러므로 그 경로에서 또 pci_ecam_free를 부르면 안 돼요. 실패는 오류 포인터, 성공은 cfg이며 이때 매핑 수명이 장치 관리에 연결돼요."
     },
     {
-      "title": "probe의 선행 조건과 저장",
-      "text": "pci_host_common_probe는 of_device_get_match_data로 pci_ecam_ops를 얻고 NULL이면 -ENODEV입니다. devm_pci_alloc_host_bridge(dev,0) 실패면 -ENOMEM이며 성공한 bridge는 platform_set_drvdata로 저장합니다. 이후 of_pci_check_probe_only를 호출하므로 정책 확인은 ECAM 생성 이전입니다. 이 파일에는 probe 실패 때 drvdata를 명시적으로 NULL로 되돌리는 코드가 없습니다."
+      "title": "probe의 준비 순서",
+      "text": "match data에서 ops를 얻고 없으면 -ENODEV예요. 관리형 host bridge 할당 실패는 -ENOMEM이고 성공하면 drvdata로 저장해요. of_pci_check_probe_only로 정책을 확인한 뒤 ECAM을 만들어요. 실패할 때 drvdata를 직접 NULL로 되돌리는 줄은 이 파일에 없어요."
     },
     {
-      "title": "호스트 코어로 넘기는 상태",
-      "text": "gen_pci_init 실패는 PTR_ERR로 정수 오류를 반환합니다. 성공하면 bridge->sysdata=cfg,bridge->ops=(struct pci_ops *)&ops->pci_ops,bridge->msi_domain=true로 설정하고 pci_host_probe 결과를 그대로 반환합니다. const 테이블 안의 pci_ops 주소를 캐스팅해 저장하지만 여기서 테이블 내용을 수정하지는 않습니다. msi_domain 플래그 설정만으로 모든 장치의 MSI 벡터 할당이 완료되었다고 설명해서는 안 됩니다."
+      "title": "호스트 코어로 전달",
+      "text": "gen_pci_init 오류는 PTR_ERR로 반환해요. 성공하면 sysdata에 cfg, ops에 테이블 안의 pci_ops 주소를 저장하고 msi_domain=true를 정한 뒤 pci_host_probe 결과를 그대로 줘요. const 테이블 주소를 캐스팅하지만 여기서 내용을 수정하지는 않아요. MSI는 메시지 방식 인터럽트이며 플래그 대입만으로 모든 벡터 할당이 완료되는 것은 아니에요."
     },
     {
-      "title": "remove 순서와 잠금",
-      "text": "remove는 drvdata의 bridge를 가져와 pci_lock_rescan_remove를 잡고 stop_root_bus,remove_root_bus를 차례로 호출한 뒤 잠금을 풉니다. 중지를 먼저 마치고 제거한다는 앞선 remove.c의 계약을 실제 호출부에서 확인할 수 있습니다. 이 remove 본문은 pci_ecam_free를 직접 부르지 않으며 그것은 등록된 관리 작업이 담당합니다. bridge나 bridge->bus의 NULL 검사는 여기 없으므로 정상 probe 뒤 제거라는 수명 전제를 확인해야 합니다."
+      "title": "제거의 두 단계",
+      "text": "remove는 drvdata에서 bridge를 얻고 rescan/remove 잠금을 잡아요. 루트 버스를 먼저 중지하고 제거한 뒤 잠금을 풀어요. ECAM free는 여기 직접 부르지 않고 등록한 관리 작업이 맡아요. bridge와 bus NULL 검사는 없어 정상 probe 뒤 제거라는 수명 전제를 확인해야 해요."
     },
     {
-      "title": "전체 범위와 실행 한계",
-      "text": "gen_pci_unmap_cfg,gen_pci_init,probe,remove 네 함수와 두 GPL export,Generic PCI host common driver 설명 및 GPL v2 메타데이터를 대조했습니다. 별도 platform_driver 객체나 모듈 등록 함수는 이 파일에 없습니다. 실제 호스트 장치 바인딩,ECAM 접근,관리 자원 해제 또는 커널 빌드는 수행하지 않았습니다."
+      "title": "전체 확인 범위",
+      "text": "네 함수, probe/remove의 GPL 공개와 모듈 설명·GPL v2를 대조했어요. 이 파일에는 platform_driver 객체나 모듈 등록 함수가 없어요. 실제 바인딩, ECAM 접근, 관리 해제나 커널 빌드 시험을 실행한 것은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "ECAM 생성 후 devm_add_action_or_reset 등록이 실패하면 별도 free가 필요한가?",
+      "prompt": "정리 작업 등록 실패 뒤 별도 free가 필요한가요?",
       "options": [
+        "아니요. or_reset이 해제 콜백을 이미 부르므로 중복하면 안 돼요.",
+        "네. 콜백은 등록 성공 때만 실행될 수 있어요."
+      ],
+      "answer": 0,
+      "explanation": "이 API의 실패 시 즉시 정리 약속을 따라야 해요.",
+      "original_prompt": "ECAM 생성 후 devm_add_action_or_reset 등록이 실패하면 별도 free가 필요한가?",
+      "original_options": [
         "이 경로에서는 reset 동작이 해제 콜백을 호출하므로 중복 free하면 안 된다",
         "그렇다. 콜백은 등록 성공 때만 어떤 경우에도 실행될 수 있다"
       ],
-      "answer": 0,
-      "explanation": "or_reset 계약은 등록 실패 시 전달한 정리 함수를 즉시 실행하는 것입니다. 이 본문은 오류 포인터만 반환하며 추가 free를 하지 않습니다."
+      "original_explanation": "or_reset 계약은 등록 실패 시 전달한 정리 함수를 즉시 실행하는 것입니다. 이 본문은 오류 포인터만 반환하며 추가 free를 하지 않습니다."
     },
     {
-      "prompt": "gen_pci_init이 사용하는 BUS 자원은 어디서 오는가?",
+      "prompt": "BUS 자원은 어디서 얻나요?",
       "options": [
+        "항상 여기서 만든 0..255 배열이에요.",
+        "bridge->windows의 첫 BUS 항목이에요."
+      ],
+      "answer": 1,
+      "explanation": "기존 목록에 없으면 오류예요.",
+      "original_prompt": "gen_pci_init이 사용하는 BUS 자원은 어디서 오는가?",
+      "original_options": [
         "이 함수가 항상 새로 할당한0..255 배열",
         "bridge->windows의 첫 IORESOURCE_BUS 항목"
       ],
-      "answer": 1,
-      "explanation": "resource_list_first_type으로 기존 창 목록을 조회합니다. 없으면 -ENODEV이고 기본 버스 범위를 여기서 합성하지 않습니다."
+      "original_explanation": "resource_list_first_type으로 기존 창 목록을 조회합니다. 없으면 -ENODEV이고 기본 버스 범위를 여기서 합성하지 않습니다."
     },
     {
-      "prompt": "remove에서 ECAM을 직접 해제한 다음 루트 장치를 제거하는가?",
+      "prompt": "remove가 ECAM부터 직접 해제하나요?",
       "options": [
+        "아니요. 잠금 안에서 중지·제거하고 ECAM은 관리 작업이 맡아요.",
+        "네. 첫 줄이 pci_ecam_free예요."
+      ],
+      "answer": 0,
+      "explanation": "직접 호출과 나중 관리 정리를 구별해요.",
+      "original_prompt": "remove에서 ECAM을 직접 해제한 다음 루트 장치를 제거하는가?",
+      "original_options": [
         "아니다. 잠금 아래 중지·제거하고 ECAM은 관리 작업으로 정리한다",
         "그렇다. 첫 줄이 pci_ecam_free다"
       ],
-      "answer": 0,
-      "explanation": "본문의 명시적 순서는 drvdata 조회,잠금,stop,remove,unlock입니다. 관리 자원 정리와 직접 호출을 구분해야 합니다."
+      "original_explanation": "본문의 명시적 순서는 drvdata 조회,잠금,stop,remove,unlock입니다. 관리 자원 정리와 직접 호출을 구분해야 합니다."
     },
     {
-      "prompt": "msi_domain=true 설정만으로 모든 MSI IRQ가 이미 할당되었다고 볼 수 있는가?",
+      "prompt": "msi_domain=true만으로 모든 MSI IRQ를 얻었나요?",
       "options": [
+        "네. 대입이 벡터 전체를 할당해요.",
+        "아니요. 호스트 상태를 정해 코어 probe로 넘겨요."
+      ],
+      "answer": 1,
+      "explanation": "여기에 벡터 요청 루프는 없어요.",
+      "original_prompt": "msi_domain=true 설정만으로 모든 MSI IRQ가 이미 할당되었다고 볼 수 있는가?",
+      "original_options": [
         "있다. 이 대입이 벡터 전체를 할당한다",
         "없다. 호스트 상태 플래그를 설정하고 코어 probe에 넘긴다"
       ],
-      "answer": 1,
-      "explanation": "대입 직후 pci_host_probe를 호출할 뿐 이 파일에 벡터 할당 루프나 IRQ 요청은 없습니다."
+      "original_explanation": "대입 직후 pci_host_probe를 호출할 뿐 이 파일에 벡터 할당 루프나 IRQ 요청은 없습니다."
     },
     {
-      "prompt": "이 파일 자체가 platform_driver를 등록하는가?",
+      "prompt": "이 파일이 platform_driver를 직접 등록하나요?",
       "options": [
+        "아니요. 공통 probe/remove를 제공해요.",
+        "네. module_platform_driver가 있어요."
+      ],
+      "answer": 0,
+      "explanation": "실제 사용하는 플랫폼 드라이버 파일과 역할이 달라요.",
+      "original_prompt": "이 파일 자체가 platform_driver를 등록하는가?",
+      "original_options": [
         "아니다. 공통 probe/remove를 내보내는 역할이다",
         "그렇다. module_platform_driver 호출을 포함한다"
       ],
-      "answer": 0,
-      "explanation": "네 함수와 export 및 모듈 메타데이터가 전체입니다. 공통 도우미와 이를 사용하는 실제 플랫폼 드라이버를 구분해야 합니다."
+      "original_explanation": "네 함수와 export 및 모듈 메타데이터가 전체입니다. 공통 도우미와 이를 사용하는 실제 플랫폼 드라이버를 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "ECAM 생성 성공 뒤 관리 작업 등록에 실패했을 때 누가 cfg를 해제하는지 화살표로 표시해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Generic PCI host driver common code\n *\n * Copyright (C) 2014 ARM Limited\n *\n * Author: Will Deacon <will.deacon@arm.com>\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/of.h>\n#include <linux/of_address.h>\n#include <linux/of_pci.h>\n#include <linux/pci-ecam.h>\n#include <linux/platform_device.h>\n\nstatic void gen_pci_unmap_cfg(void *ptr)\n{\n\tpci_ecam_free((struct pci_config_window *)ptr);\n}\n\nstatic struct pci_config_window *gen_pci_init(struct device *dev,\n\t\tstruct pci_host_bridge *bridge, const struct pci_ecam_ops *ops)\n{\n\tint err;\n\tstruct resource cfgres;\n\tstruct resource_entry *bus;\n\tstruct pci_config_window *cfg;\n\n\terr = of_address_to_resource(dev->of_node, 0, &cfgres);\n\tif (err) {\n\t\tdev_err(dev, \"missing \\\"reg\\\" property\\n\");\n\t\treturn ERR_PTR(err);\n\t}\n\n\tbus = resource_list_first_type(&bridge->windows, IORESOURCE_BUS);\n\tif (!bus)\n\t\treturn ERR_PTR(-ENODEV);\n\n\tcfg = pci_ecam_create(dev, &cfgres, bus->res, ops);\n\tif (IS_ERR(cfg))\n\t\treturn cfg;\n\n\terr = devm_add_action_or_reset(dev, gen_pci_unmap_cfg, cfg);\n\tif (err)\n\t\treturn ERR_PTR(err);\n\n\treturn cfg;\n}\n\nint pci_host_common_probe(struct platform_device *pdev)\n{\n\tstruct device *dev = &pdev->dev;\n\tstruct pci_host_bridge *bridge;\n\tstruct pci_config_window *cfg;\n\tconst struct pci_ecam_ops *ops;\n\n\tops = of_device_get_match_data(&pdev->dev);\n\tif (!ops)\n\t\treturn -ENODEV;\n\n\tbridge = devm_pci_alloc_host_bridge(dev, 0);\n\tif (!bridge)\n\t\treturn -ENOMEM;\n\n\tplatform_set_drvdata(pdev, bridge);\n\n\tof_pci_check_probe_only();\n\n\t/* Parse and map our Configuration Space windows */\n\tcfg = gen_pci_init(dev, bridge, ops);\n\tif (IS_ERR(cfg))\n\t\treturn PTR_ERR(cfg);\n\n\tbridge->sysdata = cfg;\n\tbridge->ops = (struct pci_ops *)&ops->pci_ops;\n\tbridge->msi_domain = true;\n\n\treturn pci_host_probe(bridge);\n}\nEXPORT_SYMBOL_GPL(pci_host_common_probe);\n\nvoid pci_host_common_remove(struct platform_device *pdev)\n{\n\tstruct pci_host_bridge *bridge = platform_get_drvdata(pdev);\n\n\tpci_lock_rescan_remove();\n\tpci_stop_root_bus(bridge->bus);\n\tpci_remove_root_bus(bridge->bus);\n\tpci_unlock_rescan_remove();\n}\nEXPORT_SYMBOL_GPL(pci_host_common_remove);\n\nMODULE_DESCRIPTION(\"Generic PCI host common driver\");\nMODULE_LICENSE(\"GPL v2\");\n",
   "source_review": {
@@ -120,5 +146,157 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/controller/pci-host-common.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-d6dbaa9f5615d783",
+    "path": "drivers/pci/controller/pci-host-common.c",
+    "title": "공통 PCI 호스트: ECAM 관리 작업과 probe/remove 연결",
+    "area": "PCI 호스트 · ECAM · devres · probe · 자원 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 내부 도우미와 공개 probe/remove 전체를 기존 ECAM·루트 제거 자료에 연결합니다.",
+    "guide": [
+      "자원 획득을 관리형 해제 작업에 등록하는 시점과 실패 시 즉시 정리 여부를 함께 추적해야 합니다.",
+      "오류 포인터, 콜백 어댑터, 관리형 자원 수명과 잠금 안의 두 단계 제거를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 역할과 해제 어댑터",
+        "text": "GPL-2.0 파일은 kernel,module,OF,OF address,OF PCI,pci-ecam,platform_device를 포함합니다. gen_pci_unmap_cfg는 void *를 pci_config_window *로 캐스팅해 pci_ecam_free에 전달하는 어댑터입니다. 관리 작업의 일반 포인터 콜백 형태를 ECAM 전용 해제 함수와 연결하며 이 함수에서 별도 객체를 할당하지 않습니다."
+      },
+      {
+        "title": "설정 공간 입력과 버스 자원",
+        "text": "gen_pci_init은 of_address_to_resource(dev->of_node,0,&cfgres)로 첫 주소 자원을 구합니다. 실패하면 missing reg 로그와 ERR_PTR(err)를 반환합니다. 해당 로그만으로 모든 실패 원인이 반드시 속성 부재라고 단정할 수는 없습니다. bridge->windows에서 IORESOURCE_BUS인 첫 항목을 찾고 없으면 ERR_PTR(-ENODEV)입니다. 이 함수가 창 목록을 새로 파싱하는 것은 아니며 이미 마련된 버스 자원을 사용합니다."
+      },
+      {
+        "title": "생성 후 관리형 정리 등록",
+        "text": "pci_ecam_create(dev,&cfgres,bus->res,ops)의 오류 포인터는 그대로 반환합니다. 성공하면 devm_add_action_or_reset에 해제 어댑터와 cfg를 등록합니다. 이 API는 작업 등록 실패 시 reset 동작으로 해제 콜백을 실행하므로 이 경로에서 별도의 pci_ecam_free를 중복 호출하지 않습니다. 등록 실패는 ERR_PTR(err),성공은 cfg입니다. ECAM 매핑 수명이 device의 관리 자원 정리와 연결되는 시점입니다."
+      },
+      {
+        "title": "probe의 선행 조건과 저장",
+        "text": "pci_host_common_probe는 of_device_get_match_data로 pci_ecam_ops를 얻고 NULL이면 -ENODEV입니다. devm_pci_alloc_host_bridge(dev,0) 실패면 -ENOMEM이며 성공한 bridge는 platform_set_drvdata로 저장합니다. 이후 of_pci_check_probe_only를 호출하므로 정책 확인은 ECAM 생성 이전입니다. 이 파일에는 probe 실패 때 drvdata를 명시적으로 NULL로 되돌리는 코드가 없습니다."
+      },
+      {
+        "title": "호스트 코어로 넘기는 상태",
+        "text": "gen_pci_init 실패는 PTR_ERR로 정수 오류를 반환합니다. 성공하면 bridge->sysdata=cfg,bridge->ops=(struct pci_ops *)&ops->pci_ops,bridge->msi_domain=true로 설정하고 pci_host_probe 결과를 그대로 반환합니다. const 테이블 안의 pci_ops 주소를 캐스팅해 저장하지만 여기서 테이블 내용을 수정하지는 않습니다. msi_domain 플래그 설정만으로 모든 장치의 MSI 벡터 할당이 완료되었다고 설명해서는 안 됩니다."
+      },
+      {
+        "title": "remove 순서와 잠금",
+        "text": "remove는 drvdata의 bridge를 가져와 pci_lock_rescan_remove를 잡고 stop_root_bus,remove_root_bus를 차례로 호출한 뒤 잠금을 풉니다. 중지를 먼저 마치고 제거한다는 앞선 remove.c의 계약을 실제 호출부에서 확인할 수 있습니다. 이 remove 본문은 pci_ecam_free를 직접 부르지 않으며 그것은 등록된 관리 작업이 담당합니다. bridge나 bridge->bus의 NULL 검사는 여기 없으므로 정상 probe 뒤 제거라는 수명 전제를 확인해야 합니다."
+      },
+      {
+        "title": "전체 범위와 실행 한계",
+        "text": "gen_pci_unmap_cfg,gen_pci_init,probe,remove 네 함수와 두 GPL export,Generic PCI host common driver 설명 및 GPL v2 메타데이터를 대조했습니다. 별도 platform_driver 객체나 모듈 등록 함수는 이 파일에 없습니다. 실제 호스트 장치 바인딩,ECAM 접근,관리 자원 해제 또는 커널 빌드는 수행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ECAM 생성 후 devm_add_action_or_reset 등록이 실패하면 별도 free가 필요한가?",
+        "options": [
+          "이 경로에서는 reset 동작이 해제 콜백을 호출하므로 중복 free하면 안 된다",
+          "그렇다. 콜백은 등록 성공 때만 어떤 경우에도 실행될 수 있다"
+        ],
+        "answer": 0,
+        "explanation": "or_reset 계약은 등록 실패 시 전달한 정리 함수를 즉시 실행하는 것입니다. 이 본문은 오류 포인터만 반환하며 추가 free를 하지 않습니다."
+      },
+      {
+        "prompt": "gen_pci_init이 사용하는 BUS 자원은 어디서 오는가?",
+        "options": [
+          "이 함수가 항상 새로 할당한0..255 배열",
+          "bridge->windows의 첫 IORESOURCE_BUS 항목"
+        ],
+        "answer": 1,
+        "explanation": "resource_list_first_type으로 기존 창 목록을 조회합니다. 없으면 -ENODEV이고 기본 버스 범위를 여기서 합성하지 않습니다."
+      },
+      {
+        "prompt": "remove에서 ECAM을 직접 해제한 다음 루트 장치를 제거하는가?",
+        "options": [
+          "아니다. 잠금 아래 중지·제거하고 ECAM은 관리 작업으로 정리한다",
+          "그렇다. 첫 줄이 pci_ecam_free다"
+        ],
+        "answer": 0,
+        "explanation": "본문의 명시적 순서는 drvdata 조회,잠금,stop,remove,unlock입니다. 관리 자원 정리와 직접 호출을 구분해야 합니다."
+      },
+      {
+        "prompt": "msi_domain=true 설정만으로 모든 MSI IRQ가 이미 할당되었다고 볼 수 있는가?",
+        "options": [
+          "있다. 이 대입이 벡터 전체를 할당한다",
+          "없다. 호스트 상태 플래그를 설정하고 코어 probe에 넘긴다"
+        ],
+        "answer": 1,
+        "explanation": "대입 직후 pci_host_probe를 호출할 뿐 이 파일에 벡터 할당 루프나 IRQ 요청은 없습니다."
+      },
+      {
+        "prompt": "이 파일 자체가 platform_driver를 등록하는가?",
+        "options": [
+          "아니다. 공통 probe/remove를 내보내는 역할이다",
+          "그렇다. module_platform_driver 호출을 포함한다"
+        ],
+        "answer": 0,
+        "explanation": "네 함수와 export 및 모듈 메타데이터가 전체입니다. 공통 도우미와 이를 사용하는 실제 플랫폼 드라이버를 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Generic PCI host driver common code\n *\n * Copyright (C) 2014 ARM Limited\n *\n * Author: Will Deacon <will.deacon@arm.com>\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/of.h>\n#include <linux/of_address.h>\n#include <linux/of_pci.h>\n#include <linux/pci-ecam.h>\n#include <linux/platform_device.h>\n\nstatic void gen_pci_unmap_cfg(void *ptr)\n{\n\tpci_ecam_free((struct pci_config_window *)ptr);\n}\n\nstatic struct pci_config_window *gen_pci_init(struct device *dev,\n\t\tstruct pci_host_bridge *bridge, const struct pci_ecam_ops *ops)\n{\n\tint err;\n\tstruct resource cfgres;\n\tstruct resource_entry *bus;\n\tstruct pci_config_window *cfg;\n\n\terr = of_address_to_resource(dev->of_node, 0, &cfgres);\n\tif (err) {\n\t\tdev_err(dev, \"missing \\\"reg\\\" property\\n\");\n\t\treturn ERR_PTR(err);\n\t}\n\n\tbus = resource_list_first_type(&bridge->windows, IORESOURCE_BUS);\n\tif (!bus)\n\t\treturn ERR_PTR(-ENODEV);\n\n\tcfg = pci_ecam_create(dev, &cfgres, bus->res, ops);\n\tif (IS_ERR(cfg))\n\t\treturn cfg;\n\n\terr = devm_add_action_or_reset(dev, gen_pci_unmap_cfg, cfg);\n\tif (err)\n\t\treturn ERR_PTR(err);\n\n\treturn cfg;\n}\n\nint pci_host_common_probe(struct platform_device *pdev)\n{\n\tstruct device *dev = &pdev->dev;\n\tstruct pci_host_bridge *bridge;\n\tstruct pci_config_window *cfg;\n\tconst struct pci_ecam_ops *ops;\n\n\tops = of_device_get_match_data(&pdev->dev);\n\tif (!ops)\n\t\treturn -ENODEV;\n\n\tbridge = devm_pci_alloc_host_bridge(dev, 0);\n\tif (!bridge)\n\t\treturn -ENOMEM;\n\n\tplatform_set_drvdata(pdev, bridge);\n\n\tof_pci_check_probe_only();\n\n\t/* Parse and map our Configuration Space windows */\n\tcfg = gen_pci_init(dev, bridge, ops);\n\tif (IS_ERR(cfg))\n\t\treturn PTR_ERR(cfg);\n\n\tbridge->sysdata = cfg;\n\tbridge->ops = (struct pci_ops *)&ops->pci_ops;\n\tbridge->msi_domain = true;\n\n\treturn pci_host_probe(bridge);\n}\nEXPORT_SYMBOL_GPL(pci_host_common_probe);\n\nvoid pci_host_common_remove(struct platform_device *pdev)\n{\n\tstruct pci_host_bridge *bridge = platform_get_drvdata(pdev);\n\n\tpci_lock_rescan_remove();\n\tpci_stop_root_bus(bridge->bus);\n\tpci_remove_root_bus(bridge->bus);\n\tpci_unlock_rescan_remove();\n}\nEXPORT_SYMBOL_GPL(pci_host_common_remove);\n\nMODULE_DESCRIPTION(\"Generic PCI host common driver\");\nMODULE_LICENSE(\"GPL v2\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "aa8942cb8d3f94f0e9ab67a62de4094063607e77873c423211e4c14f69df93ac",
+      "scope": "whole-file",
+      "line_count": 96,
+      "authoring_source": "course/file_units/pci_host_common_lifecycle.py",
+      "sections": [
+        "파일 역할과 해제 어댑터",
+        "설정 공간 입력과 버스 자원",
+        "생성 후 관리형 정리 등록",
+        "probe의 선행 조건과 저장",
+        "호스트 코어로 넘기는 상태",
+        "remove 순서와 잠금",
+        "전체 범위와 실행 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/controller/pci-host-common.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "빌린 물건을 자동 반납 목록에 등록하려다 실패하면 즉시 반납하는 창구가 있어요. 그 뒤 다시 반납하면 중복 처리가 되므로 약속을 알아야 해요.",
+    "meaning": "공통 PCI probe는 ECAM 자원을 만들고 장치 수명에 맞춘 정리 작업에 연결해요. remove의 명시적 중지·제거와 관리형 자원 해제를 구별해요.",
+    "exercise": "ECAM 생성 성공 뒤 관리 작업 등록에 실패했을 때 누가 cfg를 해제하는지 화살표로 표시해 보세요."
+  },
+  "goal": "공통 PCI probe는 ECAM 자원을 만들고 장치 수명에 맞춘 정리 작업에 연결해요. remove의 명시적 중지·제거와 관리형 자원 해제를 구별해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "ECAM 생성 성공 뒤 관리 작업 등록에 실패했을 때 누가 cfg를 해제하는지 화살표로 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "875ae449ddd0a293c65dfdd1e7e24d856d6a184bb3a0fe9473354e4667d92c48",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

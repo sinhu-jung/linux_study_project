@@ -5,71 +5,85 @@
   "area": "구조체 배치 · union·가변 길이 배열·언어 확장",
   "track": "files",
   "kind": "kernel",
-  "intro": "널 포인터·불리언 상수·멤버 오프셋과 여러 멤버를 하나의 영역으로 다루는 매크로입니다.",
+  "intro": "stddef.h는 구조체 멤버의 크기와 위치를 구하고 여러 멤버를 한 그룹으로 부르는 선언 도구를 제공해요.",
   "guide": [
-    "UAPI stddef를 포함하고 NULL,false/true,offsetof를 정의합니다. sizeof_field와 offsetofend는 멤버 크기·끝 위치를 구하고 struct_group 계열은 같은 저장소에 직접 접근과 그룹 이름 접근을 제공합니다.",
-    "배치 정보를 구하는 매크로는 메모리를 할당하거나 크기를 검사하는 실행 함수가 아닙니다. 패딩과 가변 배열의 저장 공간은 별도로 고려해야 합니다."
+    "구조체는 여러 값을 이름 붙은 칸에 모은 타입이고 각 칸을 멤버라고 해요. 오프셋은 구조체 시작에서 특정 칸까지 떨어진 바이트 수예요.",
+    "패딩은 주소 정렬을 맞추려고 칸 사이 또는 끝에 넣는 빈 간격이에요. 멤버 크기를 더한 값이 전체 구조체 크기와 꼭 같지는 않아요.",
+    "매크로는 번역 전에 펼치는 코드 틀이에요. 선언용 매크로를 적는 것만으로 저장할 메모리를 자동으로 얻는 것은 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "SPDX,guard,UAPI include,NULL 재정의,익명 enum의 false0/true1,offsetof 재정의,멤버 크기·끝 위치,struct_group/attr/tagged,DECLARE_FLEX_ARRAY wrapper로 끝납니다. bool typedef 자체는 이 파일에 없습니다."
+      "title": "헤더가 정의하는 기본 이름",
+      "text": "UAPI stddef 헤더를 포함하고 NULL을 ((void *)0)으로 다시 정해요. 이름 없는 enum에서 false는 0, true는 1로 정하지만 bool 타입 자체를 여기서 정의하지는 않아요. offsetof는 컴파일러의 __builtin_offsetof에 연결해요. 뒤에는 멤버 크기·끝 위치와 그룹·유연 배열 선언 도구가 있어요."
     },
     {
-      "title": "멤버 크기와 끝",
-      "text": "sizeof_field(T,m)은 해당 멤버 타입의 sizeof이며 일반 멤버에서는 NULL 객체를 실제 읽지 않습니다. offsetofend는 멤버 시작 오프셋과 그 크기의 합입니다. 구조체 뒤쪽 패딩이나 다음 멤버까지의 간격을 더하지 않으므로 항상 sizeof(T)와 같은 것은 아닙니다. bit-field나 불완전 배열처럼 sizeof를 적용할 수 없는 대상에 무조건 사용할 수 없습니다."
+      "title": "멤버 하나의 크기와 끝",
+      "text": "sizeof_field(T,m)은 m의 타입이 차지하는 바이트 수예요. 일반 멤버에 쓰는 sizeof 표현에서 주소 0의 객체를 실제로 읽는 것은 아니에요. offsetofend는 멤버 시작 위치에 그 멤버 크기만 더해요. 예시의 시작 4와 크기 2라면 끝은 6이며 전체 크기 8과 달라요. 비트 필드나 크기가 완성되지 않은 배열처럼 sizeof를 쓸 수 없는 대상에는 마음대로 적용하지 못해요."
     },
     {
-      "title": "그룹의 두 접근 방법",
-      "text": "struct_group(NAME,MEMBERS)는 UAPI __struct_group에 빈 tag와 attributes를 전달합니다. 익명 구조체를 통한 obj.field 접근과 이름 있는 구조체를 통한 obj.NAME.field 접근은 같은 저장소를 가리킵니다. 멤버 데이터를 두 벌 저장하는 구조가 아닙니다."
+      "title": "같은 칸을 두 가지 이름으로 접근",
+      "text": "struct_group은 이름 없는 구조체와 이름 있는 구조체를 union으로 겹치는 __struct_group에 연결해요. union은 여러 표현이 같은 저장 공간을 공유하게 하는 타입이에요. obj.field와 obj.NAME.field가 같은 칸을 가리켜요. 두 복사본을 만들거나 자동 동기화하는 코드가 아니에요."
     },
     {
-      "title": "속성과 재사용 태그",
-      "text": "struct_group_attr는 attributes를 전달하고 struct_group_tagged는 이름 있는 구조체에 재사용할 tag를 전달합니다. 속성은 정렬·배치에 영향을 줄 수 있으므로 그룹 크기를 필드 크기의 단순 합으로 가정하지 않습니다. tag와 객체의 멤버 이름은 서로 다른 역할입니다."
+      "title": "속성과 재사용 이름",
+      "text": "struct_group_attr는 정렬·배치 같은 속성을 전달하고 struct_group_tagged는 구조체 타입을 다시 부를 TAG를 전달해요. 객체 안의 멤버 이름 NAME과 타입을 부르는 TAG는 역할이 달라요. 속성에 따라 간격과 정렬이 달라질 수 있어 그룹 크기를 멤버 크기의 단순 합이라고 가정하면 안 돼요."
     },
     {
-      "title": "유연 배열 선언",
-      "text": "DECLARE_FLEX_ARRAY는 UAPI __DECLARE_FLEX_ARRAY에 위임합니다. union 안 등에서 유연 배열을 표현하도록 포장하지만 추가 원소 저장 공간을 할당하지 않습니다. 실제 객체 생성 시 필요한 꼬리 공간과 수명·길이 계약을 호출자가 관리합니다."
+      "title": "뒤에 이어지는 유연 배열",
+      "text": "DECLARE_FLEX_ARRAY는 __DECLARE_FLEX_ARRAY에 맡겨 union 안 등에서 유연 배열을 선언할 수 있게 해요. 유연 배열은 필요한 원소 공간을 객체 뒤에 별도로 마련해 사용하는 배열이에요. 선언만으로 원소를 넣을 공간이 생기지 않아요. 실제 할당 크기, 사용할 길이와 메모리를 유지할 기간은 다른 코드가 관리해야 해요."
     }
   ],
   "questions": [
     {
-      "prompt": "offsetofend가 항상 구조체 전체 sizeof와 같은가?",
+      "prompt": "offsetofend는 항상 구조체 전체 크기인가요?",
       "options": [
+        "아니요. 뒤의 다른 멤버나 빈 간격이 남을 수 있어요.",
+        "네. 언제나 구조체 맨 끝을 가리켜요."
+      ],
+      "answer": 0,
+      "explanation": "지정한 멤버의 시작과 크기만 더하므로 구조체 전체 sizeof와는 달라요.",
+      "original_prompt": "offsetofend가 항상 구조체 전체 sizeof와 같은가?",
+      "original_options": [
         "아니다. 뒤쪽 멤버와 패딩이 남을 수 있다",
         "그렇다. 구조체 끝을 무조건 반환한다"
       ],
-      "answer": 0,
-      "explanation": "정의는 지정 멤버의 시작 오프셋에 그 멤버 크기만 더합니다. 구조체 전체 크기와는 다릅니다."
+      "original_explanation": "정의는 지정 멤버의 시작 오프셋에 그 멤버 크기만 더합니다. 구조체 전체 크기와는 다릅니다."
     },
     {
-      "prompt": "struct_group의 두 접근 경로는 데이터를 두 번 저장하는가?",
+      "prompt": "struct_group의 접근 이름 두 개는 데이터를 두 벌 저장하나요?",
       "options": [
+        "네. 서로 맞춰 주는 복사본 두 개예요.",
+        "아니요. union의 같은 공간을 공유해요."
+      ],
+      "answer": 1,
+      "explanation": "서로 겹친 같은 저장 공간에 두 경로로 접근해요. 복사나 동기화 동작은 없어요.",
+      "original_prompt": "struct_group의 두 접근 경로는 데이터를 두 번 저장하는가?",
+      "original_options": [
         "그렇다. 동기화된 복사본 두 개를 만든다",
         "아니다. union 안의 같은 저장소를 공유한다"
       ],
-      "answer": 1,
-      "explanation": "그룹은 이름 없는 구조체와 이름 있는 구조체를 union으로 겹칩니다. 자동 복사나 동기화 코드는 없습니다."
+      "original_explanation": "그룹은 이름 없는 구조체와 이름 있는 구조체를 union으로 겹칩니다. 자동 복사나 동기화 코드는 없습니다."
     },
     {
-      "prompt": "DECLARE_FLEX_ARRAY가 필요한 원소 수만큼 메모리를 확보하는가?",
+      "prompt": "DECLARE_FLEX_ARRAY는 필요한 원소 메모리를 확보하나요?",
       "options": [
+        "아니요. 선언 형식을 제공할 뿐이에요.",
+        "네. 동적 배열을 자동으로 할당해요."
+      ],
+      "answer": 0,
+      "explanation": "매크로는 타입과 이름을 받아 선언을 만들어요. 실제 길이 계산과 메모리 확보는 별도예요.",
+      "original_prompt": "DECLARE_FLEX_ARRAY가 필요한 원소 수만큼 메모리를 확보하는가?",
+      "original_options": [
         "아니다. 선언 형식만 제공한다",
         "그렇다. 매크로가 동적 배열을 할당한다"
       ],
-      "answer": 0,
-      "explanation": "배열 원소 타입·이름만 받는 선언 매크로입니다. 실제 크기 계산과 할당은 다른 코드의 책임입니다."
+      "original_explanation": "배열 원소 타입·이름만 받는 선언 매크로입니다. 실제 크기 계산과 할당은 다른 코드의 책임입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "멤버가 4번 위치에서 시작하고 크기가 2바이트이며 구조체 전체는 8바이트라면 offsetofend와 sizeof를 각각 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_STDDEF_H\n#define _LINUX_STDDEF_H\n\n#include <uapi/linux/stddef.h>\n\n#undef NULL\n#define NULL ((void *)0)\n\nenum {\n\tfalse\t= 0,\n\ttrue\t= 1\n};\n\n#undef offsetof\n#define offsetof(TYPE, MEMBER)\t__builtin_offsetof(TYPE, MEMBER)\n\n/**\n * sizeof_field() - Report the size of a struct field in bytes\n *\n * @TYPE: The structure containing the field of interest\n * @MEMBER: The field to return the size of\n */\n#define sizeof_field(TYPE, MEMBER) sizeof((((TYPE *)0)->MEMBER))\n\n/**\n * offsetofend() - Report the offset of a struct field within the struct\n *\n * @TYPE: The type of the structure\n * @MEMBER: The member within the structure to get the end offset of\n */\n#define offsetofend(TYPE, MEMBER) \\\n\t(offsetof(TYPE, MEMBER)\t+ sizeof_field(TYPE, MEMBER))\n\n/**\n * struct_group() - Wrap a set of declarations in a mirrored struct\n *\n * @NAME: The identifier name of the mirrored sub-struct\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members.\n */\n#define struct_group(NAME, MEMBERS...)\t\\\n\t__struct_group(/* no tag */, NAME, /* no attrs */, MEMBERS)\n\n/**\n * struct_group_attr() - Create a struct_group() with trailing attributes\n *\n * @NAME: The identifier name of the mirrored sub-struct\n * @ATTRS: Any struct attributes to apply\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members. Includes structure attributes argument.\n */\n#define struct_group_attr(NAME, ATTRS, MEMBERS...) \\\n\t__struct_group(/* no tag */, NAME, ATTRS, MEMBERS)\n\n/**\n * struct_group_tagged() - Create a struct_group with a reusable tag\n *\n * @TAG: The tag name for the named sub-struct\n * @NAME: The identifier name of the mirrored sub-struct\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members. Includes struct tag argument for the named copy,\n * so the specified layout can be reused later.\n */\n#define struct_group_tagged(TAG, NAME, MEMBERS...) \\\n\t__struct_group(TAG, NAME, /* no attrs */, MEMBERS)\n\n/**\n * DECLARE_FLEX_ARRAY() - Declare a flexible array usable in a union\n *\n * @TYPE: The type of each flexible array element\n * @NAME: The name of the flexible array member\n *\n * In order to have a flexible array member in a union or alone in a\n * struct, it needs to be wrapped in an anonymous struct with at least 1\n * named member, but that member can be empty.\n */\n#define DECLARE_FLEX_ARRAY(TYPE, NAME) \\\n\t__DECLARE_FLEX_ARRAY(TYPE, NAME)\n\n#endif\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/stddef.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-36f05bd8ec588975",
+    "path": "include/linux/stddef.h",
+    "title": "커널 stddef 전체: 멤버 범위와 구조체 그룹",
+    "area": "구조체 배치 · union·가변 길이 배열·언어 확장",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "널 포인터·불리언 상수·멤버 오프셋과 여러 멤버를 하나의 영역으로 다루는 매크로입니다.",
+    "guide": [
+      "UAPI stddef를 포함하고 NULL,false/true,offsetof를 정의합니다. sizeof_field와 offsetofend는 멤버 크기·끝 위치를 구하고 struct_group 계열은 같은 저장소에 직접 접근과 그룹 이름 접근을 제공합니다.",
+      "배치 정보를 구하는 매크로는 메모리를 할당하거나 크기를 검사하는 실행 함수가 아닙니다. 패딩과 가변 배열의 저장 공간은 별도로 고려해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "SPDX,guard,UAPI include,NULL 재정의,익명 enum의 false0/true1,offsetof 재정의,멤버 크기·끝 위치,struct_group/attr/tagged,DECLARE_FLEX_ARRAY wrapper로 끝납니다. bool typedef 자체는 이 파일에 없습니다."
+      },
+      {
+        "title": "멤버 크기와 끝",
+        "text": "sizeof_field(T,m)은 해당 멤버 타입의 sizeof이며 일반 멤버에서는 NULL 객체를 실제 읽지 않습니다. offsetofend는 멤버 시작 오프셋과 그 크기의 합입니다. 구조체 뒤쪽 패딩이나 다음 멤버까지의 간격을 더하지 않으므로 항상 sizeof(T)와 같은 것은 아닙니다. bit-field나 불완전 배열처럼 sizeof를 적용할 수 없는 대상에 무조건 사용할 수 없습니다."
+      },
+      {
+        "title": "그룹의 두 접근 방법",
+        "text": "struct_group(NAME,MEMBERS)는 UAPI __struct_group에 빈 tag와 attributes를 전달합니다. 익명 구조체를 통한 obj.field 접근과 이름 있는 구조체를 통한 obj.NAME.field 접근은 같은 저장소를 가리킵니다. 멤버 데이터를 두 벌 저장하는 구조가 아닙니다."
+      },
+      {
+        "title": "속성과 재사용 태그",
+        "text": "struct_group_attr는 attributes를 전달하고 struct_group_tagged는 이름 있는 구조체에 재사용할 tag를 전달합니다. 속성은 정렬·배치에 영향을 줄 수 있으므로 그룹 크기를 필드 크기의 단순 합으로 가정하지 않습니다. tag와 객체의 멤버 이름은 서로 다른 역할입니다."
+      },
+      {
+        "title": "유연 배열 선언",
+        "text": "DECLARE_FLEX_ARRAY는 UAPI __DECLARE_FLEX_ARRAY에 위임합니다. union 안 등에서 유연 배열을 표현하도록 포장하지만 추가 원소 저장 공간을 할당하지 않습니다. 실제 객체 생성 시 필요한 꼬리 공간과 수명·길이 계약을 호출자가 관리합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "offsetofend가 항상 구조체 전체 sizeof와 같은가?",
+        "options": [
+          "아니다. 뒤쪽 멤버와 패딩이 남을 수 있다",
+          "그렇다. 구조체 끝을 무조건 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "정의는 지정 멤버의 시작 오프셋에 그 멤버 크기만 더합니다. 구조체 전체 크기와는 다릅니다."
+      },
+      {
+        "prompt": "struct_group의 두 접근 경로는 데이터를 두 번 저장하는가?",
+        "options": [
+          "그렇다. 동기화된 복사본 두 개를 만든다",
+          "아니다. union 안의 같은 저장소를 공유한다"
+        ],
+        "answer": 1,
+        "explanation": "그룹은 이름 없는 구조체와 이름 있는 구조체를 union으로 겹칩니다. 자동 복사나 동기화 코드는 없습니다."
+      },
+      {
+        "prompt": "DECLARE_FLEX_ARRAY가 필요한 원소 수만큼 메모리를 확보하는가?",
+        "options": [
+          "아니다. 선언 형식만 제공한다",
+          "그렇다. 매크로가 동적 배열을 할당한다"
+        ],
+        "answer": 0,
+        "explanation": "배열 원소 타입·이름만 받는 선언 매크로입니다. 실제 크기 계산과 할당은 다른 코드의 책임입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_STDDEF_H\n#define _LINUX_STDDEF_H\n\n#include <uapi/linux/stddef.h>\n\n#undef NULL\n#define NULL ((void *)0)\n\nenum {\n\tfalse\t= 0,\n\ttrue\t= 1\n};\n\n#undef offsetof\n#define offsetof(TYPE, MEMBER)\t__builtin_offsetof(TYPE, MEMBER)\n\n/**\n * sizeof_field() - Report the size of a struct field in bytes\n *\n * @TYPE: The structure containing the field of interest\n * @MEMBER: The field to return the size of\n */\n#define sizeof_field(TYPE, MEMBER) sizeof((((TYPE *)0)->MEMBER))\n\n/**\n * offsetofend() - Report the offset of a struct field within the struct\n *\n * @TYPE: The type of the structure\n * @MEMBER: The member within the structure to get the end offset of\n */\n#define offsetofend(TYPE, MEMBER) \\\n\t(offsetof(TYPE, MEMBER)\t+ sizeof_field(TYPE, MEMBER))\n\n/**\n * struct_group() - Wrap a set of declarations in a mirrored struct\n *\n * @NAME: The identifier name of the mirrored sub-struct\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members.\n */\n#define struct_group(NAME, MEMBERS...)\t\\\n\t__struct_group(/* no tag */, NAME, /* no attrs */, MEMBERS)\n\n/**\n * struct_group_attr() - Create a struct_group() with trailing attributes\n *\n * @NAME: The identifier name of the mirrored sub-struct\n * @ATTRS: Any struct attributes to apply\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members. Includes structure attributes argument.\n */\n#define struct_group_attr(NAME, ATTRS, MEMBERS...) \\\n\t__struct_group(/* no tag */, NAME, ATTRS, MEMBERS)\n\n/**\n * struct_group_tagged() - Create a struct_group with a reusable tag\n *\n * @TAG: The tag name for the named sub-struct\n * @NAME: The identifier name of the mirrored sub-struct\n * @MEMBERS: The member declarations for the mirrored structs\n *\n * Used to create an anonymous union of two structs with identical\n * layout and size: one anonymous and one named. The former can be\n * used normally without sub-struct naming, and the latter can be\n * used to reason about the start, end, and size of the group of\n * struct members. Includes struct tag argument for the named copy,\n * so the specified layout can be reused later.\n */\n#define struct_group_tagged(TAG, NAME, MEMBERS...) \\\n\t__struct_group(TAG, NAME, /* no attrs */, MEMBERS)\n\n/**\n * DECLARE_FLEX_ARRAY() - Declare a flexible array usable in a union\n *\n * @TYPE: The type of each flexible array element\n * @NAME: The name of the flexible array member\n *\n * In order to have a flexible array member in a union or alone in a\n * struct, it needs to be wrapped in an anonymous struct with at least 1\n * named member, but that member can be empty.\n */\n#define DECLARE_FLEX_ARRAY(TYPE, NAME) \\\n\t__DECLARE_FLEX_ARRAY(TYPE, NAME)\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "8b0949558b4ddc9ada9022d31e9fb1d5676b74fad6c87207b539f7b581663d1f",
+      "scope": "whole-file",
+      "line_count": 96,
+      "authoring_source": "course/file_units/structure_groups.py",
+      "sections": [
+        "전체 구성",
+        "멤버 크기와 끝",
+        "그룹의 두 접근 방법",
+        "속성과 재사용 태그",
+        "유연 배열 선언"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/stddef.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "서랍 속 칸에 이름을 두 가지 붙여도 서랍이 두 벌 생기지는 않아요. 칸의 끝과 서랍 전체의 끝도 다를 수 있어요.",
+    "meaning": "stddef.h는 구조체 멤버의 크기와 위치를 구하고 여러 멤버를 한 그룹으로 부르는 선언 도구를 제공해요.",
+    "exercise": "멤버가 4번 위치에서 시작하고 크기가 2바이트이며 구조체 전체는 8바이트라면 offsetofend와 sizeof를 각각 적어 보세요."
+  },
+  "goal": "stddef.h는 구조체 멤버의 크기와 위치를 구하고 여러 멤버를 한 그룹으로 부르는 선언 도구를 제공해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "멤버가 4번 위치에서 시작하고 크기가 2바이트이며 구조체 전체는 8바이트라면 offsetofend와 sizeof를 각각 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "aad12b265b8ad325b651486f93bea790af4e59159fbeb30dacea2902a69c7ede",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

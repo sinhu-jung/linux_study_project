@@ -5,54 +5,62 @@
   "area": "전처리 · Clang · pragma · 진단 출력",
   "track": "files",
   "kind": "kernel",
-  "intro": "bindgen이 사용하는 Clang의 버전 문자열을 진단에 내보내는 파일 전체를 분석합니다.",
+  "intro": "bindgen 자체 버전과 헤더를 처리하는 libclang 버전을 구별합니다.",
   "guide": [
-    "전처리 매크로를 진단으로 노출하면 실행 파일의 표시 버전과 실제 로드한 parser 버전을 구별할 수 있습니다.",
-    "pragma message, 인접 문자열, 도구 진단 캡처를 학습합니다."
+    "pragma는 소스를 처리하는 도구에 보내는 지시입니다.",
+    "libclang은 Clang의 코드 해석 기능을 다른 프로그램에서 쓰게 하는 라이브러리입니다.",
+    "인접 문자열은 나란히 쓴 문자열을 한 문자열로 이어 붙이는 C 규칙입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구현",
-      "text": "GPL-2.0 주석과 #pragma message 한 줄로 구성됩니다. clang version이라는 문자열과 __clang_version__을 연결해 진단 메시지로 노출합니다. 사용자 공간 함수나 전역 배열을 정의하는 코드가 아니며 include guard도 없습니다."
+      "text": "라이선스 주석과 pragma message 한 줄이 전부입니다. \"clang version \"과 __clang_version__을 이어 진단으로 냅니다. 함수나 전역 배열을 정의하지 않으며 중복 포함 방지도 없습니다."
     },
     {
       "title": "진단은 실행 중 출력과 다르다",
-      "text": "pragma는 헤더를 처리하는 도구에 대한 지시입니다. 생성된 커널 프로그램이 부팅하면서 printf로 버전을 출력하는 구현이 아닙니다. __clang_version__이 정의되는 parser를 전제로 하며 이 헤더에는 다른 compiler용 fallback 문자열이 없습니다."
+      "text": "헤더를 처리할 때 도구가 메시지를 내는 것이지 만들어진 커널이 부팅하면서 출력 함수를 부르는 것은 아닙니다. __clang_version__을 제공하는 해석기를 전제로 하며 다른 컴파일러를 위한 대체 문자열은 없습니다."
     },
     {
       "title": "진단과 파서 연결",
-      "text": "상위 스크립트가 bindgen으로 이 헤더를 처리할 때 사용하는 libclang의 매크로가 드러납니다. 상위 스크립트는 stderr를 캡처하고 clang version 뒤 수치 3요소를 찾습니다. 진단에 파일명·위치 등 다른 줄이 섞일 수 있어 첫 줄만 보지 않습니다. 이 헤더가 독립적으로 최소 버전을 판정하지는 않습니다. 실제 toolchain 실행 대신 원본과 호출 흐름을 대조했습니다."
+      "text": "상위 스크립트가 bindgen으로 이 헤더를 읽게 하면 실제 사용하는 libclang의 버전이 드러납니다. 상위 스크립트는 stderr를 저장하고 여러 진단 줄에서 버전 숫자 세 부분을 찾습니다. 헤더 자체가 최소 버전을 판정하지 않으며 이 설명은 실제 도구 실행 시험 결과가 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 헤더가 노출하는 버전의 출처는?",
+      "prompt": "이 헤더의 버전 정보는 어디서 오나요?",
       "options": [
+        "헤더를 읽는 Clang의 __clang_version__에서 옵니다.",
+        "Rust 컴파일러의 --version 문자열에서 옵니다."
+      ],
+      "answer": 0,
+      "explanation": "바인딩 생성기 자체와 실제 해석 라이브러리를 나눠 확인합니다.",
+      "original_prompt": "이 헤더가 노출하는 버전의 출처는?",
+      "original_options": [
         "헤더를 처리하는 Clang의 __clang_version__ 매크로",
         "Rust compiler의 --version 문자열"
       ],
-      "answer": 0,
-      "explanation": "bindgen 자체 버전과 libclang 버전은 다릅니다. pragma 진단으로 실제 parser의 정보를 얻는 probe입니다."
+      "original_explanation": "bindgen 자체 버전과 libclang 버전은 다릅니다. pragma 진단으로 실제 parser의 정보를 얻는 probe입니다."
     },
     {
-      "prompt": "pragma message는 커널 부팅 때 실행되는 출력 함수인가?",
+      "prompt": "pragma message가 커널 부팅 때 printk를 실행하나요?",
       "options": [
+        "네. printk 호출을 자동으로 만듭니다.",
+        "아니요. 헤더를 처리하는 도구에 진단을 요청합니다."
+      ],
+      "answer": 1,
+      "explanation": "소스 처리 중 메시지와 프로그램 실행 중 출력은 다릅니다.",
+      "original_prompt": "pragma message는 커널 부팅 때 실행되는 출력 함수인가?",
+      "original_options": [
         "그렇다. printk 호출을 자동 생성한다",
         "아니다. 헤더를 처리하는 도구의 진단 지시다"
       ],
-      "answer": 1,
-      "explanation": "파일에는 런타임 함수 본문이 없습니다. 컴파일 과정의 진단과 실행 중 출력을 구분합니다."
+      "original_explanation": "파일에는 런타임 함수 본문이 없습니다. 컴파일 과정의 진단과 실행 중 출력을 구분합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "이 메시지가 컴파일 과정에 나오는지 커널 부팅 중 나오는지 설명해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#pragma message(\"clang version \" __clang_version__)\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/rust_is_available_bindgen_libclang.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a2488d2fc8d7649e",
+    "path": "scripts/rust_is_available_bindgen_libclang.h",
+    "title": "Libclang 버전 probe: pragma 진단으로 매크로 노출",
+    "area": "전처리 · Clang · pragma · 진단 출력",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "bindgen이 사용하는 Clang의 버전 문자열을 진단에 내보내는 파일 전체를 분석합니다.",
+    "guide": [
+      "전처리 매크로를 진단으로 노출하면 실행 파일의 표시 버전과 실제 로드한 parser 버전을 구별할 수 있습니다.",
+      "pragma message, 인접 문자열, 도구 진단 캡처를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구현",
+        "text": "GPL-2.0 주석과 #pragma message 한 줄로 구성됩니다. clang version이라는 문자열과 __clang_version__을 연결해 진단 메시지로 노출합니다. 사용자 공간 함수나 전역 배열을 정의하는 코드가 아니며 include guard도 없습니다."
+      },
+      {
+        "title": "진단은 실행 중 출력과 다르다",
+        "text": "pragma는 헤더를 처리하는 도구에 대한 지시입니다. 생성된 커널 프로그램이 부팅하면서 printf로 버전을 출력하는 구현이 아닙니다. __clang_version__이 정의되는 parser를 전제로 하며 이 헤더에는 다른 compiler용 fallback 문자열이 없습니다."
+      },
+      {
+        "title": "진단과 파서 연결",
+        "text": "상위 스크립트가 bindgen으로 이 헤더를 처리할 때 사용하는 libclang의 매크로가 드러납니다. 상위 스크립트는 stderr를 캡처하고 clang version 뒤 수치 3요소를 찾습니다. 진단에 파일명·위치 등 다른 줄이 섞일 수 있어 첫 줄만 보지 않습니다. 이 헤더가 독립적으로 최소 버전을 판정하지는 않습니다. 실제 toolchain 실행 대신 원본과 호출 흐름을 대조했습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 헤더가 노출하는 버전의 출처는?",
+        "options": [
+          "헤더를 처리하는 Clang의 __clang_version__ 매크로",
+          "Rust compiler의 --version 문자열"
+        ],
+        "answer": 0,
+        "explanation": "bindgen 자체 버전과 libclang 버전은 다릅니다. pragma 진단으로 실제 parser의 정보를 얻는 probe입니다."
+      },
+      {
+        "prompt": "pragma message는 커널 부팅 때 실행되는 출력 함수인가?",
+        "options": [
+          "그렇다. printk 호출을 자동 생성한다",
+          "아니다. 헤더를 처리하는 도구의 진단 지시다"
+        ],
+        "answer": 1,
+        "explanation": "파일에는 런타임 함수 본문이 없습니다. 컴파일 과정의 진단과 실행 중 출력을 구분합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#pragma message(\"clang version \" __clang_version__)\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "bf71d14ea244116ab8c6d61c593d37be3c9c346e13d0569a10acdfec63739e21",
+      "scope": "whole-file",
+      "line_count": 2,
+      "authoring_source": "course/file_units/rust_toolchain_availability.py",
+      "sections": [
+        "전체 구현",
+        "진단은 실행 중 출력과 다르다",
+        "진단과 파서 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/scripts/rust_is_available_bindgen_libclang.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "도구 겉면의 이름표 대신 실제 글을 읽은 담당자에게 자기 버전을 말하게 합니다. pragma message는 헤더를 읽는 Clang의 버전을 진단 메시지로 드러냅니다.",
+    "meaning": "bindgen 자체 버전과 헤더를 처리하는 libclang 버전을 구별합니다.",
+    "exercise": "이 메시지가 컴파일 과정에 나오는지 커널 부팅 중 나오는지 설명해 보세요."
+  },
+  "goal": "bindgen 자체 버전과 헤더를 처리하는 libclang 버전을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "이 메시지가 컴파일 과정에 나오는지 커널 부팅 중 나오는지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "34a9f89d6b80aea4bf4427f1c247704b2057f1d947c96d1e64cc8b90a958e440",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

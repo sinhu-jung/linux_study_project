@@ -5,71 +5,85 @@
   "area": "MMIO · ISA와 플랫폼 · extern 공유 상태 · 주소공간 타입",
   "track": "files",
   "kind": "kernel",
-  "intro": "드라이버가 제공하는 시간 레지스터 포인터와 그 이름에 담긴 플랫폼 가정을 읽습니다.",
+  "intro": "CLINT 시간 포인터 선언과 실제 MMIO 준비를 나누고, ISA 보장과 장치별 추가 전제를 설명합니다.",
   "guide": [
-    "ISA가 보장하는 속성과 특정 장치 배치·접근 순서의 가정은 구분해야 합니다.",
-    "timex.h의 clint_time_val 직접 읽기를 선언과 주석의 전제로 연결합니다."
+    "MMIO는 장치 레지스터를 메모리 주소처럼 읽고 쓰는 방식입니다. 일반 RAM과 접근 규칙이 같다고 가정하면 안 됩니다.",
+    "ISA는 CPU 명령과 기본 동작의 약속입니다. 특정 장치의 주소 배치·읽기 순서에는 ISA만으로 정하지 않은 추가 약속이 있을 수 있습니다.",
+    "RISC-V timex.h가 clint_time_val을 직접 읽으려면 드라이버가 준비한 포인터와 플랫폼 접근 조건이 맞아야 합니다. 헤더의 extern만으로 그 준비가 끝나지 않습니다."
   ],
   "deep_dive": [
     {
       "title": "파일 범위",
-      "text": "GPL-2.0-only·저작권·guard 뒤 linux/types.h와 asm/mmio.h를 포함합니다. CONFIG_RISCV_M_MODE 안의 설명과 extern u64 __iomem *clint_time_val 선언이 전부입니다. 매핑 설치,변수 정의,read/write 함수,초기화 루틴은 없습니다."
+      "text": "GPL-2.0-only·저작권·중복 방지 guard 뒤 linux/types.h와 asm/mmio.h를 포함합니다. CONFIG_RISCV_M_MODE 안의 설명과 extern u64 __iomem *clint_time_val이 전체입니다. 실제 매핑 설치·변수 저장 공간·읽기쓰기 함수·초기화 루틴은 없습니다."
     },
     {
       "title": "드라이버와 직접 접근",
-      "text": "주석은 포인터가 CLINT 드라이버에 존재하지만 MMIO timer 읽기의 overhead를 피하려고 timex.h에서 직접 사용한다고 설명합니다. 이 헤더의 extern 선언이 드라이버를 로드하거나 주소를 자동으로 초기화하는 것은 아닙니다."
+      "text": "주석은 이 포인터가 CLINT 드라이버에 있지만 MMIO 타이머 접근의 추가 비용을 피하려고 timex.h에서 직접 사용한다고 설명합니다. CLINT는 이 경로가 가정하는 지역 인터럽트·타이머 장치입니다. extern 선언은 드라이버를 불러오거나 레지스터 주소를 자동 초기화하지 않습니다."
     },
     {
       "title": "ISA의 보장과 추가 전제",
-      "text": "주석은 mtime을 일정 주파수로 증가하는64비트 메모리 매핑 레지스터라고 설명합니다. 동시에 이 사용 방식에 필요한 순서 제약과 메모리 배치 등은 ISA 정의만으로 충족되지 않을 수 있다고 명시합니다. 그래서 일반적인 riscv_mtime 대신 clint_time_val이라는 이름을 사용해 CLINT 관련 추가 가정을 드러냅니다."
+      "text": "주석상 mtime은 일정한 주파수, 즉 일정한 속도로 늘어나는 64비트 메모리 매핑 레지스터입니다. 그러나 사용하는 데 필요한 순서 제약과 메모리 배치는 ISA만으로 정해지지 않을 수 있습니다. 일반 이름 riscv_mtime 대신 clint_time_val이라고 하여 CLINT 관련 추가 조건에 기대고 있음을 드러냅니다."
     },
     {
       "title": "타입과 구성",
-      "text": "u64는 가리키는 레지스터의 논리 폭이고 __iomem은 I/O 주소공간 주석입니다. 포인터 타입만으로32비트 CPU의64비트 단일 원자 읽기가 보장되지는 않습니다. M-mode가 아니면 이 선언도 제공되지 않으며 timex.h의 다른 모드 경로는 TIME CSR을 사용합니다."
+      "text": "u64는 가리키는 값의 논리적 64비트 폭, __iomem은 입출력 장치 주소공간 표시입니다. 그 포인터 타입만으로 32비트 CPU가 64비트를 한 번에 쪼개짐 없이 읽는 원자 접근이 보장되지는 않습니다. 가장 높은 권한의 M-mode 설정이 아니면 이 선언도 없으며 timex.h의 다른 모드 길은 TIME CSR, 즉 CPU 제어·상태 레지스터를 사용합니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "선언과 저장 공간,공유 포인터 수명,MMIO와 일반 RAM,ISA와 장치 통합 계약,빠른 접근의 전제 조건을 학습합니다. 이 파일을 읽은 것으로 CLINT 드라이버 전체나 실제 장치의64비트 접근 순서를 검증했다고 세지 않습니다."
+      "text": "선언과 저장 공간, 공유 포인터 수명, MMIO와 RAM, CPU 기본 약속과 장치 통합 조건, 빠른 직접 접근의 전제가 핵심입니다. 이 헤더를 읽은 것을 CLINT 드라이버 전체나 실제 장치의 64비트 접근 순서를 실행 검증한 것으로 세지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "extern clint_time_val 선언이 MMIO 매핑을 생성하는가?",
+      "prompt": "extern clint_time_val이 MMIO 매핑을 만들까요?",
       "options": [
+        "아니요. 주소를 담는 외부 심벌을 선언할 뿐입니다.",
+        "네. 헤더를 포함하면 자동 매핑됩니다."
+      ],
+      "answer": 0,
+      "explanation": "저장 공간과 초기화는 다른 구현이 맡습니다. 준비된 주소를 사용하는 시점도 중요합니다.",
+      "original_prompt": "extern clint_time_val 선언이 MMIO 매핑을 생성하는가?",
+      "original_options": [
         "아니다. 주소를 담는 외부 심벌의 선언이다",
         "그렇다. 헤더를 포함하면 자동 매핑된다"
       ],
-      "answer": 0,
-      "explanation": "저장 공간과 초기화는 다른 구현의 역할입니다. timex.h는 준비된 포인터를 사용하므로 호출 시점도 중요합니다."
+      "original_explanation": "저장 공간과 초기화는 다른 구현의 역할입니다. timex.h는 준비된 포인터를 사용하므로 호출 시점도 중요합니다."
     },
     {
-      "prompt": "이름이 일반 riscv_mtime이 아닌 이유를 주석은 어떻게 설명하는가?",
+      "prompt": "왜 일반 riscv_mtime 대신 clint_time_val이라고 이름 붙였을까요?",
       "options": [
+        "레지스터가 32비트이기 때문입니다.",
+        "ISA 밖의 배치·순서 가정도 필요함을 알리기 위해서입니다."
+      ],
+      "answer": 1,
+      "explanation": "주석은 mtime을 64비트라 설명하면서 추가 플랫폼 조건을 구분합니다.",
+      "original_prompt": "이름이 일반 riscv_mtime이 아닌 이유를 주석은 어떻게 설명하는가?",
+      "original_options": [
         "레지스터가32비트이기 때문이다",
         "ISA 밖의 배치·순서 가정이 필요함을 드러내기 위해서이다"
       ],
-      "answer": 1,
-      "explanation": "주석은64비트 mtime을 설명하면서 추가 플랫폼 제약을 구분합니다. 이름을 통해 그 전제를 나타냅니다."
+      "original_explanation": "주석은64비트 mtime을 설명하면서 추가 플랫폼 제약을 구분합니다. 이름을 통해 그 전제를 나타냅니다."
     },
     {
-      "prompt": "u64 __iomem 포인터가 단일64비트 원자 접근을 보증하는가?",
+      "prompt": "u64 __iomem 포인터는 한 번의 원자적 64비트 읽기를 보장할까요?",
       "options": [
+        "아니요. 실제 읽기 함수와 CPU·장치 약속을 확인해야 합니다.",
+        "네. 타입이 실제 버스 동작까지 강제합니다."
+      ],
+      "answer": 0,
+      "explanation": "RISC-V timex의 32비트 길은 두 조각과 재검사를 사용합니다. 값의 폭과 접근 방법은 다릅니다.",
+      "original_prompt": "u64 __iomem 포인터가 단일64비트 원자 접근을 보증하는가?",
+      "original_options": [
         "아니다. 실제 accessor와 CPU·장치 계약을 확인해야 한다",
         "그렇다. 타입이 버스 동작을 강제한다"
       ],
-      "answer": 0,
-      "explanation": "RISC-V timex의32비트 경로는 두 word와 재검사를 사용합니다. 논리 데이터 폭과 실제 접근 방식은 별개입니다."
+      "original_explanation": "RISC-V timex의32비트 경로는 두 word와 재검사를 사용합니다. 논리 데이터 폭과 실제 접근 방식은 별개입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "clint_time_val의 extern·u64·__iomem이 각각 무엇을 말하고 무엇을 보장하지 않는지 적으세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 Google, Inc\n */\n\n#ifndef _ASM_RISCV_CLINT_H\n#define _ASM_RISCV_CLINT_H\n\n#include <linux/types.h>\n#include <asm/mmio.h>\n\n#ifdef CONFIG_RISCV_M_MODE\n/*\n * This lives in the CLINT driver, but is accessed directly by timex.h to avoid\n * any overhead when accessing the MMIO timer.\n *\n * The ISA defines mtime as a 64-bit memory-mapped register that increments at\n * a constant frequency, but it doesn't define some other constraints we depend\n * on (most notably ordering constraints, but also some simpler stuff like the\n * memory layout).  Thus, this is called \"clint_time_val\" instead of something\n * like \"riscv_mtime\", to signify that these non-ISA assumptions must hold.\n */\nextern u64 __iomem *clint_time_val;\n#endif\n\n#endif\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/clint.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c34a0f6455546bf7",
+    "path": "arch/riscv/include/asm/clint.h",
+    "title": "RISC-V CLINT 헤더 전체: 직접 MMIO 시간 접근의 계약",
+    "area": "MMIO · ISA와 플랫폼 · extern 공유 상태 · 주소공간 타입",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "드라이버가 제공하는 시간 레지스터 포인터와 그 이름에 담긴 플랫폼 가정을 읽습니다.",
+    "guide": [
+      "ISA가 보장하는 속성과 특정 장치 배치·접근 순서의 가정은 구분해야 합니다.",
+      "timex.h의 clint_time_val 직접 읽기를 선언과 주석의 전제로 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 범위",
+        "text": "GPL-2.0-only·저작권·guard 뒤 linux/types.h와 asm/mmio.h를 포함합니다. CONFIG_RISCV_M_MODE 안의 설명과 extern u64 __iomem *clint_time_val 선언이 전부입니다. 매핑 설치,변수 정의,read/write 함수,초기화 루틴은 없습니다."
+      },
+      {
+        "title": "드라이버와 직접 접근",
+        "text": "주석은 포인터가 CLINT 드라이버에 존재하지만 MMIO timer 읽기의 overhead를 피하려고 timex.h에서 직접 사용한다고 설명합니다. 이 헤더의 extern 선언이 드라이버를 로드하거나 주소를 자동으로 초기화하는 것은 아닙니다."
+      },
+      {
+        "title": "ISA의 보장과 추가 전제",
+        "text": "주석은 mtime을 일정 주파수로 증가하는64비트 메모리 매핑 레지스터라고 설명합니다. 동시에 이 사용 방식에 필요한 순서 제약과 메모리 배치 등은 ISA 정의만으로 충족되지 않을 수 있다고 명시합니다. 그래서 일반적인 riscv_mtime 대신 clint_time_val이라는 이름을 사용해 CLINT 관련 추가 가정을 드러냅니다."
+      },
+      {
+        "title": "타입과 구성",
+        "text": "u64는 가리키는 레지스터의 논리 폭이고 __iomem은 I/O 주소공간 주석입니다. 포인터 타입만으로32비트 CPU의64비트 단일 원자 읽기가 보장되지는 않습니다. M-mode가 아니면 이 선언도 제공되지 않으며 timex.h의 다른 모드 경로는 TIME CSR을 사용합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "선언과 저장 공간,공유 포인터 수명,MMIO와 일반 RAM,ISA와 장치 통합 계약,빠른 접근의 전제 조건을 학습합니다. 이 파일을 읽은 것으로 CLINT 드라이버 전체나 실제 장치의64비트 접근 순서를 검증했다고 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "extern clint_time_val 선언이 MMIO 매핑을 생성하는가?",
+        "options": [
+          "아니다. 주소를 담는 외부 심벌의 선언이다",
+          "그렇다. 헤더를 포함하면 자동 매핑된다"
+        ],
+        "answer": 0,
+        "explanation": "저장 공간과 초기화는 다른 구현의 역할입니다. timex.h는 준비된 포인터를 사용하므로 호출 시점도 중요합니다."
+      },
+      {
+        "prompt": "이름이 일반 riscv_mtime이 아닌 이유를 주석은 어떻게 설명하는가?",
+        "options": [
+          "레지스터가32비트이기 때문이다",
+          "ISA 밖의 배치·순서 가정이 필요함을 드러내기 위해서이다"
+        ],
+        "answer": 1,
+        "explanation": "주석은64비트 mtime을 설명하면서 추가 플랫폼 제약을 구분합니다. 이름을 통해 그 전제를 나타냅니다."
+      },
+      {
+        "prompt": "u64 __iomem 포인터가 단일64비트 원자 접근을 보증하는가?",
+        "options": [
+          "아니다. 실제 accessor와 CPU·장치 계약을 확인해야 한다",
+          "그렇다. 타입이 버스 동작을 강제한다"
+        ],
+        "answer": 0,
+        "explanation": "RISC-V timex의32비트 경로는 두 word와 재검사를 사용합니다. 논리 데이터 폭과 실제 접근 방식은 별개입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 Google, Inc\n */\n\n#ifndef _ASM_RISCV_CLINT_H\n#define _ASM_RISCV_CLINT_H\n\n#include <linux/types.h>\n#include <asm/mmio.h>\n\n#ifdef CONFIG_RISCV_M_MODE\n/*\n * This lives in the CLINT driver, but is accessed directly by timex.h to avoid\n * any overhead when accessing the MMIO timer.\n *\n * The ISA defines mtime as a 64-bit memory-mapped register that increments at\n * a constant frequency, but it doesn't define some other constraints we depend\n * on (most notably ordering constraints, but also some simpler stuff like the\n * memory layout).  Thus, this is called \"clint_time_val\" instead of something\n * like \"riscv_mtime\", to signify that these non-ISA assumptions must hold.\n */\nextern u64 __iomem *clint_time_val;\n#endif\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "4bbd17e5a7e3f99e3e0a64e2891f7c12dcf117b5c2085673b250e4b77e060137",
+      "scope": "whole-file",
+      "line_count": 26,
+      "authoring_source": "course/file_units/timer_fallback_contracts.py",
+      "sections": [
+        "파일 범위",
+        "드라이버와 직접 접근",
+        "ISA의 보장과 추가 전제",
+        "타입과 구성",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/include/asm/clint.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치의 주소를 적은 쪽지를 받았다고 장치가 설치된 것은 아닙니다. CLINT 헤더도 시간 레지스터 주소가 다른 곳에 준비되어 있다고 알리는 계약입니다.",
+    "meaning": "CLINT 시간 포인터 선언과 실제 MMIO 준비를 나누고, ISA 보장과 장치별 추가 전제를 설명합니다.",
+    "exercise": "clint_time_val의 extern·u64·__iomem이 각각 무엇을 말하고 무엇을 보장하지 않는지 적으세요."
+  },
+  "goal": "CLINT 시간 포인터 선언과 실제 MMIO 준비를 나누고, ISA 보장과 장치별 추가 전제를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "clint_time_val의 extern·u64·__iomem이 각각 무엇을 말하고 무엇을 보장하지 않는지 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_f.json",
+    "authoring_sha256": "b6d689f9e713b615de97bf07bcc0d059d7212f9f6dd436f666e3fbf95dea2c06",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,97 +5,123 @@
   "area": "클록 프레임워크 · 자원 관리 · 오류 처리 · callback",
   "track": "files",
   "kind": "kernel",
-  "intro": "일곱 공개 helper,공통 get helper와 세 action wrapper를 전체 분석합니다.",
+  "intro": "KUnit 클록 정리 예약 순서와 부분 실패에서 즉시·나중 정리를 구별합니다.",
   "guide": [
-    "획득·활성화·등록에 대응하는 역연산을 예약하고 예약 실패 시 즉시 보상합니다.",
-    "오류 포인터 전파,단계별 소유권,cleanup 순서와 부분 rollback을 학습합니다."
+    "clk_put은 클록 사용 참조를 반납하고 disable_unprepare는 활성화와 준비를 되돌립니다. 두 정리는 다른 책임입니다.",
+    "ERR_PTR은 오류 번호를 포인터 값 모양에 담은 것으로 IS_ERR로 검사합니다. NULL과 똑같은 판정은 아닙니다.",
+    "wrapper는 인수 모양을 맞추어 다른 함수를 부르는 연결 함수입니다. action 예약은 테스트 종료 때 정리를 실행하도록 등록합니다."
   ],
   "deep_dive": [
     {
       "title": "구성과 prepare enable",
-      "text": "GPL-2.0 파일은 clk,clk-provider,err,kernel,slab과 KUnit clk/resource를 포함합니다. disable_unprepare wrapper를 정의하고 prepare_enable helper는 clk_prepare_enable 오류를 즉시 반환합니다. 성공한 경우에만 add_action_or_reset으로 역연산을 예약하고 그 결과를 반환합니다. 예약 실패 시 활성화를 즉시 되돌립니다."
+      "text": "GPL과 클록·오류·KUnit 헤더 뒤 끄기 연결 함수를 둡니다. prepare_enable은 원래 활성화 실패를 곧바로 반환합니다. 성공했을 때만 역연산을 add_action_or_reset으로 예약하며 예약 실패면 방금 활성화를 즉시 되돌립니다."
     },
     {
       "title": "공통 get 처리",
-      "text": "clk_put wrapper와 __clk_get_kunit은 세 획득 경로를 공유합니다. IS_ERR(clk)이면 입력 오류 포인터를 그대로 반환합니다. 그 밖에는 put action을 예약하고 실패하면 이미 reset으로 put한 뒤 ERR_PTR(ret)를 반환합니다. NULL을 IS_ERR_OR_NULL로 별도 거르는 구현은 아니므로 모든 포인터 형태를 임의로 동일 취급하지 않습니다."
+      "text": "공통 획득 처리는 IS_ERR이면 입력 오류 포인터를 그대로 줍니다. 정상 경로에서는 put 정리를 예약하고 실패하면 reset으로 이미 반납한 뒤 ERR_PTR(ret)를 줍니다. NULL까지 함께 거르는 IS_ERR_OR_NULL 구현은 아니므로 포인터 표현을 임의로 같게 처리하지 않습니다."
     },
     {
       "title": "세 입력 경로",
-      "text": "clk_get_kunit은 clk_get(dev,con_id),of_clk_get_kunit은 of_clk_get(np,index),clk_hw_get_clk_kunit은 clk_hw_get_clk(hw,con_id)를 호출해 결과를 공통 helper에 전달합니다. 문서상 성공 consumer는 테스트 종료 때 clk_put합니다. 세 함수가 같은 lookup 인수를 쓰는 것은 아닙니다."
+      "text": "device·연결 이름, 장치 트리 node·index, hw·연결 이름이라는 세 조회 경로의 결과를 공통 처리에 넘깁니다. 성공한 사용 참조는 테스트 끝에 put됩니다. 세 함수의 조회 인수가 모두 같은 것은 아닙니다."
     },
     {
       "title": "획득과 활성화의 조합",
-      "text": "prepared_enabled helper는 managed hw_get을 먼저 실행하고 IS_ERR이면 반환합니다. 이어 managed prepare_enable을 호출해 오류면 ERR_PTR,성공이면 clk를 반환합니다. 정상 등록 순서는 put action 다음 disable_unprepare action이므로 역순 cleanup은 disable_unprepare 후 put입니다."
+      "text": "조합 함수는 관리되는 hw 획득 뒤 오류를 확인하고 준비·활성화를 합니다. 실패면 오류 포인터, 성공이면 clk입니다. put을 먼저, 끄기를 나중에 예약하므로 종료 정리는 역순인 disable_unprepare 다음 put입니다."
     },
     {
       "title": "부분 실패의 정확한 의미",
-      "text": "조합 helper의 활성화 단계가 실패해도 이미 등록된 put action을 여기서 즉시 release하는 코드는 없습니다. consumer 참조는 테스트 cleanup에 남습니다. 활성화 성공 뒤 그 cleanup 예약만 실패했다면 or_reset은 disable_unprepare를 즉시 실행하고 put은 나중에 실행됩니다. 실패하면 모든 이전 단계가 즉시 원상 복귀된다고 단순화하면 안 됩니다."
+      "text": "활성화 단계에서 실패해도 이미 예약한 put을 조합 함수가 즉시 실행하지는 않습니다. 참조는 테스트 종료 정리에 남습니다. 활성화 성공 후 정리 예약만 실패하면 끄기는 즉시 reset하고 put은 나중입니다. 실패하면 모든 앞 단계를 즉시 되돌린다고 단순화하면 안 됩니다."
     },
     {
       "title": "Provider 등록 두 경로",
-      "text": "clk_hw_unregister wrapper를 공유하며 clk_hw_register_kunit은 clk_hw_register(dev,hw),of_clk_hw_register_kunit은 of_clk_hw_register(node,hw)를 호출합니다. 각각 원래 등록 오류는 즉시 반환하고 성공 시 unregister action의 add_action_or_reset 결과를 반환합니다. hw 구조체 자체를 별도 할당하거나 kfree하는 코드는 없으므로 저장소 수명은 호출자도 고려해야 합니다."
+      "text": "공급자 등록은 device 또는 node 경로로 hw를 등록하고 원래 오류는 바로 반환합니다. 성공하면 unregister 정리를 예약하며 예약 실패는 즉시 등록 해제합니다. hw 구조체 메모리를 여기서 별도 할당·해제하지 않으므로 저장 공간 수명은 호출자도 관리해야 합니다."
     },
     {
       "title": "범위와 메타데이터",
-      "text": "일곱 공개 함수는 모두 EXPORT_SYMBOL_GPL입니다. MODULE_LICENSE는 GPL이고 description은 provider와 consumer용 KUnit helper입니다. 세 wrapper,공통 helper,일곱 함수와 문서를 모두 대조했습니다. 실제 클록 하드웨어 enable이나 OOM 실험은 하지 않았으며 주파수 계산·parent 선택 알고리즘은 이 파일에 없습니다."
+      "text": "일곱 함수는 GPL export로 다른 코드에 공개되고 모듈 설명·라이선스가 있습니다. 연결 함수 세 개, 공통 처리와 일곱 공개 함수를 대조했습니다. 실제 클록 활성화나 메모리 부족 주입 결과가 아니며 주파수 계산과 부모 선택 알고리즘은 없습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "정상 조합 helper의 테스트 종료 cleanup 순서는?",
+      "prompt": "정상 조합 함수의 종료 정리 순서는 무엇인가요?",
       "options": [
+        "끄고 준비 해제한 뒤 put입니다.",
+        "put한 뒤 끄고 준비 해제합니다."
+      ],
+      "answer": 0,
+      "explanation": "예약의 역순으로 실행해 사용하는 동안 필요한 참조를 유지합니다.",
+      "original_prompt": "정상 조합 helper의 테스트 종료 cleanup 순서는?",
+      "original_options": [
         "disable_unprepare 다음 put",
         "put 다음 disable_unprepare"
       ],
-      "answer": 0,
-      "explanation": "put을 먼저 예약하고 활성화 해제를 나중에 예약하므로 역순으로 실행됩니다."
+      "original_explanation": "put을 먼저 예약하고 활성화 해제를 나중에 예약하므로 역순으로 실행됩니다."
     },
     {
-      "prompt": "__clk_get_kunit에 ERR_PTR가 들어오면?",
+      "prompt": "공통 처리에 오류 포인터가 들어오면 어떻게 하나요?",
       "options": [
+        "그 주소를 무조건 put합니다.",
+        "그대로 반환하고 정리를 예약하지 않습니다."
+      ],
+      "answer": 1,
+      "explanation": "IS_ERR 조기 반환으로 잘못된 핸들을 등록하지 않습니다.",
+      "original_prompt": "__clk_get_kunit에 ERR_PTR가 들어오면?",
+      "original_options": [
         "그 오류 주소를 무조건 clk_put한다",
         "그 포인터를 그대로 반환하고 action을 등록하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "IS_ERR 조기 반환이 잘못된 핸들을 cleanup에 등록하는 것을 피합니다."
+      "original_explanation": "IS_ERR 조기 반환이 잘못된 핸들을 cleanup에 등록하는 것을 피합니다."
     },
     {
-      "prompt": "get 성공 후 prepare 단계 실패 시 consumer 참조를 즉시 put하는가?",
+      "prompt": "획득 뒤 준비 실패면 즉시 consumer 참조를 put하나요?",
       "options": [
+        "아니요. 이미 예약한 종료 정리에 남습니다.",
+        "예. 조합 함수가 직접 put합니다."
+      ],
+      "answer": 0,
+      "explanation": "그 오류 분기는 오류 포인터 반환만 합니다.",
+      "original_prompt": "get 성공 후 prepare 단계 실패 시 consumer 참조를 즉시 put하는가?",
+      "original_options": [
         "아니다. 이미 등록된 테스트 cleanup에 남는다",
         "그렇다. 이 조합 함수가 직접 clk_put을 호출한다"
       ],
-      "answer": 0,
-      "explanation": "오류 분기는 ERR_PTR(ret) 반환뿐입니다. 즉시 rollback과 나중 cleanup을 구분해야 합니다."
+      "original_explanation": "오류 분기는 ERR_PTR(ret) 반환뿐입니다. 즉시 rollback과 나중 cleanup을 구분해야 합니다."
     },
     {
-      "prompt": "Provider 등록 성공 후 cleanup 예약 실패 시?",
+      "prompt": "공급자 등록 성공 뒤 정리 예약 실패면 어떻게 되나요?",
       "options": [
+        "등록을 남기고 성공 0입니다.",
+        "즉시 등록 해제하고 오류입니다."
+      ],
+      "answer": 1,
+      "explanation": "or_reset이 역연산을 실행합니다.",
+      "original_prompt": "Provider 등록 성공 후 cleanup 예약 실패 시?",
+      "original_options": [
         "등록 상태를 유지하면서 0을 반환한다",
         "or_reset이 즉시 unregister하고 오류를 반환한다"
       ],
-      "answer": 1,
-      "explanation": "등록 성공 자체만으로 helper 전체 성공은 아닙니다. 역연산 예약도 성공해야 합니다."
+      "original_explanation": "등록 성공 자체만으로 helper 전체 성공은 아닙니다. 역연산 예약도 성공해야 합니다."
     },
     {
-      "prompt": "이 구현이 호출자 hw 구조체의 메모리까지 직접 kfree하는가?",
+      "prompt": "호출자의 hw 메모리까지 직접 kfree하나요?",
       "options": [
+        "아니요. 등록 해제 action을 예약합니다.",
+        "예. 모든 hw를 여기서 할당하고 해제합니다."
+      ],
+      "answer": 0,
+      "explanation": "등록 수명과 구조체 메모리 소유권은 다릅니다.",
+      "original_prompt": "이 구현이 호출자 hw 구조체의 메모리까지 직접 kfree하는가?",
+      "original_options": [
         "아니다. unregister action을 예약한다",
         "그렇다. 모든 hw는 여기서 kzalloc하고 kfree한다"
       ],
-      "answer": 0,
-      "explanation": "registration 수명과 객체 저장소 소유권은 별개입니다. hw allocation/free 코드는 없습니다."
+      "original_explanation": "registration 수명과 객체 저장소 소유권은 별개입니다. hw allocation/free 코드는 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "획득 성공 뒤 활성화 실패가 났을 때 put 예약이 어디에 남는지 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * KUnit helpers for clk providers and consumers\n */\n#include <linux/clk.h>\n#include <linux/clk-provider.h>\n#include <linux/err.h>\n#include <linux/kernel.h>\n#include <linux/slab.h>\n\n#include <kunit/clk.h>\n#include <kunit/resource.h>\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_disable_unprepare_wrapper,\n\t\t\t    clk_disable_unprepare, struct clk *);\n/**\n * clk_prepare_enable_kunit() - Test managed clk_prepare_enable()\n * @test: The test context\n * @clk: clk to prepare and enable\n *\n * Return: 0 on success, or negative errno on failure.\n */\nint clk_prepare_enable_kunit(struct kunit *test, struct clk *clk)\n{\n\tint ret;\n\n\tret = clk_prepare_enable(clk);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_disable_unprepare_wrapper,\n\t\t\t\t\t clk);\n}\nEXPORT_SYMBOL_GPL(clk_prepare_enable_kunit);\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_put_wrapper, clk_put, struct clk *);\n\nstatic struct clk *__clk_get_kunit(struct kunit *test, struct clk *clk)\n{\n\tint ret;\n\n\tif (IS_ERR(clk))\n\t\treturn clk;\n\n\tret = kunit_add_action_or_reset(test, clk_put_wrapper, clk);\n\tif (ret)\n\t\treturn ERR_PTR(ret);\n\n\treturn clk;\n}\n\n/**\n * clk_get_kunit() - Test managed clk_get()\n * @test: The test context\n * @dev: device for clock \"consumer\"\n * @con_id: clock consumer ID\n *\n * Just like clk_get(), except the clk is managed by the test case and is\n * automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nclk_get_kunit(struct kunit *test, struct device *dev, const char *con_id)\n{\n\tstruct clk *clk;\n\n\tclk = clk_get(dev, con_id);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(clk_get_kunit);\n\n/**\n * of_clk_get_kunit() - Test managed of_clk_get()\n * @test: The test context\n * @np: device_node for clock \"consumer\"\n * @index: index in 'clocks' property of @np\n *\n * Just like of_clk_get(), except the clk is managed by the test case and is\n * automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nof_clk_get_kunit(struct kunit *test, struct device_node *np, int index)\n{\n\tstruct clk *clk;\n\n\tclk = of_clk_get(np, index);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(of_clk_get_kunit);\n\n/**\n * clk_hw_get_clk_kunit() - Test managed clk_hw_get_clk()\n * @test: The test context\n * @hw: clk_hw associated with the clk being consumed\n * @con_id: connection ID string on device\n *\n * Just like clk_hw_get_clk(), except the clk is managed by the test case and\n * is automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nclk_hw_get_clk_kunit(struct kunit *test, struct clk_hw *hw, const char *con_id)\n{\n\tstruct clk *clk;\n\n\tclk = clk_hw_get_clk(hw, con_id);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(clk_hw_get_clk_kunit);\n\n/**\n * clk_hw_get_clk_prepared_enabled_kunit() - Test managed clk_hw_get_clk() + clk_prepare_enable()\n * @test: The test context\n * @hw: clk_hw associated with the clk being consumed\n * @con_id: connection ID string on device\n *\n * Just like\n *\n * .. code-block:: c\n *\n *\tstruct clk *clk = clk_hw_get_clk(...);\n *\tclk_prepare_enable(clk);\n *\n * except the clk is managed by the test case and is automatically disabled and\n * unprepared with clk_disable_unprepare() and put with clk_put() after the\n * test case concludes.\n *\n * Return: new clk consumer that is prepared and enabled or ERR_PTR on failure.\n */\nstruct clk *\nclk_hw_get_clk_prepared_enabled_kunit(struct kunit *test, struct clk_hw *hw,\n\t\t\t\t      const char *con_id)\n{\n\tint ret;\n\tstruct clk *clk;\n\n\tclk = clk_hw_get_clk_kunit(test, hw, con_id);\n\tif (IS_ERR(clk))\n\t\treturn clk;\n\n\tret = clk_prepare_enable_kunit(test, clk);\n\tif (ret)\n\t\treturn ERR_PTR(ret);\n\n\treturn clk;\n}\nEXPORT_SYMBOL_GPL(clk_hw_get_clk_prepared_enabled_kunit);\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_hw_unregister_wrapper,\n\t\t\t    clk_hw_unregister, struct clk_hw *);\n\n/**\n * clk_hw_register_kunit() - Test managed clk_hw_register()\n * @test: The test context\n * @dev: device that is registering this clock\n * @hw: link to hardware-specific clock data\n *\n * Just like clk_hw_register(), except the clk registration is managed by the\n * test case and is automatically unregistered after the test case concludes.\n *\n * Return: 0 on success or a negative errno value on failure.\n */\nint clk_hw_register_kunit(struct kunit *test, struct device *dev, struct clk_hw *hw)\n{\n\tint ret;\n\n\tret = clk_hw_register(dev, hw);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_hw_unregister_wrapper, hw);\n}\nEXPORT_SYMBOL_GPL(clk_hw_register_kunit);\n\n/**\n * of_clk_hw_register_kunit() - Test managed of_clk_hw_register()\n * @test: The test context\n * @node: device_node of device that is registering this clock\n * @hw: link to hardware-specific clock data\n *\n * Just like of_clk_hw_register(), except the clk registration is managed by\n * the test case and is automatically unregistered after the test case\n * concludes.\n *\n * Return: 0 on success or a negative errno value on failure.\n */\nint of_clk_hw_register_kunit(struct kunit *test, struct device_node *node, struct clk_hw *hw)\n{\n\tint ret;\n\n\tret = of_clk_hw_register(node, hw);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_hw_unregister_wrapper, hw);\n}\nEXPORT_SYMBOL_GPL(of_clk_hw_register_kunit);\n\nMODULE_LICENSE(\"GPL\");\nMODULE_DESCRIPTION(\"KUnit helpers for clk providers and consumers\");\n",
   "source_review": {
@@ -120,5 +146,157 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/clk/clk_kunit_helpers.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-032855915ff451a3",
+    "path": "drivers/clk/clk_kunit_helpers.c",
+    "title": "KUnit 클록 구현: 역순 cleanup과 부분 성공의 수명",
+    "area": "클록 프레임워크 · 자원 관리 · 오류 처리 · callback",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "일곱 공개 helper,공통 get helper와 세 action wrapper를 전체 분석합니다.",
+    "guide": [
+      "획득·활성화·등록에 대응하는 역연산을 예약하고 예약 실패 시 즉시 보상합니다.",
+      "오류 포인터 전파,단계별 소유권,cleanup 순서와 부분 rollback을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성과 prepare enable",
+        "text": "GPL-2.0 파일은 clk,clk-provider,err,kernel,slab과 KUnit clk/resource를 포함합니다. disable_unprepare wrapper를 정의하고 prepare_enable helper는 clk_prepare_enable 오류를 즉시 반환합니다. 성공한 경우에만 add_action_or_reset으로 역연산을 예약하고 그 결과를 반환합니다. 예약 실패 시 활성화를 즉시 되돌립니다."
+      },
+      {
+        "title": "공통 get 처리",
+        "text": "clk_put wrapper와 __clk_get_kunit은 세 획득 경로를 공유합니다. IS_ERR(clk)이면 입력 오류 포인터를 그대로 반환합니다. 그 밖에는 put action을 예약하고 실패하면 이미 reset으로 put한 뒤 ERR_PTR(ret)를 반환합니다. NULL을 IS_ERR_OR_NULL로 별도 거르는 구현은 아니므로 모든 포인터 형태를 임의로 동일 취급하지 않습니다."
+      },
+      {
+        "title": "세 입력 경로",
+        "text": "clk_get_kunit은 clk_get(dev,con_id),of_clk_get_kunit은 of_clk_get(np,index),clk_hw_get_clk_kunit은 clk_hw_get_clk(hw,con_id)를 호출해 결과를 공통 helper에 전달합니다. 문서상 성공 consumer는 테스트 종료 때 clk_put합니다. 세 함수가 같은 lookup 인수를 쓰는 것은 아닙니다."
+      },
+      {
+        "title": "획득과 활성화의 조합",
+        "text": "prepared_enabled helper는 managed hw_get을 먼저 실행하고 IS_ERR이면 반환합니다. 이어 managed prepare_enable을 호출해 오류면 ERR_PTR,성공이면 clk를 반환합니다. 정상 등록 순서는 put action 다음 disable_unprepare action이므로 역순 cleanup은 disable_unprepare 후 put입니다."
+      },
+      {
+        "title": "부분 실패의 정확한 의미",
+        "text": "조합 helper의 활성화 단계가 실패해도 이미 등록된 put action을 여기서 즉시 release하는 코드는 없습니다. consumer 참조는 테스트 cleanup에 남습니다. 활성화 성공 뒤 그 cleanup 예약만 실패했다면 or_reset은 disable_unprepare를 즉시 실행하고 put은 나중에 실행됩니다. 실패하면 모든 이전 단계가 즉시 원상 복귀된다고 단순화하면 안 됩니다."
+      },
+      {
+        "title": "Provider 등록 두 경로",
+        "text": "clk_hw_unregister wrapper를 공유하며 clk_hw_register_kunit은 clk_hw_register(dev,hw),of_clk_hw_register_kunit은 of_clk_hw_register(node,hw)를 호출합니다. 각각 원래 등록 오류는 즉시 반환하고 성공 시 unregister action의 add_action_or_reset 결과를 반환합니다. hw 구조체 자체를 별도 할당하거나 kfree하는 코드는 없으므로 저장소 수명은 호출자도 고려해야 합니다."
+      },
+      {
+        "title": "범위와 메타데이터",
+        "text": "일곱 공개 함수는 모두 EXPORT_SYMBOL_GPL입니다. MODULE_LICENSE는 GPL이고 description은 provider와 consumer용 KUnit helper입니다. 세 wrapper,공통 helper,일곱 함수와 문서를 모두 대조했습니다. 실제 클록 하드웨어 enable이나 OOM 실험은 하지 않았으며 주파수 계산·parent 선택 알고리즘은 이 파일에 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "정상 조합 helper의 테스트 종료 cleanup 순서는?",
+        "options": [
+          "disable_unprepare 다음 put",
+          "put 다음 disable_unprepare"
+        ],
+        "answer": 0,
+        "explanation": "put을 먼저 예약하고 활성화 해제를 나중에 예약하므로 역순으로 실행됩니다."
+      },
+      {
+        "prompt": "__clk_get_kunit에 ERR_PTR가 들어오면?",
+        "options": [
+          "그 오류 주소를 무조건 clk_put한다",
+          "그 포인터를 그대로 반환하고 action을 등록하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "IS_ERR 조기 반환이 잘못된 핸들을 cleanup에 등록하는 것을 피합니다."
+      },
+      {
+        "prompt": "get 성공 후 prepare 단계 실패 시 consumer 참조를 즉시 put하는가?",
+        "options": [
+          "아니다. 이미 등록된 테스트 cleanup에 남는다",
+          "그렇다. 이 조합 함수가 직접 clk_put을 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "오류 분기는 ERR_PTR(ret) 반환뿐입니다. 즉시 rollback과 나중 cleanup을 구분해야 합니다."
+      },
+      {
+        "prompt": "Provider 등록 성공 후 cleanup 예약 실패 시?",
+        "options": [
+          "등록 상태를 유지하면서 0을 반환한다",
+          "or_reset이 즉시 unregister하고 오류를 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "등록 성공 자체만으로 helper 전체 성공은 아닙니다. 역연산 예약도 성공해야 합니다."
+      },
+      {
+        "prompt": "이 구현이 호출자 hw 구조체의 메모리까지 직접 kfree하는가?",
+        "options": [
+          "아니다. unregister action을 예약한다",
+          "그렇다. 모든 hw는 여기서 kzalloc하고 kfree한다"
+        ],
+        "answer": 0,
+        "explanation": "registration 수명과 객체 저장소 소유권은 별개입니다. hw allocation/free 코드는 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * KUnit helpers for clk providers and consumers\n */\n#include <linux/clk.h>\n#include <linux/clk-provider.h>\n#include <linux/err.h>\n#include <linux/kernel.h>\n#include <linux/slab.h>\n\n#include <kunit/clk.h>\n#include <kunit/resource.h>\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_disable_unprepare_wrapper,\n\t\t\t    clk_disable_unprepare, struct clk *);\n/**\n * clk_prepare_enable_kunit() - Test managed clk_prepare_enable()\n * @test: The test context\n * @clk: clk to prepare and enable\n *\n * Return: 0 on success, or negative errno on failure.\n */\nint clk_prepare_enable_kunit(struct kunit *test, struct clk *clk)\n{\n\tint ret;\n\n\tret = clk_prepare_enable(clk);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_disable_unprepare_wrapper,\n\t\t\t\t\t clk);\n}\nEXPORT_SYMBOL_GPL(clk_prepare_enable_kunit);\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_put_wrapper, clk_put, struct clk *);\n\nstatic struct clk *__clk_get_kunit(struct kunit *test, struct clk *clk)\n{\n\tint ret;\n\n\tif (IS_ERR(clk))\n\t\treturn clk;\n\n\tret = kunit_add_action_or_reset(test, clk_put_wrapper, clk);\n\tif (ret)\n\t\treturn ERR_PTR(ret);\n\n\treturn clk;\n}\n\n/**\n * clk_get_kunit() - Test managed clk_get()\n * @test: The test context\n * @dev: device for clock \"consumer\"\n * @con_id: clock consumer ID\n *\n * Just like clk_get(), except the clk is managed by the test case and is\n * automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nclk_get_kunit(struct kunit *test, struct device *dev, const char *con_id)\n{\n\tstruct clk *clk;\n\n\tclk = clk_get(dev, con_id);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(clk_get_kunit);\n\n/**\n * of_clk_get_kunit() - Test managed of_clk_get()\n * @test: The test context\n * @np: device_node for clock \"consumer\"\n * @index: index in 'clocks' property of @np\n *\n * Just like of_clk_get(), except the clk is managed by the test case and is\n * automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nof_clk_get_kunit(struct kunit *test, struct device_node *np, int index)\n{\n\tstruct clk *clk;\n\n\tclk = of_clk_get(np, index);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(of_clk_get_kunit);\n\n/**\n * clk_hw_get_clk_kunit() - Test managed clk_hw_get_clk()\n * @test: The test context\n * @hw: clk_hw associated with the clk being consumed\n * @con_id: connection ID string on device\n *\n * Just like clk_hw_get_clk(), except the clk is managed by the test case and\n * is automatically put with clk_put() after the test case concludes.\n *\n * Return: new clk consumer or ERR_PTR on failure.\n */\nstruct clk *\nclk_hw_get_clk_kunit(struct kunit *test, struct clk_hw *hw, const char *con_id)\n{\n\tstruct clk *clk;\n\n\tclk = clk_hw_get_clk(hw, con_id);\n\n\treturn __clk_get_kunit(test, clk);\n}\nEXPORT_SYMBOL_GPL(clk_hw_get_clk_kunit);\n\n/**\n * clk_hw_get_clk_prepared_enabled_kunit() - Test managed clk_hw_get_clk() + clk_prepare_enable()\n * @test: The test context\n * @hw: clk_hw associated with the clk being consumed\n * @con_id: connection ID string on device\n *\n * Just like\n *\n * .. code-block:: c\n *\n *\tstruct clk *clk = clk_hw_get_clk(...);\n *\tclk_prepare_enable(clk);\n *\n * except the clk is managed by the test case and is automatically disabled and\n * unprepared with clk_disable_unprepare() and put with clk_put() after the\n * test case concludes.\n *\n * Return: new clk consumer that is prepared and enabled or ERR_PTR on failure.\n */\nstruct clk *\nclk_hw_get_clk_prepared_enabled_kunit(struct kunit *test, struct clk_hw *hw,\n\t\t\t\t      const char *con_id)\n{\n\tint ret;\n\tstruct clk *clk;\n\n\tclk = clk_hw_get_clk_kunit(test, hw, con_id);\n\tif (IS_ERR(clk))\n\t\treturn clk;\n\n\tret = clk_prepare_enable_kunit(test, clk);\n\tif (ret)\n\t\treturn ERR_PTR(ret);\n\n\treturn clk;\n}\nEXPORT_SYMBOL_GPL(clk_hw_get_clk_prepared_enabled_kunit);\n\nKUNIT_DEFINE_ACTION_WRAPPER(clk_hw_unregister_wrapper,\n\t\t\t    clk_hw_unregister, struct clk_hw *);\n\n/**\n * clk_hw_register_kunit() - Test managed clk_hw_register()\n * @test: The test context\n * @dev: device that is registering this clock\n * @hw: link to hardware-specific clock data\n *\n * Just like clk_hw_register(), except the clk registration is managed by the\n * test case and is automatically unregistered after the test case concludes.\n *\n * Return: 0 on success or a negative errno value on failure.\n */\nint clk_hw_register_kunit(struct kunit *test, struct device *dev, struct clk_hw *hw)\n{\n\tint ret;\n\n\tret = clk_hw_register(dev, hw);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_hw_unregister_wrapper, hw);\n}\nEXPORT_SYMBOL_GPL(clk_hw_register_kunit);\n\n/**\n * of_clk_hw_register_kunit() - Test managed of_clk_hw_register()\n * @test: The test context\n * @node: device_node of device that is registering this clock\n * @hw: link to hardware-specific clock data\n *\n * Just like of_clk_hw_register(), except the clk registration is managed by\n * the test case and is automatically unregistered after the test case\n * concludes.\n *\n * Return: 0 on success or a negative errno value on failure.\n */\nint of_clk_hw_register_kunit(struct kunit *test, struct device_node *node, struct clk_hw *hw)\n{\n\tint ret;\n\n\tret = of_clk_hw_register(node, hw);\n\tif (ret)\n\t\treturn ret;\n\n\treturn kunit_add_action_or_reset(test, clk_hw_unregister_wrapper, hw);\n}\nEXPORT_SYMBOL_GPL(of_clk_hw_register_kunit);\n\nMODULE_LICENSE(\"GPL\");\nMODULE_DESCRIPTION(\"KUnit helpers for clk providers and consumers\");\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "45a628ac35bfae00057e949bd5a82946670068d2bb6557ec9030083edb579e22",
+      "scope": "whole-file",
+      "line_count": 207,
+      "authoring_source": "course/file_units/kunit_clock_skb.py",
+      "sections": [
+        "구성과 prepare enable",
+        "공통 get 처리",
+        "세 입력 경로",
+        "획득과 활성화의 조합",
+        "부분 실패의 정확한 의미",
+        "Provider 등록 두 경로",
+        "범위와 메타데이터"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/clk/clk_kunit_helpers.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "클록 사용권을 얻고 켰다면 정리는 끄기부터 하고 사용권을 돌려줘야 합니다. 예약을 얻은 순서의 반대로 실행하면 이 짝을 맞출 수 있습니다.",
+    "meaning": "KUnit 클록 정리 예약 순서와 부분 실패에서 즉시·나중 정리를 구별합니다.",
+    "exercise": "획득 성공 뒤 활성화 실패가 났을 때 put 예약이 어디에 남는지 적어 보세요."
+  },
+  "goal": "KUnit 클록 정리 예약 순서와 부분 실패에서 즉시·나중 정리를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "획득 성공 뒤 활성화 실패가 났을 때 put 예약이 어디에 남는지 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "399d2e335b6db9be45208269c6fb412cc568d1638a3c28954eacbef3b10565ee",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

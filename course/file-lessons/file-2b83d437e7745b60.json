@@ -5,79 +5,93 @@
   "area": "대기 큐 · 스택 수명 · 조건부 컴파일 · 매크로",
   "track": "files",
   "kind": "kernel",
-  "intro": "mutex를 기다리는 태스크의 대기 항목과 디버그 함수 연결을 정의하는 내부 헤더입니다.",
+  "intro": "내부 mutex 대기자의 스택 수명과 설정에 따라 사라지는 진단 필드·호출을 이해합니다.",
   "guide": [
-    "항상 필요한 대기 상태와 설정에 따라 사라지는 진단 기능을 분리합니다. 디버그 함수 호출에 필수 동작을 숨기면 설정을 끌 때 코드 의미가 달라질 수 있습니다.",
-    "공개 include/linux/mutex.h와 구분하여 mutex 구현의 내부 대기자 수명을 읽습니다. 이 파일은 실제 잠금 획득·해제 알고리즘을 구현하지 않습니다."
+    "이 내부 헤더는 공개 include/linux/mutex.h와 다릅니다. 실제 획득·해제 알고리즘은 여기 없습니다.",
+    "대기자는 막힌 작업의 커널 스택, 곧 함수가 잠시 쓰는 공간에 놓입니다. 반환 전에 줄 연결과 접근을 정리해야 합니다.",
+    "진단을 끄면 인자까지 평가하지 않습니다. 반드시 해야 할 일을 진단 함수 인자 속에 숨기지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0 표시와 저작권·소개, mutex_waiter 구조체, CONFIG_DEBUG_MUTEXES에 따른 외부 선언 또는 빈 매크로 일곱 개로 구성됩니다. 이 원문에는 include 행이나 별도 include guard가 없습니다. 내부 구현이 필요한 선행 타입을 갖춘 문맥에서 포함하는 헤더이지 단독으로 모든 의존성을 선언하는 공개 API가 아닙니다."
+      "title": "내부 헤더의 구성",
+      "text": "라이선스와 소개 뒤 mutex_waiter 구조체와 설정별 진단 이름 일곱 개가 있습니다. 원문에 include나 별도 중복 포함 방지 표시가 없습니다. 필요한 타입을 먼저 준비한 내부 코드에서 포함하는 파일이며 독립적인 공개 API 헤더는 아닙니다."
     },
     {
-      "title": "대기 항목의 필드",
-      "text": "mutex_waiter는 list_head list, task_struct 포인터 task, ww_acquire_ctx 포인터 ww_ctx를 가집니다. DEBUG_MUTEXES일 때만 void 포인터 magic이 추가됩니다. ww_ctx는 조건부 magic과 달리 항상 구조체에 선언되어 있으나 이 헤더가 그 대상 구조체의 내용이나 획득 알고리즘을 정의하지는 않습니다."
+      "title": "대기 쪽지의 칸",
+      "text": "list는 구조체 안에 들어 있는 줄 연결이고 task는 기다리는 작업의 주소, ww_ctx는 여러 잠금 획득을 조정하는 정보의 주소입니다. magic이라는 void 포인터 확인표는 CONFIG_DEBUG_MUTEXES일 때만 있습니다. ww_ctx는 늘 있지만 그 대상의 내부 모양과 획득 알고리즘은 이 파일이 정의하지 않습니다."
     },
     {
-      "title": "스택 수명",
-      "text": "주석은 대기 항목이 막힌 태스크의 커널 스택에 존재한다고 명시합니다. 다른 실행 주체가 큐를 통해 항목을 접근할 수 있으므로 대기 함수가 반환하기 전에 연결과 접근 가능성을 정리해야 합니다. 구조체 정의만으로 이를 자동 관리하지 않으며 heap free를 요구하는 독립 할당 객체라고 해석하지 않습니다."
+      "title": "스택에 놓인 자료의 수명",
+      "text": "주석은 대기 항목이 막힌 작업의 커널 스택에 있다고 명시합니다. 줄을 통해 다른 실행 주체도 만질 수 있으므로 대기 함수가 돌아가기 전에 연결과 접근 가능성을 정리해야 합니다. 타입 선언이 이를 자동 관리하지 않으며 항상 별도 할당해 free해야 하는 객체도 아닙니다."
     },
     {
-      "title": "디버그 활성 선언",
-      "text": "설정이 켜지면 lock_common, wake_waiter, free_waiter, add_waiter, remove_waiter, unlock, init 진단 함수가 extern으로 선언됩니다. add/remove는 task도 받으며 init은 이름과 lock_class_key를 받습니다. 실제 검사·패턴 기록은 mutex-debug.c에 있습니다. 함수 이름만으로 큐 삽입이나 실제 메모리 해제가 수행된다고 판단하지 않습니다."
+      "title": "진단을 켰을 때",
+      "text": "lock_common·wake_waiter·free_waiter·add_waiter·remove_waiter·unlock·init을 외부 함수로 선언합니다. add/remove는 task도 받고 init은 이름과 잠금 분류 키를 받습니다. 실제 검사와 패턴 기록은 mutex-debug.c에 있습니다. add나 free라는 이름만으로 줄 삽입이나 실제 메모리 해제를 한다고 추측하지 않습니다."
     },
     {
-      "title": "디버그 비활성 매크로",
-      "text": "설정이 꺼지면 일곱 이름 모두 do { } while (0) 매크로입니다. 인자는 본문에서 사용되지 않아 평가되지 않습니다. 따라서 debug_mutex_unlock(get_lock())처럼 인자 안에 필수 부작용을 넣으면 설정에 따라 get_lock 호출 자체가 사라집니다. 독립 문장처럼 사용하기 위한 do-while0 형식도 확인합니다."
+      "title": "진단을 껐을 때",
+      "text": "일곱 이름 모두 빈 do { } while (0) 매크로가 됩니다. 인자를 전혀 쓰지 않아 인자 식도 실행되지 않습니다. debug_mutex_unlock(get_lock())이라고 쓰면 get_lock 호출 자체가 사라집니다. 필수 동작을 넣으면 설정마다 프로그램 의미가 달라집니다. do-while 형식은 하나의 문장처럼 쓰기 위한 것입니다."
     },
     {
-      "title": "설정에 따른 레이아웃",
-      "text": "magic 필드가 조건부이므로 빌드 설정에 따라 구조체 크기와 배치가 달라질 수 있습니다. 항상 존재한다고 가정한 magic 접근이나 외부에 고정 크기를 복제한 코드는 맞지 않습니다. 이 내부 구조체는 안정된 사용자 공간 바이너리 인터페이스를 선언하는 파일이 아닙니다."
+      "title": "설정에 따라 달라지는 모양",
+      "text": "magic 선언 자체가 조건부이므로 구조체 크기와 칸 배치가 달라질 수 있습니다. 언제나 magic이 있다고 접근하거나 외부에 고정 크기를 복제하면 안 됩니다. 이 내부 타입은 사용자 프로그램에 안정된 바이너리 배치 약속을 제공하는 것이 아닙니다."
     },
     {
-      "title": "CS 연결과 책임 분리",
-      "text": "침입형 리스트 항목, 스택 객체의 공유 수명, 불완전 타입 포인터, 빌드 설정별 표현, 진단 기능을 제거해도 유지되어야 하는 필수 동작을 학습합니다. 본체 잠금 알고리즘과 진단 hook의 동작은 별도 파일이므로 이 짧은 헤더만으로 mutex 전체를 학습 완료로 세지 않습니다."
+      "title": "필수 동작과 진단 나누기",
+      "text": "자료 안의 줄 연결, 공유되는 스택 자료의 수명, 속 모양을 아직 몰라도 받을 수 있는 구조체 포인터, 설정별 표현을 배웁니다. 진단을 제거해도 필수 동작은 남아야 합니다. 실제 잠금 알고리즘은 별도 파일이므로 이 헤더만으로 전체 구현을 읽은 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "CONFIG_DEBUG_MUTEXES를 끄면 debug_mutex_unlock(f())에서 f()가 실행되는가?",
+      "prompt": "진단을 끄면 debug_mutex_unlock(f())의 f()가 실행되나요?",
       "options": [
+        "아니요. 빈 매크로가 인자를 사용하지 않습니다.",
+        "네. C 함수 인자는 언제나 먼저 실행됩니다."
+      ],
+      "answer": 0,
+      "explanation": "이 경우 함수 호출이 아니라 전처리 매크로입니다. 펼친 결과에 f()가 없으므로 필수 일을 인자에 넣으면 안 됩니다.",
+      "original_prompt": "CONFIG_DEBUG_MUTEXES를 끄면 debug_mutex_unlock(f())에서 f()가 실행되는가?",
+      "original_options": [
         "아니다. 빈 매크로가 인자를 사용하지 않아 평가하지 않는다",
         "그렇다. C 함수 인자는 항상 먼저 실행된다"
       ],
-      "answer": 0,
-      "explanation": "비활성 분기는 함수 호출이 아니라 전처리 매크로입니다. 치환 결과 do { } while (0)에 f()가 없으므로 필수 부작용을 진단 인자에 넣으면 안 됩니다."
+      "original_explanation": "비활성 분기는 함수 호출이 아니라 전처리 매크로입니다. 치환 결과 do { } while (0)에 f()가 없으므로 필수 부작용을 진단 인자에 넣으면 안 됩니다."
     },
     {
-      "prompt": "mutex_waiter의 magic은 모든 빌드에 존재하는가?",
+      "prompt": "mutex_waiter의 magic은 모든 설정에 있나요?",
       "options": [
+        "네. 진단을 끄면 값만 0이 됩니다.",
+        "아니요. CONFIG_DEBUG_MUTEXES일 때만 선언합니다."
+      ],
+      "answer": 1,
+      "explanation": "전처리 조건이 필드 선언을 감쌉니다. 꺼지면 칸 자체가 없어서 크기와 배치도 달라질 수 있습니다.",
+      "original_prompt": "mutex_waiter의 magic은 모든 빌드에 존재하는가?",
+      "original_options": [
         "그렇다. 비활성에서는 값만0으로 바뀐다",
         "아니다. CONFIG_DEBUG_MUTEXES일 때만 선언된다"
       ],
-      "answer": 1,
-      "explanation": "전처리 조건이 멤버 선언을 감쌉니다. 진단 비활성 빌드에서는 필드 자체가 없어 구조체 레이아웃도 달라질 수 있습니다."
+      "original_explanation": "전처리 조건이 멤버 선언을 감쌉니다. 진단 비활성 빌드에서는 필드 자체가 없어 구조체 레이아웃도 달라질 수 있습니다."
     },
     {
-      "prompt": "이 헤더의 주석에서 대기 항목은 어디에 존재하는가?",
+      "prompt": "주석에 따르면 대기 항목은 어디에 있나요?",
       "options": [
+        "막힌 작업의 커널 스택에 있습니다.",
+        "언제나 따로 kmalloc한 전역 객체입니다."
+      ],
+      "answer": 0,
+      "explanation": "스택 자료가 줄에 연결되므로 함수 반환 전에 연결 수명을 정리해야 합니다. 진단 free라는 이름을 실제 할당 메모리 해제로 읽지 않습니다.",
+      "original_prompt": "이 헤더의 주석에서 대기 항목은 어디에 존재하는가?",
+      "original_options": [
         "막힌 태스크의 커널 스택",
         "항상 별도 kmalloc한 전역 객체"
       ],
-      "answer": 0,
-      "explanation": "스택 대기자가 큐에 연결되므로 함수 반환 전에 연결 수명을 정리해야 합니다. debug free라는 이름을 실제 heap 해제와 혼동하지 않습니다."
+      "original_explanation": "스택 대기자가 큐에 연결되므로 함수 반환 전에 연결 수명을 정리해야 합니다. debug free라는 이름을 실제 heap 해제와 혼동하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "debug_mutex_unlock(f())가 빈 매크로로 펼쳐질 때 f()가 남는지 종이에 써 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Mutexes: blocking mutual exclusion locks\n *\n * started by Ingo Molnar:\n *\n *  Copyright (C) 2004, 2005, 2006 Red Hat, Inc., Ingo Molnar <mingo@redhat.com>\n */\n\n/*\n * This is the control structure for tasks blocked on mutex, which resides\n * on the blocked task's kernel stack:\n */\nstruct mutex_waiter {\n\tstruct list_head\tlist;\n\tstruct task_struct\t*task;\n\tstruct ww_acquire_ctx\t*ww_ctx;\n#ifdef CONFIG_DEBUG_MUTEXES\n\tvoid\t\t\t*magic;\n#endif\n};\n\n#ifdef CONFIG_DEBUG_MUTEXES\nextern void debug_mutex_lock_common(struct mutex *lock,\n\t\t\t\t    struct mutex_waiter *waiter);\nextern void debug_mutex_wake_waiter(struct mutex *lock,\n\t\t\t\t    struct mutex_waiter *waiter);\nextern void debug_mutex_free_waiter(struct mutex_waiter *waiter);\nextern void debug_mutex_add_waiter(struct mutex *lock,\n\t\t\t\t   struct mutex_waiter *waiter,\n\t\t\t\t   struct task_struct *task);\nextern void debug_mutex_remove_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t\t      struct task_struct *task);\nextern void debug_mutex_unlock(struct mutex *lock);\nextern void debug_mutex_init(struct mutex *lock, const char *name,\n\t\t\t     struct lock_class_key *key);\n#else /* CONFIG_DEBUG_MUTEXES */\n# define debug_mutex_lock_common(lock, waiter)\t\tdo { } while (0)\n# define debug_mutex_wake_waiter(lock, waiter)\t\tdo { } while (0)\n# define debug_mutex_free_waiter(waiter)\t\tdo { } while (0)\n# define debug_mutex_add_waiter(lock, waiter, ti)\tdo { } while (0)\n# define debug_mutex_remove_waiter(lock, waiter, ti)\tdo { } while (0)\n# define debug_mutex_unlock(lock)\t\t\tdo { } while (0)\n# define debug_mutex_init(lock, name, key)\t\tdo { } while (0)\n#endif /* !CONFIG_DEBUG_MUTEXES */\n",
   "source_review": {
@@ -102,5 +116,139 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/mutex.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-2b83d437e7745b60",
+    "path": "kernel/locking/mutex.h",
+    "title": "Mutex 내부 헤더 전체: 스택 대기자와 선택적 진단 hook",
+    "area": "대기 큐 · 스택 수명 · 조건부 컴파일 · 매크로",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "mutex를 기다리는 태스크의 대기 항목과 디버그 함수 연결을 정의하는 내부 헤더입니다.",
+    "guide": [
+      "항상 필요한 대기 상태와 설정에 따라 사라지는 진단 기능을 분리합니다. 디버그 함수 호출에 필수 동작을 숨기면 설정을 끌 때 코드 의미가 달라질 수 있습니다.",
+      "공개 include/linux/mutex.h와 구분하여 mutex 구현의 내부 대기자 수명을 읽습니다. 이 파일은 실제 잠금 획득·해제 알고리즘을 구현하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0 표시와 저작권·소개, mutex_waiter 구조체, CONFIG_DEBUG_MUTEXES에 따른 외부 선언 또는 빈 매크로 일곱 개로 구성됩니다. 이 원문에는 include 행이나 별도 include guard가 없습니다. 내부 구현이 필요한 선행 타입을 갖춘 문맥에서 포함하는 헤더이지 단독으로 모든 의존성을 선언하는 공개 API가 아닙니다."
+      },
+      {
+        "title": "대기 항목의 필드",
+        "text": "mutex_waiter는 list_head list, task_struct 포인터 task, ww_acquire_ctx 포인터 ww_ctx를 가집니다. DEBUG_MUTEXES일 때만 void 포인터 magic이 추가됩니다. ww_ctx는 조건부 magic과 달리 항상 구조체에 선언되어 있으나 이 헤더가 그 대상 구조체의 내용이나 획득 알고리즘을 정의하지는 않습니다."
+      },
+      {
+        "title": "스택 수명",
+        "text": "주석은 대기 항목이 막힌 태스크의 커널 스택에 존재한다고 명시합니다. 다른 실행 주체가 큐를 통해 항목을 접근할 수 있으므로 대기 함수가 반환하기 전에 연결과 접근 가능성을 정리해야 합니다. 구조체 정의만으로 이를 자동 관리하지 않으며 heap free를 요구하는 독립 할당 객체라고 해석하지 않습니다."
+      },
+      {
+        "title": "디버그 활성 선언",
+        "text": "설정이 켜지면 lock_common, wake_waiter, free_waiter, add_waiter, remove_waiter, unlock, init 진단 함수가 extern으로 선언됩니다. add/remove는 task도 받으며 init은 이름과 lock_class_key를 받습니다. 실제 검사·패턴 기록은 mutex-debug.c에 있습니다. 함수 이름만으로 큐 삽입이나 실제 메모리 해제가 수행된다고 판단하지 않습니다."
+      },
+      {
+        "title": "디버그 비활성 매크로",
+        "text": "설정이 꺼지면 일곱 이름 모두 do { } while (0) 매크로입니다. 인자는 본문에서 사용되지 않아 평가되지 않습니다. 따라서 debug_mutex_unlock(get_lock())처럼 인자 안에 필수 부작용을 넣으면 설정에 따라 get_lock 호출 자체가 사라집니다. 독립 문장처럼 사용하기 위한 do-while0 형식도 확인합니다."
+      },
+      {
+        "title": "설정에 따른 레이아웃",
+        "text": "magic 필드가 조건부이므로 빌드 설정에 따라 구조체 크기와 배치가 달라질 수 있습니다. 항상 존재한다고 가정한 magic 접근이나 외부에 고정 크기를 복제한 코드는 맞지 않습니다. 이 내부 구조체는 안정된 사용자 공간 바이너리 인터페이스를 선언하는 파일이 아닙니다."
+      },
+      {
+        "title": "CS 연결과 책임 분리",
+        "text": "침입형 리스트 항목, 스택 객체의 공유 수명, 불완전 타입 포인터, 빌드 설정별 표현, 진단 기능을 제거해도 유지되어야 하는 필수 동작을 학습합니다. 본체 잠금 알고리즘과 진단 hook의 동작은 별도 파일이므로 이 짧은 헤더만으로 mutex 전체를 학습 완료로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "CONFIG_DEBUG_MUTEXES를 끄면 debug_mutex_unlock(f())에서 f()가 실행되는가?",
+        "options": [
+          "아니다. 빈 매크로가 인자를 사용하지 않아 평가하지 않는다",
+          "그렇다. C 함수 인자는 항상 먼저 실행된다"
+        ],
+        "answer": 0,
+        "explanation": "비활성 분기는 함수 호출이 아니라 전처리 매크로입니다. 치환 결과 do { } while (0)에 f()가 없으므로 필수 부작용을 진단 인자에 넣으면 안 됩니다."
+      },
+      {
+        "prompt": "mutex_waiter의 magic은 모든 빌드에 존재하는가?",
+        "options": [
+          "그렇다. 비활성에서는 값만0으로 바뀐다",
+          "아니다. CONFIG_DEBUG_MUTEXES일 때만 선언된다"
+        ],
+        "answer": 1,
+        "explanation": "전처리 조건이 멤버 선언을 감쌉니다. 진단 비활성 빌드에서는 필드 자체가 없어 구조체 레이아웃도 달라질 수 있습니다."
+      },
+      {
+        "prompt": "이 헤더의 주석에서 대기 항목은 어디에 존재하는가?",
+        "options": [
+          "막힌 태스크의 커널 스택",
+          "항상 별도 kmalloc한 전역 객체"
+        ],
+        "answer": 0,
+        "explanation": "스택 대기자가 큐에 연결되므로 함수 반환 전에 연결 수명을 정리해야 합니다. debug free라는 이름을 실제 heap 해제와 혼동하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * Mutexes: blocking mutual exclusion locks\n *\n * started by Ingo Molnar:\n *\n *  Copyright (C) 2004, 2005, 2006 Red Hat, Inc., Ingo Molnar <mingo@redhat.com>\n */\n\n/*\n * This is the control structure for tasks blocked on mutex, which resides\n * on the blocked task's kernel stack:\n */\nstruct mutex_waiter {\n\tstruct list_head\tlist;\n\tstruct task_struct\t*task;\n\tstruct ww_acquire_ctx\t*ww_ctx;\n#ifdef CONFIG_DEBUG_MUTEXES\n\tvoid\t\t\t*magic;\n#endif\n};\n\n#ifdef CONFIG_DEBUG_MUTEXES\nextern void debug_mutex_lock_common(struct mutex *lock,\n\t\t\t\t    struct mutex_waiter *waiter);\nextern void debug_mutex_wake_waiter(struct mutex *lock,\n\t\t\t\t    struct mutex_waiter *waiter);\nextern void debug_mutex_free_waiter(struct mutex_waiter *waiter);\nextern void debug_mutex_add_waiter(struct mutex *lock,\n\t\t\t\t   struct mutex_waiter *waiter,\n\t\t\t\t   struct task_struct *task);\nextern void debug_mutex_remove_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t\t      struct task_struct *task);\nextern void debug_mutex_unlock(struct mutex *lock);\nextern void debug_mutex_init(struct mutex *lock, const char *name,\n\t\t\t     struct lock_class_key *key);\n#else /* CONFIG_DEBUG_MUTEXES */\n# define debug_mutex_lock_common(lock, waiter)\t\tdo { } while (0)\n# define debug_mutex_wake_waiter(lock, waiter)\t\tdo { } while (0)\n# define debug_mutex_free_waiter(waiter)\t\tdo { } while (0)\n# define debug_mutex_add_waiter(lock, waiter, ti)\tdo { } while (0)\n# define debug_mutex_remove_waiter(lock, waiter, ti)\tdo { } while (0)\n# define debug_mutex_unlock(lock)\t\t\tdo { } while (0)\n# define debug_mutex_init(lock, name, key)\t\tdo { } while (0)\n#endif /* !CONFIG_DEBUG_MUTEXES */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "3e5eb601e888b94dc3c2e6649bc7ae3df2a2cd1003af1c22b15a17df9c57d97a",
+      "scope": "whole-file",
+      "line_count": 45,
+      "authoring_source": "course/file_units/mutex_internal_header.py",
+      "sections": [
+        "전체 구성",
+        "대기 항목의 필드",
+        "스택 수명",
+        "디버그 활성 선언",
+        "디버그 비활성 매크로",
+        "설정에 따른 레이아웃",
+        "CS 연결과 책임 분리"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/mutex.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "잠금을 기다리는 사람의 쪽지에는 줄 연결, 작업 주소, 획득 정보가 적힙니다. 진단 설정을 켜면 확인표 한 칸을 더 붙이고, 끄면 점검 호출이 사라집니다.",
+    "meaning": "내부 mutex 대기자의 스택 수명과 설정에 따라 사라지는 진단 필드·호출을 이해합니다.",
+    "exercise": "debug_mutex_unlock(f())가 빈 매크로로 펼쳐질 때 f()가 남는지 종이에 써 보세요."
+  },
+  "goal": "내부 mutex 대기자의 스택 수명과 설정에 따라 사라지는 진단 필드·호출을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "debug_mutex_unlock(f())가 빈 매크로로 펼쳐질 때 f()가 남는지 종이에 써 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "a4f2244e2fdc2cd231c9f70bf9c21ba232e0afad288b11323801e4351baf2143",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

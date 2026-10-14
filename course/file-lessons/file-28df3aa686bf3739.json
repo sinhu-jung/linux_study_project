@@ -5,75 +5,89 @@
   "area": "Busy waiting · PAUSE · 인라인 어셈블리 · 컴파일러 장벽 · 전방 선언",
   "track": "files",
   "kind": "kernel",
-  "intro": "rep_nop·cpu_relax와 getcpu 원형을 포함한 헤더 전체를 분석합니다.",
+  "intro": "x86 PAUSE 힌트와 컴파일러 메모리 제약·실제 동기화를 구별합니다.",
   "guide": [
-    "busy-wait 힌트는 대기 루프의 실행 특성을 돕지만 락 획득이나 스레드 수면을 대신하지 않습니다.",
-    "인라인 어셈블리의 volatile·memory clobber와 동기화 연산을 구별합니다."
+    "busy-wait는 잠들지 않고 조건을 반복 확인하는 대기입니다.",
+    "memory clobber는 어셈블리가 메모리에 영향을 줄 수 있음을 컴파일러에게 알리는 약속입니다.",
+    "하드웨어 fence는 CPU의 메모리 작업 순서를 제한하는 별도 명령입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성과 조건",
-      "text": "GPL-2.0-only와 include guard 아래 !__ASSEMBLY__ 구역에 두 함수, 구조체 전방 선언, 함수 원형을 둡니다. 별도 include는 없습니다. __always_inline과 notrace는 포함 문맥에 의존하며 assembly 문맥에는 이 C 선언들을 제공하지 않습니다."
+      "text": "헤더 guard와 C 전용 구역 안에 작은 함수 둘, 구조체 전방 선언, 함수 원형이 있습니다. 별도 include는 없으므로 __always_inline과 notrace 같은 이름은 포함 문맥에서 준비되어야 합니다. 어셈블리로 포함할 때는 이 C 선언이 보이지 않습니다."
     },
     {
       "title": "Rep nop 구현",
-      "text": "rep_nop은 static __always_inline void 함수이며 asm volatile(\"rep; nop\" ::: \"memory\")를 실행합니다. 원본 주석은 이를 REP NOP (PAUSE)라고 부르고 busy-wait 루프에 유용한 힌트라고 설명합니다. C 반복문이나 조건 검사는 이 함수 내부에 없고 호출할 때마다 해당 어셈블리 문장을 제공합니다."
+      "text": "rep_nop은 rep; nop이라는 어셈블리를 실행하는 작은 항상 인라인 함수입니다. 주석은 이를 PAUSE라고 부르며 반복 대기에 좋은 힌트라고 설명합니다. 함수 안에는 반복문이나 조건 검사가 없고 호출할 때마다 힌트 한 문장을 제공합니다."
     },
     {
       "title": "Volatile과 memory의 범위",
-      "text": "volatile은 이 어셈블리의 부작용을 컴파일러가 고려하도록 하고 memory clobber는 메모리 접근 순서에 대한 컴파일러 가정을 제한합니다. 본문에 하드웨어 메모리 fence 명령이나 atomic read-modify-write는 없습니다. 따라서 다른 CPU의 쓰기가 모두 완료되거나 어떤 공유 플래그가 true가 될 때까지 기다리는 기능이라고 해석하지 않습니다."
+      "text": "volatile과 memory 표시는 컴파일러가 이 어셈블리의 효과와 메모리 순서를 함부로 가정하지 않도록 합니다. 여기에는 하드웨어 fence나 원자적 읽고 고치기 연산이 없습니다. 다른 CPU의 쓰기가 모두 끝나거나 공유 표시가 바뀔 때까지 기다려 주는 기능은 아닙니다."
     },
     {
       "title": "Cpu relax wrapper",
-      "text": "cpu_relax도 static __always_inline void이고 rep_nop()만 호출합니다. syscall, scheduler 진입, timeout, CPU migration 금지, lock 획득은 없습니다. 실제 대기 조건과 종료 가능성은 호출하는 루프가 관리해야 합니다. 원자적 변수와 필요한 메모리 순서 프로토콜 없이 cpu_relax만 넣는 것으로 올바른 동기화가 완성되는 것은 아닙니다."
+      "text": "cpu_relax는 rep_nop만 부릅니다. 시스템 호출, 스케줄러 수면, 제한 시간, CPU 이동 금지나 잠금 획득은 하지 않습니다. 조건과 종료는 바깥 반복문이 책임지며 적절한 원자적 변수와 순서 규칙이 별도로 필요합니다."
     },
     {
       "title": "Getcpu 관련 선언",
-      "text": "struct getcpu_cache는 전방 선언만 제공합니다. notrace long __vdso_getcpu(unsigned *cpu,unsigned *node,struct getcpu_cache *unused)는 원형이며 구현 본문은 별도 vgetcpu.c에 있습니다. 포인터 선언에는 구조체 전체 배치가 필요하지 않지만 이 헤더의 전방 선언만으로 sizeof(getcpu_cache)를 구할 수는 없습니다."
+      "text": "getcpu_cache는 구조체 이름만 미리 알립니다. __vdso_getcpu는 CPU·노드 출력 포인터와 사용하지 않는 캐시 포인터를 받는 함수 원형이며 본문은 다른 파일에 있습니다. 포인터 선언은 가능하지만 전체 정의 없이 그 구조체 크기나 멤버를 알 수는 없습니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "두 힌트 함수와 모든 선언·조건을 다뤘습니다. CPU 실행 힌트, 컴파일러 메모리 효과, 공유 상태의 원자성, scheduler 수면의 차이를 학습합니다. 실제 CPU별 성능·전력·명령 실행 시간을 측정한 것은 아니므로 일정 시간만큼 쉰다는 수치 보장을 제시하지 않습니다."
+      "text": "CPU 힌트, 컴파일러 제약, 공유 자료의 원자성, 스케줄러 수면을 서로 나눠 이해합니다. 실제 CPU의 시간·전력·성능을 측정한 설명이 아니므로 일정한 시간만큼 쉰다고 보장하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 cpu_relax가 스레드를 scheduler의 수면 상태로 바꾸는가?",
+      "prompt": "cpu_relax가 태스크를 잠들게 하나요?",
       "options": [
+        "아니요. rep_nop 힌트를 실행합니다.",
+        "네. 내부에서 대기 시스템 호출을 합니다."
+      ],
+      "answer": 0,
+      "explanation": "반복 대기의 힌트와 운영체제 수면은 다릅니다.",
+      "original_prompt": "이 cpu_relax가 스레드를 scheduler의 수면 상태로 바꾸는가?",
+      "original_options": [
         "아니다. rep_nop 힌트를 실행한다",
         "그렇다. 내부에서 대기 syscall을 호출한다"
       ],
-      "answer": 0,
-      "explanation": "본문에는 rep_nop 호출만 있습니다. busy-wait 루프와 scheduler가 관리하는 sleep은 다른 방식입니다."
+      "original_explanation": "본문에는 rep_nop 호출만 있습니다. busy-wait 루프와 scheduler가 관리하는 sleep은 다른 방식입니다."
     },
     {
-      "prompt": "memory clobber가 있으므로 PAUSE가 완전한 하드웨어 메모리 fence인가?",
+      "prompt": "memory 표시는 PAUSE를 완전한 하드웨어 fence로 만드나요?",
       "options": [
+        "네. memory 글자가 fence 명령을 자동 생성합니다.",
+        "아니요. 컴파일러 약속과 CPU 장벽을 구별해야 합니다."
+      ],
+      "answer": 1,
+      "explanation": "실제 명령은 rep; nop이며 필요한 동기화 순서는 별도로 맞춥니다.",
+      "original_prompt": "memory clobber가 있으므로 PAUSE가 완전한 하드웨어 메모리 fence인가?",
+      "original_options": [
         "그렇다. memory라는 문자열이 fence 명령을 자동 생성한다",
         "아니다. 컴파일러 메모리 효과와 하드웨어 fence를 구분해야 한다"
       ],
-      "answer": 1,
-      "explanation": "실제 어셈블리 문자열은 rep; nop입니다. clobber는 컴파일러 계약이며 동기화에 필요한 하드웨어 순서를 별도로 판단해야 합니다."
+      "original_explanation": "실제 어셈블리 문자열은 rep; nop입니다. clobber는 컴파일러 계약이며 동기화에 필요한 하드웨어 순서를 별도로 판단해야 합니다."
     },
     {
-      "prompt": "getcpu_cache의 전체 배치 없이 함수 원형에 그 포인터를 쓸 수 있는가?",
+      "prompt": "전체 구조체 정의 없이 getcpu_cache 포인터를 선언할 수 있나요?",
       "options": [
+        "네. 전방 선언으로 가능합니다.",
+        "아니요. 모든 멤버가 여기 있어야 합니다."
+      ],
+      "answer": 0,
+      "explanation": "포인터를 받는 선언과 멤버를 사용하는 코드는 필요한 정보가 다릅니다.",
+      "original_prompt": "getcpu_cache의 전체 배치 없이 함수 원형에 그 포인터를 쓸 수 있는가?",
+      "original_options": [
         "그렇다. 구조체 전방 선언으로 포인터 자료형을 선언할 수 있다",
         "아니다. 모든 멤버가 이 헤더에 있어야 한다"
       ],
-      "answer": 0,
-      "explanation": "포인터를 받는 함수 선언과 구조체 멤버 접근은 필요한 타입 정보가 다릅니다. 이 파일에는 전방 선언만 있습니다."
+      "original_explanation": "포인터를 받는 함수 선언과 구조체 멤버 접근은 필요한 타입 정보가 다릅니다. 이 파일에는 전방 선언만 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "cpu_relax 바깥 루프가 여전히 확인해야 할 조건을 하나 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 ARM Ltd.\n */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\n/* REP NOP (PAUSE) is a good thing to insert into busy-wait loops. */\nstatic __always_inline void rep_nop(void)\n{\n\tasm volatile(\"rep; nop\" ::: \"memory\");\n}\n\nstatic __always_inline void cpu_relax(void)\n{\n\trep_nop();\n}\n\nstruct getcpu_cache;\n\nnotrace long __vdso_getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *unused);\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
   "source_review": {
@@ -97,5 +111,134 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vdso/processor.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-28df3aa686bf3739",
+    "path": "arch/x86/include/asm/vdso/processor.h",
+    "title": "X86 cpu_relax: PAUSE 힌트와 컴파일러 메모리 효과",
+    "area": "Busy waiting · PAUSE · 인라인 어셈블리 · 컴파일러 장벽 · 전방 선언",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "rep_nop·cpu_relax와 getcpu 원형을 포함한 헤더 전체를 분석합니다.",
+    "guide": [
+      "busy-wait 힌트는 대기 루프의 실행 특성을 돕지만 락 획득이나 스레드 수면을 대신하지 않습니다.",
+      "인라인 어셈블리의 volatile·memory clobber와 동기화 연산을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성과 조건",
+        "text": "GPL-2.0-only와 include guard 아래 !__ASSEMBLY__ 구역에 두 함수, 구조체 전방 선언, 함수 원형을 둡니다. 별도 include는 없습니다. __always_inline과 notrace는 포함 문맥에 의존하며 assembly 문맥에는 이 C 선언들을 제공하지 않습니다."
+      },
+      {
+        "title": "Rep nop 구현",
+        "text": "rep_nop은 static __always_inline void 함수이며 asm volatile(\"rep; nop\" ::: \"memory\")를 실행합니다. 원본 주석은 이를 REP NOP (PAUSE)라고 부르고 busy-wait 루프에 유용한 힌트라고 설명합니다. C 반복문이나 조건 검사는 이 함수 내부에 없고 호출할 때마다 해당 어셈블리 문장을 제공합니다."
+      },
+      {
+        "title": "Volatile과 memory의 범위",
+        "text": "volatile은 이 어셈블리의 부작용을 컴파일러가 고려하도록 하고 memory clobber는 메모리 접근 순서에 대한 컴파일러 가정을 제한합니다. 본문에 하드웨어 메모리 fence 명령이나 atomic read-modify-write는 없습니다. 따라서 다른 CPU의 쓰기가 모두 완료되거나 어떤 공유 플래그가 true가 될 때까지 기다리는 기능이라고 해석하지 않습니다."
+      },
+      {
+        "title": "Cpu relax wrapper",
+        "text": "cpu_relax도 static __always_inline void이고 rep_nop()만 호출합니다. syscall, scheduler 진입, timeout, CPU migration 금지, lock 획득은 없습니다. 실제 대기 조건과 종료 가능성은 호출하는 루프가 관리해야 합니다. 원자적 변수와 필요한 메모리 순서 프로토콜 없이 cpu_relax만 넣는 것으로 올바른 동기화가 완성되는 것은 아닙니다."
+      },
+      {
+        "title": "Getcpu 관련 선언",
+        "text": "struct getcpu_cache는 전방 선언만 제공합니다. notrace long __vdso_getcpu(unsigned *cpu,unsigned *node,struct getcpu_cache *unused)는 원형이며 구현 본문은 별도 vgetcpu.c에 있습니다. 포인터 선언에는 구조체 전체 배치가 필요하지 않지만 이 헤더의 전방 선언만으로 sizeof(getcpu_cache)를 구할 수는 없습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "두 힌트 함수와 모든 선언·조건을 다뤘습니다. CPU 실행 힌트, 컴파일러 메모리 효과, 공유 상태의 원자성, scheduler 수면의 차이를 학습합니다. 실제 CPU별 성능·전력·명령 실행 시간을 측정한 것은 아니므로 일정 시간만큼 쉰다는 수치 보장을 제시하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 cpu_relax가 스레드를 scheduler의 수면 상태로 바꾸는가?",
+        "options": [
+          "아니다. rep_nop 힌트를 실행한다",
+          "그렇다. 내부에서 대기 syscall을 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "본문에는 rep_nop 호출만 있습니다. busy-wait 루프와 scheduler가 관리하는 sleep은 다른 방식입니다."
+      },
+      {
+        "prompt": "memory clobber가 있으므로 PAUSE가 완전한 하드웨어 메모리 fence인가?",
+        "options": [
+          "그렇다. memory라는 문자열이 fence 명령을 자동 생성한다",
+          "아니다. 컴파일러 메모리 효과와 하드웨어 fence를 구분해야 한다"
+        ],
+        "answer": 1,
+        "explanation": "실제 어셈블리 문자열은 rep; nop입니다. clobber는 컴파일러 계약이며 동기화에 필요한 하드웨어 순서를 별도로 판단해야 합니다."
+      },
+      {
+        "prompt": "getcpu_cache의 전체 배치 없이 함수 원형에 그 포인터를 쓸 수 있는가?",
+        "options": [
+          "그렇다. 구조체 전방 선언으로 포인터 자료형을 선언할 수 있다",
+          "아니다. 모든 멤버가 이 헤더에 있어야 한다"
+        ],
+        "answer": 0,
+        "explanation": "포인터를 받는 함수 선언과 구조체 멤버 접근은 필요한 타입 정보가 다릅니다. 이 파일에는 전방 선언만 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n/*\n * Copyright (C) 2020 ARM Ltd.\n */\n#ifndef __ASM_VDSO_PROCESSOR_H\n#define __ASM_VDSO_PROCESSOR_H\n\n#ifndef __ASSEMBLY__\n\n/* REP NOP (PAUSE) is a good thing to insert into busy-wait loops. */\nstatic __always_inline void rep_nop(void)\n{\n\tasm volatile(\"rep; nop\" ::: \"memory\");\n}\n\nstatic __always_inline void cpu_relax(void)\n{\n\trep_nop();\n}\n\nstruct getcpu_cache;\n\nnotrace long __vdso_getcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *unused);\n\n#endif /* __ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_PROCESSOR_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b8e60742dedc80a973a108f2d302ba97d5c5a2694f5aa63d51d66269da7f088f",
+      "scope": "whole-file",
+      "line_count": 27,
+      "authoring_source": "course/file_units/vdso_processor_hints.py",
+      "sections": [
+        "전체 구성과 조건",
+        "Rep nop 구현",
+        "Volatile과 memory의 범위",
+        "Cpu relax wrapper",
+        "Getcpu 관련 선언",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vdso/processor.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "문 앞에서 계속 확인하며 기다릴 때 CPU에게 잠시 여유 있게 돌라는 힌트를 줄 수 있습니다. 이 힌트는 문을 열어 주거나 기다리는 사람을 재우는 동작은 아닙니다.",
+    "meaning": "x86 PAUSE 힌트와 컴파일러 메모리 제약·실제 동기화를 구별합니다.",
+    "exercise": "cpu_relax 바깥 루프가 여전히 확인해야 할 조건을 하나 적어 보세요."
+  },
+  "goal": "x86 PAUSE 힌트와 컴파일러 메모리 제약·실제 동기화를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "cpu_relax 바깥 루프가 여전히 확인해야 할 조건을 하나 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "10462f4dfd6ddd38927a60ae5f8f3b72a286dfd92c9be96d8d5abeafd3268108",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

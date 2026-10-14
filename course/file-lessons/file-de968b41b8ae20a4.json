@@ -5,96 +5,116 @@
   "area": "자료구조 · 원형 큐 · 모듈러 산술 · 비트 마스크 · 동시성",
   "track": "files",
   "kind": "kernel",
-  "intro": "구조체와 네 매크로 전체를 인덱스 예제로 분석합니다.",
+  "intro": "순환 버퍼의 전체 개수와 배열 끝까지 이어진 개수를 구분합니다.",
   "guide": [
-    "2의 거듭제곱 크기에서 마스크로 순환 거리를 계산하되 빈 상태와 가득 찬 상태를 구분할 한 칸을 남깁니다.",
-    "생산자·소비자 큐에서 전체 여유량과 한 번에 복사할 연속 길이를 구분합니다."
+    "head는 다음 넣을 자리, tail은 다음 꺼낼 자리입니다.",
+    "크기는 양의 2의 거듭제곱이어야 마스크 계산이 맞습니다.",
+    "개수 계산은 잠금이나 내용 복사를 대신하지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "파일의 전체 구성",
-      "text": "GPL-2.0 표시, 관련 문서 경로, include guard, circ_buf 구조체, 네 계산 매크로가 전부입니다. 구조체는 char 포인터 buf와 int head, tail만 가집니다. size 필드나 소유권 정보는 없으므로 크기 관리와 메모리 할당·해제는 호출자 책임입니다."
+      "title": "구조체와 네 계산",
+      "text": "라이선스·문서 경로·중복 포함 방지 다음에 circ_buf와 네 매크로가 있습니다. 구조체는 데이터 주소 buf와 int인 head·tail뿐입니다. 크기나 소유자 칸이 없으므로 메모리 마련과 반환, 크기 관리는 호출자가 합니다."
     },
     {
-      "title": "인덱스와 전제",
-      "text": "head는 다음 삽입 위치, tail은 다음 제거 위치입니다. 이 표현에서는 양의 2의 거듭제곱 크기와 범위 안의 인덱스를 사용합니다. size-1과 AND하여 끝에서 0으로 돌아오는 나머지를 계산합니다. 임의 크기의 나머지 연산을 대체하는 공식은 아닙니다. size=1은 저장 가능한 원소가 0개인 퇴화한 경우입니다."
+      "title": "돌아가는 위치",
+      "text": "양의 2의 거듭제곱 크기와 범위 안 위치를 사용합니다. size-1과 AND하면 끝 다음이 0으로 돌아옵니다. 임의의 크기에 통하는 나머지 공식은 아닙니다. size=1이면 남겨 둘 한 칸뿐이어서 물건을 하나도 저장하지 못합니다."
     },
     {
-      "title": "사용량 CIRC_CNT",
-      "text": "식은 (head-tail)&(size-1)입니다. size=8, head=2, tail=6이면 위치 6,7,0,1에 있는 4개를 셉니다. head가 tail보다 작다고 비어 있는 것이 아닙니다. 정상 상태에서 반환 범위는 0부터 size-1이며 head==tail이면 0입니다."
+      "title": "찬 칸 수",
+      "text": "CIRC_CNT는 (head-tail)&(size-1)입니다. 크기 8, head=2, tail=6이면 6·7·0·1의 네 칸입니다. head 숫자가 작아도 빈 것은 아닙니다. 정상 결과는 0..size-1이고 head==tail이면 0입니다."
     },
     {
-      "title": "여유량 CIRC_SPACE",
-      "text": "CIRC_CNT(tail,head+1,size)로 정의하여 한 칸을 예약합니다. 같은 순간의 유효한 head와 tail에 대해 사용량+여유량=size-1입니다. size=8이면 최대 7개만 저장합니다. head를 한 바퀴 돌려 tail과 같게 만들면 가득 참과 비어 있음이 충돌하므로 이 API는 그런 삽입을 허용하는 설계가 아닙니다."
+      "title": "비워 둘 한 칸",
+      "text": "CIRC_SPACE는 CIRC_CNT(tail,head+1,size)로 한 칸을 빼 둡니다. 같은 순간의 올바른 위치에서는 사용량+여유=size-1입니다. 크기 8에는 최대 7개만 넣습니다. 전부 넣어 head가 tail과 같아지면 빈 상태와 구별되지 않으므로 이 설계는 허용하지 않습니다."
     },
     {
-      "title": "읽을 연속 구간",
-      "text": "CIRC_CNT_TO_END는 end=size-tail, n=(head+end)&(size-1)을 구하고 n과 end 중 작은 값을 반환합니다. n은 전체 사용량, end는 물리적 배열 끝까지의 길이입니다. size=8, head=2, tail=6에서는 전체 4개 중 6,7 두 개만 연속으로 읽을 수 있습니다. 나머지는 배열 처음의 별도 구간입니다."
+      "title": "연속해서 읽는 길이",
+      "text": "CNT_TO_END는 end=size-tail, n=(head+end)&(size-1)을 구해 작은 쪽을 줍니다. n은 전체 사용량, end는 배열 끝까지 거리입니다. 8·2·6 예에서는 총 네 개 중 6·7 두 개만 이어서 읽고 0·1은 다음 구간으로 읽습니다."
     },
     {
-      "title": "쓸 연속 구간",
-      "text": "CIRC_SPACE_TO_END는 end=size-1-head, n=(end+tail)&(size-1)을 구해 n<=end이면 n, 아니면 end+1을 반환합니다. n은 전체 여유량이며 물리적 끝까지의 길이는 end+1입니다. size=8, head=6, tail=2이면 여유는 3개지만 6,7 두 개만 한 번에 쓸 수 있습니다. tail=0이면 예약할 마지막 빈 칸 때문에 배열 끝까지 모두 사용할 수 없습니다."
+      "title": "연속해서 쓰는 길이",
+      "text": "SPACE_TO_END는 end=size-1-head, n=(end+tail)&(size-1) 뒤 n<=end이면 n, 아니면 end+1을 줍니다. 크기 8, head=6, tail=2이면 빈 칸은 6·7·0 세 개지만 첫 연속 구간은 두 개입니다. tail=0일 때는 마지막 예약 칸 때문에 배열 끝까지 전부 못 씁니다."
     },
     {
-      "title": "GNU C 표현식과 평가 횟수",
-      "text": "TO_END 두 매크로는 ({ ... }) 형태의 GNU C statement expression이며 마지막 조건식이 값이 됩니다. int 임시 변수 end와 n에 중간 결과를 저장하고 head와 tail 각각을 한 번만 평가합니다. size는 두 번 나타납니다. 이 형태가 표준 C의 일반 함수와 같거나 모든 인자를 한 번만 평가한다고 설명하면 안 됩니다. 부작용 없는 값과 이 표현에 맞는 크기를 전달하는 것이 안전합니다."
+      "title": "GNU C의 값 있는 블록",
+      "text": "TO_END의 ({ ... })는 여러 문장을 실행하고 마지막 식을 값으로 쓰는 GNU C 확장입니다. int 임시 칸 end와 n 덕분에 head와 tail은 한 번씩 보지만 size는 두 번 나옵니다. 표준 C 함수와 같거나 모든 인수를 한 번만 본다고 말하면 틀립니다. 값을 바꾸는 부작용 없는 인수가 알맞습니다."
     },
     {
-      "title": "동시성 보장의 경계",
-      "text": "head와 tail을 반복 평가하지 않는 것은 한 매크로 안에서 서로 다른 시점의 같은 인덱스를 재사용하는 문제를 줄입니다. 두 인덱스를 하나의 원자적 스냅샷으로 읽는다는 뜻은 아닙니다. 이 헤더에는 READ_ONCE, acquire/release, lock, 원자적 갱신이 없습니다. 데이터 복사와 인덱스 공개 순서는 호출자가 별도로 보장합니다."
+      "title": "동시에 바뀔 때",
+      "text": "같은 위치를 반복해서 읽지 않는 것과 두 위치를 정확히 같은 순간에 읽는 것은 다릅니다. 여기에 READ_ONCE, 접근 순서를 정하는 acquire/release, 잠금, 쪼개지지 않는 원자적 갱신은 없습니다. 내용 복사와 위치 공개 순서는 호출자가 지켜야 합니다."
     },
     {
-      "title": "복잡도와 표현의 한계",
-      "text": "네 연산은 큐 원소 수와 무관한 고정 개수 산술이므로 O(1)입니다. 메모리 이동이나 head/tail 갱신도 직접 하지 않습니다. unsigned 무한 증가 카운터나 별도 full 플래그를 쓰는 다른 ring 설계와 혼동하지 않습니다. 매우 큰 값의 int 중간 산술이나 잘못된 인덱스를 검증하는 방어 코드도 이 파일에는 없습니다."
+      "title": "계산의 한계",
+      "text": "원소 수와 상관없이 정해진 수의 계산만 하므로 O(1)입니다. 물건을 옮기거나 head·tail을 바꾸지도 않습니다. 끝없이 증가하는 별도 카운터나 full 표지를 쓰는 다른 설계와 구별합니다. 잘못된 위치나 너무 큰 int 계산을 막는 검사도 없습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "size=8, head=2, tail=6일 때 사용량과 연속 읽기 길이는?",
+      "prompt": "8칸, head=2, tail=6의 사용량과 연속 읽기는?",
       "options": [
+        "전체 4개, 연속 2개",
+        "둘 다 0개"
+      ],
+      "answer": 0,
+      "explanation": "6·7·0·1이 차 있지만 끝 앞의 6·7만 첫 구간입니다.",
+      "original_prompt": "size=8, head=2, tail=6일 때 사용량과 연속 읽기 길이는?",
+      "original_options": [
         "사용량 4개, 연속 읽기 2개이다",
         "사용량 0개, 연속 읽기 0개이다"
       ],
-      "answer": 0,
-      "explanation": "사용 위치는 6,7,0,1입니다. CIRC_CNT는 순환 거리 4를, TO_END는 배열 끝 전까지의 두 위치를 반환합니다."
+      "original_explanation": "사용 위치는 6,7,0,1입니다. CIRC_CNT는 순환 거리 4를, TO_END는 배열 끝 전까지의 두 위치를 반환합니다."
     },
     {
-      "prompt": "길이 8의 버퍼에서 이 규칙으로 저장 가능한 최대 원소 수는?",
+      "prompt": "8칸 버퍼에 최대 몇 개를 넣나요?",
       "options": [
+        "8개",
+        "7개"
+      ],
+      "answer": 1,
+      "explanation": "빈 상태를 구별하려고 한 칸을 남깁니다.",
+      "original_prompt": "길이 8의 버퍼에서 이 규칙으로 저장 가능한 최대 원소 수는?",
+      "original_options": [
         "8개이다",
         "7개이다"
       ],
-      "answer": 1,
-      "explanation": "한 칸을 비워 head==tail을 빈 상태로 고정합니다. 따라서 용량은 물리적 크기보다 하나 작습니다."
+      "original_explanation": "한 칸을 비워 head==tail을 빈 상태로 고정합니다. 따라서 용량은 물리적 크기보다 하나 작습니다."
     },
     {
-      "prompt": "size=8, head=6, tail=2일 때 전체 여유와 연속 쓰기 길이는?",
+      "prompt": "8칸, head=6, tail=2의 여유와 연속 쓰기는?",
       "options": [
+        "전체 3개, 연속 2개",
+        "전체 3개, 연속 3개"
+      ],
+      "answer": 0,
+      "explanation": "6·7·0에 넣고 1은 비워 둡니다. 끝 앞에는 두 칸뿐입니다.",
+      "original_prompt": "size=8, head=6, tail=2일 때 전체 여유와 연속 쓰기 길이는?",
+      "original_options": [
         "전체 3개, 연속 2개이다",
         "전체 3개, 연속 3개이다"
       ],
-      "answer": 0,
-      "explanation": "삽입 가능 위치는 6,7,0이며 1은 빈 칸으로 남겨야 합니다. 배열 끝을 넘지 않는 첫 구간은 두 개입니다."
+      "original_explanation": "삽입 가능 위치는 6,7,0이며 1은 빈 칸으로 남겨야 합니다. 배열 끝을 넘지 않는 첫 구간은 두 개입니다."
     },
     {
-      "prompt": "CIRC_CNT_TO_END가 head와 tail을 한 번씩 읽으면 메모리 장벽이 필요 없는가?",
+      "prompt": "head·tail을 한 번씩 읽으면 메모리 장벽이 필요 없나요?",
       "options": [
+        "그렇다. int 임시 변수가 acquire를 한다",
+        "아니다. 계산과 내용 공개 순서는 별개이다"
+      ],
+      "answer": 1,
+      "explanation": "임시 변수는 동기화 도구가 아닙니다. 내용보다 head가 먼저 보이지 않도록 별도 순서를 지켜야 합니다.",
+      "original_prompt": "CIRC_CNT_TO_END가 head와 tail을 한 번씩 읽으면 메모리 장벽이 필요 없는가?",
+      "original_options": [
         "그렇다. int 임시 변수가 acquire를 제공한다",
         "아니다. 값 계산과 데이터 공개 순서 보장은 별개이다"
       ],
-      "answer": 1,
-      "explanation": "statement expression의 지역 변수는 동기화 연산이 아닙니다. 생산자가 데이터보다 head를 먼저 공개하지 않도록 별도 계약이 필요합니다."
+      "original_explanation": "statement expression의 지역 변수는 동기화 연산이 아닙니다. 생산자가 데이터보다 head를 먼저 공개하지 않도록 별도 계약이 필요합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "크기 8, head=2, tail=6에서 찬 칸 6·7·0·1을 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * See Documentation/core-api/circular-buffers.rst for more information.\n */\n\n#ifndef _LINUX_CIRC_BUF_H\n#define _LINUX_CIRC_BUF_H 1\n\nstruct circ_buf {\n\tchar *buf;\n\tint head;\n\tint tail;\n};\n\n/* Return count in buffer.  */\n#define CIRC_CNT(head,tail,size) (((head) - (tail)) & ((size)-1))\n\n/* Return space available, 0..size-1.  We always leave one free char\n   as a completely full buffer has head == tail, which is the same as\n   empty.  */\n#define CIRC_SPACE(head,tail,size) CIRC_CNT((tail),((head)+1),(size))\n\n/* Return count up to the end of the buffer.  Carefully avoid\n   accessing head and tail more than once, so they can change\n   underneath us without returning inconsistent results.  */\n#define CIRC_CNT_TO_END(head,tail,size) \\\n\t({int end = (size) - (tail); \\\n\t  int n = ((head) + end) & ((size)-1); \\\n\t  n < end ? n : end;})\n\n/* Return space available up to the end of the buffer.  */\n#define CIRC_SPACE_TO_END(head,tail,size) \\\n\t({int end = (size) - 1 - (head); \\\n\t  int n = (end + (tail)) & ((size)-1); \\\n\t  n <= end ? n : end+1;})\n\n#endif /* _LINUX_CIRC_BUF_H  */\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/circ_buf.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-de968b41b8ae20a4",
+    "path": "include/linux/circ_buf.h",
+    "title": "순환 버퍼: 한 칸을 비우는 이유와 연속 구간 계산",
+    "area": "자료구조 · 원형 큐 · 모듈러 산술 · 비트 마스크 · 동시성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "구조체와 네 매크로 전체를 인덱스 예제로 분석합니다.",
+    "guide": [
+      "2의 거듭제곱 크기에서 마스크로 순환 거리를 계산하되 빈 상태와 가득 찬 상태를 구분할 한 칸을 남깁니다.",
+      "생산자·소비자 큐에서 전체 여유량과 한 번에 복사할 연속 길이를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일의 전체 구성",
+        "text": "GPL-2.0 표시, 관련 문서 경로, include guard, circ_buf 구조체, 네 계산 매크로가 전부입니다. 구조체는 char 포인터 buf와 int head, tail만 가집니다. size 필드나 소유권 정보는 없으므로 크기 관리와 메모리 할당·해제는 호출자 책임입니다."
+      },
+      {
+        "title": "인덱스와 전제",
+        "text": "head는 다음 삽입 위치, tail은 다음 제거 위치입니다. 이 표현에서는 양의 2의 거듭제곱 크기와 범위 안의 인덱스를 사용합니다. size-1과 AND하여 끝에서 0으로 돌아오는 나머지를 계산합니다. 임의 크기의 나머지 연산을 대체하는 공식은 아닙니다. size=1은 저장 가능한 원소가 0개인 퇴화한 경우입니다."
+      },
+      {
+        "title": "사용량 CIRC_CNT",
+        "text": "식은 (head-tail)&(size-1)입니다. size=8, head=2, tail=6이면 위치 6,7,0,1에 있는 4개를 셉니다. head가 tail보다 작다고 비어 있는 것이 아닙니다. 정상 상태에서 반환 범위는 0부터 size-1이며 head==tail이면 0입니다."
+      },
+      {
+        "title": "여유량 CIRC_SPACE",
+        "text": "CIRC_CNT(tail,head+1,size)로 정의하여 한 칸을 예약합니다. 같은 순간의 유효한 head와 tail에 대해 사용량+여유량=size-1입니다. size=8이면 최대 7개만 저장합니다. head를 한 바퀴 돌려 tail과 같게 만들면 가득 참과 비어 있음이 충돌하므로 이 API는 그런 삽입을 허용하는 설계가 아닙니다."
+      },
+      {
+        "title": "읽을 연속 구간",
+        "text": "CIRC_CNT_TO_END는 end=size-tail, n=(head+end)&(size-1)을 구하고 n과 end 중 작은 값을 반환합니다. n은 전체 사용량, end는 물리적 배열 끝까지의 길이입니다. size=8, head=2, tail=6에서는 전체 4개 중 6,7 두 개만 연속으로 읽을 수 있습니다. 나머지는 배열 처음의 별도 구간입니다."
+      },
+      {
+        "title": "쓸 연속 구간",
+        "text": "CIRC_SPACE_TO_END는 end=size-1-head, n=(end+tail)&(size-1)을 구해 n<=end이면 n, 아니면 end+1을 반환합니다. n은 전체 여유량이며 물리적 끝까지의 길이는 end+1입니다. size=8, head=6, tail=2이면 여유는 3개지만 6,7 두 개만 한 번에 쓸 수 있습니다. tail=0이면 예약할 마지막 빈 칸 때문에 배열 끝까지 모두 사용할 수 없습니다."
+      },
+      {
+        "title": "GNU C 표현식과 평가 횟수",
+        "text": "TO_END 두 매크로는 ({ ... }) 형태의 GNU C statement expression이며 마지막 조건식이 값이 됩니다. int 임시 변수 end와 n에 중간 결과를 저장하고 head와 tail 각각을 한 번만 평가합니다. size는 두 번 나타납니다. 이 형태가 표준 C의 일반 함수와 같거나 모든 인자를 한 번만 평가한다고 설명하면 안 됩니다. 부작용 없는 값과 이 표현에 맞는 크기를 전달하는 것이 안전합니다."
+      },
+      {
+        "title": "동시성 보장의 경계",
+        "text": "head와 tail을 반복 평가하지 않는 것은 한 매크로 안에서 서로 다른 시점의 같은 인덱스를 재사용하는 문제를 줄입니다. 두 인덱스를 하나의 원자적 스냅샷으로 읽는다는 뜻은 아닙니다. 이 헤더에는 READ_ONCE, acquire/release, lock, 원자적 갱신이 없습니다. 데이터 복사와 인덱스 공개 순서는 호출자가 별도로 보장합니다."
+      },
+      {
+        "title": "복잡도와 표현의 한계",
+        "text": "네 연산은 큐 원소 수와 무관한 고정 개수 산술이므로 O(1)입니다. 메모리 이동이나 head/tail 갱신도 직접 하지 않습니다. unsigned 무한 증가 카운터나 별도 full 플래그를 쓰는 다른 ring 설계와 혼동하지 않습니다. 매우 큰 값의 int 중간 산술이나 잘못된 인덱스를 검증하는 방어 코드도 이 파일에는 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "size=8, head=2, tail=6일 때 사용량과 연속 읽기 길이는?",
+        "options": [
+          "사용량 4개, 연속 읽기 2개이다",
+          "사용량 0개, 연속 읽기 0개이다"
+        ],
+        "answer": 0,
+        "explanation": "사용 위치는 6,7,0,1입니다. CIRC_CNT는 순환 거리 4를, TO_END는 배열 끝 전까지의 두 위치를 반환합니다."
+      },
+      {
+        "prompt": "길이 8의 버퍼에서 이 규칙으로 저장 가능한 최대 원소 수는?",
+        "options": [
+          "8개이다",
+          "7개이다"
+        ],
+        "answer": 1,
+        "explanation": "한 칸을 비워 head==tail을 빈 상태로 고정합니다. 따라서 용량은 물리적 크기보다 하나 작습니다."
+      },
+      {
+        "prompt": "size=8, head=6, tail=2일 때 전체 여유와 연속 쓰기 길이는?",
+        "options": [
+          "전체 3개, 연속 2개이다",
+          "전체 3개, 연속 3개이다"
+        ],
+        "answer": 0,
+        "explanation": "삽입 가능 위치는 6,7,0이며 1은 빈 칸으로 남겨야 합니다. 배열 끝을 넘지 않는 첫 구간은 두 개입니다."
+      },
+      {
+        "prompt": "CIRC_CNT_TO_END가 head와 tail을 한 번씩 읽으면 메모리 장벽이 필요 없는가?",
+        "options": [
+          "그렇다. int 임시 변수가 acquire를 제공한다",
+          "아니다. 값 계산과 데이터 공개 순서 보장은 별개이다"
+        ],
+        "answer": 1,
+        "explanation": "statement expression의 지역 변수는 동기화 연산이 아닙니다. 생산자가 데이터보다 head를 먼저 공개하지 않도록 별도 계약이 필요합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * See Documentation/core-api/circular-buffers.rst for more information.\n */\n\n#ifndef _LINUX_CIRC_BUF_H\n#define _LINUX_CIRC_BUF_H 1\n\nstruct circ_buf {\n\tchar *buf;\n\tint head;\n\tint tail;\n};\n\n/* Return count in buffer.  */\n#define CIRC_CNT(head,tail,size) (((head) - (tail)) & ((size)-1))\n\n/* Return space available, 0..size-1.  We always leave one free char\n   as a completely full buffer has head == tail, which is the same as\n   empty.  */\n#define CIRC_SPACE(head,tail,size) CIRC_CNT((tail),((head)+1),(size))\n\n/* Return count up to the end of the buffer.  Carefully avoid\n   accessing head and tail more than once, so they can change\n   underneath us without returning inconsistent results.  */\n#define CIRC_CNT_TO_END(head,tail,size) \\\n\t({int end = (size) - (tail); \\\n\t  int n = ((head) + end) & ((size)-1); \\\n\t  n < end ? n : end;})\n\n/* Return space available up to the end of the buffer.  */\n#define CIRC_SPACE_TO_END(head,tail,size) \\\n\t({int end = (size) - 1 - (head); \\\n\t  int n = (end + (tail)) & ((size)-1); \\\n\t  n <= end ? n : end+1;})\n\n#endif /* _LINUX_CIRC_BUF_H  */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "ea561057123dc1c300014d8181ac40dde7b85cb479314ebac3101a2a6f4e5cbf",
+      "scope": "whole-file",
+      "line_count": 37,
+      "authoring_source": "course/file_units/circular_buffers.py",
+      "sections": [
+        "파일의 전체 구성",
+        "인덱스와 전제",
+        "사용량 CIRC_CNT",
+        "여유량 CIRC_SPACE",
+        "읽을 연속 구간",
+        "쓸 연속 구간",
+        "GNU C 표현식과 평가 횟수",
+        "동시성 보장의 경계",
+        "복잡도와 표현의 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/circ_buf.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "여덟 칸을 원처럼 이어 놓고 물건을 넣고 꺼내 봅시다. 빈 상태를 알아보기 위해 한 칸은 꼭 비워 둡니다.",
+    "meaning": "순환 버퍼의 전체 개수와 배열 끝까지 이어진 개수를 구분합니다.",
+    "exercise": "크기 8, head=2, tail=6에서 찬 칸 6·7·0·1을 그려 보세요."
+  },
+  "goal": "순환 버퍼의 전체 개수와 배열 끝까지 이어진 개수를 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "크기 8, head=2, tail=6에서 찬 칸 6·7·0·1을 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "4b0af61f7a91dd380b5307a5f5a5091e4dd7cb6df1910d7f9e4b6296b391e3bb",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

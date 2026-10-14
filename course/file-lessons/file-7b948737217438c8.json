@@ -5,71 +5,85 @@
   "area": "조건부 컴파일 · fallback · NULL 계약 · 인터페이스 · 선언 문맥",
   "track": "files",
   "kind": "kernel",
-  "intro": "세 개의 독립적인 매크로 조건과 기본 inline 동작을 전체 범위로 읽습니다.",
+  "intro": "generic vsyscall 헤더는 플랫폼이 제공하지 않은 세 도우미를 각각 기본 함수로 채워요. 기본값은 NULL 또는 빈 동작이에요.",
   "guide": [
-    "기본 hook이 존재한다는 사실과 모든 사용 문맥에서 유효한 기능을 제공한다는 것은 다릅니다.",
-    "플랫폼 override가 필요한 함수와 선택적인 빈 hook을 구분합니다."
+    "hook은 공통 코드 중 플랫폼이 자기 동작을 넣을 수 있는 연결 지점이에요. override는 그 기본 동작을 플랫폼 구현으로 대신하는 뜻이에요.",
+    "NULL은 여기서 유효한 데이터 주소가 없음을 나타내요. 빈 void 함수는 실행할 내용도 결과값도 없는 기본 동작이에요.",
+    "함수 이름에 update나 sync가 있어도 실제로 무엇을 하는지는 본문을 읽어 확인해야 해요."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일과 문맥",
-      "text": "GPL-2.0과 guard, __ASSEMBLY__ 제외 조건 안에 세 #ifndef와 static inline 기본 함수가 있습니다. 자체 include는 없으므로 타입과 NULL, __always_inline을 포함 문맥이 제공해야 합니다. 세 함수의 대체 여부를 각각 독립적으로 검사합니다."
+      "title": "세 독립 조건으로 구성",
+      "text": "중복 포함 방지 조건과 어셈블리 제외 조건 안에 세 #ifndef와 기본 inline 함수가 있어요. 자체 include가 없어서 타입, NULL, __always_inline은 포함하는 문맥에서 준비해야 해요. 세 함수는 각각 별도로 대체 여부를 판단해요."
     },
     {
-      "title": "기본 데이터 getter",
-      "text": "__arch_get_k_vdso_data 매크로가 없으면 같은 이름의 함수가 NULL을 반환합니다. 공유 데이터 저장소를 자동 할당하는 fallback이 아닙니다. 반환 포인터를 곧바로 역참조하는 공통 구현과 연결하려면 실제 아키텍처 데이터 제공 및 구성 조건이 맞아야 합니다."
+      "title": "기본 getter는 NULL",
+      "text": "__arch_get_k_vdso_data 매크로가 없으면 같은 이름의 함수가 NULL을 반환해요. 공유 데이터 페이지를 자동으로 확보하는 대체 구현이 아니에요. 그 포인터가 가리키는 값을 바로 읽는 공통 코드와 연결하려면 실제 데이터 제공과 구성 조건이 맞아야 해요."
     },
     {
-      "title": "빈 추가 갱신",
-      "text": "__arch_update_vsyscall 매크로가 없으면 vdso_data *와 timekeeper *를 받는 빈 void inline을 제공합니다. 추가 플랫폼 작업이 없는 경우의 기본 동작입니다. 포인터 인자를 받는다고 반드시 필드를 복사하거나 NULL 검사를 하는 것은 아닙니다."
+      "title": "추가 갱신의 기본은 빈 동작",
+      "text": "__arch_update_vsyscall 매크로가 없으면 vdso_data와 timekeeper 포인터를 받는 빈 void 함수를 줘요. 플랫폼별 추가 작업이 필요 없는 경우의 기본이에요. 포인터를 받는다고 필드를 복사하거나 NULL 검사까지 하는 것은 아니에요."
     },
     {
-      "title": "빈 데이터 동기화",
-      "text": "__arch_sync_vdso_data 매크로가 없으면 vdso_data *를 받는 빈 void inline을 제공합니다. 여기에는 CPU memory barrier나 cache flush가 없습니다. 필요한 플랫폼별 동기화는 override와 상위 게시 규약에서 확인해야 합니다."
+      "title": "동기화 이름에도 본문은 비어 있어요",
+      "text": "__arch_sync_vdso_data가 없을 때 주는 함수도 비어 있어요. CPU의 메모리 관찰 순서를 맞추는 장벽이나 캐시 내용을 처리하는 flush는 없어요. 플랫폼이 필요로 하는 실제 동기화는 대체 함수와 상위의 자료 공개 규칙에서 확인해야 해요."
     },
     {
-      "title": "매크로 검사와 포함 순서",
-      "text": "#ifndef는 C 함수 정의를 검색하지 않습니다. 아키텍처가 구현을 제공하면 generic 포함 전에 대응 매크로도 준비하여 기본 함수를 생략시키는 규약입니다. 이 파일은 RNG 데이터 getter나 vdso_update_begin/end를 정의하지 않으므로 비슷한 이름의 다른 헤더 범위와 혼동하지 않습니다."
+      "title": "매크로와 include 순서",
+      "text": "#ifndef는 C 함수 정의를 찾지 않아요. 아키텍처 구현이 있으면 generic 포함 전에 대응 매크로도 준비해야 기본 함수를 생략해요. 이 파일에는 RNG 데이터 getter나 vdso_update_begin/end 정의가 없어요. 이름이 비슷한 다른 헤더의 기능을 여기에 있다고 보태지 않아요."
     }
   ],
   "questions": [
     {
-      "prompt": "기본 __arch_get_k_vdso_data는 무엇을 반환하는가?",
+      "prompt": "기본 데이터 getter는 무엇을 반환하나요?",
       "options": [
+        "NULL을 반환해요.",
+        "자동 할당한 데이터 페이지 주소를 반환해요."
+      ],
+      "answer": 0,
+      "explanation": "기본 함수 존재는 실제 데이터 준비 완료를 뜻하지 않아요. 본문은 return NULL이에요.",
+      "original_prompt": "기본 __arch_get_k_vdso_data는 무엇을 반환하는가?",
+      "original_options": [
         "NULL이다",
         "자동 할당된 데이터 페이지 주소이다"
       ],
-      "answer": 0,
-      "explanation": "실제 본문은 return NULL입니다. fallback 존재가 데이터 준비 완료를 뜻하지 않습니다."
+      "original_explanation": "실제 본문은 return NULL입니다. fallback 존재가 데이터 준비 완료를 뜻하지 않습니다."
     },
     {
-      "prompt": "기본 __arch_sync_vdso_data에 메모리 장벽이 있는가?",
+      "prompt": "기본 sync 함수에는 메모리 장벽이 있나요?",
       "options": [
+        "네. sync라는 이름이 장벽을 자동 생성해요.",
+        "아니요. 본문이 빈 함수예요."
+      ],
+      "answer": 1,
+      "explanation": "필요한 플랫폼 작업은 대체 구현을 봐야 해요. 이름만으로 동작이 생기지 않아요.",
+      "original_prompt": "기본 __arch_sync_vdso_data에 메모리 장벽이 있는가?",
+      "original_options": [
         "있다. sync라는 이름이 장벽 명령을 자동 생성한다",
         "없다. 빈 함수이다"
       ],
-      "answer": 1,
-      "explanation": "함수 이름과 실제 구현을 구분해야 합니다. 플랫폼 요구는 override를 확인합니다."
+      "original_explanation": "함수 이름과 실제 구현을 구분해야 합니다. 플랫폼 요구는 override를 확인합니다."
     },
     {
-      "prompt": "아키텍처 getter만 override하면 update와 sync의 기본 정의도 모두 사라지는가?",
+      "prompt": "getter만 대체하면 update와 sync 기본 정의도 사라지나요?",
       "options": [
+        "아니요. 각각 독립된 조건으로 선택해요.",
+        "네. 하나만 대체해도 전부 꺼져요."
+      ],
+      "answer": 0,
+      "explanation": "세 #ifndef가 따로 있으므로 필요한 도우미만 바꿀 수 있어요.",
+      "original_prompt": "아키텍처 getter만 override하면 update와 sync의 기본 정의도 모두 사라지는가?",
+      "original_options": [
         "아니다. 각각 별도 #ifndef로 선택된다",
         "그렇다. 하나의 override가 전체 기본 구현을 비활성화한다"
       ],
-      "answer": 0,
-      "explanation": "세 독립 조건문이 있으므로 필요한 hook만 대체하고 다른 기본값은 유지할 수 있습니다."
+      "original_explanation": "세 독립 조건문이 있으므로 필요한 hook만 대체하고 다른 기본값은 유지할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "getter만 아키텍처 매크로로 지정했을 때 나머지 update와 sync가 어떻게 되는지 세 칸에 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_VSYSCALL_H\n#define __ASM_GENERIC_VSYSCALL_H\n\n#ifndef __ASSEMBLY__\n\n#ifndef __arch_get_k_vdso_data\nstatic __always_inline struct vdso_data *__arch_get_k_vdso_data(void)\n{\n\treturn NULL;\n}\n#endif /* __arch_get_k_vdso_data */\n\n#ifndef __arch_update_vsyscall\nstatic __always_inline void __arch_update_vsyscall(struct vdso_data *vdata,\n\t\t\t\t\t\t   struct timekeeper *tk)\n{\n}\n#endif /* __arch_update_vsyscall */\n\n#ifndef __arch_sync_vdso_data\nstatic __always_inline void __arch_sync_vdso_data(struct vdso_data *vdata)\n{\n}\n#endif /* __arch_sync_vdso_data */\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_GENERIC_VSYSCALL_H */\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/vdso/vsyscall.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-7b948737217438c8",
+    "path": "include/asm-generic/vdso/vsyscall.h",
+    "title": "vDSO 기본 hook: NULL getter와 빈 update·sync",
+    "area": "조건부 컴파일 · fallback · NULL 계약 · 인터페이스 · 선언 문맥",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "세 개의 독립적인 매크로 조건과 기본 inline 동작을 전체 범위로 읽습니다.",
+    "guide": [
+      "기본 hook이 존재한다는 사실과 모든 사용 문맥에서 유효한 기능을 제공한다는 것은 다릅니다.",
+      "플랫폼 override가 필요한 함수와 선택적인 빈 hook을 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일과 문맥",
+        "text": "GPL-2.0과 guard, __ASSEMBLY__ 제외 조건 안에 세 #ifndef와 static inline 기본 함수가 있습니다. 자체 include는 없으므로 타입과 NULL, __always_inline을 포함 문맥이 제공해야 합니다. 세 함수의 대체 여부를 각각 독립적으로 검사합니다."
+      },
+      {
+        "title": "기본 데이터 getter",
+        "text": "__arch_get_k_vdso_data 매크로가 없으면 같은 이름의 함수가 NULL을 반환합니다. 공유 데이터 저장소를 자동 할당하는 fallback이 아닙니다. 반환 포인터를 곧바로 역참조하는 공통 구현과 연결하려면 실제 아키텍처 데이터 제공 및 구성 조건이 맞아야 합니다."
+      },
+      {
+        "title": "빈 추가 갱신",
+        "text": "__arch_update_vsyscall 매크로가 없으면 vdso_data *와 timekeeper *를 받는 빈 void inline을 제공합니다. 추가 플랫폼 작업이 없는 경우의 기본 동작입니다. 포인터 인자를 받는다고 반드시 필드를 복사하거나 NULL 검사를 하는 것은 아닙니다."
+      },
+      {
+        "title": "빈 데이터 동기화",
+        "text": "__arch_sync_vdso_data 매크로가 없으면 vdso_data *를 받는 빈 void inline을 제공합니다. 여기에는 CPU memory barrier나 cache flush가 없습니다. 필요한 플랫폼별 동기화는 override와 상위 게시 규약에서 확인해야 합니다."
+      },
+      {
+        "title": "매크로 검사와 포함 순서",
+        "text": "#ifndef는 C 함수 정의를 검색하지 않습니다. 아키텍처가 구현을 제공하면 generic 포함 전에 대응 매크로도 준비하여 기본 함수를 생략시키는 규약입니다. 이 파일은 RNG 데이터 getter나 vdso_update_begin/end를 정의하지 않으므로 비슷한 이름의 다른 헤더 범위와 혼동하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "기본 __arch_get_k_vdso_data는 무엇을 반환하는가?",
+        "options": [
+          "NULL이다",
+          "자동 할당된 데이터 페이지 주소이다"
+        ],
+        "answer": 0,
+        "explanation": "실제 본문은 return NULL입니다. fallback 존재가 데이터 준비 완료를 뜻하지 않습니다."
+      },
+      {
+        "prompt": "기본 __arch_sync_vdso_data에 메모리 장벽이 있는가?",
+        "options": [
+          "있다. sync라는 이름이 장벽 명령을 자동 생성한다",
+          "없다. 빈 함수이다"
+        ],
+        "answer": 1,
+        "explanation": "함수 이름과 실제 구현을 구분해야 합니다. 플랫폼 요구는 override를 확인합니다."
+      },
+      {
+        "prompt": "아키텍처 getter만 override하면 update와 sync의 기본 정의도 모두 사라지는가?",
+        "options": [
+          "아니다. 각각 별도 #ifndef로 선택된다",
+          "그렇다. 하나의 override가 전체 기본 구현을 비활성화한다"
+        ],
+        "answer": 0,
+        "explanation": "세 독립 조건문이 있으므로 필요한 hook만 대체하고 다른 기본값은 유지할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_GENERIC_VSYSCALL_H\n#define __ASM_GENERIC_VSYSCALL_H\n\n#ifndef __ASSEMBLY__\n\n#ifndef __arch_get_k_vdso_data\nstatic __always_inline struct vdso_data *__arch_get_k_vdso_data(void)\n{\n\treturn NULL;\n}\n#endif /* __arch_get_k_vdso_data */\n\n#ifndef __arch_update_vsyscall\nstatic __always_inline void __arch_update_vsyscall(struct vdso_data *vdata,\n\t\t\t\t\t\t   struct timekeeper *tk)\n{\n}\n#endif /* __arch_update_vsyscall */\n\n#ifndef __arch_sync_vdso_data\nstatic __always_inline void __arch_sync_vdso_data(struct vdso_data *vdata)\n{\n}\n#endif /* __arch_sync_vdso_data */\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_GENERIC_VSYSCALL_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1632c1d6270f433c09f72a34d3516ef56480b6d10c33bc288c19f08ae273fdbe",
+      "scope": "whole-file",
+      "line_count": 29,
+      "authoring_source": "course/file_units/x86_vdso_hooks.py",
+      "sections": [
+        "전체 파일과 문맥",
+        "기본 데이터 getter",
+        "빈 추가 갱신",
+        "빈 데이터 동기화",
+        "매크로 검사와 포함 순서"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/asm-generic/vdso/vsyscall.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "건물별 특별 안내가 없을 때 쓸 빈 안내 양식이 있어요. 양식이 준비됐다고 자료실까지 만들어진 것은 아니에요.",
+    "meaning": "generic vsyscall 헤더는 플랫폼이 제공하지 않은 세 도우미를 각각 기본 함수로 채워요. 기본값은 NULL 또는 빈 동작이에요.",
+    "exercise": "getter만 아키텍처 매크로로 지정했을 때 나머지 update와 sync가 어떻게 되는지 세 칸에 적어 보세요."
+  },
+  "goal": "generic vsyscall 헤더는 플랫폼이 제공하지 않은 세 도우미를 각각 기본 함수로 채워요. 기본값은 NULL 또는 빈 동작이에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "getter만 아키텍처 매크로로 지정했을 때 나머지 update와 sync가 어떻게 되는지 세 칸에 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "77e3145d458c58a70cf2d2255e717bae8013ab65a07e8856c2a1377059766566",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

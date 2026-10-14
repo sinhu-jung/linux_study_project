@@ -5,113 +5,139 @@
   "area": "잠금 진단 · 연결 리스트 · 메모리 수명 · 장치 자원 관리",
   "track": "files",
   "kind": "kernel",
-  "intro": "mutex와 대기자에 진단용 상태를 기록하고 잘못된 사용을 경고하는 구현입니다.",
+  "intro": "mutex 진단 함수의 경고·표시 기록과 실제 잠금·목록 조작·메모리 해제를 구별합니다.",
   "guide": [
-    "자기 주소 magic, 메모리 패턴, task의 blocked_on을 사용해 수명과 연결 상태의 불일치를 드러냅니다. 검사 함수가 실제 잠금 획득·리스트 삽입·메모리 해제를 대신하는 것은 아닙니다.",
-    "mutex 본체와 진단 hook의 책임을 구분하는 데 사용합니다. 경고가 없다는 사실만으로 모든 경쟁이나 교착 상태가 없다고 증명할 수는 없습니다."
+    "mutex는 한 작업만 들어가게 하며 기다리는 작업은 잠들 수 있는 잠금입니다. 이 파일은 그 사용을 점검합니다.",
+    "magic은 자기 주소를 담는 확인표이고 진단 패턴은 잘못 다시 사용했을 때 눈에 띄게 메모리를 채우는 값입니다.",
+    "경고는 잘못된 상태를 알릴 뿐 잠금을 풀거나 상태를 자동 복구하지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "기여자·저작권·GPL 설명, mutex/delay/device/export/poison/sched/spinlock/kallsyms/interrupt/debug_locks 및 내부 mutex.h 포함, 대기자 진단 함수 다섯 개, unlock/init 검사, 장치 관리 해제 callback과 등록, mutex_destroy로 구성됩니다. __devm_mutex_init과 mutex_destroy만 이 파일에서 GPL export합니다."
+      "title": "점검 함수들의 구성",
+      "text": "저작권과 GPL 설명, mutex·지연·장치·내보내기·오염값·작업·스핀잠금·심볼·인터럽트·잠금진단 헤더와 내부 mutex.h를 포함합니다. 대기자 진단 다섯 함수, 해제·초기화 검사, 장치 정리 등록과 destroy가 있습니다. 여기서 GPL용으로 내보내는 것은 __devm_mutex_init과 mutex_destroy 두 개입니다."
     },
     {
-      "title": "대기자 진단 초기화",
-      "text": "debug_mutex_lock_common은 wait_lock 보유를 전제로 waiter 전체를 MUTEX_DEBUG_INIT 패턴으로 채운 뒤 magic을 자기 주소로, list를 빈 자기 연결로, ww_ctx를 MUTEX_POISON_WW_CTX로 설정합니다. task 등 나머지 실제 동작 필드는 이 함수가 완성하지 않습니다. memset이 유효한 대기자 초기화의 모든 단계를 대체한다고 보면 안 됩니다."
+      "title": "대기자에 확인표 붙이기",
+      "text": "lock_common은 wait_lock을 보유한 상태에서 불러야 합니다. 대기자 전체를 MUTEX_DEBUG_INIT 패턴으로 채우고 magic에는 자기 주소, list에는 빈 자기 연결, ww_ctx에는 오염 표시값을 넣습니다. task 등 실제 동작에 필요한 나머지 칸까지 완성하지는 않으므로 이 패턴 채우기만으로 초기화 전체가 끝난 것은 아닙니다."
     },
     {
-      "title": "깨우기 직전 검사",
-      "text": "debug_mutex_wake_waiter는 wait_lock 보유를 lockdep_assert_held로 확인하고, mutex 대기 목록이 비었는지, waiter magic이 자기 주소인지, waiter list가 비었는지를 경고 조건으로 검사합니다. 태스크를 실제 깨우거나 큐에서 제거하지 않습니다. 이 불변식들은 호출 위치에서 성립해야 하는 조건입니다."
+      "title": "깨우기 전 줄 검사",
+      "text": "wake_waiter는 wait_lock 보유를 확인하고 전체 대기 줄이 비었는지, magic이 자기 주소와 다른지, 대기자의 연결이 빈지를 경고 조건으로 검사합니다. 실제 작업을 깨우거나 줄에서 빼는 함수는 아닙니다. 호출한 시점에 성립해야 하는 약속을 검사합니다."
     },
     {
-      "title": "대기자 종료 패턴",
-      "text": "debug_mutex_free_waiter는 항목이 아직 연결되어 있으면 경고하고 전체를 MUTEX_DEBUG_FREE로 덮습니다. 이름에 free가 있지만 allocator에 메모리를 반환하는 호출은 없습니다. 스택 또는 다른 저장 영역의 대기자 재사용 오류를 드러내는 진단 처리와 물리적 해제를 구별합니다."
+      "title": "사용 종료를 눈에 띄게 표시",
+      "text": "free_waiter는 아직 줄에 연결되어 있으면 경고하고 대기자 전체를 MUTEX_DEBUG_FREE 값으로 덮습니다. kfree 같은 실제 메모리 반환 호출은 없습니다. 스택 등의 보관함을 잘못 다시 쓰는 일을 드러내는 표시와 물리적 메모리 해제는 다릅니다."
     },
     {
-      "title": "등록 진단",
-      "text": "debug_mutex_add_waiter는 wait_lock 보유를 검사하고 task->blocked_on=waiter를 기록합니다. 본문에는 list_add가 없습니다. 실제 큐 연결과 진단용 blocked_on 기록은 서로 다른 단계이며 함수 이름만으로 자료구조 변경 범위를 추정하지 않습니다."
+      "title": "누가 무엇을 기다리는지 기록",
+      "text": "add_waiter는 wait_lock 보유를 확인하고 task->blocked_on에 waiter를 적습니다. 이 작업이 어떤 대기 항목에 막혔는지 진단용 연결을 만드는 것입니다. list_add가 없으므로 실제 줄에 넣는 일은 다른 단계에서 수행합니다."
     },
     {
-      "title": "제거 진단",
-      "text": "debug_mutex_remove_waiter는 waiter list가 빈 상태인지, waiter->task가 인자 task와 다른지, task->blocked_on이 waiter와 다른지 검사합니다. 이후 blocked_on=NULL, waiter list 자기 연결 초기화, waiter->task=NULL을 설정합니다. INIT_LIST_HEAD는 이웃 노드를 이어주는 list_del의 대체가 아니므로 실제 목록 연결 수정은 호출 측 절차와 함께 확인해야 합니다."
+      "title": "기다림 기록을 지우기",
+      "text": "remove_waiter는 대기자 줄이 비었는지, waiter->task와 인자 task가 다른지, task->blocked_on이 waiter와 다른지 검사합니다. 그 뒤 blocked_on=NULL, 대기자 list의 자기 연결, waiter->task=NULL을 설정합니다. 자기 연결 초기화는 양옆 노드를 이어 주는 list_del을 대신하지 않으므로 실제 줄 제거 순서는 호출 쪽과 함께 봅니다."
     },
     {
-      "title": "unlock 진단의 정확한 조건",
-      "text": "debug_locks가 켜져 있으면 lock->magic!=lock을 검사하고 wait_list.prev와 next가 둘 다 NULL인 경우를 경고합니다. 이 조건은 논리 AND이므로 한쪽만 NULL인 모든 손상을 검출하는 포괄적 검사라고 설명하면 안 됩니다. 본문에 소유자 변경이나 spin unlock은 없습니다."
+      "title": "해제 진단의 좁은 조건",
+      "text": "debug_locks가 켜지면 magic이 자기 주소와 다른지 검사하고 wait_list의 prev와 next가 둘 다 NULL일 때 경고합니다. &&는 둘 모두라는 뜻입니다. 한쪽만 NULL인 손상을 전부 잡는 검사는 아닙니다. 여기서는 소유자를 바꾸거나 실제 잠금을 풀지 않습니다."
     },
     {
-      "title": "mutex 진단 초기화",
-      "text": "CONFIG_DEBUG_LOCK_ALLOC이면 debug_check_no_locks_freed로 해당 메모리 범위의 보유 잠금 재초기화를 검사하고 lockdep_init_map_wait에 name/key와 LD_WAIT_SLEEP을 전달합니다. 설정과 무관하게 마지막에는 lock->magic=lock을 기록합니다. mutex의 모든 본체 필드를 초기화하는 일반 mutex_init과 역할이 다릅니다."
+      "title": "진단 정보 초기화",
+      "text": "CONFIG_DEBUG_LOCK_ALLOC이 켜지면 해당 메모리 안에 보유한 잠금을 다시 초기화하는지 검사하고 이름·분류 키·잠들 수 있다는 LD_WAIT_SLEEP 정보를 진단 지도에 등록합니다. 설정과 무관하게 끝에는 magic에 자기 주소를 넣습니다. 일반 mutex_init처럼 모든 본체 칸을 초기화하는 함수는 아닙니다."
     },
     {
-      "title": "장치 관리 정리 등록",
-      "text": "devm_mutex_release는 void 포인터를 mutex_destroy에 넘기는 callback입니다. __devm_mutex_init은 devm_add_action_or_reset에 이 callback과 lock을 등록하고 반환값을 그대로 전달합니다. 이 함수 자체에는 mutex_init 호출이 없으며 이름만 보고 mutex 본체 초기화까지 담당한다고 오해하면 안 됩니다. 자원 정리 등록과 실제 잠금 초기화를 구별합니다."
+      "title": "장치 수명에 맞춰 정리 예약",
+      "text": "devm_mutex_release는 나중에 불리는 정리 함수로 전달받은 주소를 mutex_destroy에 넘깁니다. __devm_mutex_init은 devm_add_action_or_reset에 이 함수와 잠금을 등록하고 결과를 그대로 반환합니다. 본문에 mutex_init은 없습니다. 정리 예약과 실제 잠금 초기화를 구별합니다."
     },
     {
-      "title": "destroy의 의미",
-      "text": "mutex_destroy는 mutex_is_locked이면 경고한 뒤 magic=NULL로 표시합니다. 문서는 호출 시 잠겨 있지 않아야 하고 이후 사용은 금지라고 명시합니다. 잠금을 기다려 해제하거나 대기자를 깨우거나 mutex 메모리를 free하지 않습니다. 경고가 떴다고 함수가 조기 반환하는 코드도 아닙니다."
+      "title": "destroy가 하는 것",
+      "text": "mutex_destroy는 잠겨 있으면 경고한 뒤 magic을 NULL로 만듭니다. 호출할 때 잠금은 풀려 있어야 하고 이후 사용은 금지입니다. 주인이 풀 때까지 기다리거나 대기자를 깨우거나 보관함을 반환하지 않습니다. 경고 뒤 곧바로 돌아가는 분기도 없으므로 잘못 호출했다고 상태가 복구되지 않습니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "오염 패턴, 자기 주소 불변식, 태스크와 대기자 간 교차 참조, 자료구조 조작과 진단의 분리, 조건부 컴파일, 장치 수명과 cleanup callback을 학습합니다. 이 수업은 원문 각 함수의 검사 범위를 설명하며 실제 모든 오용을 실행하여 검출률을 증명한 것은 아닙니다."
+      "title": "검사와 실제 동작의 분업",
+      "text": "오염 패턴, 자기 주소 확인표, 작업과 대기자의 서로 가리키는 관계, 설정별 진단과 장치 정리를 배웁니다. 이 수업은 각 함수의 검사 범위를 읽은 것이며 모든 잘못된 사용을 실행해 얼마나 검출하는지 시험한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "debug_mutex_free_waiter는 kfree로 대기자 메모리를 해제하는가?",
+      "prompt": "free_waiter는 kfree로 대기자 메모리를 돌려주나요?",
       "options": [
+        "아니요. 연결을 검사하고 진단 패턴을 채웁니다.",
+        "네. free라는 이름이므로 메모리를 반환합니다."
+      ],
+      "answer": 0,
+      "explanation": "본문은 경고 검사와 memset뿐입니다. 사용 종료 표시와 실제 보관함 해제를 구별합니다.",
+      "original_prompt": "debug_mutex_free_waiter는 kfree로 대기자 메모리를 해제하는가?",
+      "original_options": [
         "아니다. 연결 상태를 검사하고 진단 패턴으로 덮는다",
         "그렇다. 이름이 free이므로 allocator에 반환한다"
       ],
-      "answer": 0,
-      "explanation": "함수 본문은 DEBUG_LOCKS_WARN_ON과 memset뿐입니다. 진단용 수명 종료 표시와 실제 저장 영역의 해제를 구분해야 합니다."
+      "original_explanation": "함수 본문은 DEBUG_LOCKS_WARN_ON과 memset뿐입니다. 진단용 수명 종료 표시와 실제 저장 영역의 해제를 구분해야 합니다."
     },
     {
-      "prompt": "debug_mutex_add_waiter는 목록에 항목을 삽입하는가?",
+      "prompt": "add_waiter가 실제 줄에 항목을 넣나요?",
       "options": [
+        "네. 내부 list_add_tail이 넣습니다.",
+        "아니요. 잠금 보유 확인과 blocked_on 기록을 합니다."
+      ],
+      "answer": 1,
+      "explanation": "리스트 삽입 호출이 없습니다. 본체 알고리즘과 점검 함수의 책임을 따로 봅니다.",
+      "original_prompt": "debug_mutex_add_waiter는 목록에 항목을 삽입하는가?",
+      "original_options": [
         "그렇다. 내부 list_add_tail로 삽입한다",
         "아니다. 잠금 보유 확인과 blocked_on 기록을 한다"
       ],
-      "answer": 1,
-      "explanation": "이 함수에는 리스트 삽입 호출이 없습니다. 실제 mutex 알고리즘과 진단 hook이 맡는 역할을 따로 추적해야 합니다."
+      "original_explanation": "이 함수에는 리스트 삽입 호출이 없습니다. 실제 mutex 알고리즘과 진단 hook이 맡는 역할을 따로 추적해야 합니다."
     },
     {
-      "prompt": "unlock 진단이 prev 또는 next 중 하나만 NULL인 경우도 해당 조건으로 검출하는가?",
+      "prompt": "해제 진단의 NULL 검사는 prev나 next 한쪽만 비어도 잡나요?",
       "options": [
+        "아니요. 둘 다 NULL인지 AND로 검사합니다.",
+        "네. OR로 어느 한쪽만 NULL이어도 잡습니다."
+      ],
+      "answer": 0,
+      "explanation": "조건은 !prev && !next입니다. 실제 식보다 넓게 검사한다고 설명하면 안전성을 잘못 판단합니다.",
+      "original_prompt": "unlock 진단이 prev 또는 next 중 하나만 NULL인 경우도 해당 조건으로 검출하는가?",
+      "original_options": [
         "아니다. 두 포인터가 모두 NULL인지 AND로 검사한다",
         "그렇다. OR로 어느 한쪽 NULL도 검사한다"
       ],
-      "answer": 0,
-      "explanation": "원문 조건은 !prev && !next입니다. 검사 범위를 실제 논리식보다 넓게 설명하면 경고가 없는 상태의 안전성을 과대평가하게 됩니다."
+      "original_explanation": "원문 조건은 !prev && !next입니다. 검사 범위를 실제 논리식보다 넓게 설명하면 경고가 없는 상태의 안전성을 과대평가하게 됩니다."
     },
     {
-      "prompt": "잠긴 mutex를 mutex_destroy에 넘기면 자동으로 잠금을 풀어주는가?",
+      "prompt": "잠긴 mutex를 destroy하면 자동으로 풀어 주나요?",
       "options": [
+        "네. 소유자가 해제할 때까지 기다립니다.",
+        "아니요. 경고하고 magic을 NULL로 만듭니다."
+      ],
+      "answer": 1,
+      "explanation": "잠기지 않은 상태에서 호출해야 합니다. 이 함수에는 대기·해제·메모리 반환이 없습니다.",
+      "original_prompt": "잠긴 mutex를 mutex_destroy에 넘기면 자동으로 잠금을 풀어주는가?",
+      "original_options": [
         "그렇다. 소유자가 해제할 때까지 기다린다",
         "아니다. 경고하고 magic을 NULL로 만든다"
       ],
-      "answer": 1,
-      "explanation": "문서는 잠기지 않은 상태에서 호출할 것을 요구합니다. 함수에 대기·unlock·free가 없으며 경고가 사용 계약을 복구해주지는 않습니다."
+      "original_explanation": "문서는 잠기지 않은 상태에서 호출할 것을 요구합니다. 함수에 대기·unlock·free가 없으며 경고가 사용 계약을 복구해주지는 않습니다."
     },
     {
-      "prompt": "__devm_mutex_init 본문에서 mutex 본체도 초기화하는가?",
+      "prompt": "__devm_mutex_init은 잠금 본체도 초기화하나요?",
       "options": [
+        "아니요. 장치 관리 정리 동작을 등록합니다.",
+        "네. mutex_init을 호출한 뒤 등록합니다."
+      ],
+      "answer": 0,
+      "explanation": "본문은 devm_add_action_or_reset 호출 하나입니다. 이름만으로 전체 초기화 절차를 맡는다고 추측하지 않습니다.",
+      "original_prompt": "__devm_mutex_init 본문에서 mutex 본체도 초기화하는가?",
+      "original_options": [
         "아니다. 장치 관리 cleanup action을 등록한다",
         "그렇다. mutex_init을 호출한 뒤 등록한다"
       ],
-      "answer": 0,
-      "explanation": "본문은 devm_add_action_or_reset 결과를 반환하는 한 호출입니다. 함수 이름과 전체 호출 절차를 혼동하지 말아야 합니다."
+      "original_explanation": "본문은 devm_add_action_or_reset 결과를 반환하는 한 호출입니다. 함수 이름과 전체 호출 절차를 혼동하지 말아야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "free_waiter, add_waiter, destroy의 실제 본문을 읽고 이름으로 기대한 일과 수행하는 일을 비교해 보세요."
   },
   "annotated": "/*\n * Debugging code for mutexes\n *\n * Started by Ingo Molnar:\n *\n *  Copyright (C) 2004, 2005, 2006 Red Hat, Inc., Ingo Molnar <mingo@redhat.com>\n *\n * lock debugging, locking tree, deadlock detection started by:\n *\n *  Copyright (C) 2004, LynuxWorks, Inc., Igor Manyilov, Bill Huey\n *  Released under the General Public License (GPL).\n */\n#include <linux/mutex.h>\n#include <linux/delay.h>\n#include <linux/device.h>\n#include <linux/export.h>\n#include <linux/poison.h>\n#include <linux/sched.h>\n#include <linux/spinlock.h>\n#include <linux/kallsyms.h>\n#include <linux/interrupt.h>\n#include <linux/debug_locks.h>\n\n#include \"mutex.h\"\n\n/*\n * Must be called with lock->wait_lock held.\n */\nvoid debug_mutex_lock_common(struct mutex *lock, struct mutex_waiter *waiter)\n{\n\tmemset(waiter, MUTEX_DEBUG_INIT, sizeof(*waiter));\n\twaiter->magic = waiter;\n\tINIT_LIST_HEAD(&waiter->list);\n\twaiter->ww_ctx = MUTEX_POISON_WW_CTX;\n}\n\nvoid debug_mutex_wake_waiter(struct mutex *lock, struct mutex_waiter *waiter)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\tDEBUG_LOCKS_WARN_ON(list_empty(&lock->wait_list));\n\tDEBUG_LOCKS_WARN_ON(waiter->magic != waiter);\n\tDEBUG_LOCKS_WARN_ON(list_empty(&waiter->list));\n}\n\nvoid debug_mutex_free_waiter(struct mutex_waiter *waiter)\n{\n\tDEBUG_LOCKS_WARN_ON(!list_empty(&waiter->list));\n\tmemset(waiter, MUTEX_DEBUG_FREE, sizeof(*waiter));\n}\n\nvoid debug_mutex_add_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t    struct task_struct *task)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\n\t/* Mark the current thread as blocked on the lock: */\n\ttask->blocked_on = waiter;\n}\n\nvoid debug_mutex_remove_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t struct task_struct *task)\n{\n\tDEBUG_LOCKS_WARN_ON(list_empty(&waiter->list));\n\tDEBUG_LOCKS_WARN_ON(waiter->task != task);\n\tDEBUG_LOCKS_WARN_ON(task->blocked_on != waiter);\n\ttask->blocked_on = NULL;\n\n\tINIT_LIST_HEAD(&waiter->list);\n\twaiter->task = NULL;\n}\n\nvoid debug_mutex_unlock(struct mutex *lock)\n{\n\tif (likely(debug_locks)) {\n\t\tDEBUG_LOCKS_WARN_ON(lock->magic != lock);\n\t\tDEBUG_LOCKS_WARN_ON(!lock->wait_list.prev && !lock->wait_list.next);\n\t}\n}\n\nvoid debug_mutex_init(struct mutex *lock, const char *name,\n\t\t      struct lock_class_key *key)\n{\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\t/*\n\t * Make sure we are not reinitializing a held lock:\n\t */\n\tdebug_check_no_locks_freed((void *)lock, sizeof(*lock));\n\tlockdep_init_map_wait(&lock->dep_map, name, key, 0, LD_WAIT_SLEEP);\n#endif\n\tlock->magic = lock;\n}\n\nstatic void devm_mutex_release(void *res)\n{\n\tmutex_destroy(res);\n}\n\nint __devm_mutex_init(struct device *dev, struct mutex *lock)\n{\n\treturn devm_add_action_or_reset(dev, devm_mutex_release, lock);\n}\nEXPORT_SYMBOL_GPL(__devm_mutex_init);\n\n/***\n * mutex_destroy - mark a mutex unusable\n * @lock: the mutex to be destroyed\n *\n * This function marks the mutex uninitialized, and any subsequent\n * use of the mutex is forbidden. The mutex must not be locked when\n * this function is called.\n */\nvoid mutex_destroy(struct mutex *lock)\n{\n\tDEBUG_LOCKS_WARN_ON(mutex_is_locked(lock));\n\tlock->magic = NULL;\n}\n\nEXPORT_SYMBOL_GPL(mutex_destroy);\n",
   "source_review": {
@@ -140,5 +166,177 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/mutex-debug.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-751b6a4412b9262d",
+    "path": "kernel/locking/mutex-debug.c",
+    "title": "Mutex 디버그 구현 전체: 대기자 오염 표식과 수명 검사",
+    "area": "잠금 진단 · 연결 리스트 · 메모리 수명 · 장치 자원 관리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "mutex와 대기자에 진단용 상태를 기록하고 잘못된 사용을 경고하는 구현입니다.",
+    "guide": [
+      "자기 주소 magic, 메모리 패턴, task의 blocked_on을 사용해 수명과 연결 상태의 불일치를 드러냅니다. 검사 함수가 실제 잠금 획득·리스트 삽입·메모리 해제를 대신하는 것은 아닙니다.",
+      "mutex 본체와 진단 hook의 책임을 구분하는 데 사용합니다. 경고가 없다는 사실만으로 모든 경쟁이나 교착 상태가 없다고 증명할 수는 없습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "기여자·저작권·GPL 설명, mutex/delay/device/export/poison/sched/spinlock/kallsyms/interrupt/debug_locks 및 내부 mutex.h 포함, 대기자 진단 함수 다섯 개, unlock/init 검사, 장치 관리 해제 callback과 등록, mutex_destroy로 구성됩니다. __devm_mutex_init과 mutex_destroy만 이 파일에서 GPL export합니다."
+      },
+      {
+        "title": "대기자 진단 초기화",
+        "text": "debug_mutex_lock_common은 wait_lock 보유를 전제로 waiter 전체를 MUTEX_DEBUG_INIT 패턴으로 채운 뒤 magic을 자기 주소로, list를 빈 자기 연결로, ww_ctx를 MUTEX_POISON_WW_CTX로 설정합니다. task 등 나머지 실제 동작 필드는 이 함수가 완성하지 않습니다. memset이 유효한 대기자 초기화의 모든 단계를 대체한다고 보면 안 됩니다."
+      },
+      {
+        "title": "깨우기 직전 검사",
+        "text": "debug_mutex_wake_waiter는 wait_lock 보유를 lockdep_assert_held로 확인하고, mutex 대기 목록이 비었는지, waiter magic이 자기 주소인지, waiter list가 비었는지를 경고 조건으로 검사합니다. 태스크를 실제 깨우거나 큐에서 제거하지 않습니다. 이 불변식들은 호출 위치에서 성립해야 하는 조건입니다."
+      },
+      {
+        "title": "대기자 종료 패턴",
+        "text": "debug_mutex_free_waiter는 항목이 아직 연결되어 있으면 경고하고 전체를 MUTEX_DEBUG_FREE로 덮습니다. 이름에 free가 있지만 allocator에 메모리를 반환하는 호출은 없습니다. 스택 또는 다른 저장 영역의 대기자 재사용 오류를 드러내는 진단 처리와 물리적 해제를 구별합니다."
+      },
+      {
+        "title": "등록 진단",
+        "text": "debug_mutex_add_waiter는 wait_lock 보유를 검사하고 task->blocked_on=waiter를 기록합니다. 본문에는 list_add가 없습니다. 실제 큐 연결과 진단용 blocked_on 기록은 서로 다른 단계이며 함수 이름만으로 자료구조 변경 범위를 추정하지 않습니다."
+      },
+      {
+        "title": "제거 진단",
+        "text": "debug_mutex_remove_waiter는 waiter list가 빈 상태인지, waiter->task가 인자 task와 다른지, task->blocked_on이 waiter와 다른지 검사합니다. 이후 blocked_on=NULL, waiter list 자기 연결 초기화, waiter->task=NULL을 설정합니다. INIT_LIST_HEAD는 이웃 노드를 이어주는 list_del의 대체가 아니므로 실제 목록 연결 수정은 호출 측 절차와 함께 확인해야 합니다."
+      },
+      {
+        "title": "unlock 진단의 정확한 조건",
+        "text": "debug_locks가 켜져 있으면 lock->magic!=lock을 검사하고 wait_list.prev와 next가 둘 다 NULL인 경우를 경고합니다. 이 조건은 논리 AND이므로 한쪽만 NULL인 모든 손상을 검출하는 포괄적 검사라고 설명하면 안 됩니다. 본문에 소유자 변경이나 spin unlock은 없습니다."
+      },
+      {
+        "title": "mutex 진단 초기화",
+        "text": "CONFIG_DEBUG_LOCK_ALLOC이면 debug_check_no_locks_freed로 해당 메모리 범위의 보유 잠금 재초기화를 검사하고 lockdep_init_map_wait에 name/key와 LD_WAIT_SLEEP을 전달합니다. 설정과 무관하게 마지막에는 lock->magic=lock을 기록합니다. mutex의 모든 본체 필드를 초기화하는 일반 mutex_init과 역할이 다릅니다."
+      },
+      {
+        "title": "장치 관리 정리 등록",
+        "text": "devm_mutex_release는 void 포인터를 mutex_destroy에 넘기는 callback입니다. __devm_mutex_init은 devm_add_action_or_reset에 이 callback과 lock을 등록하고 반환값을 그대로 전달합니다. 이 함수 자체에는 mutex_init 호출이 없으며 이름만 보고 mutex 본체 초기화까지 담당한다고 오해하면 안 됩니다. 자원 정리 등록과 실제 잠금 초기화를 구별합니다."
+      },
+      {
+        "title": "destroy의 의미",
+        "text": "mutex_destroy는 mutex_is_locked이면 경고한 뒤 magic=NULL로 표시합니다. 문서는 호출 시 잠겨 있지 않아야 하고 이후 사용은 금지라고 명시합니다. 잠금을 기다려 해제하거나 대기자를 깨우거나 mutex 메모리를 free하지 않습니다. 경고가 떴다고 함수가 조기 반환하는 코드도 아닙니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "오염 패턴, 자기 주소 불변식, 태스크와 대기자 간 교차 참조, 자료구조 조작과 진단의 분리, 조건부 컴파일, 장치 수명과 cleanup callback을 학습합니다. 이 수업은 원문 각 함수의 검사 범위를 설명하며 실제 모든 오용을 실행하여 검출률을 증명한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "debug_mutex_free_waiter는 kfree로 대기자 메모리를 해제하는가?",
+        "options": [
+          "아니다. 연결 상태를 검사하고 진단 패턴으로 덮는다",
+          "그렇다. 이름이 free이므로 allocator에 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "함수 본문은 DEBUG_LOCKS_WARN_ON과 memset뿐입니다. 진단용 수명 종료 표시와 실제 저장 영역의 해제를 구분해야 합니다."
+      },
+      {
+        "prompt": "debug_mutex_add_waiter는 목록에 항목을 삽입하는가?",
+        "options": [
+          "그렇다. 내부 list_add_tail로 삽입한다",
+          "아니다. 잠금 보유 확인과 blocked_on 기록을 한다"
+        ],
+        "answer": 1,
+        "explanation": "이 함수에는 리스트 삽입 호출이 없습니다. 실제 mutex 알고리즘과 진단 hook이 맡는 역할을 따로 추적해야 합니다."
+      },
+      {
+        "prompt": "unlock 진단이 prev 또는 next 중 하나만 NULL인 경우도 해당 조건으로 검출하는가?",
+        "options": [
+          "아니다. 두 포인터가 모두 NULL인지 AND로 검사한다",
+          "그렇다. OR로 어느 한쪽 NULL도 검사한다"
+        ],
+        "answer": 0,
+        "explanation": "원문 조건은 !prev && !next입니다. 검사 범위를 실제 논리식보다 넓게 설명하면 경고가 없는 상태의 안전성을 과대평가하게 됩니다."
+      },
+      {
+        "prompt": "잠긴 mutex를 mutex_destroy에 넘기면 자동으로 잠금을 풀어주는가?",
+        "options": [
+          "그렇다. 소유자가 해제할 때까지 기다린다",
+          "아니다. 경고하고 magic을 NULL로 만든다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 잠기지 않은 상태에서 호출할 것을 요구합니다. 함수에 대기·unlock·free가 없으며 경고가 사용 계약을 복구해주지는 않습니다."
+      },
+      {
+        "prompt": "__devm_mutex_init 본문에서 mutex 본체도 초기화하는가?",
+        "options": [
+          "아니다. 장치 관리 cleanup action을 등록한다",
+          "그렇다. mutex_init을 호출한 뒤 등록한다"
+        ],
+        "answer": 0,
+        "explanation": "본문은 devm_add_action_or_reset 결과를 반환하는 한 호출입니다. 함수 이름과 전체 호출 절차를 혼동하지 말아야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/*\n * Debugging code for mutexes\n *\n * Started by Ingo Molnar:\n *\n *  Copyright (C) 2004, 2005, 2006 Red Hat, Inc., Ingo Molnar <mingo@redhat.com>\n *\n * lock debugging, locking tree, deadlock detection started by:\n *\n *  Copyright (C) 2004, LynuxWorks, Inc., Igor Manyilov, Bill Huey\n *  Released under the General Public License (GPL).\n */\n#include <linux/mutex.h>\n#include <linux/delay.h>\n#include <linux/device.h>\n#include <linux/export.h>\n#include <linux/poison.h>\n#include <linux/sched.h>\n#include <linux/spinlock.h>\n#include <linux/kallsyms.h>\n#include <linux/interrupt.h>\n#include <linux/debug_locks.h>\n\n#include \"mutex.h\"\n\n/*\n * Must be called with lock->wait_lock held.\n */\nvoid debug_mutex_lock_common(struct mutex *lock, struct mutex_waiter *waiter)\n{\n\tmemset(waiter, MUTEX_DEBUG_INIT, sizeof(*waiter));\n\twaiter->magic = waiter;\n\tINIT_LIST_HEAD(&waiter->list);\n\twaiter->ww_ctx = MUTEX_POISON_WW_CTX;\n}\n\nvoid debug_mutex_wake_waiter(struct mutex *lock, struct mutex_waiter *waiter)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\tDEBUG_LOCKS_WARN_ON(list_empty(&lock->wait_list));\n\tDEBUG_LOCKS_WARN_ON(waiter->magic != waiter);\n\tDEBUG_LOCKS_WARN_ON(list_empty(&waiter->list));\n}\n\nvoid debug_mutex_free_waiter(struct mutex_waiter *waiter)\n{\n\tDEBUG_LOCKS_WARN_ON(!list_empty(&waiter->list));\n\tmemset(waiter, MUTEX_DEBUG_FREE, sizeof(*waiter));\n}\n\nvoid debug_mutex_add_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t    struct task_struct *task)\n{\n\tlockdep_assert_held(&lock->wait_lock);\n\n\t/* Mark the current thread as blocked on the lock: */\n\ttask->blocked_on = waiter;\n}\n\nvoid debug_mutex_remove_waiter(struct mutex *lock, struct mutex_waiter *waiter,\n\t\t\t struct task_struct *task)\n{\n\tDEBUG_LOCKS_WARN_ON(list_empty(&waiter->list));\n\tDEBUG_LOCKS_WARN_ON(waiter->task != task);\n\tDEBUG_LOCKS_WARN_ON(task->blocked_on != waiter);\n\ttask->blocked_on = NULL;\n\n\tINIT_LIST_HEAD(&waiter->list);\n\twaiter->task = NULL;\n}\n\nvoid debug_mutex_unlock(struct mutex *lock)\n{\n\tif (likely(debug_locks)) {\n\t\tDEBUG_LOCKS_WARN_ON(lock->magic != lock);\n\t\tDEBUG_LOCKS_WARN_ON(!lock->wait_list.prev && !lock->wait_list.next);\n\t}\n}\n\nvoid debug_mutex_init(struct mutex *lock, const char *name,\n\t\t      struct lock_class_key *key)\n{\n#ifdef CONFIG_DEBUG_LOCK_ALLOC\n\t/*\n\t * Make sure we are not reinitializing a held lock:\n\t */\n\tdebug_check_no_locks_freed((void *)lock, sizeof(*lock));\n\tlockdep_init_map_wait(&lock->dep_map, name, key, 0, LD_WAIT_SLEEP);\n#endif\n\tlock->magic = lock;\n}\n\nstatic void devm_mutex_release(void *res)\n{\n\tmutex_destroy(res);\n}\n\nint __devm_mutex_init(struct device *dev, struct mutex *lock)\n{\n\treturn devm_add_action_or_reset(dev, devm_mutex_release, lock);\n}\nEXPORT_SYMBOL_GPL(__devm_mutex_init);\n\n/***\n * mutex_destroy - mark a mutex unusable\n * @lock: the mutex to be destroyed\n *\n * This function marks the mutex uninitialized, and any subsequent\n * use of the mutex is forbidden. The mutex must not be locked when\n * this function is called.\n */\nvoid mutex_destroy(struct mutex *lock)\n{\n\tDEBUG_LOCKS_WARN_ON(mutex_is_locked(lock));\n\tlock->magic = NULL;\n}\n\nEXPORT_SYMBOL_GPL(mutex_destroy);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "21ee07ea4d844b069b54c9028b23ce75907a2eac8fd83c73179f73e9e46283b0",
+      "scope": "whole-file",
+      "line_count": 118,
+      "authoring_source": "course/file_units/mutex_debugging.py",
+      "sections": [
+        "전체 구성",
+        "대기자 진단 초기화",
+        "깨우기 직전 검사",
+        "대기자 종료 패턴",
+        "등록 진단",
+        "제거 진단",
+        "unlock 진단의 정확한 조건",
+        "mutex 진단 초기화",
+        "장치 관리 정리 등록",
+        "destroy의 의미",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/mutex-debug.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "잠금의 점검원은 줄이 잘 연결됐는지와 이름표가 맞는지 확인합니다. 점검원에게 줄을 세우거나 메모리를 버리는 일까지 맡겼다고 생각하면 안 됩니다.",
+    "meaning": "mutex 진단 함수의 경고·표시 기록과 실제 잠금·목록 조작·메모리 해제를 구별합니다.",
+    "exercise": "free_waiter, add_waiter, destroy의 실제 본문을 읽고 이름으로 기대한 일과 수행하는 일을 비교해 보세요."
+  },
+  "goal": "mutex 진단 함수의 경고·표시 기록과 실제 잠금·목록 조작·메모리 해제를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "free_waiter, add_waiter, destroy의 실제 본문을 읽고 이름으로 기대한 일과 수행하는 일을 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "babcd8285344f63f9423f81515a0abd9dc0cd5fc1c4cefe7d9f1cbef867b32a9",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

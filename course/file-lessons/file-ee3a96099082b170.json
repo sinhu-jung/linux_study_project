@@ -5,135 +5,173 @@
   "area": "sysfs · kobject · 문자열 · 참조 수명 · 오류 처리",
   "track": "files",
   "kind": "kernel",
-  "intro": "노드 상태,속성 읽기와 생성·삭제·갱신,노드 attach/detach 전체를 분석합니다.",
+  "intro": "이 파일은 장치 트리 노드와 속성을 sysfs 파일로 보여 줘요. 초기화·노출·참조 보유를 구별하고 부분 실패를 실제 코드대로 읽어요.",
   "guide": [
-    "메모리 객체의 초기화,sysfs 노출,참조 보유는 서로 다른 상태입니다.",
-    "intrusive 구조,부분 읽기,이름 충돌,권한 비트와 부분 실패를 학습합니다."
+    "sysfs는 커널 정보를 파일처럼 보여 주는 통로이고 kobject는 그 안에 노출할 객체를 관리하는 구조예요.",
+    "참조를 얻는 것은 객체를 사용하는 동안 수명을 유지하도록 보유하는 일이에요. put은 그 보유를 돌려주는 것이지 언제나 전체 트리를 지우는 뜻은 아니에요.",
+    "원자적 교체는 중간 실패가 밖에서 반쪽 결과로 보이지 않도록 묶는 처리예요. 이 파일의 속성 교체에는 실패 복원 절차가 없어요."
   ],
   "deep_dive": [
     {
-      "title": "초기화와 부착 상태",
-      "text": "GPL-2.0 파일은 OF,slab과 내부 OF 헤더를 포함합니다. initialized helper는 node가 nonNULL이고 kobj.state_initialized인지,공개 attached helper는 state_in_sysfs인지 검사합니다. 메모리 객체 초기화와 sysfs 존재를 같은 상태로 보지 않습니다. OF_DYNAMIC 비활성일 때 release는 빈 함수이며 주석은 이 구성에서 노드를 해제하지 않는다고 설명합니다. of_node_ktype은 release callback을 연결합니다."
+      "title": "초기화와 화면에 보이는 상태",
+      "text": "initialized helper는 node가 있고 state_initialized인지 보며 attached helper는 state_in_sysfs를 봐요. 객체 준비와 sysfs에 나타나는 상태는 다른 필드예요. OF_DYNAMIC이 없으면 release는 빈 함수이며 주석은 이 구성에서 노드를 해제하지 않는다고 설명해요. of_node_ktype은 그 release 콜백을 연결해요."
     },
     {
-      "title": "속성의 부분 읽기",
-      "text": "property_read는 bin_attribute 주소에서 container_of로 property를 얻습니다. memory_read_from_buffer에 출력 buf,count,지역 offset 주소와 pp->value,pp->length를 전달합니다. 속성을 문자열로 다시 포맷하거나 별도 NUL을 붙이는 코드가 아니라 원래 바이트 데이터의 범위 읽기입니다. file과 kobject 인수는 본문에서 사용하지 않습니다."
+      "title": "속성의 일부 바이트 읽기",
+      "text": "container_of는 bin_attribute가 들어 있는 바깥 property의 주소를 찾아요. 읽기 함수는 value와 length, 요청 count와 지역 offset 주소를 memory_read_from_buffer에 넘겨요. 예를 들어 긴 값의 중간 일부만 읽을 수 있는 구조예요. 문자열이나 JSON으로 바꾸거나 NUL을 덧붙이지 않으며 file과 kobject 인자는 본문에서 쓰지 않아요."
     },
     {
-      "title": "이름 충돌 검색",
-      "text": "safe_name은 원래 이름으로 sysfs_get_dirent를 호출해 충돌을 확인하고 얻은 kernfs 참조를 sysfs_put합니다. 충돌할 때 이전 임시 이름을 해제하고 orig#1,orig#2처럼 kasprintf로 만듭니다. i<16 제한 때문에 최대 #16을 생성하지만 그 마지막 이름의 부재까지 다시 확인하지는 않습니다. 따라서 항상 유일한 이름을 보장한다고 단정할 수 없습니다."
+      "title": "겹치는 이름 피하기",
+      "text": "safe_name은 먼저 원래 이름이 이미 있는지 sysfs_get_dirent로 찾아요. 얻은 kernfs 참조는 sysfs_put으로 돌려줘요. 충돌하면 이전 임시 이름을 해제하고 name#1, name#2처럼 새 이름을 만들어요. i<16 제한 때문에 #16은 만들지만 다음 검사에 들어가지 못하므로 그 이름까지 비어 있음을 확인한 것은 아니에요. 항상 유일한 이름을 보장한다고 말하면 안 돼요."
     },
     {
-      "title": "이름 저장소와 실패",
-      "text": "충돌이 없으면 원래 문자열도 kstrdup하여 호출자가 해제할 새 이름을 반환합니다. 충돌 경로는 경고를 출력합니다. 반복 내부 kasprintf 실패를 즉시 검사하는 분기가 없으므로 반복 중 모든 OOM이 안전하게 처리된다고 설명하면 안 됩니다. 최종 NULL 결과의 처리는 호출 지점마다 다릅니다."
+      "title": "이름 메모리의 책임",
+      "text": "충돌이 없어도 kstrdup으로 원래 이름을 복사해 새 메모리를 반환해요. 따라서 호출자가 사용 뒤 해제해야 해요. 충돌 경로는 경고를 출력해요. 반복 안의 kasprintf 할당 실패를 즉시 검사하는 분기가 없으므로 모든 메모리 부족을 안전하게 처리한다고 단정할 수 없어요. 마지막 NULL의 처리도 호출부마다 달라요."
     },
     {
-      "title": "속성 생성과 security 접두부",
-      "text": "add_property는 이름이 security-로 시작하는지 strncmp 길이 9로 검사합니다. SYSFS 비활성 또는 of_kset 부재·노드 미부착이면 0으로 끝납니다. bin attr를 초기화하고 safe_name,권한 secure?0400:0444,크기 secure?0:pp->length와 read callback을 설정합니다. 이는 패스워드를 누출하지 말라는 주석의 정책이며 pp->value 자체를 지우는 코드는 아닙니다."
+      "title": "민감한 속성의 노출 규칙",
+      "text": "이름 앞 9글자가 security-인지 검사해요. SYSFS가 없거나 of_kset이 없거나 노드가 붙지 않았으면 0으로 끝나요. 그렇지 않으면 바이너리 속성을 초기화하고 이름과 읽기 콜백을 설정해요. security- 속성은 권한 0400과 노출 크기 0, 나머지는 0444와 원래 길이예요. 비밀번호 노출을 막으려는 정책이며 원래 value 메모리를 지우는 코드는 아니에요."
     },
     {
-      "title": "속성 생성 오류",
-      "text": "sysfs_create_bin_file의 rc를 WARN으로 알리고 그대로 반환합니다. add_property에는 safe_name NULL을 별도 -ENOMEM으로 처리하거나 생성 실패 즉시 이름을 kfree하는 분기가 없습니다. 노드 attach 경로의 이름 검사와 동일하다고 추정하면 안 됩니다."
+      "title": "속성 생성 실패",
+      "text": "sysfs_create_bin_file의 결과를 rc로 받아 오류를 경고하고 그대로 반환해요. 이 함수는 safe_name의 NULL을 별도 -ENOMEM으로 바꾸거나 생성 실패 즉시 이름을 해제하는 분기를 두지 않아요. 노드 attach 쪽의 이름 NULL 검사와 같은 처리라고 생각하면 안 돼요."
     },
     {
-      "title": "속성 삭제의 두 단계",
-      "text": "remove_bin_file은 SYSFS 비활성이면 반환하고 아니면 sysfs 파일 제거 후 attr.name을 kfree합니다. 일반 remove_property는 of_kset이 있고 노드가 부착된 경우에만 이를 호출합니다. 초기에 아직 sysfs가 준비되지 않으면 of_init에 setup을 미루는 주석이 있습니다. 속성 데이터 객체 자체를 여기서 kfree하는 것은 아닙니다."
+      "title": "속성 파일과 이름 제거",
+      "text": "remove_bin_file은 SYSFS가 없으면 끝내고, 있으면 파일을 제거한 다음 attr.name 메모리를 해제해요. 일반 remove_property는 of_kset이 있고 노드가 붙어 있을 때만 이를 불러요. 부팅 초기에는 of_init까지 설정을 미룬다는 주석도 있어요. 여기서 property 객체나 원래 값 자체를 해제하는 것은 아니에요."
     },
     {
-      "title": "속성 갱신은 원자적 교체가 아님",
-      "text": "update_property는 of_kset이 없으면 반환합니다. oldprop가 있으면 제거하고 새 속성을 추가하지만 add의 반환값을 사용하지 않습니다. 기존 속성을 유지한 채 새 파일 생성 성공을 확인하는 transaction이나 rollback은 없습니다. old 제거 전 attached 검사는 이 함수에 직접 없으므로 호출자와 하위 helper 계약도 구분해야 합니다."
+      "title": "속성 교체의 부분 실패",
+      "text": "update는 of_kset이 없으면 돌아가요. oldprop가 있으면 먼저 파일을 지우고 새 속성을 추가하지만 추가 결과를 확인하지 않아요. 실패하면 이전 파일을 되살리는 rollback, 즉 되돌리기 절차가 없어요. 이 함수에 직접 붙음 상태 검사가 있는 것도 아니므로 하위 helper와 호출자의 약속을 함께 읽어야 해요."
     },
     {
-      "title": "노드 attach의 이름과 부모",
-      "text": "attach는 SYSFS 비활성 또는 of_kset 부재이면 0입니다. kobj.kset을 지정하고 parent가 없으면 kset 아래 base의 safe_name을 얻어 parent=NULL로 kobject_add에 전달합니다. parent가 있으면 full_name의 kbasename을 부모 kobject 아래에서 안전한 이름으로 만듭니다. 이름 NULL이면 -ENOMEM이고 kobject_add 뒤에는 임시 이름을 항상 kfree합니다."
+      "title": "노드 이름과 부모 선택",
+      "text": "attach는 SYSFS나 of_kset이 없으면 작업 없이 0이에요. 부모 없는 노드는 kset 아래 base 이름을 만들고 kobject_add에는 부모 NULL을 넘겨요. 부모가 있으면 full_name의 마지막 조각을 부모 아래 이름으로 사용해요. safe_name 결과가 NULL이면 -ENOMEM이에요. kobject_add를 부른 뒤 임시 이름은 성공·실패와 무관하게 해제해요."
     },
     {
-      "title": "Attach의 부분 성공과 참조",
-      "text": "kobject_add 오류는 반환합니다. 성공하면 모든 property를 순회해 add_property하지만 각 반환값은 무시합니다. 이후 of_node_get으로 노드 참조를 보유하고 0을 반환합니다. 따라서 attach의 0이 모든 속성 파일 생성 성공까지 증명하지 않습니다. kobject 생성과 개별 attr 생성은 별도 단계입니다."
+      "title": "노드 부착 성공의 범위",
+      "text": "kobject_add 실패는 반환하지만 성공 뒤 속성들을 추가할 때는 각각의 결과를 무시해요. 그 뒤 of_node_get으로 노드 참조를 얻고 0을 반환해요. 그러므로 attach의 0만으로 모든 속성 파일이 만들어졌다고 증명할 수 없어요. 노드 노출과 개별 속성 노출은 다른 단계예요."
     },
     {
-      "title": "Detach",
-      "text": "detach는 먼저 initialized가 아닌 경우 BUG_ON을 실행합니다. of_kset이 없으면 반환합니다. attached이면 모든 속성 파일을 제거하고 kobject_del합니다. 그 뒤 attached 여부와 무관하게 of_node_put합니다. 노드 초기화 확인보다 앞서 안전한 NULL no-op 처리를 하는 함수가 아니며,임의 중복 detach가 참조 수명에 무해하다고 볼 수 없습니다."
+      "title": "노드를 떼는 순서",
+      "text": "detach는 먼저 초기화 여부를 검사하고 아니면 BUG_ON으로 잘못된 상태를 드러내요. of_kset이 없으면 그 다음에 돌아가요. 붙어 있으면 속성 파일들을 지우고 kobject_del을 불러요. 이후에는 붙어 있었는지와 관계없이 of_node_put을 해요. NULL이나 초기화 전 객체를 조용히 무시하는 함수도 아니고 중복 detach가 언제나 무해한 것도 아니에요."
     },
     {
-      "title": "전체 범위와 검증",
-      "text": "두 상태 helper,조건부 release,kobj type,read,safe_name,네 속성 관리 함수와 attach/detach를 모두 대조했습니다. 이 파일이 자체 잠금으로 모든 동시 갱신을 직렬화하는 코드는 없습니다. 실제 sysfs 파일 접근·OOM·동시 노드 삭제 실험은 실행하지 않았습니다."
+      "title": "검토 범위",
+      "text": "두 상태 helper, 조건부 release, 객체 타입, 읽기, 이름 선택, 속성 관리와 노드 부착·해제를 모두 읽었어요. 이 파일 안의 자체 잠금으로 모든 동시 변경을 직렬화하는 구조는 아니에요. 직렬화는 여러 변경을 차례로 진행하게 하는 뜻이에요. 실제 sysfs 읽기, 메모리 부족, 동시 삭제 실험은 실행하지 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "state_initialized와 state_in_sysfs가 같은 의미인가?",
+      "prompt": "초기화 상태와 sysfs 부착 상태는 같은 뜻인가요?",
       "options": [
+        "아니요. 객체 준비와 파일로 노출된 상태예요.",
+        "네. 같은 필드의 다른 이름이에요."
+      ],
+      "answer": 0,
+      "explanation": "두 helper는 서로 다른 필드를 검사해요.",
+      "original_prompt": "state_initialized와 state_in_sysfs가 같은 의미인가?",
+      "original_options": [
         "아니다. 객체 초기화와 sysfs 노출 상태다",
         "그렇다. 언제나 같은 필드의 별명이다"
       ],
-      "answer": 0,
-      "explanation": "각 helper가 서로 다른 kobject 필드를 확인합니다. 수명 단계와 노출 상태를 구분합니다."
+      "original_explanation": "각 helper가 서로 다른 kobject 필드를 확인합니다. 수명 단계와 노출 상태를 구분합니다."
     },
     {
-      "prompt": "safe_name이 #16까지 만들면 그 이름의 유일성도 반드시 확인되는가?",
+      "prompt": "safe_name이 #16을 만들면 그 이름이 비어 있는지도 반드시 검사하나요?",
       "options": [
+        "네. 고유 이름을 찾을 때까지 제한 없이 반복해요.",
+        "아니요. 다음 i<16 검사에서 반복이 끝나요."
+      ],
+      "answer": 1,
+      "explanation": "생성 후 다시 확인하기 전에 횟수 제한에 도달해요.",
+      "original_prompt": "safe_name이 #16까지 만들면 그 이름의 유일성도 반드시 확인되는가?",
+      "original_options": [
         "그렇다. 제한 없이 고유 이름이 나올 때까지 반복한다",
         "아니다. 다음 반복의 i<16 조건이 실패해 확인하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "루프 횟수 제한과 생성·확인 순서를 따라야 합니다. 최대 시도는 성공 보장이 아닙니다."
+      "original_explanation": "루프 횟수 제한과 생성·확인 순서를 따라야 합니다. 최대 시도는 성공 보장이 아닙니다."
     },
     {
-      "prompt": "security- 속성의 mode와 attr.size는?",
+      "prompt": "security- 속성의 권한과 노출 크기는 무엇인가요?",
       "options": [
+        "0400과 0이에요.",
+        "0444와 원래 길이예요."
+      ],
+      "answer": 0,
+      "explanation": "두 필드를 바꾸지만 원래 값 메모리를 지우는 것은 아니에요.",
+      "original_prompt": "security- 속성의 mode와 attr.size는?",
+      "original_options": [
         "0400과 0",
         "0444와 원래 길이"
       ],
-      "answer": 0,
-      "explanation": "secure 조건으로 두 필드를 모두 바꿉니다. 원래 메모리 데이터 자체를 삭제하는 것은 아닙니다."
+      "original_explanation": "secure 조건으로 두 필드를 모두 바꿉니다. 원래 메모리 데이터 자체를 삭제하는 것은 아닙니다."
     },
     {
-      "prompt": "노드 attach가 0이면 모든 속성 생성도 성공했는가?",
+      "prompt": "노드 attach가 0이면 모든 속성 파일도 성공했나요?",
       "options": [
+        "네. 하나라도 실패하면 전부 되돌려요.",
+        "그렇게 보장할 수 없어요. 속성 추가 결과를 무시해요."
+      ],
+      "answer": 1,
+      "explanation": "노드 추가 오류와 개별 속성 오류를 다르게 처리해요.",
+      "original_prompt": "노드 attach가 0이면 모든 속성 생성도 성공했는가?",
+      "original_options": [
         "그렇다. 속성 하나 실패하면 항상 rollback한다",
         "그렇게 보장할 수 없다. 속성 추가의 rc를 무시한다"
       ],
-      "answer": 1,
-      "explanation": "kobject_add 오류는 반환하지만 property 순회의 반환값은 사용하지 않습니다."
+      "original_explanation": "kobject_add 오류는 반환하지만 property 순회의 반환값은 사용하지 않습니다."
     },
     {
-      "prompt": "속성 update에서 새 파일 추가 실패 시 기존 파일을 되살리는가?",
+      "prompt": "새 속성 파일 추가에 실패하면 이전 파일을 복원하나요?",
       "options": [
+        "아니요. 먼저 제거한 뒤 추가하며 복원 코드는 없어요.",
+        "네. 언제나 원자적으로 교체해요."
+      ],
+      "answer": 0,
+      "explanation": "결과 확인과 rollback 호출이 없어요.",
+      "original_prompt": "속성 update에서 새 파일 추가 실패 시 기존 파일을 되살리는가?",
+      "original_options": [
         "아니다. 기존 제거 후 추가하며 rollback이 없다",
         "그렇다. 자동 원자적 교체다"
       ],
-      "answer": 0,
-      "explanation": "remove와 add 호출만 있고 결과 검사·복원 코드는 없습니다."
+      "original_explanation": "remove와 add 호출만 있고 결과 검사·복원 코드는 없습니다."
     },
     {
-      "prompt": "property_read는 속성을 문자열로 변환하는가?",
+      "prompt": "property_read는 속성을 문자열로 바꾸나요?",
       "options": [
+        "네. 언제나 JSON을 만들어요.",
+        "아니요. 원래 값의 바이트를 일부 읽어요."
+      ],
+      "answer": 1,
+      "explanation": "원본 포인터와 길이를 읽기 helper에 넘겨요.",
+      "original_prompt": "property_read는 속성을 문자열로 변환하는가?",
+      "original_options": [
         "그렇다. 항상 JSON으로 직렬화한다",
         "아니다. 원래 value 바이트를 부분 읽기한다"
       ],
-      "answer": 1,
-      "explanation": "memory_read_from_buffer에 원본 포인터와 길이를 전달합니다. 형식 변환 호출은 없습니다."
+      "original_explanation": "memory_read_from_buffer에 원본 포인터와 길이를 전달합니다. 형식 변환 호출은 없습니다."
     },
     {
-      "prompt": "detach는 미초기화 노드에 대해 조용히 반환하는가?",
+      "prompt": "초기화되지 않은 노드를 detach하면 조용히 돌아가나요?",
       "options": [
+        "아니요. 첫 BUG_ON 검사의 대상이에요.",
+        "네. 모든 상태 검사를 건너뛰어요."
+      ],
+      "answer": 0,
+      "explanation": "초기화 확인이 of_kset 검사보다 먼저예요.",
+      "original_prompt": "detach는 미초기화 노드에 대해 조용히 반환하는가?",
+      "original_options": [
         "아니다. 첫 단계의 BUG_ON 대상이다",
         "그렇다. 상태 검사를 모두 생략한다"
       ],
-      "answer": 0,
-      "explanation": "of_kset 검사 전에 초기화 불변식을 확인합니다. NULL 입력도 initialized helper에서 false가 됩니다."
+      "original_explanation": "of_kset 검사 전에 초기화 불변식을 확인합니다. NULL 입력도 initialized helper에서 false가 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "같은 속성 이름이 17번 겹치는 상황과 노드만 붙고 일부 속성 추가가 실패하는 상황을 각각 따라가 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/of.h>\n#include <linux/slab.h>\n\n#include \"of_private.h\"\n\n/* true when node is initialized */\nstatic int of_node_is_initialized(const struct device_node *node)\n{\n\treturn node && node->kobj.state_initialized;\n}\n\n/* true when node is attached (i.e. present on sysfs) */\nint of_node_is_attached(const struct device_node *node)\n{\n\treturn node && node->kobj.state_in_sysfs;\n}\n\n\n#ifndef CONFIG_OF_DYNAMIC\nstatic void of_node_release(struct kobject *kobj)\n{\n\t/* Without CONFIG_OF_DYNAMIC, no nodes gets freed */\n}\n#endif /* CONFIG_OF_DYNAMIC */\n\nconst struct kobj_type of_node_ktype = {\n\t.release = of_node_release,\n};\n\nstatic ssize_t of_node_property_read(struct file *filp, struct kobject *kobj,\n\t\t\t\tstruct bin_attribute *bin_attr, char *buf,\n\t\t\t\tloff_t offset, size_t count)\n{\n\tstruct property *pp = container_of(bin_attr, struct property, attr);\n\treturn memory_read_from_buffer(buf, count, &offset, pp->value, pp->length);\n}\n\n/* always return newly allocated name, caller must free after use */\nstatic const char *safe_name(struct kobject *kobj, const char *orig_name)\n{\n\tconst char *name = orig_name;\n\tstruct kernfs_node *kn;\n\tint i = 0;\n\n\t/* don't be a hero. After 16 tries give up */\n\twhile (i < 16 && (kn = sysfs_get_dirent(kobj->sd, name))) {\n\t\tsysfs_put(kn);\n\t\tif (name != orig_name)\n\t\t\tkfree(name);\n\t\tname = kasprintf(GFP_KERNEL, \"%s#%i\", orig_name, ++i);\n\t}\n\n\tif (name == orig_name) {\n\t\tname = kstrdup(orig_name, GFP_KERNEL);\n\t} else {\n\t\tpr_warn(\"Duplicate name in %s, renamed to \\\"%s\\\"\\n\",\n\t\t\tkobject_name(kobj), name);\n\t}\n\treturn name;\n}\n\nint __of_add_property_sysfs(struct device_node *np, struct property *pp)\n{\n\tint rc;\n\n\t/* Important: Don't leak passwords */\n\tbool secure = strncmp(pp->name, \"security-\", 9) == 0;\n\n\tif (!IS_ENABLED(CONFIG_SYSFS))\n\t\treturn 0;\n\n\tif (!of_kset || !of_node_is_attached(np))\n\t\treturn 0;\n\n\tsysfs_bin_attr_init(&pp->attr);\n\tpp->attr.attr.name = safe_name(&np->kobj, pp->name);\n\tpp->attr.attr.mode = secure ? 0400 : 0444;\n\tpp->attr.size = secure ? 0 : pp->length;\n\tpp->attr.read = of_node_property_read;\n\n\trc = sysfs_create_bin_file(&np->kobj, &pp->attr);\n\tWARN(rc, \"error adding attribute %s to node %pOF\\n\", pp->name, np);\n\treturn rc;\n}\n\nvoid __of_sysfs_remove_bin_file(struct device_node *np, struct property *prop)\n{\n\tif (!IS_ENABLED(CONFIG_SYSFS))\n\t\treturn;\n\n\tsysfs_remove_bin_file(&np->kobj, &prop->attr);\n\tkfree(prop->attr.attr.name);\n}\n\nvoid __of_remove_property_sysfs(struct device_node *np, struct property *prop)\n{\n\t/* at early boot, bail here and defer setup to of_init() */\n\tif (of_kset && of_node_is_attached(np))\n\t\t__of_sysfs_remove_bin_file(np, prop);\n}\n\nvoid __of_update_property_sysfs(struct device_node *np, struct property *newprop,\n\t\tstruct property *oldprop)\n{\n\t/* At early boot, bail out and defer setup to of_init() */\n\tif (!of_kset)\n\t\treturn;\n\n\tif (oldprop)\n\t\t__of_sysfs_remove_bin_file(np, oldprop);\n\t__of_add_property_sysfs(np, newprop);\n}\n\nint __of_attach_node_sysfs(struct device_node *np)\n{\n\tconst char *name;\n\tstruct kobject *parent;\n\tstruct property *pp;\n\tint rc;\n\n\tif (!IS_ENABLED(CONFIG_SYSFS) || !of_kset)\n\t\treturn 0;\n\n\tnp->kobj.kset = of_kset;\n\tif (!np->parent) {\n\t\t/* Nodes without parents are new top level trees */\n\t\tname = safe_name(&of_kset->kobj, \"base\");\n\t\tparent = NULL;\n\t} else {\n\t\tname = safe_name(&np->parent->kobj, kbasename(np->full_name));\n\t\tparent = &np->parent->kobj;\n\t}\n\tif (!name)\n\t\treturn -ENOMEM;\n\n\trc = kobject_add(&np->kobj, parent, \"%s\", name);\n\tkfree(name);\n\tif (rc)\n\t\treturn rc;\n\n\tfor_each_property_of_node(np, pp)\n\t\t__of_add_property_sysfs(np, pp);\n\n\tof_node_get(np);\n\treturn 0;\n}\n\nvoid __of_detach_node_sysfs(struct device_node *np)\n{\n\tstruct property *pp;\n\n\tBUG_ON(!of_node_is_initialized(np));\n\tif (!of_kset)\n\t\treturn;\n\n\t/* only remove properties if on sysfs */\n\tif (of_node_is_attached(np)) {\n\t\tfor_each_property_of_node(np, pp)\n\t\t\t__of_sysfs_remove_bin_file(np, pp);\n\t\tkobject_del(&np->kobj);\n\t}\n\n\tof_node_put(np);\n}\n",
   "source_review": {
@@ -163,5 +201,200 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/kobj.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-ee3a96099082b170",
+    "path": "drivers/of/kobj.c",
+    "title": "OF sysfs: 속성 파일·이름 충돌·노드 참조 수명",
+    "area": "sysfs · kobject · 문자열 · 참조 수명 · 오류 처리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "노드 상태,속성 읽기와 생성·삭제·갱신,노드 attach/detach 전체를 분석합니다.",
+    "guide": [
+      "메모리 객체의 초기화,sysfs 노출,참조 보유는 서로 다른 상태입니다.",
+      "intrusive 구조,부분 읽기,이름 충돌,권한 비트와 부분 실패를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "초기화와 부착 상태",
+        "text": "GPL-2.0 파일은 OF,slab과 내부 OF 헤더를 포함합니다. initialized helper는 node가 nonNULL이고 kobj.state_initialized인지,공개 attached helper는 state_in_sysfs인지 검사합니다. 메모리 객체 초기화와 sysfs 존재를 같은 상태로 보지 않습니다. OF_DYNAMIC 비활성일 때 release는 빈 함수이며 주석은 이 구성에서 노드를 해제하지 않는다고 설명합니다. of_node_ktype은 release callback을 연결합니다."
+      },
+      {
+        "title": "속성의 부분 읽기",
+        "text": "property_read는 bin_attribute 주소에서 container_of로 property를 얻습니다. memory_read_from_buffer에 출력 buf,count,지역 offset 주소와 pp->value,pp->length를 전달합니다. 속성을 문자열로 다시 포맷하거나 별도 NUL을 붙이는 코드가 아니라 원래 바이트 데이터의 범위 읽기입니다. file과 kobject 인수는 본문에서 사용하지 않습니다."
+      },
+      {
+        "title": "이름 충돌 검색",
+        "text": "safe_name은 원래 이름으로 sysfs_get_dirent를 호출해 충돌을 확인하고 얻은 kernfs 참조를 sysfs_put합니다. 충돌할 때 이전 임시 이름을 해제하고 orig#1,orig#2처럼 kasprintf로 만듭니다. i<16 제한 때문에 최대 #16을 생성하지만 그 마지막 이름의 부재까지 다시 확인하지는 않습니다. 따라서 항상 유일한 이름을 보장한다고 단정할 수 없습니다."
+      },
+      {
+        "title": "이름 저장소와 실패",
+        "text": "충돌이 없으면 원래 문자열도 kstrdup하여 호출자가 해제할 새 이름을 반환합니다. 충돌 경로는 경고를 출력합니다. 반복 내부 kasprintf 실패를 즉시 검사하는 분기가 없으므로 반복 중 모든 OOM이 안전하게 처리된다고 설명하면 안 됩니다. 최종 NULL 결과의 처리는 호출 지점마다 다릅니다."
+      },
+      {
+        "title": "속성 생성과 security 접두부",
+        "text": "add_property는 이름이 security-로 시작하는지 strncmp 길이 9로 검사합니다. SYSFS 비활성 또는 of_kset 부재·노드 미부착이면 0으로 끝납니다. bin attr를 초기화하고 safe_name,권한 secure?0400:0444,크기 secure?0:pp->length와 read callback을 설정합니다. 이는 패스워드를 누출하지 말라는 주석의 정책이며 pp->value 자체를 지우는 코드는 아닙니다."
+      },
+      {
+        "title": "속성 생성 오류",
+        "text": "sysfs_create_bin_file의 rc를 WARN으로 알리고 그대로 반환합니다. add_property에는 safe_name NULL을 별도 -ENOMEM으로 처리하거나 생성 실패 즉시 이름을 kfree하는 분기가 없습니다. 노드 attach 경로의 이름 검사와 동일하다고 추정하면 안 됩니다."
+      },
+      {
+        "title": "속성 삭제의 두 단계",
+        "text": "remove_bin_file은 SYSFS 비활성이면 반환하고 아니면 sysfs 파일 제거 후 attr.name을 kfree합니다. 일반 remove_property는 of_kset이 있고 노드가 부착된 경우에만 이를 호출합니다. 초기에 아직 sysfs가 준비되지 않으면 of_init에 setup을 미루는 주석이 있습니다. 속성 데이터 객체 자체를 여기서 kfree하는 것은 아닙니다."
+      },
+      {
+        "title": "속성 갱신은 원자적 교체가 아님",
+        "text": "update_property는 of_kset이 없으면 반환합니다. oldprop가 있으면 제거하고 새 속성을 추가하지만 add의 반환값을 사용하지 않습니다. 기존 속성을 유지한 채 새 파일 생성 성공을 확인하는 transaction이나 rollback은 없습니다. old 제거 전 attached 검사는 이 함수에 직접 없으므로 호출자와 하위 helper 계약도 구분해야 합니다."
+      },
+      {
+        "title": "노드 attach의 이름과 부모",
+        "text": "attach는 SYSFS 비활성 또는 of_kset 부재이면 0입니다. kobj.kset을 지정하고 parent가 없으면 kset 아래 base의 safe_name을 얻어 parent=NULL로 kobject_add에 전달합니다. parent가 있으면 full_name의 kbasename을 부모 kobject 아래에서 안전한 이름으로 만듭니다. 이름 NULL이면 -ENOMEM이고 kobject_add 뒤에는 임시 이름을 항상 kfree합니다."
+      },
+      {
+        "title": "Attach의 부분 성공과 참조",
+        "text": "kobject_add 오류는 반환합니다. 성공하면 모든 property를 순회해 add_property하지만 각 반환값은 무시합니다. 이후 of_node_get으로 노드 참조를 보유하고 0을 반환합니다. 따라서 attach의 0이 모든 속성 파일 생성 성공까지 증명하지 않습니다. kobject 생성과 개별 attr 생성은 별도 단계입니다."
+      },
+      {
+        "title": "Detach",
+        "text": "detach는 먼저 initialized가 아닌 경우 BUG_ON을 실행합니다. of_kset이 없으면 반환합니다. attached이면 모든 속성 파일을 제거하고 kobject_del합니다. 그 뒤 attached 여부와 무관하게 of_node_put합니다. 노드 초기화 확인보다 앞서 안전한 NULL no-op 처리를 하는 함수가 아니며,임의 중복 detach가 참조 수명에 무해하다고 볼 수 없습니다."
+      },
+      {
+        "title": "전체 범위와 검증",
+        "text": "두 상태 helper,조건부 release,kobj type,read,safe_name,네 속성 관리 함수와 attach/detach를 모두 대조했습니다. 이 파일이 자체 잠금으로 모든 동시 갱신을 직렬화하는 코드는 없습니다. 실제 sysfs 파일 접근·OOM·동시 노드 삭제 실험은 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "state_initialized와 state_in_sysfs가 같은 의미인가?",
+        "options": [
+          "아니다. 객체 초기화와 sysfs 노출 상태다",
+          "그렇다. 언제나 같은 필드의 별명이다"
+        ],
+        "answer": 0,
+        "explanation": "각 helper가 서로 다른 kobject 필드를 확인합니다. 수명 단계와 노출 상태를 구분합니다."
+      },
+      {
+        "prompt": "safe_name이 #16까지 만들면 그 이름의 유일성도 반드시 확인되는가?",
+        "options": [
+          "그렇다. 제한 없이 고유 이름이 나올 때까지 반복한다",
+          "아니다. 다음 반복의 i<16 조건이 실패해 확인하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "루프 횟수 제한과 생성·확인 순서를 따라야 합니다. 최대 시도는 성공 보장이 아닙니다."
+      },
+      {
+        "prompt": "security- 속성의 mode와 attr.size는?",
+        "options": [
+          "0400과 0",
+          "0444와 원래 길이"
+        ],
+        "answer": 0,
+        "explanation": "secure 조건으로 두 필드를 모두 바꿉니다. 원래 메모리 데이터 자체를 삭제하는 것은 아닙니다."
+      },
+      {
+        "prompt": "노드 attach가 0이면 모든 속성 생성도 성공했는가?",
+        "options": [
+          "그렇다. 속성 하나 실패하면 항상 rollback한다",
+          "그렇게 보장할 수 없다. 속성 추가의 rc를 무시한다"
+        ],
+        "answer": 1,
+        "explanation": "kobject_add 오류는 반환하지만 property 순회의 반환값은 사용하지 않습니다."
+      },
+      {
+        "prompt": "속성 update에서 새 파일 추가 실패 시 기존 파일을 되살리는가?",
+        "options": [
+          "아니다. 기존 제거 후 추가하며 rollback이 없다",
+          "그렇다. 자동 원자적 교체다"
+        ],
+        "answer": 0,
+        "explanation": "remove와 add 호출만 있고 결과 검사·복원 코드는 없습니다."
+      },
+      {
+        "prompt": "property_read는 속성을 문자열로 변환하는가?",
+        "options": [
+          "그렇다. 항상 JSON으로 직렬화한다",
+          "아니다. 원래 value 바이트를 부분 읽기한다"
+        ],
+        "answer": 1,
+        "explanation": "memory_read_from_buffer에 원본 포인터와 길이를 전달합니다. 형식 변환 호출은 없습니다."
+      },
+      {
+        "prompt": "detach는 미초기화 노드에 대해 조용히 반환하는가?",
+        "options": [
+          "아니다. 첫 단계의 BUG_ON 대상이다",
+          "그렇다. 상태 검사를 모두 생략한다"
+        ],
+        "answer": 0,
+        "explanation": "of_kset 검사 전에 초기화 불변식을 확인합니다. NULL 입력도 initialized helper에서 false가 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n#include <linux/of.h>\n#include <linux/slab.h>\n\n#include \"of_private.h\"\n\n/* true when node is initialized */\nstatic int of_node_is_initialized(const struct device_node *node)\n{\n\treturn node && node->kobj.state_initialized;\n}\n\n/* true when node is attached (i.e. present on sysfs) */\nint of_node_is_attached(const struct device_node *node)\n{\n\treturn node && node->kobj.state_in_sysfs;\n}\n\n\n#ifndef CONFIG_OF_DYNAMIC\nstatic void of_node_release(struct kobject *kobj)\n{\n\t/* Without CONFIG_OF_DYNAMIC, no nodes gets freed */\n}\n#endif /* CONFIG_OF_DYNAMIC */\n\nconst struct kobj_type of_node_ktype = {\n\t.release = of_node_release,\n};\n\nstatic ssize_t of_node_property_read(struct file *filp, struct kobject *kobj,\n\t\t\t\tstruct bin_attribute *bin_attr, char *buf,\n\t\t\t\tloff_t offset, size_t count)\n{\n\tstruct property *pp = container_of(bin_attr, struct property, attr);\n\treturn memory_read_from_buffer(buf, count, &offset, pp->value, pp->length);\n}\n\n/* always return newly allocated name, caller must free after use */\nstatic const char *safe_name(struct kobject *kobj, const char *orig_name)\n{\n\tconst char *name = orig_name;\n\tstruct kernfs_node *kn;\n\tint i = 0;\n\n\t/* don't be a hero. After 16 tries give up */\n\twhile (i < 16 && (kn = sysfs_get_dirent(kobj->sd, name))) {\n\t\tsysfs_put(kn);\n\t\tif (name != orig_name)\n\t\t\tkfree(name);\n\t\tname = kasprintf(GFP_KERNEL, \"%s#%i\", orig_name, ++i);\n\t}\n\n\tif (name == orig_name) {\n\t\tname = kstrdup(orig_name, GFP_KERNEL);\n\t} else {\n\t\tpr_warn(\"Duplicate name in %s, renamed to \\\"%s\\\"\\n\",\n\t\t\tkobject_name(kobj), name);\n\t}\n\treturn name;\n}\n\nint __of_add_property_sysfs(struct device_node *np, struct property *pp)\n{\n\tint rc;\n\n\t/* Important: Don't leak passwords */\n\tbool secure = strncmp(pp->name, \"security-\", 9) == 0;\n\n\tif (!IS_ENABLED(CONFIG_SYSFS))\n\t\treturn 0;\n\n\tif (!of_kset || !of_node_is_attached(np))\n\t\treturn 0;\n\n\tsysfs_bin_attr_init(&pp->attr);\n\tpp->attr.attr.name = safe_name(&np->kobj, pp->name);\n\tpp->attr.attr.mode = secure ? 0400 : 0444;\n\tpp->attr.size = secure ? 0 : pp->length;\n\tpp->attr.read = of_node_property_read;\n\n\trc = sysfs_create_bin_file(&np->kobj, &pp->attr);\n\tWARN(rc, \"error adding attribute %s to node %pOF\\n\", pp->name, np);\n\treturn rc;\n}\n\nvoid __of_sysfs_remove_bin_file(struct device_node *np, struct property *prop)\n{\n\tif (!IS_ENABLED(CONFIG_SYSFS))\n\t\treturn;\n\n\tsysfs_remove_bin_file(&np->kobj, &prop->attr);\n\tkfree(prop->attr.attr.name);\n}\n\nvoid __of_remove_property_sysfs(struct device_node *np, struct property *prop)\n{\n\t/* at early boot, bail here and defer setup to of_init() */\n\tif (of_kset && of_node_is_attached(np))\n\t\t__of_sysfs_remove_bin_file(np, prop);\n}\n\nvoid __of_update_property_sysfs(struct device_node *np, struct property *newprop,\n\t\tstruct property *oldprop)\n{\n\t/* At early boot, bail out and defer setup to of_init() */\n\tif (!of_kset)\n\t\treturn;\n\n\tif (oldprop)\n\t\t__of_sysfs_remove_bin_file(np, oldprop);\n\t__of_add_property_sysfs(np, newprop);\n}\n\nint __of_attach_node_sysfs(struct device_node *np)\n{\n\tconst char *name;\n\tstruct kobject *parent;\n\tstruct property *pp;\n\tint rc;\n\n\tif (!IS_ENABLED(CONFIG_SYSFS) || !of_kset)\n\t\treturn 0;\n\n\tnp->kobj.kset = of_kset;\n\tif (!np->parent) {\n\t\t/* Nodes without parents are new top level trees */\n\t\tname = safe_name(&of_kset->kobj, \"base\");\n\t\tparent = NULL;\n\t} else {\n\t\tname = safe_name(&np->parent->kobj, kbasename(np->full_name));\n\t\tparent = &np->parent->kobj;\n\t}\n\tif (!name)\n\t\treturn -ENOMEM;\n\n\trc = kobject_add(&np->kobj, parent, \"%s\", name);\n\tkfree(name);\n\tif (rc)\n\t\treturn rc;\n\n\tfor_each_property_of_node(np, pp)\n\t\t__of_add_property_sysfs(np, pp);\n\n\tof_node_get(np);\n\treturn 0;\n}\n\nvoid __of_detach_node_sysfs(struct device_node *np)\n{\n\tstruct property *pp;\n\n\tBUG_ON(!of_node_is_initialized(np));\n\tif (!of_kset)\n\t\treturn;\n\n\t/* only remove properties if on sysfs */\n\tif (of_node_is_attached(np)) {\n\t\tfor_each_property_of_node(np, pp)\n\t\t\t__of_sysfs_remove_bin_file(np, pp);\n\t\tkobject_del(&np->kobj);\n\t}\n\n\tof_node_put(np);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "f9e60424cfc84607fb42883969bddfabe979c86f89089119e758407dd27db04e",
+      "scope": "whole-file",
+      "line_count": 165,
+      "authoring_source": "course/file_units/of_sysfs_nodes.py",
+      "sections": [
+        "초기화와 부착 상태",
+        "속성의 부분 읽기",
+        "이름 충돌 검색",
+        "이름 저장소와 실패",
+        "속성 생성과 security 접두부",
+        "속성 생성 오류",
+        "속성 삭제의 두 단계",
+        "속성 갱신은 원자적 교체가 아님",
+        "노드 attach의 이름과 부모",
+        "Attach의 부분 성공과 참조",
+        "Detach",
+        "전체 범위와 검증"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/kobj.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "자료를 준비하는 것과 게시판에 붙이는 것은 다른 단계예요. 게시판에 제목이 붙었다고 모든 첨부 자료까지 성공했다고 볼 수도 없어요.",
+    "meaning": "이 파일은 장치 트리 노드와 속성을 sysfs 파일로 보여 줘요. 초기화·노출·참조 보유를 구별하고 부분 실패를 실제 코드대로 읽어요.",
+    "exercise": "같은 속성 이름이 17번 겹치는 상황과 노드만 붙고 일부 속성 추가가 실패하는 상황을 각각 따라가 보세요."
+  },
+  "goal": "이 파일은 장치 트리 노드와 속성을 sysfs 파일로 보여 줘요. 초기화·노출·참조 보유를 구별하고 부분 실패를 실제 코드대로 읽어요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "같은 속성 이름이 17번 겹치는 상황과 노드만 붙고 일부 속성 추가가 실패하는 상황을 각각 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "52ba100f0e817ce2f20200b5db0b095bf204823eb53df45a7f4dc1c33d25d46e",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 7,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

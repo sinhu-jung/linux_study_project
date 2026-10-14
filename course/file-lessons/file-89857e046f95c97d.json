@@ -5,75 +5,89 @@
   "area": "빌드 시스템 · 조건부 컴파일 · 링킹 · 테스트 구성",
   "track": "files",
   "kind": "kernel",
-  "intro": "모든 object 선택과 중첩 조건,테스트 복합 object를 분석합니다.",
+  "intro": "이 파일은 장치 트리 기능별로 어떤 object를 빌드에 넣을지 정해요. C 함수의 실행 흐름이 아니라 Kbuild의 선택 규칙이에요.",
   "guide": [
-    "소스가 존재하는 것과 특정 구성에서 빌드 입력으로 선택되는 것은 다릅니다.",
-    "Kbuild 변수 확장,조건부 구성과 C·DTBO 링크 단위를 학습합니다."
+    "object 파일은 소스나 데이터를 빌드해 연결할 수 있는 형태로 만든 중간 결과예요.",
+    "obj-$(CONFIG_...)는 설정값을 Make 변수 이름에 넣어 대상 선택을 바꿔요. 여기의 ifdef도 C 전처리 지시문이 아니라 Make 문법이에요.",
+    "DTB는 저장된 장치 트리 데이터, DTBO는 덧붙일 장치 트리 데이터예요. 테스트에는 C 코드뿐 아니라 내장 데이터도 필요할 수 있어요."
   ],
   "deep_dive": [
     {
-      "title": "기본 object",
-      "text": "GPL-2.0 Makefile은 obj-y를 base.o,cpu.o,device.o,module.o,platform.o,property.o로 설정합니다. 이 디렉터리가 처리되는 문맥에서 기본 object 목록이며 이 파일만으로 상위 디렉터리 진입 조건까지 정의하지는 않습니다."
+      "title": "항상 넣는 기본 목록",
+      "text": "이 디렉터리를 처리하는 문맥에서 obj-y는 base.o, cpu.o, device.o, module.o, platform.o, property.o예요. 이 파일 자체가 상위 디렉터리에서 언제 여기로 들어오는지까지 정하지는 않아요. 기본 목록이라는 말의 범위를 지켜 읽어요."
     },
     {
-      "title": "트리 표현과 동적 기능",
-      "text": "OF_KOBJ는 kobj.o,OF_DYNAMIC은 dynamic.o,OF_FLATTREE는 fdt.o와 empty_root.dtb.o,OF_EARLY_FLATTREE는 fdt_address.o,OF_PROMTREE는 pdt.o를 선택합니다. 빈 root DTS가 C 코드와 함께 빌드 데이터 object로 연결되는 지점이 여기입니다."
+      "title": "트리 표현에 맞춘 선택",
+      "text": "OF_KOBJ는 kobj.o, OF_DYNAMIC은 dynamic.o를 골라요. OF_FLATTREE는 fdt.o와 empty_root.dtb.o를 함께 넣어요. 빈 루트 데이터도 연결할 object가 되는 지점이에요. OF_EARLY_FLATTREE는 fdt_address.o, OF_PROMTREE는 pdt.o를 선택해요."
     },
     {
-      "title": "주소와 기타 기능",
-      "text": "OF_ADDRESS는 address.o,OF_IRQ는 irq.o,OF_UNITTEST는 unittest.o,OF_RESERVED_MEM은 of_reserved_mem.o,OF_RESOLVE는 resolver.o,OF_OVERLAY는 overlay.o,OF_NUMA는 of_numa.o에 대응합니다. 이 매핑은 각 기능의 알고리즘을 구현하는 코드가 아니라 빌드 대상 선택입니다."
+      "title": "주소와 여러 기능",
+      "text": "OF_ADDRESS는 address.o, OF_IRQ는 irq.o, OF_UNITTEST는 unittest.o에 연결돼요. OF_RESERVED_MEM은 of_reserved_mem.o, OF_RESOLVE는 resolver.o, OF_OVERLAY는 overlay.o, OF_NUMA는 of_numa.o예요. 이 대응표는 기능의 알고리즘 자체를 실행하는 코드가 아니라 빌드할 파일을 정하는 정보예요."
     },
     {
-      "title": "Kexec의 중첩 조건",
-      "text": "CONFIG_KEXEC_FILE ifdef 안에 CONFIG_OF_FLATTREE ifdef가 있고 둘 다 만족하면 obj-y에 kexec.o를 더합니다. 둘 중 하나만 만족하면 이 대입은 실행되지 않습니다. ifdef 검사와 일반 C #ifdef를 혼동하지 말고 Make 변수의 문맥으로 읽어야 합니다."
+      "title": "두 조건이 필요한 kexec",
+      "text": "CONFIG_KEXEC_FILE ifdef 안에 CONFIG_OF_FLATTREE ifdef가 들어 있어요. 두 조건을 모두 만족해야 obj-y에 kexec.o를 더해요. 하나만 켜져도 된다는 OR 조건이 아니에요. 이 검사는 C 실행 중 판단이 아니라 Make가 목록을 구성할 때의 조건이에요."
     },
     {
-      "title": "KUnit과 overlay 복합 object",
-      "text": "CONFIG_KUNIT는 of_kunit_helpers.o,OF_KUNIT_TEST는 of_test.o,OF_OVERLAY_KUNIT_TEST는 overlay-test.o를 선택합니다. overlay-test-y는 overlay_test.o와 kunit_overlay_test.dtbo.o 두 입력입니다. 하이픈이 있는 최종 object 이름과 밑줄이 있는 C object 이름은 다릅니다. 테스트 코드와 내장 overlay 심볼 데이터를 같은 복합 단위로 결합합니다."
+      "title": "테스트 코드와 데이터 묶기",
+      "text": "CONFIG_KUNIT는 of_kunit_helpers.o, OF_KUNIT_TEST는 of_test.o를 골라요. OF_OVERLAY_KUNIT_TEST는 overlay-test.o를 선택하며 그 입력은 overlay_test.o와 kunit_overlay_test.dtbo.o예요. 최종 이름의 하이픈과 C object 이름의 밑줄을 구별하세요. 실행할 테스트와 그 테스트가 사용할 내장 데이터가 한 복합 object로 묶여요."
     },
     {
-      "title": "하위 테스트 데이터와 범위",
-      "text": "마지막 OF_UNITTEST 선택은 unittest-data/ 하위 디렉터리를 추가합니다. 전체 대입과 두 ifdef를 모두 확인했습니다. Kconfig가 보장하는 dependency나 DTBO 생성 규칙 자체는 다른 파일의 책임이며 이 파일을 읽었다고 실제 빌드가 통과한 것은 아닙니다."
+      "title": "하위 데이터와 검토 범위",
+      "text": "마지막 OF_UNITTEST 줄은 unittest-data/ 하위 디렉터리도 더해요. 전체 목록과 중첩 조건을 모두 읽었어요. 다른 기능이 필수인지 정하는 Kconfig 의존성이나 DTBO 생성 방법은 다른 파일에 있어요. 이 목록을 읽은 사실만으로 실제 빌드 통과를 주장할 수는 없어요."
     }
   ],
   "questions": [
     {
-      "prompt": "overlay-test.o를 구성하는 입력은?",
+      "prompt": "overlay-test.o는 무엇으로 구성되나요?",
       "options": [
+        "overlay_test.o와 kunit_overlay_test.dtbo.o예요.",
+        "overlay.c 하나뿐이에요."
+      ],
+      "answer": 0,
+      "explanation": "overlay-test-y가 코드와 데이터 두 입력을 지정해요.",
+      "original_prompt": "overlay-test.o를 구성하는 입력은?",
+      "original_options": [
         "overlay_test.o와 kunit_overlay_test.dtbo.o",
         "overlay.c 하나만"
       ],
-      "answer": 0,
-      "explanation": "overlay-test-y에 두 입력을 명시합니다. 실행 코드와 내장 데이터가 함께 필요합니다."
+      "original_explanation": "overlay-test-y에 두 입력을 명시합니다. 실행 코드와 내장 데이터가 함께 필요합니다."
     },
     {
-      "prompt": "empty_root.dtb.o가 선택되는 직접 조건은?",
+      "prompt": "empty_root.dtb.o를 직접 선택하는 설정은 무엇인가요?",
       "options": [
+        "CONFIG_OF_KOBJ뿐이에요.",
+        "CONFIG_OF_FLATTREE예요."
+      ],
+      "answer": 1,
+      "explanation": "FLATTREE 줄에 fdt.o와 함께 적혀 있어요.",
+      "original_prompt": "empty_root.dtb.o가 선택되는 직접 조건은?",
+      "original_options": [
         "CONFIG_OF_KOBJ만",
         "CONFIG_OF_FLATTREE"
       ],
-      "answer": 1,
-      "explanation": "FLATTREE 줄은 fdt.o와 empty_root.dtb.o를 함께 나열합니다."
+      "original_explanation": "FLATTREE 줄은 fdt.o와 empty_root.dtb.o를 함께 나열합니다."
     },
     {
-      "prompt": "kexec.o가 obj-y에 추가되는 조건은?",
+      "prompt": "kexec.o는 언제 기본 목록에 더해지나요?",
       "options": [
+        "KEXEC_FILE과 OF_FLATTREE 조건이 모두 맞을 때예요.",
+        "둘 중 하나만 켜져도 언제나 추가돼요."
+      ],
+      "answer": 0,
+      "explanation": "대입문은 두 겹의 조건 안에 있어요.",
+      "original_prompt": "kexec.o가 obj-y에 추가되는 조건은?",
+      "original_options": [
         "KEXEC_FILE과 OF_FLATTREE의 중첩 ifdef가 모두 만족한다",
         "둘 중 하나만 있으면 항상 추가된다"
       ],
-      "answer": 0,
-      "explanation": "대입은 두 조건 블록 안에 있습니다. OR가 아닌 중첩 조건입니다."
+      "original_explanation": "대입은 두 조건 블록 안에 있습니다. OR가 아닌 중첩 조건입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "KEXEC_FILE과 OF_FLATTREE의 네 가지 켜짐 조합에서 kexec.o가 선택되는지 표를 만들어 보세요."
   },
   "annotated": "# SPDX-License-Identifier: GPL-2.0\nobj-y = base.o cpu.o device.o module.o platform.o property.o\nobj-$(CONFIG_OF_KOBJ) += kobj.o\nobj-$(CONFIG_OF_DYNAMIC) += dynamic.o\nobj-$(CONFIG_OF_FLATTREE) += fdt.o empty_root.dtb.o\nobj-$(CONFIG_OF_EARLY_FLATTREE) += fdt_address.o\nobj-$(CONFIG_OF_PROMTREE) += pdt.o\nobj-$(CONFIG_OF_ADDRESS)  += address.o\nobj-$(CONFIG_OF_IRQ)    += irq.o\nobj-$(CONFIG_OF_UNITTEST) += unittest.o\nobj-$(CONFIG_OF_RESERVED_MEM) += of_reserved_mem.o\nobj-$(CONFIG_OF_RESOLVE)  += resolver.o\nobj-$(CONFIG_OF_OVERLAY) += overlay.o\nobj-$(CONFIG_OF_NUMA) += of_numa.o\n\nifdef CONFIG_KEXEC_FILE\nifdef CONFIG_OF_FLATTREE\nobj-y\t+= kexec.o\nendif\nendif\n\nobj-$(CONFIG_KUNIT) += of_kunit_helpers.o\nobj-$(CONFIG_OF_KUNIT_TEST) += of_test.o\nobj-$(CONFIG_OF_OVERLAY_KUNIT_TEST) += overlay-test.o\noverlay-test-y := overlay_test.o kunit_overlay_test.dtbo.o\n\nobj-$(CONFIG_OF_UNITTEST) += unittest-data/\n",
   "source_review": {
@@ -97,5 +111,134 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/Makefile"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-89857e046f95c97d",
+    "path": "drivers/of/Makefile",
+    "title": "OF 빌드 연결: 기능별 object와 overlay 데이터의 결합",
+    "area": "빌드 시스템 · 조건부 컴파일 · 링킹 · 테스트 구성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "모든 object 선택과 중첩 조건,테스트 복합 object를 분석합니다.",
+    "guide": [
+      "소스가 존재하는 것과 특정 구성에서 빌드 입력으로 선택되는 것은 다릅니다.",
+      "Kbuild 변수 확장,조건부 구성과 C·DTBO 링크 단위를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "기본 object",
+        "text": "GPL-2.0 Makefile은 obj-y를 base.o,cpu.o,device.o,module.o,platform.o,property.o로 설정합니다. 이 디렉터리가 처리되는 문맥에서 기본 object 목록이며 이 파일만으로 상위 디렉터리 진입 조건까지 정의하지는 않습니다."
+      },
+      {
+        "title": "트리 표현과 동적 기능",
+        "text": "OF_KOBJ는 kobj.o,OF_DYNAMIC은 dynamic.o,OF_FLATTREE는 fdt.o와 empty_root.dtb.o,OF_EARLY_FLATTREE는 fdt_address.o,OF_PROMTREE는 pdt.o를 선택합니다. 빈 root DTS가 C 코드와 함께 빌드 데이터 object로 연결되는 지점이 여기입니다."
+      },
+      {
+        "title": "주소와 기타 기능",
+        "text": "OF_ADDRESS는 address.o,OF_IRQ는 irq.o,OF_UNITTEST는 unittest.o,OF_RESERVED_MEM은 of_reserved_mem.o,OF_RESOLVE는 resolver.o,OF_OVERLAY는 overlay.o,OF_NUMA는 of_numa.o에 대응합니다. 이 매핑은 각 기능의 알고리즘을 구현하는 코드가 아니라 빌드 대상 선택입니다."
+      },
+      {
+        "title": "Kexec의 중첩 조건",
+        "text": "CONFIG_KEXEC_FILE ifdef 안에 CONFIG_OF_FLATTREE ifdef가 있고 둘 다 만족하면 obj-y에 kexec.o를 더합니다. 둘 중 하나만 만족하면 이 대입은 실행되지 않습니다. ifdef 검사와 일반 C #ifdef를 혼동하지 말고 Make 변수의 문맥으로 읽어야 합니다."
+      },
+      {
+        "title": "KUnit과 overlay 복합 object",
+        "text": "CONFIG_KUNIT는 of_kunit_helpers.o,OF_KUNIT_TEST는 of_test.o,OF_OVERLAY_KUNIT_TEST는 overlay-test.o를 선택합니다. overlay-test-y는 overlay_test.o와 kunit_overlay_test.dtbo.o 두 입력입니다. 하이픈이 있는 최종 object 이름과 밑줄이 있는 C object 이름은 다릅니다. 테스트 코드와 내장 overlay 심볼 데이터를 같은 복합 단위로 결합합니다."
+      },
+      {
+        "title": "하위 테스트 데이터와 범위",
+        "text": "마지막 OF_UNITTEST 선택은 unittest-data/ 하위 디렉터리를 추가합니다. 전체 대입과 두 ifdef를 모두 확인했습니다. Kconfig가 보장하는 dependency나 DTBO 생성 규칙 자체는 다른 파일의 책임이며 이 파일을 읽었다고 실제 빌드가 통과한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "overlay-test.o를 구성하는 입력은?",
+        "options": [
+          "overlay_test.o와 kunit_overlay_test.dtbo.o",
+          "overlay.c 하나만"
+        ],
+        "answer": 0,
+        "explanation": "overlay-test-y에 두 입력을 명시합니다. 실행 코드와 내장 데이터가 함께 필요합니다."
+      },
+      {
+        "prompt": "empty_root.dtb.o가 선택되는 직접 조건은?",
+        "options": [
+          "CONFIG_OF_KOBJ만",
+          "CONFIG_OF_FLATTREE"
+        ],
+        "answer": 1,
+        "explanation": "FLATTREE 줄은 fdt.o와 empty_root.dtb.o를 함께 나열합니다."
+      },
+      {
+        "prompt": "kexec.o가 obj-y에 추가되는 조건은?",
+        "options": [
+          "KEXEC_FILE과 OF_FLATTREE의 중첩 ifdef가 모두 만족한다",
+          "둘 중 하나만 있으면 항상 추가된다"
+        ],
+        "answer": 0,
+        "explanation": "대입은 두 조건 블록 안에 있습니다. OR가 아닌 중첩 조건입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "# SPDX-License-Identifier: GPL-2.0\nobj-y = base.o cpu.o device.o module.o platform.o property.o\nobj-$(CONFIG_OF_KOBJ) += kobj.o\nobj-$(CONFIG_OF_DYNAMIC) += dynamic.o\nobj-$(CONFIG_OF_FLATTREE) += fdt.o empty_root.dtb.o\nobj-$(CONFIG_OF_EARLY_FLATTREE) += fdt_address.o\nobj-$(CONFIG_OF_PROMTREE) += pdt.o\nobj-$(CONFIG_OF_ADDRESS)  += address.o\nobj-$(CONFIG_OF_IRQ)    += irq.o\nobj-$(CONFIG_OF_UNITTEST) += unittest.o\nobj-$(CONFIG_OF_RESERVED_MEM) += of_reserved_mem.o\nobj-$(CONFIG_OF_RESOLVE)  += resolver.o\nobj-$(CONFIG_OF_OVERLAY) += overlay.o\nobj-$(CONFIG_OF_NUMA) += of_numa.o\n\nifdef CONFIG_KEXEC_FILE\nifdef CONFIG_OF_FLATTREE\nobj-y\t+= kexec.o\nendif\nendif\n\nobj-$(CONFIG_KUNIT) += of_kunit_helpers.o\nobj-$(CONFIG_OF_KUNIT_TEST) += of_test.o\nobj-$(CONFIG_OF_OVERLAY_KUNIT_TEST) += overlay-test.o\noverlay-test-y := overlay_test.o kunit_overlay_test.dtbo.o\n\nobj-$(CONFIG_OF_UNITTEST) += unittest-data/\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "76d7f17f527ff3b9b8e3175d9ae66ce9d6008326e04c5b89f9518250e8c43148",
+      "scope": "whole-file",
+      "line_count": 27,
+      "authoring_source": "course/file_units/of_test_build.py",
+      "sections": [
+        "기본 object",
+        "트리 표현과 동적 기능",
+        "주소와 기타 기능",
+        "Kexec의 중첩 조건",
+        "KUnit과 overlay 복합 object",
+        "하위 테스트 데이터와 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/Makefile"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "재료가 창고에 있다고 오늘 요리에 모두 쓰는 것은 아니에요. Makefile은 선택한 기능에 맞춰 빌드 재료를 고르는 목록이에요.",
+    "meaning": "이 파일은 장치 트리 기능별로 어떤 object를 빌드에 넣을지 정해요. C 함수의 실행 흐름이 아니라 Kbuild의 선택 규칙이에요.",
+    "exercise": "KEXEC_FILE과 OF_FLATTREE의 네 가지 켜짐 조합에서 kexec.o가 선택되는지 표를 만들어 보세요."
+  },
+  "goal": "이 파일은 장치 트리 기능별로 어떤 object를 빌드에 넣을지 정해요. C 함수의 실행 흐름이 아니라 Kbuild의 선택 규칙이에요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "KEXEC_FILE과 OF_FLATTREE의 네 가지 켜짐 조합에서 kexec.o가 선택되는지 표를 만들어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "0c51ab14de1ccca6d270459baa7666757f14a99c1503ece31957474a1ab543a2",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

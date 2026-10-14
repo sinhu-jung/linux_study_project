@@ -5,122 +5,154 @@
   "area": "장치 트리 · 재귀 · 연결 리스트 · 펌웨어 · 초기 메모리",
   "track": "files",
   "kind": "kernel",
-  "intro": "펌웨어 callback으로 노드와 속성을 읽어 커널 트리를 구성하는 전체 경로를 분석합니다.",
+  "intro": "이 코드는 펌웨어에서 노드와 속성을 읽어 커널의 장치 트리를 연결해요. 비슷한 읽기 함수라도 할당 크기와 오류 처리가 다르므로 따로 살펴야 해요.",
   "guide": [
-    "부모·첫 자식·다음 형제 표현은 임의 개수의 자식을 가진 트리를 연결 구조로 나타냅니다.",
-    "깊이 우선 탐색,속성 리스트,초기 할당,callback 계약과 문자열 경계를 학습합니다."
+    "장치 트리는 부품의 관계와 속성을 나무 모양으로 담은 자료예요. 노드는 한 항목이고 속성은 그 항목의 이름·값 정보예요.",
+    "재귀는 같은 함수를 더 작은 관계에 다시 부르는 방식이에요. 여기서는 자식 트리에 재귀를 쓰고 같은 부모의 형제들은 반복문으로 읽어요.",
+    "초기 allocator는 부팅 초기에 메모리를 제공하는 함수예요. 이 코드는 그 함수와 펌웨어 콜백의 약속에 기대며 모든 실패를 일반 오류번호로 돌려주는 구조는 아니에요."
   ],
   "deep_dive": [
     {
-      "title": "구성과 아키텍처 분기",
-      "text": "GPL-2.0+ 파일은 kernel,module,errno,mutex,slab,OF,OF PDT를 포함하고 PROM ops 포인터를 __initdata로 보관합니다. SPARC에서는 초기 unique_id counter를 노드·속성에 대입 후 증가하고 full name은 build_path_component로 만듭니다. 비SPARC에서는 unique ID와 irq_trans_init이 빈 inline이며 별도 이름 생성기를 사용합니다."
+      "title": "초기 자료와 컴퓨터 종류별 차이",
+      "text": "필요한 커널·OF 헤더를 포함하고 펌웨어 콜백 표 주소를 __initdata에 보관해요. SPARC에서는 노드와 속성에 unique_id를 넣고 카운터를 늘리며 이름은 build_path_component로 만들어요. 다른 종류에서는 ID 부여와 irq_trans_init이 빈 함수이고 별도의 이름 생성기를 사용해요. 설정 분기를 넘어 같은 효과가 있다고 가정하면 안 돼요."
     },
     {
-      "title": "비SPARC 이름 생성",
-      "text": "256바이트 지역 path에 pkg2path를 요청하여 반환이 0이면 kbasename을 복제합니다. 즉 해당 경로에서 저장하는 full_name은 전체 경로 문자열이 아니라 마지막 구성요소입니다. 실패하면 name 속성을 얻어 len+16바이트를 할당하고 name@unknownN을 sprintf한 뒤 오류 로그를 남깁니다. failsafe_id는 정적 counter이며 name 부재나 할당 실패를 명시적으로 거르는 분기는 없습니다."
+      "title": "비SPARC에서 이름 만들기",
+      "text": "256바이트 path에 pkg2path로 경로를 요청해요. 성공하면 kbasename, 즉 마지막 경로 조각만 복사해 full_name에 써요. /bus/device라면 device 부분인 식이에요. 실패하면 name 속성을 얻고 len+16 공간에 name@unknownN을 만들어 오류 메시지를 남겨요. N은 정적 카운터라 호출 사이에 유지돼요. 이름 없음이나 할당 실패를 별도로 거르는 분기는 없어요."
     },
     {
-      "title": "속성 객체와 재사용",
-      "text": "build_one_prop는 property 뒤에 이름용 32바이트를 붙여 초기 할당하고 p->name을 p+1로 둡니다. static tmp가 있으면 해당 전체 영역을 0으로 지워 재사용합니다. 새 할당 경로에서만 unique ID를 부여하며 재사용 경로에서는 다시 부여하지 않습니다. 속성 열거 종료 때 얻은 객체를 다음 호출에 재활용하는 방식입니다."
+      "title": "속성 객체의 공간과 재사용",
+      "text": "속성 본체 뒤에 이름용 32바이트를 이어서 할당해요. p+1은 구조체 한 개 뒤를 가리키므로 p->name을 그곳으로 정해요. 이전 열거가 끝나 남겨 둔 tmp가 있으면 전체 공간을 0으로 지우고 재사용해요. SPARC ID 부여는 새 할당 쪽에만 있으므로 재사용 때 카운터를 새로 늘린다고 설명하면 안 돼요."
     },
     {
-      "title": "특수 속성 경로",
-      "text": "special_name이 있으면 strcpy로 이름을 복사하고 special_len만큼 값을 할당·복사합니다. property list는 먼저 .node라는 특수 속성을 만들고 phandle node의 메모리 표현을 sizeof(node)만큼 복사합니다. 이 경로에 별도 endian 변환이나 항상 NUL을 붙이는 명령은 없습니다. 이름 저장소가 32바이트라는 전제와 복사 함수의 경계는 구분해야 합니다."
+      "title": "특수 속성 .node",
+      "text": "special_name이 있으면 이름을 strcpy로 복사하고 special_len만큼 값을 할당·복사해요. 속성 목록의 첫 .node는 phandle의 메모리 표현을 sizeof(node)만큼 담아요. 여기에는 바이트 순서를 바꾸는 endian 변환이나 값 끝에 NUL을 추가하는 줄이 없어요. 이름 공간이 32바이트라는 약속도 strcpy가 자동 검사해 주는 것은 아니에요."
     },
     {
-      "title": "일반 속성 열거와 값",
-      "text": "nextprop 오류는 tmp=p로 보관하고 NULL을 반환합니다. 그 밖에는 getproplen이 0 이하이면 p->length=0으로 둡니다. 양수면 length+1을 할당하고 getproperty를 호출합니다. 반환 len이 0 이하일 때만 length를 0으로 바꾸며 양수의 짧은 읽기에 맞춰 length를 줄이지는 않습니다. 끝에는 p->value[p->length]=NUL을 기록합니다."
+      "title": "일반 속성의 길이와 값",
+      "text": "nextprop가 오류를 알리면 객체를 tmp에 남기고 NULL로 끝내요. 속성 길이가 0 이하이면 length를 0으로 해요. 양수이면 length+1 공간을 얻어 값을 읽고, 읽은 결과가 0 이하일 때만 length를 0으로 바꿔요. 예를 들어 8을 요청해 4를 받아도 양수이므로 저장한 length는 8로 남아요. 마지막 NUL은 반환 len이 아니라 p->length 위치에 써요."
     },
     {
-      "title": "속성 리스트 구성",
-      "text": "build_prop_list는 .node를 head와 tail로 두고 첫 일반 속성을 추가합니다. 이후 tail->name을 prev로 넘겨 다음 속성을 구하면서 next 링크를 잇습니다. NULL에서 멈추며 순서를 다시 정렬하거나 hash table에 넣지 않습니다. 특수 속성 생성 실패를 검사하는 별도 분기도 없습니다."
+      "title": "속성 목록 잇기",
+      "text": "먼저 .node를 head와 tail로 삼고 첫 일반 속성을 뒤에 연결해요. 이어 이전 속성의 이름을 prev로 넘겨 다음 속성을 찾고 next 주소를 이어 붙여요. NULL을 만나면 멈추며 순서를 새로 정렬하거나 해시 표로 바꾸지는 않아요. 특수 속성 생성 실패를 따로 검사하는 분기도 없어요."
     },
     {
-      "title": "단일 name 조회 helper",
-      "text": "get_one_property는 기본 반환 문자열을 <NULL>로 두고 길이가 양수이면 정확히 len바이트를 할당해 값을 읽습니다. 이 helper는 일반 속성 생성과 달리 len+1 할당이나 끝 NUL 추가를 하지 않으며 getproperty 결과 오류도 반환 포인터 변경에 사용하지 않습니다. 따라서 두 경로의 문자열 보장 조건을 같다고 설명하면 안 됩니다."
+      "title": "이름 하나만 읽는 함수",
+      "text": "get_one_property의 기본 결과는 <NULL> 문자열이에요. 길이가 양수이면 정확히 len바이트만 얻어 값을 읽어요. 일반 속성 생성과 달리 len+1 할당이나 끝 NUL 추가가 없어요. getproperty의 결과가 오류여도 반환 포인터를 다른 값으로 바꾸지 않아요. 비슷한 이름의 함수라도 문자열 끝 보장을 같게 보면 안 돼요."
     },
     {
-      "title": "노드 생성 순서",
-      "text": "create_node는 phandle이 0이면 NULL입니다. 그 외에는 초기 할당,of_node_init,unique ID,부모 링크,name 읽기,phandle 저장,속성 리스트,full_name 생성,irq_trans_init 순서로 진행합니다. 할당 실패를 일반 errno로 전파하는 루프가 아니라 초기 allocator 및 펌웨어 callback 계약에 의존하는 코드입니다."
+      "title": "노드 하나를 만드는 순서",
+      "text": "phandle이 0이면 NULL을 반환해요. 그 외에는 메모리를 얻고 of_node_init, ID 부여, 부모 연결, name 읽기, phandle 저장, 속성 목록 만들기, full_name 만들기, IRQ 변환 초기화 순서로 진행해요. IRQ는 장치의 처리 요청 신호인 인터럽트예요. 이 경로는 모든 할당 실패를 일반 errno로 전달하는 함수가 아니라 초기 할당과 콜백 계약에 의존해요."
     },
     {
-      "title": "트리의 자식·형제 표현",
-      "text": "build_tree는 한 부모의 첫 node에서 시작해 형제들을 while로 순회합니다. 이전 형제의 sibling을 새 dp에 연결하고 첫 dp를 ret로 기억합니다. 각 dp의 child는 getchild(node)로 재귀 생성한 결과입니다. 그 자식 서브트리 처리를 마친 뒤 getsibling으로 넘어가므로 깊이 우선 구성입니다. 명시적 순환 검출이나 재귀 깊이 제한은 없습니다."
+      "title": "자식은 아래로, 형제는 옆으로",
+      "text": "build_tree는 형제들을 while로 만들고 이전 형제의 sibling을 새 노드에 연결해요. 첫 노드는 ret로 기억해 반환해요. 각 노드의 child는 getchild 식별값을 같은 함수에 넘겨 재귀로 만든 결과예요. 그 자식들을 다 만든 뒤 getsibling으로 옮기므로 깊이 우선이에요. 순환 연결을 검사하거나 재귀 깊이를 제한하는 코드는 없어요."
     },
     {
-      "title": "공개 초기화와 root",
-      "text": "kernel_tree_alloc은 size만 prom_early_alloc에 전달하고 align 인수는 사용하지 않습니다. build_devicetree는 ops가 NULL이면 BUG_ON하고 전역 ops를 저장합니다. root를 만든 뒤 full_name을 /로 대입하고 자식 트리를 구성합니다. root_node=0에서 create_node가 NULL을 반환하는 경우를 여기서 추가 검사하지 않습니다. 마지막 of_alias_scan에 allocator를 넘겨 chosen과 aliases 연결을 준비합니다."
+      "title": "루트 생성과 공개 초기화",
+      "text": "kernel_tree_alloc은 size만 prom_early_alloc에 넘기며 align을 별도로 적용하지 않아요. 공개 함수는 ops가 NULL이면 BUG_ON으로 잘못된 상태를 드러내고 표를 전역에 보관해요. 루트를 만든 뒤 full_name을 /로 정하고 자식 트리를 만들어요. root_node=0 때문에 루트가 NULL인 경우를 추가로 검사하지는 않아요. 마지막 of_alias_scan에 allocator를 넘겨 chosen과 aliases 연결을 준비해요."
     },
     {
-      "title": "전체 범위와 검증",
-      "text": "아키텍처 두 분기,속성 생성·리스트·단일 조회,노드·트리 생성,allocator adapter와 공개 초기화를 모두 대조했습니다. 정상 비순환 트리는 노드·속성 수에 따른 순회를 수행하고 재귀 스택은 높이에 영향을 받습니다. 펌웨어 동작이나 초기 allocator의 실제 부팅 검증은 실행하지 않았습니다."
+      "title": "전체 읽기와 한계",
+      "text": "컴퓨터 종류별 분기, 속성과 목록, 단일 이름 조회, 노드와 트리, 할당 연결 함수와 공개 초기화를 대조했어요. 정상적으로 순환 없는 트리라면 노드와 속성을 따라 작업하고 재귀 호출이 쌓이는 양은 트리 높이의 영향을 받아요. 실제 펌웨어나 부팅 초기 allocator의 실행 실험은 하지 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "build_tree에서 자식과 형제는 어떻게 처리되는가?",
+      "prompt": "build_tree는 자식과 형제를 어떻게 읽나요?",
       "options": [
+        "자식은 재귀로, 형제는 반복문으로 처리해요.",
+        "둘 다 전역 해시 표만 조회해요."
+      ],
+      "answer": 0,
+      "explanation": "child에는 재귀 결과를, 이전 형제의 sibling에는 다음 노드를 연결해요.",
+      "original_prompt": "build_tree에서 자식과 형제는 어떻게 처리되는가?",
+      "original_options": [
         "자식은 재귀,형제는 반복문으로 처리한다",
         "둘 다 전역 hash table만 조회한다"
       ],
-      "answer": 0,
-      "explanation": "child를 재귀 결과로 지정하고 sibling을 이전 형제에 연결합니다. 첫 자식·다음 형제 표현입니다."
+      "original_explanation": "child를 재귀 결과로 지정하고 sibling을 이전 형제에 연결합니다. 첫 자식·다음 형제 표현입니다."
     },
     {
-      "prompt": "비SPARC pkg2path 성공 시 full_name에 무엇을 복제하는가?",
+      "prompt": "비SPARC에서 경로 읽기가 성공하면 full_name에 무엇을 복사하나요?",
       "options": [
+        "항상 경로 전체를 복사해요.",
+        "kbasename으로 얻은 마지막 경로 조각을 복사해요."
+      ],
+      "answer": 1,
+      "explanation": "필드 이름만 보고 전체 경로라고 판단하면 안 돼요.",
+      "original_prompt": "비SPARC pkg2path 성공 시 full_name에 무엇을 복제하는가?",
+      "original_options": [
         "항상 전체 path의 모든 문자",
         "path의 kbasename"
       ],
-      "answer": 1,
-      "explanation": "이름 생성기가 kbasename을 호출합니다. 필드 이름만 보고 저장 형태를 추정하지 않습니다."
+      "original_explanation": "이름 생성기가 kbasename을 호출합니다. 필드 이름만 보고 저장 형태를 추정하지 않습니다."
     },
     {
-      "prompt": "getproperty가 양수이지만 요청보다 짧은 길이를 반환하면 일반 속성 length를 그 값으로 줄이는가?",
+      "prompt": "일반 속성 읽기가 요청보다 짧은 양수를 반환하면 length도 그 값으로 줄이나요?",
       "options": [
+        "아니요. 결과가 0 이하일 때만 length를 0으로 바꿔요.",
+        "네. 항상 실제 읽은 길이로 바꿔요."
+      ],
+      "answer": 0,
+      "explanation": "코드에 양수 짧은 읽기의 길이 갱신은 없어요.",
+      "original_prompt": "getproperty가 양수이지만 요청보다 짧은 길이를 반환하면 일반 속성 length를 그 값으로 줄이는가?",
+      "original_options": [
         "아니다. len<=0일 때만 0으로 바꾼다",
         "그렇다. 언제나 실제 반환 길이로 갱신한다"
       ],
-      "answer": 0,
-      "explanation": "대입 조건을 실제 코드대로 읽어야 합니다. 최종 NUL 위치도 p->length를 사용합니다."
+      "original_explanation": "대입 조건을 실제 코드대로 읽어야 합니다. 최종 NUL 위치도 p->length를 사용합니다."
     },
     {
-      "prompt": "단일 name 조회 helper가 항상 추가 NUL 바이트를 쓰는가?",
+      "prompt": "이름 하나 읽는 helper가 끝 NUL 공간도 항상 추가하나요?",
       "options": [
+        "네. 일반 속성 함수와 완전히 같아요.",
+        "아니요. len만큼 할당하고 별도 NUL을 쓰지 않아요."
+      ],
+      "answer": 1,
+      "explanation": "두 경로의 공간 크기와 끝 처리를 구별해야 해요.",
+      "original_prompt": "단일 name 조회 helper가 항상 추가 NUL 바이트를 쓰는가?",
+      "original_options": [
         "그렇다. 일반 속성 helper와 완전히 같다",
         "아니다. 길이 그대로 할당하고 별도 NUL 기록이 없다"
       ],
-      "answer": 1,
-      "explanation": "비슷한 조회 함수라도 할당 크기와 종료 처리가 다릅니다."
+      "original_explanation": "비슷한 조회 함수라도 할당 크기와 종료 처리가 다릅니다."
     },
     {
-      "prompt": "속성 tmp 재사용에서 SPARC unique ID를 새로 부여하는가?",
+      "prompt": "tmp를 재사용할 때 SPARC ID도 새로 부여하나요?",
       "options": [
+        "아니요. 0으로 지워 재사용하며 새 ID 부여는 새 할당 쪽에 있어요.",
+        "네. 모든 경로에서 카운터를 늘려요."
+      ],
+      "answer": 0,
+      "explanation": "메모리 재사용과 ID 대입은 서로 다른 분기에 있어요.",
+      "original_prompt": "속성 tmp 재사용에서 SPARC unique ID를 새로 부여하는가?",
+      "original_options": [
         "아니다. memset 후 재사용하며 ID 부여는 새 할당 쪽에 있다",
         "그렇다. 모든 경로에서 counter를 증가한다"
       ],
-      "answer": 0,
-      "explanation": "분기별 쓰기 위치를 추적해야 합니다. 메모리 재사용과 ID 부여는 별개입니다."
+      "original_explanation": "분기별 쓰기 위치를 추적해야 합니다. 메모리 재사용과 ID 부여는 별개입니다."
     },
     {
-      "prompt": "kernel_tree_alloc이 align을 별도 적용하는가?",
+      "prompt": "kernel_tree_alloc은 align에 맞게 주소를 직접 조정하나요?",
       "options": [
+        "네. align 단위로 주소를 반올림해요.",
+        "아니요. size만 초기 allocator에 전달해요."
+      ],
+      "answer": 1,
+      "explanation": "아래 allocator의 보장은 별도로 확인해야 하며 이 adapter는 align을 쓰지 않아요.",
+      "original_prompt": "kernel_tree_alloc이 align을 별도 적용하는가?",
+      "original_options": [
         "그렇다. align만큼 주소를 직접 반올림한다",
         "아니다. size만 초기 allocator에 전달한다"
       ],
-      "answer": 1,
-      "explanation": "adapter 본문은 prom_early_alloc(size) 반환뿐입니다. 하위 allocator 보장은 별도 계약입니다."
+      "original_explanation": "adapter 본문은 prom_early_alloc(size) 반환뿐입니다. 하위 allocator 보장은 별도 계약입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "부모 A에 자식 B와 C가 있고 B에 자식 D가 있다고 가정해 생성 순서를 그려 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/* pdt.c: OF PROM device tree support code.\n *\n * Paul Mackerras\tAugust 1996.\n * Copyright (C) 1996-2005 Paul Mackerras.\n *\n *  Adapted for 64bit PowerPC by Dave Engebretsen and Peter Bergner.\n *    {engebret|bergner}@us.ibm.com\n *\n *  Adapted for sparc by David S. Miller davem@davemloft.net\n *  Adapted for multiple architectures by Andres Salomon <dilinger@queued.net>\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/errno.h>\n#include <linux/mutex.h>\n#include <linux/slab.h>\n#include <linux/of.h>\n#include <linux/of_pdt.h>\n\nstatic struct of_pdt_ops *of_pdt_prom_ops __initdata;\n\n#if defined(CONFIG_SPARC)\nunsigned int of_pdt_unique_id __initdata;\n\n#define of_pdt_incr_unique_id(p) do { \\\n\t(p)->unique_id = of_pdt_unique_id++; \\\n} while (0)\n\nstatic char * __init of_pdt_build_full_name(struct device_node *dp)\n{\n\treturn build_path_component(dp);\n}\n\n#else /* CONFIG_SPARC */\n\nstatic inline void of_pdt_incr_unique_id(void *p) { }\nstatic inline void irq_trans_init(struct device_node *dp) { }\n\nstatic char * __init of_pdt_build_full_name(struct device_node *dp)\n{\n\tstatic int failsafe_id = 0; /* for generating unique names on failure */\n\tconst char *name;\n\tchar path[256];\n\tchar *buf;\n\tint len;\n\n\tif (!of_pdt_prom_ops->pkg2path(dp->phandle, path, sizeof(path), &len)) {\n\t\tname = kbasename(path);\n\t\tbuf = prom_early_alloc(strlen(name) + 1);\n\t\tstrcpy(buf, name);\n\t\treturn buf;\n\t}\n\n\tname = of_get_property(dp, \"name\", &len);\n\tbuf = prom_early_alloc(len + 16);\n\tsprintf(buf, \"%s@unknown%i\", name, failsafe_id++);\n\tpr_err(\"%s: pkg2path failed; assigning %s\\n\", __func__, buf);\n\treturn buf;\n}\n\n#endif /* !CONFIG_SPARC */\n\nstatic struct property * __init of_pdt_build_one_prop(phandle node, char *prev,\n\t\t\t\t\t       char *special_name,\n\t\t\t\t\t       void *special_val,\n\t\t\t\t\t       int special_len)\n{\n\tstatic struct property *tmp = NULL;\n\tstruct property *p;\n\tint err;\n\n\tif (tmp) {\n\t\tp = tmp;\n\t\tmemset(p, 0, sizeof(*p) + 32);\n\t\ttmp = NULL;\n\t} else {\n\t\tp = prom_early_alloc(sizeof(struct property) + 32);\n\t\tof_pdt_incr_unique_id(p);\n\t}\n\n\tp->name = (char *) (p + 1);\n\tif (special_name) {\n\t\tstrcpy(p->name, special_name);\n\t\tp->length = special_len;\n\t\tp->value = prom_early_alloc(special_len);\n\t\tmemcpy(p->value, special_val, special_len);\n\t} else {\n\t\terr = of_pdt_prom_ops->nextprop(node, prev, p->name);\n\t\tif (err) {\n\t\t\ttmp = p;\n\t\t\treturn NULL;\n\t\t}\n\t\tp->length = of_pdt_prom_ops->getproplen(node, p->name);\n\t\tif (p->length <= 0) {\n\t\t\tp->length = 0;\n\t\t} else {\n\t\t\tint len;\n\n\t\t\tp->value = prom_early_alloc(p->length + 1);\n\t\t\tlen = of_pdt_prom_ops->getproperty(node, p->name,\n\t\t\t\t\tp->value, p->length);\n\t\t\tif (len <= 0)\n\t\t\t\tp->length = 0;\n\t\t\t((unsigned char *)p->value)[p->length] = '\\0';\n\t\t}\n\t}\n\treturn p;\n}\n\nstatic struct property * __init of_pdt_build_prop_list(phandle node)\n{\n\tstruct property *head, *tail;\n\n\thead = tail = of_pdt_build_one_prop(node, NULL,\n\t\t\t\t     \".node\", &node, sizeof(node));\n\n\ttail->next = of_pdt_build_one_prop(node, NULL, NULL, NULL, 0);\n\ttail = tail->next;\n\twhile(tail) {\n\t\ttail->next = of_pdt_build_one_prop(node, tail->name,\n\t\t\t\t\t    NULL, NULL, 0);\n\t\ttail = tail->next;\n\t}\n\n\treturn head;\n}\n\nstatic char * __init of_pdt_get_one_property(phandle node, const char *name)\n{\n\tchar *buf = \"<NULL>\";\n\tint len;\n\n\tlen = of_pdt_prom_ops->getproplen(node, name);\n\tif (len > 0) {\n\t\tbuf = prom_early_alloc(len);\n\t\tlen = of_pdt_prom_ops->getproperty(node, name, buf, len);\n\t}\n\n\treturn buf;\n}\n\nstatic struct device_node * __init of_pdt_create_node(phandle node,\n\t\t\t\t\t\t    struct device_node *parent)\n{\n\tstruct device_node *dp;\n\n\tif (!node)\n\t\treturn NULL;\n\n\tdp = prom_early_alloc(sizeof(*dp));\n\tof_node_init(dp);\n\tof_pdt_incr_unique_id(dp);\n\tdp->parent = parent;\n\n\tdp->name = of_pdt_get_one_property(node, \"name\");\n\tdp->phandle = node;\n\n\tdp->properties = of_pdt_build_prop_list(node);\n\n\tdp->full_name = of_pdt_build_full_name(dp);\n\n\tirq_trans_init(dp);\n\n\treturn dp;\n}\n\nstatic struct device_node * __init of_pdt_build_tree(struct device_node *parent,\n\t\t\t\t\t\t   phandle node)\n{\n\tstruct device_node *ret = NULL, *prev_sibling = NULL;\n\tstruct device_node *dp;\n\n\twhile (1) {\n\t\tdp = of_pdt_create_node(node, parent);\n\t\tif (!dp)\n\t\t\tbreak;\n\n\t\tif (prev_sibling)\n\t\t\tprev_sibling->sibling = dp;\n\n\t\tif (!ret)\n\t\t\tret = dp;\n\t\tprev_sibling = dp;\n\n\t\tdp->child = of_pdt_build_tree(dp, of_pdt_prom_ops->getchild(node));\n\n\t\tnode = of_pdt_prom_ops->getsibling(node);\n\t}\n\n\treturn ret;\n}\n\nstatic void * __init kernel_tree_alloc(u64 size, u64 align)\n{\n\treturn prom_early_alloc(size);\n}\n\nvoid __init of_pdt_build_devicetree(phandle root_node, struct of_pdt_ops *ops)\n{\n\tBUG_ON(!ops);\n\tof_pdt_prom_ops = ops;\n\n\tof_root = of_pdt_create_node(root_node, NULL);\n\tof_root->full_name = \"/\";\n\n\tof_root->child = of_pdt_build_tree(of_root,\n\t\t\t\tof_pdt_prom_ops->getchild(of_root->phandle));\n\n\t/* Get pointer to \"/chosen\" and \"/aliases\" nodes for use everywhere */\n\tof_alias_scan(kernel_tree_alloc);\n}\n",
   "source_review": {
@@ -149,5 +181,186 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/pdt.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b488f31537e42255",
+    "path": "drivers/of/pdt.c",
+    "title": "PROM 트리 생성: 속성 연결 리스트와 자식·형제 재귀",
+    "area": "장치 트리 · 재귀 · 연결 리스트 · 펌웨어 · 초기 메모리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "펌웨어 callback으로 노드와 속성을 읽어 커널 트리를 구성하는 전체 경로를 분석합니다.",
+    "guide": [
+      "부모·첫 자식·다음 형제 표현은 임의 개수의 자식을 가진 트리를 연결 구조로 나타냅니다.",
+      "깊이 우선 탐색,속성 리스트,초기 할당,callback 계약과 문자열 경계를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "구성과 아키텍처 분기",
+        "text": "GPL-2.0+ 파일은 kernel,module,errno,mutex,slab,OF,OF PDT를 포함하고 PROM ops 포인터를 __initdata로 보관합니다. SPARC에서는 초기 unique_id counter를 노드·속성에 대입 후 증가하고 full name은 build_path_component로 만듭니다. 비SPARC에서는 unique ID와 irq_trans_init이 빈 inline이며 별도 이름 생성기를 사용합니다."
+      },
+      {
+        "title": "비SPARC 이름 생성",
+        "text": "256바이트 지역 path에 pkg2path를 요청하여 반환이 0이면 kbasename을 복제합니다. 즉 해당 경로에서 저장하는 full_name은 전체 경로 문자열이 아니라 마지막 구성요소입니다. 실패하면 name 속성을 얻어 len+16바이트를 할당하고 name@unknownN을 sprintf한 뒤 오류 로그를 남깁니다. failsafe_id는 정적 counter이며 name 부재나 할당 실패를 명시적으로 거르는 분기는 없습니다."
+      },
+      {
+        "title": "속성 객체와 재사용",
+        "text": "build_one_prop는 property 뒤에 이름용 32바이트를 붙여 초기 할당하고 p->name을 p+1로 둡니다. static tmp가 있으면 해당 전체 영역을 0으로 지워 재사용합니다. 새 할당 경로에서만 unique ID를 부여하며 재사용 경로에서는 다시 부여하지 않습니다. 속성 열거 종료 때 얻은 객체를 다음 호출에 재활용하는 방식입니다."
+      },
+      {
+        "title": "특수 속성 경로",
+        "text": "special_name이 있으면 strcpy로 이름을 복사하고 special_len만큼 값을 할당·복사합니다. property list는 먼저 .node라는 특수 속성을 만들고 phandle node의 메모리 표현을 sizeof(node)만큼 복사합니다. 이 경로에 별도 endian 변환이나 항상 NUL을 붙이는 명령은 없습니다. 이름 저장소가 32바이트라는 전제와 복사 함수의 경계는 구분해야 합니다."
+      },
+      {
+        "title": "일반 속성 열거와 값",
+        "text": "nextprop 오류는 tmp=p로 보관하고 NULL을 반환합니다. 그 밖에는 getproplen이 0 이하이면 p->length=0으로 둡니다. 양수면 length+1을 할당하고 getproperty를 호출합니다. 반환 len이 0 이하일 때만 length를 0으로 바꾸며 양수의 짧은 읽기에 맞춰 length를 줄이지는 않습니다. 끝에는 p->value[p->length]=NUL을 기록합니다."
+      },
+      {
+        "title": "속성 리스트 구성",
+        "text": "build_prop_list는 .node를 head와 tail로 두고 첫 일반 속성을 추가합니다. 이후 tail->name을 prev로 넘겨 다음 속성을 구하면서 next 링크를 잇습니다. NULL에서 멈추며 순서를 다시 정렬하거나 hash table에 넣지 않습니다. 특수 속성 생성 실패를 검사하는 별도 분기도 없습니다."
+      },
+      {
+        "title": "단일 name 조회 helper",
+        "text": "get_one_property는 기본 반환 문자열을 <NULL>로 두고 길이가 양수이면 정확히 len바이트를 할당해 값을 읽습니다. 이 helper는 일반 속성 생성과 달리 len+1 할당이나 끝 NUL 추가를 하지 않으며 getproperty 결과 오류도 반환 포인터 변경에 사용하지 않습니다. 따라서 두 경로의 문자열 보장 조건을 같다고 설명하면 안 됩니다."
+      },
+      {
+        "title": "노드 생성 순서",
+        "text": "create_node는 phandle이 0이면 NULL입니다. 그 외에는 초기 할당,of_node_init,unique ID,부모 링크,name 읽기,phandle 저장,속성 리스트,full_name 생성,irq_trans_init 순서로 진행합니다. 할당 실패를 일반 errno로 전파하는 루프가 아니라 초기 allocator 및 펌웨어 callback 계약에 의존하는 코드입니다."
+      },
+      {
+        "title": "트리의 자식·형제 표현",
+        "text": "build_tree는 한 부모의 첫 node에서 시작해 형제들을 while로 순회합니다. 이전 형제의 sibling을 새 dp에 연결하고 첫 dp를 ret로 기억합니다. 각 dp의 child는 getchild(node)로 재귀 생성한 결과입니다. 그 자식 서브트리 처리를 마친 뒤 getsibling으로 넘어가므로 깊이 우선 구성입니다. 명시적 순환 검출이나 재귀 깊이 제한은 없습니다."
+      },
+      {
+        "title": "공개 초기화와 root",
+        "text": "kernel_tree_alloc은 size만 prom_early_alloc에 전달하고 align 인수는 사용하지 않습니다. build_devicetree는 ops가 NULL이면 BUG_ON하고 전역 ops를 저장합니다. root를 만든 뒤 full_name을 /로 대입하고 자식 트리를 구성합니다. root_node=0에서 create_node가 NULL을 반환하는 경우를 여기서 추가 검사하지 않습니다. 마지막 of_alias_scan에 allocator를 넘겨 chosen과 aliases 연결을 준비합니다."
+      },
+      {
+        "title": "전체 범위와 검증",
+        "text": "아키텍처 두 분기,속성 생성·리스트·단일 조회,노드·트리 생성,allocator adapter와 공개 초기화를 모두 대조했습니다. 정상 비순환 트리는 노드·속성 수에 따른 순회를 수행하고 재귀 스택은 높이에 영향을 받습니다. 펌웨어 동작이나 초기 allocator의 실제 부팅 검증은 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "build_tree에서 자식과 형제는 어떻게 처리되는가?",
+        "options": [
+          "자식은 재귀,형제는 반복문으로 처리한다",
+          "둘 다 전역 hash table만 조회한다"
+        ],
+        "answer": 0,
+        "explanation": "child를 재귀 결과로 지정하고 sibling을 이전 형제에 연결합니다. 첫 자식·다음 형제 표현입니다."
+      },
+      {
+        "prompt": "비SPARC pkg2path 성공 시 full_name에 무엇을 복제하는가?",
+        "options": [
+          "항상 전체 path의 모든 문자",
+          "path의 kbasename"
+        ],
+        "answer": 1,
+        "explanation": "이름 생성기가 kbasename을 호출합니다. 필드 이름만 보고 저장 형태를 추정하지 않습니다."
+      },
+      {
+        "prompt": "getproperty가 양수이지만 요청보다 짧은 길이를 반환하면 일반 속성 length를 그 값으로 줄이는가?",
+        "options": [
+          "아니다. len<=0일 때만 0으로 바꾼다",
+          "그렇다. 언제나 실제 반환 길이로 갱신한다"
+        ],
+        "answer": 0,
+        "explanation": "대입 조건을 실제 코드대로 읽어야 합니다. 최종 NUL 위치도 p->length를 사용합니다."
+      },
+      {
+        "prompt": "단일 name 조회 helper가 항상 추가 NUL 바이트를 쓰는가?",
+        "options": [
+          "그렇다. 일반 속성 helper와 완전히 같다",
+          "아니다. 길이 그대로 할당하고 별도 NUL 기록이 없다"
+        ],
+        "answer": 1,
+        "explanation": "비슷한 조회 함수라도 할당 크기와 종료 처리가 다릅니다."
+      },
+      {
+        "prompt": "속성 tmp 재사용에서 SPARC unique ID를 새로 부여하는가?",
+        "options": [
+          "아니다. memset 후 재사용하며 ID 부여는 새 할당 쪽에 있다",
+          "그렇다. 모든 경로에서 counter를 증가한다"
+        ],
+        "answer": 0,
+        "explanation": "분기별 쓰기 위치를 추적해야 합니다. 메모리 재사용과 ID 부여는 별개입니다."
+      },
+      {
+        "prompt": "kernel_tree_alloc이 align을 별도 적용하는가?",
+        "options": [
+          "그렇다. align만큼 주소를 직접 반올림한다",
+          "아니다. size만 초기 allocator에 전달한다"
+        ],
+        "answer": 1,
+        "explanation": "adapter 본문은 prom_early_alloc(size) 반환뿐입니다. 하위 allocator 보장은 별도 계약입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0+\n/* pdt.c: OF PROM device tree support code.\n *\n * Paul Mackerras\tAugust 1996.\n * Copyright (C) 1996-2005 Paul Mackerras.\n *\n *  Adapted for 64bit PowerPC by Dave Engebretsen and Peter Bergner.\n *    {engebret|bergner}@us.ibm.com\n *\n *  Adapted for sparc by David S. Miller davem@davemloft.net\n *  Adapted for multiple architectures by Andres Salomon <dilinger@queued.net>\n */\n\n#include <linux/kernel.h>\n#include <linux/module.h>\n#include <linux/errno.h>\n#include <linux/mutex.h>\n#include <linux/slab.h>\n#include <linux/of.h>\n#include <linux/of_pdt.h>\n\nstatic struct of_pdt_ops *of_pdt_prom_ops __initdata;\n\n#if defined(CONFIG_SPARC)\nunsigned int of_pdt_unique_id __initdata;\n\n#define of_pdt_incr_unique_id(p) do { \\\n\t(p)->unique_id = of_pdt_unique_id++; \\\n} while (0)\n\nstatic char * __init of_pdt_build_full_name(struct device_node *dp)\n{\n\treturn build_path_component(dp);\n}\n\n#else /* CONFIG_SPARC */\n\nstatic inline void of_pdt_incr_unique_id(void *p) { }\nstatic inline void irq_trans_init(struct device_node *dp) { }\n\nstatic char * __init of_pdt_build_full_name(struct device_node *dp)\n{\n\tstatic int failsafe_id = 0; /* for generating unique names on failure */\n\tconst char *name;\n\tchar path[256];\n\tchar *buf;\n\tint len;\n\n\tif (!of_pdt_prom_ops->pkg2path(dp->phandle, path, sizeof(path), &len)) {\n\t\tname = kbasename(path);\n\t\tbuf = prom_early_alloc(strlen(name) + 1);\n\t\tstrcpy(buf, name);\n\t\treturn buf;\n\t}\n\n\tname = of_get_property(dp, \"name\", &len);\n\tbuf = prom_early_alloc(len + 16);\n\tsprintf(buf, \"%s@unknown%i\", name, failsafe_id++);\n\tpr_err(\"%s: pkg2path failed; assigning %s\\n\", __func__, buf);\n\treturn buf;\n}\n\n#endif /* !CONFIG_SPARC */\n\nstatic struct property * __init of_pdt_build_one_prop(phandle node, char *prev,\n\t\t\t\t\t       char *special_name,\n\t\t\t\t\t       void *special_val,\n\t\t\t\t\t       int special_len)\n{\n\tstatic struct property *tmp = NULL;\n\tstruct property *p;\n\tint err;\n\n\tif (tmp) {\n\t\tp = tmp;\n\t\tmemset(p, 0, sizeof(*p) + 32);\n\t\ttmp = NULL;\n\t} else {\n\t\tp = prom_early_alloc(sizeof(struct property) + 32);\n\t\tof_pdt_incr_unique_id(p);\n\t}\n\n\tp->name = (char *) (p + 1);\n\tif (special_name) {\n\t\tstrcpy(p->name, special_name);\n\t\tp->length = special_len;\n\t\tp->value = prom_early_alloc(special_len);\n\t\tmemcpy(p->value, special_val, special_len);\n\t} else {\n\t\terr = of_pdt_prom_ops->nextprop(node, prev, p->name);\n\t\tif (err) {\n\t\t\ttmp = p;\n\t\t\treturn NULL;\n\t\t}\n\t\tp->length = of_pdt_prom_ops->getproplen(node, p->name);\n\t\tif (p->length <= 0) {\n\t\t\tp->length = 0;\n\t\t} else {\n\t\t\tint len;\n\n\t\t\tp->value = prom_early_alloc(p->length + 1);\n\t\t\tlen = of_pdt_prom_ops->getproperty(node, p->name,\n\t\t\t\t\tp->value, p->length);\n\t\t\tif (len <= 0)\n\t\t\t\tp->length = 0;\n\t\t\t((unsigned char *)p->value)[p->length] = '\\0';\n\t\t}\n\t}\n\treturn p;\n}\n\nstatic struct property * __init of_pdt_build_prop_list(phandle node)\n{\n\tstruct property *head, *tail;\n\n\thead = tail = of_pdt_build_one_prop(node, NULL,\n\t\t\t\t     \".node\", &node, sizeof(node));\n\n\ttail->next = of_pdt_build_one_prop(node, NULL, NULL, NULL, 0);\n\ttail = tail->next;\n\twhile(tail) {\n\t\ttail->next = of_pdt_build_one_prop(node, tail->name,\n\t\t\t\t\t    NULL, NULL, 0);\n\t\ttail = tail->next;\n\t}\n\n\treturn head;\n}\n\nstatic char * __init of_pdt_get_one_property(phandle node, const char *name)\n{\n\tchar *buf = \"<NULL>\";\n\tint len;\n\n\tlen = of_pdt_prom_ops->getproplen(node, name);\n\tif (len > 0) {\n\t\tbuf = prom_early_alloc(len);\n\t\tlen = of_pdt_prom_ops->getproperty(node, name, buf, len);\n\t}\n\n\treturn buf;\n}\n\nstatic struct device_node * __init of_pdt_create_node(phandle node,\n\t\t\t\t\t\t    struct device_node *parent)\n{\n\tstruct device_node *dp;\n\n\tif (!node)\n\t\treturn NULL;\n\n\tdp = prom_early_alloc(sizeof(*dp));\n\tof_node_init(dp);\n\tof_pdt_incr_unique_id(dp);\n\tdp->parent = parent;\n\n\tdp->name = of_pdt_get_one_property(node, \"name\");\n\tdp->phandle = node;\n\n\tdp->properties = of_pdt_build_prop_list(node);\n\n\tdp->full_name = of_pdt_build_full_name(dp);\n\n\tirq_trans_init(dp);\n\n\treturn dp;\n}\n\nstatic struct device_node * __init of_pdt_build_tree(struct device_node *parent,\n\t\t\t\t\t\t   phandle node)\n{\n\tstruct device_node *ret = NULL, *prev_sibling = NULL;\n\tstruct device_node *dp;\n\n\twhile (1) {\n\t\tdp = of_pdt_create_node(node, parent);\n\t\tif (!dp)\n\t\t\tbreak;\n\n\t\tif (prev_sibling)\n\t\t\tprev_sibling->sibling = dp;\n\n\t\tif (!ret)\n\t\t\tret = dp;\n\t\tprev_sibling = dp;\n\n\t\tdp->child = of_pdt_build_tree(dp, of_pdt_prom_ops->getchild(node));\n\n\t\tnode = of_pdt_prom_ops->getsibling(node);\n\t}\n\n\treturn ret;\n}\n\nstatic void * __init kernel_tree_alloc(u64 size, u64 align)\n{\n\treturn prom_early_alloc(size);\n}\n\nvoid __init of_pdt_build_devicetree(phandle root_node, struct of_pdt_ops *ops)\n{\n\tBUG_ON(!ops);\n\tof_pdt_prom_ops = ops;\n\n\tof_root = of_pdt_create_node(root_node, NULL);\n\tof_root->full_name = \"/\";\n\n\tof_root->child = of_pdt_build_tree(of_root,\n\t\t\t\tof_pdt_prom_ops->getchild(of_root->phandle));\n\n\t/* Get pointer to \"/chosen\" and \"/aliases\" nodes for use everywhere */\n\tof_alias_scan(kernel_tree_alloc);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b531bc1d7c221cb54fba42b6f89c0b2c38b5c78f8fc8209e2de6319efda67e96",
+      "scope": "whole-file",
+      "line_count": 213,
+      "authoring_source": "course/file_units/of_prom_tree.py",
+      "sections": [
+        "구성과 아키텍처 분기",
+        "비SPARC 이름 생성",
+        "속성 객체와 재사용",
+        "특수 속성 경로",
+        "일반 속성 열거와 값",
+        "속성 리스트 구성",
+        "단일 name 조회 helper",
+        "노드 생성 순서",
+        "트리의 자식·형제 표현",
+        "공개 초기화와 root",
+        "전체 범위와 검증"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/pdt.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "가족도에서 한 사람의 자녀를 먼저 살핀 뒤 다음 형제로 옮겨 가면 나무 모양 관계를 차례대로 만들 수 있어요.",
+    "meaning": "이 코드는 펌웨어에서 노드와 속성을 읽어 커널의 장치 트리를 연결해요. 비슷한 읽기 함수라도 할당 크기와 오류 처리가 다르므로 따로 살펴야 해요.",
+    "exercise": "부모 A에 자식 B와 C가 있고 B에 자식 D가 있다고 가정해 생성 순서를 그려 보세요."
+  },
+  "goal": "이 코드는 펌웨어에서 노드와 속성을 읽어 커널의 장치 트리를 연결해요. 비슷한 읽기 함수라도 할당 크기와 오류 처리가 다르므로 따로 살펴야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "부모 A에 자식 B와 C가 있고 B에 자식 D가 있다고 가정해 생성 순서를 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "a04357fd9414e8b21f23c5858184f521a67d2581b4fd37625adab02815316935",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

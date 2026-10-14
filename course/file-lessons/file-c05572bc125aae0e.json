@@ -5,71 +5,85 @@
   "area": "부팅 매개변수 · 문자열 · 링커 심볼 · 빌드 메타데이터",
   "track": "files",
   "kind": "kernel",
-  "intro": "초기 매개변수 handler와 배너 형식, ELF note, timestamp 구현 포함을 모두 분석합니다.",
+  "intro": "초기 hostname 복사와 배너 문자열, weak 빌드 경로의 역할을 구별합니다.",
   "guide": [
-    "실행 중 바꾸는 초기 데이터와 빌드 때 고정하는 버전 문자열은 다른 경로로 관리됩니다.",
-    "문자열 길이 제한, 전처리 소스 포함, weak 심볼과 export를 구분합니다."
+    "hostname은 컴퓨터를 구별하는 이름입니다. 여기서는 초기 부팅 인수의 이름을 정해진 배열에 복사합니다.",
+    "문자열은 끝에 값 0인 종료 칸이 필요합니다. 최대 바이트 수와 화면에 보이는 글자 수가 항상 같지는 않습니다.",
+    "weak는 링크할 때 더 강한 정의로 대체할 수 있는 심볼 표시입니다. 실행 중 권한이나 메모리 순서가 약하다는 뜻이 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "포함 파일과 초기 handler",
-      "text": "GPL-2.0-only 파일은 generated compile 정보와 build-salt,elfnote-lto,export,init,printk,UTS,proc namespace 헤더를 포함합니다. early_hostname은 init_uts_ns.name.nodename 배열 크기와 그보다 하나 작은 maxlen을 구합니다. strscpy에 배열 전체 크기를 전달해 초기 hostname을 복사합니다."
+      "text": "GPL 파일은 생성된 컴파일 정보와 빌드 표식, 초기화·출력·UTS 이름공간 관련 헤더를 포함합니다. early_hostname은 초기 이름 배열 전체 크기와 그보다 1 작은 최대 길이를 구합니다. strscpy에는 종료 공간을 포함한 배열 전체 크기를 전달합니다."
     },
     {
       "title": "잘린 hostname의 처리",
-      "text": "nodename은 65바이트이므로 일반적인 이 구조에서는 최대 64바이트의 문자열과 종료 공간을 사용합니다. strscpy 반환이 음수면 길이 초과와 잘림을 경고하고 그래도 handler는 0을 반환합니다. 길이 초과를 이유로 여기서 이전 hostname으로 rollback하거나 부팅을 중단하지 않습니다. early_param(\"hostname\",early_hostname)으로 초기 매개변수에 연결되며 문자열 전체의 문자 수와 byte 수를 혼동하지 않습니다."
+      "text": "일반적인 nodename 배열은 65바이트여서 내용 64바이트와 종료 칸을 담습니다. 복사 결과가 음수면 너무 길어 잘렸다고 경고하지만 함수는 0을 반환합니다. 이전 이름으로 되돌리거나 부팅을 중단하는 경로는 없습니다. early_param으로 hostname 인수에 연결되며 바이트 제한을 문자 개수로 단정하면 안 됩니다."
     },
     {
       "title": "Proc 배너는 형식 문자열",
-      "text": "linux_proc_banner는 %s version %s, compile 사용자@호스트, 컴파일러, 마지막 %s와 newline으로 구성합니다. 세 %s는 그대로 형식 자리표시자로 남고 LINUX_COMPILE_BY·HOST·COMPILER는 전처리 매크로 문자열을 연결합니다. 이 파일이 선언 위치에서 sprintf를 실행하는 것은 아닙니다. 실제 linux_banner의 고정 문자열과 다릅니다."
+      "text": "linux_proc_banner에는 세 %s 자리가 남습니다. 컴파일 사용자·호스트·컴파일러 매크로 문자열은 인접 문자열로 붙지만 %s는 이 선언에서 채워지지 않습니다. 선언 위치에서 sprintf를 실행하는 것이 아닙니다. 고정 문자열인 linux_banner와 구별합니다."
     },
     {
       "title": "ELF note와 weak 선언",
-      "text": "BUILD_SALT와 BUILD_LTO_INFO를 사용해 관련 ELF note를 정의합니다. 이후 init_uts_ns와 linux_banner를 __weak로 선언합니다. 주석은 build version과 timestamp가 빌드 마지막 단계에 확정되어 먼저 weak로, 나중에는 weak 없이 컴파일한다고 설명합니다. C의 weak는 런타임 namespace 권한이나 낮은 메모리 일관성을 뜻하지 않고 링크 심볼 선택과 관련됩니다."
+      "text": "BUILD_SALT와 BUILD_LTO_INFO는 실행 파일의 ELF note라는 부가 정보 표식을 만듭니다. 초기 이름공간과 linux_banner를 weak로 선언하는 이유는 빌드 버전·시간이 마지막 단계에서 확정되기 때문입니다. 먼저 대체 가능한 정의로 만들고 나중에는 weak 없이 컴파일하는 링크 절차입니다."
     },
     {
       "title": "C 소스 포함과 export",
-      "text": "version-timestamp.c를 직접 include하므로 그 정의가 이 번역 단위에도 들어옵니다. 앞 weak 속성을 가진 임시 정의 경로와 별도 최종 컴파일 경로가 연결됩니다. 마지막 EXPORT_SYMBOL_GPL(init_uts_ns)는 초기 namespace 객체를 export하며 이 파일에 linux_banner의 같은 export는 없습니다. 전체 handler·문자열·note·선언·include·export를 검토했습니다. 실제 커널 링크를 실행한 결과는 아닙니다."
+      "text": "version-timestamp.c를 직접 include하므로 그 소스 내용이 이 번역 단위에 들어옵니다. 함수 원형만 추출하는 기능이 아닙니다. 초기 weak 경로와 별도 최종 컴파일 경로가 이어집니다. 마지막 GPL export는 init_uts_ns 이름을 다른 코드에 공개하며 같은 linux_banner export는 없습니다. 이는 소스 설명이며 실제 전체 커널 링크 실행 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "hostname이 배열에 비해 길면 early_hostname은?",
+      "prompt": "hostname이 너무 길면 이 함수는 어떻게 하나요?",
       "options": [
+        "잘라 복사한 채 경고하고 0을 반환합니다.",
+        "반드시 EINVAL로 부팅을 중단합니다."
+      ],
+      "answer": 0,
+      "explanation": "음수 복사 결과는 경고로 이어지고 반환은 0입니다.",
+      "original_prompt": "hostname이 배열에 비해 길면 early_hostname은?",
+      "original_options": [
         "잘라 복사한 상태에서 경고하고 0을 반환한다",
         "반드시 -EINVAL로 부팅을 중단한다"
       ],
-      "answer": 0,
-      "explanation": "음수 strscpy 결과는 경고 분기로만 이어지고 마지막 return은 0입니다."
+      "original_explanation": "음수 strscpy 결과는 경고 분기로만 이어지고 마지막 return은 0입니다."
     },
     {
-      "prompt": "linux_proc_banner의 %s는 이 선언에서 대체되는가?",
+      "prompt": "linux_proc_banner의 %s가 선언 때 채워지나요?",
       "options": [
+        "예. C가 현재 이름을 자동으로 넣습니다.",
+        "아니요. 형식 문자열의 빈자리로 남습니다."
+      ],
+      "answer": 1,
+      "explanation": "문자열 연결과 나중의 서식 처리는 다릅니다.",
+      "original_prompt": "linux_proc_banner의 %s는 이 선언에서 대체되는가?",
+      "original_options": [
         "그렇다. C가 자동으로 현재 hostname을 채운다",
         "아니다. 형식 문자열 안에 남는다"
       ],
-      "answer": 1,
-      "explanation": "인접 문자열 연결과 런타임 서식 처리는 다릅니다. 전처리 compile 매크로만 빌드 문자열로 연결됩니다."
+      "original_explanation": "인접 문자열 연결과 런타임 서식 처리는 다릅니다. 전처리 compile 매크로만 빌드 문자열로 연결됩니다."
     },
     {
-      "prompt": "version-timestamp.c include의 의미는?",
+      "prompt": "C 소스 파일을 include한다는 것은 무엇인가요?",
       "options": [
+        "그 구현 내용이 이 번역 단위에 들어옵니다.",
+        "함수 원형만 자동 추출합니다."
+      ],
+      "answer": 0,
+      "explanation": "include는 지정 소스 내용을 포함합니다.",
+      "original_prompt": "version-timestamp.c include의 의미는?",
+      "original_options": [
         "구현 소스 전체가 이 번역 단위에 포함된다",
         "함수 원형만 자동 추출한다"
       ],
-      "answer": 0,
-      "explanation": "C의 include는 소스 내용을 가져옵니다. weak 속성의 임시 경로와 별도 컴파일되는 최종 경로를 구분해야 합니다."
+      "original_explanation": "C의 include는 소스 내용을 가져옵니다. weak 속성의 임시 경로와 별도 컴파일되는 최종 경로를 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "linux_proc_banner에서 그대로 남는 %s와 빌드 매크로로 붙는 글자를 나누어 표시해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  linux/init/version.c\n *\n *  Copyright (C) 1992  Theodore Ts'o\n *\n *  May be freely distributed as part of Linux.\n */\n\n#include <generated/compile.h>\n#include <linux/build-salt.h>\n#include <linux/elfnote-lto.h>\n#include <linux/export.h>\n#include <linux/init.h>\n#include <linux/printk.h>\n#include <linux/uts.h>\n#include <linux/utsname.h>\n#include <linux/proc_ns.h>\n\nstatic int __init early_hostname(char *arg)\n{\n\tsize_t bufsize = sizeof(init_uts_ns.name.nodename);\n\tsize_t maxlen  = bufsize - 1;\n\tssize_t arglen;\n\n\targlen = strscpy(init_uts_ns.name.nodename, arg, bufsize);\n\tif (arglen < 0) {\n\t\tpr_warn(\"hostname parameter exceeds %zd characters and will be truncated\",\n\t\t\tmaxlen);\n\t}\n\treturn 0;\n}\nearly_param(\"hostname\", early_hostname);\n\nconst char linux_proc_banner[] =\n\t\"%s version %s\"\n\t\" (\" LINUX_COMPILE_BY \"@\" LINUX_COMPILE_HOST \")\"\n\t\" (\" LINUX_COMPILER \") %s\\n\";\n\nBUILD_SALT;\nBUILD_LTO_INFO;\n\n/*\n * init_uts_ns and linux_banner contain the build version and timestamp,\n * which are really fixed at the very last step of build process.\n * They are compiled with __weak first, and without __weak later.\n */\n\nstruct uts_namespace init_uts_ns __weak;\nconst char linux_banner[] __weak;\n\n#include \"version-timestamp.c\"\n\nEXPORT_SYMBOL_GPL(init_uts_ns);\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/init/version.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c05572bc125aae0e",
+    "path": "init/version.c",
+    "title": "커널 버전 진입 파일: 초기 hostname·배너·weak 정의",
+    "area": "부팅 매개변수 · 문자열 · 링커 심볼 · 빌드 메타데이터",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "초기 매개변수 handler와 배너 형식, ELF note, timestamp 구현 포함을 모두 분석합니다.",
+    "guide": [
+      "실행 중 바꾸는 초기 데이터와 빌드 때 고정하는 버전 문자열은 다른 경로로 관리됩니다.",
+      "문자열 길이 제한, 전처리 소스 포함, weak 심볼과 export를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "포함 파일과 초기 handler",
+        "text": "GPL-2.0-only 파일은 generated compile 정보와 build-salt,elfnote-lto,export,init,printk,UTS,proc namespace 헤더를 포함합니다. early_hostname은 init_uts_ns.name.nodename 배열 크기와 그보다 하나 작은 maxlen을 구합니다. strscpy에 배열 전체 크기를 전달해 초기 hostname을 복사합니다."
+      },
+      {
+        "title": "잘린 hostname의 처리",
+        "text": "nodename은 65바이트이므로 일반적인 이 구조에서는 최대 64바이트의 문자열과 종료 공간을 사용합니다. strscpy 반환이 음수면 길이 초과와 잘림을 경고하고 그래도 handler는 0을 반환합니다. 길이 초과를 이유로 여기서 이전 hostname으로 rollback하거나 부팅을 중단하지 않습니다. early_param(\"hostname\",early_hostname)으로 초기 매개변수에 연결되며 문자열 전체의 문자 수와 byte 수를 혼동하지 않습니다."
+      },
+      {
+        "title": "Proc 배너는 형식 문자열",
+        "text": "linux_proc_banner는 %s version %s, compile 사용자@호스트, 컴파일러, 마지막 %s와 newline으로 구성합니다. 세 %s는 그대로 형식 자리표시자로 남고 LINUX_COMPILE_BY·HOST·COMPILER는 전처리 매크로 문자열을 연결합니다. 이 파일이 선언 위치에서 sprintf를 실행하는 것은 아닙니다. 실제 linux_banner의 고정 문자열과 다릅니다."
+      },
+      {
+        "title": "ELF note와 weak 선언",
+        "text": "BUILD_SALT와 BUILD_LTO_INFO를 사용해 관련 ELF note를 정의합니다. 이후 init_uts_ns와 linux_banner를 __weak로 선언합니다. 주석은 build version과 timestamp가 빌드 마지막 단계에 확정되어 먼저 weak로, 나중에는 weak 없이 컴파일한다고 설명합니다. C의 weak는 런타임 namespace 권한이나 낮은 메모리 일관성을 뜻하지 않고 링크 심볼 선택과 관련됩니다."
+      },
+      {
+        "title": "C 소스 포함과 export",
+        "text": "version-timestamp.c를 직접 include하므로 그 정의가 이 번역 단위에도 들어옵니다. 앞 weak 속성을 가진 임시 정의 경로와 별도 최종 컴파일 경로가 연결됩니다. 마지막 EXPORT_SYMBOL_GPL(init_uts_ns)는 초기 namespace 객체를 export하며 이 파일에 linux_banner의 같은 export는 없습니다. 전체 handler·문자열·note·선언·include·export를 검토했습니다. 실제 커널 링크를 실행한 결과는 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "hostname이 배열에 비해 길면 early_hostname은?",
+        "options": [
+          "잘라 복사한 상태에서 경고하고 0을 반환한다",
+          "반드시 -EINVAL로 부팅을 중단한다"
+        ],
+        "answer": 0,
+        "explanation": "음수 strscpy 결과는 경고 분기로만 이어지고 마지막 return은 0입니다."
+      },
+      {
+        "prompt": "linux_proc_banner의 %s는 이 선언에서 대체되는가?",
+        "options": [
+          "그렇다. C가 자동으로 현재 hostname을 채운다",
+          "아니다. 형식 문자열 안에 남는다"
+        ],
+        "answer": 1,
+        "explanation": "인접 문자열 연결과 런타임 서식 처리는 다릅니다. 전처리 compile 매크로만 빌드 문자열로 연결됩니다."
+      },
+      {
+        "prompt": "version-timestamp.c include의 의미는?",
+        "options": [
+          "구현 소스 전체가 이 번역 단위에 포함된다",
+          "함수 원형만 자동 추출한다"
+        ],
+        "answer": 0,
+        "explanation": "C의 include는 소스 내용을 가져옵니다. weak 속성의 임시 경로와 별도 컴파일되는 최종 경로를 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  linux/init/version.c\n *\n *  Copyright (C) 1992  Theodore Ts'o\n *\n *  May be freely distributed as part of Linux.\n */\n\n#include <generated/compile.h>\n#include <linux/build-salt.h>\n#include <linux/elfnote-lto.h>\n#include <linux/export.h>\n#include <linux/init.h>\n#include <linux/printk.h>\n#include <linux/uts.h>\n#include <linux/utsname.h>\n#include <linux/proc_ns.h>\n\nstatic int __init early_hostname(char *arg)\n{\n\tsize_t bufsize = sizeof(init_uts_ns.name.nodename);\n\tsize_t maxlen  = bufsize - 1;\n\tssize_t arglen;\n\n\targlen = strscpy(init_uts_ns.name.nodename, arg, bufsize);\n\tif (arglen < 0) {\n\t\tpr_warn(\"hostname parameter exceeds %zd characters and will be truncated\",\n\t\t\tmaxlen);\n\t}\n\treturn 0;\n}\nearly_param(\"hostname\", early_hostname);\n\nconst char linux_proc_banner[] =\n\t\"%s version %s\"\n\t\" (\" LINUX_COMPILE_BY \"@\" LINUX_COMPILE_HOST \")\"\n\t\" (\" LINUX_COMPILER \") %s\\n\";\n\nBUILD_SALT;\nBUILD_LTO_INFO;\n\n/*\n * init_uts_ns and linux_banner contain the build version and timestamp,\n * which are really fixed at the very last step of build process.\n * They are compiled with __weak first, and without __weak later.\n */\n\nstruct uts_namespace init_uts_ns __weak;\nconst char linux_banner[] __weak;\n\n#include \"version-timestamp.c\"\n\nEXPORT_SYMBOL_GPL(init_uts_ns);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "94f91b9045f23a8824ae55cd117063521b9a0cf270409654c39ba181f4d2bc52",
+      "scope": "whole-file",
+      "line_count": 54,
+      "authoring_source": "course/file_units/kernel_version_build.py",
+      "sections": [
+        "포함 파일과 초기 handler",
+        "잘린 hostname의 처리",
+        "Proc 배너는 형식 문자열",
+        "ELF note와 weak 선언",
+        "C 소스 포함과 export"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/init/version.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "커널의 이름표에는 버전과 누가 어디서 만들었는지가 들어갑니다. 어떤 글자는 빌드 때 확정되고 어떤 %s 칸은 나중에 채우도록 남습니다.",
+    "meaning": "초기 hostname 복사와 배너 문자열, weak 빌드 경로의 역할을 구별합니다.",
+    "exercise": "linux_proc_banner에서 그대로 남는 %s와 빌드 매크로로 붙는 글자를 나누어 표시해 보세요."
+  },
+  "goal": "초기 hostname 복사와 배너 문자열, weak 빌드 경로의 역할을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "linux_proc_banner에서 그대로 남는 %s와 빌드 매크로로 붙는 글자를 나누어 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "72bdcfb958631c0ae19f87c005d50049637b1a0128421d86164a307488e47f47",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

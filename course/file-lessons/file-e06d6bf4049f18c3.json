@@ -5,117 +5,143 @@
   "area": "ABI · 조건부 컴파일 · 달력 표현 · 타입 변환 · 순환 순서",
   "track": "files",
   "kind": "kernel",
-  "intro": "시간 복사·변환 선언, 설정별 timer 정리, struct tm과 세 비교 매크로를 전체 범위로 읽습니다.",
+  "intro": "시간 함수의 약속, 구조체의 필드, 순환하는 수의 비교 범위를 읽습니다.",
   "guide": [
-    "같은 시간이라도 ABI 경계, 달력 필드, 상대적인 순환 카운터는 서로 다른 표현과 유효 범위를 가집니다.",
-    "사용자 공간 시간 구조체 복사와 커널 달력 변환, 래핑 가능한 초 값 비교를 구분합니다."
+    "함수 선언은 사용 방법 안내이며 실행 본문은 아닙니다.",
+    "커널의 tm은 사용자 프로그램의 tm과 같은 상자라고 가정하지 않습니다.",
+    "32비트 전후 비교에는 두 시각이 반 바퀴보다 가깝다는 조건이 있습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일 구조",
-      "text": "GPL-2.0 표시와 guard, cache/math64/time64 include, sys_tz 외부 선언으로 시작합니다. 복사와 달력 변환·timer 관련 선언, 커널 tm 정의, time32 include, 유효성 helper와 32비트 시간 비교 매크로, vdso/time.h include로 끝납니다. include된 다른 헤더의 구현을 이 파일의 직접 구현으로 세지 않습니다."
+      "title": "헤더의 구성",
+      "text": "GPL-2.0과 중복 포함을 막는 guard 뒤에 cache, math64, time64 헤더와 sys_tz 선언이 있습니다. 복사·달력·타이머 선언, tm 구조체, time32 헤더, 유효성 검사와 32비트 비교, vdso/time.h 순서입니다. 다른 헤더를 불러온다고 그 안의 구현까지 이 파일이 직접 정의한 것은 아닙니다."
     },
     {
-      "title": "사용자 공간 경계 선언",
-      "text": "get_timespec64/put_timespec64는 커널 timespec64와 __user __kernel_timespec 포인터 사이, get_itimerspec64/put_itimerspec64는 각각의 interval timer 구조체 사이의 인터페이스입니다. 모두 int 반환 선언입니다. 헤더에는 실제 사용자 메모리 접근과 실패 처리 본문이 없으므로 선언만으로 복사 방식이나 구체적 오류 코드를 확정하지 않습니다."
+      "title": "사용자 메모리와의 경계",
+      "text": "get_timespec64와 put_timespec64는 커널 timespec64와 사용자 쪽 __kernel_timespec 사이의 함수 약속입니다. itimerspec 쌍도 간격 타이머 구조체를 주고받습니다. __user는 사용자 메모리 주소임을 표시하며 반환형은 int입니다. 본문이 없으므로 실제 복사법과 구체적인 오류 번호는 여기만 보고 정할 수 없습니다."
     },
     {
-      "title": "기타 외부 인터페이스",
-      "text": "mktime64는 unsigned 연·월·일·시·분·초를 받아 time64_t를 반환합니다. do_utimes는 dfd, 사용자 filename, timespec64 배열을 가리키는 포인터와 flags를 받고 long을 반환합니다. sys_tz는 외부 timezone 객체입니다. 함수 선언이 있다는 사실이 이 헤더를 포함하는 순간 시간이나 파일 시각을 변경한다는 뜻은 아닙니다."
+      "title": "다른 함수 약속",
+      "text": "mktime64는 부호 없는 연·월·일·시·분·초를 받아 time64_t를 돌려줍니다. do_utimes는 dfd, 사용자 파일 이름 주소, timespec64 배열 주소, flags를 받아 long을 돌려줍니다. sys_tz는 다른 곳에 있는 timezone 객체입니다. 헤더를 포함했다고 즉시 시계나 파일 시각이 바뀌지는 않습니다."
     },
     {
-      "title": "POSIX timer 설정 분기",
-      "text": "CONFIG_POSIX_TIMERS이면 clear_itimer는 외부 void 함수 선언입니다. 아니면 인자가 없는 빈 inline 함수로 제공됩니다. 기능이 꺼진 빌드에서도 해당 호출을 같은 형태로 쓸 수 있게 하지만 timer 정리 기능이 그대로 실행된다는 뜻은 아닙니다."
+      "title": "타이머를 끈 빌드",
+      "text": "CONFIG_POSIX_TIMERS가 켜지면 clear_itimer는 외부 함수 선언입니다. 꺼지면 아무 일도 하지 않는 inline 함수가 됩니다. 같은 호출 문장을 계속 쓸 수 있지만 꺼진 기능의 정리를 실제 수행하는 것은 아닙니다."
     },
     {
-      "title": "커널 tm 전체 필드",
-      "text": "tm_sec는 보통 0..59이고 주석상 윤초를 위해 60도 허용합니다. tm_min은 0..59, tm_hour는 0..23, tm_mday는 1..31, tm_mon은 1월부터 0..11입니다. tm_year는 1900년 이후 연수인 long, tm_wday는 일요일부터 0..6, tm_yday는 1월 1일부터 0..365인 int입니다. 나머지 필드도 int이며 이 구조체에는 tm_isdst, 시간대 이름, UTC offset 필드가 없습니다."
+      "title": "tm의 여덟 칸",
+      "text": "초는 보통 0..59이며 주석은 윤초용 60도 허용합니다. 분은 0..59, 시는 0..23, 날짜는 1..31, 월은 1월=0부터 11입니다. 연도 칸은 1900년 이후 연수이며 long이고, 나머지는 int입니다. 요일은 일요일=0부터 6, 연중 날은 1월 1일=0부터 365입니다. tm_isdst나 시간대 이름, UTC 보정 칸은 없습니다."
     },
     {
-      "title": "달력 변환과 사용자 libc의 구분",
-      "text": "time64_to_tm은 time64_t 초, int offset, 결과 struct tm 포인터를 받습니다. 주석은 커널이 자체 완결성을 갖도록 사용자 공간과 비슷한 구조를 별도로 정의한다고 설명합니다. 사용자 libc의 struct tm과 크기·전체 필드·ABI가 같다고 가정하거나 그대로 사용자 공간에 복사하는 계약은 아닙니다."
+      "title": "커널용 달력 상자",
+      "text": "time64_to_tm은 초, 더할 초인 offset, 결과 주소를 받습니다. 커널이 스스로 쓸 tm을 정의한 것이며 사용자 libc와 비슷해 보여도 필드와 크기, 바이너리 규약인 ABI가 같다는 약속은 아닙니다. 통째로 사용자 메모리에 복사해도 된다는 뜻도 아닙니다."
     },
     {
-      "title": "Interval timer 유효성",
-      "text": "itimerspec64_valid는 it_interval과 it_value 각각에 timespec64_valid를 적용해 하나라도 실패하면 false, 모두 성공하면 true를 반환합니다. OR 단락 평가 때문에 첫 검사가 실패하면 둘째 검사를 평가하지 않습니다. 이 helper는 값을 고치거나 타이머를 시작하지 않고 반환값만 제공하며 NULL 포인터 검사도 하지 않습니다."
+      "title": "타이머 값 검사",
+      "text": "itimerspec64_valid는 반복 간격 it_interval과 첫 만료 값 it_value를 각각 검사합니다. 하나라도 잘못되면 false, 둘 다 맞으면 true입니다. OR는 첫 실패에서 답이 정해져 둘째를 생략합니다. 값을 고치거나 타이머를 시작하지 않으며 NULL 주소도 검사하지 않습니다."
     },
     {
-      "title": "32비트 상대 순서",
-      "text": "time_after32(a,b)는 (s32)((u32)b-(u32)a)<0입니다. unsigned 차이로 래핑을 거친 거리를 만든 뒤 signed 부호로 순서를 판단합니다. time_before32(b,a)는 time_after32(a,b)의 별칭입니다. 값이 같으면 false이고, 실제 시각 차이가 반주기인 2^31보다 작다는 전제가 필요합니다. 초 단위라면 문서의 약 68년 제한과 연결됩니다."
+      "title": "한 바퀴 도는 시계",
+      "text": "time_after32(a,b)는 b-a를 u32로 계산한 뒤 s32로 읽어 음수인지 봅니다. 최대값 뒤에 0이 오는 돌아감을 반영하는 것입니다. before는 인수를 바꾼 after이며 같으면 false입니다. 실제 차이가 2^31보다 작아야 전후를 읽을 수 있습니다. 초 단위면 약 68년보다 가까워야 한다는 설명과 이어집니다."
     },
     {
-      "title": "순환 순서의 예와 모호성",
-      "text": "b=0xfffffffe, a=1이면 a가 세 tick 뒤입니다. b-a의 32비트 표현을 signed로 읽으면 -3이므로 after가 true입니다. 정확히 0x80000000 차이는 양 방향 검사에서 모두 음수가 될 수 있어 전후 관계를 결정할 수 없습니다. 일반 정수 대소 비교로 대체하거나 임의로 멀리 떨어진 날짜를 정렬하는 comparator로 사용하면 안 됩니다."
+      "title": "돌아감과 모호함",
+      "text": "b=0xfffffffe, a=1이면 a가 세 칸 뒤입니다. 차이를 부호 있는 32비트로 읽으면 -3이라 after가 참입니다. 정확히 0x80000000 차이면 양방향 모두 음수가 될 수 있어 어느 쪽이 뒤인지 정하지 못합니다. 일반 숫자 비교나 아주 먼 날짜의 정렬 함수로 바꾸어 쓰면 안 됩니다."
     },
     {
-      "title": "포함 구간 검사",
-      "text": "time_between32(t,l,h)는 unsigned h-l과 t-l을 비교하여 l에서 앞으로 h까지의 순환 구간에 t가 들어가는지 양 끝 포함으로 검사합니다. l=0xfffffffe,h=1이면 fffffffe,ffffffff,0,1이 포함됩니다. l==h이면 그 값 하나만 포함합니다. 주석의 설명 줄에 time_before32(t,l,h)라고 적힌 것은 실제 매크로 이름·인자 수와 다르므로 time_between32의 식을 기준으로 읽습니다."
+      "title": "양 끝을 넣는 구간",
+      "text": "time_between32는 시작 l에서 끝 h까지 앞으로 간 거리와 l에서 t까지 간 거리를 비교합니다. l=0xfffffffe,h=1이면 fffffffe, ffffffff, 0, 1을 모두 넣습니다. l==h면 그 값 하나만 넣습니다. 주석의 time_before32(t,l,h)는 실제 이름과 인수 수가 맞지 않으므로 time_between32 식을 기준으로 읽습니다."
     },
     {
-      "title": "매크로 평가와 순서 전제",
-      "text": "between 식에는 l이 두 번 나타나므로 l++처럼 부작용 있는 인자를 피합니다. 비교 매크로는 값을 u32로 줄이므로 상위 32비트 정보는 보존하지 않습니다. between의 unsigned 원호 포함 검사와 before/after의 반주기 순서 해석이 모든 입력에서 항상 동치인 것은 아닙니다. 예를 들어 l=0,h=0xffffffff인 원호는 모든 u32를 포함하지만 이를 일반적인 반주기 전후 비교로 해석할 수 없습니다."
+      "title": "인수와 비교의 한계",
+      "text": "between 식은 l을 두 번 쓰므로 l++처럼 쓸 때 값이 바뀌는 인수를 피합니다. u32로 바꾸면 위쪽 32비트는 사라집니다. 원호 안에 있는지 검사하는 between과 반 바퀴 조건의 전후 검사는 모든 경우 같지 않습니다. l=0,h=0xffffffff 구간은 모든 u32를 포함하지만 일반 전후 비교로 읽을 수는 없습니다."
     },
     {
-      "title": "학습 범위",
-      "text": "선언만 있는 함수는 호출 형태와 책임 경계를, 본문이 있는 helper와 매크로는 모든 분기와 표현식을 설명합니다. 실제 시간대 정책이나 사용자 메모리 복사 구현은 해당 소스 파일을 별도로 읽어야 합니다. 핵심 CS는 타입 폭, 모듈러 거리, 순서의 유효 범위, 조건부 stub, 데이터 표현의 차이입니다."
+      "title": "어디까지 배웠나",
+      "text": "선언에서는 사용 형태와 담당 범위를, 짧은 본문과 매크로에서는 실제 조건을 배웁니다. 시간대 정책과 사용자 메모리 복사는 다른 구현을 읽어야 합니다. 핵심은 숫자 칸의 크기, 한 바퀴 도는 거리, 비교의 전제, 꺼진 기능용 빈 함수입니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 헤더의 struct tm에 tm_isdst가 있는가?",
+      "prompt": "이 커널 tm에 tm_isdst 칸이 있나요?",
       "options": [
+        "없다",
+        "있고 time64_to_tm이 자동으로 채운다"
+      ],
+      "answer": 0,
+      "explanation": "여덟 칸만 정의되어 있습니다. 사용자용과 같은 구조라고 생각하면 안 됩니다.",
+      "original_prompt": "이 헤더의 struct tm에 tm_isdst가 있는가?",
+      "original_options": [
         "없다",
         "있으며 time64_to_tm이 자동 설정한다"
       ],
-      "answer": 0,
-      "explanation": "커널 정의는 열거된 여덟 필드뿐입니다. 사용자 공간의 비슷한 구조와 완전히 같은 ABI라고 가정하면 안 됩니다."
+      "original_explanation": "커널 정의는 열거된 여덟 필드뿐입니다. 사용자 공간의 비슷한 구조와 완전히 같은 ABI라고 가정하면 안 됩니다."
     },
     {
-      "prompt": "b=0xfffffffe이고 a=1이면 반주기 이내 전제에서 time_after32(a,b)는?",
+      "prompt": "b=0xfffffffe, a=1이면 가까운 시각이라는 조건 아래 after(a,b)는?",
       "options": [
+        "거짓이다. 1은 언제나 앞이다",
+        "참이다"
+      ],
+      "answer": 1,
+      "explanation": "한 바퀴 돌아 1이 되기까지 세 칸 앞으로 갑니다.",
+      "original_prompt": "b=0xfffffffe이고 a=1이면 반주기 이내 전제에서 time_after32(a,b)는?",
+      "original_options": [
         "false이다. 1은 항상 fffffffe보다 작다",
         "true이다"
       ],
-      "answer": 1,
-      "explanation": "unsigned 뺄셈 뒤 signed 해석으로 래핑을 반영합니다. a는 b 이후 세 tick입니다."
+      "original_explanation": "unsigned 뺄셈 뒤 signed 해석으로 래핑을 반영합니다. a는 b 이후 세 tick입니다."
     },
     {
-      "prompt": "두 32비트 시각이 정확히 2^31 떨어져 있으면 전후를 유일하게 정할 수 있는가?",
+      "prompt": "차이가 정확히 2^31이면 전후가 하나로 정해지나요?",
       "options": [
+        "아니다. 반 바퀴 경계는 모호하다",
+        "그렇다. 부호 변환이 실제 기준 시각을 복원한다"
+      ],
+      "answer": 0,
+      "explanation": "숫자 두 개만으로 어느 바퀴였는지 알 수 없습니다.",
+      "original_prompt": "두 32비트 시각이 정확히 2^31 떨어져 있으면 전후를 유일하게 정할 수 있는가?",
+      "original_options": [
         "아니다. 반주기 경계는 모호하다",
         "그렇다. signed 변환이 실제 epoch까지 복원한다"
       ],
-      "answer": 0,
-      "explanation": "값 두 개에는 어느 회전의 시각인지 정보가 없습니다. 두 방향 차이가 같은 최상위 비트 패턴이므로 거리 제한이 필요합니다."
+      "original_explanation": "값 두 개에는 어느 회전의 시각인지 정보가 없습니다. 두 방향 차이가 같은 최상위 비트 패턴이므로 거리 제한이 필요합니다."
     },
     {
-      "prompt": "time_between32(t,l,h)는 양 끝을 포함하는가?",
+      "prompt": "between은 시작점과 끝점도 넣나요?",
       "options": [
+        "아니다. 항상 뺀다",
+        "그렇다. 거리를 >=로 비교한다"
+      ],
+      "answer": 1,
+      "explanation": "시작점의 거리는 0, 끝점의 거리는 전체 거리와 같으므로 둘 다 들어갑니다.",
+      "original_prompt": "time_between32(t,l,h)는 양 끝을 포함하는가?",
+      "original_options": [
         "아니다. 양 끝은 무조건 제외한다",
         "그렇다. unsigned 거리에 >=를 사용한다"
       ],
-      "answer": 1,
-      "explanation": "t=l이면 거리가 0, t=h이면 두 거리가 같으므로 모두 참입니다. l==h는 단일 값 구간입니다."
+      "original_explanation": "t=l이면 거리가 0, t=h이면 두 거리가 같으므로 모두 참입니다. l==h는 단일 값 구간입니다."
     },
     {
-      "prompt": "CONFIG_POSIX_TIMERS가 꺼지면 clear_itimer 선언은 어떻게 되는가?",
+      "prompt": "CONFIG_POSIX_TIMERS를 끄면 clear_itimer는?",
       "options": [
+        "아무 일도 하지 않는 inline 함수가 있다",
+        "링크 오류가 나도록 항상 없어진다"
+      ],
+      "answer": 0,
+      "explanation": "호출 형태는 유지하되 꺼진 기능은 실행하지 않습니다.",
+      "original_prompt": "CONFIG_POSIX_TIMERS가 꺼지면 clear_itimer 선언은 어떻게 되는가?",
+      "original_options": [
         "빈 inline 함수가 제공된다",
         "항상 링크 오류를 발생시키도록 제거된다"
       ],
-      "answer": 0,
-      "explanation": "설정별 stub으로 공통 호출 형태를 유지합니다. 비활성 기능을 실제 수행하는 구현은 아닙니다."
+      "original_explanation": "설정별 stub으로 공통 호출 형태를 유지합니다. 비활성 기능을 실제 수행하는 구현은 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "0xfffffffe 다음에 0xffffffff, 0, 1을 적어 왜 1이 세 칸 뒤인지 설명해 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_TIME_H\n#define _LINUX_TIME_H\n\n# include <linux/cache.h>\n# include <linux/math64.h>\n# include <linux/time64.h>\n\nextern struct timezone sys_tz;\n\nint get_timespec64(struct timespec64 *ts,\n\t\tconst struct __kernel_timespec __user *uts);\nint put_timespec64(const struct timespec64 *ts,\n\t\tstruct __kernel_timespec __user *uts);\nint get_itimerspec64(struct itimerspec64 *it,\n\t\t\tconst struct __kernel_itimerspec __user *uit);\nint put_itimerspec64(const struct itimerspec64 *it,\n\t\t\tstruct __kernel_itimerspec __user *uit);\n\nextern time64_t mktime64(const unsigned int year, const unsigned int mon,\n\t\t\tconst unsigned int day, const unsigned int hour,\n\t\t\tconst unsigned int min, const unsigned int sec);\n\n#ifdef CONFIG_POSIX_TIMERS\nextern void clear_itimer(void);\n#else\nstatic inline void clear_itimer(void) {}\n#endif\n\nextern long do_utimes(int dfd, const char __user *filename, struct timespec64 *times, int flags);\n\n/*\n * Similar to the struct tm in userspace <time.h>, but it needs to be here so\n * that the kernel source is self contained.\n */\nstruct tm {\n\t/*\n\t * the number of seconds after the minute, normally in the range\n\t * 0 to 59, but can be up to 60 to allow for leap seconds\n\t */\n\tint tm_sec;\n\t/* the number of minutes after the hour, in the range 0 to 59*/\n\tint tm_min;\n\t/* the number of hours past midnight, in the range 0 to 23 */\n\tint tm_hour;\n\t/* the day of the month, in the range 1 to 31 */\n\tint tm_mday;\n\t/* the number of months since January, in the range 0 to 11 */\n\tint tm_mon;\n\t/* the number of years since 1900 */\n\tlong tm_year;\n\t/* the number of days since Sunday, in the range 0 to 6 */\n\tint tm_wday;\n\t/* the number of days since January 1, in the range 0 to 365 */\n\tint tm_yday;\n};\n\nvoid time64_to_tm(time64_t totalsecs, int offset, struct tm *result);\n\n# include <linux/time32.h>\n\nstatic inline bool itimerspec64_valid(const struct itimerspec64 *its)\n{\n\tif (!timespec64_valid(&(its->it_interval)) ||\n\t\t!timespec64_valid(&(its->it_value)))\n\t\treturn false;\n\n\treturn true;\n}\n\n/**\n * time_after32 - compare two 32-bit relative times\n * @a:\tthe time which may be after @b\n * @b:\tthe time which may be before @a\n *\n * time_after32(a, b) returns true if the time @a is after time @b.\n * time_before32(b, a) returns true if the time @b is before time @a.\n *\n * Similar to time_after(), compare two 32-bit timestamps for relative\n * times.  This is useful for comparing 32-bit seconds values that can't\n * be converted to 64-bit values (e.g. due to disk format or wire protocol\n * issues) when it is known that the times are less than 68 years apart.\n */\n#define time_after32(a, b)\t((s32)((u32)(b) - (u32)(a)) < 0)\n#define time_before32(b, a)\ttime_after32(a, b)\n\n/**\n * time_between32 - check if a 32-bit timestamp is within a given time range\n * @t:\tthe time which may be within [l,h]\n * @l:\tthe lower bound of the range\n * @h:\tthe higher bound of the range\n *\n * time_before32(t, l, h) returns true if @l <= @t <= @h. All operands are\n * treated as 32-bit integers.\n *\n * Equivalent to !(time_before32(@t, @l) || time_after32(@t, @h)).\n */\n#define time_between32(t, l, h) ((u32)(h) - (u32)(l) >= (u32)(t) - (u32)(l))\n\n# include <vdso/time.h>\n\n#endif\n",
   "source_review": {
@@ -145,5 +171,182 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/time.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-e06d6bf4049f18c3",
+    "path": "include/linux/time.h",
+    "title": "커널 time.h: 달력 구조체와 32비트 순환 시각 비교",
+    "area": "ABI · 조건부 컴파일 · 달력 표현 · 타입 변환 · 순환 순서",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "시간 복사·변환 선언, 설정별 timer 정리, struct tm과 세 비교 매크로를 전체 범위로 읽습니다.",
+    "guide": [
+      "같은 시간이라도 ABI 경계, 달력 필드, 상대적인 순환 카운터는 서로 다른 표현과 유효 범위를 가집니다.",
+      "사용자 공간 시간 구조체 복사와 커널 달력 변환, 래핑 가능한 초 값 비교를 구분합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일 구조",
+        "text": "GPL-2.0 표시와 guard, cache/math64/time64 include, sys_tz 외부 선언으로 시작합니다. 복사와 달력 변환·timer 관련 선언, 커널 tm 정의, time32 include, 유효성 helper와 32비트 시간 비교 매크로, vdso/time.h include로 끝납니다. include된 다른 헤더의 구현을 이 파일의 직접 구현으로 세지 않습니다."
+      },
+      {
+        "title": "사용자 공간 경계 선언",
+        "text": "get_timespec64/put_timespec64는 커널 timespec64와 __user __kernel_timespec 포인터 사이, get_itimerspec64/put_itimerspec64는 각각의 interval timer 구조체 사이의 인터페이스입니다. 모두 int 반환 선언입니다. 헤더에는 실제 사용자 메모리 접근과 실패 처리 본문이 없으므로 선언만으로 복사 방식이나 구체적 오류 코드를 확정하지 않습니다."
+      },
+      {
+        "title": "기타 외부 인터페이스",
+        "text": "mktime64는 unsigned 연·월·일·시·분·초를 받아 time64_t를 반환합니다. do_utimes는 dfd, 사용자 filename, timespec64 배열을 가리키는 포인터와 flags를 받고 long을 반환합니다. sys_tz는 외부 timezone 객체입니다. 함수 선언이 있다는 사실이 이 헤더를 포함하는 순간 시간이나 파일 시각을 변경한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "POSIX timer 설정 분기",
+        "text": "CONFIG_POSIX_TIMERS이면 clear_itimer는 외부 void 함수 선언입니다. 아니면 인자가 없는 빈 inline 함수로 제공됩니다. 기능이 꺼진 빌드에서도 해당 호출을 같은 형태로 쓸 수 있게 하지만 timer 정리 기능이 그대로 실행된다는 뜻은 아닙니다."
+      },
+      {
+        "title": "커널 tm 전체 필드",
+        "text": "tm_sec는 보통 0..59이고 주석상 윤초를 위해 60도 허용합니다. tm_min은 0..59, tm_hour는 0..23, tm_mday는 1..31, tm_mon은 1월부터 0..11입니다. tm_year는 1900년 이후 연수인 long, tm_wday는 일요일부터 0..6, tm_yday는 1월 1일부터 0..365인 int입니다. 나머지 필드도 int이며 이 구조체에는 tm_isdst, 시간대 이름, UTC offset 필드가 없습니다."
+      },
+      {
+        "title": "달력 변환과 사용자 libc의 구분",
+        "text": "time64_to_tm은 time64_t 초, int offset, 결과 struct tm 포인터를 받습니다. 주석은 커널이 자체 완결성을 갖도록 사용자 공간과 비슷한 구조를 별도로 정의한다고 설명합니다. 사용자 libc의 struct tm과 크기·전체 필드·ABI가 같다고 가정하거나 그대로 사용자 공간에 복사하는 계약은 아닙니다."
+      },
+      {
+        "title": "Interval timer 유효성",
+        "text": "itimerspec64_valid는 it_interval과 it_value 각각에 timespec64_valid를 적용해 하나라도 실패하면 false, 모두 성공하면 true를 반환합니다. OR 단락 평가 때문에 첫 검사가 실패하면 둘째 검사를 평가하지 않습니다. 이 helper는 값을 고치거나 타이머를 시작하지 않고 반환값만 제공하며 NULL 포인터 검사도 하지 않습니다."
+      },
+      {
+        "title": "32비트 상대 순서",
+        "text": "time_after32(a,b)는 (s32)((u32)b-(u32)a)<0입니다. unsigned 차이로 래핑을 거친 거리를 만든 뒤 signed 부호로 순서를 판단합니다. time_before32(b,a)는 time_after32(a,b)의 별칭입니다. 값이 같으면 false이고, 실제 시각 차이가 반주기인 2^31보다 작다는 전제가 필요합니다. 초 단위라면 문서의 약 68년 제한과 연결됩니다."
+      },
+      {
+        "title": "순환 순서의 예와 모호성",
+        "text": "b=0xfffffffe, a=1이면 a가 세 tick 뒤입니다. b-a의 32비트 표현을 signed로 읽으면 -3이므로 after가 true입니다. 정확히 0x80000000 차이는 양 방향 검사에서 모두 음수가 될 수 있어 전후 관계를 결정할 수 없습니다. 일반 정수 대소 비교로 대체하거나 임의로 멀리 떨어진 날짜를 정렬하는 comparator로 사용하면 안 됩니다."
+      },
+      {
+        "title": "포함 구간 검사",
+        "text": "time_between32(t,l,h)는 unsigned h-l과 t-l을 비교하여 l에서 앞으로 h까지의 순환 구간에 t가 들어가는지 양 끝 포함으로 검사합니다. l=0xfffffffe,h=1이면 fffffffe,ffffffff,0,1이 포함됩니다. l==h이면 그 값 하나만 포함합니다. 주석의 설명 줄에 time_before32(t,l,h)라고 적힌 것은 실제 매크로 이름·인자 수와 다르므로 time_between32의 식을 기준으로 읽습니다."
+      },
+      {
+        "title": "매크로 평가와 순서 전제",
+        "text": "between 식에는 l이 두 번 나타나므로 l++처럼 부작용 있는 인자를 피합니다. 비교 매크로는 값을 u32로 줄이므로 상위 32비트 정보는 보존하지 않습니다. between의 unsigned 원호 포함 검사와 before/after의 반주기 순서 해석이 모든 입력에서 항상 동치인 것은 아닙니다. 예를 들어 l=0,h=0xffffffff인 원호는 모든 u32를 포함하지만 이를 일반적인 반주기 전후 비교로 해석할 수 없습니다."
+      },
+      {
+        "title": "학습 범위",
+        "text": "선언만 있는 함수는 호출 형태와 책임 경계를, 본문이 있는 helper와 매크로는 모든 분기와 표현식을 설명합니다. 실제 시간대 정책이나 사용자 메모리 복사 구현은 해당 소스 파일을 별도로 읽어야 합니다. 핵심 CS는 타입 폭, 모듈러 거리, 순서의 유효 범위, 조건부 stub, 데이터 표현의 차이입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 헤더의 struct tm에 tm_isdst가 있는가?",
+        "options": [
+          "없다",
+          "있으며 time64_to_tm이 자동 설정한다"
+        ],
+        "answer": 0,
+        "explanation": "커널 정의는 열거된 여덟 필드뿐입니다. 사용자 공간의 비슷한 구조와 완전히 같은 ABI라고 가정하면 안 됩니다."
+      },
+      {
+        "prompt": "b=0xfffffffe이고 a=1이면 반주기 이내 전제에서 time_after32(a,b)는?",
+        "options": [
+          "false이다. 1은 항상 fffffffe보다 작다",
+          "true이다"
+        ],
+        "answer": 1,
+        "explanation": "unsigned 뺄셈 뒤 signed 해석으로 래핑을 반영합니다. a는 b 이후 세 tick입니다."
+      },
+      {
+        "prompt": "두 32비트 시각이 정확히 2^31 떨어져 있으면 전후를 유일하게 정할 수 있는가?",
+        "options": [
+          "아니다. 반주기 경계는 모호하다",
+          "그렇다. signed 변환이 실제 epoch까지 복원한다"
+        ],
+        "answer": 0,
+        "explanation": "값 두 개에는 어느 회전의 시각인지 정보가 없습니다. 두 방향 차이가 같은 최상위 비트 패턴이므로 거리 제한이 필요합니다."
+      },
+      {
+        "prompt": "time_between32(t,l,h)는 양 끝을 포함하는가?",
+        "options": [
+          "아니다. 양 끝은 무조건 제외한다",
+          "그렇다. unsigned 거리에 >=를 사용한다"
+        ],
+        "answer": 1,
+        "explanation": "t=l이면 거리가 0, t=h이면 두 거리가 같으므로 모두 참입니다. l==h는 단일 값 구간입니다."
+      },
+      {
+        "prompt": "CONFIG_POSIX_TIMERS가 꺼지면 clear_itimer 선언은 어떻게 되는가?",
+        "options": [
+          "빈 inline 함수가 제공된다",
+          "항상 링크 오류를 발생시키도록 제거된다"
+        ],
+        "answer": 0,
+        "explanation": "설정별 stub으로 공통 호출 형태를 유지합니다. 비활성 기능을 실제 수행하는 구현은 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_TIME_H\n#define _LINUX_TIME_H\n\n# include <linux/cache.h>\n# include <linux/math64.h>\n# include <linux/time64.h>\n\nextern struct timezone sys_tz;\n\nint get_timespec64(struct timespec64 *ts,\n\t\tconst struct __kernel_timespec __user *uts);\nint put_timespec64(const struct timespec64 *ts,\n\t\tstruct __kernel_timespec __user *uts);\nint get_itimerspec64(struct itimerspec64 *it,\n\t\t\tconst struct __kernel_itimerspec __user *uit);\nint put_itimerspec64(const struct itimerspec64 *it,\n\t\t\tstruct __kernel_itimerspec __user *uit);\n\nextern time64_t mktime64(const unsigned int year, const unsigned int mon,\n\t\t\tconst unsigned int day, const unsigned int hour,\n\t\t\tconst unsigned int min, const unsigned int sec);\n\n#ifdef CONFIG_POSIX_TIMERS\nextern void clear_itimer(void);\n#else\nstatic inline void clear_itimer(void) {}\n#endif\n\nextern long do_utimes(int dfd, const char __user *filename, struct timespec64 *times, int flags);\n\n/*\n * Similar to the struct tm in userspace <time.h>, but it needs to be here so\n * that the kernel source is self contained.\n */\nstruct tm {\n\t/*\n\t * the number of seconds after the minute, normally in the range\n\t * 0 to 59, but can be up to 60 to allow for leap seconds\n\t */\n\tint tm_sec;\n\t/* the number of minutes after the hour, in the range 0 to 59*/\n\tint tm_min;\n\t/* the number of hours past midnight, in the range 0 to 23 */\n\tint tm_hour;\n\t/* the day of the month, in the range 1 to 31 */\n\tint tm_mday;\n\t/* the number of months since January, in the range 0 to 11 */\n\tint tm_mon;\n\t/* the number of years since 1900 */\n\tlong tm_year;\n\t/* the number of days since Sunday, in the range 0 to 6 */\n\tint tm_wday;\n\t/* the number of days since January 1, in the range 0 to 365 */\n\tint tm_yday;\n};\n\nvoid time64_to_tm(time64_t totalsecs, int offset, struct tm *result);\n\n# include <linux/time32.h>\n\nstatic inline bool itimerspec64_valid(const struct itimerspec64 *its)\n{\n\tif (!timespec64_valid(&(its->it_interval)) ||\n\t\t!timespec64_valid(&(its->it_value)))\n\t\treturn false;\n\n\treturn true;\n}\n\n/**\n * time_after32 - compare two 32-bit relative times\n * @a:\tthe time which may be after @b\n * @b:\tthe time which may be before @a\n *\n * time_after32(a, b) returns true if the time @a is after time @b.\n * time_before32(b, a) returns true if the time @b is before time @a.\n *\n * Similar to time_after(), compare two 32-bit timestamps for relative\n * times.  This is useful for comparing 32-bit seconds values that can't\n * be converted to 64-bit values (e.g. due to disk format or wire protocol\n * issues) when it is known that the times are less than 68 years apart.\n */\n#define time_after32(a, b)\t((s32)((u32)(b) - (u32)(a)) < 0)\n#define time_before32(b, a)\ttime_after32(a, b)\n\n/**\n * time_between32 - check if a 32-bit timestamp is within a given time range\n * @t:\tthe time which may be within [l,h]\n * @l:\tthe lower bound of the range\n * @h:\tthe higher bound of the range\n *\n * time_before32(t, l, h) returns true if @l <= @t <= @h. All operands are\n * treated as 32-bit integers.\n *\n * Equivalent to !(time_before32(@t, @l) || time_after32(@t, @h)).\n */\n#define time_between32(t, l, h) ((u32)(h) - (u32)(l) >= (u32)(t) - (u32)(l))\n\n# include <vdso/time.h>\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1632adf829e28c143aa9bd4cfd4a100d57c2b22b7f13e069f6dae545a2dc1c98",
+      "scope": "whole-file",
+      "line_count": 102,
+      "authoring_source": "course/file_units/calendar_time.py",
+      "sections": [
+        "전체 파일 구조",
+        "사용자 공간 경계 선언",
+        "기타 외부 인터페이스",
+        "POSIX timer 설정 분기",
+        "커널 tm 전체 필드",
+        "달력 변환과 사용자 libc의 구분",
+        "Interval timer 유효성",
+        "32비트 상대 순서",
+        "순환 순서의 예와 모호성",
+        "포함 구간 검사",
+        "매크로 평가와 순서 전제",
+        "학습 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/time.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "시간을 담는 상자도 종류가 다릅니다. 날짜 상자와 한 바퀴 돌면 0으로 돌아오는 32비트 시계를 구분해 봅시다.",
+    "meaning": "시간 함수의 약속, 구조체의 필드, 순환하는 수의 비교 범위를 읽습니다.",
+    "exercise": "0xfffffffe 다음에 0xffffffff, 0, 1을 적어 왜 1이 세 칸 뒤인지 설명해 보세요."
+  },
+  "goal": "시간 함수의 약속, 구조체의 필드, 순환하는 수의 비교 범위를 읽습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "0xfffffffe 다음에 0xffffffff, 0, 1을 적어 왜 1이 세 칸 뒤인지 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "b8067f710993d3374662442eec274247b9fcca95b6994cc55a6468c0f14d82a9",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

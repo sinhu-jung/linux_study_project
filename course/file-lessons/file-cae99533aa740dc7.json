@@ -5,92 +5,112 @@
   "area": "메모리 배치 · 포인터 산술 · 비트마스크 · enum · 아키텍처 hook · 조건부 컴파일",
   "track": "files",
   "kind": "kernel",
-  "intro": "공유 데이터 주소와 갱신 hook, asm-generic fallback 선택을 전체 분석합니다.",
+  "intro": "ARM64 vsyscall 헤더는 vDSO 자료 위치와 56비트 마스크, 공통 코드가 부를 아키텍처별 도우미를 정의합니다.",
   "guide": [
-    "고정 오프셋과 비트마스크는 데이터 배치 계약이며, 아키텍처 hook은 공통 갱신 알고리즘에 필요한 차이만 제공합니다.",
-    "시간 데이터와 RNG 데이터 주소를 구별하고 두 clocksource 슬롯의 마스크 갱신을 설명합니다."
+    "오프셋은 기준점에서 떨어진 거리입니다. 페이지 번호, 바이트 거리, 구조체 원소 개수는 단위가 다릅니다.",
+    "마스크는 사용할 비트 자리만 남기는 값입니다. 이동 연산을 먼저 계산해야 어느 비트를 지우는지 알 수 있습니다.",
+    "hook은 공통 코드가 아키텍처별 동작을 끼워 넣도록 만든 연결 지점입니다. 이 파일의 hook 자체가 전체 시간 갱신과 잠금을 모두 수행하지는 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "가시성과 전체 구성",
-      "text": "GPL-2.0 include guard 아래 __VDSO_RND_DATA_OFFSET을 480으로 정의한 뒤 !__ASSEMBLY__ 구역을 시작합니다. 따라서 이 상수는 assembly 포함 문맥에도 보이지만 C enum·함수는 제외됩니다. C 구역은 linux/timekeeper_internal.h와 vdso/datapage.h에 의존합니다."
+      "title": "어셈블리에서도 보이는 상수",
+      "text": "GPL-2.0과 중복 포함을 막는 include guard 아래에서 난수 자료 오프셋을 480으로 정합니다. 이 정의는 !__ASSEMBLY__보다 앞이라 어셈블리 포함 문맥에도 보입니다. C 전용 enum과 함수는 그 조건 안에 있으며 timekeeper_internal.h와 vdso/datapage.h를 포함합니다."
     },
     {
-      "title": "Vvar 페이지 enum",
-      "text": "vvar_pages는 VVAR_DATA_PAGE_OFFSET=0, VVAR_TIMENS_PAGE_OFFSET=1, VVAR_NR_PAGES=2 순서입니다. 이름과 주석 문맥의 페이지 오프셋이지 0바이트와 1바이트 간격의 구조체 멤버가 아닙니다. enum 선언 자체가 페이지를 할당하거나 사용자 공간에 매핑하지는 않습니다."
+      "title": "vvar 페이지 번호",
+      "text": "vvar_pages에서 DATA는 0, TIMENS는 1, NR_PAGES는 2입니다. 각각 페이지 단위 위치와 개수를 나타내며 0바이트와 1바이트 간격의 멤버가 아닙니다. enum은 이름과 번호를 정할 뿐 실제 페이지를 확보하거나 사용자 공간에 연결하지 않습니다."
     },
     {
-      "title": "정밀도 마스크",
-      "text": "VDSO_PRECISION_MASK는 ~(0xFF00ULL<<48)입니다. 괄호 안 값은 상위 8비트가 1인 0xFF00000000000000이고 이를 반전하면 0x00FFFFFFFFFFFFFF로 하위 56비트가 남습니다. 0xFF00이라는 원래 토큰만 보고 중간 8비트를 지운다고 해석하지 말고 shift를 먼저 적용해야 합니다."
+      "title": "아래 56비트만 남기기",
+      "text": "VDSO_PRECISION_MASK는 ~(0xFF00ULL<<48)입니다. 먼저 48비트 이동하면 0xFF00000000000000으로 가장 위 8비트가 1입니다. 이를 반전하면 0x00FFFFFFFFFFFFFF가 되어 아래 56비트만 1로 남습니다. 원래 0xFF00만 보고 중간 비트를 지운다고 생각하면 이동을 빠뜨린 것입니다."
     },
     {
-      "title": "시간 데이터 포인터",
-      "text": "extern struct vdso_data *vdso_data는 포인터의 외부 선언입니다. __arm64_get_k_vdso_data는 그 포인터를 반환하고 __arch_get_k_vdso_data 매크로가 이 함수 이름에 연결됩니다. 이 헤더에서 실제 저장 공간을 할당하거나 포인터가 유효한지 검사하지 않습니다."
+      "title": "시간 자료 주소를 돌려주기",
+      "text": "extern struct vdso_data *vdso_data는 다른 곳에 정의된 포인터를 알리는 선언입니다. __arm64_get_k_vdso_data는 그 주소를 그대로 반환하며 __arch_get_k_vdso_data가 이 이름을 가리키게 됩니다. 이 헤더는 저장 공간을 새로 만들거나 주소가 유효한지 검사하지 않습니다."
     },
     {
-      "title": "RNG 데이터의 바이트 오프셋",
-      "text": "__arm64_get_k_vdso_rnd_data는 (void *)vdso_data + __VDSO_RND_DATA_OFFSET을 반환하며 반환형은 struct vdso_rng_data *입니다. Linux가 사용하는 GNU C의 void 포인터 산술 문맥에서 480바이트를 더하는 형태입니다. vdso_data 원소 480개를 건너뛰는 연산이 아닙니다. __arch_get_k_vdso_rng_data 매크로는 이름에 rnd가 들어간 이 함수로 연결됩니다."
+      "title": "난수 자료는 480바이트 뒤",
+      "text": "__arm64_get_k_vdso_rnd_data는 vdso_data를 void *로 바꾼 다음 480을 더해 vdso_rng_data 포인터로 반환합니다. Linux의 GNU C 문맥에서 이 void 포인터 산술은 바이트 단위입니다. 구조체 480개를 건너뛰는 계산과 다릅니다. __arch_get_k_vdso_rng_data는 이름에 rnd가 들어간 이 도우미와 연결됩니다."
     },
     {
-      "title": "갱신 hook의 정확한 쓰기 범위",
-      "text": "__arm64_update_vsyscall(vdata, tk)는 vdata[CS_HRES_COARSE].mask와 vdata[CS_RAW].mask를 모두 VDSO_PRECISION_MASK로 설정합니다. tk 인수는 본문에서 사용하지 않습니다. 초·나노초·seq·mult·shift를 이 함수에서 갱신한다고 확대해서 설명하지 않습니다. __arch_update_vsyscall이 이 함수 이름으로 정의됩니다."
+      "title": "갱신하는 곳은 마스크 두 개",
+      "text": "__arm64_update_vsyscall은 HRES_COARSE와 RAW 두 슬롯의 mask를 VDSO_PRECISION_MASK로 씁니다. 슬롯은 배열의 한 칸입니다. tk 인수는 사용하지 않으며 초, 나노초, seq, mult, shift를 여기서 모두 갱신하지 않습니다. __arch_update_vsyscall이 이 함수 이름으로 연결됩니다."
     },
     {
-      "title": "Generic 헤더의 포함 순서",
-      "text": "위 hook 매크로를 정의한 다음 asm-generic/vdso/vsyscall.h를 포함해야 한다는 주석이 있습니다. generic 헤더의 #ifndef 검사가 아키텍처 getter와 update를 보존하도록 하기 위한 순서입니다. 이 ARM64 파일에는 __arch_sync_vdso_data 재정의가 없으므로 확인한 generic 헤더의 빈 sync 함수가 제공됩니다. RNG getter까지 generic 쪽에 동일한 fallback이 있다고 추정하지 않습니다."
+      "title": "공통 헤더를 나중에 포함하는 이유",
+      "text": "아키텍처 hook 이름을 먼저 정한 뒤 asm-generic/vdso/vsyscall.h를 포함합니다. 공통 헤더의 #ifndef가 기존 정의를 보고 ARM64 도우미를 보존하도록 하는 전처리 순서입니다. 이 파일은 __arch_sync_vdso_data를 따로 정의하지 않아 확인한 공통 헤더의 빈 sync 함수가 쓰입니다. 난수 getter에도 같은 기본 대체 함수가 있으리라고 추측하지 않습니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "모든 상수·enum·외부 선언·세 helper·hook 매크로·포함 순서를 다뤘습니다. 데이터 주소 산술, 정밀도 마스크, 공통 알고리즘의 확장 지점이 핵심입니다. 이 hook에는 자체 잠금이나 seq begin/end가 없으므로 동기화 책임은 호출 문맥과 함께 확인해야 합니다. 실제 ARM64 메모리 매핑과 동시 갱신 실행 시험을 수행한 것은 아닙니다."
+      "title": "갱신의 바깥 약속까지 확인하기",
+      "text": "상수, 페이지 번호, 포인터 선언, 세 도우미와 연결 매크로, include 순서가 전체 구성입니다. 이 hook에는 자체 잠금이나 seq 갱신 시작·종료가 없습니다. 여러 실행 흐름이 같은 자료를 다룰 때의 보호는 호출하는 코드와 함께 확인해야 합니다. 실제 ARM64 매핑이나 동시 갱신을 실행 시험한 결과는 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "VDSO_PRECISION_MASK가 남기는 유효 비트 범위는?",
+      "prompt": "VDSO_PRECISION_MASK는 어느 비트를 남기나요?",
       "options": [
+        "아래쪽 56비트입니다.",
+        "위쪽 8비트입니다."
+      ],
+      "answer": 0,
+      "explanation": "48비트 이동 후 반전하면 위 8비트는 0, 아래 56비트는 1입니다.",
+      "original_prompt": "VDSO_PRECISION_MASK가 남기는 유효 비트 범위는?",
+      "original_options": [
         "하위 56비트이다",
         "상위 8비트이다"
       ],
-      "answer": 0,
-      "explanation": "0xFF00ULL<<48은 상위 8비트가 1인 값입니다. NOT 연산으로 그 8비트를 지우고 나머지 하위 56비트를 남깁니다."
+      "original_explanation": "0xFF00ULL<<48은 상위 8비트가 1인 값입니다. NOT 연산으로 그 8비트를 지우고 나머지 하위 56비트를 남깁니다."
     },
     {
-      "prompt": "RNG getter에서 vdso_data 기준으로 더하는 거리는?",
+      "prompt": "난수 getter가 기준 주소에 더하는 거리는 얼마인가요?",
       "options": [
+        "vdso_data 구조체 480개 크기입니다.",
+        "480바이트입니다."
+      ],
+      "answer": 1,
+      "explanation": "void *로 바꾼 GNU C의 바이트 단위 주소 계산입니다.",
+      "original_prompt": "RNG getter에서 vdso_data 기준으로 더하는 거리는?",
+      "original_options": [
         "vdso_data 구조체 480개의 크기이다",
         "480바이트이다"
       ],
-      "answer": 1,
-      "explanation": "먼저 void *로 바꾸고 오프셋을 더합니다. GNU C의 바이트 단위 void 포인터 산술이며 구조체 포인터의 원소 단위 이동과 다릅니다."
+      "original_explanation": "먼저 void *로 바꾸고 오프셋을 더합니다. GNU C의 바이트 단위 void 포인터 산술이며 구조체 포인터의 원소 단위 이동과 다릅니다."
     },
     {
-      "prompt": "__arm64_update_vsyscall이 직접 갱신하는 필드는?",
+      "prompt": "update 함수가 직접 바꾸는 필드는 무엇인가요?",
       "options": [
+        "HRES_COARSE와 RAW의 mask입니다.",
+        "모든 슬롯의 seq와 현재 초·나노초 전체입니다."
+      ],
+      "answer": 0,
+      "explanation": "본문의 두 대입문을 따라가면 실제 쓰기 범위가 보입니다.",
+      "original_prompt": "__arm64_update_vsyscall이 직접 갱신하는 필드는?",
+      "original_options": [
         "HRES_COARSE와 RAW 슬롯의 mask이다",
         "모든 슬롯의 seq와 현재 초·나노초 전체이다"
       ],
-      "answer": 0,
-      "explanation": "본문에는 mask 대입 두 개만 있고 tk도 사용하지 않습니다. 공통 시간 갱신 전체와 아키텍처 hook의 책임을 구분해야 합니다."
+      "original_explanation": "본문에는 mask 대입 두 개만 있고 tk도 사용하지 않습니다. 공통 시간 갱신 전체와 아키텍처 hook의 책임을 구분해야 합니다."
     },
     {
-      "prompt": "asm-generic 헤더를 hook 매크로 정의 뒤에 포함하는 이유는?",
+      "prompt": "공통 헤더를 hook 정의 뒤에 포함하는 이유는 무엇인가요?",
       "options": [
+        "실행 중 공통 코드가 ARM64 함수 주소를 검색하기 위해서입니다.",
+        "공통 기본값을 정하기 전에 ARM64 hook이 있음을 알리기 위해서입니다."
+      ],
+      "answer": 1,
+      "explanation": "#ifndef로 선택하는 전처리 단계의 순서이며 실행 중 검색이 아닙니다.",
+      "original_prompt": "asm-generic 헤더를 hook 매크로 정의 뒤에 포함하는 이유는?",
+      "original_options": [
         "runtime에 generic 코드가 ARM64 함수 주소를 검색하도록 하기 위해서다",
         "generic의 조건부 기본 구현보다 ARM64 hook을 먼저 알리기 위해서다"
       ],
-      "answer": 1,
-      "explanation": "선택은 전처리 단계의 #ifndef로 이뤄집니다. 동적 함수 검색이나 실행 순서 문제가 아니라 선언을 구성하는 포함 순서 문제입니다."
+      "original_explanation": "선택은 전처리 단계의 #ifndef로 이뤄집니다. 동적 함수 검색이나 실행 순서 문제가 아니라 선언을 구성하는 포함 순서 문제입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "시간 자료 시작에서 480바이트 뒤와 한 페이지 뒤를 각각 다른 점으로 그리세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_VDSO_VSYSCALL_H\n#define __ASM_VDSO_VSYSCALL_H\n\n#define __VDSO_RND_DATA_OFFSET  480\n\n#ifndef __ASSEMBLY__\n\n#include <linux/timekeeper_internal.h>\n#include <vdso/datapage.h>\n\nenum vvar_pages {\n\tVVAR_DATA_PAGE_OFFSET,\n\tVVAR_TIMENS_PAGE_OFFSET,\n\tVVAR_NR_PAGES,\n};\n\n#define VDSO_PRECISION_MASK\t~(0xFF00ULL<<48)\n\nextern struct vdso_data *vdso_data;\n\n/*\n * Update the vDSO data page to keep in sync with kernel timekeeping.\n */\nstatic __always_inline\nstruct vdso_data *__arm64_get_k_vdso_data(void)\n{\n\treturn vdso_data;\n}\n#define __arch_get_k_vdso_data __arm64_get_k_vdso_data\n\nstatic __always_inline\nstruct vdso_rng_data *__arm64_get_k_vdso_rnd_data(void)\n{\n\treturn (void *)vdso_data + __VDSO_RND_DATA_OFFSET;\n}\n#define __arch_get_k_vdso_rng_data __arm64_get_k_vdso_rnd_data\n\nstatic __always_inline\nvoid __arm64_update_vsyscall(struct vdso_data *vdata, struct timekeeper *tk)\n{\n\tvdata[CS_HRES_COARSE].mask\t= VDSO_PRECISION_MASK;\n\tvdata[CS_RAW].mask\t\t= VDSO_PRECISION_MASK;\n}\n#define __arch_update_vsyscall __arm64_update_vsyscall\n\n/* The asm-generic header needs to be included after the definitions above */\n#include <asm-generic/vdso/vsyscall.h>\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_VSYSCALL_H */\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/vsyscall.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-cae99533aa740dc7",
+    "path": "arch/arm64/include/asm/vdso/vsyscall.h",
+    "title": "ARM64 커널 vDSO 데이터: 페이지 인덱스·RNG 오프셋·56비트 마스크",
+    "area": "메모리 배치 · 포인터 산술 · 비트마스크 · enum · 아키텍처 hook · 조건부 컴파일",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "공유 데이터 주소와 갱신 hook, asm-generic fallback 선택을 전체 분석합니다.",
+    "guide": [
+      "고정 오프셋과 비트마스크는 데이터 배치 계약이며, 아키텍처 hook은 공통 갱신 알고리즘에 필요한 차이만 제공합니다.",
+      "시간 데이터와 RNG 데이터 주소를 구별하고 두 clocksource 슬롯의 마스크 갱신을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "가시성과 전체 구성",
+        "text": "GPL-2.0 include guard 아래 __VDSO_RND_DATA_OFFSET을 480으로 정의한 뒤 !__ASSEMBLY__ 구역을 시작합니다. 따라서 이 상수는 assembly 포함 문맥에도 보이지만 C enum·함수는 제외됩니다. C 구역은 linux/timekeeper_internal.h와 vdso/datapage.h에 의존합니다."
+      },
+      {
+        "title": "Vvar 페이지 enum",
+        "text": "vvar_pages는 VVAR_DATA_PAGE_OFFSET=0, VVAR_TIMENS_PAGE_OFFSET=1, VVAR_NR_PAGES=2 순서입니다. 이름과 주석 문맥의 페이지 오프셋이지 0바이트와 1바이트 간격의 구조체 멤버가 아닙니다. enum 선언 자체가 페이지를 할당하거나 사용자 공간에 매핑하지는 않습니다."
+      },
+      {
+        "title": "정밀도 마스크",
+        "text": "VDSO_PRECISION_MASK는 ~(0xFF00ULL<<48)입니다. 괄호 안 값은 상위 8비트가 1인 0xFF00000000000000이고 이를 반전하면 0x00FFFFFFFFFFFFFF로 하위 56비트가 남습니다. 0xFF00이라는 원래 토큰만 보고 중간 8비트를 지운다고 해석하지 말고 shift를 먼저 적용해야 합니다."
+      },
+      {
+        "title": "시간 데이터 포인터",
+        "text": "extern struct vdso_data *vdso_data는 포인터의 외부 선언입니다. __arm64_get_k_vdso_data는 그 포인터를 반환하고 __arch_get_k_vdso_data 매크로가 이 함수 이름에 연결됩니다. 이 헤더에서 실제 저장 공간을 할당하거나 포인터가 유효한지 검사하지 않습니다."
+      },
+      {
+        "title": "RNG 데이터의 바이트 오프셋",
+        "text": "__arm64_get_k_vdso_rnd_data는 (void *)vdso_data + __VDSO_RND_DATA_OFFSET을 반환하며 반환형은 struct vdso_rng_data *입니다. Linux가 사용하는 GNU C의 void 포인터 산술 문맥에서 480바이트를 더하는 형태입니다. vdso_data 원소 480개를 건너뛰는 연산이 아닙니다. __arch_get_k_vdso_rng_data 매크로는 이름에 rnd가 들어간 이 함수로 연결됩니다."
+      },
+      {
+        "title": "갱신 hook의 정확한 쓰기 범위",
+        "text": "__arm64_update_vsyscall(vdata, tk)는 vdata[CS_HRES_COARSE].mask와 vdata[CS_RAW].mask를 모두 VDSO_PRECISION_MASK로 설정합니다. tk 인수는 본문에서 사용하지 않습니다. 초·나노초·seq·mult·shift를 이 함수에서 갱신한다고 확대해서 설명하지 않습니다. __arch_update_vsyscall이 이 함수 이름으로 정의됩니다."
+      },
+      {
+        "title": "Generic 헤더의 포함 순서",
+        "text": "위 hook 매크로를 정의한 다음 asm-generic/vdso/vsyscall.h를 포함해야 한다는 주석이 있습니다. generic 헤더의 #ifndef 검사가 아키텍처 getter와 update를 보존하도록 하기 위한 순서입니다. 이 ARM64 파일에는 __arch_sync_vdso_data 재정의가 없으므로 확인한 generic 헤더의 빈 sync 함수가 제공됩니다. RNG getter까지 generic 쪽에 동일한 fallback이 있다고 추정하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "모든 상수·enum·외부 선언·세 helper·hook 매크로·포함 순서를 다뤘습니다. 데이터 주소 산술, 정밀도 마스크, 공통 알고리즘의 확장 지점이 핵심입니다. 이 hook에는 자체 잠금이나 seq begin/end가 없으므로 동기화 책임은 호출 문맥과 함께 확인해야 합니다. 실제 ARM64 메모리 매핑과 동시 갱신 실행 시험을 수행한 것은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "VDSO_PRECISION_MASK가 남기는 유효 비트 범위는?",
+        "options": [
+          "하위 56비트이다",
+          "상위 8비트이다"
+        ],
+        "answer": 0,
+        "explanation": "0xFF00ULL<<48은 상위 8비트가 1인 값입니다. NOT 연산으로 그 8비트를 지우고 나머지 하위 56비트를 남깁니다."
+      },
+      {
+        "prompt": "RNG getter에서 vdso_data 기준으로 더하는 거리는?",
+        "options": [
+          "vdso_data 구조체 480개의 크기이다",
+          "480바이트이다"
+        ],
+        "answer": 1,
+        "explanation": "먼저 void *로 바꾸고 오프셋을 더합니다. GNU C의 바이트 단위 void 포인터 산술이며 구조체 포인터의 원소 단위 이동과 다릅니다."
+      },
+      {
+        "prompt": "__arm64_update_vsyscall이 직접 갱신하는 필드는?",
+        "options": [
+          "HRES_COARSE와 RAW 슬롯의 mask이다",
+          "모든 슬롯의 seq와 현재 초·나노초 전체이다"
+        ],
+        "answer": 0,
+        "explanation": "본문에는 mask 대입 두 개만 있고 tk도 사용하지 않습니다. 공통 시간 갱신 전체와 아키텍처 hook의 책임을 구분해야 합니다."
+      },
+      {
+        "prompt": "asm-generic 헤더를 hook 매크로 정의 뒤에 포함하는 이유는?",
+        "options": [
+          "runtime에 generic 코드가 ARM64 함수 주소를 검색하도록 하기 위해서다",
+          "generic의 조건부 기본 구현보다 ARM64 hook을 먼저 알리기 위해서다"
+        ],
+        "answer": 1,
+        "explanation": "선택은 전처리 단계의 #ifndef로 이뤄집니다. 동적 함수 검색이나 실행 순서 문제가 아니라 선언을 구성하는 포함 순서 문제입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_VDSO_VSYSCALL_H\n#define __ASM_VDSO_VSYSCALL_H\n\n#define __VDSO_RND_DATA_OFFSET  480\n\n#ifndef __ASSEMBLY__\n\n#include <linux/timekeeper_internal.h>\n#include <vdso/datapage.h>\n\nenum vvar_pages {\n\tVVAR_DATA_PAGE_OFFSET,\n\tVVAR_TIMENS_PAGE_OFFSET,\n\tVVAR_NR_PAGES,\n};\n\n#define VDSO_PRECISION_MASK\t~(0xFF00ULL<<48)\n\nextern struct vdso_data *vdso_data;\n\n/*\n * Update the vDSO data page to keep in sync with kernel timekeeping.\n */\nstatic __always_inline\nstruct vdso_data *__arm64_get_k_vdso_data(void)\n{\n\treturn vdso_data;\n}\n#define __arch_get_k_vdso_data __arm64_get_k_vdso_data\n\nstatic __always_inline\nstruct vdso_rng_data *__arm64_get_k_vdso_rnd_data(void)\n{\n\treturn (void *)vdso_data + __VDSO_RND_DATA_OFFSET;\n}\n#define __arch_get_k_vdso_rng_data __arm64_get_k_vdso_rnd_data\n\nstatic __always_inline\nvoid __arm64_update_vsyscall(struct vdso_data *vdata, struct timekeeper *tk)\n{\n\tvdata[CS_HRES_COARSE].mask\t= VDSO_PRECISION_MASK;\n\tvdata[CS_RAW].mask\t\t= VDSO_PRECISION_MASK;\n}\n#define __arch_update_vsyscall __arm64_update_vsyscall\n\n/* The asm-generic header needs to be included after the definitions above */\n#include <asm-generic/vdso/vsyscall.h>\n\n#endif /* !__ASSEMBLY__ */\n\n#endif /* __ASM_VDSO_VSYSCALL_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "11dfadfd8d8b3a7c740feb480f9a050e7732dc66399aee86556a0109d4d6df4b",
+      "scope": "whole-file",
+      "line_count": 52,
+      "authoring_source": "course/file_units/arm64_vdso_entry_update.py",
+      "sections": [
+        "가시성과 전체 구성",
+        "Vvar 페이지 enum",
+        "정밀도 마스크",
+        "시간 데이터 포인터",
+        "RNG 데이터의 바이트 오프셋",
+        "갱신 hook의 정확한 쓰기 범위",
+        "Generic 헤더의 포함 순서",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/vsyscall.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "공유 안내판에서 시간 칸과 난수 칸의 자리를 정하고, 숫자에서 사용할 자리만 남기는 규칙입니다.",
+    "meaning": "ARM64 vsyscall 헤더는 vDSO 자료 위치와 56비트 마스크, 공통 코드가 부를 아키텍처별 도우미를 정의합니다.",
+    "exercise": "시간 자료 시작에서 480바이트 뒤와 한 페이지 뒤를 각각 다른 점으로 그리세요."
+  },
+  "goal": "ARM64 vsyscall 헤더는 vDSO 자료 위치와 56비트 마스크, 공통 코드가 부를 아키텍처별 도우미를 정의합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "시간 자료 시작에서 480바이트 뒤와 한 페이지 뒤를 각각 다른 점으로 그리세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "d0ec005659488f458f3c77665c3736893e8fb7bca1e639c3f4edf10d6e34ff49",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

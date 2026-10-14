@@ -5,92 +5,112 @@
   "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
   "track": "files",
   "kind": "kernel",
-  "intro": "8비트 바이트를 6비트 문자로 변환하고 되돌리는 구현입니다. 정상 형식 생성과 엄격한 입력 검증은 구분해야 합니다.",
+  "intro": "Base64 구현은 8비트 바이트와 6비트 문자 번호를 변환하며 패딩·남은 비트·부분 출력의 계약을 구별해야 합니다.",
   "guide": [
-    "32비트 누적값 ac와 아직 소비하지 않은 bits를 유지합니다. 인코더는 6비트씩 표를 조회하고 디코더는 8비트씩 출력합니다.",
-    "출력 용량 인자가 없으므로 호출자가 충분한 버퍼를 확보해야 합니다. 인코딩은 암호화가 아니며 오류 반환 시 디코딩 출력이 그대로 보존된다고 가정하면 안 됩니다."
+    "Base64는 데이터를 글자로 표현하는 인코딩이며 비밀을 숨기는 암호화가 아닙니다.",
+    "출력 용량을 받지 않으므로 충분한 공간을 호출자가 계산해야 합니다. NUL 종료도 자동으로 붙지 않습니다.",
+    "이 디코더는 모든 정규 문법을 엄격히 검사하지 않으며 오류 전 출력 일부가 이미 바뀔 수 있습니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구성",
-      "text": "GPL SPDX, 작성자와 fs/crypto/fname.c 유래 설명, kernel/types/export/string/base64 헤더 포함, 65칸 문자표, encode와 decode 및 각각의 GPL export로 구성됩니다. 표는 A..Z, a..z, 0..9, +, /의 64문자와 NUL을 담습니다. URL-safe 표의 -와 _를 사용하지 않습니다."
+      "title": "파일과 문자표",
+      "text": "GPL 표기·저자·fs/crypto/fname.c 유래 설명 뒤 관련 헤더와 65칸 표, encode·decode 및 GPL export가 있습니다. 표는 대문자·소문자·숫자·+·/의 64글자와 종료 NUL입니다. URL-safe의 -와 _는 이 표에 없습니다."
     },
     {
-      "title": "인코더의 불변식",
-      "text": "바이트를 읽을 때 ac를 8비트 왼쪽으로 밀어 새 바이트를 OR하고 bits에 8을 더합니다. do-while에서 bits를 6 줄인 뒤 (ac >> bits)&0x3f로 문자를 출력합니다. 각 입력 처리 후 남은 유효 비트는 0, 2, 4개 중 하나입니다. u32에서 오래된 상위 비트가 사라져도 이후에 필요한 하위 비트는 유지됩니다."
+      "title": "인코더의 남은 비트 관리",
+      "text": "ac를 8비트 밀고 새 바이트를 넣으며 bits에 8을 더합니다. 이후 6비트씩 꺼내 표의 0~63번 글자를 씁니다. 각 입력 뒤 남은 유효 비트는 0·2·4개 중 하나입니다. ac는 32비트라 오래된 높은 비트가 없어져도 다음에 필요한 낮은 비트는 남습니다."
     },
     {
-      "title": "마지막 문자와 패딩",
-      "text": "남은 비트가 있으면 6비트 칸의 위쪽으로 옮겨 마지막 문자를 쓰고 bits에서 6을 뺍니다. bits가 음수인 동안 =를 쓰며 2씩 올립니다. 입력 1바이트는 ==, 2바이트는 =, 3의 배수는 패딩이 없습니다. 예를 들어 f의 01100110은 011001과 100000으로 나뉘어 Zg==가 됩니다."
+      "title": "마지막 글자와 =",
+      "text": "남은 비트를 6비트 칸의 높은 쪽으로 옮겨 마지막 글자를 쓰고 bits에서 6을 뺍니다. 음수 bits가 0이 될 때까지 =를 쓰며 2씩 올립니다. 한 바이트는 ==, 두 바이트는 =, 세 바이트의 배수는 패딩이 없습니다. f는 011001·100000으로 Zg==입니다."
     },
     {
-      "title": "길이와 버퍼 계약",
-      "text": "정상 비음수 입력 n바이트의 패딩 포함 출력은 4*ceil(n/3)바이트입니다. 반환은 cp-dst이며 NUL을 추가하지 않습니다. 문자열 함수로 후속 처리하려면 호출자가 별도 공간과 종료 문자를 관리해야 합니다. int 길이와 포인터 차이의 표현 범위를 지켜야 하며 임의의 큰 n에 곱셈 공식을 적용할 때도 오버플로 검사가 필요합니다."
+      "title": "필요한 공간과 끝 문자",
+      "text": "정상 비음수 n의 출력은 패딩 포함 4×ceil(n/3)바이트입니다. 반환은 실제 쓴 길이이며 NUL은 추가하지 않습니다. C 문자열로 쓸 때는 한 칸을 더 확보하고 끝 표시를 별도로 씁니다. int 길이·포인터 차이 범위와 큰 크기 계산의 곱셈 오버플로도 지켜야 합니다."
     },
     {
-      "title": "디코더의 일반 문자 경로",
-      "text": "각 문자를 strchr로 표에서 찾아 인덱스를 6비트 값으로 사용합니다. bits가 8 이상이 되면 8을 빼고 누적값을 오른쪽으로 이동해 바이트를 씁니다. NUL은 strchr가 표 끝을 찾을 수 있어서 src[i]==0 조건으로 별도 거부합니다. 공백이나 개행, -와 _도 표에 없어 거부합니다. srclen을 받으므로 입력 NUL 종료는 필요하지 않습니다."
+      "title": "디코더의 일반 문자",
+      "text": "strchr로 표의 위치를 찾아 6비트 값을 누적하고 8비트가 모이면 바이트를 씁니다. 입력 NUL은 표 끝 NUL을 찾을 수 있어 별도 검사로 거부합니다. 공백·줄바꿈·-·_도 거부합니다. srclen이 있어 입력 문자열 자체의 NUL 종료는 필요하지 않습니다."
     },
     {
-      "title": "= 처리와 엄격성의 한계",
-      "text": "=는 ac를 6비트 이동하고 bits를 늘린 뒤 필요하면 8을 빼지만 바이트를 출력하지 않습니다. 패딩 위치·개수·전체 길이의 배수 조건을 별도로 검사하지 않습니다. 그래서 ====는 길이 0, A도 길이 0으로 성공하며 Zg는 f로 성공합니다. Zg==A 역시 f로 성공합니다. 함수 설명의 유효성 표현만 보고 정규 형태까지 엄격히 검사한다고 결론 내리면 안 됩니다."
+      "title": "패딩 검사의 한계",
+      "text": "=는 누적값을 6비트 밀고 bits를 조절하지만 출력은 하지 않습니다. 위치·개수·전체 길이의 네 배수 여부를 따로 검사하지 않습니다. 그래서 ====와 A는 길이 0으로, Zg와 Zg==A는 f로 성공합니다. 함수 설명만 보고 정규 Base64 형식을 모두 엄격히 검사한다고 단정하지 않습니다."
     },
     {
-      "title": "남은 비트와 실패 시 상태",
-      "text": "루프 끝에서 ac의 하위 bits개 비트가 0이 아니면 -1입니다. Zg는 남은 4비트가 0이지만 Zh는 1이므로 실패합니다. 바이트는 처리 중 바로 출력하므로 Zm9v!는 foo를 쓴 뒤 !에서 실패합니다. 호출자는 -1이면 반환된 버퍼를 성공 결과로 사용하지 않아야 합니다."
+      "title": "남은 비트와 부분 출력",
+      "text": "끝에서 아직 남은 낮은 bits개가 0이 아니면 -1입니다. Zg는 남은 값이 0이지만 Zh는 1이라 실패합니다. 출력은 중간에 바로 쓰므로 Zm9v!는 foo를 먼저 쓴 뒤 !에서 -1입니다. 실패한 버퍼를 완성된 성공 결과로 사용하면 안 됩니다."
     },
     {
-      "title": "CS와 검증",
-      "text": "비트 스트림의 단위 변환, 고정 알파벳 인덱스, 패딩과 문법 검증, 실패 원자성을 연결합니다. 표 크기가 고정되어 strchr를 써도 입력 길이에 대해 선형 시간이지만 매 문자 탐색 비용이 있습니다. check_base64.py는 Python 표준 인코더와 520개 입력을 비교하고 비정규 입력·부분 출력까지 총 3,132개 검사를 수행합니다. 실제 커널 전체 빌드 검증은 아닙니다."
+      "title": "검산의 범위",
+      "text": "비트 단위 변환과 표 조회, 문법 검사와 실패 시 출력 변화를 구별합니다. 표 크기는 고정이라 전체 시간은 입력 길이에 비례하지만 문자마다 탐색 비용은 있습니다. 기존 check_base64.py는 표준 인코더와 520개 입력 및 비정규·부분 출력까지 총 3132개를 검사하는 자료입니다. 이는 실제 커널 전체 빌드 검증과 다릅니다."
     }
   ],
   "questions": [
     {
-      "prompt": "한 바이트 f를 인코딩할 때 필요한 출력 공간은?",
+      "prompt": "한 바이트 f의 출력 공간은 얼마인가요?",
       "options": [
+        "패딩 포함 4바이트이고 NUL 공간은 별도입니다.",
+        "2바이트면 패딩과 NUL까지 충분합니다."
+      ],
+      "answer": 0,
+      "explanation": "Zg 두 글자에 == 두 글자가 추가됩니다.",
+      "original_prompt": "한 바이트 f를 인코딩할 때 필요한 출력 공간은?",
+      "original_options": [
         "패딩 포함 4바이트이며 NUL 공간은 별도다",
         "2바이트면 패딩과 NUL까지 충분하다"
       ],
-      "answer": 0,
-      "explanation": "6비트 데이터 문자는 Zg 두 개지만 구현은 ==도 씁니다. 반환 길이는 4이고 종료 NUL은 쓰지 않습니다."
+      "original_explanation": "6비트 데이터 문자는 Zg 두 개지만 구현은 ==도 씁니다. 반환 길이는 4이고 종료 NUL은 쓰지 않습니다."
     },
     {
-      "prompt": "base64_decode가 ====를 거부하는가?",
+      "prompt": "디코더는 ====를 거부하나요?",
       "options": [
+        "예. 패딩 위치를 엄격히 검사합니다.",
+        "아니요. 이 구현에서는 길이 0으로 성공합니다."
+      ],
+      "answer": 1,
+      "explanation": "패딩 분기는 출력 없이 비트 상태를 움직이며 별도 위치 검사는 없습니다.",
+      "original_prompt": "base64_decode가 ====를 거부하는가?",
+      "original_options": [
         "그렇다. 패딩 위치를 엄격하게 검사한다",
         "아니다. 이 구현은 출력 길이 0으로 성공한다"
       ],
-      "answer": 1,
-      "explanation": "= 분기는 값을 출력하지 않고 비트 상태만 이동합니다. 끝의 남은 비트가 0이면 성공하며 별도 패딩 문법 검사가 없습니다."
+      "original_explanation": "= 분기는 값을 출력하지 않고 비트 상태만 이동합니다. 끝의 남은 비트가 0이면 성공하며 별도 패딩 문법 검사가 없습니다."
     },
     {
-      "prompt": "Zm9v!를 디코딩하면 출력은 보존되는가?",
+      "prompt": "Zm9v!가 실패하면 출력이 그대로 보존되나요?",
       "options": [
+        "아니요. foo를 쓴 뒤 -1입니다.",
+        "예. 전체 검증 후에만 씁니다."
+      ],
+      "answer": 0,
+      "explanation": "8비트가 모일 때마다 바로 저장합니다.",
+      "original_prompt": "Zm9v!를 디코딩하면 출력은 보존되는가?",
+      "original_options": [
         "아니다. foo를 쓴 뒤 -1을 반환한다",
         "그렇다. 전체 검증 뒤에만 출력한다"
       ],
-      "answer": 0,
-      "explanation": "각 8비트가 준비되면 즉시 저장합니다. !가 표에 없어 실패할 때 이미 앞부분이 수정되어 있습니다."
+      "original_explanation": "각 8비트가 준비되면 즉시 저장합니다. !가 표에 없어 실패할 때 이미 앞부분이 수정되어 있습니다."
     },
     {
-      "prompt": "입력 속 NUL을 별도로 검사하는 이유는?",
+      "prompt": "입력 NUL을 따로 검사하는 이유는 무엇인가요?",
       "options": [
+        "정상 Base64 문자이기 때문입니다.",
+        "strchr가 표의 종료 NUL을 찾을 수 있기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "찾은 포인터가 NULL인지 검사하는 것만으로 입력 NUL을 막을 수 없습니다.",
+      "original_prompt": "입력 속 NUL을 별도로 검사하는 이유는?",
+      "original_options": [
         "NUL은 정상 Base64 알파벳이기 때문이다",
         "strchr가 문자표의 종료 NUL 위치를 찾을 수 있기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "표 배열에는 문자열 종료용 NUL이 있으므로 p가 NULL인지 확인하는 것만으로는 입력 NUL을 거부할 수 없습니다."
+      "original_explanation": "표 배열에는 문자열 종료용 NUL이 있으므로 p가 NULL인지 확인하는 것만으로는 입력 NUL을 거부할 수 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "f의 비트 01100110을 011001과 100000으로 나눠 Zg==를 만드는 과정을 적으세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * base64.c - RFC4648-compliant base64 encoding\n *\n * Copyright (c) 2020 Hannes Reinecke, SUSE\n *\n * Based on the base64url routines from fs/crypto/fname.c\n * (which are using the URL-safe base64 encoding),\n * modified to use the standard coding table from RFC4648 section 4.\n */\n\n#include <linux/kernel.h>\n#include <linux/types.h>\n#include <linux/export.h>\n#include <linux/string.h>\n#include <linux/base64.h>\n\nstatic const char base64_table[65] =\n\t\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\";\n\n/**\n * base64_encode() - base64-encode some binary data\n * @src: the binary data to encode\n * @srclen: the length of @src in bytes\n * @dst: (output) the base64-encoded string.  Not NUL-terminated.\n *\n * Encodes data using base64 encoding, i.e. the \"Base 64 Encoding\" specified\n * by RFC 4648, including the  '='-padding.\n *\n * Return: the length of the resulting base64-encoded string in bytes.\n */\nint base64_encode(const u8 *src, int srclen, char *dst)\n{\n\tu32 ac = 0;\n\tint bits = 0;\n\tint i;\n\tchar *cp = dst;\n\n\tfor (i = 0; i < srclen; i++) {\n\t\tac = (ac << 8) | src[i];\n\t\tbits += 8;\n\t\tdo {\n\t\t\tbits -= 6;\n\t\t\t*cp++ = base64_table[(ac >> bits) & 0x3f];\n\t\t} while (bits >= 6);\n\t}\n\tif (bits) {\n\t\t*cp++ = base64_table[(ac << (6 - bits)) & 0x3f];\n\t\tbits -= 6;\n\t}\n\twhile (bits < 0) {\n\t\t*cp++ = '=';\n\t\tbits += 2;\n\t}\n\treturn cp - dst;\n}\nEXPORT_SYMBOL_GPL(base64_encode);\n\n/**\n * base64_decode() - base64-decode a string\n * @src: the string to decode.  Doesn't need to be NUL-terminated.\n * @srclen: the length of @src in bytes\n * @dst: (output) the decoded binary data\n *\n * Decodes a string using base64 encoding, i.e. the \"Base 64 Encoding\"\n * specified by RFC 4648, including the  '='-padding.\n *\n * This implementation hasn't been optimized for performance.\n *\n * Return: the length of the resulting decoded binary data in bytes,\n *\t   or -1 if the string isn't a valid base64 string.\n */\nint base64_decode(const char *src, int srclen, u8 *dst)\n{\n\tu32 ac = 0;\n\tint bits = 0;\n\tint i;\n\tu8 *bp = dst;\n\n\tfor (i = 0; i < srclen; i++) {\n\t\tconst char *p = strchr(base64_table, src[i]);\n\n\t\tif (src[i] == '=') {\n\t\t\tac = (ac << 6);\n\t\t\tbits += 6;\n\t\t\tif (bits >= 8)\n\t\t\t\tbits -= 8;\n\t\t\tcontinue;\n\t\t}\n\t\tif (p == NULL || src[i] == 0)\n\t\t\treturn -1;\n\t\tac = (ac << 6) | (p - base64_table);\n\t\tbits += 6;\n\t\tif (bits >= 8) {\n\t\t\tbits -= 8;\n\t\t\t*bp++ = (u8)(ac >> bits);\n\t\t}\n\t}\n\tif (ac & ((1 << bits) - 1))\n\t\treturn -1;\n\treturn bp - dst;\n}\nEXPORT_SYMBOL_GPL(base64_decode);\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/base64.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-8c38328c6edb6b03",
+    "path": "lib/base64.c",
+    "title": "Base64 전체 구현: 비트 누적, 패딩, 느슨한 디코딩",
+    "area": "바이너리 표현 · 비트 스트림 · 버퍼 계약",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "8비트 바이트를 6비트 문자로 변환하고 되돌리는 구현입니다. 정상 형식 생성과 엄격한 입력 검증은 구분해야 합니다.",
+    "guide": [
+      "32비트 누적값 ac와 아직 소비하지 않은 bits를 유지합니다. 인코더는 6비트씩 표를 조회하고 디코더는 8비트씩 출력합니다.",
+      "출력 용량 인자가 없으므로 호출자가 충분한 버퍼를 확보해야 합니다. 인코딩은 암호화가 아니며 오류 반환 시 디코딩 출력이 그대로 보존된다고 가정하면 안 됩니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "GPL SPDX, 작성자와 fs/crypto/fname.c 유래 설명, kernel/types/export/string/base64 헤더 포함, 65칸 문자표, encode와 decode 및 각각의 GPL export로 구성됩니다. 표는 A..Z, a..z, 0..9, +, /의 64문자와 NUL을 담습니다. URL-safe 표의 -와 _를 사용하지 않습니다."
+      },
+      {
+        "title": "인코더의 불변식",
+        "text": "바이트를 읽을 때 ac를 8비트 왼쪽으로 밀어 새 바이트를 OR하고 bits에 8을 더합니다. do-while에서 bits를 6 줄인 뒤 (ac >> bits)&0x3f로 문자를 출력합니다. 각 입력 처리 후 남은 유효 비트는 0, 2, 4개 중 하나입니다. u32에서 오래된 상위 비트가 사라져도 이후에 필요한 하위 비트는 유지됩니다."
+      },
+      {
+        "title": "마지막 문자와 패딩",
+        "text": "남은 비트가 있으면 6비트 칸의 위쪽으로 옮겨 마지막 문자를 쓰고 bits에서 6을 뺍니다. bits가 음수인 동안 =를 쓰며 2씩 올립니다. 입력 1바이트는 ==, 2바이트는 =, 3의 배수는 패딩이 없습니다. 예를 들어 f의 01100110은 011001과 100000으로 나뉘어 Zg==가 됩니다."
+      },
+      {
+        "title": "길이와 버퍼 계약",
+        "text": "정상 비음수 입력 n바이트의 패딩 포함 출력은 4*ceil(n/3)바이트입니다. 반환은 cp-dst이며 NUL을 추가하지 않습니다. 문자열 함수로 후속 처리하려면 호출자가 별도 공간과 종료 문자를 관리해야 합니다. int 길이와 포인터 차이의 표현 범위를 지켜야 하며 임의의 큰 n에 곱셈 공식을 적용할 때도 오버플로 검사가 필요합니다."
+      },
+      {
+        "title": "디코더의 일반 문자 경로",
+        "text": "각 문자를 strchr로 표에서 찾아 인덱스를 6비트 값으로 사용합니다. bits가 8 이상이 되면 8을 빼고 누적값을 오른쪽으로 이동해 바이트를 씁니다. NUL은 strchr가 표 끝을 찾을 수 있어서 src[i]==0 조건으로 별도 거부합니다. 공백이나 개행, -와 _도 표에 없어 거부합니다. srclen을 받으므로 입력 NUL 종료는 필요하지 않습니다."
+      },
+      {
+        "title": "= 처리와 엄격성의 한계",
+        "text": "=는 ac를 6비트 이동하고 bits를 늘린 뒤 필요하면 8을 빼지만 바이트를 출력하지 않습니다. 패딩 위치·개수·전체 길이의 배수 조건을 별도로 검사하지 않습니다. 그래서 ====는 길이 0, A도 길이 0으로 성공하며 Zg는 f로 성공합니다. Zg==A 역시 f로 성공합니다. 함수 설명의 유효성 표현만 보고 정규 형태까지 엄격히 검사한다고 결론 내리면 안 됩니다."
+      },
+      {
+        "title": "남은 비트와 실패 시 상태",
+        "text": "루프 끝에서 ac의 하위 bits개 비트가 0이 아니면 -1입니다. Zg는 남은 4비트가 0이지만 Zh는 1이므로 실패합니다. 바이트는 처리 중 바로 출력하므로 Zm9v!는 foo를 쓴 뒤 !에서 실패합니다. 호출자는 -1이면 반환된 버퍼를 성공 결과로 사용하지 않아야 합니다."
+      },
+      {
+        "title": "CS와 검증",
+        "text": "비트 스트림의 단위 변환, 고정 알파벳 인덱스, 패딩과 문법 검증, 실패 원자성을 연결합니다. 표 크기가 고정되어 strchr를 써도 입력 길이에 대해 선형 시간이지만 매 문자 탐색 비용이 있습니다. check_base64.py는 Python 표준 인코더와 520개 입력을 비교하고 비정규 입력·부분 출력까지 총 3,132개 검사를 수행합니다. 실제 커널 전체 빌드 검증은 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "한 바이트 f를 인코딩할 때 필요한 출력 공간은?",
+        "options": [
+          "패딩 포함 4바이트이며 NUL 공간은 별도다",
+          "2바이트면 패딩과 NUL까지 충분하다"
+        ],
+        "answer": 0,
+        "explanation": "6비트 데이터 문자는 Zg 두 개지만 구현은 ==도 씁니다. 반환 길이는 4이고 종료 NUL은 쓰지 않습니다."
+      },
+      {
+        "prompt": "base64_decode가 ====를 거부하는가?",
+        "options": [
+          "그렇다. 패딩 위치를 엄격하게 검사한다",
+          "아니다. 이 구현은 출력 길이 0으로 성공한다"
+        ],
+        "answer": 1,
+        "explanation": "= 분기는 값을 출력하지 않고 비트 상태만 이동합니다. 끝의 남은 비트가 0이면 성공하며 별도 패딩 문법 검사가 없습니다."
+      },
+      {
+        "prompt": "Zm9v!를 디코딩하면 출력은 보존되는가?",
+        "options": [
+          "아니다. foo를 쓴 뒤 -1을 반환한다",
+          "그렇다. 전체 검증 뒤에만 출력한다"
+        ],
+        "answer": 0,
+        "explanation": "각 8비트가 준비되면 즉시 저장합니다. !가 표에 없어 실패할 때 이미 앞부분이 수정되어 있습니다."
+      },
+      {
+        "prompt": "입력 속 NUL을 별도로 검사하는 이유는?",
+        "options": [
+          "NUL은 정상 Base64 알파벳이기 때문이다",
+          "strchr가 문자표의 종료 NUL 위치를 찾을 수 있기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "표 배열에는 문자열 종료용 NUL이 있으므로 p가 NULL인지 확인하는 것만으로는 입력 NUL을 거부할 수 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * base64.c - RFC4648-compliant base64 encoding\n *\n * Copyright (c) 2020 Hannes Reinecke, SUSE\n *\n * Based on the base64url routines from fs/crypto/fname.c\n * (which are using the URL-safe base64 encoding),\n * modified to use the standard coding table from RFC4648 section 4.\n */\n\n#include <linux/kernel.h>\n#include <linux/types.h>\n#include <linux/export.h>\n#include <linux/string.h>\n#include <linux/base64.h>\n\nstatic const char base64_table[65] =\n\t\"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\";\n\n/**\n * base64_encode() - base64-encode some binary data\n * @src: the binary data to encode\n * @srclen: the length of @src in bytes\n * @dst: (output) the base64-encoded string.  Not NUL-terminated.\n *\n * Encodes data using base64 encoding, i.e. the \"Base 64 Encoding\" specified\n * by RFC 4648, including the  '='-padding.\n *\n * Return: the length of the resulting base64-encoded string in bytes.\n */\nint base64_encode(const u8 *src, int srclen, char *dst)\n{\n\tu32 ac = 0;\n\tint bits = 0;\n\tint i;\n\tchar *cp = dst;\n\n\tfor (i = 0; i < srclen; i++) {\n\t\tac = (ac << 8) | src[i];\n\t\tbits += 8;\n\t\tdo {\n\t\t\tbits -= 6;\n\t\t\t*cp++ = base64_table[(ac >> bits) & 0x3f];\n\t\t} while (bits >= 6);\n\t}\n\tif (bits) {\n\t\t*cp++ = base64_table[(ac << (6 - bits)) & 0x3f];\n\t\tbits -= 6;\n\t}\n\twhile (bits < 0) {\n\t\t*cp++ = '=';\n\t\tbits += 2;\n\t}\n\treturn cp - dst;\n}\nEXPORT_SYMBOL_GPL(base64_encode);\n\n/**\n * base64_decode() - base64-decode a string\n * @src: the string to decode.  Doesn't need to be NUL-terminated.\n * @srclen: the length of @src in bytes\n * @dst: (output) the decoded binary data\n *\n * Decodes a string using base64 encoding, i.e. the \"Base 64 Encoding\"\n * specified by RFC 4648, including the  '='-padding.\n *\n * This implementation hasn't been optimized for performance.\n *\n * Return: the length of the resulting decoded binary data in bytes,\n *\t   or -1 if the string isn't a valid base64 string.\n */\nint base64_decode(const char *src, int srclen, u8 *dst)\n{\n\tu32 ac = 0;\n\tint bits = 0;\n\tint i;\n\tu8 *bp = dst;\n\n\tfor (i = 0; i < srclen; i++) {\n\t\tconst char *p = strchr(base64_table, src[i]);\n\n\t\tif (src[i] == '=') {\n\t\t\tac = (ac << 6);\n\t\t\tbits += 6;\n\t\t\tif (bits >= 8)\n\t\t\t\tbits -= 8;\n\t\t\tcontinue;\n\t\t}\n\t\tif (p == NULL || src[i] == 0)\n\t\t\treturn -1;\n\t\tac = (ac << 6) | (p - base64_table);\n\t\tbits += 6;\n\t\tif (bits >= 8) {\n\t\t\tbits -= 8;\n\t\t\t*bp++ = (u8)(ac >> bits);\n\t\t}\n\t}\n\tif (ac & ((1 << bits) - 1))\n\t\treturn -1;\n\treturn bp - dst;\n}\nEXPORT_SYMBOL_GPL(base64_decode);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "28329b1af6f3796ed69f0f46bdfc7ceaec76e715d8d81e1955fb366d5f624917",
+      "scope": "whole-file",
+      "line_count": 103,
+      "authoring_source": "course/file_units/binary_text.py",
+      "sections": [
+        "파일 전체 구성",
+        "인코더의 불변식",
+        "마지막 문자와 패딩",
+        "길이와 버퍼 계약",
+        "디코더의 일반 문자 경로",
+        "= 처리와 엄격성의 한계",
+        "남은 비트와 실패 시 상태",
+        "CS와 검증"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/base64.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "8칸씩 포장한 비트를 풀어 6칸씩 이름표를 붙이는 방식입니다. 마지막 포장이 모자라면 = 표시로 네 글자 묶음을 맞춥니다.",
+    "meaning": "Base64 구현은 8비트 바이트와 6비트 문자 번호를 변환하며 패딩·남은 비트·부분 출력의 계약을 구별해야 합니다.",
+    "exercise": "f의 비트 01100110을 011001과 100000으로 나눠 Zg==를 만드는 과정을 적으세요."
+  },
+  "goal": "Base64 구현은 8비트 바이트와 6비트 문자 번호를 변환하며 패딩·남은 비트·부분 출력의 계약을 구별해야 합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "f의 비트 01100110을 011001과 100000으로 나눠 Zg==를 만드는 과정을 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "2267e700a2cc1f8d4a0b8bccc943301b1255c94313adda46a65f1a7e31df3f49",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,188 +5,232 @@
   "area": "가상 메모리 · 캐시 별칭 · highmem · folio · 구간 트리 · 코드 동기화",
   "track": "files",
   "kind": "kernel",
-  "intro": "SoC 보완 장벽에서 시작해 VIVT/VIPT 캐시, highmem folio, ptrace와 익명 페이지의 동기화 경로를 읽습니다.",
+  "intro": "flush.c는 ARM 캐시 종류와 실행 매핑 여부에 따라 자료·명령 캐시를 정리하며 folio 상태와 사용자 주소 겹침을 함께 관리합니다.",
   "guide": [
-    "같은 물리 메모리에 여러 가상 주소가 대응하면 캐시 색과 실행 매핑에 따라 유지보수 경로가 달라집니다. D-cache 상태와 I-cache 상태도 구분합니다.",
-    "앞서 barrier.h의 arm_heavy_mb 선언을 실제 구현에 연결하고 자료구조·분기·상태 비트를 파일 전체에서 추적합니다."
+    "캐시는 메모리 내용을 가까이 보관한 사본입니다. 같은 물리 페이지의 여러 가상 주소를 alias, 즉 주소 별칭이라고 부릅니다.",
+    "D-cache는 자료, I-cache는 명령어를 위한 캐시입니다. 하나의 처리 생략이 다른 처리도 생략한다는 뜻은 아닙니다.",
+    "folio는 한 페이지 이상을 묶은 메모리 단위입니다. 처리 크기, 페이지 수, 상태 비트와 호출 조건을 함께 따라갑니다."
   ],
   "deep_dive": [
     {
-      "title": "파일 범위",
-      "text": "GPL-2.0-only와 저작권 뒤 module/mm/pagemap/highmem, ARM cache·SMP·TLB 관련 헤더, hugetlb와 로컬 mm.h를 포함합니다. 보완 장벽, VIPT alias helper와 공개 cache 함수, ptrace/uprobe 복사, folio flush와 사용자 매핑 순회, PTE 동기화, 익명 페이지 flush까지 포함합니다. 실제 저수준 __cpuc 명령 구현은 호출 대상의 범위입니다."
+      "title": "전체 파일의 역할",
+      "text": "GPL-2.0-only와 저작권 뒤 module·mm·pagemap·highmem, ARM 캐시·SMP·TLB, hugetlb와 로컬 mm.h를 포함합니다. SoC 보완 장벽부터 주소 별칭, ptrace·uprobe 복사, folio, 사용자 매핑 순회, PTE 동기화와 익명 페이지까지 다룹니다. __cpuc의 실제 낮은 수준 명령 본문은 호출 대상 파일에 있습니다."
     },
     {
-      "title": "SoC 보완 장벽 구현",
-      "text": "CONFIG_ARM_HEAVY_MB일 때 soc_mb 함수 포인터를 정의하고 arm_heavy_mb를 export합니다. CONFIG_OUTER_CACHE_SYNC이면 outer_cache.sync가 있을 때 먼저 호출하고, 이어 soc_mb가 있으면 호출합니다. 함수 자체에는 dsb가 없으며 앞서 barrier.h의 __arm_heavy_mb가 dsb 뒤 이 함수를 호출했습니다. 없는 callback은 건너뜁니다."
+      "title": "보완 장벽의 두 callback",
+      "text": "callback은 다른 코드가 호출하도록 등록한 함수입니다. ARM_HEAVY_MB이면 soc_mb 포인터를 정의하고 arm_heavy_mb를 외부에 공개합니다. OUTER_CACHE_SYNC 설정에서 outer_cache.sync가 있으면 먼저 호출하고 이어 soc_mb가 있으면 호출합니다. 없는 함수는 건너뜁니다. 여기에는 dsb가 없고 barrier.h의 바깥 wrapper가 dsb 후 이 함수를 부릅니다."
     },
     {
-      "title": "캐시 색을 맞춘 alias",
-      "text": "CONFIG_CPU_CACHE_VIPT의 flush_pfn_alias는 FLUSH_ALIAS_START에 CACHE_COLOUR(vaddr)<<PAGE_SHIFT를 더한 임시 주소를 선택합니다. set_top_pte로 해당 PFN을 PAGE_KERNEL로 매핑한 뒤 mcrr로 페이지 범위, mcr로 후속 유지보수 명령을 수행합니다. 범위 끝은 to+PAGE_SIZE-1입니다. 사용자 포인터를 그대로 커널에서 역참조하는 구현이 아닙니다."
+      "title": "주소 색을 맞추는 임시 연결",
+      "text": "VIPT 설정의 flush_pfn_alias는 사용자 주소에서 CACHE_COLOUR를 구해 FLUSH_ALIAS_START에 페이지 단위로 더합니다. 색은 같은 캐시 위치 관계를 맞추기 위한 주소 분류입니다. PFN이라는 물리 페이지 번호를 PAGE_KERNEL 속성으로 임시 연결하고 mcrr·mcr 유지보수를 실행합니다. 끝은 to+PAGE_SIZE-1로 마지막 바이트를 포함합니다. 사용자 주소를 그대로 커널 포인터로 읽는 방법은 아닙니다."
     },
     {
-      "title": "I-cache alias의 offset",
-      "text": "flush_icache_alias도 사용자 주소의 색을 맞춰 매핑하지만 vaddr의 페이지 내부 offset을 보존합니다. to=va+offset을 구한 뒤 flush_icache_range(to,to+len)을 호출합니다. PFN은 페이지를, offset은 그 안의 시작 바이트를 결정합니다. 두 alias helper의 끝 주소 표현을 같은 것으로 뭉뚱그리지 않습니다."
+      "title": "명령 캐시 별칭의 내부 위치",
+      "text": "flush_icache_alias도 색을 맞추되 사용자 주소의 페이지 내부 offset을 남깁니다. 임시 페이지 시작 va에 offset을 더해 to를 만든 뒤 flush_icache_range(to,to+len)을 부릅니다. PFN은 페이지, offset은 페이지 안 위치를 정합니다. 앞 도우미의 포함 끝과 이 범위의 끝 표현을 무심코 같다고 읽지 않습니다."
     },
     {
-      "title": "mm와 범위 flush",
-      "text": "flush_cache_mm은 VIVT이면 vivt helper로 넘기고 즉시 반환합니다. 아니면 VIPT aliasing에서 cache 유지보수 asm을 수행합니다. flush_cache_range도 VIVT에 위임해 반환하고 VIPT aliasing에서 같은 asm을 사용한 뒤 VM_EXEC이면 전체 I-cache를 flush합니다. 이 후자 경로는 start/end를 이용한 세밀한 부분 루프를 구현하지 않습니다."
+      "title": "주소 공간과 범위 정리",
+      "text": "flush_cache_mm은 VIVT이면 전용 도우미로 넘기고 반환하며 VIPT aliasing이면 유지보수 asm을 합니다. flush_cache_range도 VIVT 위임 뒤 반환하고, 아니면 VIPT aliasing 작업 후 VM_EXEC일 때 전체 I-cache를 정리합니다. 이 경로에 start부터 end까지 세밀히 순회하는 반복문은 없습니다."
     },
     {
-      "title": "페이지 묶음 flush",
-      "text": "flush_cache_pages는 VIVT에 user_addr,pfn,nr을 전달해 위임합니다. VIPT aliasing에서는 flush_pfn_alias(pfn,user_addr)와 전체 I-cache flush를 호출합니다. 또 VM_EXEC이면서 icache_is_vivt_asid_tagged이면 전체 I-cache를 flush합니다. 여기의 VIPT 본문에는 nr만큼 alias helper를 반복하는 루프가 없으므로 본문에 없는 반복 동작을 만들어 설명하지 않습니다. CONFIG_CPU_CACHE_VIPT가 없으면 두 내부 alias helper는 빈 매크로가 됩니다."
+      "title": "페이지 묶음의 실제 호출",
+      "text": "flush_cache_pages는 VIVT에 주소·PFN·nr을 그대로 줍니다. VIPT aliasing에서는 PFN 별칭 도우미 한 번과 전체 I-cache 정리를 합니다. 실행 매핑이면서 I-cache가 VIVT ASID 태그형이면 전체 I-cache 정리도 수행합니다. VIPT 본문에 nr번 반복하는 루프는 없습니다. VIPT 설정이 없으면 두 alias 도우미는 빈 매크로입니다."
     },
     {
-      "title": "Ptrace 제어 플래그",
-      "text": "FLAG_PA_IS_EXEC는1, FLAG_PA_CORE_IN_MM은2입니다. flush_ptrace_access는 현재 CPU가 대상 mm_cpumask에 속하는지와 VMA의 VM_EXEC 여부를 각각 비트로 모아 내부 helper에 전달합니다. flush_uprobe_xol_access는 두 비트를 모두 설정해 같은 helper를 호출합니다. 이 비트들은 전체 전역 CPU 상태가 아니라 해당 호출의 판단 자료입니다."
+      "title": "ptrace 판단 플래그",
+      "text": "IS_EXEC는 비트 값 1, CORE_IN_MM은 2입니다. flush_ptrace_access는 현재 CPU가 대상 mm의 CPU 집합에 속하는지와 VMA 실행 권한을 표시해 내부 함수로 넘깁니다. uprobe의 xol 경로는 두 비트를 모두 켭니다. 이 값은 이번 호출의 판단 자료이며 전체 CPU 상태를 새로 설정하는 것이 아닙니다."
     },
     {
-      "title": "Ptrace VIVT·aliasing 경로",
-      "text": "__flush_ptrace_access는 VIVT에서 CORE_IN_MM일 때만 kaddr부터 len 범위의 __cpuc_coherent_kern_range를 호출하고 반환합니다. VIPT aliasing에서는 사용자 주소 색으로 PFN alias를 flush하고 전체 I-cache를 flush한 뒤 반환합니다. 두 경로 모두 아래의 non-aliasing 실행 분기로 계속 내려가지 않습니다."
+      "title": "먼저 끝나는 두 ptrace 경로",
+      "text": "VIVT이면 CORE_IN_MM일 때만 커널 주소에서 len 범위의 coherent 도우미를 실행한 뒤 반환합니다. VIPT aliasing이면 사용자 주소 색의 PFN 별칭과 전체 I-cache를 정리하고 반환합니다. 두 분기는 아래 non-aliasing 경로까지 이어 실행되지 않습니다."
     },
     {
-      "title": "Ptrace non-aliasing 경로",
-      "text": "남은 VIPT non-aliasing D-cache 경로에서는 IS_EXEC일 때만 코드 동기화를 합니다. I-cache가 VIPT aliasing이면 사용자 색의 flush_icache_alias를 사용하고 아니면 커널 주소 범위의 coherent helper를 사용합니다. cache_ops_need_broadcast가 참이면 smp_call_function으로 다른 CPU의 전체 I-cache flush callback을 호출하고 wait 인자1로 완료를 기다립니다. 단순히 SMP라는 이유만으로 항상 broadcast하는 본문은 아닙니다."
+      "title": "실행 자료와 다른 CPU의 정리",
+      "text": "남은 VIPT non-aliasing D-cache 경로는 IS_EXEC일 때만 코드를 동기화합니다. I-cache가 VIPT aliasing이면 색을 맞춘 도우미, 아니면 커널 범위 도우미를 씁니다. cache_ops_need_broadcast가 참일 때 다른 CPU의 전체 I-cache callback을 smp_call_function으로 부르고 wait=1로 완료를 기다립니다. SMP라는 이유만으로 무조건 방송하는 것은 아닙니다."
     },
     {
-      "title": "사용자 페이지에 복사",
-      "text": "copy_to_user_page는 SMP일 때 preempt_disable 후 memcpy를 하고 flush_ptrace_access를 수행한 뒤 preempt_enable합니다. 주석은 현재 CPU에서 실행해야 한다고 명시합니다. 선점 방지는 이 구간의 CPU 이동 문제와 관련되며 대상 데이터를 다른 CPU가 수정하지 못하도록 하는 범용 상호 배제 잠금은 아닙니다."
+      "title": "복사하는 동안 CPU 유지",
+      "text": "copy_to_user_page는 SMP에서 선점을 막고 memcpy로 복사한 뒤 ptrace 캐시 처리를 하고 선점을 풉니다. 선점은 실행하던 일을 다른 작업으로 바꾸는 일이며 여기서는 현재 CPU에서 처리해야 한다는 조건과 관련됩니다. 다른 CPU가 같은 자료를 쓰지 못하게 하는 범용 상호 배제 잠금은 아닙니다."
     },
     {
-      "title": "Lowmem folio",
-      "text": "__flush_dcache_folio는 highmem이 아니면 folio_address와 folio_size로 커널 매핑 전체를 __cpuc_flush_dcache_area에 전달합니다. folio를 항상 한 페이지라고 가정하지 않고 크기와 페이지 수를 각각 사용합니다. 이 내부 함수는 마지막의 cache alias 처리도 계속 수행합니다."
+      "title": "일반 메모리 folio",
+      "text": "__flush_dcache_folio는 highmem이 아니면 folio_address와 folio_size로 전체 커널 연결 범위를 정리합니다. folio를 무조건 한 페이지라고 가정하면 안 됩니다. 이 작업 뒤에도 함수 끝의 alias 처리를 계속 확인합니다."
     },
     {
-      "title": "Highmem 두 경로",
-      "text": "highmem이며 VIPT non-aliasing이면 folio의 각 페이지 offset을 kmap_local_folio로 매핑하고 PAGE_SIZE만큼 flush한 뒤 kunmap_local합니다. 그 밖의 highmem 경로는 kmap_high_get으로 기존 매핑을 얻은 경우에만 PAGE_SIZE flush와 kunmap_high를 수행합니다. NULL이면 그 페이지의 해당 분기 작업을 건너뛰며 두 경로의 매핑 획득 방식을 같다고 설명하면 안 됩니다."
+      "title": "highmem의 두 매핑 방법",
+      "text": "직접 늘 연결되어 있지 않은 highmem에서 VIPT non-aliasing이면 페이지마다 kmap_local_folio로 임시 연결하고 PAGE_SIZE를 정리한 뒤 kunmap_local로 풉니다. 다른 highmem 경로는 kmap_high_get이 기존 연결을 돌려준 경우만 정리하고 kunmap_high합니다. NULL이면 그 페이지 작업을 건너뛰므로 두 방식은 같지 않습니다."
     },
     {
-      "title": "파일 위치에 맞춘 색",
-      "text": "__flush_dcache_folio의 마지막은 mapping이 있고 VIPT aliasing이면 folio_pfn과 folio_pos를 flush_pfn_alias에 전달합니다. 주석은 페이지 캐시의 관련 사용자 색이 index와 합치되므로 해당 색의 flush를 선택한다고 설명합니다. 여기에도 folio의 모든 PFN을 반복하는 별도 alias 루프는 없습니다."
+      "title": "파일 위치에 맞는 색",
+      "text": "내부 folio 함수 끝에서 mapping이 있고 VIPT aliasing이면 folio_pfn과 folio_pos로 alias를 정리합니다. 페이지 캐시의 사용자 색이 파일 index와 맞는다는 주석을 따릅니다. 이 자리에도 모든 PFN을 도는 별도 반복문은 없습니다."
     },
     {
-      "title": "사용자 alias 검색 자료구조",
-      "text": "__flush_dcache_aliases는 current->active_mm을 기준으로 pgoff=folio->index와 닫힌 끝 pgoff_end=pgoff+folio_nr_pages-1을 만듭니다. mapping 잠금 아래 i_mmap 구간 트리의 겹치는 VMA를 순회하고 현재 active_mm이 아니거나 VM_MAYSHARE가 없으면 건너뜁니다. 모든 프로세스의 모든 VMA를 무조건 flush하는 선형 전체 순회가 아닙니다."
+      "title": "겹치는 사용자 매핑 찾기",
+      "text": "__flush_dcache_aliases는 current->active_mm을 기준으로 folio index부터 index+페이지 수-1까지 양 끝 포함 범위를 만듭니다. mapping 잠금 아래 i_mmap 구간 트리에서 겹치는 VMA를 찾습니다. 현재 active_mm이 아니거나 VM_MAYSHARE가 없으면 넘깁니다. 모든 프로세스의 VMA를 무조건 정리하는 전체 목록 순회가 아닙니다."
     },
     {
-      "title": "겹치는 범위 계산",
-      "text": "각 VMA에서 start는 vm_start, pfn은 folio 시작, nr은 folio 페이지 수로 시작합니다. unsigned offset=pgoff-vm_pgoff를 구해 offset>-nr이면 앞쪽이 VMA 밖인 겹침을 처리하도록 pfn-=offset,nr+=offset을 수행하고, 아니면 start+=offset*PAGE_SIZE로 VMA 내부 시작을 옮깁니다. 끝이 vm_end를 넘으면 nr을 잘라 flush_cache_pages에 전달합니다. 음수처럼 보이는 차이를 unsigned wrap으로 다루는 코드이므로 signed 비교로 임의 번역하면 안 됩니다."
+      "title": "겹친 부분만 남기는 계산",
+      "text": "start는 VMA 시작, pfn과 nr은 folio 시작과 페이지 수입니다. unsigned offset=pgoff-vm_pgoff를 계산해 offset>-nr이면 pfn-=offset, nr+=offset으로 앞부분을 조정하고, 아니면 start를 offset페이지 옮깁니다. 끝이 vm_end를 넘으면 nr을 더 줄입니다. 음수 차이처럼 보이는 값을 부호 없는 수의 한 바퀴 돌아감으로 처리하므로 signed 비교로 임의 변경해 해설하지 않습니다."
     },
     {
-      "title": "겹침 숫자 예제",
-      "text": "folio index10·4페이지이고 VMA 시작 파일 offset12이면 두 페이지만 겹칩니다. 이 ARM의 unsigned 계산에서 offset은-2의 wrap 값이며 pfn-=offset은 PFN을2 올리고 nr+=offset은4를2로 줄입니다. 반대로 VMA offset8이면 offset2여서 start를2페이지 옮깁니다. 두 경우 모두 이후 vm_end에 의한 추가 절단이 가능합니다."
+      "title": "숫자로 보는 겹침",
+      "text": "folio가 파일 위치 10부터 네 페이지면 10~13입니다. VMA가 12부터라면 앞의 둘을 빼고 PFN을 2 올린 두 페이지만 남습니다. 코드의 unsigned offset은 -2에 대응하는 돌아간 값이며 pfn-=offset과 nr+=offset이 각각 +2와 -2 효과입니다. 반대로 VMA가 8부터면 offset 2로 사용자 start를 두 페이지 옮깁니다. 이후 VMA 끝에서 더 잘릴 수 있습니다."
     },
     {
-      "title": "PTE 설치 쪽 동기화",
-      "text": "아키텍처6 이상에서 __sync_icache_dcache는 VIPT non-aliasing의 비실행 PTE이면 즉시 반환합니다. 유효하지 않은 PFN과 reserved folio도 건너뜁니다. VIPT aliasing이면 folio_flush_mapping을 얻고 아니면 mapping=NULL입니다. test_and_set_bit(PG_dcache_clean)의 이전 값이0일 때만 내부 D-cache flush를 수행하며 실행 PTE이면 전체 I-cache를 flush합니다."
+      "title": "PTE를 설치할 때의 정리",
+      "text": "ARMv6 이상에서 non-aliasing VIPT의 비실행 PTE이면 바로 반환합니다. 유효하지 않은 PFN과 reserved folio도 건너뜁니다. VIPT aliasing이면 mapping을 얻고 아니면 NULL입니다. test_and_set_bit로 clean 비트를 켜면서 이전 값을 받아, 이전이 0일 때만 내부 D-cache 정리를 합니다. 실행 PTE의 전체 I-cache 정리는 별도 조건입니다."
     },
     {
-      "title": "Clean 비트의 읽기",
-      "text": "PG_dcache_clean은 이 동기화 프로토콜의 상태 비트입니다. __sync_icache_dcache는 test-and-set으로 이미 처리된 상태를 검사하고, 쓰기 이후 flush_dcache_folio는 상황에 따라 비트를 지워 나중 작업이 다시 필요함을 표시합니다. 원자 비트 연산 하나만으로 전체 folio 데이터가 동시 수정에서 보호되는 것은 아닙니다."
+      "title": "clean 비트가 뜻하는 상태",
+      "text": "PG_dcache_clean은 이 동기화 절차가 기억하는 상태입니다. test-and-set은 이전 값 읽기와 새 비트 설정을 하나의 원자적 동작, 즉 중간에 쪼개지지 않는 특정 갱신으로 합니다. 쓰기 뒤에는 필요에 따라 비트를 지워 나중 정리를 다시 요구합니다. 비트 하나의 원자성이 folio 전체 자료의 동시 쓰기까지 잠그는 것은 아닙니다."
     },
     {
-      "title": "공개 folio flush의 빠른 경로",
-      "text": "flush_dcache_folio는 zero PFN이면 쓰지 않는 페이지라는 주석에 따라 반환합니다. broadcast가 필요 없고 VIPT non-aliasing이면 clean 비트가 있을 때 지우고 반환합니다. 주석의 coherent라서 작업 불필요하다는 설명과 달리 상태 비트 갱신은 남아 있으며 특히 이후 실행 매핑 동기화와 함께 읽어야 합니다."
+      "title": "공개 folio 함수의 빠른 반환",
+      "text": "zero PFN은 쓰지 않는 페이지라 정리가 필요 없다는 주석에 따라 반환합니다. 방송이 필요 없고 VIPT non-aliasing이면 clean 비트가 켜져 있을 때 지우고 반환합니다. 실제 캐시 작업을 생략하더라도 상태 비트 갱신은 남으며 이후 실행 매핑 동기화와 연결됩니다."
     },
     {
-      "title": "지연 flush와 즉시 flush",
-      "text": "나머지 경로는 mapping을 얻습니다. broadcast가 필요 없고 mapping이 있으며 사용자 매핑이 없으면 clean 비트를 지워 지연합니다. 그렇지 않으면 __flush_dcache_folio를 실행하고 mapping+VIVT이면 사용자 aliases를, mapping이 있는 다른 경우는 전체 I-cache를 처리한 뒤 clean 비트를 설정합니다. broadcast가 필요한 구성에서는 이 지연 분기를 사용하지 않습니다."
+      "title": "지금 정리할지 나중으로 미룰지",
+      "text": "방송이 필요 없고 파일 mapping은 있지만 사용자 매핑이 없으면 clean 비트를 지워 정리를 미룹니다. 나머지는 내부 folio 정리를 하고 mapping+VIVT이면 사용자 별칭도 처리하며 다른 mapping 경우에는 전체 I-cache를 정리한 뒤 clean을 켭니다. 다른 CPU 정리가 필요한 구성에서는 이 지연 분기를 쓰지 않습니다."
     },
     {
-      "title": "Page 래퍼와 export",
-      "text": "flush_dcache_folio와 flush_dcache_page를 export합니다. page 래퍼는 page_folio(page)를 구해 folio 함수를 호출하므로 전달받은 작은 page 하나만의 바이트 범위를 독립 처리한다고 설명하면 틀립니다. 내부 helper들은 모두 공개 export된 것이 아닙니다."
+      "title": "page wrapper와 외부 공개",
+      "text": "flush_dcache_folio와 flush_dcache_page는 export되어 다른 코드에서 사용할 수 있습니다. page 함수는 page_folio로 해당 folio를 찾아 전체 folio 함수에 맡깁니다. 받은 작은 page만 독립적으로 처리한다고 읽으면 안 됩니다. 모든 내부 도우미가 export된 것도 아닙니다."
     },
     {
-      "title": "익명 페이지의 순서",
-      "text": "__flush_anon_page는 전방 선언과 정의가 함께 있습니다. VIPT non-aliasing이면 반환하고, VIVT는 flush_cache_page, 그 밖은 PFN alias와 전체 I-cache flush를 수행합니다. 이후 page_address의 PAGE_SIZE에 __cpuc_flush_dcache_area를 적용합니다. 주석의 예상 호출 순서는 get_user_pages에서 flush_anon_page, memcpy, 쓰기가 있었다면 flush_dcache_page입니다. 주석은 마지막 커널 매핑 작업이 invalidate만 필요한 의도보다 writeback+invalidate로 과도하다는 FIXME도 남깁니다."
+      "title": "익명 페이지 처리 순서",
+      "text": "__flush_anon_page의 선언과 본문이 함께 있습니다. non-aliasing VIPT이면 반환하고 VIVT이면 flush_cache_page, 다른 경우는 PFN 별칭과 전체 I-cache를 처리합니다. 뒤에 커널 page_address의 PAGE_SIZE를 D-cache 도우미로 정리합니다. 예상 순서는 get_user_pages 안의 anon 정리 → memcpy → 썼다면 flush_dcache_page입니다. FIXME는 마지막 작업이 의도한 invalidate보다 더 큰 writeback+invalidate라는 점도 남깁니다."
     },
     {
-      "title": "CS 연결과 검증 범위",
-      "text": "가상/물리 인덱스·태그, 같은 물리 페이지의 주소 별칭, cache colour, folio와 highmem, bit 상태 기계, 구간 트리의 겹침 검색, unsigned 모듈러 산술, 다른 CPU callback을 학습합니다. 원본 대응과 빌드 검사는 실제 ARM 캐시 일관성이나 모든 CPU 구성의 실행 검증을 대신하지 않습니다."
+      "title": "배운 원리와 검증 범위",
+      "text": "주소 별칭과 색, D/I 캐시 구분, folio·highmem, 상태 비트, 구간 트리, unsigned 계산과 다른 CPU callback을 연결했습니다. 소스 대응과 빌드 구조 확인은 실제 ARM 캐시 일관성이나 모든 CPU 설정 실행 시험을 대신하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "arm_heavy_mb에서 두 callback이 모두 있으면 호출 순서는?",
+      "prompt": "두 callback이 있을 때 arm_heavy_mb의 순서는 무엇인가요?",
       "options": [
+        "outer_cache.sync 다음 soc_mb입니다.",
+        "soc_mb 다음 outer_cache.sync입니다."
+      ],
+      "answer": 0,
+      "explanation": "outer 동기화 설정과 포인터를 먼저 확인하고 그다음 SoC 함수를 확인합니다.",
+      "original_prompt": "arm_heavy_mb에서 두 callback이 모두 있으면 호출 순서는?",
+      "original_options": [
         "outer_cache.sync 뒤 soc_mb이다",
         "soc_mb 뒤 outer_cache.sync이다"
       ],
-      "answer": 0,
-      "explanation": "OUTER_CACHE_SYNC 구성에서 outer callback을 먼저 검사·호출하고 이어 soc_mb를 검사합니다. dsb는 앞서 barrier.h 래퍼의 역할입니다."
+      "original_explanation": "OUTER_CACHE_SYNC 구성에서 outer callback을 먼저 검사·호출하고 이어 soc_mb를 검사합니다. dsb는 앞서 barrier.h 래퍼의 역할입니다."
     },
     {
-      "prompt": "Highmem·VIPT non-aliasing folio를 내부 helper가 처리하는 방식은?",
+      "prompt": "highmem·VIPT non-aliasing folio는 어떻게 처리하나요?",
       "options": [
+        "전체 folio가 영구 커널 주소를 가진다고 가정합니다.",
+        "각 페이지를 임시 local 매핑해 정리하고 해제합니다."
+      ],
+      "answer": 1,
+      "explanation": "페이지 수만큼 연결·PAGE_SIZE 정리·해제를 반복합니다.",
+      "original_prompt": "Highmem·VIPT non-aliasing folio를 내부 helper가 처리하는 방식은?",
+      "original_options": [
         "folio 전체가 항상 영구 kernel 주소를 가진다고 가정한다",
         "각 페이지를 local 매핑하고 flush한 뒤 해제한다"
       ],
-      "answer": 1,
-      "explanation": "folio_nr_pages만큼 kmap_local_folio(offset),PAGE_SIZE flush,kunmap_local을 반복합니다. lowmem의 folio_address 경로와 구별합니다."
+      "original_explanation": "folio_nr_pages만큼 kmap_local_folio(offset),PAGE_SIZE flush,kunmap_local을 반복합니다. lowmem의 folio_address 경로와 구별합니다."
     },
     {
-      "prompt": "cache_ops_need_broadcast가 참이면 mapping이 있고 미매핑인 folio도 지연 분기에 들어가는가?",
+      "prompt": "방송이 필요하면 사용자 매핑 없는 folio도 지연하나요?",
       "options": [
+        "아니요. 지연 조건에는 방송 불필요가 들어 있습니다.",
+        "예. mapping만 있으면 미룹니다."
+      ],
+      "answer": 0,
+      "explanation": "다른 CPU 처리 필요 여부를 빼면 원래 조건이 달라집니다.",
+      "original_prompt": "cache_ops_need_broadcast가 참이면 mapping이 있고 미매핑인 folio도 지연 분기에 들어가는가?",
+      "original_options": [
         "아니다. 지연 조건이 broadcast 불필요를 요구한다",
         "그렇다. mapping 유무만으로 지연한다"
       ],
-      "answer": 0,
-      "explanation": "if 조건에 !cache_ops_need_broadcast()가 포함됩니다. 다른 CPU의 유지보수가 필요한 환경에서 지연 최적화를 무조건 적용하지 않습니다."
+      "original_explanation": "if 조건에 !cache_ops_need_broadcast()가 포함됩니다. 다른 CPU의 유지보수가 필요한 환경에서 지연 최적화를 무조건 적용하지 않습니다."
     },
     {
-      "prompt": "folio index10·4페이지, VMA 파일 offset12이면 VMA 끝 절단 전 남은 범위는?",
+      "prompt": "folio 10부터 4페이지와 VMA offset 12가 겹치면 무엇이 남나요?",
       "options": [
+        "PFN을 2 내린 6페이지입니다.",
+        "PFN을 2 올린 2페이지입니다."
+      ],
+      "answer": 1,
+      "explanation": "VMA보다 앞인 10과 11을 빼고 12와 13만 남깁니다.",
+      "original_prompt": "folio index10·4페이지, VMA 파일 offset12이면 VMA 끝 절단 전 남은 범위는?",
+      "original_options": [
         "folio PFN을2 내린6페이지이다",
         "folio PFN을2 올린2페이지이다"
       ],
-      "answer": 1,
-      "explanation": "앞의 두 페이지가 VMA 시작보다 앞입니다. unsigned offset=-2의 wrap 값을 사용한 pfn-=offset,nr+=offset이 각각+2와-2 효과를 냅니다."
+      "original_explanation": "앞의 두 페이지가 VMA 시작보다 앞입니다. unsigned offset=-2의 wrap 값을 사용한 pfn-=offset,nr+=offset이 각각+2와-2 효과를 냅니다."
     },
     {
-      "prompt": "__sync_icache_dcache에서 PG_dcache_clean이 이미1이면 D-cache helper를 다시 호출하는가?",
+      "prompt": "clean 비트가 이미 1이면 PTE 동기화가 D-cache 도우미를 다시 부르나요?",
       "options": [
+        "아니요. 이전 값이 0일 때만 부릅니다.",
+        "예. 이전 값이 1일 때 부릅니다."
+      ],
+      "answer": 0,
+      "explanation": "!test_and_set_bit 조건입니다. 실행 PTE의 I-cache 처리는 별도로 남습니다.",
+      "original_prompt": "__sync_icache_dcache에서 PG_dcache_clean이 이미1이면 D-cache helper를 다시 호출하는가?",
+      "original_options": [
         "아니다. 이전 비트가0일 때만 호출한다",
         "그렇다. test_and_set 결과가1일 때 호출한다"
       ],
-      "answer": 0,
-      "explanation": "조건은 !test_and_set_bit입니다. 다만 실행 PTE의 I-cache flush는 그 다음 별도 조건이므로 D-cache 생략과 함께 무조건 생략된다고 보면 틀립니다."
+      "original_explanation": "조건은 !test_and_set_bit입니다. 다만 실행 PTE의 I-cache flush는 그 다음 별도 조건이므로 D-cache 생략과 함께 무조건 생략된다고 보면 틀립니다."
     },
     {
-      "prompt": "copy_to_user_page의 preempt_disable이 제공하는 것은?",
+      "prompt": "copy_to_user_page의 선점 차단은 무엇을 하나요?",
       "options": [
+        "다른 모든 CPU가 그 페이지에 쓰는 일을 잠급니다.",
+        "SMP에서 복사와 캐시 처리 중 선점을 막습니다."
+      ],
+      "answer": 1,
+      "explanation": "공유 페이지의 상호 배제 잠금이 아니라 현재 CPU 실행 조건과 관련됩니다.",
+      "original_prompt": "copy_to_user_page의 preempt_disable이 제공하는 것은?",
+      "original_options": [
         "모든 다른 CPU의 같은 페이지 쓰기를 잠금으로 막는다",
         "SMP에서 복사와 cache 처리 중 선점을 막는다"
       ],
-      "answer": 1,
-      "explanation": "본문에는 공유 페이지 상호 배제 잠금이 없습니다. 현재 CPU에서 처리해야 한다는 주석과 선점 구간을 연결해야 합니다."
+      "original_explanation": "본문에는 공유 페이지 상호 배제 잠금이 없습니다. 현재 CPU에서 처리해야 한다는 주석과 선점 구간을 연결해야 합니다."
     },
     {
-      "prompt": "flush_dcache_page가 folio 중 한 page를 받으면 무엇을 호출하는가?",
+      "prompt": "page wrapper는 무엇을 호출하나요?",
       "options": [
+        "page_folio로 얻은 folio의 정리 함수입니다.",
+        "그 page의 1바이트만 정리합니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 범위와 지연 여부는 folio 함수의 분기가 정합니다.",
+      "original_prompt": "flush_dcache_page가 folio 중 한 page를 받으면 무엇을 호출하는가?",
+      "original_options": [
         "page_folio로 얻은 folio의 flush 함수이다",
         "언제나 해당 page의1바이트만 flush한다"
       ],
-      "answer": 0,
-      "explanation": "래퍼는 flush_dcache_folio(page_folio(page))입니다. 실제 작업 범위와 지연 여부는 folio 처리 분기가 결정합니다."
+      "original_explanation": "래퍼는 flush_dcache_folio(page_folio(page))입니다. 실제 작업 범위와 지연 여부는 folio 처리 분기가 결정합니다."
     },
     {
-      "prompt": "__flush_dcache_aliases의 VMA 필터는?",
+      "prompt": "별칭 탐색에서 어떤 VMA를 남기나요?",
       "options": [
+        "모든 mm의 모든 VMA입니다.",
+        "현재 active_mm이며 VM_MAYSHARE가 있는 VMA입니다."
+      ],
+      "answer": 1,
+      "explanation": "파일 위치 겹침 검색 후 실행 문맥과 공유 가능 여부를 더 검사합니다.",
+      "original_prompt": "__flush_dcache_aliases의 VMA 필터는?",
+      "original_options": [
         "모든 mm의 모든 VMA이다",
         "현재 active_mm이며 VM_MAYSHARE가 있는 VMA이다"
       ],
-      "answer": 1,
-      "explanation": "구간 트리의 파일 offset 겹침 검색 뒤 vm_mm과 VM_MAYSHARE를 추가 검사합니다. 범위 검색과 문맥 필터는 서로 다른 단계입니다."
+      "original_explanation": "구간 트리의 파일 offset 겹침 검색 뒤 vm_mm과 VM_MAYSHARE를 추가 검사합니다. 범위 검색과 문맥 필터는 서로 다른 단계입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "folio 파일 위치 10~13과 VMA 시작 12가 겹치는 두 페이지를 그리고 캐시 정리 경로를 표시하세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  linux/arch/arm/mm/flush.c\n *\n *  Copyright (C) 1995-2002 Russell King\n */\n#include <linux/module.h>\n#include <linux/mm.h>\n#include <linux/pagemap.h>\n#include <linux/highmem.h>\n\n#include <asm/cacheflush.h>\n#include <asm/cachetype.h>\n#include <asm/highmem.h>\n#include <asm/smp_plat.h>\n#include <asm/tlbflush.h>\n#include <linux/hugetlb.h>\n\n#include \"mm.h\"\n\n#ifdef CONFIG_ARM_HEAVY_MB\nvoid (*soc_mb)(void);\n\nvoid arm_heavy_mb(void)\n{\n#ifdef CONFIG_OUTER_CACHE_SYNC\n\tif (outer_cache.sync)\n\t\touter_cache.sync();\n#endif\n\tif (soc_mb)\n\t\tsoc_mb();\n}\nEXPORT_SYMBOL(arm_heavy_mb);\n#endif\n\n#ifdef CONFIG_CPU_CACHE_VIPT\n\nstatic void flush_pfn_alias(unsigned long pfn, unsigned long vaddr)\n{\n\tunsigned long to = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);\n\tconst int zero = 0;\n\n\tset_top_pte(to, pfn_pte(pfn, PAGE_KERNEL));\n\n\tasm(\t\"mcrr\tp15, 0, %1, %0, c14\\n\"\n\t\"\tmcr\tp15, 0, %2, c7, c10, 4\"\n\t    :\n\t    : \"r\" (to), \"r\" (to + PAGE_SIZE - 1), \"r\" (zero)\n\t    : \"cc\");\n}\n\nstatic void flush_icache_alias(unsigned long pfn, unsigned long vaddr, unsigned long len)\n{\n\tunsigned long va = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);\n\tunsigned long offset = vaddr & (PAGE_SIZE - 1);\n\tunsigned long to;\n\n\tset_top_pte(va, pfn_pte(pfn, PAGE_KERNEL));\n\tto = va + offset;\n\tflush_icache_range(to, to + len);\n}\n\nvoid flush_cache_mm(struct mm_struct *mm)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_mm(mm);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tasm(\t\"mcr\tp15, 0, %0, c7, c14, 0\\n\"\n\t\t\"\tmcr\tp15, 0, %0, c7, c10, 4\"\n\t\t    :\n\t\t    : \"r\" (0)\n\t\t    : \"cc\");\n\t}\n}\n\nvoid flush_cache_range(struct vm_area_struct *vma, unsigned long start, unsigned long end)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_range(vma, start, end);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tasm(\t\"mcr\tp15, 0, %0, c7, c14, 0\\n\"\n\t\t\"\tmcr\tp15, 0, %0, c7, c10, 4\"\n\t\t    :\n\t\t    : \"r\" (0)\n\t\t    : \"cc\");\n\t}\n\n\tif (vma->vm_flags & VM_EXEC)\n\t\t__flush_icache_all();\n}\n\nvoid flush_cache_pages(struct vm_area_struct *vma, unsigned long user_addr, unsigned long pfn, unsigned int nr)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_pages(vma, user_addr, pfn, nr);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tflush_pfn_alias(pfn, user_addr);\n\t\t__flush_icache_all();\n\t}\n\n\tif (vma->vm_flags & VM_EXEC && icache_is_vivt_asid_tagged())\n\t\t__flush_icache_all();\n}\n\n#else\n#define flush_pfn_alias(pfn,vaddr)\t\tdo { } while (0)\n#define flush_icache_alias(pfn,vaddr,len)\tdo { } while (0)\n#endif\n\n#define FLAG_PA_IS_EXEC 1\n#define FLAG_PA_CORE_IN_MM 2\n\nstatic void flush_ptrace_access_other(void *args)\n{\n\t__flush_icache_all();\n}\n\nstatic inline\nvoid __flush_ptrace_access(struct page *page, unsigned long uaddr, void *kaddr,\n\t\t\t   unsigned long len, unsigned int flags)\n{\n\tif (cache_is_vivt()) {\n\t\tif (flags & FLAG_PA_CORE_IN_MM) {\n\t\t\tunsigned long addr = (unsigned long)kaddr;\n\t\t\t__cpuc_coherent_kern_range(addr, addr + len);\n\t\t}\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tflush_pfn_alias(page_to_pfn(page), uaddr);\n\t\t__flush_icache_all();\n\t\treturn;\n\t}\n\n\t/* VIPT non-aliasing D-cache */\n\tif (flags & FLAG_PA_IS_EXEC) {\n\t\tunsigned long addr = (unsigned long)kaddr;\n\t\tif (icache_is_vipt_aliasing())\n\t\t\tflush_icache_alias(page_to_pfn(page), uaddr, len);\n\t\telse\n\t\t\t__cpuc_coherent_kern_range(addr, addr + len);\n\t\tif (cache_ops_need_broadcast())\n\t\t\tsmp_call_function(flush_ptrace_access_other,\n\t\t\t\t\t  NULL, 1);\n\t}\n}\n\nstatic\nvoid flush_ptrace_access(struct vm_area_struct *vma, struct page *page,\n\t\t\t unsigned long uaddr, void *kaddr, unsigned long len)\n{\n\tunsigned int flags = 0;\n\tif (cpumask_test_cpu(smp_processor_id(), mm_cpumask(vma->vm_mm)))\n\t\tflags |= FLAG_PA_CORE_IN_MM;\n\tif (vma->vm_flags & VM_EXEC)\n\t\tflags |= FLAG_PA_IS_EXEC;\n\t__flush_ptrace_access(page, uaddr, kaddr, len, flags);\n}\n\nvoid flush_uprobe_xol_access(struct page *page, unsigned long uaddr,\n\t\t\t     void *kaddr, unsigned long len)\n{\n\tunsigned int flags = FLAG_PA_CORE_IN_MM|FLAG_PA_IS_EXEC;\n\n\t__flush_ptrace_access(page, uaddr, kaddr, len, flags);\n}\n\n/*\n * Copy user data from/to a page which is mapped into a different\n * processes address space.  Really, we want to allow our \"user\n * space\" model to handle this.\n *\n * Note that this code needs to run on the current CPU.\n */\nvoid copy_to_user_page(struct vm_area_struct *vma, struct page *page,\n\t\t       unsigned long uaddr, void *dst, const void *src,\n\t\t       unsigned long len)\n{\n#ifdef CONFIG_SMP\n\tpreempt_disable();\n#endif\n\tmemcpy(dst, src, len);\n\tflush_ptrace_access(vma, page, uaddr, dst, len);\n#ifdef CONFIG_SMP\n\tpreempt_enable();\n#endif\n}\n\nvoid __flush_dcache_folio(struct address_space *mapping, struct folio *folio)\n{\n\t/*\n\t * Writeback any data associated with the kernel mapping of this\n\t * page.  This ensures that data in the physical page is mutually\n\t * coherent with the kernels mapping.\n\t */\n\tif (!folio_test_highmem(folio)) {\n\t\t__cpuc_flush_dcache_area(folio_address(folio),\n\t\t\t\t\tfolio_size(folio));\n\t} else {\n\t\tunsigned long i;\n\t\tif (cache_is_vipt_nonaliasing()) {\n\t\t\tfor (i = 0; i < folio_nr_pages(folio); i++) {\n\t\t\t\tvoid *addr = kmap_local_folio(folio,\n\t\t\t\t\t\t\t\ti * PAGE_SIZE);\n\t\t\t\t__cpuc_flush_dcache_area(addr, PAGE_SIZE);\n\t\t\t\tkunmap_local(addr);\n\t\t\t}\n\t\t} else {\n\t\t\tfor (i = 0; i < folio_nr_pages(folio); i++) {\n\t\t\t\tvoid *addr = kmap_high_get(folio_page(folio, i));\n\t\t\t\tif (addr) {\n\t\t\t\t\t__cpuc_flush_dcache_area(addr, PAGE_SIZE);\n\t\t\t\t\tkunmap_high(folio_page(folio, i));\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t/*\n\t * If this is a page cache page, and we have an aliasing VIPT cache,\n\t * we only need to do one flush - which would be at the relevant\n\t * userspace colour, which is congruent with page->index.\n\t */\n\tif (mapping && cache_is_vipt_aliasing())\n\t\tflush_pfn_alias(folio_pfn(folio), folio_pos(folio));\n}\n\nstatic void __flush_dcache_aliases(struct address_space *mapping, struct folio *folio)\n{\n\tstruct mm_struct *mm = current->active_mm;\n\tstruct vm_area_struct *vma;\n\tpgoff_t pgoff, pgoff_end;\n\n\t/*\n\t * There are possible user space mappings of this page:\n\t * - VIVT cache: we need to also write back and invalidate all user\n\t *   data in the current VM view associated with this page.\n\t * - aliasing VIPT: we only need to find one mapping of this page.\n\t */\n\tpgoff = folio->index;\n\tpgoff_end = pgoff + folio_nr_pages(folio) - 1;\n\n\tflush_dcache_mmap_lock(mapping);\n\tvma_interval_tree_foreach(vma, &mapping->i_mmap, pgoff, pgoff_end) {\n\t\tunsigned long start, offset, pfn;\n\t\tunsigned int nr;\n\n\t\t/*\n\t\t * If this VMA is not in our MM, we can ignore it.\n\t\t */\n\t\tif (vma->vm_mm != mm)\n\t\t\tcontinue;\n\t\tif (!(vma->vm_flags & VM_MAYSHARE))\n\t\t\tcontinue;\n\n\t\tstart = vma->vm_start;\n\t\tpfn = folio_pfn(folio);\n\t\tnr = folio_nr_pages(folio);\n\t\toffset = pgoff - vma->vm_pgoff;\n\t\tif (offset > -nr) {\n\t\t\tpfn -= offset;\n\t\t\tnr += offset;\n\t\t} else {\n\t\t\tstart += offset * PAGE_SIZE;\n\t\t}\n\t\tif (start + nr * PAGE_SIZE > vma->vm_end)\n\t\t\tnr = (vma->vm_end - start) / PAGE_SIZE;\n\n\t\tflush_cache_pages(vma, start, pfn, nr);\n\t}\n\tflush_dcache_mmap_unlock(mapping);\n}\n\n#if __LINUX_ARM_ARCH__ >= 6\nvoid __sync_icache_dcache(pte_t pteval)\n{\n\tunsigned long pfn;\n\tstruct folio *folio;\n\tstruct address_space *mapping;\n\n\tif (cache_is_vipt_nonaliasing() && !pte_exec(pteval))\n\t\t/* only flush non-aliasing VIPT caches for exec mappings */\n\t\treturn;\n\tpfn = pte_pfn(pteval);\n\tif (!pfn_valid(pfn))\n\t\treturn;\n\n\tfolio = page_folio(pfn_to_page(pfn));\n\tif (folio_test_reserved(folio))\n\t\treturn;\n\n\tif (cache_is_vipt_aliasing())\n\t\tmapping = folio_flush_mapping(folio);\n\telse\n\t\tmapping = NULL;\n\n\tif (!test_and_set_bit(PG_dcache_clean, &folio->flags))\n\t\t__flush_dcache_folio(mapping, folio);\n\n\tif (pte_exec(pteval))\n\t\t__flush_icache_all();\n}\n#endif\n\n/*\n * Ensure cache coherency between kernel mapping and userspace mapping\n * of this page.\n *\n * We have three cases to consider:\n *  - VIPT non-aliasing cache: fully coherent so nothing required.\n *  - VIVT: fully aliasing, so we need to handle every alias in our\n *          current VM view.\n *  - VIPT aliasing: need to handle one alias in our current VM view.\n *\n * If we need to handle aliasing:\n *  If the page only exists in the page cache and there are no user\n *  space mappings, we can be lazy and remember that we may have dirty\n *  kernel cache lines for later.  Otherwise, we assume we have\n *  aliasing mappings.\n *\n * Note that we disable the lazy flush for SMP configurations where\n * the cache maintenance operations are not automatically broadcasted.\n */\nvoid flush_dcache_folio(struct folio *folio)\n{\n\tstruct address_space *mapping;\n\n\t/*\n\t * The zero page is never written to, so never has any dirty\n\t * cache lines, and therefore never needs to be flushed.\n\t */\n\tif (is_zero_pfn(folio_pfn(folio)))\n\t\treturn;\n\n\tif (!cache_ops_need_broadcast() && cache_is_vipt_nonaliasing()) {\n\t\tif (test_bit(PG_dcache_clean, &folio->flags))\n\t\t\tclear_bit(PG_dcache_clean, &folio->flags);\n\t\treturn;\n\t}\n\n\tmapping = folio_flush_mapping(folio);\n\n\tif (!cache_ops_need_broadcast() &&\n\t    mapping && !folio_mapped(folio))\n\t\tclear_bit(PG_dcache_clean, &folio->flags);\n\telse {\n\t\t__flush_dcache_folio(mapping, folio);\n\t\tif (mapping && cache_is_vivt())\n\t\t\t__flush_dcache_aliases(mapping, folio);\n\t\telse if (mapping)\n\t\t\t__flush_icache_all();\n\t\tset_bit(PG_dcache_clean, &folio->flags);\n\t}\n}\nEXPORT_SYMBOL(flush_dcache_folio);\n\nvoid flush_dcache_page(struct page *page)\n{\n\tflush_dcache_folio(page_folio(page));\n}\nEXPORT_SYMBOL(flush_dcache_page);\n/*\n * Flush an anonymous page so that users of get_user_pages()\n * can safely access the data.  The expected sequence is:\n *\n *  get_user_pages()\n *    -> flush_anon_page\n *  memcpy() to/from page\n *  if written to page, flush_dcache_page()\n */\nvoid __flush_anon_page(struct vm_area_struct *vma, struct page *page, unsigned long vmaddr);\nvoid __flush_anon_page(struct vm_area_struct *vma, struct page *page, unsigned long vmaddr)\n{\n\tunsigned long pfn;\n\n\t/* VIPT non-aliasing caches need do nothing */\n\tif (cache_is_vipt_nonaliasing())\n\t\treturn;\n\n\t/*\n\t * Write back and invalidate userspace mapping.\n\t */\n\tpfn = page_to_pfn(page);\n\tif (cache_is_vivt()) {\n\t\tflush_cache_page(vma, vmaddr, pfn);\n\t} else {\n\t\t/*\n\t\t * For aliasing VIPT, we can flush an alias of the\n\t\t * userspace address only.\n\t\t */\n\t\tflush_pfn_alias(pfn, vmaddr);\n\t\t__flush_icache_all();\n\t}\n\n\t/*\n\t * Invalidate kernel mapping.  No data should be contained\n\t * in this mapping of the page.  FIXME: this is overkill\n\t * since we actually ask for a write-back and invalidate.\n\t */\n\t__cpuc_flush_dcache_area(page_address(page), PAGE_SIZE);\n}\n",
   "source_review": {
@@ -227,5 +271,264 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/mm/flush.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b60192336b5eeb29",
+    "path": "arch/arm/mm/flush.c",
+    "title": "ARM 캐시 flush 전체: 별칭·folio·실행 코드 동기화",
+    "area": "가상 메모리 · 캐시 별칭 · highmem · folio · 구간 트리 · 코드 동기화",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "SoC 보완 장벽에서 시작해 VIVT/VIPT 캐시, highmem folio, ptrace와 익명 페이지의 동기화 경로를 읽습니다.",
+    "guide": [
+      "같은 물리 메모리에 여러 가상 주소가 대응하면 캐시 색과 실행 매핑에 따라 유지보수 경로가 달라집니다. D-cache 상태와 I-cache 상태도 구분합니다.",
+      "앞서 barrier.h의 arm_heavy_mb 선언을 실제 구현에 연결하고 자료구조·분기·상태 비트를 파일 전체에서 추적합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 범위",
+        "text": "GPL-2.0-only와 저작권 뒤 module/mm/pagemap/highmem, ARM cache·SMP·TLB 관련 헤더, hugetlb와 로컬 mm.h를 포함합니다. 보완 장벽, VIPT alias helper와 공개 cache 함수, ptrace/uprobe 복사, folio flush와 사용자 매핑 순회, PTE 동기화, 익명 페이지 flush까지 포함합니다. 실제 저수준 __cpuc 명령 구현은 호출 대상의 범위입니다."
+      },
+      {
+        "title": "SoC 보완 장벽 구현",
+        "text": "CONFIG_ARM_HEAVY_MB일 때 soc_mb 함수 포인터를 정의하고 arm_heavy_mb를 export합니다. CONFIG_OUTER_CACHE_SYNC이면 outer_cache.sync가 있을 때 먼저 호출하고, 이어 soc_mb가 있으면 호출합니다. 함수 자체에는 dsb가 없으며 앞서 barrier.h의 __arm_heavy_mb가 dsb 뒤 이 함수를 호출했습니다. 없는 callback은 건너뜁니다."
+      },
+      {
+        "title": "캐시 색을 맞춘 alias",
+        "text": "CONFIG_CPU_CACHE_VIPT의 flush_pfn_alias는 FLUSH_ALIAS_START에 CACHE_COLOUR(vaddr)<<PAGE_SHIFT를 더한 임시 주소를 선택합니다. set_top_pte로 해당 PFN을 PAGE_KERNEL로 매핑한 뒤 mcrr로 페이지 범위, mcr로 후속 유지보수 명령을 수행합니다. 범위 끝은 to+PAGE_SIZE-1입니다. 사용자 포인터를 그대로 커널에서 역참조하는 구현이 아닙니다."
+      },
+      {
+        "title": "I-cache alias의 offset",
+        "text": "flush_icache_alias도 사용자 주소의 색을 맞춰 매핑하지만 vaddr의 페이지 내부 offset을 보존합니다. to=va+offset을 구한 뒤 flush_icache_range(to,to+len)을 호출합니다. PFN은 페이지를, offset은 그 안의 시작 바이트를 결정합니다. 두 alias helper의 끝 주소 표현을 같은 것으로 뭉뚱그리지 않습니다."
+      },
+      {
+        "title": "mm와 범위 flush",
+        "text": "flush_cache_mm은 VIVT이면 vivt helper로 넘기고 즉시 반환합니다. 아니면 VIPT aliasing에서 cache 유지보수 asm을 수행합니다. flush_cache_range도 VIVT에 위임해 반환하고 VIPT aliasing에서 같은 asm을 사용한 뒤 VM_EXEC이면 전체 I-cache를 flush합니다. 이 후자 경로는 start/end를 이용한 세밀한 부분 루프를 구현하지 않습니다."
+      },
+      {
+        "title": "페이지 묶음 flush",
+        "text": "flush_cache_pages는 VIVT에 user_addr,pfn,nr을 전달해 위임합니다. VIPT aliasing에서는 flush_pfn_alias(pfn,user_addr)와 전체 I-cache flush를 호출합니다. 또 VM_EXEC이면서 icache_is_vivt_asid_tagged이면 전체 I-cache를 flush합니다. 여기의 VIPT 본문에는 nr만큼 alias helper를 반복하는 루프가 없으므로 본문에 없는 반복 동작을 만들어 설명하지 않습니다. CONFIG_CPU_CACHE_VIPT가 없으면 두 내부 alias helper는 빈 매크로가 됩니다."
+      },
+      {
+        "title": "Ptrace 제어 플래그",
+        "text": "FLAG_PA_IS_EXEC는1, FLAG_PA_CORE_IN_MM은2입니다. flush_ptrace_access는 현재 CPU가 대상 mm_cpumask에 속하는지와 VMA의 VM_EXEC 여부를 각각 비트로 모아 내부 helper에 전달합니다. flush_uprobe_xol_access는 두 비트를 모두 설정해 같은 helper를 호출합니다. 이 비트들은 전체 전역 CPU 상태가 아니라 해당 호출의 판단 자료입니다."
+      },
+      {
+        "title": "Ptrace VIVT·aliasing 경로",
+        "text": "__flush_ptrace_access는 VIVT에서 CORE_IN_MM일 때만 kaddr부터 len 범위의 __cpuc_coherent_kern_range를 호출하고 반환합니다. VIPT aliasing에서는 사용자 주소 색으로 PFN alias를 flush하고 전체 I-cache를 flush한 뒤 반환합니다. 두 경로 모두 아래의 non-aliasing 실행 분기로 계속 내려가지 않습니다."
+      },
+      {
+        "title": "Ptrace non-aliasing 경로",
+        "text": "남은 VIPT non-aliasing D-cache 경로에서는 IS_EXEC일 때만 코드 동기화를 합니다. I-cache가 VIPT aliasing이면 사용자 색의 flush_icache_alias를 사용하고 아니면 커널 주소 범위의 coherent helper를 사용합니다. cache_ops_need_broadcast가 참이면 smp_call_function으로 다른 CPU의 전체 I-cache flush callback을 호출하고 wait 인자1로 완료를 기다립니다. 단순히 SMP라는 이유만으로 항상 broadcast하는 본문은 아닙니다."
+      },
+      {
+        "title": "사용자 페이지에 복사",
+        "text": "copy_to_user_page는 SMP일 때 preempt_disable 후 memcpy를 하고 flush_ptrace_access를 수행한 뒤 preempt_enable합니다. 주석은 현재 CPU에서 실행해야 한다고 명시합니다. 선점 방지는 이 구간의 CPU 이동 문제와 관련되며 대상 데이터를 다른 CPU가 수정하지 못하도록 하는 범용 상호 배제 잠금은 아닙니다."
+      },
+      {
+        "title": "Lowmem folio",
+        "text": "__flush_dcache_folio는 highmem이 아니면 folio_address와 folio_size로 커널 매핑 전체를 __cpuc_flush_dcache_area에 전달합니다. folio를 항상 한 페이지라고 가정하지 않고 크기와 페이지 수를 각각 사용합니다. 이 내부 함수는 마지막의 cache alias 처리도 계속 수행합니다."
+      },
+      {
+        "title": "Highmem 두 경로",
+        "text": "highmem이며 VIPT non-aliasing이면 folio의 각 페이지 offset을 kmap_local_folio로 매핑하고 PAGE_SIZE만큼 flush한 뒤 kunmap_local합니다. 그 밖의 highmem 경로는 kmap_high_get으로 기존 매핑을 얻은 경우에만 PAGE_SIZE flush와 kunmap_high를 수행합니다. NULL이면 그 페이지의 해당 분기 작업을 건너뛰며 두 경로의 매핑 획득 방식을 같다고 설명하면 안 됩니다."
+      },
+      {
+        "title": "파일 위치에 맞춘 색",
+        "text": "__flush_dcache_folio의 마지막은 mapping이 있고 VIPT aliasing이면 folio_pfn과 folio_pos를 flush_pfn_alias에 전달합니다. 주석은 페이지 캐시의 관련 사용자 색이 index와 합치되므로 해당 색의 flush를 선택한다고 설명합니다. 여기에도 folio의 모든 PFN을 반복하는 별도 alias 루프는 없습니다."
+      },
+      {
+        "title": "사용자 alias 검색 자료구조",
+        "text": "__flush_dcache_aliases는 current->active_mm을 기준으로 pgoff=folio->index와 닫힌 끝 pgoff_end=pgoff+folio_nr_pages-1을 만듭니다. mapping 잠금 아래 i_mmap 구간 트리의 겹치는 VMA를 순회하고 현재 active_mm이 아니거나 VM_MAYSHARE가 없으면 건너뜁니다. 모든 프로세스의 모든 VMA를 무조건 flush하는 선형 전체 순회가 아닙니다."
+      },
+      {
+        "title": "겹치는 범위 계산",
+        "text": "각 VMA에서 start는 vm_start, pfn은 folio 시작, nr은 folio 페이지 수로 시작합니다. unsigned offset=pgoff-vm_pgoff를 구해 offset>-nr이면 앞쪽이 VMA 밖인 겹침을 처리하도록 pfn-=offset,nr+=offset을 수행하고, 아니면 start+=offset*PAGE_SIZE로 VMA 내부 시작을 옮깁니다. 끝이 vm_end를 넘으면 nr을 잘라 flush_cache_pages에 전달합니다. 음수처럼 보이는 차이를 unsigned wrap으로 다루는 코드이므로 signed 비교로 임의 번역하면 안 됩니다."
+      },
+      {
+        "title": "겹침 숫자 예제",
+        "text": "folio index10·4페이지이고 VMA 시작 파일 offset12이면 두 페이지만 겹칩니다. 이 ARM의 unsigned 계산에서 offset은-2의 wrap 값이며 pfn-=offset은 PFN을2 올리고 nr+=offset은4를2로 줄입니다. 반대로 VMA offset8이면 offset2여서 start를2페이지 옮깁니다. 두 경우 모두 이후 vm_end에 의한 추가 절단이 가능합니다."
+      },
+      {
+        "title": "PTE 설치 쪽 동기화",
+        "text": "아키텍처6 이상에서 __sync_icache_dcache는 VIPT non-aliasing의 비실행 PTE이면 즉시 반환합니다. 유효하지 않은 PFN과 reserved folio도 건너뜁니다. VIPT aliasing이면 folio_flush_mapping을 얻고 아니면 mapping=NULL입니다. test_and_set_bit(PG_dcache_clean)의 이전 값이0일 때만 내부 D-cache flush를 수행하며 실행 PTE이면 전체 I-cache를 flush합니다."
+      },
+      {
+        "title": "Clean 비트의 읽기",
+        "text": "PG_dcache_clean은 이 동기화 프로토콜의 상태 비트입니다. __sync_icache_dcache는 test-and-set으로 이미 처리된 상태를 검사하고, 쓰기 이후 flush_dcache_folio는 상황에 따라 비트를 지워 나중 작업이 다시 필요함을 표시합니다. 원자 비트 연산 하나만으로 전체 folio 데이터가 동시 수정에서 보호되는 것은 아닙니다."
+      },
+      {
+        "title": "공개 folio flush의 빠른 경로",
+        "text": "flush_dcache_folio는 zero PFN이면 쓰지 않는 페이지라는 주석에 따라 반환합니다. broadcast가 필요 없고 VIPT non-aliasing이면 clean 비트가 있을 때 지우고 반환합니다. 주석의 coherent라서 작업 불필요하다는 설명과 달리 상태 비트 갱신은 남아 있으며 특히 이후 실행 매핑 동기화와 함께 읽어야 합니다."
+      },
+      {
+        "title": "지연 flush와 즉시 flush",
+        "text": "나머지 경로는 mapping을 얻습니다. broadcast가 필요 없고 mapping이 있으며 사용자 매핑이 없으면 clean 비트를 지워 지연합니다. 그렇지 않으면 __flush_dcache_folio를 실행하고 mapping+VIVT이면 사용자 aliases를, mapping이 있는 다른 경우는 전체 I-cache를 처리한 뒤 clean 비트를 설정합니다. broadcast가 필요한 구성에서는 이 지연 분기를 사용하지 않습니다."
+      },
+      {
+        "title": "Page 래퍼와 export",
+        "text": "flush_dcache_folio와 flush_dcache_page를 export합니다. page 래퍼는 page_folio(page)를 구해 folio 함수를 호출하므로 전달받은 작은 page 하나만의 바이트 범위를 독립 처리한다고 설명하면 틀립니다. 내부 helper들은 모두 공개 export된 것이 아닙니다."
+      },
+      {
+        "title": "익명 페이지의 순서",
+        "text": "__flush_anon_page는 전방 선언과 정의가 함께 있습니다. VIPT non-aliasing이면 반환하고, VIVT는 flush_cache_page, 그 밖은 PFN alias와 전체 I-cache flush를 수행합니다. 이후 page_address의 PAGE_SIZE에 __cpuc_flush_dcache_area를 적용합니다. 주석의 예상 호출 순서는 get_user_pages에서 flush_anon_page, memcpy, 쓰기가 있었다면 flush_dcache_page입니다. 주석은 마지막 커널 매핑 작업이 invalidate만 필요한 의도보다 writeback+invalidate로 과도하다는 FIXME도 남깁니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "가상/물리 인덱스·태그, 같은 물리 페이지의 주소 별칭, cache colour, folio와 highmem, bit 상태 기계, 구간 트리의 겹침 검색, unsigned 모듈러 산술, 다른 CPU callback을 학습합니다. 원본 대응과 빌드 검사는 실제 ARM 캐시 일관성이나 모든 CPU 구성의 실행 검증을 대신하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "arm_heavy_mb에서 두 callback이 모두 있으면 호출 순서는?",
+        "options": [
+          "outer_cache.sync 뒤 soc_mb이다",
+          "soc_mb 뒤 outer_cache.sync이다"
+        ],
+        "answer": 0,
+        "explanation": "OUTER_CACHE_SYNC 구성에서 outer callback을 먼저 검사·호출하고 이어 soc_mb를 검사합니다. dsb는 앞서 barrier.h 래퍼의 역할입니다."
+      },
+      {
+        "prompt": "Highmem·VIPT non-aliasing folio를 내부 helper가 처리하는 방식은?",
+        "options": [
+          "folio 전체가 항상 영구 kernel 주소를 가진다고 가정한다",
+          "각 페이지를 local 매핑하고 flush한 뒤 해제한다"
+        ],
+        "answer": 1,
+        "explanation": "folio_nr_pages만큼 kmap_local_folio(offset),PAGE_SIZE flush,kunmap_local을 반복합니다. lowmem의 folio_address 경로와 구별합니다."
+      },
+      {
+        "prompt": "cache_ops_need_broadcast가 참이면 mapping이 있고 미매핑인 folio도 지연 분기에 들어가는가?",
+        "options": [
+          "아니다. 지연 조건이 broadcast 불필요를 요구한다",
+          "그렇다. mapping 유무만으로 지연한다"
+        ],
+        "answer": 0,
+        "explanation": "if 조건에 !cache_ops_need_broadcast()가 포함됩니다. 다른 CPU의 유지보수가 필요한 환경에서 지연 최적화를 무조건 적용하지 않습니다."
+      },
+      {
+        "prompt": "folio index10·4페이지, VMA 파일 offset12이면 VMA 끝 절단 전 남은 범위는?",
+        "options": [
+          "folio PFN을2 내린6페이지이다",
+          "folio PFN을2 올린2페이지이다"
+        ],
+        "answer": 1,
+        "explanation": "앞의 두 페이지가 VMA 시작보다 앞입니다. unsigned offset=-2의 wrap 값을 사용한 pfn-=offset,nr+=offset이 각각+2와-2 효과를 냅니다."
+      },
+      {
+        "prompt": "__sync_icache_dcache에서 PG_dcache_clean이 이미1이면 D-cache helper를 다시 호출하는가?",
+        "options": [
+          "아니다. 이전 비트가0일 때만 호출한다",
+          "그렇다. test_and_set 결과가1일 때 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "조건은 !test_and_set_bit입니다. 다만 실행 PTE의 I-cache flush는 그 다음 별도 조건이므로 D-cache 생략과 함께 무조건 생략된다고 보면 틀립니다."
+      },
+      {
+        "prompt": "copy_to_user_page의 preempt_disable이 제공하는 것은?",
+        "options": [
+          "모든 다른 CPU의 같은 페이지 쓰기를 잠금으로 막는다",
+          "SMP에서 복사와 cache 처리 중 선점을 막는다"
+        ],
+        "answer": 1,
+        "explanation": "본문에는 공유 페이지 상호 배제 잠금이 없습니다. 현재 CPU에서 처리해야 한다는 주석과 선점 구간을 연결해야 합니다."
+      },
+      {
+        "prompt": "flush_dcache_page가 folio 중 한 page를 받으면 무엇을 호출하는가?",
+        "options": [
+          "page_folio로 얻은 folio의 flush 함수이다",
+          "언제나 해당 page의1바이트만 flush한다"
+        ],
+        "answer": 0,
+        "explanation": "래퍼는 flush_dcache_folio(page_folio(page))입니다. 실제 작업 범위와 지연 여부는 folio 처리 분기가 결정합니다."
+      },
+      {
+        "prompt": "__flush_dcache_aliases의 VMA 필터는?",
+        "options": [
+          "모든 mm의 모든 VMA이다",
+          "현재 active_mm이며 VM_MAYSHARE가 있는 VMA이다"
+        ],
+        "answer": 1,
+        "explanation": "구간 트리의 파일 offset 겹침 검색 뒤 vm_mm과 VM_MAYSHARE를 추가 검사합니다. 범위 검색과 문맥 필터는 서로 다른 단계입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n *  linux/arch/arm/mm/flush.c\n *\n *  Copyright (C) 1995-2002 Russell King\n */\n#include <linux/module.h>\n#include <linux/mm.h>\n#include <linux/pagemap.h>\n#include <linux/highmem.h>\n\n#include <asm/cacheflush.h>\n#include <asm/cachetype.h>\n#include <asm/highmem.h>\n#include <asm/smp_plat.h>\n#include <asm/tlbflush.h>\n#include <linux/hugetlb.h>\n\n#include \"mm.h\"\n\n#ifdef CONFIG_ARM_HEAVY_MB\nvoid (*soc_mb)(void);\n\nvoid arm_heavy_mb(void)\n{\n#ifdef CONFIG_OUTER_CACHE_SYNC\n\tif (outer_cache.sync)\n\t\touter_cache.sync();\n#endif\n\tif (soc_mb)\n\t\tsoc_mb();\n}\nEXPORT_SYMBOL(arm_heavy_mb);\n#endif\n\n#ifdef CONFIG_CPU_CACHE_VIPT\n\nstatic void flush_pfn_alias(unsigned long pfn, unsigned long vaddr)\n{\n\tunsigned long to = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);\n\tconst int zero = 0;\n\n\tset_top_pte(to, pfn_pte(pfn, PAGE_KERNEL));\n\n\tasm(\t\"mcrr\tp15, 0, %1, %0, c14\\n\"\n\t\"\tmcr\tp15, 0, %2, c7, c10, 4\"\n\t    :\n\t    : \"r\" (to), \"r\" (to + PAGE_SIZE - 1), \"r\" (zero)\n\t    : \"cc\");\n}\n\nstatic void flush_icache_alias(unsigned long pfn, unsigned long vaddr, unsigned long len)\n{\n\tunsigned long va = FLUSH_ALIAS_START + (CACHE_COLOUR(vaddr) << PAGE_SHIFT);\n\tunsigned long offset = vaddr & (PAGE_SIZE - 1);\n\tunsigned long to;\n\n\tset_top_pte(va, pfn_pte(pfn, PAGE_KERNEL));\n\tto = va + offset;\n\tflush_icache_range(to, to + len);\n}\n\nvoid flush_cache_mm(struct mm_struct *mm)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_mm(mm);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tasm(\t\"mcr\tp15, 0, %0, c7, c14, 0\\n\"\n\t\t\"\tmcr\tp15, 0, %0, c7, c10, 4\"\n\t\t    :\n\t\t    : \"r\" (0)\n\t\t    : \"cc\");\n\t}\n}\n\nvoid flush_cache_range(struct vm_area_struct *vma, unsigned long start, unsigned long end)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_range(vma, start, end);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tasm(\t\"mcr\tp15, 0, %0, c7, c14, 0\\n\"\n\t\t\"\tmcr\tp15, 0, %0, c7, c10, 4\"\n\t\t    :\n\t\t    : \"r\" (0)\n\t\t    : \"cc\");\n\t}\n\n\tif (vma->vm_flags & VM_EXEC)\n\t\t__flush_icache_all();\n}\n\nvoid flush_cache_pages(struct vm_area_struct *vma, unsigned long user_addr, unsigned long pfn, unsigned int nr)\n{\n\tif (cache_is_vivt()) {\n\t\tvivt_flush_cache_pages(vma, user_addr, pfn, nr);\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tflush_pfn_alias(pfn, user_addr);\n\t\t__flush_icache_all();\n\t}\n\n\tif (vma->vm_flags & VM_EXEC && icache_is_vivt_asid_tagged())\n\t\t__flush_icache_all();\n}\n\n#else\n#define flush_pfn_alias(pfn,vaddr)\t\tdo { } while (0)\n#define flush_icache_alias(pfn,vaddr,len)\tdo { } while (0)\n#endif\n\n#define FLAG_PA_IS_EXEC 1\n#define FLAG_PA_CORE_IN_MM 2\n\nstatic void flush_ptrace_access_other(void *args)\n{\n\t__flush_icache_all();\n}\n\nstatic inline\nvoid __flush_ptrace_access(struct page *page, unsigned long uaddr, void *kaddr,\n\t\t\t   unsigned long len, unsigned int flags)\n{\n\tif (cache_is_vivt()) {\n\t\tif (flags & FLAG_PA_CORE_IN_MM) {\n\t\t\tunsigned long addr = (unsigned long)kaddr;\n\t\t\t__cpuc_coherent_kern_range(addr, addr + len);\n\t\t}\n\t\treturn;\n\t}\n\n\tif (cache_is_vipt_aliasing()) {\n\t\tflush_pfn_alias(page_to_pfn(page), uaddr);\n\t\t__flush_icache_all();\n\t\treturn;\n\t}\n\n\t/* VIPT non-aliasing D-cache */\n\tif (flags & FLAG_PA_IS_EXEC) {\n\t\tunsigned long addr = (unsigned long)kaddr;\n\t\tif (icache_is_vipt_aliasing())\n\t\t\tflush_icache_alias(page_to_pfn(page), uaddr, len);\n\t\telse\n\t\t\t__cpuc_coherent_kern_range(addr, addr + len);\n\t\tif (cache_ops_need_broadcast())\n\t\t\tsmp_call_function(flush_ptrace_access_other,\n\t\t\t\t\t  NULL, 1);\n\t}\n}\n\nstatic\nvoid flush_ptrace_access(struct vm_area_struct *vma, struct page *page,\n\t\t\t unsigned long uaddr, void *kaddr, unsigned long len)\n{\n\tunsigned int flags = 0;\n\tif (cpumask_test_cpu(smp_processor_id(), mm_cpumask(vma->vm_mm)))\n\t\tflags |= FLAG_PA_CORE_IN_MM;\n\tif (vma->vm_flags & VM_EXEC)\n\t\tflags |= FLAG_PA_IS_EXEC;\n\t__flush_ptrace_access(page, uaddr, kaddr, len, flags);\n}\n\nvoid flush_uprobe_xol_access(struct page *page, unsigned long uaddr,\n\t\t\t     void *kaddr, unsigned long len)\n{\n\tunsigned int flags = FLAG_PA_CORE_IN_MM|FLAG_PA_IS_EXEC;\n\n\t__flush_ptrace_access(page, uaddr, kaddr, len, flags);\n}\n\n/*\n * Copy user data from/to a page which is mapped into a different\n * processes address space.  Really, we want to allow our \"user\n * space\" model to handle this.\n *\n * Note that this code needs to run on the current CPU.\n */\nvoid copy_to_user_page(struct vm_area_struct *vma, struct page *page,\n\t\t       unsigned long uaddr, void *dst, const void *src,\n\t\t       unsigned long len)\n{\n#ifdef CONFIG_SMP\n\tpreempt_disable();\n#endif\n\tmemcpy(dst, src, len);\n\tflush_ptrace_access(vma, page, uaddr, dst, len);\n#ifdef CONFIG_SMP\n\tpreempt_enable();\n#endif\n}\n\nvoid __flush_dcache_folio(struct address_space *mapping, struct folio *folio)\n{\n\t/*\n\t * Writeback any data associated with the kernel mapping of this\n\t * page.  This ensures that data in the physical page is mutually\n\t * coherent with the kernels mapping.\n\t */\n\tif (!folio_test_highmem(folio)) {\n\t\t__cpuc_flush_dcache_area(folio_address(folio),\n\t\t\t\t\tfolio_size(folio));\n\t} else {\n\t\tunsigned long i;\n\t\tif (cache_is_vipt_nonaliasing()) {\n\t\t\tfor (i = 0; i < folio_nr_pages(folio); i++) {\n\t\t\t\tvoid *addr = kmap_local_folio(folio,\n\t\t\t\t\t\t\t\ti * PAGE_SIZE);\n\t\t\t\t__cpuc_flush_dcache_area(addr, PAGE_SIZE);\n\t\t\t\tkunmap_local(addr);\n\t\t\t}\n\t\t} else {\n\t\t\tfor (i = 0; i < folio_nr_pages(folio); i++) {\n\t\t\t\tvoid *addr = kmap_high_get(folio_page(folio, i));\n\t\t\t\tif (addr) {\n\t\t\t\t\t__cpuc_flush_dcache_area(addr, PAGE_SIZE);\n\t\t\t\t\tkunmap_high(folio_page(folio, i));\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t/*\n\t * If this is a page cache page, and we have an aliasing VIPT cache,\n\t * we only need to do one flush - which would be at the relevant\n\t * userspace colour, which is congruent with page->index.\n\t */\n\tif (mapping && cache_is_vipt_aliasing())\n\t\tflush_pfn_alias(folio_pfn(folio), folio_pos(folio));\n}\n\nstatic void __flush_dcache_aliases(struct address_space *mapping, struct folio *folio)\n{\n\tstruct mm_struct *mm = current->active_mm;\n\tstruct vm_area_struct *vma;\n\tpgoff_t pgoff, pgoff_end;\n\n\t/*\n\t * There are possible user space mappings of this page:\n\t * - VIVT cache: we need to also write back and invalidate all user\n\t *   data in the current VM view associated with this page.\n\t * - aliasing VIPT: we only need to find one mapping of this page.\n\t */\n\tpgoff = folio->index;\n\tpgoff_end = pgoff + folio_nr_pages(folio) - 1;\n\n\tflush_dcache_mmap_lock(mapping);\n\tvma_interval_tree_foreach(vma, &mapping->i_mmap, pgoff, pgoff_end) {\n\t\tunsigned long start, offset, pfn;\n\t\tunsigned int nr;\n\n\t\t/*\n\t\t * If this VMA is not in our MM, we can ignore it.\n\t\t */\n\t\tif (vma->vm_mm != mm)\n\t\t\tcontinue;\n\t\tif (!(vma->vm_flags & VM_MAYSHARE))\n\t\t\tcontinue;\n\n\t\tstart = vma->vm_start;\n\t\tpfn = folio_pfn(folio);\n\t\tnr = folio_nr_pages(folio);\n\t\toffset = pgoff - vma->vm_pgoff;\n\t\tif (offset > -nr) {\n\t\t\tpfn -= offset;\n\t\t\tnr += offset;\n\t\t} else {\n\t\t\tstart += offset * PAGE_SIZE;\n\t\t}\n\t\tif (start + nr * PAGE_SIZE > vma->vm_end)\n\t\t\tnr = (vma->vm_end - start) / PAGE_SIZE;\n\n\t\tflush_cache_pages(vma, start, pfn, nr);\n\t}\n\tflush_dcache_mmap_unlock(mapping);\n}\n\n#if __LINUX_ARM_ARCH__ >= 6\nvoid __sync_icache_dcache(pte_t pteval)\n{\n\tunsigned long pfn;\n\tstruct folio *folio;\n\tstruct address_space *mapping;\n\n\tif (cache_is_vipt_nonaliasing() && !pte_exec(pteval))\n\t\t/* only flush non-aliasing VIPT caches for exec mappings */\n\t\treturn;\n\tpfn = pte_pfn(pteval);\n\tif (!pfn_valid(pfn))\n\t\treturn;\n\n\tfolio = page_folio(pfn_to_page(pfn));\n\tif (folio_test_reserved(folio))\n\t\treturn;\n\n\tif (cache_is_vipt_aliasing())\n\t\tmapping = folio_flush_mapping(folio);\n\telse\n\t\tmapping = NULL;\n\n\tif (!test_and_set_bit(PG_dcache_clean, &folio->flags))\n\t\t__flush_dcache_folio(mapping, folio);\n\n\tif (pte_exec(pteval))\n\t\t__flush_icache_all();\n}\n#endif\n\n/*\n * Ensure cache coherency between kernel mapping and userspace mapping\n * of this page.\n *\n * We have three cases to consider:\n *  - VIPT non-aliasing cache: fully coherent so nothing required.\n *  - VIVT: fully aliasing, so we need to handle every alias in our\n *          current VM view.\n *  - VIPT aliasing: need to handle one alias in our current VM view.\n *\n * If we need to handle aliasing:\n *  If the page only exists in the page cache and there are no user\n *  space mappings, we can be lazy and remember that we may have dirty\n *  kernel cache lines for later.  Otherwise, we assume we have\n *  aliasing mappings.\n *\n * Note that we disable the lazy flush for SMP configurations where\n * the cache maintenance operations are not automatically broadcasted.\n */\nvoid flush_dcache_folio(struct folio *folio)\n{\n\tstruct address_space *mapping;\n\n\t/*\n\t * The zero page is never written to, so never has any dirty\n\t * cache lines, and therefore never needs to be flushed.\n\t */\n\tif (is_zero_pfn(folio_pfn(folio)))\n\t\treturn;\n\n\tif (!cache_ops_need_broadcast() && cache_is_vipt_nonaliasing()) {\n\t\tif (test_bit(PG_dcache_clean, &folio->flags))\n\t\t\tclear_bit(PG_dcache_clean, &folio->flags);\n\t\treturn;\n\t}\n\n\tmapping = folio_flush_mapping(folio);\n\n\tif (!cache_ops_need_broadcast() &&\n\t    mapping && !folio_mapped(folio))\n\t\tclear_bit(PG_dcache_clean, &folio->flags);\n\telse {\n\t\t__flush_dcache_folio(mapping, folio);\n\t\tif (mapping && cache_is_vivt())\n\t\t\t__flush_dcache_aliases(mapping, folio);\n\t\telse if (mapping)\n\t\t\t__flush_icache_all();\n\t\tset_bit(PG_dcache_clean, &folio->flags);\n\t}\n}\nEXPORT_SYMBOL(flush_dcache_folio);\n\nvoid flush_dcache_page(struct page *page)\n{\n\tflush_dcache_folio(page_folio(page));\n}\nEXPORT_SYMBOL(flush_dcache_page);\n/*\n * Flush an anonymous page so that users of get_user_pages()\n * can safely access the data.  The expected sequence is:\n *\n *  get_user_pages()\n *    -> flush_anon_page\n *  memcpy() to/from page\n *  if written to page, flush_dcache_page()\n */\nvoid __flush_anon_page(struct vm_area_struct *vma, struct page *page, unsigned long vmaddr);\nvoid __flush_anon_page(struct vm_area_struct *vma, struct page *page, unsigned long vmaddr)\n{\n\tunsigned long pfn;\n\n\t/* VIPT non-aliasing caches need do nothing */\n\tif (cache_is_vipt_nonaliasing())\n\t\treturn;\n\n\t/*\n\t * Write back and invalidate userspace mapping.\n\t */\n\tpfn = page_to_pfn(page);\n\tif (cache_is_vivt()) {\n\t\tflush_cache_page(vma, vmaddr, pfn);\n\t} else {\n\t\t/*\n\t\t * For aliasing VIPT, we can flush an alias of the\n\t\t * userspace address only.\n\t\t */\n\t\tflush_pfn_alias(pfn, vmaddr);\n\t\t__flush_icache_all();\n\t}\n\n\t/*\n\t * Invalidate kernel mapping.  No data should be contained\n\t * in this mapping of the page.  FIXME: this is overkill\n\t * since we actually ask for a write-back and invalidate.\n\t */\n\t__cpuc_flush_dcache_area(page_address(page), PAGE_SIZE);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "370115e4a78896a35f68210149be066ddb869fab6c480325f53302dafc31b980",
+      "scope": "whole-file",
+      "line_count": 411,
+      "authoring_source": "course/file_units/arm_cache_flush.py",
+      "sections": [
+        "파일 범위",
+        "SoC 보완 장벽 구현",
+        "캐시 색을 맞춘 alias",
+        "I-cache alias의 offset",
+        "mm와 범위 flush",
+        "페이지 묶음 flush",
+        "Ptrace 제어 플래그",
+        "Ptrace VIVT·aliasing 경로",
+        "Ptrace non-aliasing 경로",
+        "사용자 페이지에 복사",
+        "Lowmem folio",
+        "Highmem 두 경로",
+        "파일 위치에 맞춘 색",
+        "사용자 alias 검색 자료구조",
+        "겹치는 범위 계산",
+        "겹침 숫자 예제",
+        "PTE 설치 쪽 동기화",
+        "Clean 비트의 읽기",
+        "공개 folio flush의 빠른 경로",
+        "지연 flush와 즉시 flush",
+        "Page 래퍼와 export",
+        "익명 페이지의 순서",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm/mm/flush.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 책을 여러 이름의 책장에서 보는 경우, 한쪽 사본을 고친 뒤 다른 쪽에서도 새 내용을 보도록 정리해야 합니다.",
+    "meaning": "flush.c는 ARM 캐시 종류와 실행 매핑 여부에 따라 자료·명령 캐시를 정리하며 folio 상태와 사용자 주소 겹침을 함께 관리합니다.",
+    "exercise": "folio 파일 위치 10~13과 VMA 시작 12가 겹치는 두 페이지를 그리고 캐시 정리 경로를 표시하세요."
+  },
+  "goal": "flush.c는 ARM 캐시 종류와 실행 매핑 여부에 따라 자료·명령 캐시를 정리하며 folio 상태와 사용자 주소 겹침을 함께 관리합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "folio 파일 위치 10~13과 VMA 시작 12가 겹치는 두 페이지를 그리고 캐시 정리 경로를 표시하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "5262d85d83bd93d7a3b5e49d9620b75b0670cccaee064096942b7aec3c856b14",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 8,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

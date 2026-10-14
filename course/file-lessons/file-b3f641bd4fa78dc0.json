@@ -5,96 +5,116 @@
   "area": "휴리스틱 검색 · 선형 탐색 · 정렬 · 상태 초기화 · 다중 스택 순회",
   "track": "files",
   "kind": "kernel",
-  "intro": "프레임 정보 대신 스택 슬롯의 값을 검사하는 네 함수의 동작과 후보 판별의 한계를 학습합니다.",
+  "intro": "추측 스택 순회의 후보값과 실제 호출 관계의 증명을 구별합니다.",
   "guide": [
-    "값이 커널 코드 주소라는 사실은 그 슬롯이 실제 호출의 반환 주소라는 증명과 다릅니다.",
-    "정밀 unwind 정보가 없는 검색 방식의 trace를 해석할 때 허위 후보와 생략 가능성을 이해합니다."
+    "unwinder는 이전 함수 호출 경로를 찾아가는 코드입니다.",
+    "휴리스틱은 완전한 증명 대신 특징으로 그럴듯한 후보를 찾는 방법입니다.",
+    "프레임은 함수 호출 한 단계의 저장 영역입니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체와 역할",
-      "text": "GPL-2.0-only와 scheduler/ftrace/ptrace/bitops/stacktrace/unwind include 뒤 반환 주소 조회, 주소 포인터 조회, 다음 후보 검색, 시작 함수가 있습니다. 이름의 guess처럼 frame chain이나 ORC 메타데이터를 읽는 대신 stack 슬롯에서 __kernel_text_address에 해당하는 값을 찾습니다. 실제 호출 관계를 검증하는 디스어셈블이나 return instruction 검사는 없습니다."
+      "text": "이 파일은 주소 조회, 주소 칸 포인터 조회, 다음 후보 탐색, 시작을 제공합니다. 프레임 연결이나 ORC 복원 자료 대신 커널 코드 주소처럼 보이는 스택 값을 찾습니다. 실제 call·return 관계를 해석해 증명하지 않습니다."
     },
     {
       "title": "현재 후보 값 조회",
-      "text": "unwind_get_return_address는 done이면 0, 아니면 *state->sp를 READ_ONCE_NOCHECK로 읽고 unwind_recover_ret_addr에 주소와 슬롯 포인터를 전달합니다. 이전 헤더의 ftrace graph·rethook 복원을 이용합니다. 이 함수 본문은 읽은 값을 다시 __kernel_text_address로 검사하지 않습니다. 후보 검색 당시 값과 나중 조회 값의 일관성을 이 함수만으로 보장하지 않습니다. GPL 심볼로 export됩니다."
+      "text": "끝났으면 주소 0, 아니면 현재 sp 값을 한 번 읽어 ftrace·rethook 복원 도구에 슬롯 주소와 함께 줍니다. 이때 다시 코드 주소인지 검사하지 않으므로 검색 때와 조회 때 값이 같다는 보장까지 이 함수만으로 만들 수 없습니다."
     },
     {
       "title": "포인터 조회의 의도적 빈 결과",
-      "text": "unwind_get_return_address_ptr은 인자와 무관하게 NULL을 반환합니다. 내부 state->sp가 존재한다고 이를 신뢰 가능한 반환 주소 저장 위치 API로 공개하는 것은 아닙니다. 값 조회 함수가 반환 주소 후보를 내놓는다는 사실과 수정 가능한 정확한 저장 위치를 제공한다는 계약을 구분합니다."
+      "text": "주소 칸 포인터 조회는 언제나 NULL입니다. 내부 sp가 있어도 믿을 만한 반환 주소 저장 위치로 공개하지 않는 선택입니다. 후보 값을 제공하는 것과 수정 가능한 정확한 칸을 제공하는 것은 다릅니다."
     },
     {
       "title": "다음 후보 검색",
-      "text": "unwind_next_frame은 done이면 false입니다. 그 외 for문의 초기 state->sp++로 현재 슬롯을 건너뛴 뒤 info->end 미만의 슬롯을 unsigned long 단위로 검사합니다. 각 값을 READ_ONCE_NOCHECK로 읽어 __kernel_text_address이면 즉시 true입니다. 그 주소가 저장된 call frame의 크기나 이전 BP와의 관계는 검사하지 않습니다. 스택에 보관된 함수 포인터 같은 값이 후보로 보일 가능성을 이해해야 합니다."
+      "text": "다음 탐색은 먼저 sp를 한 칸 늘려 현재 후보를 건너뜁니다. 영역 끝 전까지 long 단위로 읽어 첫 커널 코드 주소 후보에서 성공합니다. 이전 BP나 프레임 크기를 검사하지 않아 다른 용도의 함수 포인터도 후보가 될 수 있습니다."
     },
     {
       "title": "스택 간 전환",
-      "text": "현재 영역 끝까지 후보가 없으면 info->next_sp를 sizeof(long)에 맞춰 올림 정렬하여 state->sp에 대입합니다. get_stack_info가 0을 반환하는 동안 do/while을 계속하며 stack_mask 주소를 함께 넘깁니다. 다음 반복의 for도 sp++로 시작하므로 전환된 시작 슬롯을 그대로 첫 검사 대상으로 삼는다고 설명하면 틀립니다. stack_mask의 구체적인 방문 방지 구현은 get_stack_info 쪽에 있고 이 파일에는 없습니다."
+      "text": "현재 영역에서 못 찾으면 next_sp를 long 경계에 올림 정렬하고 다음 스택 정보를 얻는 동안 계속합니다. 새 영역에서도 반복 초기의 sp++가 실행되므로 바뀐 시작 칸을 그대로 검사한다고 말하면 틀립니다. 방문 기록의 세부 처리는 외부 get_stack_info에 있습니다."
     },
     {
       "title": "시작 상태 초기화",
-      "text": "__unwind_start는 memset으로 전체 state를 0으로 만든 뒤 task를 저장하고 first_frame을 long 정렬한 주소를 sp로 둡니다. get_stack_info에는 정렬 전 first_frame을 전달합니다. 이 backend는 regs 인자를 본문에서 직접 사용하지 않으며 상위 unwind_start가 기본 first_frame을 선택할 수 있습니다. 이 함수 자체에는 stack 참조 획득이나 task 정지가 없습니다."
+      "text": "시작은 전체 상태를 0으로 만들고 태스크와 정렬한 first_frame을 sp에 넣습니다. 스택 정보에는 정렬 전 first_frame을 줍니다. 이 본문은 regs를 직접 사용하지 않고 스택 참조나 태스크 정지도 하지 않으며 기본 시작점은 위 포장 함수가 고를 수 있습니다."
     },
     {
       "title": "시작 후보 검사와 정렬 전제",
-      "text": "done이 아니고 first_frame이 sizeof(long) 범위로 on_stack 조건을 만족하지 않거나 *first_frame이 kernel text 주소가 아니면 next_frame을 호출합니다. OR의 단락 평가 때문에 범위 실패 시 역참조를 하지 않습니다. 다만 이 판별은 원래 first_frame을 사용하고 실제 조회 상태는 정렬된 sp를 사용하므로 둘을 무조건 같은 주소라고 설명하지 않습니다. 호출자가 유효한 시작점과 수명 조건을 마련해야 합니다."
+      "text": "아직 끝이 아니며 원래 first_frame이 영역 안이 아니거나 그 값이 코드 주소가 아니면 다음 후보로 갑니다. 범위가 틀리면 단락 평가 덕분에 역참조하지 않습니다. 검사 주소는 원래 입력, 실제 상태 sp는 정렬한 주소이므로 항상 같다고 가정하지 않습니다."
     },
     {
       "title": "종료와 오류 상태",
-      "text": "다음 stack 탐색을 계속할 수 없으면 next_frame은 false입니다. 시작 함수는 next_frame의 bool을 따로 반환하지 않으며 자신의 반환형도 void입니다. 이 파일에는 state->error를 true로 설정하는 대입이 없습니다. 시작 시 0이었던 error만 보고 얻은 trace가 정확한 호출 chain이라고 증명할 수는 없습니다. 실제 범위 종료 판정은 공통 상태와 stack 탐색 helper를 통해 이뤄집니다."
+      "text": "다음 스택 탐색이 끝나면 false입니다. 시작 함수는 void이며 다음 탐색 결과를 별도로 반환하지 않습니다. 여기에는 error를 true로 바꾸는 대입도 없으므로 error가 0이라고 정확한 호출 경로가 증명된 것은 아닙니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "주소 분류를 이용한 휴리스틱, 첫 일치 선형 탐색, 포인터 정렬과 원래 입력의 차이, 상태 초기화, 값의 후보성과 구조적 증명의 차이를 학습합니다. 단일 영역에서 검색 비용은 검사한 슬롯 수에 비례합니다. 원본 전체 대조는 실제 커널에서 허위 후보 비율이나 동시 실행 안정성을 측정한 시험이 아닙니다."
+      "text": "주소 분류와 첫 일치 탐색, 정렬 전후 포인터, 초기화와 증명의 한계를 배웁니다. 비용은 살펴본 슬롯 수에 비례합니다. 실제 커널에서 거짓 후보 비율이나 동시 실행 안전성을 측정한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "__kernel_text_address가 참인 슬롯은 반드시 실제 return address인가?",
+      "prompt": "커널 코드 주소인 슬롯은 반드시 반환 주소인가요?",
       "options": [
+        "아니요. 코드 주소를 보관한 다른 자료일 수 있습니다.",
+        "네. 전체 호출 관계를 증명합니다."
+      ],
+      "answer": 0,
+      "explanation": "값의 주소 범위 분류만 하며 호출 구조 검증은 없습니다.",
+      "original_prompt": "__kernel_text_address가 참인 슬롯은 반드시 실제 return address인가?",
+      "original_options": [
         "아니다. 코드 주소를 담은 다른 데이터도 후보가 될 수 있다",
         "그렇다. 이 함수가 전체 호출 관계를 증명한다"
       ],
-      "answer": 0,
-      "explanation": "검색은 값이 코드 주소 범위인지 판단합니다. 프레임 구조나 call/return 관계를 검증하는 조건은 이 코드에 없습니다."
+      "original_explanation": "검색은 값이 코드 주소 범위인지 판단합니다. 프레임 구조나 call/return 관계를 검증하는 조건은 이 코드에 없습니다."
     },
     {
-      "prompt": "unwind_get_return_address_ptr은 state->sp를 반환하는가?",
+      "prompt": "주소 칸 조회가 state->sp를 반환하나요?",
       "options": [
+        "네. 값이 있으면 포인터도 제공합니다.",
+        "아니요. 언제나 NULL입니다."
+      ],
+      "answer": 1,
+      "explanation": "값 후보와 신뢰 가능한 저장 칸은 다른 약속입니다.",
+      "original_prompt": "unwind_get_return_address_ptr은 state->sp를 반환하는가?",
+      "original_options": [
         "그렇다. 값 조회가 가능하면 포인터도 반드시 제공한다",
         "아니다. 항상 NULL을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "값 후보와 신뢰 가능한 저장 위치는 다른 계약입니다. 해당 함수의 본문은 return NULL뿐입니다."
+      "original_explanation": "값 후보와 신뢰 가능한 저장 위치는 다른 계약입니다. 해당 함수의 본문은 return NULL뿐입니다."
     },
     {
-      "prompt": "next_frame은 현재 state->sp 슬롯을 다시 검사하는가?",
+      "prompt": "next_frame은 현재 sp를 다시 검사하나요?",
       "options": [
+        "아니요. 먼저 한 칸 증가시킵니다.",
+        "네. 항상 현재 칸부터 봅니다."
+      ],
+      "answer": 0,
+      "explanation": "영역 전환 뒤에도 같은 반복 초기식이 적용됩니다.",
+      "original_prompt": "next_frame은 현재 state->sp 슬롯을 다시 검사하는가?",
+      "original_options": [
         "아니다. 먼저 sp를 한 슬롯 증가시킨다",
         "그렇다. 현재 슬롯부터 반드시 재검사한다"
       ],
-      "answer": 0,
-      "explanation": "for 초기식이 state->sp++입니다. 스택 전환 후 반복에서도 같은 초기식이 실행됩니다."
+      "original_explanation": "for 초기식이 state->sp++입니다. 스택 전환 후 반복에서도 같은 초기식이 실행됩니다."
     },
     {
-      "prompt": "__unwind_start가 regs->sp를 직접 읽는가?",
+      "prompt": "시작 본문이 regs->sp를 직접 읽나요?",
       "options": [
+        "네. first_frame보다 우선합니다.",
+        "아니요. first_frame을 쓰고 regs는 직접 쓰지 않습니다."
+      ],
+      "answer": 1,
+      "explanation": "기본 시작점 선택과 실제 backend 역할을 나눠 봅니다.",
+      "original_prompt": "__unwind_start가 regs->sp를 직접 읽는가?",
+      "original_options": [
         "그렇다. first_frame 값과 관계없이 regs->sp를 우선한다",
         "아니다. 이 본문은 first_frame으로 시작하며 regs를 직접 사용하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "기본 시작점 선택은 상위 wrapper에서 이뤄질 수 있습니다. backend와 wrapper의 책임을 나누어 읽어야 합니다."
+      "original_explanation": "기본 시작점 선택은 상위 wrapper에서 이뤄질 수 있습니다. backend와 wrapper의 책임을 나누어 읽어야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "스택에 저장한 함수 포인터가 반환 주소 후보처럼 보일 수 있는 이유를 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#include <linux/sched.h>\n#include <linux/ftrace.h>\n#include <asm/ptrace.h>\n#include <asm/bitops.h>\n#include <asm/stacktrace.h>\n#include <asm/unwind.h>\n\nunsigned long unwind_get_return_address(struct unwind_state *state)\n{\n\tunsigned long addr;\n\n\tif (unwind_done(state))\n\t\treturn 0;\n\n\taddr = READ_ONCE_NOCHECK(*state->sp);\n\n\treturn unwind_recover_ret_addr(state, addr, state->sp);\n}\nEXPORT_SYMBOL_GPL(unwind_get_return_address);\n\nunsigned long *unwind_get_return_address_ptr(struct unwind_state *state)\n{\n\treturn NULL;\n}\n\nbool unwind_next_frame(struct unwind_state *state)\n{\n\tstruct stack_info *info = &state->stack_info;\n\n\tif (unwind_done(state))\n\t\treturn false;\n\n\tdo {\n\t\tfor (state->sp++; state->sp < info->end; state->sp++) {\n\t\t\tunsigned long addr = READ_ONCE_NOCHECK(*state->sp);\n\n\t\t\tif (__kernel_text_address(addr))\n\t\t\t\treturn true;\n\t\t}\n\n\t\tstate->sp = PTR_ALIGN(info->next_sp, sizeof(long));\n\n\t} while (!get_stack_info(state->sp, state->task, info,\n\t\t\t\t &state->stack_mask));\n\n\treturn false;\n}\nEXPORT_SYMBOL_GPL(unwind_next_frame);\n\nvoid __unwind_start(struct unwind_state *state, struct task_struct *task,\n\t\t    struct pt_regs *regs, unsigned long *first_frame)\n{\n\tmemset(state, 0, sizeof(*state));\n\n\tstate->task = task;\n\tstate->sp   = PTR_ALIGN(first_frame, sizeof(long));\n\n\tget_stack_info(first_frame, state->task, &state->stack_info,\n\t\t       &state->stack_mask);\n\n\t/*\n\t * The caller can provide the address of the first frame directly\n\t * (first_frame) or indirectly (regs->sp) to indicate which stack frame\n\t * to start unwinding at.  Skip ahead until we reach it.\n\t */\n\tif (!unwind_done(state) &&\n\t    (!on_stack(&state->stack_info, first_frame, sizeof(long)) ||\n\t    !__kernel_text_address(*first_frame)))\n\t\tunwind_next_frame(state);\n}\nEXPORT_SYMBOL_GPL(__unwind_start);\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/kernel/unwind_guess.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b3f641bd4fa78dc0",
+    "path": "arch/x86/kernel/unwind_guess.c",
+    "title": "x86 guess unwinder: 커널 코드 주소 후보의 선형 검색",
+    "area": "휴리스틱 검색 · 선형 탐색 · 정렬 · 상태 초기화 · 다중 스택 순회",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "프레임 정보 대신 스택 슬롯의 값을 검사하는 네 함수의 동작과 후보 판별의 한계를 학습합니다.",
+    "guide": [
+      "값이 커널 코드 주소라는 사실은 그 슬롯이 실제 호출의 반환 주소라는 증명과 다릅니다.",
+      "정밀 unwind 정보가 없는 검색 방식의 trace를 해석할 때 허위 후보와 생략 가능성을 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체와 역할",
+        "text": "GPL-2.0-only와 scheduler/ftrace/ptrace/bitops/stacktrace/unwind include 뒤 반환 주소 조회, 주소 포인터 조회, 다음 후보 검색, 시작 함수가 있습니다. 이름의 guess처럼 frame chain이나 ORC 메타데이터를 읽는 대신 stack 슬롯에서 __kernel_text_address에 해당하는 값을 찾습니다. 실제 호출 관계를 검증하는 디스어셈블이나 return instruction 검사는 없습니다."
+      },
+      {
+        "title": "현재 후보 값 조회",
+        "text": "unwind_get_return_address는 done이면 0, 아니면 *state->sp를 READ_ONCE_NOCHECK로 읽고 unwind_recover_ret_addr에 주소와 슬롯 포인터를 전달합니다. 이전 헤더의 ftrace graph·rethook 복원을 이용합니다. 이 함수 본문은 읽은 값을 다시 __kernel_text_address로 검사하지 않습니다. 후보 검색 당시 값과 나중 조회 값의 일관성을 이 함수만으로 보장하지 않습니다. GPL 심볼로 export됩니다."
+      },
+      {
+        "title": "포인터 조회의 의도적 빈 결과",
+        "text": "unwind_get_return_address_ptr은 인자와 무관하게 NULL을 반환합니다. 내부 state->sp가 존재한다고 이를 신뢰 가능한 반환 주소 저장 위치 API로 공개하는 것은 아닙니다. 값 조회 함수가 반환 주소 후보를 내놓는다는 사실과 수정 가능한 정확한 저장 위치를 제공한다는 계약을 구분합니다."
+      },
+      {
+        "title": "다음 후보 검색",
+        "text": "unwind_next_frame은 done이면 false입니다. 그 외 for문의 초기 state->sp++로 현재 슬롯을 건너뛴 뒤 info->end 미만의 슬롯을 unsigned long 단위로 검사합니다. 각 값을 READ_ONCE_NOCHECK로 읽어 __kernel_text_address이면 즉시 true입니다. 그 주소가 저장된 call frame의 크기나 이전 BP와의 관계는 검사하지 않습니다. 스택에 보관된 함수 포인터 같은 값이 후보로 보일 가능성을 이해해야 합니다."
+      },
+      {
+        "title": "스택 간 전환",
+        "text": "현재 영역 끝까지 후보가 없으면 info->next_sp를 sizeof(long)에 맞춰 올림 정렬하여 state->sp에 대입합니다. get_stack_info가 0을 반환하는 동안 do/while을 계속하며 stack_mask 주소를 함께 넘깁니다. 다음 반복의 for도 sp++로 시작하므로 전환된 시작 슬롯을 그대로 첫 검사 대상으로 삼는다고 설명하면 틀립니다. stack_mask의 구체적인 방문 방지 구현은 get_stack_info 쪽에 있고 이 파일에는 없습니다."
+      },
+      {
+        "title": "시작 상태 초기화",
+        "text": "__unwind_start는 memset으로 전체 state를 0으로 만든 뒤 task를 저장하고 first_frame을 long 정렬한 주소를 sp로 둡니다. get_stack_info에는 정렬 전 first_frame을 전달합니다. 이 backend는 regs 인자를 본문에서 직접 사용하지 않으며 상위 unwind_start가 기본 first_frame을 선택할 수 있습니다. 이 함수 자체에는 stack 참조 획득이나 task 정지가 없습니다."
+      },
+      {
+        "title": "시작 후보 검사와 정렬 전제",
+        "text": "done이 아니고 first_frame이 sizeof(long) 범위로 on_stack 조건을 만족하지 않거나 *first_frame이 kernel text 주소가 아니면 next_frame을 호출합니다. OR의 단락 평가 때문에 범위 실패 시 역참조를 하지 않습니다. 다만 이 판별은 원래 first_frame을 사용하고 실제 조회 상태는 정렬된 sp를 사용하므로 둘을 무조건 같은 주소라고 설명하지 않습니다. 호출자가 유효한 시작점과 수명 조건을 마련해야 합니다."
+      },
+      {
+        "title": "종료와 오류 상태",
+        "text": "다음 stack 탐색을 계속할 수 없으면 next_frame은 false입니다. 시작 함수는 next_frame의 bool을 따로 반환하지 않으며 자신의 반환형도 void입니다. 이 파일에는 state->error를 true로 설정하는 대입이 없습니다. 시작 시 0이었던 error만 보고 얻은 trace가 정확한 호출 chain이라고 증명할 수는 없습니다. 실제 범위 종료 판정은 공통 상태와 stack 탐색 helper를 통해 이뤄집니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "주소 분류를 이용한 휴리스틱, 첫 일치 선형 탐색, 포인터 정렬과 원래 입력의 차이, 상태 초기화, 값의 후보성과 구조적 증명의 차이를 학습합니다. 단일 영역에서 검색 비용은 검사한 슬롯 수에 비례합니다. 원본 전체 대조는 실제 커널에서 허위 후보 비율이나 동시 실행 안정성을 측정한 시험이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "__kernel_text_address가 참인 슬롯은 반드시 실제 return address인가?",
+        "options": [
+          "아니다. 코드 주소를 담은 다른 데이터도 후보가 될 수 있다",
+          "그렇다. 이 함수가 전체 호출 관계를 증명한다"
+        ],
+        "answer": 0,
+        "explanation": "검색은 값이 코드 주소 범위인지 판단합니다. 프레임 구조나 call/return 관계를 검증하는 조건은 이 코드에 없습니다."
+      },
+      {
+        "prompt": "unwind_get_return_address_ptr은 state->sp를 반환하는가?",
+        "options": [
+          "그렇다. 값 조회가 가능하면 포인터도 반드시 제공한다",
+          "아니다. 항상 NULL을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "값 후보와 신뢰 가능한 저장 위치는 다른 계약입니다. 해당 함수의 본문은 return NULL뿐입니다."
+      },
+      {
+        "prompt": "next_frame은 현재 state->sp 슬롯을 다시 검사하는가?",
+        "options": [
+          "아니다. 먼저 sp를 한 슬롯 증가시킨다",
+          "그렇다. 현재 슬롯부터 반드시 재검사한다"
+        ],
+        "answer": 0,
+        "explanation": "for 초기식이 state->sp++입니다. 스택 전환 후 반복에서도 같은 초기식이 실행됩니다."
+      },
+      {
+        "prompt": "__unwind_start가 regs->sp를 직접 읽는가?",
+        "options": [
+          "그렇다. first_frame 값과 관계없이 regs->sp를 우선한다",
+          "아니다. 이 본문은 first_frame으로 시작하며 regs를 직접 사용하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "기본 시작점 선택은 상위 wrapper에서 이뤄질 수 있습니다. backend와 wrapper의 책임을 나누어 읽어야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n#include <linux/sched.h>\n#include <linux/ftrace.h>\n#include <asm/ptrace.h>\n#include <asm/bitops.h>\n#include <asm/stacktrace.h>\n#include <asm/unwind.h>\n\nunsigned long unwind_get_return_address(struct unwind_state *state)\n{\n\tunsigned long addr;\n\n\tif (unwind_done(state))\n\t\treturn 0;\n\n\taddr = READ_ONCE_NOCHECK(*state->sp);\n\n\treturn unwind_recover_ret_addr(state, addr, state->sp);\n}\nEXPORT_SYMBOL_GPL(unwind_get_return_address);\n\nunsigned long *unwind_get_return_address_ptr(struct unwind_state *state)\n{\n\treturn NULL;\n}\n\nbool unwind_next_frame(struct unwind_state *state)\n{\n\tstruct stack_info *info = &state->stack_info;\n\n\tif (unwind_done(state))\n\t\treturn false;\n\n\tdo {\n\t\tfor (state->sp++; state->sp < info->end; state->sp++) {\n\t\t\tunsigned long addr = READ_ONCE_NOCHECK(*state->sp);\n\n\t\t\tif (__kernel_text_address(addr))\n\t\t\t\treturn true;\n\t\t}\n\n\t\tstate->sp = PTR_ALIGN(info->next_sp, sizeof(long));\n\n\t} while (!get_stack_info(state->sp, state->task, info,\n\t\t\t\t &state->stack_mask));\n\n\treturn false;\n}\nEXPORT_SYMBOL_GPL(unwind_next_frame);\n\nvoid __unwind_start(struct unwind_state *state, struct task_struct *task,\n\t\t    struct pt_regs *regs, unsigned long *first_frame)\n{\n\tmemset(state, 0, sizeof(*state));\n\n\tstate->task = task;\n\tstate->sp   = PTR_ALIGN(first_frame, sizeof(long));\n\n\tget_stack_info(first_frame, state->task, &state->stack_info,\n\t\t       &state->stack_mask);\n\n\t/*\n\t * The caller can provide the address of the first frame directly\n\t * (first_frame) or indirectly (regs->sp) to indicate which stack frame\n\t * to start unwinding at.  Skip ahead until we reach it.\n\t */\n\tif (!unwind_done(state) &&\n\t    (!on_stack(&state->stack_info, first_frame, sizeof(long)) ||\n\t    !__kernel_text_address(*first_frame)))\n\t\tunwind_next_frame(state);\n}\nEXPORT_SYMBOL_GPL(__unwind_start);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "9da685231e305a17fb1815e7940fd8fe82dd73faa7596fbccf10373f31406518",
+      "scope": "whole-file",
+      "line_count": 72,
+      "authoring_source": "course/file_units/x86_guess_unwinder.py",
+      "sections": [
+        "파일 전체와 역할",
+        "현재 후보 값 조회",
+        "포인터 조회의 의도적 빈 결과",
+        "다음 후보 검색",
+        "스택 간 전환",
+        "시작 상태 초기화",
+        "시작 후보 검사와 정렬 전제",
+        "종료와 오류 상태",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/kernel/unwind_guess.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "책에서 주소처럼 생긴 숫자를 찾았다고 실제로 방문했던 곳이라는 증거는 아닙니다. guess unwinder는 스택에서 커널 코드 주소처럼 보이는 값을 찾아 후보로 내놓습니다.",
+    "meaning": "추측 스택 순회의 후보값과 실제 호출 관계의 증명을 구별합니다.",
+    "exercise": "스택에 저장한 함수 포인터가 반환 주소 후보처럼 보일 수 있는 이유를 설명해 보세요."
+  },
+  "goal": "추측 스택 순회의 후보값과 실제 호출 관계의 증명을 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "스택에 저장한 함수 포인터가 반환 주소 후보처럼 보일 수 있는 이유를 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "3895cebd59a2457d4ac129108fbb07f85cdf98cf83aa26d244c4f2b7b3511a76",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

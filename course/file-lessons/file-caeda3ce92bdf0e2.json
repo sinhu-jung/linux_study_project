@@ -5,54 +5,62 @@
   "area": "헤더 의존성 · 조건부 컴파일 · 아키텍처 경계 · include guard",
   "track": "files",
   "kind": "kernel",
-  "intro": "generic gettimeofday 조건과 포함하는 다섯 헤더를 전체 범위로 읽습니다.",
+  "intro": "vgtod.h는 설정이 켜졌을 때 시간 조회에 필요한 헤더들을 이어 주며 실행 함수는 만들지 않아요.",
   "guide": [
-    "아키텍처별 include 경계를 설정으로 제한하여 다른 실행 환경에 필요 없는 의존성을 끌어오지 않습니다.",
-    "짧은 연결 헤더도 빌드 구성과 타입·helper 가용성에 영향을 주는 이유를 이해합니다."
+    "헤더 include는 번역할 때 다른 정의를 가져오는 일이에요. 지금 시각을 조회하는 함수 호출과 달라요.",
+    "설정 매크로는 어떤 기능을 빌드할지 정하는 표식이에요. 주석에 등장하는 목적과 실제 검사 조건을 구분해요.",
+    "이 파일이 짧아도 어떤 타입과 도우미를 사용할 수 있는지에 영향을 줘요. 의존성 연결이라는 역할이 있어요."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체",
-      "text": "GPL-2.0과 guard 안에 CONFIG_GENERIC_GETTIMEOFDAY 조건이 있습니다. 함수·구조체·전역 변수 정의 없이 조건부 include만 제공합니다. 파일을 포함한다고 현재 시각을 읽는 연산이 실행되지는 않습니다."
+      "title": "조건부 포함만 하는 파일",
+      "text": "라이선스와 중복 포함 방지 안에 CONFIG_GENERIC_GETTIMEOFDAY 조건이 있어요. 함수·구조체·전역 변수의 직접 정의 없이 include만 제공해요. 이 파일을 포함한다고 현재 시각을 읽는 연산이 실행되지는 않아요."
     },
     {
-      "title": "포함 목록",
-      "text": "조건이 참이면 linux/compiler.h, asm/clocksource.h, vdso/datapage.h, vdso/helpers.h, uapi/linux/time.h를 순서대로 포함합니다. compiler 지원, 아키텍처 clocksource, 데이터 배치, sequence helper와 공개 시간 정의를 연결합니다. 각 포함 파일의 전체 내용을 이 짧은 헤더의 직접 구현으로 세지 않습니다."
+      "title": "가져오는 다섯 헤더",
+      "text": "조건이 맞으면 linux/compiler.h, asm/clocksource.h, vdso/datapage.h, vdso/helpers.h, uapi/linux/time.h 순서로 포함해요. 컴파일러 지원, 아키텍처 시계, 자료 배치, 순서 번호 도우미, 공개 시간 정의를 연결해요. 포함 파일 전체 구현을 이 짧은 파일의 직접 본문으로 세지는 않아요."
     },
     {
-      "title": "조건의 이유와 비활성 결과",
-      "text": "주석은 ARCH=um이 원하지 않는 헤더를 포함하지 않도록 이 검사가 필요하다고 설명합니다. 실제 전처리 조건은 ARCH 문자열 비교가 아니라 CONFIG_GENERIC_GETTIMEOFDAY입니다. 꺼지면 이 목록은 포함하지 않으며 그 대신 대체 함수나 타입을 정의하는 else도 없습니다."
+      "title": "목적과 실제 조건",
+      "text": "주석은 ARCH=um에서 원하지 않는 헤더를 가져오지 않으려는 검사라고 해요. 그러나 실제 코드는 ARCH 문자열을 비교하지 않고 CONFIG_GENERIC_GETTIMEOFDAY 정의를 확인해요. 꺼져 있으면 목록을 생략하며 대체 함수나 타입을 만드는 else도 없어요."
     }
   ],
   "questions": [
     {
-      "prompt": "이 파일이 ARCH 문자열을 직접 검사하는가?",
+      "prompt": "이 파일은 ARCH 문자열을 직접 비교하나요?",
       "options": [
+        "아니요. CONFIG_GENERIC_GETTIMEOFDAY를 검사해요.",
+        "네. ARCH가 x86인지 문자열로 비교해요."
+      ],
+      "answer": 0,
+      "explanation": "ARCH=um은 설계 이유를 설명한 주석이고 실제 조건은 설정 매크로예요.",
+      "original_prompt": "이 파일이 ARCH 문자열을 직접 검사하는가?",
+      "original_options": [
         "아니다. CONFIG_GENERIC_GETTIMEOFDAY를 검사한다",
         "그렇다. ARCH가 x86인지 문자열 비교한다"
       ],
-      "answer": 0,
-      "explanation": "주석의 목적과 실제 조건식을 구분합니다. ARCH=um 언급은 설계 이유이고 본문은 설정 매크로를 검사합니다."
+      "original_explanation": "주석의 목적과 실제 조건식을 구분합니다. ARCH=um 언급은 설계 이유이고 본문은 설정 매크로를 검사합니다."
     },
     {
-      "prompt": "조건이 꺼지면 기본 시간 조회 함수를 제공하는가?",
+      "prompt": "설정이 꺼지면 기본 시간 조회 함수를 만들어 주나요?",
       "options": [
+        "네. 대체 함수 본문을 자동으로 만들어요.",
+        "아니요. 해당 include들을 생략해요."
+      ],
+      "answer": 1,
+      "explanation": "else나 함수 본문이 없어요. 헤더 연결과 실행 구현을 나누어 읽어야 해요.",
+      "original_prompt": "조건이 꺼지면 기본 시간 조회 함수를 제공하는가?",
+      "original_options": [
         "그렇다. 자동으로 fallback 함수 본문을 만든다",
         "아니다. 해당 include들을 생략할 뿐이다"
       ],
-      "answer": 1,
-      "explanation": "else나 함수 정의가 없습니다. 의존성 연결과 실행 구현은 다른 역할입니다."
+      "original_explanation": "else나 함수 정의가 없습니다. 의존성 연결과 실행 구현은 다른 역할입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "CONFIG_GENERIC_GETTIMEOFDAY가 켜진 경우와 꺼진 경우에 포함되는 목록을 나누어 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_VGTOD_H\n#define _ASM_X86_VGTOD_H\n\n/*\n * This check is required to prevent ARCH=um to include\n * unwanted headers.\n */\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n#include <linux/compiler.h>\n#include <asm/clocksource.h>\n#include <vdso/datapage.h>\n#include <vdso/helpers.h>\n\n#include <uapi/linux/time.h>\n\n#endif /* CONFIG_GENERIC_GETTIMEOFDAY */\n\n#endif /* _ASM_X86_VGTOD_H */\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vgtod.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-caeda3ce92bdf0e2",
+    "path": "arch/x86/include/asm/vgtod.h",
+    "title": "X86 VGTOD 헤더: 설정별 include 경계",
+    "area": "헤더 의존성 · 조건부 컴파일 · 아키텍처 경계 · include guard",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "generic gettimeofday 조건과 포함하는 다섯 헤더를 전체 범위로 읽습니다.",
+    "guide": [
+      "아키텍처별 include 경계를 설정으로 제한하여 다른 실행 환경에 필요 없는 의존성을 끌어오지 않습니다.",
+      "짧은 연결 헤더도 빌드 구성과 타입·helper 가용성에 영향을 주는 이유를 이해합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "GPL-2.0과 guard 안에 CONFIG_GENERIC_GETTIMEOFDAY 조건이 있습니다. 함수·구조체·전역 변수 정의 없이 조건부 include만 제공합니다. 파일을 포함한다고 현재 시각을 읽는 연산이 실행되지는 않습니다."
+      },
+      {
+        "title": "포함 목록",
+        "text": "조건이 참이면 linux/compiler.h, asm/clocksource.h, vdso/datapage.h, vdso/helpers.h, uapi/linux/time.h를 순서대로 포함합니다. compiler 지원, 아키텍처 clocksource, 데이터 배치, sequence helper와 공개 시간 정의를 연결합니다. 각 포함 파일의 전체 내용을 이 짧은 헤더의 직접 구현으로 세지 않습니다."
+      },
+      {
+        "title": "조건의 이유와 비활성 결과",
+        "text": "주석은 ARCH=um이 원하지 않는 헤더를 포함하지 않도록 이 검사가 필요하다고 설명합니다. 실제 전처리 조건은 ARCH 문자열 비교가 아니라 CONFIG_GENERIC_GETTIMEOFDAY입니다. 꺼지면 이 목록은 포함하지 않으며 그 대신 대체 함수나 타입을 정의하는 else도 없습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 파일이 ARCH 문자열을 직접 검사하는가?",
+        "options": [
+          "아니다. CONFIG_GENERIC_GETTIMEOFDAY를 검사한다",
+          "그렇다. ARCH가 x86인지 문자열 비교한다"
+        ],
+        "answer": 0,
+        "explanation": "주석의 목적과 실제 조건식을 구분합니다. ARCH=um 언급은 설계 이유이고 본문은 설정 매크로를 검사합니다."
+      },
+      {
+        "prompt": "조건이 꺼지면 기본 시간 조회 함수를 제공하는가?",
+        "options": [
+          "그렇다. 자동으로 fallback 함수 본문을 만든다",
+          "아니다. 해당 include들을 생략할 뿐이다"
+        ],
+        "answer": 1,
+        "explanation": "else나 함수 정의가 없습니다. 의존성 연결과 실행 구현은 다른 역할입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _ASM_X86_VGTOD_H\n#define _ASM_X86_VGTOD_H\n\n/*\n * This check is required to prevent ARCH=um to include\n * unwanted headers.\n */\n#ifdef CONFIG_GENERIC_GETTIMEOFDAY\n#include <linux/compiler.h>\n#include <asm/clocksource.h>\n#include <vdso/datapage.h>\n#include <vdso/helpers.h>\n\n#include <uapi/linux/time.h>\n\n#endif /* CONFIG_GENERIC_GETTIMEOFDAY */\n\n#endif /* _ASM_X86_VGTOD_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b77b73bd2aea2b99113f933ddef2feca8bef92c6212e6e174d3841fcc1244171",
+      "scope": "whole-file",
+      "line_count": 19,
+      "authoring_source": "course/file_units/x86_vvar_layout.py",
+      "sections": [
+        "파일 전체",
+        "포함 목록",
+        "조건의 이유와 비활성 결과"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/x86/include/asm/vgtod.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "필요한 수업 날에만 관련 책을 가방에 넣는 목록이에요. 책 목록을 읽는 것만으로 시계를 재는 실험이 실행되지는 않아요.",
+    "meaning": "vgtod.h는 설정이 켜졌을 때 시간 조회에 필요한 헤더들을 이어 주며 실행 함수는 만들지 않아요.",
+    "exercise": "CONFIG_GENERIC_GETTIMEOFDAY가 켜진 경우와 꺼진 경우에 포함되는 목록을 나누어 적어 보세요."
+  },
+  "goal": "vgtod.h는 설정이 켜졌을 때 시간 조회에 필요한 헤더들을 이어 주며 실행 함수는 만들지 않아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "CONFIG_GENERIC_GETTIMEOFDAY가 켜진 경우와 꺼진 경우에 포함되는 목록을 나누어 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "eb08e5c7f8231aa995ce82f55b8f2f6fe98faad65e4a9d0fae2da033324906ea",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

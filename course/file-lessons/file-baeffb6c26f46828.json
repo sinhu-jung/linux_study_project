@@ -5,54 +5,62 @@
   "area": "전처리 · enum 확장 · ABI 호환성 · 기능 구분",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 아키텍처 시계 모드와 공통 enum으로의 연결을 분석합니다.",
+  "intro": "clocksource 헤더는 32·64비트 모두용 모드와 64비트 전용 모드 두 이름을 공통 열거형에 제공합니다.",
   "guide": [
-    "시계 장치 종류뿐 아니라 사용자 ABI의 지원 범위도 모드 계약의 일부입니다.",
-    "32비트 호환 task와 64비트 task에 허용되는 모드를 구별합니다."
+    "모드는 시계 값을 읽는 방법과 지원 범위를 나타내는 선택 값입니다. 타이머가 물리적으로 있는지 없는지만 말하는 것이 아닙니다.",
+    "매크로는 컴파일 전 단계에서 이름을 다른 토큰으로 바꾸는 규칙입니다. 이 목록을 정의하는 것만으로 부팅 중 시계를 등록하지 않습니다.",
+    "두 이름의 숫자는 들어가는 공통 enum의 앞 항목에 따라 정해지므로 이 파일만 보고 직접 숫자를 지정했다고 말하지 않습니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 정의",
-      "text": "GPL-2.0과 __ASM_VDSOCLOCKSOURCE_H guard 아래 VDSO_ARCH_CLOCKMODES 매크로 하나를 정의합니다. 두 enum 항목 이름을 쉼표로 연결한 토큰 목록이며 여기서 독립적인 enum 형이나 변수를 선언하지 않습니다. 별도 include나 실행 함수도 없습니다."
+      "title": "이름 두 개를 제공하는 매크로",
+      "text": "GPL-2.0과 include guard 아래 VDSO_ARCH_CLOCKMODES 하나가 있습니다. 쉼표로 구분한 두 항목의 토큰 목록이며 독립 enum 형이나 저장 변수를 선언하지 않습니다. 별도 include나 실행 함수도 없습니다."
     },
     {
-      "title": "두 모드의 계약",
-      "text": "VDSO_CLOCKMODE_ARCHTIMER는 주석상 32비트와 64비트 task 모두를 위한 모드입니다. VDSO_CLOCKMODE_ARCHTIMER_NOCOMPAT는 64비트 task만을 위한 모드입니다. NOCOMPAT를 타이머 자체가 존재하지 않는다는 의미로 읽으면 안 됩니다. 실제 사용 여부 검사와 syscall 전환은 이 매크로 바깥의 코드에서 수행합니다."
+      "title": "지원하는 작업 종류의 차이",
+      "text": "ARCHTIMER는 주석상 32비트와 64비트 작업 모두용이고 ARCHTIMER_NOCOMPAT는 64비트 작업만을 위한 모드입니다. NOCOMPAT를 모든 작업에서 타이머가 없다는 뜻으로 읽지 않습니다. 실제 지원 검사와 syscall 전환은 이 매크로를 사용하는 바깥 코드의 일입니다."
     },
     {
-      "title": "공통 enum과 범위",
-      "text": "include/vdso/clocksource.h의 공통 enum에서 NONE 뒤에 이 토큰 목록이 삽입되는 문맥에서는 ARCHTIMER가 1, ARCHTIMER_NOCOMPAT가 2가 됩니다. 이 헤더 자체가 숫자를 직접 지정한 것은 아닙니다. 전체 정의와 주석을 설명했으며 compat 구현이나 타이머 드라이버 전체를 함께 완료로 집계하지 않습니다."
+      "title": "공통 enum에 넣었을 때의 번호",
+      "text": "include/vdso/clocksource.h의 공통 enum에서 NONE 다음에 이 목록이 들어가면 두 값은 1과 2가 됩니다. 이 헤더가 직접 숫자를 써 놓은 것은 아닙니다. 전체 정의를 읽었지만 compat 구현이나 타이머 드라이버 전체를 함께 검토 완료한 것은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "ARCHTIMER_NOCOMPAT에 대한 이 파일의 설명은?",
+      "prompt": "ARCHTIMER_NOCOMPAT는 무엇을 뜻하나요?",
       "options": [
+        "64비트 작업만을 위한 vDSO 시계 모드입니다.",
+        "모든 작업이 타이머를 쓰지 못한다는 뜻입니다."
+      ],
+      "answer": 0,
+      "explanation": "호환 ABI 지원 범위와 타이머 존재를 구분해야 합니다.",
+      "original_prompt": "ARCHTIMER_NOCOMPAT에 대한 이 파일의 설명은?",
+      "original_options": [
         "64비트 task만을 위한 vDSO clocksource 모드이다",
         "모든 task에서 타이머를 사용하지 못한다는 모드이다"
       ],
-      "answer": 0,
-      "explanation": "주석은 64bit tasks only라고 구분합니다. 호환 ABI의 지원 범위와 타이머 자체의 존재 여부는 다릅니다."
+      "original_explanation": "주석은 64bit tasks only라고 구분합니다. 호환 ABI의 지원 범위와 타이머 자체의 존재 여부는 다릅니다."
     },
     {
-      "prompt": "VDSO_ARCH_CLOCKMODES가 여기서 독립 enum 객체를 만드는가?",
+      "prompt": "이 매크로가 독립 enum 객체를 만드나요?",
       "options": [
+        "예. 부팅 때 시계를 등록하는 전역 객체입니다.",
+        "아니요. 공통 enum에 넣을 두 항목의 토큰 목록입니다."
+      ],
+      "answer": 1,
+      "explanation": "전처리 치환이며 실행 중 등록 함수 호출이 아닙니다.",
+      "original_prompt": "VDSO_ARCH_CLOCKMODES가 여기서 독립 enum 객체를 만드는가?",
+      "original_options": [
         "그렇다. 부팅 시 두 시계를 등록하는 전역 객체이다",
         "아니다. 공통 enum에 삽입할 두 항목의 토큰 목록이다"
       ],
-      "answer": 1,
-      "explanation": "매크로 확장과 런타임 등록은 다른 단계입니다. 이 파일에는 enum 본문이나 등록 함수 호출이 없습니다."
+      "original_explanation": "매크로 확장과 런타임 등록은 다른 단계입니다. 이 파일에는 enum 본문이나 등록 함수 호출이 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "ARCHTIMER와 ARCHTIMER_NOCOMPAT 옆에 허용되는 작업의 비트 수를 적으세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_VDSOCLOCKSOURCE_H\n#define __ASM_VDSOCLOCKSOURCE_H\n\n#define VDSO_ARCH_CLOCKMODES\t\t\t\t\t\\\n\t/* vdso clocksource for both 32 and 64bit tasks */\t\\\n\tVDSO_CLOCKMODE_ARCHTIMER,\t\t\t\t\\\n\t/* vdso clocksource for 64bit tasks only */\t\t\\\n\tVDSO_CLOCKMODE_ARCHTIMER_NOCOMPAT\n\n#endif\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/clocksource.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-baeffb6c26f46828",
+    "path": "arch/arm64/include/asm/vdso/clocksource.h",
+    "title": "ARM64 vDSO 시계 모드: compat 지원의 구분",
+    "area": "전처리 · enum 확장 · ABI 호환성 · 기능 구분",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 아키텍처 시계 모드와 공통 enum으로의 연결을 분석합니다.",
+    "guide": [
+      "시계 장치 종류뿐 아니라 사용자 ABI의 지원 범위도 모드 계약의 일부입니다.",
+      "32비트 호환 task와 64비트 task에 허용되는 모드를 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 정의",
+        "text": "GPL-2.0과 __ASM_VDSOCLOCKSOURCE_H guard 아래 VDSO_ARCH_CLOCKMODES 매크로 하나를 정의합니다. 두 enum 항목 이름을 쉼표로 연결한 토큰 목록이며 여기서 독립적인 enum 형이나 변수를 선언하지 않습니다. 별도 include나 실행 함수도 없습니다."
+      },
+      {
+        "title": "두 모드의 계약",
+        "text": "VDSO_CLOCKMODE_ARCHTIMER는 주석상 32비트와 64비트 task 모두를 위한 모드입니다. VDSO_CLOCKMODE_ARCHTIMER_NOCOMPAT는 64비트 task만을 위한 모드입니다. NOCOMPAT를 타이머 자체가 존재하지 않는다는 의미로 읽으면 안 됩니다. 실제 사용 여부 검사와 syscall 전환은 이 매크로 바깥의 코드에서 수행합니다."
+      },
+      {
+        "title": "공통 enum과 범위",
+        "text": "include/vdso/clocksource.h의 공통 enum에서 NONE 뒤에 이 토큰 목록이 삽입되는 문맥에서는 ARCHTIMER가 1, ARCHTIMER_NOCOMPAT가 2가 됩니다. 이 헤더 자체가 숫자를 직접 지정한 것은 아닙니다. 전체 정의와 주석을 설명했으며 compat 구현이나 타이머 드라이버 전체를 함께 완료로 집계하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "ARCHTIMER_NOCOMPAT에 대한 이 파일의 설명은?",
+        "options": [
+          "64비트 task만을 위한 vDSO clocksource 모드이다",
+          "모든 task에서 타이머를 사용하지 못한다는 모드이다"
+        ],
+        "answer": 0,
+        "explanation": "주석은 64bit tasks only라고 구분합니다. 호환 ABI의 지원 범위와 타이머 자체의 존재 여부는 다릅니다."
+      },
+      {
+        "prompt": "VDSO_ARCH_CLOCKMODES가 여기서 독립 enum 객체를 만드는가?",
+        "options": [
+          "그렇다. 부팅 시 두 시계를 등록하는 전역 객체이다",
+          "아니다. 공통 enum에 삽입할 두 항목의 토큰 목록이다"
+        ],
+        "answer": 1,
+        "explanation": "매크로 확장과 런타임 등록은 다른 단계입니다. 이 파일에는 enum 본문이나 등록 함수 호출이 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __ASM_VDSOCLOCKSOURCE_H\n#define __ASM_VDSOCLOCKSOURCE_H\n\n#define VDSO_ARCH_CLOCKMODES\t\t\t\t\t\\\n\t/* vdso clocksource for both 32 and 64bit tasks */\t\\\n\tVDSO_CLOCKMODE_ARCHTIMER,\t\t\t\t\\\n\t/* vdso clocksource for 64bit tasks only */\t\t\\\n\tVDSO_CLOCKMODE_ARCHTIMER_NOCOMPAT\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c94059ea73c440b10631602b342956aafd076392948827d7dbf5d2c06e0c3b2c",
+      "scope": "whole-file",
+      "line_count": 11,
+      "authoring_source": "course/file_units/arm64_vdso_time.py",
+      "sections": [
+        "전체 정의",
+        "두 모드의 계약",
+        "공통 enum과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/arm64/include/asm/vdso/clocksource.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 시계라도 어떤 종류의 이용자에게 빠른 사용법을 제공할지는 별도로 정할 수 있습니다.",
+    "meaning": "clocksource 헤더는 32·64비트 모두용 모드와 64비트 전용 모드 두 이름을 공통 열거형에 제공합니다.",
+    "exercise": "ARCHTIMER와 ARCHTIMER_NOCOMPAT 옆에 허용되는 작업의 비트 수를 적으세요."
+  },
+  "goal": "clocksource 헤더는 32·64비트 모두용 모드와 64비트 전용 모드 두 이름을 공통 열거형에 제공합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "ARCHTIMER와 ARCHTIMER_NOCOMPAT 옆에 허용되는 작업의 비트 수를 적으세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "fc8cf9dd82ed9b0b69fc17a43b62e4cf9c05b61a497a2917fe0ea1be80238eb6",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

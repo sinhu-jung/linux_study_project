@@ -5,96 +5,116 @@
   "area": "UAPI · ABI 안정성 · 비트 마스크 · 자료 표현 변환 · 메모리 상태",
   "track": "files",
   "kind": "kernel",
-  "intro": "사용자 공간에 내보내는 27개 페이지 상태 비트 번호와 실제 상태를 만드는 코드의 관계를 학습합니다.",
+  "intro": "공개 페이지 상태 번호는 비트 위치이며 내부 페이지 비트와 같다고 가정하지 않아요.",
   "guide": [
-    "외부 비트 번호는 내부 page flags 배치와 별개이며, 번호 정의와 런타임 상태 지원은 다릅니다.",
-    "/proc/kpageflags 결과를 해석하는 프로그램에서 비트 번호와 의미를 정확히 연결합니다."
+    "페이지는 메모리를 관리하는 일정 크기의 단위이고 KPF는 그 상태를 외부에 보여 주는 비트 번호예요. 여러 상태를 동시에 표시할 수 있어요.",
+    "KPF_LOCKED가 0이라는 말은 첫 번째 비트 위치라는 뜻이에요. 검사할 때는 1ULL<<0, 즉 값 1을 사용해요.",
+    "외부에 약속한 번호와 커널 내부 표현은 변환 코드로 연결해요. 번호 정의만으로 상태를 설정하거나 메모리 작업을 실행하지 않아요."
   ],
   "deep_dive": [
     {
       "title": "전체 파일의 역할",
-      "text": "GPL-2.0 WITH Linux-syscall-note, guard, 안정적인 사용자 공간 비트라는 주석과 KPF 상수 정의로 이루어집니다. 함수·저장 배열·입출력 코드는 없습니다. 매크로 값은 비트 인덱스이며 마스크 자체가 아닙니다. 예를 들어 KPF_LOCKED=0은 상태가 없다는 뜻이 아니라 0번 비트이므로 검사 마스크는 1ULL<<0입니다."
+      "text": "라이선스와 guard, 안정적인 사용자 공간 비트라는 설명, KPF 상수로 된 헤더예요. 함수·저장 배열·입출력은 없어요. 상수는 마스크가 아니라 위치 번호이므로 0번 비트의 마스크도 0이 아닌 1이에요."
     },
     {
       "title": "0부터 4까지",
-      "text": "LOCKED=0, ERROR=1, REFERENCED=2, UPTODATE=3, DIRTY=4입니다. ERROR에는 현재 사용하지 않는다는 주석이 붙어 있지만 이후 번호를 당기지 않습니다. 공개 ABI에서 사용하지 않는 자리도 번호 유지가 필요하다는 사례입니다. dirty와 uptodate는 별도 속성이므로 서로 배타적인 enum 값처럼 해석하지 않습니다."
+      "text": "0 LOCKED는 잠금, 1 ERROR는 오류, 2 REFERENCED는 참조됨, 3 UPTODATE는 내용이 최신, 4 DIRTY는 저장할 변경이 있음을 나타내요. ERROR가 지금 안 쓰여도 뒤 번호를 당기지 않아요. 공개 ABI 번호를 지키기 때문이에요. 최신과 변경됨은 별도 속성이라 배타적 한 값으로 읽지 않아요."
     },
     {
       "title": "5부터 10까지",
-      "text": "LRU=5, ACTIVE=6, SLAB=7, WRITEBACK=8, RECLAIM=9, BUDDY=10입니다. LRU 소속·활성 상태, slab 사용, writeback 및 회수 관련 상태, buddy 상태를 표현하는 출력 번호입니다. 이 헤더가 LRU 이동이나 회수, buddy 할당을 수행하지는 않습니다. 여러 비트가 동시에 설정될 수 있습니다."
+      "text": "5 LRU는 해당 관리 목록 소속, 6 ACTIVE는 활성, 7 SLAB은 slab 객체 저장용, 8 WRITEBACK은 저장 중, 9 RECLAIM은 회수 관련, 10 BUDDY는 buddy 상태예요. 헤더는 번호만 주며 목록 이동, 회수, 할당을 수행하지 않아요. 여러 비트가 함께 켜질 수 있어요."
     },
     {
       "title": "11부터 16까지",
-      "text": "주석은 11~20을 2.6.31의 추가 항목으로 묶습니다. MMAP=11, ANON=12, SWAPCACHE=13, SWAPBACKED=14, COMPOUND_HEAD=15, COMPOUND_TAIL=16입니다. 매핑 여부와 anonymous 유형은 다른 질문이며 swap cache와 swap backing도 같은 비트가 아닙니다. compound head/tail은 큰 페이지의 구성에서 어떤 위치인지 구분합니다."
+      "text": "주석은 11~20이 2.6.31에 더해졌다고 알려요. 11 MMAP은 매핑, 12 ANON은 익명 메모리, 13 SWAPCACHE는 swap 캐시, 14 SWAPBACKED는 swap 기반, 15 COMPOUND_HEAD와 16 COMPOUND_TAIL은 묶인 큰 페이지의 머리와 뒤쪽 위치예요. 매핑 여부와 익명 여부, 두 swap 상태는 각각 달라요."
     },
     {
       "title": "17부터 20까지",
-      "text": "HUGE=17, UNEVICTABLE=18, HWPOISON=19, NOPAGE=20입니다. fs/proc/page.c의 stable_page_flags를 대조하면 HUGE는 hugetlb 판별과 연결되고 NOPAGE는 page 포인터가 없는 경우를 나타냅니다. 따라서 NOPAGE를 플래그가 모두 0인 정상 페이지와 구별합니다. 함수 이름이나 비트 이름만으로 모든 큰 페이지가 HUGE로 보고된다고 단정하면 안 됩니다."
+      "text": "17 HUGE, 18 UNEVICTABLE, 19 HWPOISON, 20 NOPAGE는 각각 큰 페이지 관련, 내보내기 어려움, 하드웨어 오류, page 대상 없음이에요. 대조한 stable_page_flags에서 HUGE는 hugetlb 조건과 연결돼 모든 큰 페이지를 뜻하지 않아요. NOPAGE는 정상 페이지의 비트가 모두 0인 상황과 달라요."
     },
     {
       "title": "21부터 26까지",
-      "text": "KSM=21, THP=22, OFFLINE=23, ZERO_PAGE=24, IDLE=25, PGTABLE=26입니다. 구현은 THP를 PMD 크기에만 한정하지 않는다고 명시합니다. OFFLINE과 NOPAGE도 별개의 판별입니다. ZERO_PAGE는 공유 zero page 계열의 상태이며 단순히 페이지의 모든 바이트를 검사해서 0인지 알려주는 비트가 아닙니다. 이 헤더의 상수는 기능별 ifdef 없이 정의되지만 모든 구성에서 해당 상태가 발생한다는 뜻은 아닙니다."
+      "text": "21 KSM, 22 THP, 23 OFFLINE, 24 ZERO_PAGE, 25 IDLE, 26 PGTABLE은 병합·투명 큰 페이지·오프라인·공유 0페이지·유휴·페이지 표 상태예요. THP는 PMD 크기에만 한정되지 않아요. OFFLINE과 NOPAGE도 달라요. ZERO_PAGE는 내용을 훑어 모두 0인지 검사하는 비트가 아니에요. 조건부 정의가 없어도 모든 구성에서 각 상태가 실제 발생한다는 뜻은 아니에요."
     },
     {
       "title": "내부 상태에서 공개 값으로 변환",
-      "text": "stable_page_flags는 일부 PG 비트를 대응 KPF 자리로 복사하고, 일부 상태는 매핑·folio·page helper로 합성합니다. 예를 들어 SWAPCACHE는 swapbacked와 swapcache 두 내부 비트가 모두 있는지 확인합니다. KPF 번호를 그대로 page->flags의 비트 번호로 사용해서는 안 됩니다. 관련 함수 대조는 fs/proc/page.c 전체를 완료한 것으로 계산하지 않습니다."
+      "text": "stable_page_flags는 일부 내부 PG 비트를 KPF 위치로 옮기고 일부는 page·folio·매핑 helper로 합쳐 만들어요. SWAPCACHE는 내부 swapbacked와 swapcache가 모두 있는지 확인해요. KPF 번호를 page->flags에 그대로 적용하면 안 돼요. 이 대조가 fs/proc/page.c 전체 완료를 뜻하지는 않아요."
     },
     {
       "title": "Idle 비트맵과의 차이",
-      "text": "/proc/kpageflags는 PFN마다 여러 상태를 담은 u64 레코드를 제공합니다. idle sysfs bitmap은 u64 하나에 64개 PFN의 idle 여부를 담습니다. kpageflags의 IDLE=25는 각 PFN 레코드의 25번 비트이고 idle bitmap에서 모든 PFN을 항상 25번에 놓는다는 뜻이 아닙니다. 상태 변환 함수는 idle 상태를 읽지만 여기서 역매핑을 순회하여 PTE 참조를 갱신하지는 않습니다."
+      "text": "PFN은 물리 페이지 번호예요. /proc/kpageflags의 u64 하나는 PFN 하나의 여러 상태를 담고 idle sysfs bitmap의 u64 하나는 PFN 64개의 유휴 여부를 담아요. IDLE=25는 전자의 각 기록에서의 위치예요. 상태 변환이 idle을 읽는다고 역매핑을 돌아 PTE 참조를 새로 확인하는 것까지 수행하지는 않아요."
     },
     {
       "title": "CS 연결과 범위",
-      "text": "지속되는 외부 번호와 변화 가능한 내부 표현 사이의 변환 계층, 비트 번호와 마스크, 합성 상태, 예약된 번호 보존을 학습합니다. 이 헤더의 원본 대조는 실제 메모리 상태의 일관된 스냅샷이나 모든 커널 구성의 동작을 증명하지 않습니다."
+      "text": "안정적인 외부 번호와 바뀔 수 있는 내부 표현 사이 변환, 비트 번호와 마스크, 여러 조건을 합친 상태, 미사용 번호 보존을 배워요. 이 원문 대조는 실제 메모리의 한순간 일관된 상태나 모든 구성 동작을 증명하는 실험은 아니에요."
     }
   ],
   "questions": [
     {
-      "prompt": "KPF_LOCKED가 0일 때 locked 검사 마스크는?",
+      "prompt": "KPF_LOCKED=0이면 검사 마스크는 무엇인가요?",
       "options": [
+        "1ULL<<0, 즉 1이에요.",
+        "0이라 어떤 값에서도 검사할 수 없어요."
+      ],
+      "answer": 0,
+      "explanation": "0은 위치 번호이고 그 자리를 켠 값은 1이에요.",
+      "original_prompt": "KPF_LOCKED가 0일 때 locked 검사 마스크는?",
+      "original_options": [
         "1ULL<<0, 즉 1이다",
         "0이므로 어떤 값에서도 검사할 수 없다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 비트 번호입니다. 번호 0과 값 0을 혼동하지 않아야 합니다."
+      "original_explanation": "매크로는 비트 번호입니다. 번호 0과 값 0을 혼동하지 않아야 합니다."
     },
     {
-      "prompt": "사용하지 않는 KPF_ERROR 뒤의 번호를 한 칸씩 당겨도 되는가?",
+      "prompt": "미사용 KPF_ERROR 뒤 번호를 당겨도 되나요?",
       "options": [
+        "네. 미사용 항목을 빼고 모두 당겨야 해요.",
+        "안 돼요. 사용자 공간에 약속한 번호가 바뀌어요."
+      ],
+      "answer": 1,
+      "explanation": "기존 프로그램이 기대하는 공개 비트 번호를 유지해야 해요.",
+      "original_prompt": "사용하지 않는 KPF_ERROR 뒤의 번호를 한 칸씩 당겨도 되는가?",
+      "original_options": [
         "된다. 미사용 항목은 뒤의 모든 번호에서 제거해야 한다",
         "안 된다. 사용자 공간에 공개한 비트 번호가 바뀐다"
       ],
-      "answer": 1,
-      "explanation": "안정적인 공개 ABI는 기존 소비자가 기대하는 번호를 보존해야 합니다. 원본도 ERROR=1을 유지합니다."
+      "original_explanation": "안정적인 공개 ABI는 기존 소비자가 기대하는 번호를 보존해야 합니다. 원본도 ERROR=1을 유지합니다."
     },
     {
-      "prompt": "KPF_THP는 반드시 PMD 크기 페이지만 뜻하는가?",
+      "prompt": "KPF_THP는 반드시 PMD 크기 페이지만 뜻하나요?",
       "options": [
+        "아니요. 변환 구현은 그 크기로 한정하지 않아요.",
+        "네. KPF 숫자가 페이지 크기를 고정해요."
+      ],
+      "answer": 0,
+      "explanation": "헤더는 번호를 주고 실제 상태 조건은 생산 코드가 정해요.",
+      "original_prompt": "KPF_THP는 반드시 PMD 크기 페이지만 뜻하는가?",
+      "original_options": [
         "아니다. 변환 구현은 PMD 크기로 한정하지 않는다",
         "그렇다. KPF 번호가 페이지 크기를 고정한다"
       ],
-      "answer": 0,
-      "explanation": "헤더는 번호만 정하고 실제 조건은 변환 함수가 정합니다. 해당 구현 주석은 PMD 크기에 한정하지 않는다고 명시합니다."
+      "original_explanation": "헤더는 번호만 정하고 실제 조건은 변환 함수가 정합니다. 해당 구현 주석은 PMD 크기에 한정하지 않는다고 명시합니다."
     },
     {
-      "prompt": "kpageflags의 IDLE 비트와 idle sysfs 비트맵의 배치는 같은가?",
+      "prompt": "kpageflags와 idle sysfs bitmap은 같은 배치인가요?",
       "options": [
+        "네. 같은 바이트 배열처럼 읽으면 돼요.",
+        "아니요. 전자는 페이지별 여러 상태, 후자는 여러 페이지의 idle을 담아요."
+      ],
+      "answer": 1,
+      "explanation": "u64 하나가 나타내는 자료의 단위부터 달라요.",
+      "original_prompt": "kpageflags의 IDLE 비트와 idle sysfs 비트맵의 배치는 같은가?",
+      "original_options": [
         "그렇다. 두 파일을 같은 바이트 배열로 해석하면 된다",
         "아니다. 전자는 PFN별 상태 레코드, 후자는 여러 PFN의 idle 비트를 묶는다"
       ],
-      "answer": 1,
-      "explanation": "전자는 한 u64에 한 PFN의 여러 상태, 후자는 한 u64에 64개 PFN의 한 상태입니다. 단위가 다릅니다."
+      "original_explanation": "전자는 한 u64에 한 PFN의 여러 상태, 후자는 한 u64에 64개 PFN의 한 상태입니다. 단위가 다릅니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "KPF_LOCKED=0과 KPF_IDLE=25의 검사 마스크를 각각 적어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPILINUX_KERNEL_PAGE_FLAGS_H\n#define _UAPILINUX_KERNEL_PAGE_FLAGS_H\n\n/*\n * Stable page flag bits exported to user space\n */\n\n#define KPF_LOCKED\t\t0\n#define KPF_ERROR\t\t1\t/* Now unused */\n#define KPF_REFERENCED\t\t2\n#define KPF_UPTODATE\t\t3\n#define KPF_DIRTY\t\t4\n#define KPF_LRU\t\t\t5\n#define KPF_ACTIVE\t\t6\n#define KPF_SLAB\t\t7\n#define KPF_WRITEBACK\t\t8\n#define KPF_RECLAIM\t\t9\n#define KPF_BUDDY\t\t10\n\n/* 11-20: new additions in 2.6.31 */\n#define KPF_MMAP\t\t11\n#define KPF_ANON\t\t12\n#define KPF_SWAPCACHE\t\t13\n#define KPF_SWAPBACKED\t\t14\n#define KPF_COMPOUND_HEAD\t15\n#define KPF_COMPOUND_TAIL\t16\n#define KPF_HUGE\t\t17\n#define KPF_UNEVICTABLE\t\t18\n#define KPF_HWPOISON\t\t19\n#define KPF_NOPAGE\t\t20\n\n#define KPF_KSM\t\t\t21\n#define KPF_THP\t\t\t22\n#define KPF_OFFLINE\t\t23\n#define KPF_ZERO_PAGE\t\t24\n#define KPF_IDLE\t\t25\n#define KPF_PGTABLE\t\t26\n\n#endif /* _UAPILINUX_KERNEL_PAGE_FLAGS_H */\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/kernel-page-flags.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-7aa8b65949eb15f3",
+    "path": "include/uapi/linux/kernel-page-flags.h",
+    "title": "공개 KPF 번호: 커널 페이지 상태의 안정적인 표현",
+    "area": "UAPI · ABI 안정성 · 비트 마스크 · 자료 표현 변환 · 메모리 상태",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "사용자 공간에 내보내는 27개 페이지 상태 비트 번호와 실제 상태를 만드는 코드의 관계를 학습합니다.",
+    "guide": [
+      "외부 비트 번호는 내부 page flags 배치와 별개이며, 번호 정의와 런타임 상태 지원은 다릅니다.",
+      "/proc/kpageflags 결과를 해석하는 프로그램에서 비트 번호와 의미를 정확히 연결합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일의 역할",
+        "text": "GPL-2.0 WITH Linux-syscall-note, guard, 안정적인 사용자 공간 비트라는 주석과 KPF 상수 정의로 이루어집니다. 함수·저장 배열·입출력 코드는 없습니다. 매크로 값은 비트 인덱스이며 마스크 자체가 아닙니다. 예를 들어 KPF_LOCKED=0은 상태가 없다는 뜻이 아니라 0번 비트이므로 검사 마스크는 1ULL<<0입니다."
+      },
+      {
+        "title": "0부터 4까지",
+        "text": "LOCKED=0, ERROR=1, REFERENCED=2, UPTODATE=3, DIRTY=4입니다. ERROR에는 현재 사용하지 않는다는 주석이 붙어 있지만 이후 번호를 당기지 않습니다. 공개 ABI에서 사용하지 않는 자리도 번호 유지가 필요하다는 사례입니다. dirty와 uptodate는 별도 속성이므로 서로 배타적인 enum 값처럼 해석하지 않습니다."
+      },
+      {
+        "title": "5부터 10까지",
+        "text": "LRU=5, ACTIVE=6, SLAB=7, WRITEBACK=8, RECLAIM=9, BUDDY=10입니다. LRU 소속·활성 상태, slab 사용, writeback 및 회수 관련 상태, buddy 상태를 표현하는 출력 번호입니다. 이 헤더가 LRU 이동이나 회수, buddy 할당을 수행하지는 않습니다. 여러 비트가 동시에 설정될 수 있습니다."
+      },
+      {
+        "title": "11부터 16까지",
+        "text": "주석은 11~20을 2.6.31의 추가 항목으로 묶습니다. MMAP=11, ANON=12, SWAPCACHE=13, SWAPBACKED=14, COMPOUND_HEAD=15, COMPOUND_TAIL=16입니다. 매핑 여부와 anonymous 유형은 다른 질문이며 swap cache와 swap backing도 같은 비트가 아닙니다. compound head/tail은 큰 페이지의 구성에서 어떤 위치인지 구분합니다."
+      },
+      {
+        "title": "17부터 20까지",
+        "text": "HUGE=17, UNEVICTABLE=18, HWPOISON=19, NOPAGE=20입니다. fs/proc/page.c의 stable_page_flags를 대조하면 HUGE는 hugetlb 판별과 연결되고 NOPAGE는 page 포인터가 없는 경우를 나타냅니다. 따라서 NOPAGE를 플래그가 모두 0인 정상 페이지와 구별합니다. 함수 이름이나 비트 이름만으로 모든 큰 페이지가 HUGE로 보고된다고 단정하면 안 됩니다."
+      },
+      {
+        "title": "21부터 26까지",
+        "text": "KSM=21, THP=22, OFFLINE=23, ZERO_PAGE=24, IDLE=25, PGTABLE=26입니다. 구현은 THP를 PMD 크기에만 한정하지 않는다고 명시합니다. OFFLINE과 NOPAGE도 별개의 판별입니다. ZERO_PAGE는 공유 zero page 계열의 상태이며 단순히 페이지의 모든 바이트를 검사해서 0인지 알려주는 비트가 아닙니다. 이 헤더의 상수는 기능별 ifdef 없이 정의되지만 모든 구성에서 해당 상태가 발생한다는 뜻은 아닙니다."
+      },
+      {
+        "title": "내부 상태에서 공개 값으로 변환",
+        "text": "stable_page_flags는 일부 PG 비트를 대응 KPF 자리로 복사하고, 일부 상태는 매핑·folio·page helper로 합성합니다. 예를 들어 SWAPCACHE는 swapbacked와 swapcache 두 내부 비트가 모두 있는지 확인합니다. KPF 번호를 그대로 page->flags의 비트 번호로 사용해서는 안 됩니다. 관련 함수 대조는 fs/proc/page.c 전체를 완료한 것으로 계산하지 않습니다."
+      },
+      {
+        "title": "Idle 비트맵과의 차이",
+        "text": "/proc/kpageflags는 PFN마다 여러 상태를 담은 u64 레코드를 제공합니다. idle sysfs bitmap은 u64 하나에 64개 PFN의 idle 여부를 담습니다. kpageflags의 IDLE=25는 각 PFN 레코드의 25번 비트이고 idle bitmap에서 모든 PFN을 항상 25번에 놓는다는 뜻이 아닙니다. 상태 변환 함수는 idle 상태를 읽지만 여기서 역매핑을 순회하여 PTE 참조를 갱신하지는 않습니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "지속되는 외부 번호와 변화 가능한 내부 표현 사이의 변환 계층, 비트 번호와 마스크, 합성 상태, 예약된 번호 보존을 학습합니다. 이 헤더의 원본 대조는 실제 메모리 상태의 일관된 스냅샷이나 모든 커널 구성의 동작을 증명하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "KPF_LOCKED가 0일 때 locked 검사 마스크는?",
+        "options": [
+          "1ULL<<0, 즉 1이다",
+          "0이므로 어떤 값에서도 검사할 수 없다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 비트 번호입니다. 번호 0과 값 0을 혼동하지 않아야 합니다."
+      },
+      {
+        "prompt": "사용하지 않는 KPF_ERROR 뒤의 번호를 한 칸씩 당겨도 되는가?",
+        "options": [
+          "된다. 미사용 항목은 뒤의 모든 번호에서 제거해야 한다",
+          "안 된다. 사용자 공간에 공개한 비트 번호가 바뀐다"
+        ],
+        "answer": 1,
+        "explanation": "안정적인 공개 ABI는 기존 소비자가 기대하는 번호를 보존해야 합니다. 원본도 ERROR=1을 유지합니다."
+      },
+      {
+        "prompt": "KPF_THP는 반드시 PMD 크기 페이지만 뜻하는가?",
+        "options": [
+          "아니다. 변환 구현은 PMD 크기로 한정하지 않는다",
+          "그렇다. KPF 번호가 페이지 크기를 고정한다"
+        ],
+        "answer": 0,
+        "explanation": "헤더는 번호만 정하고 실제 조건은 변환 함수가 정합니다. 해당 구현 주석은 PMD 크기에 한정하지 않는다고 명시합니다."
+      },
+      {
+        "prompt": "kpageflags의 IDLE 비트와 idle sysfs 비트맵의 배치는 같은가?",
+        "options": [
+          "그렇다. 두 파일을 같은 바이트 배열로 해석하면 된다",
+          "아니다. 전자는 PFN별 상태 레코드, 후자는 여러 PFN의 idle 비트를 묶는다"
+        ],
+        "answer": 1,
+        "explanation": "전자는 한 u64에 한 PFN의 여러 상태, 후자는 한 u64에 64개 PFN의 한 상태입니다. 단위가 다릅니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */\n#ifndef _UAPILINUX_KERNEL_PAGE_FLAGS_H\n#define _UAPILINUX_KERNEL_PAGE_FLAGS_H\n\n/*\n * Stable page flag bits exported to user space\n */\n\n#define KPF_LOCKED\t\t0\n#define KPF_ERROR\t\t1\t/* Now unused */\n#define KPF_REFERENCED\t\t2\n#define KPF_UPTODATE\t\t3\n#define KPF_DIRTY\t\t4\n#define KPF_LRU\t\t\t5\n#define KPF_ACTIVE\t\t6\n#define KPF_SLAB\t\t7\n#define KPF_WRITEBACK\t\t8\n#define KPF_RECLAIM\t\t9\n#define KPF_BUDDY\t\t10\n\n/* 11-20: new additions in 2.6.31 */\n#define KPF_MMAP\t\t11\n#define KPF_ANON\t\t12\n#define KPF_SWAPCACHE\t\t13\n#define KPF_SWAPBACKED\t\t14\n#define KPF_COMPOUND_HEAD\t15\n#define KPF_COMPOUND_TAIL\t16\n#define KPF_HUGE\t\t17\n#define KPF_UNEVICTABLE\t\t18\n#define KPF_HWPOISON\t\t19\n#define KPF_NOPAGE\t\t20\n\n#define KPF_KSM\t\t\t21\n#define KPF_THP\t\t\t22\n#define KPF_OFFLINE\t\t23\n#define KPF_ZERO_PAGE\t\t24\n#define KPF_IDLE\t\t25\n#define KPF_PGTABLE\t\t26\n\n#endif /* _UAPILINUX_KERNEL_PAGE_FLAGS_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "3faf64bb4e395bba5e66752a5129d5d23e0893ae94d202a824dfe88ce3024dda",
+      "scope": "whole-file",
+      "line_count": 40,
+      "authoring_source": "course/file_units/exported_page_flags.py",
+      "sections": [
+        "전체 파일의 역할",
+        "0부터 4까지",
+        "5부터 10까지",
+        "11부터 16까지",
+        "17부터 20까지",
+        "21부터 26까지",
+        "내부 상태에서 공개 값으로 변환",
+        "Idle 비트맵과의 차이",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/uapi/linux/kernel-page-flags.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "한 칸마다 뜻이 다른 체크표에서 칸 번호와 체크 표시의 값을 구별해요.",
+    "meaning": "공개 페이지 상태 번호는 비트 위치이며 내부 페이지 비트와 같다고 가정하지 않아요.",
+    "exercise": "KPF_LOCKED=0과 KPF_IDLE=25의 검사 마스크를 각각 적어 보세요."
+  },
+  "goal": "공개 페이지 상태 번호는 비트 위치이며 내부 페이지 비트와 같다고 가정하지 않아요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "KPF_LOCKED=0과 KPF_IDLE=25의 검사 마스크를 각각 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "f4543f0870ca8e194152f619fcbc780fbf169737eb60f8e4a0f1dd27e287fe13",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

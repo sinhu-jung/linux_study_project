@@ -5,101 +5,127 @@
   "area": "장치 트리 · 그래프 · 반복자 · 참조 수명 · 조건부 컴파일",
   "track": "files",
   "kind": "kernel",
-  "intro": "엔드포인트 구조체, 순회 매크로, 11개 활성 API와 모든 비활성 stub을 분석합니다.",
+  "intro": "OF 연결점의 계층 식별자와 반복자 참조 수명, 설정별 조회 결과를 이해합니다.",
   "guide": [
-    "그래프의 식별자, 노드 포인터, 순회 중 보유한 참조는 서로 다른 개념입니다.",
-    "계층적 식별자, 그래프 연결 조회, 반복자와 조기 종료 시 자원 해제를 학습합니다."
+    "endpoint는 장치 간 연결의 끝점이고 port는 그 끝점이 속한 포트입니다.",
+    "port와 id는 reg 속성의 식별자이며 배열 순번이나 메모리 주소가 아닙니다.",
+    "for문을 중간에 나가면 다음 항목 이동식이 실행되지 않으므로 현재 참조 정리 책임이 남습니다."
   ],
   "deep_dive": [
     {
-      "title": "헤더와 데이터 모델",
-      "text": "GPL-2.0과 OF graph binding parsing helpers 설명, 저작권·저자 표기 뒤 __LINUX_OF_GRAPH_H guard가 있습니다. types.h와 errno.h를 포함합니다. of_endpoint의 unsigned int port는 소속 포트 reg 속성의 식별자, unsigned int id는 엔드포인트 reg 식별자, const device_node *local_node는 해당 엔드포인트 노드 포인터입니다. id와 port는 배열 위치나 포인터가 아니라 서로 다른 계층의 식별자입니다."
+      "title": "연결점의 세 칸",
+      "text": "라이선스·설명·저작권 뒤 중복 포함 방지와 types·errno를 포함합니다. of_endpoint는 unsigned port와 id, const local_node 주소를 담습니다. 앞 둘은 포트와 끝점이라는 서로 다른 층의 reg 식별자이고 마지막이 실제 노드 주소입니다."
     },
     {
-      "title": "반복자의 시작과 진행",
-      "text": "for_each_endpoint_of_node(parent,child)는 get_next_endpoint(parent,NULL)로 시작하고 child!=NULL 동안 반복합니다. 증감식은 get_next_endpoint(parent,child)로 이전 노드를 넘깁니다. child는 매번 반환값으로 덮어쓰므로 반복 상태가 이 포인터와 하위 함수에 의해 유지됩니다. 이 헤더는 순회 매크로만 정의하며 실제 포트 탐색 순서나 내부 참조 갱신 구현은 제공하지 않습니다."
+      "title": "반복의 시작과 진행",
+      "text": "get_next_endpoint(parent,NULL)로 시작해 child가 NULL이 아닌 동안 반복합니다. 다음 이동은 현재 child를 넘겨 받은 새 주소로 덮습니다. 반복 상태는 이 주소와 하위 함수가 관리합니다. 실제 포트 검색 순서나 참조 갱신 구현은 헤더에 없습니다."
     },
     {
-      "title": "조기 종료와 참조 수명",
-      "text": "매크로 주석은 루프를 중간에 빠져나오면 of_node_put(child)를 수동으로 호출해야 한다고 명시합니다. break나 return은 다음 증감식을 실행하지 않으므로 정상적인 다음 항목 이동 경로에만 의존해서 현재 참조가 정리될 것이라 가정하면 안 됩니다. 이 계약은 커널 객체 참조의 수명과 C 제어 흐름을 연결하는 예입니다. 매크로 본문에 자동 정리 블록이나 cleanup 속성이 있는 것은 아닙니다."
+      "title": "중간에 나가면 직접 put",
+      "text": "주석은 루프를 중간에 나갈 때 of_node_put(child)를 직접 부르라고 합니다. break나 return은 다음 이동식을 건너뛰므로 그 경로가 현재 참조를 정리할 것이라 믿으면 안 됩니다. 매크로에는 자동 정리 블록이나 속성이 없습니다."
     },
     {
-      "title": "존재·파싱·개수 API",
-      "text": "CONFIG_OF 활성에서는 is_present가 const node에서 bool, parse_endpoint가 const node와 of_endpoint 출력 포인터에서 int, get_endpoint_count가 const node에서 unsigned int를 반환합니다. 파싱 결과 구조체와 개수는 다른 결과입니다. 선언만으로 누락 reg의 기본값이나 파싱 오류의 상세 종류를 확정할 수 없으며 local_node 포인터의 const도 참조 획득·해제를 자동으로 수행하지 않습니다."
+      "title": "존재·해석·개수 조회",
+      "text": "OF가 켜지면 존재 검사는 bool, parse_endpoint는 출력 구조체를 받아 int, 개수는 unsigned int입니다. 파싱한 정보와 항목 수는 다릅니다. 빠진 reg의 기본값과 오류 종류는 선언만으로 확정하지 않습니다. local_node의 const도 참조를 자동으로 얻거나 놓지 않습니다."
     },
     {
-      "title": "로컬 조회 API",
-      "text": "get_port_by_id는 node와 u32 id로 포트 노드 포인터를 반환하고 get_next_endpoint는 const parent와 previous 포인터를 받습니다. get_endpoint_by_regs는 const parent와 int port_reg, int reg를 받습니다. 두 reg 인수가 signed int라는 사실만으로 음수 값의 특별한 의미를 추정해서는 안 됩니다. 이 헤더에는 검색 조건을 해석하는 구현이 없습니다."
+      "title": "내 쪽의 노드 찾기",
+      "text": "get_port_by_id는 노드와 u32 ID, get_next_endpoint는 부모와 이전 노드를 받습니다. get_endpoint_by_regs는 int port_reg와 reg를 받습니다. signed 타입이라는 이유만으로 음수가 모든 항목 선택 같은 특별 뜻이라고 가정하지 않습니다. 검색 조건 구현은 다른 파일에 있습니다."
     },
     {
-      "title": "원격 연결과 부모 조회",
-      "text": "get_remote_endpoint, get_remote_port_parent, get_remote_port는 각각 const node를 받는 별도 함수입니다. get_port_parent는 비const node 포인터를 받으며 get_remote_node는 const node에 u32 port와 endpoint 식별자를 추가로 받습니다. 모두 device_node 포인터를 반환하지만 엔드포인트, 포트, 부모, 원격 장치 조회를 같은 호출로 치환할 수는 없습니다. 연결을 따라가는 실제 알고리즘과 각 함수의 참조 반환 계약은 구현에서 추가로 확인해야 합니다."
+      "title": "연결 건너편 찾기",
+      "text": "remote_endpoint·remote_port_parent·remote_port는 각각 별도 함수입니다. port_parent는 비const 노드, remote_node는 const 노드와 u32 포트·끝점 식별자를 받습니다. 모두 노드 주소를 주어도 끝점·포트·부모·원격 장치는 다른 대상입니다. 연결 탐색과 참조 반환 약속은 구현에서 더 확인합니다."
     },
     {
-      "title": "비활성 구성의 결과",
-      "text": "CONFIG_OF가 없으면 is_present는 false, parse_endpoint는 -ENOSYS, get_endpoint_count는 0이며 나머지 여덟 포인터 함수는 NULL입니다. parse_endpoint는 출력 구조체를 초기화하지 않고 get_next_endpoint stub도 previous에 대해 put을 호출하지 않습니다. 매크로를 정상 시작하면 첫 호출부터 NULL이어서 본문은 실행되지 않습니다. 활성 함수의 부수 효과를 비활성 stub에도 존재한다고 추정하면 안 됩니다."
+      "title": "OF를 끈 결과",
+      "text": "존재는 false, 해석은 -ENOSYS, 개수는 0이며 나머지 여덟 주소 함수는 NULL입니다. 파싱 출력은 초기화하지 않고 다음 항목 함수도 previous 참조를 put하지 않습니다. 정상 반복 시작은 첫 NULL 때문에 본문 0번입니다. 활성 함수의 부수 동작이 빈 대체에도 있다고 추측하지 않습니다."
     },
     {
-      "title": "전체 검토 범위",
-      "text": "파일의 포함·guard·주석, of_endpoint의 모든 필드, 순회 매크로와 조기 종료 계약, 11개 활성 선언과 11개 stub을 모두 대조했습니다. 그래프의 전체 순회 알고리즘이나 하드웨어 연결 검증은 이 헤더에 없으며 실행하지도 않았습니다. 파일의 인터페이스 범위와 외부 구현에서 확인할 사항을 구분해 학습합니다."
+      "title": "확인한 인터페이스",
+      "text": "세 필드, 반복과 조기 종료 계약, 활성 선언 11개와 대체 함수 11개를 읽었습니다. 전체 그래프 순회 알고리즘이나 실제 하드웨어 연결 검증이 이 헤더에 있지는 않으며 실행하지도 않았습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "of_endpoint의 port와 id는 각각 무엇을 나타내는가?",
+      "prompt": "port와 id는 각각 무엇인가요?",
       "options": [
+        "포트 reg 식별자와 끝점 reg 식별자입니다.",
+        "같은 노드 주소를 두 번 저장한 값입니다."
+      ],
+      "answer": 0,
+      "explanation": "주소는 local_node라는 별도 칸입니다. 두 번호의 계층을 구별합니다.",
+      "original_prompt": "of_endpoint의 port와 id는 각각 무엇을 나타내는가?",
+      "original_options": [
         "소속 포트의 reg 식별자와 엔드포인트의 reg 식별자",
         "동일한 노드 포인터를 두 번 저장한 값"
       ],
-      "answer": 0,
-      "explanation": "구조체 주석이 두 계층의 reg 값을 구분합니다. local_node가 별도의 포인터 필드이며 식별자를 메모리 주소로 해석하면 안 됩니다."
+      "original_explanation": "구조체 주석이 두 계층의 reg 값을 구분합니다. local_node가 별도의 포인터 필드이며 식별자를 메모리 주소로 해석하면 안 됩니다."
     },
     {
-      "prompt": "for_each_endpoint_of_node에서 원하는 항목을 찾고 break할 때 주석이 요구하는 것은?",
+      "prompt": "찾은 뒤 break할 때 필요한 일은?",
       "options": [
+        "매크로가 모든 조기 종료를 자동 정리하니 없습니다.",
+        "현재 child를 of_node_put으로 직접 놓습니다."
+      ],
+      "answer": 1,
+      "explanation": "break는 다음 이동을 건너뜁니다. 주석에 직접 정리 계약이 있습니다.",
+      "original_prompt": "for_each_endpoint_of_node에서 원하는 항목을 찾고 break할 때 주석이 요구하는 것은?",
+      "original_options": [
         "매크로가 모든 조기 종료에서 자동으로 put하므로 아무것도 하지 않는다",
         "현재 child에 of_node_put을 수동으로 호출한다"
       ],
-      "answer": 1,
-      "explanation": "break는 for의 다음 증감식을 건너뜁니다. 원문 주석은 루프를 벗어날 때 현재 child의 참조를 명시적으로 해제하라고 안내하며 매크로 자체에 자동 정리는 없습니다."
+      "original_explanation": "break는 for의 다음 증감식을 건너뜁니다. 원문 주석은 루프를 벗어날 때 현재 child의 참조를 명시적으로 해제하라고 안내하며 매크로 자체에 자동 정리는 없습니다."
     },
     {
-      "prompt": "OF 비활성의 parse_endpoint 실패 후 출력 구조체는 0으로 초기화되는가?",
+      "prompt": "OF 비활성 파싱 실패는 출력을 0으로 만드나요?",
       "options": [
+        "아니요. -ENOSYS 반환뿐입니다.",
+        "네. 세 칸을 모두 초기화합니다."
+      ],
+      "answer": 0,
+      "explanation": "출력에 쓰지 않으므로 실패한 결과를 유효한 정보로 쓰면 안 됩니다.",
+      "original_prompt": "OF 비활성의 parse_endpoint 실패 후 출력 구조체는 0으로 초기화되는가?",
+      "original_options": [
         "아니다. 본문은 -ENOSYS 반환뿐이다",
         "그렇다. port와 id와 local_node를 모두 초기화한다"
       ],
-      "answer": 0,
-      "explanation": "출력 인수에 쓰는 문장이 없습니다. 호출자는 실패한 파싱 결과를 유효한 엔드포인트 정보로 사용해서는 안 됩니다."
+      "original_explanation": "출력 인수에 쓰는 문장이 없습니다. 호출자는 실패한 파싱 결과를 유효한 엔드포인트 정보로 사용해서는 안 됩니다."
     },
     {
-      "prompt": "OF 비활성에서 순회 매크로의 본문은 몇 번 실행되는가?",
+      "prompt": "OF 비활성 반복의 본문 실행 수는?",
       "options": [
+        "빈 항목을 위해 꼭 1번입니다.",
+        "0번입니다."
+      ],
+      "answer": 1,
+      "explanation": "첫 조회가 NULL이라 첫 조건부터 거짓입니다. NULL은 항목이 아니라 종료입니다.",
+      "original_prompt": "OF 비활성에서 순회 매크로의 본문은 몇 번 실행되는가?",
+      "original_options": [
         "빈 엔드포인트를 나타내기 위해 반드시 1번",
         "0번"
       ],
-      "answer": 1,
-      "explanation": "초기 get_next_endpoint가 NULL을 반환하고 첫 조건 child!=NULL이 거짓입니다. NULL은 여기서 본문을 실행하는 항목이 아니라 반복 종료를 뜻합니다."
+      "original_explanation": "초기 get_next_endpoint가 NULL을 반환하고 첫 조건 child!=NULL이 거짓입니다. NULL은 여기서 본문을 실행하는 항목이 아니라 반복 종료를 뜻합니다."
     },
     {
-      "prompt": "이 헤더만 읽고 get_endpoint_by_regs의 음수 인수 의미를 확정할 수 있는가?",
+      "prompt": "선언만으로 by_regs의 음수 의미를 알 수 있나요?",
       "options": [
+        "없습니다. int를 받는 선언만 있습니다.",
+        "있습니다. signed는 늘 전체 선택입니다."
+      ],
+      "answer": 0,
+      "explanation": "표현 가능한 값과 함수가 부여한 의미는 다릅니다. 구현·문서 계약을 확인합니다.",
+      "original_prompt": "이 헤더만 읽고 get_endpoint_by_regs의 음수 인수 의미를 확정할 수 있는가?",
+      "original_options": [
         "없다. int 인수를 받는 선언만 제공된다",
         "있다. signed 타입이면 언제나 모든 항목 선택을 뜻한다"
       ],
-      "answer": 0,
-      "explanation": "타입이 표현 가능한 값의 범위와 함수가 그 값에 부여하는 의미는 다릅니다. 특별 값의 계약은 구현이나 해당 문서에서 확인해야 합니다."
+      "original_explanation": "타입이 표현 가능한 값의 범위와 함수가 그 값에 부여하는 의미는 다릅니다. 특별 값의 계약은 구현이나 해당 문서에서 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "연결점 순회에서 break하기 직전에 현재 child 참조를 어떻게 정리할지 써 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * OF graph binding parsing helpers\n *\n * Copyright (C) 2012 - 2013 Samsung Electronics Co., Ltd.\n * Author: Sylwester Nawrocki <s.nawrocki@samsung.com>\n *\n * Copyright (C) 2012 Renesas Electronics Corp.\n * Author: Guennadi Liakhovetski <g.liakhovetski@gmx.de>\n */\n#ifndef __LINUX_OF_GRAPH_H\n#define __LINUX_OF_GRAPH_H\n\n#include <linux/types.h>\n#include <linux/errno.h>\n\n/**\n * struct of_endpoint - the OF graph endpoint data structure\n * @port: identifier (value of reg property) of a port this endpoint belongs to\n * @id: identifier (value of reg property) of this endpoint\n * @local_node: pointer to device_node of this endpoint\n */\nstruct of_endpoint {\n\tunsigned int port;\n\tunsigned int id;\n\tconst struct device_node *local_node;\n};\n\n/**\n * for_each_endpoint_of_node - iterate over every endpoint in a device node\n * @parent: parent device node containing ports and endpoints\n * @child: loop variable pointing to the current endpoint node\n *\n * When breaking out of the loop, of_node_put(child) has to be called manually.\n */\n#define for_each_endpoint_of_node(parent, child) \\\n\tfor (child = of_graph_get_next_endpoint(parent, NULL); child != NULL; \\\n\t     child = of_graph_get_next_endpoint(parent, child))\n\n#ifdef CONFIG_OF\nbool of_graph_is_present(const struct device_node *node);\nint of_graph_parse_endpoint(const struct device_node *node,\n\t\t\t\tstruct of_endpoint *endpoint);\nunsigned int of_graph_get_endpoint_count(const struct device_node *np);\nstruct device_node *of_graph_get_port_by_id(struct device_node *node, u32 id);\nstruct device_node *of_graph_get_next_endpoint(const struct device_node *parent,\n\t\t\t\t\tstruct device_node *previous);\nstruct device_node *of_graph_get_endpoint_by_regs(\n\t\tconst struct device_node *parent, int port_reg, int reg);\nstruct device_node *of_graph_get_remote_endpoint(\n\t\t\t\t\tconst struct device_node *node);\nstruct device_node *of_graph_get_port_parent(struct device_node *node);\nstruct device_node *of_graph_get_remote_port_parent(\n\t\t\t\t\tconst struct device_node *node);\nstruct device_node *of_graph_get_remote_port(const struct device_node *node);\nstruct device_node *of_graph_get_remote_node(const struct device_node *node,\n\t\t\t\t\t     u32 port, u32 endpoint);\n#else\n\nstatic inline bool of_graph_is_present(const struct device_node *node)\n{\n\treturn false;\n}\n\nstatic inline int of_graph_parse_endpoint(const struct device_node *node,\n\t\t\t\t\tstruct of_endpoint *endpoint)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline unsigned int of_graph_get_endpoint_count(const struct device_node *np)\n{\n\treturn 0;\n}\n\nstatic inline struct device_node *of_graph_get_port_by_id(\n\t\t\t\t\tstruct device_node *node, u32 id)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_next_endpoint(\n\t\t\t\t\tconst struct device_node *parent,\n\t\t\t\t\tstruct device_node *previous)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_endpoint_by_regs(\n\t\tconst struct device_node *parent, int port_reg, int reg)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_endpoint(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_port_parent(\n\tstruct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_port_parent(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_port(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\nstatic inline struct device_node *of_graph_get_remote_node(\n\t\t\t\t\tconst struct device_node *node,\n\t\t\t\t\tu32 port, u32 endpoint)\n{\n\treturn NULL;\n}\n\n#endif /* CONFIG_OF */\n\n#endif /* __LINUX_OF_GRAPH_H */\n",
   "source_review": {
@@ -125,5 +151,162 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_graph.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a832ae51ba0e7b49",
+    "path": "include/linux/of_graph.h",
+    "title": "OF 그래프 헤더: 포트·엔드포인트와 순회 참조 수명",
+    "area": "장치 트리 · 그래프 · 반복자 · 참조 수명 · 조건부 컴파일",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "엔드포인트 구조체, 순회 매크로, 11개 활성 API와 모든 비활성 stub을 분석합니다.",
+    "guide": [
+      "그래프의 식별자, 노드 포인터, 순회 중 보유한 참조는 서로 다른 개념입니다.",
+      "계층적 식별자, 그래프 연결 조회, 반복자와 조기 종료 시 자원 해제를 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더와 데이터 모델",
+        "text": "GPL-2.0과 OF graph binding parsing helpers 설명, 저작권·저자 표기 뒤 __LINUX_OF_GRAPH_H guard가 있습니다. types.h와 errno.h를 포함합니다. of_endpoint의 unsigned int port는 소속 포트 reg 속성의 식별자, unsigned int id는 엔드포인트 reg 식별자, const device_node *local_node는 해당 엔드포인트 노드 포인터입니다. id와 port는 배열 위치나 포인터가 아니라 서로 다른 계층의 식별자입니다."
+      },
+      {
+        "title": "반복자의 시작과 진행",
+        "text": "for_each_endpoint_of_node(parent,child)는 get_next_endpoint(parent,NULL)로 시작하고 child!=NULL 동안 반복합니다. 증감식은 get_next_endpoint(parent,child)로 이전 노드를 넘깁니다. child는 매번 반환값으로 덮어쓰므로 반복 상태가 이 포인터와 하위 함수에 의해 유지됩니다. 이 헤더는 순회 매크로만 정의하며 실제 포트 탐색 순서나 내부 참조 갱신 구현은 제공하지 않습니다."
+      },
+      {
+        "title": "조기 종료와 참조 수명",
+        "text": "매크로 주석은 루프를 중간에 빠져나오면 of_node_put(child)를 수동으로 호출해야 한다고 명시합니다. break나 return은 다음 증감식을 실행하지 않으므로 정상적인 다음 항목 이동 경로에만 의존해서 현재 참조가 정리될 것이라 가정하면 안 됩니다. 이 계약은 커널 객체 참조의 수명과 C 제어 흐름을 연결하는 예입니다. 매크로 본문에 자동 정리 블록이나 cleanup 속성이 있는 것은 아닙니다."
+      },
+      {
+        "title": "존재·파싱·개수 API",
+        "text": "CONFIG_OF 활성에서는 is_present가 const node에서 bool, parse_endpoint가 const node와 of_endpoint 출력 포인터에서 int, get_endpoint_count가 const node에서 unsigned int를 반환합니다. 파싱 결과 구조체와 개수는 다른 결과입니다. 선언만으로 누락 reg의 기본값이나 파싱 오류의 상세 종류를 확정할 수 없으며 local_node 포인터의 const도 참조 획득·해제를 자동으로 수행하지 않습니다."
+      },
+      {
+        "title": "로컬 조회 API",
+        "text": "get_port_by_id는 node와 u32 id로 포트 노드 포인터를 반환하고 get_next_endpoint는 const parent와 previous 포인터를 받습니다. get_endpoint_by_regs는 const parent와 int port_reg, int reg를 받습니다. 두 reg 인수가 signed int라는 사실만으로 음수 값의 특별한 의미를 추정해서는 안 됩니다. 이 헤더에는 검색 조건을 해석하는 구현이 없습니다."
+      },
+      {
+        "title": "원격 연결과 부모 조회",
+        "text": "get_remote_endpoint, get_remote_port_parent, get_remote_port는 각각 const node를 받는 별도 함수입니다. get_port_parent는 비const node 포인터를 받으며 get_remote_node는 const node에 u32 port와 endpoint 식별자를 추가로 받습니다. 모두 device_node 포인터를 반환하지만 엔드포인트, 포트, 부모, 원격 장치 조회를 같은 호출로 치환할 수는 없습니다. 연결을 따라가는 실제 알고리즘과 각 함수의 참조 반환 계약은 구현에서 추가로 확인해야 합니다."
+      },
+      {
+        "title": "비활성 구성의 결과",
+        "text": "CONFIG_OF가 없으면 is_present는 false, parse_endpoint는 -ENOSYS, get_endpoint_count는 0이며 나머지 여덟 포인터 함수는 NULL입니다. parse_endpoint는 출력 구조체를 초기화하지 않고 get_next_endpoint stub도 previous에 대해 put을 호출하지 않습니다. 매크로를 정상 시작하면 첫 호출부터 NULL이어서 본문은 실행되지 않습니다. 활성 함수의 부수 효과를 비활성 stub에도 존재한다고 추정하면 안 됩니다."
+      },
+      {
+        "title": "전체 검토 범위",
+        "text": "파일의 포함·guard·주석, of_endpoint의 모든 필드, 순회 매크로와 조기 종료 계약, 11개 활성 선언과 11개 stub을 모두 대조했습니다. 그래프의 전체 순회 알고리즘이나 하드웨어 연결 검증은 이 헤더에 없으며 실행하지도 않았습니다. 파일의 인터페이스 범위와 외부 구현에서 확인할 사항을 구분해 학습합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "of_endpoint의 port와 id는 각각 무엇을 나타내는가?",
+        "options": [
+          "소속 포트의 reg 식별자와 엔드포인트의 reg 식별자",
+          "동일한 노드 포인터를 두 번 저장한 값"
+        ],
+        "answer": 0,
+        "explanation": "구조체 주석이 두 계층의 reg 값을 구분합니다. local_node가 별도의 포인터 필드이며 식별자를 메모리 주소로 해석하면 안 됩니다."
+      },
+      {
+        "prompt": "for_each_endpoint_of_node에서 원하는 항목을 찾고 break할 때 주석이 요구하는 것은?",
+        "options": [
+          "매크로가 모든 조기 종료에서 자동으로 put하므로 아무것도 하지 않는다",
+          "현재 child에 of_node_put을 수동으로 호출한다"
+        ],
+        "answer": 1,
+        "explanation": "break는 for의 다음 증감식을 건너뜁니다. 원문 주석은 루프를 벗어날 때 현재 child의 참조를 명시적으로 해제하라고 안내하며 매크로 자체에 자동 정리는 없습니다."
+      },
+      {
+        "prompt": "OF 비활성의 parse_endpoint 실패 후 출력 구조체는 0으로 초기화되는가?",
+        "options": [
+          "아니다. 본문은 -ENOSYS 반환뿐이다",
+          "그렇다. port와 id와 local_node를 모두 초기화한다"
+        ],
+        "answer": 0,
+        "explanation": "출력 인수에 쓰는 문장이 없습니다. 호출자는 실패한 파싱 결과를 유효한 엔드포인트 정보로 사용해서는 안 됩니다."
+      },
+      {
+        "prompt": "OF 비활성에서 순회 매크로의 본문은 몇 번 실행되는가?",
+        "options": [
+          "빈 엔드포인트를 나타내기 위해 반드시 1번",
+          "0번"
+        ],
+        "answer": 1,
+        "explanation": "초기 get_next_endpoint가 NULL을 반환하고 첫 조건 child!=NULL이 거짓입니다. NULL은 여기서 본문을 실행하는 항목이 아니라 반복 종료를 뜻합니다."
+      },
+      {
+        "prompt": "이 헤더만 읽고 get_endpoint_by_regs의 음수 인수 의미를 확정할 수 있는가?",
+        "options": [
+          "없다. int 인수를 받는 선언만 제공된다",
+          "있다. signed 타입이면 언제나 모든 항목 선택을 뜻한다"
+        ],
+        "answer": 0,
+        "explanation": "타입이 표현 가능한 값의 범위와 함수가 그 값에 부여하는 의미는 다릅니다. 특별 값의 계약은 구현이나 해당 문서에서 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n/*\n * OF graph binding parsing helpers\n *\n * Copyright (C) 2012 - 2013 Samsung Electronics Co., Ltd.\n * Author: Sylwester Nawrocki <s.nawrocki@samsung.com>\n *\n * Copyright (C) 2012 Renesas Electronics Corp.\n * Author: Guennadi Liakhovetski <g.liakhovetski@gmx.de>\n */\n#ifndef __LINUX_OF_GRAPH_H\n#define __LINUX_OF_GRAPH_H\n\n#include <linux/types.h>\n#include <linux/errno.h>\n\n/**\n * struct of_endpoint - the OF graph endpoint data structure\n * @port: identifier (value of reg property) of a port this endpoint belongs to\n * @id: identifier (value of reg property) of this endpoint\n * @local_node: pointer to device_node of this endpoint\n */\nstruct of_endpoint {\n\tunsigned int port;\n\tunsigned int id;\n\tconst struct device_node *local_node;\n};\n\n/**\n * for_each_endpoint_of_node - iterate over every endpoint in a device node\n * @parent: parent device node containing ports and endpoints\n * @child: loop variable pointing to the current endpoint node\n *\n * When breaking out of the loop, of_node_put(child) has to be called manually.\n */\n#define for_each_endpoint_of_node(parent, child) \\\n\tfor (child = of_graph_get_next_endpoint(parent, NULL); child != NULL; \\\n\t     child = of_graph_get_next_endpoint(parent, child))\n\n#ifdef CONFIG_OF\nbool of_graph_is_present(const struct device_node *node);\nint of_graph_parse_endpoint(const struct device_node *node,\n\t\t\t\tstruct of_endpoint *endpoint);\nunsigned int of_graph_get_endpoint_count(const struct device_node *np);\nstruct device_node *of_graph_get_port_by_id(struct device_node *node, u32 id);\nstruct device_node *of_graph_get_next_endpoint(const struct device_node *parent,\n\t\t\t\t\tstruct device_node *previous);\nstruct device_node *of_graph_get_endpoint_by_regs(\n\t\tconst struct device_node *parent, int port_reg, int reg);\nstruct device_node *of_graph_get_remote_endpoint(\n\t\t\t\t\tconst struct device_node *node);\nstruct device_node *of_graph_get_port_parent(struct device_node *node);\nstruct device_node *of_graph_get_remote_port_parent(\n\t\t\t\t\tconst struct device_node *node);\nstruct device_node *of_graph_get_remote_port(const struct device_node *node);\nstruct device_node *of_graph_get_remote_node(const struct device_node *node,\n\t\t\t\t\t     u32 port, u32 endpoint);\n#else\n\nstatic inline bool of_graph_is_present(const struct device_node *node)\n{\n\treturn false;\n}\n\nstatic inline int of_graph_parse_endpoint(const struct device_node *node,\n\t\t\t\t\tstruct of_endpoint *endpoint)\n{\n\treturn -ENOSYS;\n}\n\nstatic inline unsigned int of_graph_get_endpoint_count(const struct device_node *np)\n{\n\treturn 0;\n}\n\nstatic inline struct device_node *of_graph_get_port_by_id(\n\t\t\t\t\tstruct device_node *node, u32 id)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_next_endpoint(\n\t\t\t\t\tconst struct device_node *parent,\n\t\t\t\t\tstruct device_node *previous)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_endpoint_by_regs(\n\t\tconst struct device_node *parent, int port_reg, int reg)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_endpoint(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_port_parent(\n\tstruct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_port_parent(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\n\nstatic inline struct device_node *of_graph_get_remote_port(\n\t\t\t\t\tconst struct device_node *node)\n{\n\treturn NULL;\n}\nstatic inline struct device_node *of_graph_get_remote_node(\n\t\t\t\t\tconst struct device_node *node,\n\t\t\t\t\tu32 port, u32 endpoint)\n{\n\treturn NULL;\n}\n\n#endif /* CONFIG_OF */\n\n#endif /* __LINUX_OF_GRAPH_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "2d2bd61bdd13e1133ad1ec70074f46e05c128cebae1b08a85a6ab4192ce4360c",
+      "scope": "whole-file",
+      "line_count": 127,
+      "authoring_source": "course/file_units/of_graph_interface.py",
+      "sections": [
+        "헤더와 데이터 모델",
+        "반복자의 시작과 진행",
+        "조기 종료와 참조 수명",
+        "존재·파싱·개수 API",
+        "로컬 조회 API",
+        "원격 연결과 부모 조회",
+        "비활성 구성의 결과",
+        "전체 검토 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/of_graph.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치 연결도를 읽을 때 포트 번호, 포트 안의 연결점 번호, 연결점이 저장된 주소를 따로 알아야 합니다. 하나를 찾고 순회를 멈출 때에는 들고 있던 노드 참조도 돌려줍니다.",
+    "meaning": "OF 연결점의 계층 식별자와 반복자 참조 수명, 설정별 조회 결과를 이해합니다.",
+    "exercise": "연결점 순회에서 break하기 직전에 현재 child 참조를 어떻게 정리할지 써 보세요."
+  },
+  "goal": "OF 연결점의 계층 식별자와 반복자 참조 수명, 설정별 조회 결과를 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "연결점 순회에서 break하기 직전에 현재 child 참조를 어떻게 정리할지 써 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "d9d1d3dcc007686b0c44c13dfcc03269a0d8089b2c4dc1ffde09ad7ae5280477",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,96 +5,116 @@
   "area": "가변 길이 레코드 · 파싱 · 문자열 알고리즘",
   "track": "files",
   "kind": "kernel",
-  "intro": "장치 패턴 목록 등에 쓰는 작은 셸 스타일 문자열 매칭 구현입니다.",
+  "intro": "glob은 바이트 패턴 전체를 맞추며 최근 별표의 재시도 위치만 저장해요.",
   "guide": [
-    "패턴과 문자열을 함께 이동하며 가장 최근 *의 위치를 저장합니다. 불일치하면 그 별표가 소비하는 문자열을 한 글자 늘리고 재시도합니다.",
-    "문자열 전체를 매칭하며 경로 전용 규칙이나 정규표현식을 기대하면 안 됩니다. 입력은 읽을 수 있는 NUL 종료 문자열이어야 합니다."
+    "?는 끝 표시를 제외한 바이트 하나, *는 0개 이상의 바이트를 맞춰요. 문자열 전체가 패턴과 맞아야 해요.",
+    "이 구현은 슬래시와 맨 앞 점을 특별 취급하지 않아요. 문자 묶음의 부정은 !이며 ^를 정규표현식처럼 쓰면 뜻이 달라져요.",
+    "최근 별표 뒤를 다시 검사해 실패를 처리하므로 재귀 스택은 필요 없어요. 하지만 패턴을 여러 번 볼 수 있어 시간까지 항상 일정한 것은 아니에요."
   ],
   "deep_dive": [
     {
       "title": "파일 전체와 모듈 정보",
-      "text": "module/glob 헤더, 모듈 설명과 Dual MIT/GPL 라이선스, glob_match 함수, EXPORT_SYMBOL로 구성됩니다. 주석은 의존하는 ATA 코드가 모듈일 수 있어 이 코드도 모듈로 만들 수 있음을 설명합니다. 패턴 사전 처리나 별도 힙 할당은 없습니다."
+      "text": "module과 glob 헤더, 설명과 Dual MIT/GPL 라이선스, glob_match와 외부 공개 표시로 구성돼요. 의존하는 ATA 코드가 모듈일 수 있어 이 코드도 모듈 가능하다는 설명이 있어요. 패턴 사전 처리나 별도 heap 할당은 없어요."
     },
     {
       "title": "기본 순회와 전체 일치",
-      "text": "매 반복에서 문자열 문자 c와 패턴 문자 d를 unsigned char로 읽고 각 포인터를 증가시킵니다. 리터럴 문자가 같으면 계속하고 두 문자가 모두 NUL이면 성공합니다. 패턴의 일부가 맞았다는 이유만으로 성공하지 않습니다. 단, 패턴 끝의 *는 남은 모든 문자열을 소비할 수 있어 바로 성공합니다."
+      "text": "매번 문자열 c와 패턴 d를 unsigned char로 읽고 포인터를 한 칸 옮겨요. 일반 글자가 같으면 계속하고 둘 다 NUL일 때 성공해요. 앞부분만 맞았다고 성공하지 않지만 패턴 끝의 *는 나머지 전체를 맡을 수 있어 바로 성공해요."
     },
     {
       "title": "물음표와 별표",
-      "text": "?는 NUL을 제외한 문자 하나를 소비합니다. *는 back_pat에 그 뒤의 패턴 위치를, back_str에 현재 문자열 위치를 저장합니다. 이미 증가한 str을 한 칸 되돌려 처음에는 길이 0 매치를 시도합니다. 불일치 시 pat을 back_pat로 돌리고 str을 ++back_str로 정해 별표의 소비량을 늘립니다."
+      "text": "?는 NUL이 아닌 한 바이트를 읽어요. *는 그 뒤 패턴 위치를 back_pat에, 현재 문자열 위치를 back_str에 기억해요. 처음에는 별표가 0글자를 맡도록 str를 한 칸 되돌려요. 실패하면 pat=back_pat, str=++back_str로 별표가 맡을 양을 한 칸 늘려 다시 시도해요."
     },
     {
       "title": "되돌아갈 지점 하나로 충분한 이유",
-      "text": "*가 /를 포함한 모든 문자를 허용하므로 이전 별표까지 여러 단계로 되돌아갈 필요 없이 최근 별표 이후의 정렬을 조정할 수 있습니다. 재귀 호출이나 스택을 쓰지 않고 두 위치만 보관합니다. 문자열 끝에서 불일치하거나 저장된 별표가 없으면 실패합니다."
+      "text": "*가 /까지 모든 문자를 허용하므로 더 옛 별표까지 여러 단계 되돌릴 필요 없이 최근 별표의 양을 조절할 수 있어요. 재귀나 스택 대신 위치 두 개만 기억해요. 문자열 끝에서 틀렸거나 기억한 별표가 없으면 실패해요."
     },
     {
       "title": "문자 클래스",
-      "text": "[...] 안에서는 단일 문자와 a-b 범위를 순회하며 해당 여부를 OR합니다. 첫 !는 결과를 반전합니다. 첫 범위의 시작 문자가 ]일 수 있어 []a]는 ]와 a를 포함합니다. - 바로 뒤가 ]이면 범위로 처리하지 않습니다. 역방향 z-a는 a<=c<=b를 만족하지 않아 그 범위로는 일치하지 않습니다."
+      "text": "[...]는 한 글자 또는 a-b 범위에 드는지 OR로 합쳐 검사해요. 맨 앞 !는 결과를 뒤집어요. 첫 항목은 ]로 시작할 수 있어 []a]는 ]와 a를 허용해요. - 바로 뒤가 ]이면 범위가 아니에요. z-a 같은 역방향 범위는 a<=c<=b 조건을 만족할 수 없어요."
     },
     {
       "title": "닫히지 않은 클래스와 이스케이프",
-      "text": "클래스 해석 도중 NUL을 만나면 literal로 가서 원래 [를 문자로 비교합니다. 따라서 닫는 ]가 없는 [abc는 같은 리터럴 문자열과 매칭할 수 있습니다. 역슬래시는 다음 패턴 문자를 d로 읽어 리터럴 경로로 보냅니다. 정상 예로 역슬래시 뒤 *는 별표 문자 자체를 뜻합니다. 이 구현은 클래스 안의 백슬래시에 별도의 이스케이프 분기를 제공하지 않습니다."
+      "text": "닫는 ] 전에 NUL을 만나면 원래 [를 일반 글자로 읽는 경로로 가요. 그래서 [abc 패턴은 같은 글자열 [abc와 맞을 수 있어요. 역슬래시는 다음 패턴 문자를 일반 글자로 읽어 별표 자체 등을 표현해요. 문자 묶음 안에는 별도의 역슬래시 escape 분기가 없어요."
     },
     {
       "title": "셸 및 정규표현식과 차이",
-      "text": "/와 선행 .를 특별 취급하지 않으므로 *는 .hidden이나 a/b에도 매칭합니다. 클래스 부정은 !이며 ^는 정규표현식처럼 부정 연산자가 아닙니다. [^a]는 ^ 또는 a를 허용하는 클래스입니다. 바이트 기반 비교이므로 UTF-8의 여러 바이트 문자를 ? 하나로 처리하는 유니코드 매처가 아닙니다."
+      "text": "/와 앞의 .가 특별하지 않아 *는 a/b와 .hidden 모두에 맞아요. 묶음 부정은 !뿐이므로 [^a]는 ^ 또는 a예요. 비교 단위는 바이트라 UTF-8 여러 바이트 글자를 ? 하나로 처리하는 유니코드 검색기가 아니에요."
     },
     {
       "title": "시간과 공간 복잡도",
-      "text": "패턴 전처리가 없고 최근 별표 다음 패턴을 여러 시작점에서 다시 검사할 수 있습니다. 주석의 *aaaaa와 aaaaaaaaaa 예는 성공까지 패턴을 여섯 번 통과합니다. 최악 시간은 문자열 길이와 패턴 길이의 곱에 비례하고 보조 공간은 상수입니다. 모든 와일드카드 매칭이 선형 시간이라고 일반화하지 않습니다."
+      "text": "최근 별표 뒤 패턴을 여러 시작 위치에서 다시 읽을 수 있어요. *aaaaa와 aaaaaaaaaa 예는 성공까지 패턴을 여섯 번 통과해요. 최악 시간은 문자열 길이×패턴 길이에 비례하고 추가 공간은 일정해요. 메모리를 적게 쓴다고 시간도 상수이거나 선형인 것은 아니에요."
     },
     {
       "title": "CS 연결",
-      "text": "유한 상태와 포인터, 제한된 backtracking, 전체 일치와 부분 일치, 토큰 해석, 바이트 문자 집합을 학습합니다. __pure는 입력이 같아도 다른 곳에서 입력 메모리를 바꾸면 결과가 달라질 수 없는 절대 상수 함수라는 뜻이 아닙니다. 함수는 전달된 문자열 메모리를 읽습니다."
+      "text": "포인터로 상태를 추적하기, 제한된 되돌아가기, 전체와 부분 일치, 패턴 해석, 바이트 집합을 배워요. __pure는 입력 포인터가 같으면 메모리가 바뀌어도 결과가 영원히 같다는 뜻이 아니에요. 실제로는 그 주소의 문자열 내용을 읽어요."
     }
   ],
   "questions": [
     {
-      "prompt": "패턴 *는 a/b와 .hidden에 매칭하는가?",
+      "prompt": "* 패턴은 a/b와 .hidden에 맞나요?",
       "options": [
+        "둘 다 맞아요.",
+        "슬래시와 앞 점 때문에 둘 다 실패해요."
+      ],
+      "answer": 0,
+      "explanation": "이 구현은 경로 구분자와 선행 점을 특별하게 다루지 않아요.",
+      "original_prompt": "패턴 *는 a/b와 .hidden에 매칭하는가?",
+      "original_options": [
         "둘 다 매칭한다",
         "슬래시와 선행 점 때문에 둘 다 실패한다"
       ],
-      "answer": 0,
-      "explanation": "이 구현은 경로 구분자나 선행 점을 특별 취급하지 않습니다. 별표는 남은 모든 문자를 허용합니다."
+      "original_explanation": "이 구현은 경로 구분자나 선행 점을 특별 취급하지 않습니다. 별표는 남은 모든 문자를 허용합니다."
     },
     {
-      "prompt": "[^a]는 a를 제외한 모든 문자를 뜻하는가?",
+      "prompt": "[^a]는 a를 제외한 모든 글자라는 뜻인가요?",
       "options": [
+        "네. 정규표현식의 부정과 같아요.",
+        "아니요. ^ 또는 a를 허용하는 묶음이에요."
+      ],
+      "answer": 1,
+      "explanation": "부정 여부는 맨 앞 !로만 결정해요.",
+      "original_prompt": "[^a]는 a를 제외한 모든 문자를 뜻하는가?",
+      "original_options": [
         "그렇다. 정규표현식의 부정 클래스와 같다",
         "아니다. ^와 a를 포함하는 클래스다"
       ],
-      "answer": 1,
-      "explanation": "반전 여부는 첫 문자가 !인지로만 정합니다. ^는 일반 문자로 처리됩니다."
+      "original_explanation": "반전 여부는 첫 문자가 !인지로만 정합니다. ^는 일반 문자로 처리됩니다."
     },
     {
-      "prompt": "별표 이후 불일치가 발생하면 무엇을 바꾸는가?",
+      "prompt": "별표 이후에 틀리면 무엇을 바꿔 다시 시도하나요?",
       "options": [
+        "최근 별표가 맡는 문자열 길이를 한 글자 늘려요.",
+        "재귀로 과거의 모든 별표를 탐색해요."
+      ],
+      "answer": 0,
+      "explanation": "저장한 패턴 위치로 돌아가 back_str를 한 칸 늘려요.",
+      "original_prompt": "별표 이후 불일치가 발생하면 무엇을 바꾸는가?",
+      "original_options": [
         "최근 별표의 문자열 소비량을 한 글자 늘린다",
         "항상 재귀로 모든 과거 별표를 탐색한다"
       ],
-      "answer": 0,
-      "explanation": "pat=back_pat, str=++back_str로 재시도합니다. 별도 재귀나 여러 단계의 저장 스택은 없습니다."
+      "original_explanation": "pat=back_pat, str=++back_str로 재시도합니다. 별도 재귀나 여러 단계의 저장 스택은 없습니다."
     },
     {
-      "prompt": "최악 시간 복잡도는?",
+      "prompt": "최악의 실행 시간은 어떻게 늘어나나요?",
       "options": [
+        "입력 크기와 관계없이 일정해요.",
+        "문자열 길이와 패턴 길이의 곱에 비례해요."
+      ],
+      "answer": 1,
+      "explanation": "패턴 뒤쪽을 여러 시작점에서 다시 비교할 수 있어요.",
+      "original_prompt": "최악 시간 복잡도는?",
+      "original_options": [
         "입력과 무관하게 상수 시간이다",
         "문자열 길이와 패턴 길이의 곱에 비례한다"
       ],
-      "answer": 1,
-      "explanation": "별표 다음 패턴을 여러 문자열 시작점에서 다시 검사할 수 있습니다. 보조 공간이 상수라고 시간도 상수인 것은 아닙니다."
+      "original_explanation": "별표 다음 패턴을 여러 문자열 시작점에서 다시 검사할 수 있습니다. 보조 공간이 상수라고 시간도 상수인 것은 아닙니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "*aaaaa와 aaaaaaaaaa에서 별표가 0글자부터 몇 글자까지 맡는지 따라가 보세요."
   },
   "annotated": "#include <linux/module.h>\n#include <linux/glob.h>\n\n/*\n * The only reason this code can be compiled as a module is because the\n * ATA code that depends on it can be as well.  In practice, they're\n * both usually compiled in and the module overhead goes away.\n */\nMODULE_DESCRIPTION(\"glob(7) matching\");\nMODULE_LICENSE(\"Dual MIT/GPL\");\n\n/**\n * glob_match - Shell-style pattern matching, like !fnmatch(pat, str, 0)\n * @pat: Shell-style pattern to match, e.g. \"*.[ch]\".\n * @str: String to match.  The pattern must match the entire string.\n *\n * Perform shell-style glob matching, returning true (1) if the match\n * succeeds, or false (0) if it fails.  Equivalent to !fnmatch(@pat, @str, 0).\n *\n * Pattern metacharacters are ?, *, [ and \\.\n * (And, inside character classes, !, - and ].)\n *\n * This is small and simple implementation intended for device blacklists\n * where a string is matched against a number of patterns.  Thus, it\n * does not preprocess the patterns.  It is non-recursive, and run-time\n * is at most quadratic: strlen(@str)*strlen(@pat).\n *\n * An example of the worst case is glob_match(\"*aaaaa\", \"aaaaaaaaaa\");\n * it takes 6 passes over the pattern before matching the string.\n *\n * Like !fnmatch(@pat, @str, 0) and unlike the shell, this does NOT\n * treat / or leading . specially; it isn't actually used for pathnames.\n *\n * Note that according to glob(7) (and unlike bash), character classes\n * are complemented by a leading !; this does not support the regex-style\n * [^a-z] syntax.\n *\n * An opening bracket without a matching close is matched literally.\n */\nbool __pure glob_match(char const *pat, char const *str)\n{\n\t/*\n\t * Backtrack to previous * on mismatch and retry starting one\n\t * character later in the string.  Because * matches all characters\n\t * (no exception for /), it can be easily proved that there's\n\t * never a need to backtrack multiple levels.\n\t */\n\tchar const *back_pat = NULL, *back_str;\n\n\t/*\n\t * Loop over each token (character or class) in pat, matching\n\t * it against the remaining unmatched tail of str.  Return false\n\t * on mismatch, or true after matching the trailing nul bytes.\n\t */\n\tfor (;;) {\n\t\tunsigned char c = *str++;\n\t\tunsigned char d = *pat++;\n\n\t\tswitch (d) {\n\t\tcase '?':\t/* Wildcard: anything but nul */\n\t\t\tif (c == '\\0')\n\t\t\t\treturn false;\n\t\t\tbreak;\n\t\tcase '*':\t/* Any-length wildcard */\n\t\t\tif (*pat == '\\0')\t/* Optimize trailing * case */\n\t\t\t\treturn true;\n\t\t\tback_pat = pat;\n\t\t\tback_str = --str;\t/* Allow zero-length match */\n\t\t\tbreak;\n\t\tcase '[': {\t/* Character class */\n\t\t\tif (c == '\\0')\t/* No possible match */\n\t\t\t\treturn false;\n\t\t\tbool match = false, inverted = (*pat == '!');\n\t\t\tchar const *class = pat + inverted;\n\t\t\tunsigned char a = *class++;\n\n\t\t\t/*\n\t\t\t * Iterate over each span in the character class.\n\t\t\t * A span is either a single character a, or a\n\t\t\t * range a-b.  The first span may begin with ']'.\n\t\t\t */\n\t\t\tdo {\n\t\t\t\tunsigned char b = a;\n\n\t\t\t\tif (a == '\\0')\t/* Malformed */\n\t\t\t\t\tgoto literal;\n\n\t\t\t\tif (class[0] == '-' && class[1] != ']') {\n\t\t\t\t\tb = class[1];\n\n\t\t\t\t\tif (b == '\\0')\n\t\t\t\t\t\tgoto literal;\n\n\t\t\t\t\tclass += 2;\n\t\t\t\t\t/* Any special action if a > b? */\n\t\t\t\t}\n\t\t\t\tmatch |= (a <= c && c <= b);\n\t\t\t} while ((a = *class++) != ']');\n\n\t\t\tif (match == inverted)\n\t\t\t\tgoto backtrack;\n\t\t\tpat = class;\n\t\t\t}\n\t\t\tbreak;\n\t\tcase '\\\\':\n\t\t\td = *pat++;\n\t\t\tfallthrough;\n\t\tdefault:\t/* Literal character */\nliteral:\n\t\t\tif (c == d) {\n\t\t\t\tif (d == '\\0')\n\t\t\t\t\treturn true;\n\t\t\t\tbreak;\n\t\t\t}\nbacktrack:\n\t\t\tif (c == '\\0' || !back_pat)\n\t\t\t\treturn false;\t/* No point continuing */\n\t\t\t/* Try again from last *, one character later in str. */\n\t\t\tpat = back_pat;\n\t\t\tstr = ++back_str;\n\t\t\tbreak;\n\t\t}\n\t}\n}\nEXPORT_SYMBOL(glob_match);\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/glob.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-27138e8d74f837ad",
+    "path": "lib/glob.c",
+    "title": "Glob 전체 알고리즘: 최근 별표로 돌아가는 비재귀 매칭",
+    "area": "가변 길이 레코드 · 파싱 · 문자열 알고리즘",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "장치 패턴 목록 등에 쓰는 작은 셸 스타일 문자열 매칭 구현입니다.",
+    "guide": [
+      "패턴과 문자열을 함께 이동하며 가장 최근 *의 위치를 저장합니다. 불일치하면 그 별표가 소비하는 문자열을 한 글자 늘리고 재시도합니다.",
+      "문자열 전체를 매칭하며 경로 전용 규칙이나 정규표현식을 기대하면 안 됩니다. 입력은 읽을 수 있는 NUL 종료 문자열이어야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체와 모듈 정보",
+        "text": "module/glob 헤더, 모듈 설명과 Dual MIT/GPL 라이선스, glob_match 함수, EXPORT_SYMBOL로 구성됩니다. 주석은 의존하는 ATA 코드가 모듈일 수 있어 이 코드도 모듈로 만들 수 있음을 설명합니다. 패턴 사전 처리나 별도 힙 할당은 없습니다."
+      },
+      {
+        "title": "기본 순회와 전체 일치",
+        "text": "매 반복에서 문자열 문자 c와 패턴 문자 d를 unsigned char로 읽고 각 포인터를 증가시킵니다. 리터럴 문자가 같으면 계속하고 두 문자가 모두 NUL이면 성공합니다. 패턴의 일부가 맞았다는 이유만으로 성공하지 않습니다. 단, 패턴 끝의 *는 남은 모든 문자열을 소비할 수 있어 바로 성공합니다."
+      },
+      {
+        "title": "물음표와 별표",
+        "text": "?는 NUL을 제외한 문자 하나를 소비합니다. *는 back_pat에 그 뒤의 패턴 위치를, back_str에 현재 문자열 위치를 저장합니다. 이미 증가한 str을 한 칸 되돌려 처음에는 길이 0 매치를 시도합니다. 불일치 시 pat을 back_pat로 돌리고 str을 ++back_str로 정해 별표의 소비량을 늘립니다."
+      },
+      {
+        "title": "되돌아갈 지점 하나로 충분한 이유",
+        "text": "*가 /를 포함한 모든 문자를 허용하므로 이전 별표까지 여러 단계로 되돌아갈 필요 없이 최근 별표 이후의 정렬을 조정할 수 있습니다. 재귀 호출이나 스택을 쓰지 않고 두 위치만 보관합니다. 문자열 끝에서 불일치하거나 저장된 별표가 없으면 실패합니다."
+      },
+      {
+        "title": "문자 클래스",
+        "text": "[...] 안에서는 단일 문자와 a-b 범위를 순회하며 해당 여부를 OR합니다. 첫 !는 결과를 반전합니다. 첫 범위의 시작 문자가 ]일 수 있어 []a]는 ]와 a를 포함합니다. - 바로 뒤가 ]이면 범위로 처리하지 않습니다. 역방향 z-a는 a<=c<=b를 만족하지 않아 그 범위로는 일치하지 않습니다."
+      },
+      {
+        "title": "닫히지 않은 클래스와 이스케이프",
+        "text": "클래스 해석 도중 NUL을 만나면 literal로 가서 원래 [를 문자로 비교합니다. 따라서 닫는 ]가 없는 [abc는 같은 리터럴 문자열과 매칭할 수 있습니다. 역슬래시는 다음 패턴 문자를 d로 읽어 리터럴 경로로 보냅니다. 정상 예로 역슬래시 뒤 *는 별표 문자 자체를 뜻합니다. 이 구현은 클래스 안의 백슬래시에 별도의 이스케이프 분기를 제공하지 않습니다."
+      },
+      {
+        "title": "셸 및 정규표현식과 차이",
+        "text": "/와 선행 .를 특별 취급하지 않으므로 *는 .hidden이나 a/b에도 매칭합니다. 클래스 부정은 !이며 ^는 정규표현식처럼 부정 연산자가 아닙니다. [^a]는 ^ 또는 a를 허용하는 클래스입니다. 바이트 기반 비교이므로 UTF-8의 여러 바이트 문자를 ? 하나로 처리하는 유니코드 매처가 아닙니다."
+      },
+      {
+        "title": "시간과 공간 복잡도",
+        "text": "패턴 전처리가 없고 최근 별표 다음 패턴을 여러 시작점에서 다시 검사할 수 있습니다. 주석의 *aaaaa와 aaaaaaaaaa 예는 성공까지 패턴을 여섯 번 통과합니다. 최악 시간은 문자열 길이와 패턴 길이의 곱에 비례하고 보조 공간은 상수입니다. 모든 와일드카드 매칭이 선형 시간이라고 일반화하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "유한 상태와 포인터, 제한된 backtracking, 전체 일치와 부분 일치, 토큰 해석, 바이트 문자 집합을 학습합니다. __pure는 입력이 같아도 다른 곳에서 입력 메모리를 바꾸면 결과가 달라질 수 없는 절대 상수 함수라는 뜻이 아닙니다. 함수는 전달된 문자열 메모리를 읽습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "패턴 *는 a/b와 .hidden에 매칭하는가?",
+        "options": [
+          "둘 다 매칭한다",
+          "슬래시와 선행 점 때문에 둘 다 실패한다"
+        ],
+        "answer": 0,
+        "explanation": "이 구현은 경로 구분자나 선행 점을 특별 취급하지 않습니다. 별표는 남은 모든 문자를 허용합니다."
+      },
+      {
+        "prompt": "[^a]는 a를 제외한 모든 문자를 뜻하는가?",
+        "options": [
+          "그렇다. 정규표현식의 부정 클래스와 같다",
+          "아니다. ^와 a를 포함하는 클래스다"
+        ],
+        "answer": 1,
+        "explanation": "반전 여부는 첫 문자가 !인지로만 정합니다. ^는 일반 문자로 처리됩니다."
+      },
+      {
+        "prompt": "별표 이후 불일치가 발생하면 무엇을 바꾸는가?",
+        "options": [
+          "최근 별표의 문자열 소비량을 한 글자 늘린다",
+          "항상 재귀로 모든 과거 별표를 탐색한다"
+        ],
+        "answer": 0,
+        "explanation": "pat=back_pat, str=++back_str로 재시도합니다. 별도 재귀나 여러 단계의 저장 스택은 없습니다."
+      },
+      {
+        "prompt": "최악 시간 복잡도는?",
+        "options": [
+          "입력과 무관하게 상수 시간이다",
+          "문자열 길이와 패턴 길이의 곱에 비례한다"
+        ],
+        "answer": 1,
+        "explanation": "별표 다음 패턴을 여러 문자열 시작점에서 다시 검사할 수 있습니다. 보조 공간이 상수라고 시간도 상수인 것은 아닙니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "#include <linux/module.h>\n#include <linux/glob.h>\n\n/*\n * The only reason this code can be compiled as a module is because the\n * ATA code that depends on it can be as well.  In practice, they're\n * both usually compiled in and the module overhead goes away.\n */\nMODULE_DESCRIPTION(\"glob(7) matching\");\nMODULE_LICENSE(\"Dual MIT/GPL\");\n\n/**\n * glob_match - Shell-style pattern matching, like !fnmatch(pat, str, 0)\n * @pat: Shell-style pattern to match, e.g. \"*.[ch]\".\n * @str: String to match.  The pattern must match the entire string.\n *\n * Perform shell-style glob matching, returning true (1) if the match\n * succeeds, or false (0) if it fails.  Equivalent to !fnmatch(@pat, @str, 0).\n *\n * Pattern metacharacters are ?, *, [ and \\.\n * (And, inside character classes, !, - and ].)\n *\n * This is small and simple implementation intended for device blacklists\n * where a string is matched against a number of patterns.  Thus, it\n * does not preprocess the patterns.  It is non-recursive, and run-time\n * is at most quadratic: strlen(@str)*strlen(@pat).\n *\n * An example of the worst case is glob_match(\"*aaaaa\", \"aaaaaaaaaa\");\n * it takes 6 passes over the pattern before matching the string.\n *\n * Like !fnmatch(@pat, @str, 0) and unlike the shell, this does NOT\n * treat / or leading . specially; it isn't actually used for pathnames.\n *\n * Note that according to glob(7) (and unlike bash), character classes\n * are complemented by a leading !; this does not support the regex-style\n * [^a-z] syntax.\n *\n * An opening bracket without a matching close is matched literally.\n */\nbool __pure glob_match(char const *pat, char const *str)\n{\n\t/*\n\t * Backtrack to previous * on mismatch and retry starting one\n\t * character later in the string.  Because * matches all characters\n\t * (no exception for /), it can be easily proved that there's\n\t * never a need to backtrack multiple levels.\n\t */\n\tchar const *back_pat = NULL, *back_str;\n\n\t/*\n\t * Loop over each token (character or class) in pat, matching\n\t * it against the remaining unmatched tail of str.  Return false\n\t * on mismatch, or true after matching the trailing nul bytes.\n\t */\n\tfor (;;) {\n\t\tunsigned char c = *str++;\n\t\tunsigned char d = *pat++;\n\n\t\tswitch (d) {\n\t\tcase '?':\t/* Wildcard: anything but nul */\n\t\t\tif (c == '\\0')\n\t\t\t\treturn false;\n\t\t\tbreak;\n\t\tcase '*':\t/* Any-length wildcard */\n\t\t\tif (*pat == '\\0')\t/* Optimize trailing * case */\n\t\t\t\treturn true;\n\t\t\tback_pat = pat;\n\t\t\tback_str = --str;\t/* Allow zero-length match */\n\t\t\tbreak;\n\t\tcase '[': {\t/* Character class */\n\t\t\tif (c == '\\0')\t/* No possible match */\n\t\t\t\treturn false;\n\t\t\tbool match = false, inverted = (*pat == '!');\n\t\t\tchar const *class = pat + inverted;\n\t\t\tunsigned char a = *class++;\n\n\t\t\t/*\n\t\t\t * Iterate over each span in the character class.\n\t\t\t * A span is either a single character a, or a\n\t\t\t * range a-b.  The first span may begin with ']'.\n\t\t\t */\n\t\t\tdo {\n\t\t\t\tunsigned char b = a;\n\n\t\t\t\tif (a == '\\0')\t/* Malformed */\n\t\t\t\t\tgoto literal;\n\n\t\t\t\tif (class[0] == '-' && class[1] != ']') {\n\t\t\t\t\tb = class[1];\n\n\t\t\t\t\tif (b == '\\0')\n\t\t\t\t\t\tgoto literal;\n\n\t\t\t\t\tclass += 2;\n\t\t\t\t\t/* Any special action if a > b? */\n\t\t\t\t}\n\t\t\t\tmatch |= (a <= c && c <= b);\n\t\t\t} while ((a = *class++) != ']');\n\n\t\t\tif (match == inverted)\n\t\t\t\tgoto backtrack;\n\t\t\tpat = class;\n\t\t\t}\n\t\t\tbreak;\n\t\tcase '\\\\':\n\t\t\td = *pat++;\n\t\t\tfallthrough;\n\t\tdefault:\t/* Literal character */\nliteral:\n\t\t\tif (c == d) {\n\t\t\t\tif (d == '\\0')\n\t\t\t\t\treturn true;\n\t\t\t\tbreak;\n\t\t\t}\nbacktrack:\n\t\t\tif (c == '\\0' || !back_pat)\n\t\t\t\treturn false;\t/* No point continuing */\n\t\t\t/* Try again from last *, one character later in str. */\n\t\t\tpat = back_pat;\n\t\t\tstr = ++back_str;\n\t\t\tbreak;\n\t\t}\n\t}\n}\nEXPORT_SYMBOL(glob_match);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "eca9323dbd1aae38c2404f91f01dcee605a59a1c2d5a35bda348a788fa73cfe0",
+      "scope": "whole-file",
+      "line_count": 125,
+      "authoring_source": "course/file_units/firmware_and_glob.py",
+      "sections": [
+        "파일 전체와 모듈 정보",
+        "기본 순회와 전체 일치",
+        "물음표와 별표",
+        "되돌아갈 지점 하나로 충분한 이유",
+        "문자 클래스",
+        "닫히지 않은 클래스와 이스케이프",
+        "셸 및 정규표현식과 차이",
+        "시간과 공간 복잡도",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/glob.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "별표 카드가 먹을 글자 수를 하나씩 늘려 다시 맞춰 보는 이름 찾기 놀이예요.",
+    "meaning": "glob은 바이트 패턴 전체를 맞추며 최근 별표의 재시도 위치만 저장해요.",
+    "exercise": "*aaaaa와 aaaaaaaaaa에서 별표가 0글자부터 몇 글자까지 맡는지 따라가 보세요."
+  },
+  "goal": "glob은 바이트 패턴 전체를 맞추며 최근 별표의 재시도 위치만 저장해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "*aaaaa와 aaaaaaaaaa에서 별표가 0글자부터 몇 글자까지 맡는지 따라가 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "52f4487f9c39ddfbd1e65eb2c53178d358d61eb777ec80c6ea02dd2c30177f44",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

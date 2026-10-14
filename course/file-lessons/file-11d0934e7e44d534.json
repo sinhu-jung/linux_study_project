@@ -5,58 +5,66 @@
   "area": "전처리 · 문자열 표현 · ELF note · 빌드 설정",
   "track": "files",
   "kind": "kernel",
-  "intro": "Linux note type 0x100과 두 전처리 분기를 분석합니다.",
+  "intro": "언어별 매크로와 빌드 문자열의 note 저장을 이해합니다.",
   "guide": [
-    "같은 바이너리 메타데이터를 언어별 생성 방식으로 제공할 수 있으며 이름이 salt여도 runtime 난수 생성과는 다릅니다.",
-    "빌드 설정 문자열이 note 내용으로 변환되는 과정을 설명합니다."
+    "설정 문자열은 빌드 문맥에서 제공합니다.",
+    "어셈블리 .asciz는 끝의 NUL도 넣습니다.",
+    "ELFNOTE32의 32가 문자열을 네 바이트로 자른다는 뜻은 아닙니다."
   ],
   "deep_dive": [
     {
       "title": "전체 정의",
-      "text": "__BUILD_SALT_H guard 아래 linux/elfnote.h를 포함하고 LINUX_ELFNOTE_BUILD_SALT를 0x100으로 정의합니다. note 이름 Linux의 type 값으로 쓰며 여기서 해시 함수·난수 함수·저장 장치를 구현하지 않습니다. 별도의 파일 SPDX 표기는 원본에 없습니다."
+      "text": "__BUILD_SALT_H 가드 아래 elfnote 헤더와 LINUX_ELFNOTE_BUILD_SALT=0x100이 있습니다. Linux note의 종류 번호이며 해시·난수·저장 장치 구현은 없습니다. 원본에는 별도 SPDX 줄이 없습니다."
     },
     {
       "title": "어셈블러 분기",
-      "text": "#ifdef __ASSEMBLER__에서는 BUILD_SALT를 ELFNOTE(Linux, LINUX_ELFNOTE_BUILD_SALT, .asciz CONFIG_BUILD_SALT)로 정의합니다. .asciz는 설정 문자열 뒤 NUL을 포함하는 표현입니다. CONFIG_BUILD_SALT는 빌드 문맥이 제공하며 이 헤더는 기본 문자열이나 값 검증을 따로 정의하지 않습니다."
+      "text": "__ASSEMBLER__가 있으면 ELFNOTE(Linux,종류,.asciz CONFIG_BUILD_SALT)로 펼칩니다. .asciz는 문자열 뒤 끝 표시 NUL을 포함합니다. 이 헤더는 기본 문자열이나 값 검사기를 만들지 않고 빌드가 준 설정을 씁니다."
     },
     {
       "title": "C 분기",
-      "text": "else에서는 ELFNOTE32(\"Linux\", LINUX_ELFNOTE_BUILD_SALT, CONFIG_BUILD_SALT)를 사용합니다. C elfnote 매크로는 description의 typeof와 sizeof를 사용하므로 문자열 데이터를 그대로 담습니다. ELFNOTE32 이름만 보고 문자열을 32비트 정수 salt로 잘라 저장한다고 해석하면 안 됩니다. note 헤더 형식 선택과 description 자료형은 다른 요소입니다."
+      "text": "그 밖에는 ELFNOTE32(\"Linux\",종류,CONFIG_BUILD_SALT)입니다. C note 매크로의 typeof와 sizeof가 내용의 타입과 크기를 따라가 문자열을 담습니다. 헤더 형식을 고르는 32와 description의 자료형은 별개라 네 바이트 정수로 잘리지 않습니다."
     },
     {
-      "title": "CS 연결과 범위",
-      "text": "한 BUILD_SALT 이름을 C·어셈블리 양쪽에서 사용할 수 있도록 다른 확장을 제공합니다. 이것은 빌드 시 제공된 식별 데이터이며 비밀키 생성이나 실행 시 entropy 공급 기능이 아닙니다. 전체 매크로와 분기를 설명했으며 실제 설정값이나 만들어진 바이너리의 내용을 이 파일만으로 확정하지 않습니다."
+      "title": "한 이름, 두 생성법",
+      "text": "언어에 맞춰 다른 확장으로 같은 BUILD_SALT를 쓰게 합니다. 빌드 때 주는 식별 자료이며 비밀키나 실행 중 엔트로피 공급은 아닙니다. 전체 분기를 읽었지만 실제 설정 문자열이나 완성 바이너리 내용은 이 파일만으로 확정하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "BUILD_SALT가 생성하는 Linux note의 type 값은?",
+      "prompt": "Linux build salt note 종류 값은?",
       "options": [
+        "0x100",
+        "LINUX_VERSION_CODE 그 자체"
+      ],
+      "answer": 0,
+      "explanation": "버전 note의 type 0과 별개의 내용 구분 태그입니다.",
+      "original_prompt": "BUILD_SALT가 생성하는 Linux note의 type 값은?",
+      "original_options": [
         "0x100이다",
         "LINUX_VERSION_CODE 그 자체이다"
       ],
-      "answer": 0,
-      "explanation": "버전 note의 type 0과 build salt의 type 0x100은 별개의 항목입니다. type은 description을 구분하는 태그입니다."
+      "original_explanation": "버전 note의 type 0과 build salt의 type 0x100은 별개의 항목입니다. type은 description을 구분하는 태그입니다."
     },
     {
-      "prompt": "C 분기의 ELFNOTE32는 CONFIG_BUILD_SALT 문자열을 32비트 정수로 잘라 저장하는가?",
+      "prompt": "C의 ELFNOTE32가 문자열을 32비트로 자르나요?",
       "options": [
+        "그렇다. 언제나 네 바이트만 남긴다",
+        "아니다. typeof와 sizeof로 문자열을 담는다"
+      ],
+      "answer": 1,
+      "explanation": "헤더 선택과 내용 타입·길이는 독립적입니다.",
+      "original_prompt": "C 분기의 ELFNOTE32는 CONFIG_BUILD_SALT 문자열을 32비트 정수로 잘라 저장하는가?",
+      "original_options": [
         "그렇다. 이름에 32가 있으므로 항상 4바이트만 남는다",
         "아니다. description은 매크로의 typeof와 sizeof로 문자열 데이터를 담는다"
       ],
-      "answer": 1,
-      "explanation": "ELF note 헤더 선택과 description 형식은 독립적입니다. 문자열 길이는 원래 설정 문자열의 크기에 따라 결정됩니다."
+      "original_explanation": "ELF note 헤더 선택과 description 형식은 독립적입니다. 문자열 길이는 원래 설정 문자열의 크기에 따라 결정됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "note type 0x100과 CONFIG_BUILD_SALT 내용의 역할을 나누어 보세요."
   },
   "annotated": "#ifndef __BUILD_SALT_H\n#define __BUILD_SALT_H\n\n#include <linux/elfnote.h>\n\n#define LINUX_ELFNOTE_BUILD_SALT       0x100\n\n#ifdef __ASSEMBLER__\n\n#define BUILD_SALT \\\n       ELFNOTE(Linux, LINUX_ELFNOTE_BUILD_SALT, .asciz CONFIG_BUILD_SALT)\n\n#else\n\n#define BUILD_SALT \\\n       ELFNOTE32(\"Linux\", LINUX_ELFNOTE_BUILD_SALT, CONFIG_BUILD_SALT)\n\n#endif\n\n#endif /* __BUILD_SALT_H */\n",
   "source_review": {
@@ -78,5 +86,115 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/build-salt.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-11d0934e7e44d534",
+    "path": "include/linux/build-salt.h",
+    "title": "Build salt note: C와 어셈블리의 공통 식별 데이터",
+    "area": "전처리 · 문자열 표현 · ELF note · 빌드 설정",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "Linux note type 0x100과 두 전처리 분기를 분석합니다.",
+    "guide": [
+      "같은 바이너리 메타데이터를 언어별 생성 방식으로 제공할 수 있으며 이름이 salt여도 runtime 난수 생성과는 다릅니다.",
+      "빌드 설정 문자열이 note 내용으로 변환되는 과정을 설명합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 정의",
+        "text": "__BUILD_SALT_H guard 아래 linux/elfnote.h를 포함하고 LINUX_ELFNOTE_BUILD_SALT를 0x100으로 정의합니다. note 이름 Linux의 type 값으로 쓰며 여기서 해시 함수·난수 함수·저장 장치를 구현하지 않습니다. 별도의 파일 SPDX 표기는 원본에 없습니다."
+      },
+      {
+        "title": "어셈블러 분기",
+        "text": "#ifdef __ASSEMBLER__에서는 BUILD_SALT를 ELFNOTE(Linux, LINUX_ELFNOTE_BUILD_SALT, .asciz CONFIG_BUILD_SALT)로 정의합니다. .asciz는 설정 문자열 뒤 NUL을 포함하는 표현입니다. CONFIG_BUILD_SALT는 빌드 문맥이 제공하며 이 헤더는 기본 문자열이나 값 검증을 따로 정의하지 않습니다."
+      },
+      {
+        "title": "C 분기",
+        "text": "else에서는 ELFNOTE32(\"Linux\", LINUX_ELFNOTE_BUILD_SALT, CONFIG_BUILD_SALT)를 사용합니다. C elfnote 매크로는 description의 typeof와 sizeof를 사용하므로 문자열 데이터를 그대로 담습니다. ELFNOTE32 이름만 보고 문자열을 32비트 정수 salt로 잘라 저장한다고 해석하면 안 됩니다. note 헤더 형식 선택과 description 자료형은 다른 요소입니다."
+      },
+      {
+        "title": "CS 연결과 범위",
+        "text": "한 BUILD_SALT 이름을 C·어셈블리 양쪽에서 사용할 수 있도록 다른 확장을 제공합니다. 이것은 빌드 시 제공된 식별 데이터이며 비밀키 생성이나 실행 시 entropy 공급 기능이 아닙니다. 전체 매크로와 분기를 설명했으며 실제 설정값이나 만들어진 바이너리의 내용을 이 파일만으로 확정하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "BUILD_SALT가 생성하는 Linux note의 type 값은?",
+        "options": [
+          "0x100이다",
+          "LINUX_VERSION_CODE 그 자체이다"
+        ],
+        "answer": 0,
+        "explanation": "버전 note의 type 0과 build salt의 type 0x100은 별개의 항목입니다. type은 description을 구분하는 태그입니다."
+      },
+      {
+        "prompt": "C 분기의 ELFNOTE32는 CONFIG_BUILD_SALT 문자열을 32비트 정수로 잘라 저장하는가?",
+        "options": [
+          "그렇다. 이름에 32가 있으므로 항상 4바이트만 남는다",
+          "아니다. description은 매크로의 typeof와 sizeof로 문자열 데이터를 담는다"
+        ],
+        "answer": 1,
+        "explanation": "ELF note 헤더 선택과 description 형식은 독립적입니다. 문자열 길이는 원래 설정 문자열의 크기에 따라 결정됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "#ifndef __BUILD_SALT_H\n#define __BUILD_SALT_H\n\n#include <linux/elfnote.h>\n\n#define LINUX_ELFNOTE_BUILD_SALT       0x100\n\n#ifdef __ASSEMBLER__\n\n#define BUILD_SALT \\\n       ELFNOTE(Linux, LINUX_ELFNOTE_BUILD_SALT, .asciz CONFIG_BUILD_SALT)\n\n#else\n\n#define BUILD_SALT \\\n       ELFNOTE32(\"Linux\", LINUX_ELFNOTE_BUILD_SALT, CONFIG_BUILD_SALT)\n\n#endif\n\n#endif /* __BUILD_SALT_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "1c082864ade620b01995b8d74c7e52461833c79204244c6d372ae3a0b084b2ce",
+      "scope": "whole-file",
+      "line_count": 20,
+      "authoring_source": "course/file_units/vdso_notes_offsets.py",
+      "sections": [
+        "전체 정의",
+        "어셈블러 분기",
+        "C 분기",
+        "CS 연결과 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/build-salt.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 BUILD_SALT 이름표를 C와 어셈블리에서 각각 맞는 방법으로 만듭니다. salt라는 이름이 실행 중 비밀키를 만든다는 뜻은 아닙니다.",
+    "meaning": "언어별 매크로와 빌드 문자열의 note 저장을 이해합니다.",
+    "exercise": "note type 0x100과 CONFIG_BUILD_SALT 내용의 역할을 나누어 보세요."
+  },
+  "goal": "언어별 매크로와 빌드 문자열의 note 저장을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "note type 0x100과 CONFIG_BUILD_SALT 내용의 역할을 나누어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "5224d4928ad151b69caa41dd5e0cc0f464d5d784cebc0eafd721392c8d6a783e",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

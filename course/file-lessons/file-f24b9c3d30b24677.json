@@ -5,54 +5,62 @@
   "area": "CRC · 비트 연산 · 오류 검출",
   "track": "files",
   "kind": "kernel",
-  "intro": "인라인 helper가 실행되는 계산과 외부 객체의 저장 위치를 구별합니다.",
+  "intro": "한 바이트 inline 도구와 외부 표 선언, 상태 표현의 조건을 구분합니다.",
   "guide": [
-    "crc7_be_syndrome_table[256]을 extern const u8로 선언하고 crc7_be_byte는 table[crc XOR data]를 반환합니다. crc7_be는 버퍼 처리 함수의 외부 선언입니다.",
-    "crc와 data가 u8라 XOR 결과는 0..255여서 표 인덱스에 맞습니다. 이는 상태가 올바른 왼쪽 정렬 CRC인지는 보장하지 않으므로 표현 계약은 호출자가 지켜야 합니다."
+    "한 번 호출에는 data 한 바이트만 줍니다.",
+    "extern 표 선언은 표를 새로 만들지 않습니다.",
+    "인덱스가 범위 안이어도 초기 상태 표현은 맞아야 합니다."
   ],
   "deep_dive": [
     {
       "title": "파일 전체",
-      "text": "SPDX와 _LINUX_CRC7_H 헤더 가드, linux/types.h 포함, 외부 상수 표 선언, static inline helper 정의, 외부 버퍼 함수 선언 순서입니다. helper의 static은 번역 단위 내부 연결이고 inline은 최적화 가능성을 나타내며 외부 표의 정의를 대신하지 않습니다."
+      "text": "라이선스, 가드, types 헤더, 외부 const 표 선언, static inline 도구, 외부 버퍼 함수 선언 순서입니다. static은 이 번역 단위 안의 연결이고 inline은 최적화 가능성 표시입니다. 실제 외부 표의 정의는 lib/crc7.c에 따로 필요합니다."
     },
     {
-      "title": "한 바이트 계산",
-      "text": "crc=0x12, data=0x01이면 인덱스는 0x13입니다. lib/crc7.c의 해당 표 원소가 0x04이므로 결과는 0x04입니다. 포인터를 받거나 버퍼를 순회하지 않아 한 번 호출은 한 바이트만 갱신합니다."
+      "title": "한 번의 조회",
+      "text": "0x12 XOR 0x01은 0x13이고 구현 표의 그 칸은 0x04입니다. 포인터나 길이 인수 없이 u8 data 하나만 받으므로 한 바이트만 갱신합니다. 버퍼 전체 반복은 crc7_be가 맡습니다."
     },
     {
-      "title": "CS 연결",
-      "text": "배열 인덱스의 수치적 안전성과 자료 표현의 의미적 타당성은 별개입니다. 모든 u8 XOR 인덱스는 표 범위 안이지만 홀수 초기 상태는 일반적인 왼쪽 정렬 CRC7 계약에 맞지 않습니다."
+      "title": "숫자 범위와 의미",
+      "text": "두 u8을 XOR하면 항상 0..255라 256칸 표 안입니다. 그러나 홀수 초기값은 보통의 왼쪽 정렬 CRC7 상태 계약에 맞지 않습니다. 주소 범위가 안전하다는 사실과 데이터 의미가 올바르다는 사실은 다릅니다."
     }
   ],
   "questions": [
     {
-      "prompt": "crc7_be_byte 한 번은 몇 바이트를 처리하는가?",
+      "prompt": "crc7_be_byte는 몇 바이트를 처리하나요?",
       "options": [
+        "1바이트",
+        "len 길이 전체 버퍼"
+      ],
+      "answer": 0,
+      "explanation": "인수에 data 하나만 있고 전체 반복은 다른 함수입니다.",
+      "original_prompt": "crc7_be_byte 한 번은 몇 바이트를 처리하는가?",
+      "original_options": [
         "1바이트",
         "len만큼의 전체 버퍼"
       ],
-      "answer": 0,
-      "explanation": "인자로 u8 data 하나만 받습니다. 전체 버퍼 루프는 crc7_be에 있습니다."
+      "original_explanation": "인자로 u8 data 하나만 받습니다. 전체 버퍼 루프는 crc7_be에 있습니다."
     },
     {
-      "prompt": "헤더의 extern const 표 선언은 매 포함마다 새 256바이트 표를 정의하는가?",
+      "prompt": "extern 표 선언마다 새 표가 생기나요?",
       "options": [
+        "그렇다. 호출마다 표를 복사한다",
+        "아니다. 외부 표의 존재와 형식을 알린다"
+      ],
+      "answer": 1,
+      "explanation": "초기화 데이터는 없고 lib/crc7.c의 표를 읽습니다.",
+      "original_prompt": "헤더의 extern const 표 선언은 매 포함마다 새 256바이트 표를 정의하는가?",
+      "original_options": [
         "그렇다. 모든 호출마다 표를 복사한다",
         "아니다. 외부 표의 존재와 형식을 선언한다"
       ],
-      "answer": 1,
-      "explanation": "이 선언에는 초기화 데이터가 없으며 실제 정의는 lib/crc7.c에 있습니다. helper는 그 표를 읽을 뿐 복사하지 않습니다."
+      "original_explanation": "이 선언에는 초기화 데이터가 없으며 실제 정의는 lib/crc7.c에 있습니다. helper는 그 표를 읽을 뿐 복사하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "crc=0x12,data=1의 인덱스 0x13을 계산하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_CRC7_H\n#define _LINUX_CRC7_H\n#include <linux/types.h>\n\nextern const u8 crc7_be_syndrome_table[256];\n\nstatic inline u8 crc7_be_byte(u8 crc, u8 data)\n{\n\treturn crc7_be_syndrome_table[crc ^ data];\n}\n\nextern u8 crc7_be(u8 crc, const u8 *buffer, size_t len);\n\n#endif\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/crc7.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-f24b9c3d30b24677",
+    "path": "include/linux/crc7.h",
+    "title": "CRC7 헤더 전체: inline 바이트 갱신과 외부 표",
+    "area": "CRC · 비트 연산 · 오류 검출",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "인라인 helper가 실행되는 계산과 외부 객체의 저장 위치를 구별합니다.",
+    "guide": [
+      "crc7_be_syndrome_table[256]을 extern const u8로 선언하고 crc7_be_byte는 table[crc XOR data]를 반환합니다. crc7_be는 버퍼 처리 함수의 외부 선언입니다.",
+      "crc와 data가 u8라 XOR 결과는 0..255여서 표 인덱스에 맞습니다. 이는 상태가 올바른 왼쪽 정렬 CRC인지는 보장하지 않으므로 표현 계약은 호출자가 지켜야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체",
+        "text": "SPDX와 _LINUX_CRC7_H 헤더 가드, linux/types.h 포함, 외부 상수 표 선언, static inline helper 정의, 외부 버퍼 함수 선언 순서입니다. helper의 static은 번역 단위 내부 연결이고 inline은 최적화 가능성을 나타내며 외부 표의 정의를 대신하지 않습니다."
+      },
+      {
+        "title": "한 바이트 계산",
+        "text": "crc=0x12, data=0x01이면 인덱스는 0x13입니다. lib/crc7.c의 해당 표 원소가 0x04이므로 결과는 0x04입니다. 포인터를 받거나 버퍼를 순회하지 않아 한 번 호출은 한 바이트만 갱신합니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "배열 인덱스의 수치적 안전성과 자료 표현의 의미적 타당성은 별개입니다. 모든 u8 XOR 인덱스는 표 범위 안이지만 홀수 초기 상태는 일반적인 왼쪽 정렬 CRC7 계약에 맞지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "crc7_be_byte 한 번은 몇 바이트를 처리하는가?",
+        "options": [
+          "1바이트",
+          "len만큼의 전체 버퍼"
+        ],
+        "answer": 0,
+        "explanation": "인자로 u8 data 하나만 받습니다. 전체 버퍼 루프는 crc7_be에 있습니다."
+      },
+      {
+        "prompt": "헤더의 extern const 표 선언은 매 포함마다 새 256바이트 표를 정의하는가?",
+        "options": [
+          "그렇다. 모든 호출마다 표를 복사한다",
+          "아니다. 외부 표의 존재와 형식을 선언한다"
+        ],
+        "answer": 1,
+        "explanation": "이 선언에는 초기화 데이터가 없으며 실제 정의는 lib/crc7.c에 있습니다. helper는 그 표를 읽을 뿐 복사하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_CRC7_H\n#define _LINUX_CRC7_H\n#include <linux/types.h>\n\nextern const u8 crc7_be_syndrome_table[256];\n\nstatic inline u8 crc7_be_byte(u8 crc, u8 data)\n{\n\treturn crc7_be_syndrome_table[crc ^ data];\n}\n\nextern u8 crc7_be(u8 crc, const u8 *buffer, size_t len);\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "26d14d14136c45189c71659aae40f17e53eff9831043c36ab351fc725e7b76c8",
+      "scope": "whole-file",
+      "line_count": 15,
+      "authoring_source": "course/file_units/crc_fundamentals.py",
+      "sections": [
+        "파일 전체",
+        "한 바이트 계산",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/crc7.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "바이트 하나를 기존 CRC 상태와 섞어 표에서 다음 상태를 찾습니다. 전체 버퍼를 읽는 함수와 역할을 나누어 봅시다.",
+    "meaning": "한 바이트 inline 도구와 외부 표 선언, 상태 표현의 조건을 구분합니다.",
+    "exercise": "crc=0x12,data=1의 인덱스 0x13을 계산하세요."
+  },
+  "goal": "한 바이트 inline 도구와 외부 표 선언, 상태 표현의 조건을 구분합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "crc=0x12,data=1의 인덱스 0x13을 계산하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "8866366aa494eb8b5b168bb57def740d5f83f05177856ec22d21d3e64babcf39",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,54 +5,62 @@
   "area": "전처리 · 심볼 이름 · incbin · 소스 재사용",
   "track": "files",
   "kind": "kernel",
-  "intro": "세 매크로와 공통 어셈블리 포함 전체를 분석합니다.",
+  "intro": "compat 이미지 연결 파일은 경계 이름과 입력 ELF 경로를 바꿔 공통 소스를 재사용합니다.",
   "guide": [
-    "소스 재사용 전에 식별자와 입력 경로를 재정의하면 별도 이미지 객체를 만들 수 있습니다.",
-    "이미지 경계 심볼과 이미지 내부 함수 이름을 구별합니다."
+    "이미지는 완성된 실행 파일의 바이트 묶음입니다. incbin은 그런 파일을 현재 결과물 안에 넣는 지시입니다.",
+    "경계 심볼은 포함된 영역의 시작과 끝을 가리키는 이름표입니다. 내부 모든 함수 이름과는 다릅니다.",
+    "이 파일은 공통 소스를 포함하기 전에 필요한 매크로를 정합니다."
   ],
   "deep_dive": [
     {
       "title": "전체 매크로",
-      "text": "GPL-2.0-only 뒤 vdso_start를 compat_vdso_start, vdso_end를 compat_vdso_end로 정의합니다. __VDSO_PATH는 arch/riscv/kernel/compat_vdso/compat_vdso.so 문자열입니다. 이어 ../vdso/vdso.S를 포함합니다. 이 파일에 다른 함수나 실행 명령은 없습니다."
+      "text": "라이선스 뒤 vdso_start를 compat_vdso_start로, vdso_end를 compat_vdso_end로 정의합니다. __VDSO_PATH는 arch/riscv/kernel/compat_vdso/compat_vdso.so입니다. 이어 ../vdso/vdso.S를 포함하며 별도 함수나 실행 명령은 없습니다."
     },
     {
       "title": "포함 결과의 의미",
-      "text": "공통 vdso.S가 페이지 정렬·globl·시작과 끝 라벨·incbin을 제공하므로 여기서는 compat 이름의 경계와 compat ELF를 포함하는 객체가 됩니다. 미리 정의한 __VDSO_PATH가 공통 파일의 #ifndef 기본값을 막습니다. 내부 ELF 함수 이름을 모두 compat로 바꾸는 매크로는 아닙니다."
+      "text": "공통 파일이 페이지 정렬과 공개 경계 이름, incbin을 제공하므로 결과는 호환 경계 이름으로 호환 ELF를 담습니다. 미리 정한 경로가 공통 파일의 #ifndef 기본 경로 대신 쓰입니다. 이것이 내부 ELF의 모든 __vdso 함수 이름을 바꾸는 매크로는 아닙니다."
     },
     {
       "title": "범위",
-      "text": "시작·끝 경계는 포함된 바이너리 영역을 가리키며 페이지 padding을 포함할 수 있습니다. 실제 사용자 주소 매핑은 이 wrapper의 책임이 아닙니다. 전체 소스를 대조했으며 포함 대상은 이미 별도 학습으로 다룬 범위이고 여기서 중복 완료 집계하지 않습니다."
+      "text": "시작·끝은 포함된 바이트 영역의 경계이며 페이지를 맞추기 위한 빈 공간도 포함할 수 있습니다. 사용자 주소 공간에 실제로 연결하는 매핑은 이 짧은 파일의 책임이 아닙니다. 공통 포함 대상의 학습 범위는 별도로 셉니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 wrapper가 바꾸는 경계 심볼은?",
+      "prompt": "이 파일이 바꾸는 경계 이름은 무엇인가요?",
       "options": [
+        "vdso_start/end를 compat_vdso_start/end로 바꿉니다.",
+        "모든 __vdso 함수에 자동으로 compat를 붙입니다."
+      ],
+      "answer": 0,
+      "explanation": "두 명시된 식별자에 적용할 뿐 포함 바이너리 전체 심볼을 다시 쓰지 않습니다.",
+      "original_prompt": "이 wrapper가 바꾸는 경계 심볼은?",
+      "original_options": [
         "vdso_start/end를 compat_vdso_start/end로 바꾼다",
         "모든 __vdso 함수에 자동으로 compat를 붙인다"
       ],
-      "answer": 0,
-      "explanation": "매크로는 명시된 두 식별자에만 적용됩니다. 포함 바이너리 내부의 모든 심볼을 재작성하는 도구가 아닙니다."
+      "original_explanation": "매크로는 명시된 두 식별자에만 적용됩니다. 포함 바이너리 내부의 모든 심볼을 재작성하는 도구가 아닙니다."
     },
     {
-      "prompt": "공통 파일의 기본 vdso.so 대신 compat 이미지를 사용하는 이유는?",
+      "prompt": "기본 vdso.so 대신 호환 이미지를 넣는 이유는 무엇인가요?",
       "options": [
+        "파일명에 compat가 있으면 자동으로 경로가 바뀌기 때문입니다.",
+        "include 전에 __VDSO_PATH를 정의하기 때문입니다."
+      ],
+      "answer": 1,
+      "explanation": "사전 정의가 공통 파일의 기본 경로 선택을 막습니다.",
+      "original_prompt": "공통 파일의 기본 vdso.so 대신 compat 이미지를 사용하는 이유는?",
+      "original_options": [
         "파일 이름에 compat가 있으면 assembler가 자동으로 경로를 바꾸기 때문이다",
         "include 전에 __VDSO_PATH를 정의하기 때문이다"
       ],
-      "answer": 1,
-      "explanation": "공통 파일의 #ifndef와 사전 정의가 함께 입력 경로를 선택합니다."
+      "original_explanation": "공통 파일의 #ifndef와 사전 정의가 함께 입력 경로를 선택합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "vdso_start/end와 __VDSO_PATH의 변경을 두 줄로 적어 내부 함수 이름 변경과 구분하세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#define\tvdso_start\tcompat_vdso_start\n#define\tvdso_end\tcompat_vdso_end\n\n#define\t__VDSO_PATH\t\"arch/riscv/kernel/compat_vdso/compat_vdso.so\"\n\n#include \"../vdso/vdso.S\"\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/compat_vdso.S"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-502c5d7b82cb135c",
+    "path": "arch/riscv/kernel/compat_vdso/compat_vdso.S",
+    "title": "Compat 이미지 포함: 경계 심볼과 입력 ELF 경로 교체",
+    "area": "전처리 · 심볼 이름 · incbin · 소스 재사용",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "세 매크로와 공통 어셈블리 포함 전체를 분석합니다.",
+    "guide": [
+      "소스 재사용 전에 식별자와 입력 경로를 재정의하면 별도 이미지 객체를 만들 수 있습니다.",
+      "이미지 경계 심볼과 이미지 내부 함수 이름을 구별합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 매크로",
+        "text": "GPL-2.0-only 뒤 vdso_start를 compat_vdso_start, vdso_end를 compat_vdso_end로 정의합니다. __VDSO_PATH는 arch/riscv/kernel/compat_vdso/compat_vdso.so 문자열입니다. 이어 ../vdso/vdso.S를 포함합니다. 이 파일에 다른 함수나 실행 명령은 없습니다."
+      },
+      {
+        "title": "포함 결과의 의미",
+        "text": "공통 vdso.S가 페이지 정렬·globl·시작과 끝 라벨·incbin을 제공하므로 여기서는 compat 이름의 경계와 compat ELF를 포함하는 객체가 됩니다. 미리 정의한 __VDSO_PATH가 공통 파일의 #ifndef 기본값을 막습니다. 내부 ELF 함수 이름을 모두 compat로 바꾸는 매크로는 아닙니다."
+      },
+      {
+        "title": "범위",
+        "text": "시작·끝 경계는 포함된 바이너리 영역을 가리키며 페이지 padding을 포함할 수 있습니다. 실제 사용자 주소 매핑은 이 wrapper의 책임이 아닙니다. 전체 소스를 대조했으며 포함 대상은 이미 별도 학습으로 다룬 범위이고 여기서 중복 완료 집계하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 wrapper가 바꾸는 경계 심볼은?",
+        "options": [
+          "vdso_start/end를 compat_vdso_start/end로 바꾼다",
+          "모든 __vdso 함수에 자동으로 compat를 붙인다"
+        ],
+        "answer": 0,
+        "explanation": "매크로는 명시된 두 식별자에만 적용됩니다. 포함 바이너리 내부의 모든 심볼을 재작성하는 도구가 아닙니다."
+      },
+      {
+        "prompt": "공통 파일의 기본 vdso.so 대신 compat 이미지를 사용하는 이유는?",
+        "options": [
+          "파일 이름에 compat가 있으면 assembler가 자동으로 경로를 바꾸기 때문이다",
+          "include 전에 __VDSO_PATH를 정의하기 때문이다"
+        ],
+        "answer": 1,
+        "explanation": "공통 파일의 #ifndef와 사전 정의가 함께 입력 경로를 선택합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0-only */\n\n#define\tvdso_start\tcompat_vdso_start\n#define\tvdso_end\tcompat_vdso_end\n\n#define\t__VDSO_PATH\t\"arch/riscv/kernel/compat_vdso/compat_vdso.so\"\n\n#include \"../vdso/vdso.S\"\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "d1a5869d19a4ac4a8b374d4506945545c5069f295f3f41e96f8cb17ae61f1a00",
+      "scope": "whole-file",
+      "line_count": 8,
+      "authoring_source": "course/file_units/riscv_compat_wrappers.py",
+      "sections": [
+        "전체 매크로",
+        "포함 결과의 의미",
+        "범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/arch/riscv/kernel/compat_vdso/compat_vdso.S"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "같은 포장 방법을 쓰되 상자의 시작·끝 이름표와 안에 넣을 제품만 호환 버전으로 바꿉니다.",
+    "meaning": "compat 이미지 연결 파일은 경계 이름과 입력 ELF 경로를 바꿔 공통 소스를 재사용합니다.",
+    "exercise": "vdso_start/end와 __VDSO_PATH의 변경을 두 줄로 적어 내부 함수 이름 변경과 구분하세요."
+  },
+  "goal": "compat 이미지 연결 파일은 경계 이름과 입력 ELF 경로를 바꿔 공통 소스를 재사용합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "vdso_start/end와 __VDSO_PATH의 변경을 두 줄로 적어 내부 함수 이름 변경과 구분하세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "192d60bc4bf02137801b6cdd86f730f83fbca840eaa101597e95b5a1c883fd0b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

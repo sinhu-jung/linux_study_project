@@ -5,96 +5,116 @@
   "area": "MMIO 순서 · posted write · spinlock · readback · 장치 프로토콜",
   "track": "files",
   "kind": "kernel",
-  "intro": "두 CPU가 ring pointer를 갱신하는 예제로 CPU 임계 구역 순서와 장치 관찰 순서를 구분합니다.",
+  "intro": "잠금 해제 전 안전한 장치 읽기로 앞선 쓰기 전달 순서를 확보하는 예를 설명합니다.",
   "guide": [
-    "CPU가 코드를 실행한 순서와 버퍼에 남은 장치 쓰기가 도착하는 순서는 별도 계약입니다.",
-    "앞서 MMIOWB 추적을 읽은 뒤 이 문서의 플랫폼 전제와 안전한 레지스터 readback 방식을 비교합니다."
+    "MMIO는 장치를 메모리 주소처럼 접근하는 방식입니다. 레지스터는 장치가 상태나 명령을 주고받는 작은 칸입니다.",
+    "스핀 잠금은 한 번에 한 실행만 보호 구역을 쓰게 하지만 장치로 가는 임시 저장 쓰기의 순서까지 모든 환경에서 해결하지는 않습니다.",
+    "readback은 쓰기 뒤에 다시 읽는 접근입니다. 값 자체보다 앞선 쓰기가 전달되게 하는 순서 효과를 이용할 수 있습니다."
   ],
   "deep_dive": [
     {
       "title": "문서 전체 범위",
-      "text": "제목 뒤 약한 MMIO 순서를 가진 일부 플랫폼의 설명,두 CPU의 잘못될 수 있는 예제,readback을 추가한 예제,효과 설명으로 끝납니다. 특정 장치 드라이버의 실행 코드나 모든 버스의 표준을 구현하는 파일은 아닙니다."
+      "text": "일부 플랫폼의 약한 MMIO 순서 설명, 두 CPU의 문제가 될 수 있는 예, 읽기를 덧붙인 예와 효과가 문서 전체입니다. 특정 드라이버의 실행 코드나 모든 버스 규칙의 구현 파일은 아닙니다."
     },
     {
       "title": "조건부 문제 제기",
-      "text": "문서는 일부 플랫폼에서 MMIO가 약하게 순서화될 수 있어 드라이버가 의도한 장치 쓰기 도착 순서를 확보해야 한다고 설명합니다. 모든 플랫폼에서 모든 writel이 항상 뒤집힌다는 뜻은 아닙니다. 아키텍처 accessor,잠금 hook,버스와 장치 보장까지 고려해야 합니다."
+      "text": "일부 환경에서는 장치 쓰기가 의도한 순서로 도착하도록 드라이버가 보완해야 합니다. 모든 플랫폼에서 모든 writel이 항상 뒤집힌다는 뜻은 아닙니다. CPU별 접근 함수, 잠금 때의 처리, 버스와 장치 약속을 함께 봐야 합니다."
     },
     {
       "title": "기존 예제의 CPU 순서",
-      "text": "CPU A와 B는 같은 dev_lock을 spin_lock_irqsave로 획득하고 status를 읽은 뒤 ring_ptr에 각각 newval과 newval2를 씁니다. 각 임계 구역 끝에는 spin_unlock_irqrestore가 있습니다. 이 구조는 CPU의 동시 접근을 직렬화하지만 문서가 가정한 플랫폼에서 pending I/O write의 도착 순서까지 충분히 보장하지 못할 수 있습니다."
+      "text": "A와 B는 같은 dev_lock을 잡고 status를 읽은 뒤 ring_ptr에 각각 새 값을 씁니다. 마지막에 잠금을 풉니다. CPU끼리 보호 구역에 동시에 들어오지는 않지만 문서가 가정한 환경에서는 대기 중인 장치 쓰기 도착 순서가 충분히 보장되지 않을 수 있습니다."
     },
     {
       "title": "장치 관찰의 역전",
-      "text": "예제에서 A가 먼저 잠금을 썼더라도 장치는 newval보다 newval2를 먼저 받을 수 있다고 설명합니다. 논리적으로 나중 포인터를 먼저 보거나 이후 오래된 값으로 덮이면 문제가 될 수 있습니다. status를 쓰기 전에 읽은 동작은 그 뒤에 발생한 쓰기를 해제 전에 밀어내는 readback과 위치가 다릅니다."
+      "text": "A가 먼저 잠금을 썼어도 장치는 B의 newval2를 먼저 받을 수 있습니다. 나중 값 뒤에 오래된 값이 도착해 덮으면 문제가 됩니다. 쓰기 전에 status를 읽는 것과 쓰기 후 잠금 해제 전에 확인 읽기를 하는 것은 위치와 역할이 다릅니다."
     },
     {
       "title": "수정 예제의 위치",
-      "text": "수정된 예제는 각 writel 뒤,spin_unlock_irqrestore 전에 (void)readl(safe_register)를 추가합니다. 잠금을 넘기기 전에 앞선 쓰기 순서를 확보하려는 위치입니다. 반환값을 버리는 void 변환은 I/O 접근을 없애겠다는 뜻이 아니라 읽기의 순서 효과를 사용한다는 표현입니다."
+      "text": "수정 예는 writel 뒤, spin_unlock_irqrestore 앞에 (void)readl(safe_register)를 넣습니다. 다른 CPU에 잠금을 넘기기 전에 앞선 쓰기 순서를 확보하려는 것입니다. void는 읽은 값을 버린다는 뜻이지 장치 읽기 자체를 없앤다는 뜻이 아닙니다."
     },
     {
       "title": "안전한 레지스터 선택",
-      "text": "문서는 안전한 장치 또는 bridge 레지스터를 읽어 chipset의 pending write를 flush하는 방식을 설명하며 config register를 가능성으로 듭니다. 모든 임의 레지스터를 읽어도 안전하다는 허가는 아닙니다. read-to-clear,장치 전원 상태,부적절한 주소 같은 부작용은 장치·플랫폼 규약에 따라 검토해야 합니다."
+      "text": "안전한 장치 또는 중간 연결 장치인 bridge의 레지스터를 읽어 대기 쓰기를 먼저 보내도록 합니다. 설정 레지스터가 후보일 수 있지만 아무 주소나 읽어도 된다는 뜻은 아닙니다. 읽으면 상태가 지워지는 칸, 꺼진 장치, 잘못된 주소의 부작용은 장치 규약에 따라 봐야 합니다."
     },
     {
       "title": "보장의 범위",
-      "text": "설명의 flush는 pending I/O write의 전달·순서 문제를 해결하는 문맥입니다. 데이터 캐시 flush,파일 fsync,장치가 받은 명령의 기능적 완료를 모두 뜻하는 것은 아닙니다. 예를 들어 쓰기를 장치에 전달한 뒤 장치가 수행하는 긴 작업의 완료는 별도의 상태 확인이 필요할 수 있습니다."
+      "text": "여기서 flush는 대기 중 입출력 쓰기의 전달·순서 문제입니다. CPU 데이터 캐시 비우기, 파일 fsync, 장치 명령 작업의 완료를 모두 뜻하지 않습니다. 쓰기가 도착한 뒤 오래 걸리는 장치 작업은 별도 완료 상태 확인이 필요할 수 있습니다."
     },
     {
       "title": "MMIOWB와의 연결",
-      "text": "이 문서는 safe readback 예제이며 mmiowb helper를 호출하지 않습니다. 앞서 본 공통 MMIOWB는 accessor의 pending 표시와 잠금 해제 hook을 연결합니다. 실제 드라이버에서 어느 동작이 필요한지 또는 이미 보장되는지는 플랫폼 계약으로 판단해야 하며 문서 예제를 근거로 모든 드라이버에 readback을 무조건 추가하지 않습니다."
+      "text": "이 문서는 안전한 읽기 예이고 mmiowb 함수를 직접 부르지 않습니다. MMIOWB 계층은 접근 때 대기 표시와 잠금 해제 처리를 연결하는 별도 방식입니다. 실제로 필요한 처리나 이미 있는 보장은 플랫폼 약속으로 판단해야 하며 모든 드라이버에 무조건 읽기를 추가하는 근거는 아닙니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "상호 배제와 외부 관찰 순서,buffered write,중요 동작의 배치,값을 사용하지 않는 I/O 접근,장치별 부작용을 학습합니다. 문서의 가상 예제를 읽은 것은 실제 하드웨어의 readback 효과나 모든 잠금 경로를 시험한 것으로 세지 않습니다."
+      "text": "상호 배제와 외부 도착 순서, 임시 저장 쓰기, 값은 안 쓰지만 효과가 필요한 접근을 구별합니다. 가상 예를 읽었다는 것은 실제 장치의 읽기 효과나 모든 잠금 경로를 실행 시험했다는 뜻이 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "수정 예제에서 safe_register를 읽는 위치는?",
+      "prompt": "수정 예에서 안전한 레지스터 읽기는 어디에 있나요?",
       "options": [
+        "writel 뒤, 잠금 해제 전입니다.",
+        "잠금을 잡기 전에만 있습니다."
+      ],
+      "answer": 0,
+      "explanation": "앞선 쓰기를 잠금 전달 전에 처리하려는 배치입니다.",
+      "original_prompt": "수정 예제에서 safe_register를 읽는 위치는?",
+      "original_options": [
         "writel 뒤이고 잠금 해제 전이다",
         "잠금 획득 전에만 읽는다"
       ],
-      "answer": 0,
-      "explanation": "앞선 쓰기를 잠금 전달 전에 처리하려는 목적입니다. 기존 status 읽기는 새 쓰기 전에 있으므로 역할과 위치가 다릅니다."
+      "original_explanation": "앞선 쓰기를 잠금 전달 전에 처리하려는 목적입니다. 기존 status 읽기는 새 쓰기 전에 있으므로 역할과 위치가 다릅니다."
     },
     {
-      "prompt": "(void)readl의 void는 읽기를 생략한다는 뜻인가?",
+      "prompt": "(void)readl의 void는 읽기를 생략하라는 뜻인가요?",
       "options": [
+        "예. 입출력을 반드시 제거합니다.",
+        "아니요. 반환된 값만 사용하지 않습니다."
+      ],
+      "answer": 1,
+      "explanation": "읽기의 전달 순서 효과를 이용합니다.",
+      "original_prompt": "(void)readl의 void는 읽기를 생략한다는 뜻인가?",
+      "original_options": [
         "그렇다. compiler가 I/O를 반드시 제거한다",
         "아니다. 반환값만 사용하지 않는다"
       ],
-      "answer": 1,
-      "explanation": "문서는 읽기의 전달·순서 효과를 사용합니다. 데이터 값을 버리는 것과 접근 자체를 생략하는 것은 다릅니다."
+      "original_explanation": "문서는 읽기의 전달·순서 효과를 사용합니다. 데이터 값을 버리는 것과 접근 자체를 생략하는 것은 다릅니다."
     },
     {
-      "prompt": "spinlock이 코드 순서를 정하면 모든 플랫폼에서 장치 쓰기 도착 순서도 자동 보장되는가?",
+      "prompt": "CPU 잠금 순서가 모든 장치 도착 순서를 자동 보장하나요?",
       "options": [
+        "아니요. 문서는 추가 처리가 필요한 일부 환경을 설명합니다.",
+        "예. CPU와 장치의 순서는 언제나 같습니다."
+      ],
+      "answer": 0,
+      "explanation": "환경에 따른 입출력 보장을 따로 봐야 합니다.",
+      "original_prompt": "spinlock이 코드 순서를 정하면 모든 플랫폼에서 장치 쓰기 도착 순서도 자동 보장되는가?",
+      "original_options": [
         "아니다. 문서는 추가 처리가 필요한 일부 플랫폼을 설명한다",
         "그렇다. CPU와 장치 순서는 언제나 같다"
       ],
-      "answer": 0,
-      "explanation": "버퍼와 장치 접근 계약을 별도로 확인해야 합니다. 반대로 이 문서를 모든 플랫폼의 무조건 실패 증명으로 확대하지도 않습니다."
+      "original_explanation": "버퍼와 장치 접근 계약을 별도로 확인해야 합니다. 반대로 이 문서를 모든 플랫폼의 무조건 실패 증명으로 확대하지도 않습니다."
     },
     {
-      "prompt": "safe readback으로 장치에 쓰기가 전달되면 장치의 긴 작업 완료도 보장되는가?",
+      "prompt": "쓰기 전달을 확인하면 장치의 긴 작업도 끝났나요?",
       "options": [
+        "예. 모든 작업이 즉시 끝납니다.",
+        "아니요. 전달과 기능 수행 완료는 다릅니다."
+      ],
+      "answer": 1,
+      "explanation": "명령 수행 완료는 해당 장치의 별도 약속으로 확인합니다.",
+      "original_prompt": "safe readback으로 장치에 쓰기가 전달되면 장치의 긴 작업 완료도 보장되는가?",
+      "original_options": [
         "그렇다. 모든 장치 작업이 즉시 끝난다",
         "아니다. 전달 순서와 기능적 완료는 별개이다"
       ],
-      "answer": 1,
-      "explanation": "문서는 pending I/O 쓰기의 순서를 다룹니다. 장치 명령 수행 완료는 해당 프로토콜의 별도 계약입니다."
+      "original_explanation": "문서는 pending I/O 쓰기의 순서를 다룹니다. 장치 명령 수행 완료는 해당 프로토콜의 별도 계약입니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "writel, 안전한 readl, 잠금 해제를 세 칸에 순서대로 적고 각 동작의 목적을 붙여 보세요."
   },
   "annotated": "==============================================\nOrdering I/O writes to memory-mapped addresses\n==============================================\n\nOn some platforms, so-called memory-mapped I/O is weakly ordered.  On such\nplatforms, driver writers are responsible for ensuring that I/O writes to\nmemory-mapped addresses on their device arrive in the order intended.  This is\ntypically done by reading a 'safe' device or bridge register, causing the I/O\nchipset to flush pending writes to the device before any reads are posted.  A\ndriver would usually use this technique immediately prior to the exit of a\ncritical section of code protected by spinlocks.  This would ensure that\nsubsequent writes to I/O space arrived only after all prior writes (much like a\nmemory barrier op, mb(), only with respect to I/O).\n\nA more concrete example from a hypothetical device driver::\n\n\t\t...\n\tCPU A:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU A:  val = readl(my_status);\n\tCPU A:  ...\n\tCPU A:  writel(newval, ring_ptr);\n\tCPU A:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\tCPU B:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU B:  val = readl(my_status);\n\tCPU B:  ...\n\tCPU B:  writel(newval2, ring_ptr);\n\tCPU B:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\nIn the case above, the device may receive newval2 before it receives newval,\nwhich could cause problems.  Fixing it is easy enough though::\n\n\t\t...\n\tCPU A:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU A:  val = readl(my_status);\n\tCPU A:  ...\n\tCPU A:  writel(newval, ring_ptr);\n\tCPU A:  (void)readl(safe_register); /* maybe a config register? */\n\tCPU A:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\tCPU B:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU B:  val = readl(my_status);\n\tCPU B:  ...\n\tCPU B:  writel(newval2, ring_ptr);\n\tCPU B:  (void)readl(safe_register); /* maybe a config register? */\n\tCPU B:  spin_unlock_irqrestore(&dev_lock, flags)\n\nHere, the reads from safe_register will cause the I/O chipset to flush any\npending writes before actually posting the read to the chipset, preventing\npossible data corruption.\n",
   "source_review": {
@@ -121,5 +141,158 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/driver-api/io_ordering.rst"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-a948bfac33a7e008",
+    "path": "Documentation/driver-api/io_ordering.rst",
+    "title": "장치 쓰기 순서 지침 전체: 잠금 해제 전 안전한 readback",
+    "area": "MMIO 순서 · posted write · spinlock · readback · 장치 프로토콜",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "두 CPU가 ring pointer를 갱신하는 예제로 CPU 임계 구역 순서와 장치 관찰 순서를 구분합니다.",
+    "guide": [
+      "CPU가 코드를 실행한 순서와 버퍼에 남은 장치 쓰기가 도착하는 순서는 별도 계약입니다.",
+      "앞서 MMIOWB 추적을 읽은 뒤 이 문서의 플랫폼 전제와 안전한 레지스터 readback 방식을 비교합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "문서 전체 범위",
+        "text": "제목 뒤 약한 MMIO 순서를 가진 일부 플랫폼의 설명,두 CPU의 잘못될 수 있는 예제,readback을 추가한 예제,효과 설명으로 끝납니다. 특정 장치 드라이버의 실행 코드나 모든 버스의 표준을 구현하는 파일은 아닙니다."
+      },
+      {
+        "title": "조건부 문제 제기",
+        "text": "문서는 일부 플랫폼에서 MMIO가 약하게 순서화될 수 있어 드라이버가 의도한 장치 쓰기 도착 순서를 확보해야 한다고 설명합니다. 모든 플랫폼에서 모든 writel이 항상 뒤집힌다는 뜻은 아닙니다. 아키텍처 accessor,잠금 hook,버스와 장치 보장까지 고려해야 합니다."
+      },
+      {
+        "title": "기존 예제의 CPU 순서",
+        "text": "CPU A와 B는 같은 dev_lock을 spin_lock_irqsave로 획득하고 status를 읽은 뒤 ring_ptr에 각각 newval과 newval2를 씁니다. 각 임계 구역 끝에는 spin_unlock_irqrestore가 있습니다. 이 구조는 CPU의 동시 접근을 직렬화하지만 문서가 가정한 플랫폼에서 pending I/O write의 도착 순서까지 충분히 보장하지 못할 수 있습니다."
+      },
+      {
+        "title": "장치 관찰의 역전",
+        "text": "예제에서 A가 먼저 잠금을 썼더라도 장치는 newval보다 newval2를 먼저 받을 수 있다고 설명합니다. 논리적으로 나중 포인터를 먼저 보거나 이후 오래된 값으로 덮이면 문제가 될 수 있습니다. status를 쓰기 전에 읽은 동작은 그 뒤에 발생한 쓰기를 해제 전에 밀어내는 readback과 위치가 다릅니다."
+      },
+      {
+        "title": "수정 예제의 위치",
+        "text": "수정된 예제는 각 writel 뒤,spin_unlock_irqrestore 전에 (void)readl(safe_register)를 추가합니다. 잠금을 넘기기 전에 앞선 쓰기 순서를 확보하려는 위치입니다. 반환값을 버리는 void 변환은 I/O 접근을 없애겠다는 뜻이 아니라 읽기의 순서 효과를 사용한다는 표현입니다."
+      },
+      {
+        "title": "안전한 레지스터 선택",
+        "text": "문서는 안전한 장치 또는 bridge 레지스터를 읽어 chipset의 pending write를 flush하는 방식을 설명하며 config register를 가능성으로 듭니다. 모든 임의 레지스터를 읽어도 안전하다는 허가는 아닙니다. read-to-clear,장치 전원 상태,부적절한 주소 같은 부작용은 장치·플랫폼 규약에 따라 검토해야 합니다."
+      },
+      {
+        "title": "보장의 범위",
+        "text": "설명의 flush는 pending I/O write의 전달·순서 문제를 해결하는 문맥입니다. 데이터 캐시 flush,파일 fsync,장치가 받은 명령의 기능적 완료를 모두 뜻하는 것은 아닙니다. 예를 들어 쓰기를 장치에 전달한 뒤 장치가 수행하는 긴 작업의 완료는 별도의 상태 확인이 필요할 수 있습니다."
+      },
+      {
+        "title": "MMIOWB와의 연결",
+        "text": "이 문서는 safe readback 예제이며 mmiowb helper를 호출하지 않습니다. 앞서 본 공통 MMIOWB는 accessor의 pending 표시와 잠금 해제 hook을 연결합니다. 실제 드라이버에서 어느 동작이 필요한지 또는 이미 보장되는지는 플랫폼 계약으로 판단해야 하며 문서 예제를 근거로 모든 드라이버에 readback을 무조건 추가하지 않습니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "상호 배제와 외부 관찰 순서,buffered write,중요 동작의 배치,값을 사용하지 않는 I/O 접근,장치별 부작용을 학습합니다. 문서의 가상 예제를 읽은 것은 실제 하드웨어의 readback 효과나 모든 잠금 경로를 시험한 것으로 세지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "수정 예제에서 safe_register를 읽는 위치는?",
+        "options": [
+          "writel 뒤이고 잠금 해제 전이다",
+          "잠금 획득 전에만 읽는다"
+        ],
+        "answer": 0,
+        "explanation": "앞선 쓰기를 잠금 전달 전에 처리하려는 목적입니다. 기존 status 읽기는 새 쓰기 전에 있으므로 역할과 위치가 다릅니다."
+      },
+      {
+        "prompt": "(void)readl의 void는 읽기를 생략한다는 뜻인가?",
+        "options": [
+          "그렇다. compiler가 I/O를 반드시 제거한다",
+          "아니다. 반환값만 사용하지 않는다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 읽기의 전달·순서 효과를 사용합니다. 데이터 값을 버리는 것과 접근 자체를 생략하는 것은 다릅니다."
+      },
+      {
+        "prompt": "spinlock이 코드 순서를 정하면 모든 플랫폼에서 장치 쓰기 도착 순서도 자동 보장되는가?",
+        "options": [
+          "아니다. 문서는 추가 처리가 필요한 일부 플랫폼을 설명한다",
+          "그렇다. CPU와 장치 순서는 언제나 같다"
+        ],
+        "answer": 0,
+        "explanation": "버퍼와 장치 접근 계약을 별도로 확인해야 합니다. 반대로 이 문서를 모든 플랫폼의 무조건 실패 증명으로 확대하지도 않습니다."
+      },
+      {
+        "prompt": "safe readback으로 장치에 쓰기가 전달되면 장치의 긴 작업 완료도 보장되는가?",
+        "options": [
+          "그렇다. 모든 장치 작업이 즉시 끝난다",
+          "아니다. 전달 순서와 기능적 완료는 별개이다"
+        ],
+        "answer": 1,
+        "explanation": "문서는 pending I/O 쓰기의 순서를 다룹니다. 장치 명령 수행 완료는 해당 프로토콜의 별도 계약입니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "==============================================\nOrdering I/O writes to memory-mapped addresses\n==============================================\n\nOn some platforms, so-called memory-mapped I/O is weakly ordered.  On such\nplatforms, driver writers are responsible for ensuring that I/O writes to\nmemory-mapped addresses on their device arrive in the order intended.  This is\ntypically done by reading a 'safe' device or bridge register, causing the I/O\nchipset to flush pending writes to the device before any reads are posted.  A\ndriver would usually use this technique immediately prior to the exit of a\ncritical section of code protected by spinlocks.  This would ensure that\nsubsequent writes to I/O space arrived only after all prior writes (much like a\nmemory barrier op, mb(), only with respect to I/O).\n\nA more concrete example from a hypothetical device driver::\n\n\t\t...\n\tCPU A:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU A:  val = readl(my_status);\n\tCPU A:  ...\n\tCPU A:  writel(newval, ring_ptr);\n\tCPU A:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\tCPU B:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU B:  val = readl(my_status);\n\tCPU B:  ...\n\tCPU B:  writel(newval2, ring_ptr);\n\tCPU B:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\nIn the case above, the device may receive newval2 before it receives newval,\nwhich could cause problems.  Fixing it is easy enough though::\n\n\t\t...\n\tCPU A:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU A:  val = readl(my_status);\n\tCPU A:  ...\n\tCPU A:  writel(newval, ring_ptr);\n\tCPU A:  (void)readl(safe_register); /* maybe a config register? */\n\tCPU A:  spin_unlock_irqrestore(&dev_lock, flags)\n\t\t...\n\tCPU B:  spin_lock_irqsave(&dev_lock, flags)\n\tCPU B:  val = readl(my_status);\n\tCPU B:  ...\n\tCPU B:  writel(newval2, ring_ptr);\n\tCPU B:  (void)readl(safe_register); /* maybe a config register? */\n\tCPU B:  spin_unlock_irqrestore(&dev_lock, flags)\n\nHere, the reads from safe_register will cause the I/O chipset to flush any\npending writes before actually posting the read to the chipset, preventing\npossible data corruption.\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "99dc98ab635bb099bd1a52801baa5b7ccbcf52c8a15c8636268523100470bfd6",
+      "scope": "whole-file",
+      "line_count": 51,
+      "authoring_source": "course/file_units/io_ordering_document.py",
+      "sections": [
+        "문서 전체 범위",
+        "조건부 문제 제기",
+        "기존 예제의 CPU 순서",
+        "장치 관찰의 역전",
+        "수정 예제의 위치",
+        "안전한 레지스터 선택",
+        "보장의 범위",
+        "MMIOWB와의 연결",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/Documentation/driver-api/io_ordering.rst"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "편지를 차례로 우체통에 넣었다고 받는 쪽의 도착 순서까지 자동으로 같은 것은 아닙니다. CPU의 잠금 순서와 장치가 쓰기를 받는 순서를 구별해 봅니다.",
+    "meaning": "잠금 해제 전 안전한 장치 읽기로 앞선 쓰기 전달 순서를 확보하는 예를 설명합니다.",
+    "exercise": "writel, 안전한 readl, 잠금 해제를 세 칸에 순서대로 적고 각 동작의 목적을 붙여 보세요."
+  },
+  "goal": "잠금 해제 전 안전한 장치 읽기로 앞선 쓰기 전달 순서를 확보하는 예를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "writel, 안전한 readl, 잠금 해제를 세 칸에 순서대로 적고 각 동작의 목적을 붙여 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_b.json",
+    "authoring_sha256": "bd8bd2c6b825541c3a620cdb83b3011cd7cd3125aa133c12c4376cccd238faff",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,92 +5,112 @@
   "area": "연결 리스트 · 원자 연산 · ABA · 소유권",
   "track": "files",
   "kind": "kernel",
-  "intro": "NULL로 끝나는 단일 연결 리스트에 묶음을 넣거나 맨 앞 노드를 제거하는 구현입니다.",
+  "intro": "llist의 비교·교환 재시도와 소비자 조합·노드 수명 조건을 이해합니다.",
   "guide": [
-    "헤드 포인터를 try_cmpxchg로 바꾸되 경쟁으로 값이 달라지면 새 관측값에 맞춰 재시도합니다. 임의의 소비자 조합까지 자동으로 안전한 자료구조는 아닙니다.",
-    "하나의 del_first 소비자와 여러 생산자, 또는 del_all 소비자 조합 같은 명시적 계약을 지킵니다. 분리한 체인의 메모리 소유권과 재사용도 호출자가 관리해야 합니다."
+    "CAS는 예상한 값과 현재 값이 같을 때만 바꾸는 원자적 비교·교환입니다. try_cmpxchg 실패는 예상값도 새 관측값으로 갱신하여 재시도할 수 있게 합니다.",
+    "생산자는 작업을 넣고 소비자는 꺼냅니다. 원자 연산이 있어도 모든 소비자 조합이 안전한 것은 아니며 단일 삭제 소비자의 제약을 지켜야 합니다.",
+    "분리한 노드를 해제하거나 재사용할 책임은 호출자에게 있습니다. 줄에서 뺐다는 것과 메모리를 없앴다는 것은 다릅니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL SPDX, NMI와 cmpxchg 제약, 저작권·작성자, kernel/export/llist 포함 뒤에 add_batch, del_first, del_first_this, reverse_order 네 함수와 GPL export가 있습니다. 노드 할당·해제와 대기 큐 처리는 이 파일의 역할이 아닙니다."
+      "title": "파일 전체와 담당 작업",
+      "text": "GPL-2.0-only, NMI 제한 설명, 저작권·작성자와 kernel/export/llist 헤더 뒤 묶음 추가·첫 삭제·지정 첫 삭제·역순의 네 함수와 GPL 공개 표시가 있습니다. 노드 할당·해제나 기다림 목록 처리는 이 파일이 하지 않습니다."
     },
     {
-      "title": "묶음 삽입",
-      "text": "llist_add_batch는 READ_ONCE로 기존 first를 읽고 new_last->next=first로 새 체인의 꼬리를 연결한 뒤 헤드를 new_first로 CAS합니다. 실패하면 try_cmpxchg가 first를 실제 관측값으로 갱신하므로 다음 반복에서 꼬리 연결도 다시 씁니다. 성공 시 !first를 반환해 그 삽입 직전에 비어 있었는지 알립니다. 이후에도 비어 있거나 혼자만 들어 있다는 보장은 아닙니다."
+      "title": "묶음을 맨 앞에 넣기",
+      "text": "add_batch는 READ_ONCE로 기존 first를 읽고 새 꼬리의 next에 연결한 뒤 헤드를 새 첫 노드로 CAS합니다. 실패하면 first가 갱신되므로 반복 안의 꼬리 연결도 다시 씁니다. 성공 뒤 !first는 그 성공 삽입 직전에 비었는지를 뜻합니다. 이후 다른 삽입이 없거나 내 묶음만 남는다는 보장은 아닙니다."
     },
     {
-      "title": "묶음의 선행 조건",
-      "text": "new_first에서 new_last까지의 체인은 호출자가 미리 연결해야 하며 유효한 노드를 전달해야 합니다. 함수가 중간 노드를 검사하거나 복사하지 않습니다. 단일 삽입은 헤더에서 같은 노드를 first와 last로 전달해 재사용합니다. 묶음 내부 순서는 그대로이고 기존 체인 앞에 놓입니다."
+      "title": "새 묶음은 미리 준비해야 한다",
+      "text": "첫 노드부터 마지막까지는 호출자가 연결해 두고 유효한 주소를 줘야 합니다. 함수가 중간 노드를 검사·복사하지 않습니다. 단일 삽입은 같은 노드를 처음과 끝으로 전달합니다. 묶음 안 순서는 그대로이고 전체가 기존 줄 앞에 놓입니다."
     },
     {
-      "title": "맨 앞 삭제",
-      "text": "llist_del_first는 smp_load_acquire로 entry를 읽고 NULL이면 반환합니다. entry->next를 READ_ONCE로 얻은 뒤 헤드를 next로 CAS합니다. 경쟁 실패 시 갱신된 entry에 대해 반복합니다. 성공하면 분리한 entry를 반환하지만 next를 자기 자신으로 초기화하거나 객체를 free하지 않습니다."
+      "title": "맨 앞 하나 꺼내기",
+      "text": "del_first는 acquire 방식으로 헤드를 읽어 뒤 자료 관측 순서를 맞춥니다. NULL이면 끝내고 아니라면 next를 READ_ONCE로 읽어 헤드를 바꾸려 합니다. 실패하면 새 entry로 반복합니다. 성공하면 분리 노드를 반환하지만 next를 자기 자신으로 바꾸거나 메모리를 해제하지 않습니다."
     },
     {
-      "title": "소비자 제약과 ABA",
-      "text": "여러 생산자와 단일 del_first 소비자는 지원하지만 여러 del_first 소비자 또는 del_first와 del_all 소비자의 혼합에는 소비자 간 잠금이 필요합니다. 다른 소비자가 노드를 제거·재삽입해 헤드 주소는 같고 next는 달라지면 CAS가 변경 이력을 구분하지 못할 수 있습니다. 포인터가 원래 주소로 돌아오는 ABA와 노드 수명 문제를 연결해 이해합니다."
+      "title": "소비자 제한과 ABA",
+      "text": "여러 삽입자와 한 del_first 소비자는 가능하지만 del_first 소비자 여럿 또는 del_all 소비자와 혼합에는 소비자 간 잠금이 필요합니다. 다른 소비자가 빼고 다시 넣어 헤드 주소는 A로 돌아왔어도 그 A의 next는 달라질 수 있습니다. 이런 A→B→A 변경 이력을 주소 비교만으로 모르는 문제가 ABA이며 재사용 수명과 함께 봐야 합니다."
     },
     {
-      "title": "특정 헤드만 삭제",
-      "text": "llist_del_first_this는 acquire로 헤드를 읽고 entry!=this이면 false를 반환합니다. 같으면 next를 읽어 CAS하고 실패 시 다시 일치 여부를 검사합니다. 주석은 여러 호출자가 서로 다른 this를 제시하고 여러 add와 동시 실행하는 경우를 허용합니다. 전체 리스트에서 this를 찾아 지우는 함수가 아니며 this는 유효한 노드여야 합니다. NULL이면 빈 헤드와 같아진 뒤 next 접근이 발생할 수 있으므로 일반 실패 입력처럼 넘기지 않습니다."
+      "title": "지정 노드가 첫 노드일 때만",
+      "text": "del_first_this는 관측한 헤드가 this와 다르면 false입니다. 같을 때 next를 읽어 CAS하고 실패 시 일치 여부를 다시 확인합니다. 서로 다른 유효한 this를 주는 여러 호출자와 여러 삽입자가 함께 쓰는 경우를 주석이 허용합니다. 중간 노드 검색은 없고 NULL을 this로 주면 빈 헤드와 같아져 next 접근으로 갈 수 있어 일반 실패 입력처럼 주면 안 됩니다."
     },
     {
-      "title": "역순 변환",
-      "text": "reverse_order는 new_head=NULL에서 시작해 현재 노드의 다음을 저장하고 그 노드의 next를 new_head로 돌립니다. 모든 노드를 한 번 방문하므로 시간 O(n), 추가 공간 O(1)입니다. 빈 체인은 NULL을 반환합니다. 원자 연산이 없으므로 공유 중인 활성 체인을 임의로 뒤집는 동시성 함수가 아닙니다."
+      "title": "기존 줄을 뒤집기",
+      "text": "reverse는 새 헤드를 NULL로 두고 원래 다음을 보관한 뒤 현재 next를 새 헤드로 돌립니다. 한 번씩 방문해 시간 O(n), 보조 공간 O(1)이며 빈 줄은 NULL입니다. 새 노드를 복사하지 않습니다. 원자 연산도 없어 공유 중인 줄을 마음대로 뒤집는 동시 접근 도구가 아닙니다."
     },
     {
-      "title": "NMI와 CS 연결",
-      "text": "헤드 원자 연산이 가능하다는 사실만으로 NMI에서 안전한 것은 아닙니다. 주석은 ARCH_HAVE_NMI_SAFE_CMPXCHG가 없는 아키텍처의 NMI 사용을 제한합니다. CAS 성공 지점, 실패 재시도, acquire 관측, 생산자·소비자 조합, 스택 순서와 배치 소유권을 학습합니다. 소스 대조는 모든 CPU의 메모리 모델에 대한 실행 증명이 아닙니다."
+      "title": "특수 인터럽트와 검증 범위",
+      "text": "NMI는 일반 방식으로 막을 수 없는 특수 인터럽트입니다. 원자 연산이 있다는 이유만으로 여기서 안전한 것은 아니며 ARCH_HAVE_NMI_SAFE_CMPXCHG 조건을 지켜야 합니다. CAS 성공·재시도·acquire 관측과 생산자/소비자 약속을 읽는 일은 모든 CPU의 메모리 모델을 실행으로 증명한 것이 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "add_batch의 CAS가 실패하면 꼬리 next도 다시 쓰는가?",
+      "prompt": "묶음 CAS가 실패하면 꼬리 next도 다시 쓰나요?",
       "options": [
+        "네, 갱신된 기존 헤드에 다시 잇습니다.",
+        "아니요, 처음 본 값만 계속 씁니다."
+      ],
+      "answer": 0,
+      "explanation": "꼬리 대입이 반복 안에 있고 실패한 try_cmpxchg가 first를 갱신합니다.",
+      "original_prompt": "add_batch의 CAS가 실패하면 꼬리 next도 다시 쓰는가?",
+      "original_options": [
         "그렇다. 갱신된 기존 헤드에 다시 연결한다",
         "아니다. 최초 관측값을 영원히 사용한다"
       ],
-      "answer": 0,
-      "explanation": "꼬리 연결 대입은 do 루프 안에 있습니다. 실패한 try_cmpxchg는 expected인 first를 갱신합니다."
+      "original_explanation": "꼬리 연결 대입은 do 루프 안에 있습니다. 실패한 try_cmpxchg는 expected인 first를 갱신합니다."
     },
     {
-      "prompt": "여러 del_first 소비자는 생산자가 있어도 무조건 잠금 없이 안전한가?",
+      "prompt": "del_first 소비자가 여럿이어도 무조건 잠금 없이 되나요?",
       "options": [
+        "네, CAS가 모든 경쟁을 해결합니다.",
+        "아니요, 소비자 간 잠금이 필요한 조합입니다."
+      ],
+      "answer": 1,
+      "explanation": "헤드 주소가 돌아와도 next가 달라질 수 있어 단일 소비자 조건이 있습니다.",
+      "original_prompt": "여러 del_first 소비자는 생산자가 있어도 무조건 잠금 없이 안전한가?",
+      "original_options": [
         "그렇다. CAS가 있으므로 모든 경쟁이 해결된다",
         "아니다. 소비자 간 잠금이 필요한 조합이다"
       ],
-      "answer": 1,
-      "explanation": "헤드 주소가 되돌아와도 next가 바뀐 상태일 수 있습니다. 파일 주석이 단일 del_first 소비자 조건을 명시합니다."
+      "original_explanation": "헤드 주소가 되돌아와도 next가 바뀐 상태일 수 있습니다. 파일 주석이 단일 del_first 소비자 조건을 명시합니다."
     },
     {
-      "prompt": "del_first_this는 중간에 있는 지정 노드도 찾는가?",
+      "prompt": "del_first_this가 중간 노드도 찾아 지우나요?",
       "options": [
+        "아니요, 현재 맨 앞이 지정 노드일 때만 지웁니다.",
+        "네, 일치할 때까지 줄을 걷습니다."
+      ],
+      "answer": 0,
+      "explanation": "다르면 즉시 false이며 반복은 검색이 아니라 CAS 재시도입니다.",
+      "original_prompt": "del_first_this는 중간에 있는 지정 노드도 찾는가?",
+      "original_options": [
         "아니다. 현재 맨 앞이 지정 노드일 때만 제거한다",
         "그렇다. 일치할 때까지 체인을 순회한다"
       ],
-      "answer": 0,
-      "explanation": "entry!=this이면 즉시 false입니다. 선형 탐색 루프는 없고 CAS 재시도만 있습니다."
+      "original_explanation": "entry!=this이면 즉시 false입니다. 선형 탐색 루프는 없고 CAS 재시도만 있습니다."
     },
     {
-      "prompt": "reverse_order는 새 노드를 할당하는가?",
+      "prompt": "reverse_order는 새 노드를 만드나요?",
       "options": [
+        "네, 역순 복사본을 만듭니다.",
+        "아니요, 기존 next를 제자리에서 바꿉니다."
+      ],
+      "answer": 1,
+      "explanation": "보조 포인터만 쓰므로 분리된 줄의 소유권이 중요합니다.",
+      "original_prompt": "reverse_order는 새 노드를 할당하는가?",
+      "original_options": [
         "그렇다. 역순 복사본을 만든다",
         "아니다. 기존 next를 제자리에서 바꾼다"
       ],
-      "answer": 1,
-      "explanation": "보조 포인터만 사용하고 기존 노드의 next를 덮어씁니다. 분리한 체인의 소유권이 중요합니다."
+      "original_explanation": "보조 포인터만 사용하고 기존 노드의 next를 덮어씁니다. 분리한 체인의 소유권이 중요합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "두 생산자가 동시에 앞에 넣어 첫 CAS가 실패한 경우 새 꼬리를 어디에 다시 잇는지 그리세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Lock-less NULL terminated single linked list\n *\n * The basic atomic operation of this list is cmpxchg on long.  On\n * architectures that don't have NMI-safe cmpxchg implementation, the\n * list can NOT be used in NMI handlers.  So code that uses the list in\n * an NMI handler should depend on CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG.\n *\n * Copyright 2010,2011 Intel Corp.\n *   Author: Huang Ying <ying.huang@intel.com>\n */\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/llist.h>\n\n\n/**\n * llist_add_batch - add several linked entries in batch\n * @new_first:\tfirst entry in batch to be added\n * @new_last:\tlast entry in batch to be added\n * @head:\tthe head for your lock-less list\n *\n * Return whether list is empty before adding.\n */\nbool llist_add_batch(struct llist_node *new_first, struct llist_node *new_last,\n\t\t     struct llist_head *head)\n{\n\tstruct llist_node *first = READ_ONCE(head->first);\n\n\tdo {\n\t\tnew_last->next = first;\n\t} while (!try_cmpxchg(&head->first, &first, new_first));\n\n\treturn !first;\n}\nEXPORT_SYMBOL_GPL(llist_add_batch);\n\n/**\n * llist_del_first - delete the first entry of lock-less list\n * @head:\tthe head for your lock-less list\n *\n * If list is empty, return NULL, otherwise, return the first entry\n * deleted, this is the newest added one.\n *\n * Only one llist_del_first user can be used simultaneously with\n * multiple llist_add users without lock.  Because otherwise\n * llist_del_first, llist_add, llist_add (or llist_del_all, llist_add,\n * llist_add) sequence in another user may change @head->first->next,\n * but keep @head->first.  If multiple consumers are needed, please\n * use llist_del_all or use lock between consumers.\n */\nstruct llist_node *llist_del_first(struct llist_head *head)\n{\n\tstruct llist_node *entry, *next;\n\n\tentry = smp_load_acquire(&head->first);\n\tdo {\n\t\tif (entry == NULL)\n\t\t\treturn NULL;\n\t\tnext = READ_ONCE(entry->next);\n\t} while (!try_cmpxchg(&head->first, &entry, next));\n\n\treturn entry;\n}\nEXPORT_SYMBOL_GPL(llist_del_first);\n\n/**\n * llist_del_first_this - delete given entry of lock-less list if it is first\n * @head:\tthe head for your lock-less list\n * @this:\ta list entry.\n *\n * If head of the list is given entry, delete and return %true else\n * return %false.\n *\n * Multiple callers can safely call this concurrently with multiple\n * llist_add() callers, providing all the callers offer a different @this.\n */\nbool llist_del_first_this(struct llist_head *head,\n\t\t\t  struct llist_node *this)\n{\n\tstruct llist_node *entry, *next;\n\n\t/* acquire ensures orderig wrt try_cmpxchg() is llist_del_first() */\n\tentry = smp_load_acquire(&head->first);\n\tdo {\n\t\tif (entry != this)\n\t\t\treturn false;\n\t\tnext = READ_ONCE(entry->next);\n\t} while (!try_cmpxchg(&head->first, &entry, next));\n\n\treturn true;\n}\nEXPORT_SYMBOL_GPL(llist_del_first_this);\n\n/**\n * llist_reverse_order - reverse order of a llist chain\n * @head:\tfirst item of the list to be reversed\n *\n * Reverse the order of a chain of llist entries and return the\n * new first entry.\n */\nstruct llist_node *llist_reverse_order(struct llist_node *head)\n{\n\tstruct llist_node *new_head = NULL;\n\n\twhile (head) {\n\t\tstruct llist_node *tmp = head;\n\t\thead = head->next;\n\t\ttmp->next = new_head;\n\t\tnew_head = tmp;\n\t}\n\n\treturn new_head;\n}\nEXPORT_SYMBOL_GPL(llist_reverse_order);\n",
   "source_review": {
@@ -116,5 +136,153 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/llist.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-395bad44d6c461d8",
+    "path": "lib/llist.c",
+    "title": "잠금 없는 리스트 구현 전체: CAS 재시도와 조건부 삭제",
+    "area": "연결 리스트 · 원자 연산 · ABA · 소유권",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "NULL로 끝나는 단일 연결 리스트에 묶음을 넣거나 맨 앞 노드를 제거하는 구현입니다.",
+    "guide": [
+      "헤드 포인터를 try_cmpxchg로 바꾸되 경쟁으로 값이 달라지면 새 관측값에 맞춰 재시도합니다. 임의의 소비자 조합까지 자동으로 안전한 자료구조는 아닙니다.",
+      "하나의 del_first 소비자와 여러 생산자, 또는 del_all 소비자 조합 같은 명시적 계약을 지킵니다. 분리한 체인의 메모리 소유권과 재사용도 호출자가 관리해야 합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL SPDX, NMI와 cmpxchg 제약, 저작권·작성자, kernel/export/llist 포함 뒤에 add_batch, del_first, del_first_this, reverse_order 네 함수와 GPL export가 있습니다. 노드 할당·해제와 대기 큐 처리는 이 파일의 역할이 아닙니다."
+      },
+      {
+        "title": "묶음 삽입",
+        "text": "llist_add_batch는 READ_ONCE로 기존 first를 읽고 new_last->next=first로 새 체인의 꼬리를 연결한 뒤 헤드를 new_first로 CAS합니다. 실패하면 try_cmpxchg가 first를 실제 관측값으로 갱신하므로 다음 반복에서 꼬리 연결도 다시 씁니다. 성공 시 !first를 반환해 그 삽입 직전에 비어 있었는지 알립니다. 이후에도 비어 있거나 혼자만 들어 있다는 보장은 아닙니다."
+      },
+      {
+        "title": "묶음의 선행 조건",
+        "text": "new_first에서 new_last까지의 체인은 호출자가 미리 연결해야 하며 유효한 노드를 전달해야 합니다. 함수가 중간 노드를 검사하거나 복사하지 않습니다. 단일 삽입은 헤더에서 같은 노드를 first와 last로 전달해 재사용합니다. 묶음 내부 순서는 그대로이고 기존 체인 앞에 놓입니다."
+      },
+      {
+        "title": "맨 앞 삭제",
+        "text": "llist_del_first는 smp_load_acquire로 entry를 읽고 NULL이면 반환합니다. entry->next를 READ_ONCE로 얻은 뒤 헤드를 next로 CAS합니다. 경쟁 실패 시 갱신된 entry에 대해 반복합니다. 성공하면 분리한 entry를 반환하지만 next를 자기 자신으로 초기화하거나 객체를 free하지 않습니다."
+      },
+      {
+        "title": "소비자 제약과 ABA",
+        "text": "여러 생산자와 단일 del_first 소비자는 지원하지만 여러 del_first 소비자 또는 del_first와 del_all 소비자의 혼합에는 소비자 간 잠금이 필요합니다. 다른 소비자가 노드를 제거·재삽입해 헤드 주소는 같고 next는 달라지면 CAS가 변경 이력을 구분하지 못할 수 있습니다. 포인터가 원래 주소로 돌아오는 ABA와 노드 수명 문제를 연결해 이해합니다."
+      },
+      {
+        "title": "특정 헤드만 삭제",
+        "text": "llist_del_first_this는 acquire로 헤드를 읽고 entry!=this이면 false를 반환합니다. 같으면 next를 읽어 CAS하고 실패 시 다시 일치 여부를 검사합니다. 주석은 여러 호출자가 서로 다른 this를 제시하고 여러 add와 동시 실행하는 경우를 허용합니다. 전체 리스트에서 this를 찾아 지우는 함수가 아니며 this는 유효한 노드여야 합니다. NULL이면 빈 헤드와 같아진 뒤 next 접근이 발생할 수 있으므로 일반 실패 입력처럼 넘기지 않습니다."
+      },
+      {
+        "title": "역순 변환",
+        "text": "reverse_order는 new_head=NULL에서 시작해 현재 노드의 다음을 저장하고 그 노드의 next를 new_head로 돌립니다. 모든 노드를 한 번 방문하므로 시간 O(n), 추가 공간 O(1)입니다. 빈 체인은 NULL을 반환합니다. 원자 연산이 없으므로 공유 중인 활성 체인을 임의로 뒤집는 동시성 함수가 아닙니다."
+      },
+      {
+        "title": "NMI와 CS 연결",
+        "text": "헤드 원자 연산이 가능하다는 사실만으로 NMI에서 안전한 것은 아닙니다. 주석은 ARCH_HAVE_NMI_SAFE_CMPXCHG가 없는 아키텍처의 NMI 사용을 제한합니다. CAS 성공 지점, 실패 재시도, acquire 관측, 생산자·소비자 조합, 스택 순서와 배치 소유권을 학습합니다. 소스 대조는 모든 CPU의 메모리 모델에 대한 실행 증명이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "add_batch의 CAS가 실패하면 꼬리 next도 다시 쓰는가?",
+        "options": [
+          "그렇다. 갱신된 기존 헤드에 다시 연결한다",
+          "아니다. 최초 관측값을 영원히 사용한다"
+        ],
+        "answer": 0,
+        "explanation": "꼬리 연결 대입은 do 루프 안에 있습니다. 실패한 try_cmpxchg는 expected인 first를 갱신합니다."
+      },
+      {
+        "prompt": "여러 del_first 소비자는 생산자가 있어도 무조건 잠금 없이 안전한가?",
+        "options": [
+          "그렇다. CAS가 있으므로 모든 경쟁이 해결된다",
+          "아니다. 소비자 간 잠금이 필요한 조합이다"
+        ],
+        "answer": 1,
+        "explanation": "헤드 주소가 되돌아와도 next가 바뀐 상태일 수 있습니다. 파일 주석이 단일 del_first 소비자 조건을 명시합니다."
+      },
+      {
+        "prompt": "del_first_this는 중간에 있는 지정 노드도 찾는가?",
+        "options": [
+          "아니다. 현재 맨 앞이 지정 노드일 때만 제거한다",
+          "그렇다. 일치할 때까지 체인을 순회한다"
+        ],
+        "answer": 0,
+        "explanation": "entry!=this이면 즉시 false입니다. 선형 탐색 루프는 없고 CAS 재시도만 있습니다."
+      },
+      {
+        "prompt": "reverse_order는 새 노드를 할당하는가?",
+        "options": [
+          "그렇다. 역순 복사본을 만든다",
+          "아니다. 기존 next를 제자리에서 바꾼다"
+        ],
+        "answer": 1,
+        "explanation": "보조 포인터만 사용하고 기존 노드의 next를 덮어씁니다. 분리한 체인의 소유권이 중요합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Lock-less NULL terminated single linked list\n *\n * The basic atomic operation of this list is cmpxchg on long.  On\n * architectures that don't have NMI-safe cmpxchg implementation, the\n * list can NOT be used in NMI handlers.  So code that uses the list in\n * an NMI handler should depend on CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG.\n *\n * Copyright 2010,2011 Intel Corp.\n *   Author: Huang Ying <ying.huang@intel.com>\n */\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/llist.h>\n\n\n/**\n * llist_add_batch - add several linked entries in batch\n * @new_first:\tfirst entry in batch to be added\n * @new_last:\tlast entry in batch to be added\n * @head:\tthe head for your lock-less list\n *\n * Return whether list is empty before adding.\n */\nbool llist_add_batch(struct llist_node *new_first, struct llist_node *new_last,\n\t\t     struct llist_head *head)\n{\n\tstruct llist_node *first = READ_ONCE(head->first);\n\n\tdo {\n\t\tnew_last->next = first;\n\t} while (!try_cmpxchg(&head->first, &first, new_first));\n\n\treturn !first;\n}\nEXPORT_SYMBOL_GPL(llist_add_batch);\n\n/**\n * llist_del_first - delete the first entry of lock-less list\n * @head:\tthe head for your lock-less list\n *\n * If list is empty, return NULL, otherwise, return the first entry\n * deleted, this is the newest added one.\n *\n * Only one llist_del_first user can be used simultaneously with\n * multiple llist_add users without lock.  Because otherwise\n * llist_del_first, llist_add, llist_add (or llist_del_all, llist_add,\n * llist_add) sequence in another user may change @head->first->next,\n * but keep @head->first.  If multiple consumers are needed, please\n * use llist_del_all or use lock between consumers.\n */\nstruct llist_node *llist_del_first(struct llist_head *head)\n{\n\tstruct llist_node *entry, *next;\n\n\tentry = smp_load_acquire(&head->first);\n\tdo {\n\t\tif (entry == NULL)\n\t\t\treturn NULL;\n\t\tnext = READ_ONCE(entry->next);\n\t} while (!try_cmpxchg(&head->first, &entry, next));\n\n\treturn entry;\n}\nEXPORT_SYMBOL_GPL(llist_del_first);\n\n/**\n * llist_del_first_this - delete given entry of lock-less list if it is first\n * @head:\tthe head for your lock-less list\n * @this:\ta list entry.\n *\n * If head of the list is given entry, delete and return %true else\n * return %false.\n *\n * Multiple callers can safely call this concurrently with multiple\n * llist_add() callers, providing all the callers offer a different @this.\n */\nbool llist_del_first_this(struct llist_head *head,\n\t\t\t  struct llist_node *this)\n{\n\tstruct llist_node *entry, *next;\n\n\t/* acquire ensures orderig wrt try_cmpxchg() is llist_del_first() */\n\tentry = smp_load_acquire(&head->first);\n\tdo {\n\t\tif (entry != this)\n\t\t\treturn false;\n\t\tnext = READ_ONCE(entry->next);\n\t} while (!try_cmpxchg(&head->first, &entry, next));\n\n\treturn true;\n}\nEXPORT_SYMBOL_GPL(llist_del_first_this);\n\n/**\n * llist_reverse_order - reverse order of a llist chain\n * @head:\tfirst item of the list to be reversed\n *\n * Reverse the order of a chain of llist entries and return the\n * new first entry.\n */\nstruct llist_node *llist_reverse_order(struct llist_node *head)\n{\n\tstruct llist_node *new_head = NULL;\n\n\twhile (head) {\n\t\tstruct llist_node *tmp = head;\n\t\thead = head->next;\n\t\ttmp->next = new_head;\n\t\tnew_head = tmp;\n\t}\n\n\treturn new_head;\n}\nEXPORT_SYMBOL_GPL(llist_reverse_order);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "3e2951fcb7b7b746c7e99ecbd152e7aca6378d4c037bb97d36818df0bee45f7d",
+      "scope": "whole-file",
+      "line_count": 116,
+      "authoring_source": "course/file_units/lockless_lists.py",
+      "sections": [
+        "전체 구성",
+        "묶음 삽입",
+        "묶음의 선행 조건",
+        "맨 앞 삭제",
+        "소비자 제약과 ABA",
+        "특정 헤드만 삭제",
+        "역순 변환",
+        "NMI와 CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/llist.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "여러 사람이 줄 맨 앞에 작업 묶음을 넣을 때, 내가 본 맨 앞이 그대로인지 확인하며 교체합니다. 확인 실패 때는 새 상황을 읽고 다시 연결합니다.",
+    "meaning": "llist의 비교·교환 재시도와 소비자 조합·노드 수명 조건을 이해합니다.",
+    "exercise": "두 생산자가 동시에 앞에 넣어 첫 CAS가 실패한 경우 새 꼬리를 어디에 다시 잇는지 그리세요."
+  },
+  "goal": "llist의 비교·교환 재시도와 소비자 조합·노드 수명 조건을 이해합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "두 생산자가 동시에 앞에 넣어 첫 CAS가 실패한 경우 새 꼬리를 어디에 다시 잇는지 그리세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "ab325cbbf1c4e94cedc5f6bee935a079972e274e8fe13bab324ff51bce117291",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

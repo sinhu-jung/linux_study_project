@@ -5,54 +5,62 @@
   "area": "정수 타입 · 전처리·ABI·고정소수점",
   "track": "files",
   "kind": "kernel",
-  "intro": "같은 상수 규칙을 여러 계층에서 재사용하는 포함 구조입니다.",
+  "intro": "UL·ULL 별칭과 실제 C·어셈블리 처리가 있는 UAPI 헤더의 역할을 나눠 읽습니다.",
   "guide": [
-    "uapi/linux/const.h를 포함하고 UL(x)를 _UL(x),ULL(x)를 _ULL(x)로 연결합니다.",
-    "UL/ULL은 산술 값을 런타임 변환하는 함수가 아니라 전처리 상수 표현을 만드는 매크로입니다. 실제 C·어셈블리 분기는 포함한 UAPI 헤더에 있습니다."
+    "UL과 ULL은 실행 중 숫자를 바꾸는 함수가 아니라 코드를 준비할 때 상수 표기를 만드는 매크로입니다.",
+    "C에서는 각각 unsigned long과 unsigned long long 타입 표시를 붙입니다.",
+    "어셈블리에서는 포함한 UAPI 헤더가 타입 접미사를 빼 줍니다. 실제 분기가 있는 파일을 구별합니다."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "SPDX GPL-2.0, __VDSO_CONST_H guard,단일 include,별칭2개,#endif가 전부입니다. 함수나 가변 전역 상태는 없습니다."
+      "title": "별칭 두 개의 파일",
+      "text": "라이선스, __VDSO_CONST_H 중복 포함 방지, uapi/linux/const.h 포함과 UL·ULL 별칭 두 개가 전부입니다. 함수나 실행 중 바뀌는 전역 자료는 없습니다."
     },
     {
-      "title": "위임 관계",
-      "text": "UL(1)은 C 문맥에서 _UL과 _AC를 거쳐1UL 상수를 만듭니다. 어셈블리 문맥에서는 UAPI의 분기에 따라 접미사가 제거됩니다. 이 파일이 별도의 또 다른 비트 연산 알고리즘을 구현하지는 않습니다."
+      "title": "공통 도구에 맡기기",
+      "text": "C에서 UL(1)은 _UL과 _AC를 거쳐 1UL을 만듭니다. 어셈블리에서는 UAPI의 조건 분기로 접미사가 빠집니다. 이 파일이 새로운 비트 계산 방법을 별도로 구현한 것은 아닙니다."
     },
     {
-      "title": "타입과 사용 제한",
-      "text": "unsigned long과 unsigned long long은 구분되는 C 타입입니다. 두 타입의 폭이 같을 수 있어도 타입 자체가 같아지는 것은 아닙니다. 접미사 붙이기 매크로에는 일반 변수나 임의 산술식을 전달하는 용도로 해석하지 않습니다."
+      "title": "타입과 입력의 제한",
+      "text": "unsigned long과 unsigned long long은 둘 다 부호 없는 정수지만 서로 다른 C 타입입니다. 어떤 환경에서 비트 수가 같아도 같은 타입이 되지는 않습니다. 숫자 표기에 접미사를 붙이는 도구이므로 일반 변수나 아무 산술식에나 적용하는 변환 함수로 생각하지 않습니다."
     }
   ],
   "questions": [
     {
-      "prompt": "UL과 ULL의 C 타입은 항상 같은가?",
+      "prompt": "UL과 ULL은 C에서 항상 같은 타입인가요?",
       "options": [
+        "아니요. unsigned long과 unsigned long long으로 다릅니다.",
+        "네. 둘 다 부호 없으므로 같습니다."
+      ],
+      "answer": 0,
+      "explanation": "부호가 같아도 정수 타입의 종류는 다릅니다. 특정 환경에서 폭이 같을 수는 있습니다.",
+      "original_prompt": "UL과 ULL의 C 타입은 항상 같은가?",
+      "original_options": [
         "아니다. 각각 unsigned long과 unsigned long long이다",
         "그렇다. 둘 다 unsigned이므로 같은 타입이다"
       ],
-      "answer": 0,
-      "explanation": "부호가 같아도 정수 타입의 순위와 폭은 별개입니다. 구체 ABI에서는 폭이 같을 수도 있습니다."
+      "original_explanation": "부호가 같아도 정수 타입의 순위와 폭은 별개입니다. 구체 ABI에서는 폭이 같을 수도 있습니다."
     },
     {
-      "prompt": "C·어셈블리 분기를 이 파일이 직접 정의하는가?",
+      "prompt": "이 파일 안에 C와 어셈블리를 가르는 분기가 있나요?",
       "options": [
+        "네. 이 파일이 __ASSEMBLY__ 분기를 직접 정의합니다.",
+        "아니요. 포함한 UAPI const 헤더가 처리합니다."
+      ],
+      "answer": 1,
+      "explanation": "여기는 include와 별칭 두 개만 있습니다. 실제 처리를 맡은 위치까지 따라 읽습니다.",
+      "original_prompt": "C·어셈블리 분기를 이 파일이 직접 정의하는가?",
+      "original_options": [
         "그렇다. 이 파일 안에 __ASSEMBLY__ 분기가 있다",
         "아니다. 포함한 UAPI const 헤더에 위임한다"
       ],
-      "answer": 1,
-      "explanation": "원문은 include와 UL/ULL 별칭뿐입니다. 실제 분기 위치까지 추적해야 파일별 책임을 구분할 수 있습니다."
+      "original_explanation": "원문은 include와 UL/ULL 별칭뿐입니다. 실제 분기 위치까지 추적해야 파일별 책임을 구분할 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "UL(1)에서 _UL, _AC를 따라 C 상수 1UL까지 이어 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_CONST_H\n#define __VDSO_CONST_H\n\n#include <uapi/linux/const.h>\n\n#define UL(x)\t\t(_UL(x))\n#define ULL(x)\t\t(_ULL(x))\n\n#endif /* __VDSO_CONST_H */\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/const.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-3267b9f723cf7c91",
+    "path": "include/vdso/const.h",
+    "title": "vDSO 상수 헤더 전체: 공통 UAPI 위의 짧은 별칭",
+    "area": "정수 타입 · 전처리·ABI·고정소수점",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "같은 상수 규칙을 여러 계층에서 재사용하는 포함 구조입니다.",
+    "guide": [
+      "uapi/linux/const.h를 포함하고 UL(x)를 _UL(x),ULL(x)를 _ULL(x)로 연결합니다.",
+      "UL/ULL은 산술 값을 런타임 변환하는 함수가 아니라 전처리 상수 표현을 만드는 매크로입니다. 실제 C·어셈블리 분기는 포함한 UAPI 헤더에 있습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "SPDX GPL-2.0, __VDSO_CONST_H guard,단일 include,별칭2개,#endif가 전부입니다. 함수나 가변 전역 상태는 없습니다."
+      },
+      {
+        "title": "위임 관계",
+        "text": "UL(1)은 C 문맥에서 _UL과 _AC를 거쳐1UL 상수를 만듭니다. 어셈블리 문맥에서는 UAPI의 분기에 따라 접미사가 제거됩니다. 이 파일이 별도의 또 다른 비트 연산 알고리즘을 구현하지는 않습니다."
+      },
+      {
+        "title": "타입과 사용 제한",
+        "text": "unsigned long과 unsigned long long은 구분되는 C 타입입니다. 두 타입의 폭이 같을 수 있어도 타입 자체가 같아지는 것은 아닙니다. 접미사 붙이기 매크로에는 일반 변수나 임의 산술식을 전달하는 용도로 해석하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "UL과 ULL의 C 타입은 항상 같은가?",
+        "options": [
+          "아니다. 각각 unsigned long과 unsigned long long이다",
+          "그렇다. 둘 다 unsigned이므로 같은 타입이다"
+        ],
+        "answer": 0,
+        "explanation": "부호가 같아도 정수 타입의 순위와 폭은 별개입니다. 구체 ABI에서는 폭이 같을 수도 있습니다."
+      },
+      {
+        "prompt": "C·어셈블리 분기를 이 파일이 직접 정의하는가?",
+        "options": [
+          "그렇다. 이 파일 안에 __ASSEMBLY__ 분기가 있다",
+          "아니다. 포함한 UAPI const 헤더에 위임한다"
+        ],
+        "answer": 1,
+        "explanation": "원문은 include와 UL/ULL 별칭뿐입니다. 실제 분기 위치까지 추적해야 파일별 책임을 구분할 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef __VDSO_CONST_H\n#define __VDSO_CONST_H\n\n#include <uapi/linux/const.h>\n\n#define UL(x)\t\t(_UL(x))\n#define ULL(x)\t\t(_ULL(x))\n\n#endif /* __VDSO_CONST_H */\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "063bec23979bceeb3207d1778776bd86eb44d0f5dd6e30b2b4c39cedc2e32490",
+      "scope": "whole-file",
+      "line_count": 10,
+      "authoring_source": "course/file_units/math_contracts.py",
+      "sections": [
+        "전체 파일",
+        "위임 관계",
+        "타입과 사용 제한"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/vdso/const.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "긴 이름의 공통 도구에 짧은 별명을 붙인 파일입니다. UL과 ULL을 쓰면 이미 준비된 상수 만들기 도구로 이어집니다.",
+    "meaning": "UL·ULL 별칭과 실제 C·어셈블리 처리가 있는 UAPI 헤더의 역할을 나눠 읽습니다.",
+    "exercise": "UL(1)에서 _UL, _AC를 따라 C 상수 1UL까지 이어 보세요."
+  },
+  "goal": "UL·ULL 별칭과 실제 C·어셈블리 처리가 있는 UAPI 헤더의 역할을 나눠 읽습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "UL(1)에서 _UL, _AC를 따라 C 상수 1UL까지 이어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "940cc165ba80815828da1097d652fce6ebeaa3c1207f9cc72570514553753eae",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

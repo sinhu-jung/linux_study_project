@@ -5,121 +5,147 @@
   "area": "세마포어 · 동기화 · 대기 큐 · 스케줄링",
   "track": "files",
   "kind": "kernel",
-  "intro": "자원이 남으면 즉시 감소시키고, 없으면 큐에서 기다리다가 반납자가 특정 대기자에게 직접 인계하는 계수형 세마포어입니다.",
+  "intro": "세마포어의 직접 인계, 신호·시간 초과 경쟁과 함수별 결과를 설명합니다.",
   "guide": [
-    "대기자가 있을 때 up은 공개 count를 늘리지 않고 첫 대기자의 up 플래그를 설정합니다. 타임아웃·신호와 인계의 승패는 잠금 아래 상태 확인 순서로 정해집니다.",
-    "획득 성공은0, 신호 중단은 -EINTR, 시간 초과는 -ETIME입니다. completion의 반환 규약과 혼동하지 않고 실제로 획득한 경우에만 해당 자원을 사용합니다."
+    "토큰은 자원을 한 번 사용할 수 있는 몫을 뜻합니다.",
+    "FIFO는 먼저 줄 선 사람을 먼저 선택하는 순서입니다.",
+    "irqsave는 인터럽트 상태를 저장하고 막았다가 나중에 원래대로 되돌리는 방식입니다."
   ],
   "deep_dive": [
     {
       "title": "전체 구성",
-      "text": "GPL-2.0-only·저작권·설계 주석, compiler/kernel/export/sched/debug/semaphore/spinlock/ftrace/lock trace 포함, 느린 경로 전방 선언, 여섯 public API와 export, waiter 구조체, 공통 대기와 trace wrapper, 상태별 noinline 함수와 __up으로 끝납니다. 느린 경로를 분리해 빠른 획득 코드를 짧게 유지합니다."
+      "text": "파일은 여섯 공개 API와 느린 대기 함수, 대기자 구조, 공통 반복, 추적 처리와 인계 함수로 구성됩니다. 빨리 얻는 코드를 짧게 유지하려고 경쟁할 때의 경로를 분리합니다."
     },
     {
       "title": "공통 상태와 IRQ",
-      "text": "lock은 count와 wait_list를 보호하며 count는 앞으로 즉시 획득할 수 있는 수입니다.0이면 대기자가 있을 수도 있지만0이라는 사실 자체가 대기자 수는 아닙니다. trylock과 up의 IRQ 호출 때문에 irqsave를 사용하며 주석은 성공이 확실한 down의 역사적 호출도 언급합니다. 잠들 수 있는 경로에는 might_sleep이 있으므로 일반적인 IRQ 대기 허용으로 읽지 않습니다."
+      "text": "내부 잠금이 count와 대기 줄을 보호합니다. count는 앞으로 즉시 얻을 수 있는 몫이며 0이라고 대기자 수를 알 수는 없습니다. trylock과 up의 인터럽트 호출 때문에 irqsave를 씁니다. 성공이 확실한 down의 역사적 호출 설명을 일반적인 인터럽트 중 수면 허용으로 확대하지 않습니다."
     },
     {
       "title": "기본 획득",
-      "text": "down은 might_sleep 후 irqsave 잠금 아래 count>0이면 감소하고 아니면 __down으로 갑니다. 원문은 down 사용을 deprecated로 표시하고 interruptible 또는 killable을 권합니다. __down은 TASK_UNINTERRUPTIBLE과 MAX_SCHEDULE_TIMEOUT을 쓰므로 일반 신호로 기다림을 중단하지 않습니다."
+      "text": "down은 잠들 수 있는 문맥인지 확인하고 내부 잠금 아래 남은 count를 하나 줄입니다. 없으면 끊을 수 없는 상태로 최대 대기 시간을 써 기다립니다. 원문은 이 함수 사용을 더 이상 권장하지 않고 interruptible이나 killable을 권합니다."
     },
     {
       "title": "중단 가능한 획득",
-      "text": "down_interruptible과 down_killable도 count가 남으면 즉시 감소하고0입니다. 없는 경우 각각 TASK_INTERRUPTIBLE, TASK_KILLABLE로 대기해 신호 또는 치명적 신호 중단 시 -EINTR입니다. 빠른 성공 경로는 pending signal을 먼저 검사하지 않으므로 신호가 있다는 이유만으로 모든 호출이 실패하는 것은 아닙니다."
+      "text": "interruptible과 killable도 자원이 남으면 즉시 줄여 성공 0을 반환합니다. 없으면 각각 일반 신호 또는 치명적 신호에 반응하는 상태로 기다리며 중단하면 -EINTR입니다. 빠른 경로는 신호를 먼저 검사하지 않으므로 신호가 있다고 모든 호출이 실패하지는 않습니다."
     },
     {
       "title": "비대기 획득의 반환 반전",
-      "text": "down_trylock은 잠금 아래 count-1을 int 지역변수에 계산하고 음수가 아니면 count를 갱신합니다. 반환은 count<0이므로 성공0, 실패1입니다. spin_trylock/mutex_trylock의 성공 true와 반대라는 경고가 있습니다. 여기에는 참조 계수 같은 포화 방어가 없고 임의의 거대한 초기값이나 잘못된 반납을 허용하는 검증 API가 아닙니다."
+      "text": "down_trylock은 count-1 후보를 int에 담고 음수가 아니면 적용합니다. 음수인지 반환하므로 성공 0, 실패 1이며 mutex_trylock 등과 반대입니다. 횟수 넘침을 포화시켜 막는 보호 장치가 아니므로 임의의 큰 초기값이나 잘못된 과다 반납을 검증해 주지 않습니다."
     },
     {
       "title": "시간 제한 획득",
-      "text": "down_timeout은 먼저 count를 확인하므로 자원이 즉시 있으면 timeout이0이어도 획득할 수 있습니다. 자원이 없으면 TASK_UNINTERRUPTIBLE로 지정 jiffies 동안 기다리고 만료는 -ETIME입니다. 성공0은 완료 대기의 timeout 성공 양수와 다른 계약입니다."
+      "text": "down_timeout도 먼저 남은 몫을 봅니다. 따라서 timeout이 0이어도 count가 있으면 즉시 성공 0입니다. 없으면 지정 jiffies 동안 끊을 수 없는 상태로 기다리고 만료 시 -ETIME입니다. 완료 대기 함수처럼 성공을 양수로 돌려주는 규칙과 다릅니다."
     },
     {
       "title": "반납과 인계 분기",
-      "text": "up은 irqsave 잠금 아래 wait_list가 비었으면 count를1 늘립니다. 대기자가 있으면 __up으로 가서 첫 항목을 제거하고 waiter.up=true, wake_up_process를 수행합니다. 이 경우 count를 늘리지 않으므로 대기자에게 준 몫을 새 호출자가 공개 count에서 가로채는 구조가 아닙니다."
+      "text": "up은 대기 줄이 비면 count를 하나 늘립니다. 줄이 있으면 첫 대기자를 제거하고 그 사람의 up 표시를 true로 만든 뒤 깨웁니다. 이때 count는 늘리지 않으므로 이미 줄 선 사람의 몫을 새 호출자가 공개 count에서 가져갈 수 없습니다."
     },
     {
       "title": "지역 waiter",
-      "text": "semaphore_waiter는 list, task, bool up을 가지며 공통 대기의 스택에 존재합니다. 큐 꼬리에 붙이고 current와 false를 기록합니다. 이 객체를 깨우는 쪽이 접근하므로 함수 반환 전에 성공 인계 또는 실패 정리로 목록에서 반드시 빠져야 합니다."
+      "text": "대기자 자료에는 목록 연결, 태스크, up 표시가 있으며 기다리는 함수의 스택에 놓입니다. 꼬리에 추가하고 현재 태스크와 false를 적습니다. 함수가 끝나면 이 지역 자료가 사라지므로 성공 인계나 실패 정리에서 반드시 목록에서 빠져야 합니다."
     },
     {
       "title": "수면 반복",
-      "text": "___down_common은 잠금을 보유한 채 시작해 signal_pending_state, timeout<=0 순서로 검사합니다. 계속 기다리면 태스크 상태를 바꾸고 unlock_irq 후 schedule_timeout, lock_irq 후 waiter.up을 확인합니다. up이면 즉시0으로 성공합니다. 깨웠지만 아직 인계되지 않았다면 반복하므로 깨우기 자체만으로 획득을 인정하지 않습니다."
+      "text": "공통 대기는 잠금 아래 신호, 남은 시간 순으로 검사합니다. 더 기다리면 상태를 설정하고 잠금과 인터럽트 차단을 풀어 schedule_timeout으로 쉽니다. 돌아와 다시 잠근 뒤 up 표시를 확인합니다. 깨웠다는 사실만으로 획득이 아니며 몫을 받았는지 확인합니다."
     },
     {
       "title": "경계 경쟁과 실패 정리",
-      "text": "수면에서 돌아와 잠금을 잡았을 때 waiter.up이면 다음 반복의 신호·만료 검사보다 성공이 먼저입니다. 아직 인계가 없고 신호 또는 만료 조건이 확인되면 list_del 후 각각 -EINTR, -ETIME입니다. 같은 잠금이 인계와 제거를 직렬화하므로 반환한 스택 waiter를 목록에 남기지 않습니다."
+      "text": "잠에서 돌아와 up이 true이면 다음 반복의 신호·시간 검사보다 먼저 성공합니다. 아직 인계가 없고 신호나 만료를 확인하면 목록에서 지우고 -EINTR 또는 -ETIME을 반환합니다. 같은 잠금이 인계와 제거를 한 번씩 처리하게 해 사라진 스택 자료가 줄에 남지 않게 합니다."
     },
     {
       "title": "계측과 상태별 wrapper",
-      "text": "__down_common은 trace_contention_begin(sem,0), 실제 공통 대기, trace_contention_end(sem,ret)를 연결합니다. __down/interruptible/killable/timeout은 상태와 timeout 값을 고정해 전달하는 noinline 함수입니다. 주석은 inline 핵심 함수의 상수 인자가 최적화될 수 있다고 설명하며 이 계측이 자원을 획득하는 별도 알고리즘인 것은 아닙니다."
+      "text": "공통 함수 바깥은 경쟁 시작과 끝을 trace로 기록합니다. 상태별 함수는 대기 상태와 시간값을 고정해 전달하며 핵심 인라인 함수의 상수 인수는 최적화될 수 있습니다. 기록 기능이 별도의 자원 획득 알고리즘인 것은 아닙니다."
     },
     {
       "title": "공정성과 소유권",
-      "text": "꼬리 삽입과 첫 항목 인계는 대기자 선택의 FIFO를 만듭니다. CPU에서 실제 후속 작업 완료 순서나 우선순위 상속을 보장하는 코드는 아닙니다. mutex와 달리 다른 실행 주체의 up이 가능하지만 count의 균형과 객체 수명은 호출자의 프로토콜로 유지해야 합니다."
+      "text": "꼬리에 넣고 맨 앞에 인계하므로 대기자 선택은 FIFO입니다. 하지만 실제 CPU에서 일을 끝내는 순서나 우선순위 상속을 보장하지는 않습니다. 다른 주체가 up할 수 있어도 몫 수의 균형과 객체 수명은 호출자의 규칙으로 지켜야 합니다."
     },
     {
       "title": "CS 연결과 검증 범위",
-      "text": "자원 토큰, 직접 인계, FIFO 큐, 스택 대기 객체의 수명, 상태 전이의 잠금 직렬화, 성공과 오류의 반환 규약을 학습합니다. 원본 대조는 실제 스케줄러와 모든 신호·IRQ 경쟁을 실행한 검사가 아닙니다."
+      "text": "자원 몫의 직접 전달, 대기 줄, 지역 자료의 수명과 잠금 아래 상태 변경을 함께 읽습니다. 획득 성공을 확인한 뒤 자원을 사용해야 합니다. 원본 검토는 실제 스케줄러와 모든 신호·인터럽트 경쟁을 실행 시험했다는 뜻은 아닙니다."
     }
   ],
   "questions": [
     {
-      "prompt": "down_trylock이0을 반환했을 때 의미는?",
+      "prompt": "down_trylock의 결과가 0이면 무엇인가요?",
       "options": [
+        "세마포어를 얻은 성공입니다.",
+        "몫이 없어 실패했다는 뜻입니다."
+      ],
+      "answer": 0,
+      "explanation": "다른 trylock의 성공 true 규칙과 반대라 주의해야 합니다.",
+      "original_prompt": "down_trylock이0을 반환했을 때 의미는?",
+      "original_options": [
         "세마포어 획득 성공이다",
         "자원이 없어 실패했다"
       ],
-      "answer": 0,
-      "explanation": "구현은 감소 후보가 음수인지 반환합니다. 문서는 spin_trylock과 mutex_trylock의 성공 true 규약과 반대라고 경고합니다."
+      "original_explanation": "구현은 감소 후보가 음수인지 반환합니다. 문서는 spin_trylock과 mutex_trylock의 성공 true 규약과 반대라고 경고합니다."
     },
     {
-      "prompt": "대기자가 있을 때 up은 먼저 count를 늘리는가?",
+      "prompt": "기다리는 사람이 있을 때 up은 count부터 늘리나요?",
       "options": [
+        "네. count를 늘려 모두 다시 경쟁하게 합니다.",
+        "아니요. 첫 대기자의 up 표시로 직접 몫을 넘깁니다."
+      ],
+      "answer": 1,
+      "explanation": "count 증가는 대기 줄이 비었을 때만 합니다.",
+      "original_prompt": "대기자가 있을 때 up은 먼저 count를 늘리는가?",
+      "original_options": [
         "그렇다. count를 늘린 뒤 모든 대기자가 경쟁하게 한다",
         "아니다. 첫 대기자에게 up 플래그로 직접 인계한다"
       ],
-      "answer": 1,
-      "explanation": "__up은 첫 항목 제거, up=true, wake_up_process를 수행합니다. count 증가는 대기 목록이 비어 있는 분기에만 있습니다."
+      "original_explanation": "__up은 첫 항목 제거, up=true, wake_up_process를 수행합니다. count 증가는 대기 목록이 비어 있는 분기에만 있습니다."
     },
     {
-      "prompt": "down_timeout에 timeout0을 주었지만 count가1이면?",
+      "prompt": "timeout은 0이지만 count가 1이면 어떻게 되나요?",
       "options": [
+        "즉시 얻고 0을 반환할 수 있습니다.",
+        "항상 -ETIME입니다."
+      ],
+      "answer": 0,
+      "explanation": "남은 몫 확인이 느린 경로의 시간 검사보다 앞섭니다.",
+      "original_prompt": "down_timeout에 timeout0을 주었지만 count가1이면?",
+      "original_options": [
         "즉시 획득해0을 반환할 수 있다",
         "언제나 -ETIME이다"
       ],
-      "answer": 0,
-      "explanation": "public 함수의 빠른 경로는 timeout 검사보다 먼저 count를 줄입니다. timeout 검사는 자원이 없어 느린 대기에 들어간 경우에 적용됩니다."
+      "original_explanation": "public 함수의 빠른 경로는 timeout 검사보다 먼저 count를 줄입니다. timeout 검사는 자원이 없어 느린 대기에 들어간 경우에 적용됩니다."
     },
     {
-      "prompt": "수면 뒤 잠금을 다시 잡았을 때 waiter.up이 true이면 timeout이 끝났어도?",
+      "prompt": "다시 잠금을 잡았을 때 waiter.up이 true라면 시간이 끝났어도 어떻게 하나요?",
       "options": [
+        "받은 몫을 버리고 항상 -ETIME을 반환합니다.",
+        "성공 0을 반환합니다."
+      ],
+      "answer": 1,
+      "explanation": "이미 인계된 사실을 다음 시간 검사보다 먼저 확인합니다.",
+      "original_prompt": "수면 뒤 잠금을 다시 잡았을 때 waiter.up이 true이면 timeout이 끝났어도?",
+      "original_options": [
         "인계된 자원을 버리고 항상 -ETIME을 반환한다",
         "성공0을 반환한다"
       ],
-      "answer": 1,
-      "explanation": "깨어난 직후 up 검사가 다음 반복의 timeout 검사보다 앞섭니다. 잠금 아래 이미 인계된 사실을 확인하면 획득 성공으로 끝납니다."
+      "original_explanation": "깨어난 직후 up 검사가 다음 반복의 timeout 검사보다 앞섭니다. 잠금 아래 이미 인계된 사실을 확인하면 획득 성공으로 끝납니다."
     },
     {
-      "prompt": "interruptible 획득의 신호 오류는 completion과 같은 -ERESTARTSYS인가?",
+      "prompt": "신호 중단 오류가 completion처럼 -ERESTARTSYS인가요?",
       "options": [
+        "아니요. 이 구현은 -EINTR입니다.",
+        "네. 커널 대기는 모두 같은 오류입니다."
+      ],
+      "answer": 0,
+      "explanation": "비슷한 함수라도 각 반환 약속을 확인해야 합니다.",
+      "original_prompt": "interruptible 획득의 신호 오류는 completion과 같은 -ERESTARTSYS인가?",
+      "original_options": [
         "아니다. 이 구현은 -EINTR이다",
         "그렇다. 모든 커널 대기는 같은 오류다"
       ],
-      "answer": 0,
-      "explanation": "___down_common의 interrupted 레이블은 대기 항목을 제거하고 -EINTR을 반환합니다. 비슷한 대기 API라도 반환 계약을 개별 확인해야 합니다."
+      "original_explanation": "___down_common의 interrupted 레이블은 대기 항목을 제거하고 -EINTR을 반환합니다. 비슷한 대기 API라도 반환 계약을 개별 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "대기자 없음과 있음에서 up이 count와 waiter.up 중 무엇을 바꾸는지 그려 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (c) 2008 Intel Corporation\n * Author: Matthew Wilcox <willy@linux.intel.com>\n *\n * This file implements counting semaphores.\n * A counting semaphore may be acquired 'n' times before sleeping.\n * See mutex.c for single-acquisition sleeping locks which enforce\n * rules which allow code to be debugged more easily.\n */\n\n/*\n * Some notes on the implementation:\n *\n * The spinlock controls access to the other members of the semaphore.\n * down_trylock() and up() can be called from interrupt context, so we\n * have to disable interrupts when taking the lock.  It turns out various\n * parts of the kernel expect to be able to use down() on a semaphore in\n * interrupt context when they know it will succeed, so we have to use\n * irqsave variants for down(), down_interruptible() and down_killable()\n * too.\n *\n * The ->count variable represents how many more tasks can acquire this\n * semaphore.  If it's zero, there may be tasks waiting on the wait_list.\n */\n\n#include <linux/compiler.h>\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/sched.h>\n#include <linux/sched/debug.h>\n#include <linux/semaphore.h>\n#include <linux/spinlock.h>\n#include <linux/ftrace.h>\n#include <trace/events/lock.h>\n\nstatic noinline void __down(struct semaphore *sem);\nstatic noinline int __down_interruptible(struct semaphore *sem);\nstatic noinline int __down_killable(struct semaphore *sem);\nstatic noinline int __down_timeout(struct semaphore *sem, long timeout);\nstatic noinline void __up(struct semaphore *sem);\n\n/**\n * down - acquire the semaphore\n * @sem: the semaphore to be acquired\n *\n * Acquires the semaphore.  If no more tasks are allowed to acquire the\n * semaphore, calling this function will put the task to sleep until the\n * semaphore is released.\n *\n * Use of this function is deprecated, please use down_interruptible() or\n * down_killable() instead.\n */\nvoid __sched down(struct semaphore *sem)\n{\n\tunsigned long flags;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\t__down(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n}\nEXPORT_SYMBOL(down);\n\n/**\n * down_interruptible - acquire the semaphore unless interrupted\n * @sem: the semaphore to be acquired\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the sleep is interrupted by a signal, this function will return -EINTR.\n * If the semaphore is successfully acquired, this function returns 0.\n */\nint __sched down_interruptible(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_interruptible(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_interruptible);\n\n/**\n * down_killable - acquire the semaphore unless killed\n * @sem: the semaphore to be acquired\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the sleep is interrupted by a fatal signal, this function will return\n * -EINTR.  If the semaphore is successfully acquired, this function returns\n * 0.\n */\nint __sched down_killable(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_killable(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_killable);\n\n/**\n * down_trylock - try to acquire the semaphore, without waiting\n * @sem: the semaphore to be acquired\n *\n * Try to acquire the semaphore atomically.  Returns 0 if the semaphore has\n * been acquired successfully or 1 if it cannot be acquired.\n *\n * NOTE: This return value is inverted from both spin_trylock and\n * mutex_trylock!  Be careful about this when converting code.\n *\n * Unlike mutex_trylock, this function can be used from interrupt context,\n * and the semaphore can be released by any task or interrupt.\n */\nint __sched down_trylock(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint count;\n\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tcount = sem->count - 1;\n\tif (likely(count >= 0))\n\t\tsem->count = count;\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn (count < 0);\n}\nEXPORT_SYMBOL(down_trylock);\n\n/**\n * down_timeout - acquire the semaphore within a specified time\n * @sem: the semaphore to be acquired\n * @timeout: how long to wait before failing\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the semaphore is not released within the specified number of jiffies,\n * this function returns -ETIME.  It returns 0 if the semaphore was acquired.\n */\nint __sched down_timeout(struct semaphore *sem, long timeout)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_timeout(sem, timeout);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_timeout);\n\n/**\n * up - release the semaphore\n * @sem: the semaphore to release\n *\n * Release the semaphore.  Unlike mutexes, up() may be called from any\n * context and even by tasks which have never called down().\n */\nvoid __sched up(struct semaphore *sem)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(list_empty(&sem->wait_list)))\n\t\tsem->count++;\n\telse\n\t\t__up(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n}\nEXPORT_SYMBOL(up);\n\n/* Functions for the contended case */\n\nstruct semaphore_waiter {\n\tstruct list_head list;\n\tstruct task_struct *task;\n\tbool up;\n};\n\n/*\n * Because this function is inlined, the 'state' parameter will be\n * constant, and thus optimised away by the compiler.  Likewise the\n * 'timeout' parameter for the cases without timeouts.\n */\nstatic inline int __sched ___down_common(struct semaphore *sem, long state,\n\t\t\t\t\t\t\t\tlong timeout)\n{\n\tstruct semaphore_waiter waiter;\n\n\tlist_add_tail(&waiter.list, &sem->wait_list);\n\twaiter.task = current;\n\twaiter.up = false;\n\n\tfor (;;) {\n\t\tif (signal_pending_state(state, current))\n\t\t\tgoto interrupted;\n\t\tif (unlikely(timeout <= 0))\n\t\t\tgoto timed_out;\n\t\t__set_current_state(state);\n\t\traw_spin_unlock_irq(&sem->lock);\n\t\ttimeout = schedule_timeout(timeout);\n\t\traw_spin_lock_irq(&sem->lock);\n\t\tif (waiter.up)\n\t\t\treturn 0;\n\t}\n\n timed_out:\n\tlist_del(&waiter.list);\n\treturn -ETIME;\n\n interrupted:\n\tlist_del(&waiter.list);\n\treturn -EINTR;\n}\n\nstatic inline int __sched __down_common(struct semaphore *sem, long state,\n\t\t\t\t\tlong timeout)\n{\n\tint ret;\n\n\ttrace_contention_begin(sem, 0);\n\tret = ___down_common(sem, state, timeout);\n\ttrace_contention_end(sem, ret);\n\n\treturn ret;\n}\n\nstatic noinline void __sched __down(struct semaphore *sem)\n{\n\t__down_common(sem, TASK_UNINTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_interruptible(struct semaphore *sem)\n{\n\treturn __down_common(sem, TASK_INTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_killable(struct semaphore *sem)\n{\n\treturn __down_common(sem, TASK_KILLABLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_timeout(struct semaphore *sem, long timeout)\n{\n\treturn __down_common(sem, TASK_UNINTERRUPTIBLE, timeout);\n}\n\nstatic noinline void __sched __up(struct semaphore *sem)\n{\n\tstruct semaphore_waiter *waiter = list_first_entry(&sem->wait_list,\n\t\t\t\t\t\tstruct semaphore_waiter, list);\n\tlist_del(&waiter->list);\n\twaiter->up = true;\n\twake_up_process(waiter->task);\n}\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/semaphore.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-87ffcff418670437",
+    "path": "kernel/locking/semaphore.c",
+    "title": "세마포어 구현 전체: 직접 인계와 중단 가능한 자원 획득",
+    "area": "세마포어 · 동기화 · 대기 큐 · 스케줄링",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "자원이 남으면 즉시 감소시키고, 없으면 큐에서 기다리다가 반납자가 특정 대기자에게 직접 인계하는 계수형 세마포어입니다.",
+    "guide": [
+      "대기자가 있을 때 up은 공개 count를 늘리지 않고 첫 대기자의 up 플래그를 설정합니다. 타임아웃·신호와 인계의 승패는 잠금 아래 상태 확인 순서로 정해집니다.",
+      "획득 성공은0, 신호 중단은 -EINTR, 시간 초과는 -ETIME입니다. completion의 반환 규약과 혼동하지 않고 실제로 획득한 경우에만 해당 자원을 사용합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0-only·저작권·설계 주석, compiler/kernel/export/sched/debug/semaphore/spinlock/ftrace/lock trace 포함, 느린 경로 전방 선언, 여섯 public API와 export, waiter 구조체, 공통 대기와 trace wrapper, 상태별 noinline 함수와 __up으로 끝납니다. 느린 경로를 분리해 빠른 획득 코드를 짧게 유지합니다."
+      },
+      {
+        "title": "공통 상태와 IRQ",
+        "text": "lock은 count와 wait_list를 보호하며 count는 앞으로 즉시 획득할 수 있는 수입니다.0이면 대기자가 있을 수도 있지만0이라는 사실 자체가 대기자 수는 아닙니다. trylock과 up의 IRQ 호출 때문에 irqsave를 사용하며 주석은 성공이 확실한 down의 역사적 호출도 언급합니다. 잠들 수 있는 경로에는 might_sleep이 있으므로 일반적인 IRQ 대기 허용으로 읽지 않습니다."
+      },
+      {
+        "title": "기본 획득",
+        "text": "down은 might_sleep 후 irqsave 잠금 아래 count>0이면 감소하고 아니면 __down으로 갑니다. 원문은 down 사용을 deprecated로 표시하고 interruptible 또는 killable을 권합니다. __down은 TASK_UNINTERRUPTIBLE과 MAX_SCHEDULE_TIMEOUT을 쓰므로 일반 신호로 기다림을 중단하지 않습니다."
+      },
+      {
+        "title": "중단 가능한 획득",
+        "text": "down_interruptible과 down_killable도 count가 남으면 즉시 감소하고0입니다. 없는 경우 각각 TASK_INTERRUPTIBLE, TASK_KILLABLE로 대기해 신호 또는 치명적 신호 중단 시 -EINTR입니다. 빠른 성공 경로는 pending signal을 먼저 검사하지 않으므로 신호가 있다는 이유만으로 모든 호출이 실패하는 것은 아닙니다."
+      },
+      {
+        "title": "비대기 획득의 반환 반전",
+        "text": "down_trylock은 잠금 아래 count-1을 int 지역변수에 계산하고 음수가 아니면 count를 갱신합니다. 반환은 count<0이므로 성공0, 실패1입니다. spin_trylock/mutex_trylock의 성공 true와 반대라는 경고가 있습니다. 여기에는 참조 계수 같은 포화 방어가 없고 임의의 거대한 초기값이나 잘못된 반납을 허용하는 검증 API가 아닙니다."
+      },
+      {
+        "title": "시간 제한 획득",
+        "text": "down_timeout은 먼저 count를 확인하므로 자원이 즉시 있으면 timeout이0이어도 획득할 수 있습니다. 자원이 없으면 TASK_UNINTERRUPTIBLE로 지정 jiffies 동안 기다리고 만료는 -ETIME입니다. 성공0은 완료 대기의 timeout 성공 양수와 다른 계약입니다."
+      },
+      {
+        "title": "반납과 인계 분기",
+        "text": "up은 irqsave 잠금 아래 wait_list가 비었으면 count를1 늘립니다. 대기자가 있으면 __up으로 가서 첫 항목을 제거하고 waiter.up=true, wake_up_process를 수행합니다. 이 경우 count를 늘리지 않으므로 대기자에게 준 몫을 새 호출자가 공개 count에서 가로채는 구조가 아닙니다."
+      },
+      {
+        "title": "지역 waiter",
+        "text": "semaphore_waiter는 list, task, bool up을 가지며 공통 대기의 스택에 존재합니다. 큐 꼬리에 붙이고 current와 false를 기록합니다. 이 객체를 깨우는 쪽이 접근하므로 함수 반환 전에 성공 인계 또는 실패 정리로 목록에서 반드시 빠져야 합니다."
+      },
+      {
+        "title": "수면 반복",
+        "text": "___down_common은 잠금을 보유한 채 시작해 signal_pending_state, timeout<=0 순서로 검사합니다. 계속 기다리면 태스크 상태를 바꾸고 unlock_irq 후 schedule_timeout, lock_irq 후 waiter.up을 확인합니다. up이면 즉시0으로 성공합니다. 깨웠지만 아직 인계되지 않았다면 반복하므로 깨우기 자체만으로 획득을 인정하지 않습니다."
+      },
+      {
+        "title": "경계 경쟁과 실패 정리",
+        "text": "수면에서 돌아와 잠금을 잡았을 때 waiter.up이면 다음 반복의 신호·만료 검사보다 성공이 먼저입니다. 아직 인계가 없고 신호 또는 만료 조건이 확인되면 list_del 후 각각 -EINTR, -ETIME입니다. 같은 잠금이 인계와 제거를 직렬화하므로 반환한 스택 waiter를 목록에 남기지 않습니다."
+      },
+      {
+        "title": "계측과 상태별 wrapper",
+        "text": "__down_common은 trace_contention_begin(sem,0), 실제 공통 대기, trace_contention_end(sem,ret)를 연결합니다. __down/interruptible/killable/timeout은 상태와 timeout 값을 고정해 전달하는 noinline 함수입니다. 주석은 inline 핵심 함수의 상수 인자가 최적화될 수 있다고 설명하며 이 계측이 자원을 획득하는 별도 알고리즘인 것은 아닙니다."
+      },
+      {
+        "title": "공정성과 소유권",
+        "text": "꼬리 삽입과 첫 항목 인계는 대기자 선택의 FIFO를 만듭니다. CPU에서 실제 후속 작업 완료 순서나 우선순위 상속을 보장하는 코드는 아닙니다. mutex와 달리 다른 실행 주체의 up이 가능하지만 count의 균형과 객체 수명은 호출자의 프로토콜로 유지해야 합니다."
+      },
+      {
+        "title": "CS 연결과 검증 범위",
+        "text": "자원 토큰, 직접 인계, FIFO 큐, 스택 대기 객체의 수명, 상태 전이의 잠금 직렬화, 성공과 오류의 반환 규약을 학습합니다. 원본 대조는 실제 스케줄러와 모든 신호·IRQ 경쟁을 실행한 검사가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "down_trylock이0을 반환했을 때 의미는?",
+        "options": [
+          "세마포어 획득 성공이다",
+          "자원이 없어 실패했다"
+        ],
+        "answer": 0,
+        "explanation": "구현은 감소 후보가 음수인지 반환합니다. 문서는 spin_trylock과 mutex_trylock의 성공 true 규약과 반대라고 경고합니다."
+      },
+      {
+        "prompt": "대기자가 있을 때 up은 먼저 count를 늘리는가?",
+        "options": [
+          "그렇다. count를 늘린 뒤 모든 대기자가 경쟁하게 한다",
+          "아니다. 첫 대기자에게 up 플래그로 직접 인계한다"
+        ],
+        "answer": 1,
+        "explanation": "__up은 첫 항목 제거, up=true, wake_up_process를 수행합니다. count 증가는 대기 목록이 비어 있는 분기에만 있습니다."
+      },
+      {
+        "prompt": "down_timeout에 timeout0을 주었지만 count가1이면?",
+        "options": [
+          "즉시 획득해0을 반환할 수 있다",
+          "언제나 -ETIME이다"
+        ],
+        "answer": 0,
+        "explanation": "public 함수의 빠른 경로는 timeout 검사보다 먼저 count를 줄입니다. timeout 검사는 자원이 없어 느린 대기에 들어간 경우에 적용됩니다."
+      },
+      {
+        "prompt": "수면 뒤 잠금을 다시 잡았을 때 waiter.up이 true이면 timeout이 끝났어도?",
+        "options": [
+          "인계된 자원을 버리고 항상 -ETIME을 반환한다",
+          "성공0을 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "깨어난 직후 up 검사가 다음 반복의 timeout 검사보다 앞섭니다. 잠금 아래 이미 인계된 사실을 확인하면 획득 성공으로 끝납니다."
+      },
+      {
+        "prompt": "interruptible 획득의 신호 오류는 completion과 같은 -ERESTARTSYS인가?",
+        "options": [
+          "아니다. 이 구현은 -EINTR이다",
+          "그렇다. 모든 커널 대기는 같은 오류다"
+        ],
+        "answer": 0,
+        "explanation": "___down_common의 interrupted 레이블은 대기 항목을 제거하고 -EINTR을 반환합니다. 비슷한 대기 API라도 반환 계약을 개별 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/*\n * Copyright (c) 2008 Intel Corporation\n * Author: Matthew Wilcox <willy@linux.intel.com>\n *\n * This file implements counting semaphores.\n * A counting semaphore may be acquired 'n' times before sleeping.\n * See mutex.c for single-acquisition sleeping locks which enforce\n * rules which allow code to be debugged more easily.\n */\n\n/*\n * Some notes on the implementation:\n *\n * The spinlock controls access to the other members of the semaphore.\n * down_trylock() and up() can be called from interrupt context, so we\n * have to disable interrupts when taking the lock.  It turns out various\n * parts of the kernel expect to be able to use down() on a semaphore in\n * interrupt context when they know it will succeed, so we have to use\n * irqsave variants for down(), down_interruptible() and down_killable()\n * too.\n *\n * The ->count variable represents how many more tasks can acquire this\n * semaphore.  If it's zero, there may be tasks waiting on the wait_list.\n */\n\n#include <linux/compiler.h>\n#include <linux/kernel.h>\n#include <linux/export.h>\n#include <linux/sched.h>\n#include <linux/sched/debug.h>\n#include <linux/semaphore.h>\n#include <linux/spinlock.h>\n#include <linux/ftrace.h>\n#include <trace/events/lock.h>\n\nstatic noinline void __down(struct semaphore *sem);\nstatic noinline int __down_interruptible(struct semaphore *sem);\nstatic noinline int __down_killable(struct semaphore *sem);\nstatic noinline int __down_timeout(struct semaphore *sem, long timeout);\nstatic noinline void __up(struct semaphore *sem);\n\n/**\n * down - acquire the semaphore\n * @sem: the semaphore to be acquired\n *\n * Acquires the semaphore.  If no more tasks are allowed to acquire the\n * semaphore, calling this function will put the task to sleep until the\n * semaphore is released.\n *\n * Use of this function is deprecated, please use down_interruptible() or\n * down_killable() instead.\n */\nvoid __sched down(struct semaphore *sem)\n{\n\tunsigned long flags;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\t__down(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n}\nEXPORT_SYMBOL(down);\n\n/**\n * down_interruptible - acquire the semaphore unless interrupted\n * @sem: the semaphore to be acquired\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the sleep is interrupted by a signal, this function will return -EINTR.\n * If the semaphore is successfully acquired, this function returns 0.\n */\nint __sched down_interruptible(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_interruptible(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_interruptible);\n\n/**\n * down_killable - acquire the semaphore unless killed\n * @sem: the semaphore to be acquired\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the sleep is interrupted by a fatal signal, this function will return\n * -EINTR.  If the semaphore is successfully acquired, this function returns\n * 0.\n */\nint __sched down_killable(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_killable(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_killable);\n\n/**\n * down_trylock - try to acquire the semaphore, without waiting\n * @sem: the semaphore to be acquired\n *\n * Try to acquire the semaphore atomically.  Returns 0 if the semaphore has\n * been acquired successfully or 1 if it cannot be acquired.\n *\n * NOTE: This return value is inverted from both spin_trylock and\n * mutex_trylock!  Be careful about this when converting code.\n *\n * Unlike mutex_trylock, this function can be used from interrupt context,\n * and the semaphore can be released by any task or interrupt.\n */\nint __sched down_trylock(struct semaphore *sem)\n{\n\tunsigned long flags;\n\tint count;\n\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tcount = sem->count - 1;\n\tif (likely(count >= 0))\n\t\tsem->count = count;\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn (count < 0);\n}\nEXPORT_SYMBOL(down_trylock);\n\n/**\n * down_timeout - acquire the semaphore within a specified time\n * @sem: the semaphore to be acquired\n * @timeout: how long to wait before failing\n *\n * Attempts to acquire the semaphore.  If no more tasks are allowed to\n * acquire the semaphore, calling this function will put the task to sleep.\n * If the semaphore is not released within the specified number of jiffies,\n * this function returns -ETIME.  It returns 0 if the semaphore was acquired.\n */\nint __sched down_timeout(struct semaphore *sem, long timeout)\n{\n\tunsigned long flags;\n\tint result = 0;\n\n\tmight_sleep();\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(sem->count > 0))\n\t\tsem->count--;\n\telse\n\t\tresult = __down_timeout(sem, timeout);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n\n\treturn result;\n}\nEXPORT_SYMBOL(down_timeout);\n\n/**\n * up - release the semaphore\n * @sem: the semaphore to release\n *\n * Release the semaphore.  Unlike mutexes, up() may be called from any\n * context and even by tasks which have never called down().\n */\nvoid __sched up(struct semaphore *sem)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&sem->lock, flags);\n\tif (likely(list_empty(&sem->wait_list)))\n\t\tsem->count++;\n\telse\n\t\t__up(sem);\n\traw_spin_unlock_irqrestore(&sem->lock, flags);\n}\nEXPORT_SYMBOL(up);\n\n/* Functions for the contended case */\n\nstruct semaphore_waiter {\n\tstruct list_head list;\n\tstruct task_struct *task;\n\tbool up;\n};\n\n/*\n * Because this function is inlined, the 'state' parameter will be\n * constant, and thus optimised away by the compiler.  Likewise the\n * 'timeout' parameter for the cases without timeouts.\n */\nstatic inline int __sched ___down_common(struct semaphore *sem, long state,\n\t\t\t\t\t\t\t\tlong timeout)\n{\n\tstruct semaphore_waiter waiter;\n\n\tlist_add_tail(&waiter.list, &sem->wait_list);\n\twaiter.task = current;\n\twaiter.up = false;\n\n\tfor (;;) {\n\t\tif (signal_pending_state(state, current))\n\t\t\tgoto interrupted;\n\t\tif (unlikely(timeout <= 0))\n\t\t\tgoto timed_out;\n\t\t__set_current_state(state);\n\t\traw_spin_unlock_irq(&sem->lock);\n\t\ttimeout = schedule_timeout(timeout);\n\t\traw_spin_lock_irq(&sem->lock);\n\t\tif (waiter.up)\n\t\t\treturn 0;\n\t}\n\n timed_out:\n\tlist_del(&waiter.list);\n\treturn -ETIME;\n\n interrupted:\n\tlist_del(&waiter.list);\n\treturn -EINTR;\n}\n\nstatic inline int __sched __down_common(struct semaphore *sem, long state,\n\t\t\t\t\tlong timeout)\n{\n\tint ret;\n\n\ttrace_contention_begin(sem, 0);\n\tret = ___down_common(sem, state, timeout);\n\ttrace_contention_end(sem, ret);\n\n\treturn ret;\n}\n\nstatic noinline void __sched __down(struct semaphore *sem)\n{\n\t__down_common(sem, TASK_UNINTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_interruptible(struct semaphore *sem)\n{\n\treturn __down_common(sem, TASK_INTERRUPTIBLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_killable(struct semaphore *sem)\n{\n\treturn __down_common(sem, TASK_KILLABLE, MAX_SCHEDULE_TIMEOUT);\n}\n\nstatic noinline int __sched __down_timeout(struct semaphore *sem, long timeout)\n{\n\treturn __down_common(sem, TASK_UNINTERRUPTIBLE, timeout);\n}\n\nstatic noinline void __sched __up(struct semaphore *sem)\n{\n\tstruct semaphore_waiter *waiter = list_first_entry(&sem->wait_list,\n\t\t\t\t\t\tstruct semaphore_waiter, list);\n\tlist_del(&waiter->list);\n\twaiter->up = true;\n\twake_up_process(waiter->task);\n}\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "a6f6b77835ef0a0cef6a856177cd38f4e86d240ccec8469c58a5c2b3451b986c",
+      "scope": "whole-file",
+      "line_count": 279,
+      "authoring_source": "course/file_units/semaphores.py",
+      "sections": [
+        "전체 구성",
+        "공통 상태와 IRQ",
+        "기본 획득",
+        "중단 가능한 획득",
+        "비대기 획득의 반환 반전",
+        "시간 제한 획득",
+        "반납과 인계 분기",
+        "지역 waiter",
+        "수면 반복",
+        "경계 경쟁과 실패 정리",
+        "계측과 상태별 wrapper",
+        "공정성과 소유권",
+        "CS 연결과 검증 범위"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/locking/semaphore.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "반납한 공을 줄 맨 앞 친구에게 직접 건네면 새로 온 친구가 가로채지 못합니다. 세마포어의 up도 기다리는 사람이 있으면 공개된 남은 수를 늘리는 대신 그 사람에게 몫을 넘깁니다.",
+    "meaning": "세마포어의 직접 인계, 신호·시간 초과 경쟁과 함수별 결과를 설명합니다.",
+    "exercise": "대기자 없음과 있음에서 up이 count와 waiter.up 중 무엇을 바꾸는지 그려 보세요."
+  },
+  "goal": "세마포어의 직접 인계, 신호·시간 초과 경쟁과 함수별 결과를 설명합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "대기자 없음과 있음에서 up이 count와 waiter.up 중 무엇을 바꾸는지 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_e.json",
+    "authoring_sha256": "50662310b191f6cf0dbcee4c16f44167a1f669d9ea50dd34935007f37d24e8c0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

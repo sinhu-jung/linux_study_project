@@ -5,121 +5,147 @@
   "area": "연결 리스트 · 스케줄링 · 대기 큐 · 인터럽트 · 동시성",
   "track": "files",
   "kind": "kernel",
-  "intro": "태스크 포인터와 연결 리스트를 이용해 단순 대기 큐의 초기화·등록·깨우기·정리를 구현합니다.",
+  "intro": "swait.c는 대기 항목과 태스크 상태를 잠금 아래 바꾸며, 깨우기 방식마다 IRQ와 잠금의 책임이 달라요.",
   "guide": [
-    "대기 항목의 연결 상태와 태스크 상태를 잠금 아래 조정합니다. 조건 자체는 호출자가 관리하며, 깨우기는 조건 검사나 실행 완료를 대신하지 않습니다.",
-    "completion 등에서 내부 함수와 잠금 wrapper를 구분해 읽습니다. IRQ 문맥에서 모든 전체 깨우기 함수를 동일하게 사용할 수 있는 것은 아닙니다."
+    "태스크는 스케줄러가 관리하는 작업 단위예요. 실행 가능한 상태로 만드는 일과 지금 CPU에서 실행을 끝내는 일은 달라요.",
+    "리스트는 항목들이 앞뒤 주소로 이어진 목록이에요. list_del_init은 목록에서 빼고 자기 자신을 가리키는 빈 연결로 돌려놓아요.",
+    "irqsave는 이전 IRQ 상태를 보관해 나중에 복원하는 방식이에요. IRQ는 CPU에 들어오는 인터럽트 알림이며 일반 lock_irq/unlock_irq와 계약을 구분해야 해요."
   ],
   "deep_dive": [
     {
-      "title": "전체 구성",
-      "text": "GPL-2.0과 구현 소개 뒤 큐 초기화, 잠금 보유 상태의 단일·전체 깨우기, 단일·전체 wrapper, 내부 등록과 두 등록 wrapper, 내부·외부 정리가 있습니다. __init_swait_queue_head, swake_up_locked, swake_up_one/all, prepare_to_swait_exclusive/event, finish_swait는 EXPORT_SYMBOL입니다. 나머지 내부 함수와 completion 전용 전체 깨우기는 이 파일에서 별도로 export하지 않습니다."
+      "title": "구현의 전체 순서",
+      "text": "초기화, 잠금을 이미 잡은 단일·전체 깨우기, 잠금을 직접 관리하는 연결 함수, 내부 등록과 두 준비 함수, 내부·외부 정리가 있어요. __init_swait_queue_head, swake_up_locked, one/all, 두 prepare 함수와 finish_swait는 EXPORT_SYMBOL로 공개해요. 다른 내부 함수와 completion 전용 전체 깨우기는 여기서 별도 export하지 않아요."
     },
     {
-      "title": "초기화",
-      "text": "__init_swait_queue_head는 raw spinlock을 초기화하고 lockdep class와 name을 설정한 뒤 task_list를 빈 순환 리스트로 만듭니다. 여기에는 기다릴 조건의 값, 완료 신호 횟수 또는 timeout 저장이 없습니다. 호출자가 별도 조건과 큐의 수명을 관리해야 합니다."
+      "title": "빈 대기열 만들기",
+      "text": "__init_swait_queue_head는 raw spinlock을 초기화하고 잠금 검사기 lockdep에 종류와 이름을 알려 줘요. 이어 목록 머리를 빈 순환 리스트로 만들어요. 기다릴 조건, 완료 횟수나 시간 제한은 이 큐에 저장하지 않아요. 조건과 큐 메모리의 수명은 호출자가 관리해요."
     },
     {
-      "title": "잠금 아래 한 명 깨우기",
-      "text": "swake_up_locked는 큐가 비었으면 반환하고, 아니면 첫 항목을 선택해 TASK_NORMAL과 전달받은 wake_flags로 try_to_wake_up을 호출한 뒤 list_del_init으로 항목을 제거·자기 연결 초기화합니다. 함수 안에서 잠금을 잡지 않으므로 호출자가 이미 보유해야 합니다. 깨우기 결과가0이어도 항목은 제거합니다. 주석은 이미 실행 중인 태스크가 조건을 관측할 것이라는 프로토콜 전제를 설명합니다."
+      "title": "이미 잠긴 큐에서 한 명 고르기",
+      "text": "swake_up_locked는 빈 큐면 끝내고 아니면 첫 항목을 골라 TASK_NORMAL과 wake_flags로 try_to_wake_up을 불러요. 그 뒤 깨우기 결과가 0이어도 list_del_init으로 항목을 빼요. 주석은 이미 실행 중인 태스크가 조건을 볼 것이라는 사용 규칙을 설명해요. 이 함수 자체는 잠금을 잡지 않으므로 호출자가 이미 잡아야 해요."
     },
     {
-      "title": "한 명 wrapper",
-      "text": "swake_up_one은 irqsave raw spinlock 아래 swake_up_locked(q,0)을 호출하고 원래 IRQ 상태를 복원합니다. 큐 뒤에 등록하고 앞에서 꺼내는 방식은 대기 항목 선택의 FIFO 순서를 형성하지만 여러 CPU에서 후속 코드가 완료되는 순서까지 보장하지 않습니다."
+      "title": "잠금까지 챙기는 한 명 깨우기",
+      "text": "swake_up_one은 IRQ 상태를 저장한 raw spinlock 아래 locked(q,0)을 부르고 이전 IRQ 상태를 복원해요. 꼬리에 등록하고 앞에서 고르므로 선택은 먼저 온 항목부터인 FIFO예요. 다만 여러 CPU에서 이후 작업을 마치는 순서까지 같다고 보장하지는 않아요."
     },
     {
-      "title": "completion 전용 전체 깨우기",
-      "text": "swake_up_all_locked는 큐가 빌 때까지 swake_up_locked(q,0)을 반복합니다. 잠금을 직접 풀거나 IRQ를 켜지 않습니다. 원문은 completion만을 위한 인터페이스이며 일반 용도가 아니라고 명시합니다. 큐 길이에 따라 반복하므로 일반 swake_up_all의 잠금 보유 시간을 나누는 전략과 다릅니다."
+      "title": "completion만을 위한 전체 깨우기",
+      "text": "swake_up_all_locked는 큐가 빌 때까지 locked(q,0)을 반복해요. 직접 잠금을 풀거나 IRQ를 켜지 않아요. completion은 작업 완료를 기다리고 알리는 커널 장치예요. 원문은 이 함수가 completion 전용이며 일반 사용용이 아니라고 명시해요. 큐 길이만큼 잠금 안에서 반복한다는 점도 일반 all과 달라요."
     },
     {
-      "title": "일반 전체 깨우기의 분리 목록",
-      "text": "swake_up_all은 IRQ를 끄고 잠근 뒤 list_splice_init으로 당시 큐를 지역 tmp 목록으로 옮깁니다. tmp의 첫 항목마다 wake_up_state(TASK_NORMAL)와 list_del_init을 수행합니다. 더 남으면 잠금 해제와 IRQ 활성화 후 다시 잠급니다. 그 사이 원래 큐에 새로 등록된 항목은 tmp에 포함되지 않으므로 이 호출이 새 대기자까지 무한히 따라 깨우는 구조가 아닙니다."
+      "title": "일반 전체 깨우기는 명단을 떼어 놔요",
+      "text": "swake_up_all은 잠근 뒤 list_splice_init으로 그 순간 큐를 지역 tmp 목록에 옮겨요. tmp 앞 항목을 TASK_NORMAL로 깨우고 제거해요. 더 남으면 잠금을 놓고 IRQ를 켰다가 다시 잡아요. 그사이에 원래 큐에 새로 등록한 항목은 tmp에 없으므로 이번 호출이 계속 쫓아가며 깨우지 않아요."
     },
     {
-      "title": "IRQ 계약",
-      "text": "일반 전체 깨우기는 irqsave가 아니라 lock_irq/unlock_irq를 사용하고 반복 중 IRQ를 열어 잠금 보유 시간을 나눕니다. 그래서 IRQ가 꺼진 상태에서 사용하면 안 된다는 주석이 있습니다. 반면 locked 전체 깨우기는 호출자가 유지하는 잠금·IRQ 문맥 안에서 동작하도록 별도로 제공됩니다. 모든 wake 함수가 같은 문맥 계약이라고 추측하면 안 됩니다."
+      "title": "IRQ가 꺼진 곳에서 일반 all을 쓰면 안 돼요",
+      "text": "일반 all은 irqsave가 아니라 lock_irq/unlock_irq를 사용해요. 오래 잠그지 않으려고 반복 중 IRQ를 열 수 있으므로 이미 IRQ가 꺼진 문맥에서 쓰면 안 된다는 주석이 있어요. locked 전체 깨우기는 호출자가 유지하는 잠금·IRQ 문맥 안에서 동작하는 별도 함수예요. 이름이 비슷해도 사용할 수 있는 상황이 같지 않아요."
     },
     {
-      "title": "내부 등록",
-      "text": "__prepare_to_swait는 wait->task=current를 설정하고 항목이 비연결 상태일 때만 큐 꼬리에 추가합니다. 이미 등록된 항목을 반복해서 중복 삽입하지 않습니다. 자체 잠금이나 태스크 상태 변경은 없으며 적절히 초기화된 항목을 전제로 합니다. 임의의 다른 큐에 연결된 항목을 자동으로 옮기는 함수도 아닙니다."
+      "title": "내부 등록은 목록만 준비해요",
+      "text": "__prepare_to_swait는 wait->task에 current를 넣고 항목이 연결되지 않았을 때만 큐 꼬리에 추가해요. 이미 등록된 항목을 중복 삽입하지 않아요. 자체 잠금이나 태스크 상태 변경은 없고 항목의 올바른 초기화가 전제예요. 다른 큐에 붙은 항목을 자동으로 옮겨 주는 함수도 아니에요."
     },
     {
-      "title": "exclusive 등록",
-      "text": "prepare_to_swait_exclusive는 irqsave 잠금 아래 내부 등록을 하고 set_current_state(state)로 태스크 상태를 지정한 뒤 복원합니다. 이 함수는 실제 schedule을 호출하지 않습니다. 준비·조건 재검사·수면·정리는 호출 측 대기 루프에서 이어져야 합니다."
+      "title": "exclusive 준비와 실제 수면은 달라요",
+      "text": "prepare_to_swait_exclusive는 irqsave 잠금 아래 내부 등록을 하고 set_current_state로 상태를 정한 뒤 복원해요. schedule을 부르지는 않아요. 준비 후 조건을 재검사하고 실제로 잠들고 나중에 정리하는 과정은 호출자의 대기 반복문이 이어 가야 해요."
     },
     {
-      "title": "신호를 처리하는 등록",
-      "text": "prepare_to_swait_event는 같은 잠금 아래 signal_pending_state를 확인합니다. 중단할 신호가 있으면 list_del_init으로 항목을 제거하고 -ERESTARTSYS를 반환하며, 그렇지 않으면 등록하고 상태를 설정한 뒤0입니다. 중단할 항목을 남겨두면 후속 swake_up_one이 그 항목을 선택할 수 있으므로 먼저 제거하는 것이 핵심입니다. 신호 분기 자체가 TASK_RUNNING을 설정하는 것은 아닙니다."
+      "title": "신호 때문에 대기를 그만두기",
+      "text": "prepare_to_swait_event는 잠금 아래 signal_pending_state로 중단할 신호를 봐요. 있으면 해당 항목만 list_del_init으로 빼고 -ERESTARTSYS를 반환해요. 다음 한 명 깨우기가 이제 그만둘 항목을 고르지 않게 하는 거예요. 신호가 없으면 등록과 상태 설정 후 0이에요. 신호 분기 자체가 TASK_RUNNING을 설정하는 것은 아니에요."
     },
     {
-      "title": "내부 정리",
-      "text": "__finish_swait는 __set_current_state(TASK_RUNNING)을 수행하고 연결되어 있으면 list_del_init합니다. q 인자를 받지만 본문에서 잠금을 잡거나 q를 사용하지 않습니다. 호출자가 이미 잠금 아래인 경우를 위한 내부 처리이며 외부 wrapper와 동일한 동기화 기능이 있다고 생각하면 안 됩니다."
+      "title": "내부 정리의 잠금 책임",
+      "text": "__finish_swait는 TASK_RUNNING으로 바꾸고 연결되어 있으면 항목을 빼요. q 인자가 있지만 본문에서 사용하거나 잠그지 않아요. 호출자가 이미 적절한 잠금 문맥을 마련하는 내부 처리예요. 인자가 있다는 사실만으로 잠금 기능도 있다고 판단하면 안 돼요."
     },
     {
-      "title": "외부 정리",
-      "text": "finish_swait도 먼저 TASK_RUNNING으로 바꿉니다. list_empty_careful로 항목 상태를 확인하여 이미 제거되었다면 잠금을 생략하고, 아니면 irqsave 잠금 아래 list_del_init을 수행합니다. 빠른 검사 뒤 깨우기 측이 먼저 제거했어도 자기 연결된 항목의 삭제 초기화는 안전한 상태로 귀결됩니다. 이 최적화를 임의의 동시 리스트 변경에 일반화하면 안 됩니다."
+      "title": "외부 정리의 빠른 확인",
+      "text": "finish_swait도 먼저 TASK_RUNNING으로 바꿔요. list_empty_careful로 이미 제거됐는지 보고 그렇다면 잠금을 생략해요. 남아 있으면 irqsave 잠금 아래 삭제하고 자기 연결로 돌려놓아요. 빠른 확인 뒤 깨우는 쪽이 먼저 제거했어도 이 사용 규칙에서는 삭제 초기화가 안전한 상태로 끝나요. 임의의 다른 동시 리스트 변경에도 언제나 안전하다는 뜻은 아니에요."
     },
     {
-      "title": "CS 연결과 한계",
-      "text": "침입형 순환 리스트, FIFO 선택, 큐 스냅샷 분리, 잠금 보유 시간, 태스크 상태와 실제 실행의 차이, 신호 중단 시 대기 항목 제거를 학습합니다. 이 파일은 조건을 참으로 만들지 않으며 호출자의 올바른 조건 공개와 수명 보장이 필요합니다. 원본 대조는 실제 모든 IRQ·스케줄러 경쟁을 실행 검증한 것이 아닙니다."
+      "title": "큐와 조건은 별개예요",
+      "text": "이 파일은 조건을 참으로 만들지 않아요. 호출자가 조건 변경을 알맞은 순서로 공개하고 메모리 수명을 보장해야 해요. 연결 리스트, FIFO 선택, 명단 분리와 잠금 보유 시간, 상태와 실제 실행의 차이를 배워요. 원문 대조는 가능한 모든 IRQ·스케줄러 경쟁을 실제 실행한 검증과는 달라요."
     }
   ],
   "questions": [
     {
-      "prompt": "swake_up_all이 tmp로 큐를 옮긴 뒤 새로 원래 큐에 들어온 항목도 이번 tmp 반복이 깨우는가?",
+      "prompt": "tmp로 옮긴 뒤 새로 원래 큐에 들어온 항목도 이번 반복이 깨우나요?",
       "options": [
+        "아니요. 이미 떼어 놓은 tmp에는 없어요.",
+        "네. 원래 큐가 영원히 빌 때까지 따라가요."
+      ],
+      "answer": 0,
+      "explanation": "반복 대상은 옮긴 당시의 tmp 목록이에요. 새 항목은 원래 큐에 남아요.",
+      "original_prompt": "swake_up_all이 tmp로 큐를 옮긴 뒤 새로 원래 큐에 들어온 항목도 이번 tmp 반복이 깨우는가?",
+      "original_options": [
         "아니다. 이번에 분리한 목록에 포함되지 않는다",
         "그렇다. 원래 큐가 영원히 빌 때까지 추적한다"
       ],
-      "answer": 0,
-      "explanation": "list_splice_init은 그 시점의 항목들을 지역 목록으로 옮깁니다. 반복 대상은 tmp이며 중간에 등록된 새 항목은 원래 큐에 남습니다."
+      "original_explanation": "list_splice_init은 그 시점의 항목들을 지역 목록으로 옮깁니다. 반복 대상은 tmp이며 중간에 등록된 새 항목은 원래 큐에 남습니다."
     },
     {
-      "prompt": "일반 swake_up_all을 IRQ가 꺼진 상태에서 호출해도 되는가?",
+      "prompt": "IRQ가 꺼진 상태에서 일반 swake_up_all을 불러도 되나요?",
       "options": [
+        "네. 항상 irqsave로 원래 상태를 유지해요.",
+        "아니요. 반복 중 잠금을 풀며 IRQ를 켤 수 있어요."
+      ],
+      "answer": 1,
+      "explanation": "lock_irq/unlock_irq를 쓰므로 IRQ 차단 상태에서의 사용을 원문이 금지해요.",
+      "original_prompt": "일반 swake_up_all을 IRQ가 꺼진 상태에서 호출해도 되는가?",
+      "original_options": [
         "된다. 모든 경로가 irqsave로 원래 상태를 유지한다",
         "안 된다. 구현은 반복 중 잠금을 풀며 IRQ를 켤 수 있다"
       ],
-      "answer": 1,
-      "explanation": "이 함수는 raw_spin_lock_irq/unlock_irq를 쓰며 보유 시간을 나누기 위해 반복 중 해제합니다. 원문도 IRQ-disabled 사용을 허용하지 않는다고 명시합니다."
+      "original_explanation": "이 함수는 raw_spin_lock_irq/unlock_irq를 쓰며 보유 시간을 나누기 위해 반복 중 해제합니다. 원문도 IRQ-disabled 사용을 허용하지 않는다고 명시합니다."
     },
     {
-      "prompt": "prepare_to_swait_exclusive는 호출 즉시 실제 수면까지 실행하는가?",
+      "prompt": "prepare_to_swait_exclusive가 바로 잠드는 동작까지 하나요?",
       "options": [
+        "아니요. 등록과 태스크 상태 설정만 해요.",
+        "네. 내부에서 schedule을 호출해요."
+      ],
+      "answer": 0,
+      "explanation": "준비·조건 검사·실제 수면·정리는 별도 단계예요. 본문에 schedule 호출은 없어요.",
+      "original_prompt": "prepare_to_swait_exclusive는 호출 즉시 실제 수면까지 실행하는가?",
+      "original_options": [
         "아니다. 큐 등록과 태스크 상태 설정만 한다",
         "그렇다. 내부에서 schedule을 호출한다"
       ],
-      "answer": 0,
-      "explanation": "함수 본문은 잠금, 등록, set_current_state, 잠금 해제입니다. 실제 수면과 조건 검사, 정리는 호출자 대기 루프의 역할입니다."
+      "original_explanation": "함수 본문은 잠금, 등록, set_current_state, 잠금 해제입니다. 실제 수면과 조건 검사, 정리는 호출자 대기 루프의 역할입니다."
     },
     {
-      "prompt": "prepare_to_swait_event가 신호 중단 시 항목을 제거하는 이유는?",
+      "prompt": "신호 중단 때 해당 항목을 빼는 까닭은 무엇인가요?",
       "options": [
+        "신호 처리를 위해 다른 대기자까지 모두 지워야 해서예요.",
+        "다음 한 명 깨우기가 그만둘 항목을 고르지 않게 하려는 거예요."
+      ],
+      "answer": 1,
+      "explanation": "자기 항목만 제거하고 오류를 반환해요. 깨우기 선택을 불필요하게 차지하지 않도록 해요.",
+      "original_prompt": "prepare_to_swait_event가 신호 중단 시 항목을 제거하는 이유는?",
+      "original_options": [
         "신호를 처리하려면 큐의 모든 다른 항목도 해제해야 하기 때문에",
         "후속 단일 깨우기가 중단할 대기 항목을 선택하지 않게 하기 위해"
       ],
-      "answer": 1,
-      "explanation": "해당 항목만 list_del_init하고 -ERESTARTSYS를 반환합니다. 단일 깨우기의 선택을 중단 태스크가 차지하지 않도록 큐 상태를 정리합니다."
+      "original_explanation": "해당 항목만 list_del_init하고 -ERESTARTSYS를 반환합니다. 단일 깨우기의 선택을 중단 태스크가 차지하지 않도록 큐 상태를 정리합니다."
     },
     {
-      "prompt": "__finish_swait가 q의 잠금을 직접 잡는가?",
+      "prompt": "__finish_swait가 q의 잠금을 직접 잡나요?",
       "options": [
+        "아니요. 외부 finish_swait와 달리 자체 잠금이 없어요.",
+        "네. q 인자가 있으니 반드시 잠가요."
+      ],
+      "answer": 0,
+      "explanation": "함수 본문은 상태와 연결만 바꿔요. 잠금 책임은 호출 문맥과 함께 확인해야 해요.",
+      "original_prompt": "__finish_swait가 q의 잠금을 직접 잡는가?",
+      "original_options": [
         "아니다. 외부 finish_swait와 달리 자체 잠금이 없다",
         "그렇다. q 인자가 있으므로 반드시 잠근다"
       ],
-      "answer": 0,
-      "explanation": "내부 함수는 태스크 상태와 항목만 변경합니다. 이름이나 인자 모양이 아니라 본문과 호출 문맥을 따라 잠금 책임을 확인해야 합니다."
+      "original_explanation": "내부 함수는 태스크 상태와 항목만 변경합니다. 이름이나 인자 모양이 아니라 본문과 호출 문맥을 따라 잠금 책임을 확인해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "기존 명단 A·B를 tmp로 옮긴 뒤 새 C가 원래 명단에 들어오는 그림을 그리고 이번 전체 깨우기 대상을 표시해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * <linux/swait.h> (simple wait queues ) implementation:\n */\n\nvoid __init_swait_queue_head(struct swait_queue_head *q, const char *name,\n\t\t\t     struct lock_class_key *key)\n{\n\traw_spin_lock_init(&q->lock);\n\tlockdep_set_class_and_name(&q->lock, key, name);\n\tINIT_LIST_HEAD(&q->task_list);\n}\nEXPORT_SYMBOL(__init_swait_queue_head);\n\n/*\n * The thing about the wake_up_state() return value; I think we can ignore it.\n *\n * If for some reason it would return 0, that means the previously waiting\n * task is already running, so it will observe condition true (or has already).\n */\nvoid swake_up_locked(struct swait_queue_head *q, int wake_flags)\n{\n\tstruct swait_queue *curr;\n\n\tif (list_empty(&q->task_list))\n\t\treturn;\n\n\tcurr = list_first_entry(&q->task_list, typeof(*curr), task_list);\n\ttry_to_wake_up(curr->task, TASK_NORMAL, wake_flags);\n\tlist_del_init(&curr->task_list);\n}\nEXPORT_SYMBOL(swake_up_locked);\n\n/*\n * Wake up all waiters. This is an interface which is solely exposed for\n * completions and not for general usage.\n *\n * It is intentionally different from swake_up_all() to allow usage from\n * hard interrupt context and interrupt disabled regions.\n */\nvoid swake_up_all_locked(struct swait_queue_head *q)\n{\n\twhile (!list_empty(&q->task_list))\n\t\tswake_up_locked(q, 0);\n}\n\nvoid swake_up_one(struct swait_queue_head *q)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\tswake_up_locked(q, 0);\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n}\nEXPORT_SYMBOL(swake_up_one);\n\n/*\n * Does not allow usage from IRQ disabled, since we must be able to\n * release IRQs to guarantee bounded hold time.\n */\nvoid swake_up_all(struct swait_queue_head *q)\n{\n\tstruct swait_queue *curr;\n\tLIST_HEAD(tmp);\n\n\traw_spin_lock_irq(&q->lock);\n\tlist_splice_init(&q->task_list, &tmp);\n\twhile (!list_empty(&tmp)) {\n\t\tcurr = list_first_entry(&tmp, typeof(*curr), task_list);\n\n\t\twake_up_state(curr->task, TASK_NORMAL);\n\t\tlist_del_init(&curr->task_list);\n\n\t\tif (list_empty(&tmp))\n\t\t\tbreak;\n\n\t\traw_spin_unlock_irq(&q->lock);\n\t\traw_spin_lock_irq(&q->lock);\n\t}\n\traw_spin_unlock_irq(&q->lock);\n}\nEXPORT_SYMBOL(swake_up_all);\n\nvoid __prepare_to_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\twait->task = current;\n\tif (list_empty(&wait->task_list))\n\t\tlist_add_tail(&wait->task_list, &q->task_list);\n}\n\nvoid prepare_to_swait_exclusive(struct swait_queue_head *q, struct swait_queue *wait, int state)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\t__prepare_to_swait(q, wait);\n\tset_current_state(state);\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n}\nEXPORT_SYMBOL(prepare_to_swait_exclusive);\n\nlong prepare_to_swait_event(struct swait_queue_head *q, struct swait_queue *wait, int state)\n{\n\tunsigned long flags;\n\tlong ret = 0;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\tif (signal_pending_state(state, current)) {\n\t\t/*\n\t\t * See prepare_to_wait_event(). TL;DR, subsequent swake_up_one()\n\t\t * must not see us.\n\t\t */\n\t\tlist_del_init(&wait->task_list);\n\t\tret = -ERESTARTSYS;\n\t} else {\n\t\t__prepare_to_swait(q, wait);\n\t\tset_current_state(state);\n\t}\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n\n\treturn ret;\n}\nEXPORT_SYMBOL(prepare_to_swait_event);\n\nvoid __finish_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\t__set_current_state(TASK_RUNNING);\n\tif (!list_empty(&wait->task_list))\n\t\tlist_del_init(&wait->task_list);\n}\n\nvoid finish_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\tunsigned long flags;\n\n\t__set_current_state(TASK_RUNNING);\n\n\tif (!list_empty_careful(&wait->task_list)) {\n\t\traw_spin_lock_irqsave(&q->lock, flags);\n\t\tlist_del_init(&wait->task_list);\n\t\traw_spin_unlock_irqrestore(&q->lock, flags);\n\t}\n}\nEXPORT_SYMBOL(finish_swait);\n",
   "source_review": {
@@ -150,5 +176,187 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/sched/swait.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-424dcf1876d65051",
+    "path": "kernel/sched/swait.c",
+    "title": "단순 대기 큐 구현 전체: 등록, 깨우기와 중단 정리",
+    "area": "연결 리스트 · 스케줄링 · 대기 큐 · 인터럽트 · 동시성",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "태스크 포인터와 연결 리스트를 이용해 단순 대기 큐의 초기화·등록·깨우기·정리를 구현합니다.",
+    "guide": [
+      "대기 항목의 연결 상태와 태스크 상태를 잠금 아래 조정합니다. 조건 자체는 호출자가 관리하며, 깨우기는 조건 검사나 실행 완료를 대신하지 않습니다.",
+      "completion 등에서 내부 함수와 잠금 wrapper를 구분해 읽습니다. IRQ 문맥에서 모든 전체 깨우기 함수를 동일하게 사용할 수 있는 것은 아닙니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 구성",
+        "text": "GPL-2.0과 구현 소개 뒤 큐 초기화, 잠금 보유 상태의 단일·전체 깨우기, 단일·전체 wrapper, 내부 등록과 두 등록 wrapper, 내부·외부 정리가 있습니다. __init_swait_queue_head, swake_up_locked, swake_up_one/all, prepare_to_swait_exclusive/event, finish_swait는 EXPORT_SYMBOL입니다. 나머지 내부 함수와 completion 전용 전체 깨우기는 이 파일에서 별도로 export하지 않습니다."
+      },
+      {
+        "title": "초기화",
+        "text": "__init_swait_queue_head는 raw spinlock을 초기화하고 lockdep class와 name을 설정한 뒤 task_list를 빈 순환 리스트로 만듭니다. 여기에는 기다릴 조건의 값, 완료 신호 횟수 또는 timeout 저장이 없습니다. 호출자가 별도 조건과 큐의 수명을 관리해야 합니다."
+      },
+      {
+        "title": "잠금 아래 한 명 깨우기",
+        "text": "swake_up_locked는 큐가 비었으면 반환하고, 아니면 첫 항목을 선택해 TASK_NORMAL과 전달받은 wake_flags로 try_to_wake_up을 호출한 뒤 list_del_init으로 항목을 제거·자기 연결 초기화합니다. 함수 안에서 잠금을 잡지 않으므로 호출자가 이미 보유해야 합니다. 깨우기 결과가0이어도 항목은 제거합니다. 주석은 이미 실행 중인 태스크가 조건을 관측할 것이라는 프로토콜 전제를 설명합니다."
+      },
+      {
+        "title": "한 명 wrapper",
+        "text": "swake_up_one은 irqsave raw spinlock 아래 swake_up_locked(q,0)을 호출하고 원래 IRQ 상태를 복원합니다. 큐 뒤에 등록하고 앞에서 꺼내는 방식은 대기 항목 선택의 FIFO 순서를 형성하지만 여러 CPU에서 후속 코드가 완료되는 순서까지 보장하지 않습니다."
+      },
+      {
+        "title": "completion 전용 전체 깨우기",
+        "text": "swake_up_all_locked는 큐가 빌 때까지 swake_up_locked(q,0)을 반복합니다. 잠금을 직접 풀거나 IRQ를 켜지 않습니다. 원문은 completion만을 위한 인터페이스이며 일반 용도가 아니라고 명시합니다. 큐 길이에 따라 반복하므로 일반 swake_up_all의 잠금 보유 시간을 나누는 전략과 다릅니다."
+      },
+      {
+        "title": "일반 전체 깨우기의 분리 목록",
+        "text": "swake_up_all은 IRQ를 끄고 잠근 뒤 list_splice_init으로 당시 큐를 지역 tmp 목록으로 옮깁니다. tmp의 첫 항목마다 wake_up_state(TASK_NORMAL)와 list_del_init을 수행합니다. 더 남으면 잠금 해제와 IRQ 활성화 후 다시 잠급니다. 그 사이 원래 큐에 새로 등록된 항목은 tmp에 포함되지 않으므로 이 호출이 새 대기자까지 무한히 따라 깨우는 구조가 아닙니다."
+      },
+      {
+        "title": "IRQ 계약",
+        "text": "일반 전체 깨우기는 irqsave가 아니라 lock_irq/unlock_irq를 사용하고 반복 중 IRQ를 열어 잠금 보유 시간을 나눕니다. 그래서 IRQ가 꺼진 상태에서 사용하면 안 된다는 주석이 있습니다. 반면 locked 전체 깨우기는 호출자가 유지하는 잠금·IRQ 문맥 안에서 동작하도록 별도로 제공됩니다. 모든 wake 함수가 같은 문맥 계약이라고 추측하면 안 됩니다."
+      },
+      {
+        "title": "내부 등록",
+        "text": "__prepare_to_swait는 wait->task=current를 설정하고 항목이 비연결 상태일 때만 큐 꼬리에 추가합니다. 이미 등록된 항목을 반복해서 중복 삽입하지 않습니다. 자체 잠금이나 태스크 상태 변경은 없으며 적절히 초기화된 항목을 전제로 합니다. 임의의 다른 큐에 연결된 항목을 자동으로 옮기는 함수도 아닙니다."
+      },
+      {
+        "title": "exclusive 등록",
+        "text": "prepare_to_swait_exclusive는 irqsave 잠금 아래 내부 등록을 하고 set_current_state(state)로 태스크 상태를 지정한 뒤 복원합니다. 이 함수는 실제 schedule을 호출하지 않습니다. 준비·조건 재검사·수면·정리는 호출 측 대기 루프에서 이어져야 합니다."
+      },
+      {
+        "title": "신호를 처리하는 등록",
+        "text": "prepare_to_swait_event는 같은 잠금 아래 signal_pending_state를 확인합니다. 중단할 신호가 있으면 list_del_init으로 항목을 제거하고 -ERESTARTSYS를 반환하며, 그렇지 않으면 등록하고 상태를 설정한 뒤0입니다. 중단할 항목을 남겨두면 후속 swake_up_one이 그 항목을 선택할 수 있으므로 먼저 제거하는 것이 핵심입니다. 신호 분기 자체가 TASK_RUNNING을 설정하는 것은 아닙니다."
+      },
+      {
+        "title": "내부 정리",
+        "text": "__finish_swait는 __set_current_state(TASK_RUNNING)을 수행하고 연결되어 있으면 list_del_init합니다. q 인자를 받지만 본문에서 잠금을 잡거나 q를 사용하지 않습니다. 호출자가 이미 잠금 아래인 경우를 위한 내부 처리이며 외부 wrapper와 동일한 동기화 기능이 있다고 생각하면 안 됩니다."
+      },
+      {
+        "title": "외부 정리",
+        "text": "finish_swait도 먼저 TASK_RUNNING으로 바꿉니다. list_empty_careful로 항목 상태를 확인하여 이미 제거되었다면 잠금을 생략하고, 아니면 irqsave 잠금 아래 list_del_init을 수행합니다. 빠른 검사 뒤 깨우기 측이 먼저 제거했어도 자기 연결된 항목의 삭제 초기화는 안전한 상태로 귀결됩니다. 이 최적화를 임의의 동시 리스트 변경에 일반화하면 안 됩니다."
+      },
+      {
+        "title": "CS 연결과 한계",
+        "text": "침입형 순환 리스트, FIFO 선택, 큐 스냅샷 분리, 잠금 보유 시간, 태스크 상태와 실제 실행의 차이, 신호 중단 시 대기 항목 제거를 학습합니다. 이 파일은 조건을 참으로 만들지 않으며 호출자의 올바른 조건 공개와 수명 보장이 필요합니다. 원본 대조는 실제 모든 IRQ·스케줄러 경쟁을 실행 검증한 것이 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "swake_up_all이 tmp로 큐를 옮긴 뒤 새로 원래 큐에 들어온 항목도 이번 tmp 반복이 깨우는가?",
+        "options": [
+          "아니다. 이번에 분리한 목록에 포함되지 않는다",
+          "그렇다. 원래 큐가 영원히 빌 때까지 추적한다"
+        ],
+        "answer": 0,
+        "explanation": "list_splice_init은 그 시점의 항목들을 지역 목록으로 옮깁니다. 반복 대상은 tmp이며 중간에 등록된 새 항목은 원래 큐에 남습니다."
+      },
+      {
+        "prompt": "일반 swake_up_all을 IRQ가 꺼진 상태에서 호출해도 되는가?",
+        "options": [
+          "된다. 모든 경로가 irqsave로 원래 상태를 유지한다",
+          "안 된다. 구현은 반복 중 잠금을 풀며 IRQ를 켤 수 있다"
+        ],
+        "answer": 1,
+        "explanation": "이 함수는 raw_spin_lock_irq/unlock_irq를 쓰며 보유 시간을 나누기 위해 반복 중 해제합니다. 원문도 IRQ-disabled 사용을 허용하지 않는다고 명시합니다."
+      },
+      {
+        "prompt": "prepare_to_swait_exclusive는 호출 즉시 실제 수면까지 실행하는가?",
+        "options": [
+          "아니다. 큐 등록과 태스크 상태 설정만 한다",
+          "그렇다. 내부에서 schedule을 호출한다"
+        ],
+        "answer": 0,
+        "explanation": "함수 본문은 잠금, 등록, set_current_state, 잠금 해제입니다. 실제 수면과 조건 검사, 정리는 호출자 대기 루프의 역할입니다."
+      },
+      {
+        "prompt": "prepare_to_swait_event가 신호 중단 시 항목을 제거하는 이유는?",
+        "options": [
+          "신호를 처리하려면 큐의 모든 다른 항목도 해제해야 하기 때문에",
+          "후속 단일 깨우기가 중단할 대기 항목을 선택하지 않게 하기 위해"
+        ],
+        "answer": 1,
+        "explanation": "해당 항목만 list_del_init하고 -ERESTARTSYS를 반환합니다. 단일 깨우기의 선택을 중단 태스크가 차지하지 않도록 큐 상태를 정리합니다."
+      },
+      {
+        "prompt": "__finish_swait가 q의 잠금을 직접 잡는가?",
+        "options": [
+          "아니다. 외부 finish_swait와 달리 자체 잠금이 없다",
+          "그렇다. q 인자가 있으므로 반드시 잠근다"
+        ],
+        "answer": 0,
+        "explanation": "내부 함수는 태스크 상태와 항목만 변경합니다. 이름이나 인자 모양이 아니라 본문과 호출 문맥을 따라 잠금 책임을 확인해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * <linux/swait.h> (simple wait queues ) implementation:\n */\n\nvoid __init_swait_queue_head(struct swait_queue_head *q, const char *name,\n\t\t\t     struct lock_class_key *key)\n{\n\traw_spin_lock_init(&q->lock);\n\tlockdep_set_class_and_name(&q->lock, key, name);\n\tINIT_LIST_HEAD(&q->task_list);\n}\nEXPORT_SYMBOL(__init_swait_queue_head);\n\n/*\n * The thing about the wake_up_state() return value; I think we can ignore it.\n *\n * If for some reason it would return 0, that means the previously waiting\n * task is already running, so it will observe condition true (or has already).\n */\nvoid swake_up_locked(struct swait_queue_head *q, int wake_flags)\n{\n\tstruct swait_queue *curr;\n\n\tif (list_empty(&q->task_list))\n\t\treturn;\n\n\tcurr = list_first_entry(&q->task_list, typeof(*curr), task_list);\n\ttry_to_wake_up(curr->task, TASK_NORMAL, wake_flags);\n\tlist_del_init(&curr->task_list);\n}\nEXPORT_SYMBOL(swake_up_locked);\n\n/*\n * Wake up all waiters. This is an interface which is solely exposed for\n * completions and not for general usage.\n *\n * It is intentionally different from swake_up_all() to allow usage from\n * hard interrupt context and interrupt disabled regions.\n */\nvoid swake_up_all_locked(struct swait_queue_head *q)\n{\n\twhile (!list_empty(&q->task_list))\n\t\tswake_up_locked(q, 0);\n}\n\nvoid swake_up_one(struct swait_queue_head *q)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\tswake_up_locked(q, 0);\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n}\nEXPORT_SYMBOL(swake_up_one);\n\n/*\n * Does not allow usage from IRQ disabled, since we must be able to\n * release IRQs to guarantee bounded hold time.\n */\nvoid swake_up_all(struct swait_queue_head *q)\n{\n\tstruct swait_queue *curr;\n\tLIST_HEAD(tmp);\n\n\traw_spin_lock_irq(&q->lock);\n\tlist_splice_init(&q->task_list, &tmp);\n\twhile (!list_empty(&tmp)) {\n\t\tcurr = list_first_entry(&tmp, typeof(*curr), task_list);\n\n\t\twake_up_state(curr->task, TASK_NORMAL);\n\t\tlist_del_init(&curr->task_list);\n\n\t\tif (list_empty(&tmp))\n\t\t\tbreak;\n\n\t\traw_spin_unlock_irq(&q->lock);\n\t\traw_spin_lock_irq(&q->lock);\n\t}\n\traw_spin_unlock_irq(&q->lock);\n}\nEXPORT_SYMBOL(swake_up_all);\n\nvoid __prepare_to_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\twait->task = current;\n\tif (list_empty(&wait->task_list))\n\t\tlist_add_tail(&wait->task_list, &q->task_list);\n}\n\nvoid prepare_to_swait_exclusive(struct swait_queue_head *q, struct swait_queue *wait, int state)\n{\n\tunsigned long flags;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\t__prepare_to_swait(q, wait);\n\tset_current_state(state);\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n}\nEXPORT_SYMBOL(prepare_to_swait_exclusive);\n\nlong prepare_to_swait_event(struct swait_queue_head *q, struct swait_queue *wait, int state)\n{\n\tunsigned long flags;\n\tlong ret = 0;\n\n\traw_spin_lock_irqsave(&q->lock, flags);\n\tif (signal_pending_state(state, current)) {\n\t\t/*\n\t\t * See prepare_to_wait_event(). TL;DR, subsequent swake_up_one()\n\t\t * must not see us.\n\t\t */\n\t\tlist_del_init(&wait->task_list);\n\t\tret = -ERESTARTSYS;\n\t} else {\n\t\t__prepare_to_swait(q, wait);\n\t\tset_current_state(state);\n\t}\n\traw_spin_unlock_irqrestore(&q->lock, flags);\n\n\treturn ret;\n}\nEXPORT_SYMBOL(prepare_to_swait_event);\n\nvoid __finish_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\t__set_current_state(TASK_RUNNING);\n\tif (!list_empty(&wait->task_list))\n\t\tlist_del_init(&wait->task_list);\n}\n\nvoid finish_swait(struct swait_queue_head *q, struct swait_queue *wait)\n{\n\tunsigned long flags;\n\n\t__set_current_state(TASK_RUNNING);\n\n\tif (!list_empty_careful(&wait->task_list)) {\n\t\traw_spin_lock_irqsave(&q->lock, flags);\n\t\tlist_del_init(&wait->task_list);\n\t\traw_spin_unlock_irqrestore(&q->lock, flags);\n\t}\n}\nEXPORT_SYMBOL(finish_swait);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "3a9f2fd51f1f9ea9f91e980e391ceeef394700039ac24679b2f7f3c87ba82e2a",
+      "scope": "whole-file",
+      "line_count": 144,
+      "authoring_source": "course/file_units/swait_implementation.py",
+      "sections": [
+        "전체 구성",
+        "초기화",
+        "잠금 아래 한 명 깨우기",
+        "한 명 wrapper",
+        "completion 전용 전체 깨우기",
+        "일반 전체 깨우기의 분리 목록",
+        "IRQ 계약",
+        "내부 등록",
+        "exclusive 등록",
+        "신호를 처리하는 등록",
+        "내부 정리",
+        "외부 정리",
+        "CS 연결과 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/sched/swait.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "대기표를 뽑은 사람을 부를 때 명단에서 지워야 다음 사람을 제대로 부를 수 있어요. 불렀다는 사실은 그 사람의 일이 끝났다는 뜻은 아니에요.",
+    "meaning": "swait.c는 대기 항목과 태스크 상태를 잠금 아래 바꾸며, 깨우기 방식마다 IRQ와 잠금의 책임이 달라요.",
+    "exercise": "기존 명단 A·B를 tmp로 옮긴 뒤 새 C가 원래 명단에 들어오는 그림을 그리고 이번 전체 깨우기 대상을 표시해 보세요."
+  },
+  "goal": "swait.c는 대기 항목과 태스크 상태를 잠금 아래 바꾸며, 깨우기 방식마다 IRQ와 잠금의 책임이 달라요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "기존 명단 A·B를 tmp로 옮긴 뒤 새 C가 원래 명단에 들어오는 그림을 그리고 이번 전체 깨우기 대상을 표시해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "694d792681075d1d3577ab529c54451431d26ae1c01d897062cb82ae976b22e0",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 5,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

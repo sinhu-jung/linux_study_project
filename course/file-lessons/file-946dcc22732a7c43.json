@@ -5,71 +5,85 @@
   "area": "공개 헤더 · 빌드 구성·호출 계약",
   "track": "files",
   "kind": "kernel",
-  "intro": "세 수치 helper와 하나의 외부 할당 선언으로 IOMMU 주소 제약을 계산합니다.",
+  "intro": "포함 경계, 2의 거듭제곱 마스크와 올림 나눗셈을 읽습니다.",
   "guide": [
-    "iommu_device_max_index는 size+offset과 dma_mask를 비교해 size 또는 dma_mask-offset+1을 반환합니다. iommu_is_span_boundary는 경계 내부 오프셋과 nr을 비교합니다. iommu_num_pages는 첫 페이지 오프셋과 len을 더한 뒤 페이지 크기로 올림 나눗셈합니다.",
-    "단위와 산술 범위는 호출자가 맞춰야 합니다. boundary_size와 io_page_size는 해당 비트마스크 계산에 맞는 2의 거듭제곱이어야 하며 0 또는 unsigned 오버플로 입력이 자동으로 안전한 오류가 되지 않습니다."
+    "단위와 산술 범위는 호출자가 맞춥니다.",
+    "경계 크기와 페이지 크기는 마스크에 맞는 2의 거듭제곱이어야 합니다.",
+    "길이 0도 실제 식을 따라 확인합니다."
   ],
   "deep_dive": [
     {
-      "title": "헤더 전체",
-      "text": "SPDX·가드와 bug/log2/math/types 헤더, 세 inline 함수, iommu_area_alloc 외부 선언, 닫는 가드가 전부입니다. 외부 할당 함수의 구현은 lib/iommu-helper.c에 있습니다. 세 helper는 비트맵 자체를 예약하지 않습니다."
+      "title": "전체 도구",
+      "text": "라이선스·가드와 네 헤더 뒤 세 inline 함수, iommu_area_alloc 선언이 있습니다. 할당 본문은 lib/iommu-helper.c에 있습니다. 여기의 세 계산 도구가 비트맵 자리를 직접 예약하지는 않습니다."
     },
     {
-      "title": "최대 인덱스 계산",
-      "text": "size=16,offset=8,dma_mask=19이면 24>19라 19-8+1=12입니다. dma_mask는 포함 경계이므로 +1이 등장합니다. offset이 이미 dma_mask보다 큰 경우의 뺄셈 underflow나 size+offset overflow를 이 함수가 일반적으로 검사하지 않으므로 유효 입력 계약이 필요합니다."
+      "title": "마지막 허용 번호",
+      "text": "size=16, offset=8, dma_mask=19면 24>19이므로 19-8+1=12를 줍니다. 마지막 번호 19도 포함하여 +1을 합니다. offset이 mask보다 큰 뺄셈이나 size+offset의 넘침은 일반적으로 검사하지 않으므로 유효한 입력을 줘야 합니다."
     },
     {
-      "title": "장치 경계 검사",
-      "text": "boundary_size가 2의 거듭제곱인지 BUG_ON으로 확인합니다. shift=(shift+index)&(boundary_size-1)는 경계 안의 위치입니다. boundary=8,index=5,shift=0,nr=3이면 8>8이 거짓이라 끝에 딱 맞습니다. nr=4면 9>8이 참입니다. 경계 위반 bool과 BUG_ON의 잘못된 경계 크기 검사는 다른 실패 방식입니다."
+      "title": "경계 넘기 검사",
+      "text": "boundary_size가 2의 거듭제곱이 아니면 BUG_ON으로 잘못된 사용을 알립니다. (shift+index)&(boundary-1)은 경계 안 위치입니다. 크기 8, 시작 5, 길이 3은 8>8이 거짓이라 허용하고 길이 4는 9>8이 참이라 넘습니다. 경계 넘음의 반환값과 잘못된 크기의 BUG_ON은 다른 실패 방식입니다."
     },
     {
-      "title": "페이지 수 계산",
-      "text": "페이지 크기 4096,addr=4095,len=2면 첫 페이지 오프셋 4095+2=4097, 올림 나눗셈 결과 2페이지입니다. addr=4096,len=4096은 오프셋 0이고 1페이지입니다. len=0이어도 정렬되지 않은 addr이면 오프셋이 남아 이 식이 1을 반환할 수 있습니다. API의 수식을 읽지 않고 빈 길이는 언제나 0이라고 추측하면 안 됩니다."
+      "title": "필요한 페이지",
+      "text": "크기 4096에서 addr=4095,len=2면 첫 페이지 안 위치 4095에 2를 더해 4097, 올림 나누면 2페이지입니다. addr=4096,len=4096이면 1페이지입니다. len=0이어도 정렬 안 된 주소의 오프셋이 남아 1이 될 수 있습니다. 빈 길이를 따로 0 처리하는 분기는 없습니다."
     },
     {
-      "title": "CS 연결",
-      "text": "포함 경계와 반열린 구간, 나눗셈 올림, 2의 거듭제곱 마스크, unsigned 산술이 연결됩니다. 고정 횟수 연산인 helper의 O(1)과 비트맵 할당 검색 전체의 복잡도를 구분합니다."
+      "title": "계산의 조건",
+      "text": "끝 번호를 포함하는 범위와 끝 다음을 경계로 쓰는 범위, 올림, 비트 마스크, 부호 없는 산술을 배웁니다. 0인 크기나 unsigned 넘침이 자동으로 안전한 오류가 되는 것은 아닙니다. 고정 횟수 O(1) 계산과 할당 검색 전체의 비용은 다릅니다."
     }
   ],
   "questions": [
     {
-      "prompt": "4096바이트 페이지에서 addr=4095,len=2가 덮는 페이지 수는?",
+      "prompt": "4096바이트 페이지에서 4095부터 2바이트는 몇 페이지인가요?",
       "options": [
         "2",
         "1"
       ],
       "answer": 0,
-      "explanation": "첫 페이지의 마지막 바이트와 다음 페이지의 첫 바이트에 걸칩니다. 오프셋 4095+2=4097을 4096으로 올림 나누면 2입니다."
+      "explanation": "첫 페이지 마지막과 다음 페이지 첫 바이트에 걸칩니다.",
+      "original_prompt": "4096바이트 페이지에서 addr=4095,len=2가 덮는 페이지 수는?",
+      "original_options": [
+        "2",
+        "1"
+      ],
+      "original_explanation": "첫 페이지의 마지막 바이트와 다음 페이지의 첫 바이트에 걸칩니다. 오프셋 4095+2=4097을 4096으로 올림 나누면 2입니다."
     },
     {
-      "prompt": "boundary=8,index=5,nr=3,shift=0이면 경계를 넘는가?",
+      "prompt": "경계 8, 시작 5, 길이 3, shift=0은 넘나요?",
       "options": [
+        "그렇다. 같아도 위반이다",
+        "아니다. 끝에 정확히 맞는다"
+      ],
+      "answer": 1,
+      "explanation": "검사는 >=가 아니라 >입니다.",
+      "original_prompt": "boundary=8,index=5,nr=3,shift=0이면 경계를 넘는가?",
+      "original_options": [
         "그렇다. 같아도 위반이다",
         "아니다. 끝이 경계에 정확히 맞는다"
       ],
-      "answer": 1,
-      "explanation": "비교는 >이지 >=가 아닙니다. 경계 내부 시작 5에 길이 3을 더한 8은 허용됩니다."
+      "original_explanation": "비교는 >이지 >=가 아닙니다. 경계 내부 시작 5에 길이 3을 더한 8은 허용됩니다."
     },
     {
-      "prompt": "iommu_num_pages에서 len=0이면 무조건 0인가?",
+      "prompt": "len=0이면 num_pages도 늘 0인가요?",
       "options": [
+        "아니다. 정렬 안 된 주소의 오프셋이 남는다",
+        "그렇다. 길이 0이면 즉시 반환한다"
+      ],
+      "answer": 0,
+      "explanation": "별도 분기 없이 오프셋+길이를 올림 나눕니다.",
+      "original_prompt": "iommu_num_pages에서 len=0이면 무조건 0인가?",
+      "original_options": [
         "아니다. 정렬되지 않은 addr의 오프셋이 식에 남는다",
         "그렇다. len이 0인지 먼저 반환한다"
       ],
-      "answer": 0,
-      "explanation": "별도의 len==0 분기가 없습니다. 실제로 계산하는 값은 (addr & (page_size-1))+len이며 오프셋이 양수면 올림 결과가 1일 수 있습니다."
+      "original_explanation": "별도의 len==0 분기가 없습니다. 실제로 계산하는 값은 (addr & (page_size-1))+len이며 오프셋이 양수면 올림 결과가 1일 수 있습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "4095번 주소부터 2바이트가 왜 4096바이트 페이지 두 개에 걸치는지 그려 보세요."
   },
   "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_IOMMU_HELPER_H\n#define _LINUX_IOMMU_HELPER_H\n\n#include <linux/bug.h>\n#include <linux/log2.h>\n#include <linux/math.h>\n#include <linux/types.h>\n\nstatic inline unsigned long iommu_device_max_index(unsigned long size,\n\t\t\t\t\t\t   unsigned long offset,\n\t\t\t\t\t\t   u64 dma_mask)\n{\n\tif (size + offset > dma_mask)\n\t\treturn dma_mask - offset + 1;\n\telse\n\t\treturn size;\n}\n\nstatic inline int iommu_is_span_boundary(unsigned int index, unsigned int nr,\n\t\tunsigned long shift, unsigned long boundary_size)\n{\n\tBUG_ON(!is_power_of_2(boundary_size));\n\n\tshift = (shift + index) & (boundary_size - 1);\n\treturn shift + nr > boundary_size;\n}\n\nextern unsigned long iommu_area_alloc(unsigned long *map, unsigned long size,\n\t\t\t\t      unsigned long start, unsigned int nr,\n\t\t\t\t      unsigned long shift,\n\t\t\t\t      unsigned long boundary_size,\n\t\t\t\t      unsigned long align_mask);\n\nstatic inline unsigned long iommu_num_pages(unsigned long addr,\n\t\t\t\t\t    unsigned long len,\n\t\t\t\t\t    unsigned long io_page_size)\n{\n\tunsigned long size = (addr & (io_page_size - 1)) + len;\n\n\treturn DIV_ROUND_UP(size, io_page_size);\n}\n\n#endif\n",
   "source_review": {
@@ -92,5 +106,129 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/iommu-helper.h"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-946dcc22732a7c43",
+    "path": "include/linux/iommu-helper.h",
+    "title": "IOMMU 헤더 전체: 범위·페이지 올림·장치 경계",
+    "area": "공개 헤더 · 빌드 구성·호출 계약",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "세 수치 helper와 하나의 외부 할당 선언으로 IOMMU 주소 제약을 계산합니다.",
+    "guide": [
+      "iommu_device_max_index는 size+offset과 dma_mask를 비교해 size 또는 dma_mask-offset+1을 반환합니다. iommu_is_span_boundary는 경계 내부 오프셋과 nr을 비교합니다. iommu_num_pages는 첫 페이지 오프셋과 len을 더한 뒤 페이지 크기로 올림 나눗셈합니다.",
+      "단위와 산술 범위는 호출자가 맞춰야 합니다. boundary_size와 io_page_size는 해당 비트마스크 계산에 맞는 2의 거듭제곱이어야 하며 0 또는 unsigned 오버플로 입력이 자동으로 안전한 오류가 되지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "헤더 전체",
+        "text": "SPDX·가드와 bug/log2/math/types 헤더, 세 inline 함수, iommu_area_alloc 외부 선언, 닫는 가드가 전부입니다. 외부 할당 함수의 구현은 lib/iommu-helper.c에 있습니다. 세 helper는 비트맵 자체를 예약하지 않습니다."
+      },
+      {
+        "title": "최대 인덱스 계산",
+        "text": "size=16,offset=8,dma_mask=19이면 24>19라 19-8+1=12입니다. dma_mask는 포함 경계이므로 +1이 등장합니다. offset이 이미 dma_mask보다 큰 경우의 뺄셈 underflow나 size+offset overflow를 이 함수가 일반적으로 검사하지 않으므로 유효 입력 계약이 필요합니다."
+      },
+      {
+        "title": "장치 경계 검사",
+        "text": "boundary_size가 2의 거듭제곱인지 BUG_ON으로 확인합니다. shift=(shift+index)&(boundary_size-1)는 경계 안의 위치입니다. boundary=8,index=5,shift=0,nr=3이면 8>8이 거짓이라 끝에 딱 맞습니다. nr=4면 9>8이 참입니다. 경계 위반 bool과 BUG_ON의 잘못된 경계 크기 검사는 다른 실패 방식입니다."
+      },
+      {
+        "title": "페이지 수 계산",
+        "text": "페이지 크기 4096,addr=4095,len=2면 첫 페이지 오프셋 4095+2=4097, 올림 나눗셈 결과 2페이지입니다. addr=4096,len=4096은 오프셋 0이고 1페이지입니다. len=0이어도 정렬되지 않은 addr이면 오프셋이 남아 이 식이 1을 반환할 수 있습니다. API의 수식을 읽지 않고 빈 길이는 언제나 0이라고 추측하면 안 됩니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "포함 경계와 반열린 구간, 나눗셈 올림, 2의 거듭제곱 마스크, unsigned 산술이 연결됩니다. 고정 횟수 연산인 helper의 O(1)과 비트맵 할당 검색 전체의 복잡도를 구분합니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "4096바이트 페이지에서 addr=4095,len=2가 덮는 페이지 수는?",
+        "options": [
+          "2",
+          "1"
+        ],
+        "answer": 0,
+        "explanation": "첫 페이지의 마지막 바이트와 다음 페이지의 첫 바이트에 걸칩니다. 오프셋 4095+2=4097을 4096으로 올림 나누면 2입니다."
+      },
+      {
+        "prompt": "boundary=8,index=5,nr=3,shift=0이면 경계를 넘는가?",
+        "options": [
+          "그렇다. 같아도 위반이다",
+          "아니다. 끝이 경계에 정확히 맞는다"
+        ],
+        "answer": 1,
+        "explanation": "비교는 >이지 >=가 아닙니다. 경계 내부 시작 5에 길이 3을 더한 8은 허용됩니다."
+      },
+      {
+        "prompt": "iommu_num_pages에서 len=0이면 무조건 0인가?",
+        "options": [
+          "아니다. 정렬되지 않은 addr의 오프셋이 식에 남는다",
+          "그렇다. len이 0인지 먼저 반환한다"
+        ],
+        "answer": 0,
+        "explanation": "별도의 len==0 분기가 없습니다. 실제로 계산하는 값은 (addr & (page_size-1))+len이며 오프셋이 양수면 올림 결과가 1일 수 있습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "/* SPDX-License-Identifier: GPL-2.0 */\n#ifndef _LINUX_IOMMU_HELPER_H\n#define _LINUX_IOMMU_HELPER_H\n\n#include <linux/bug.h>\n#include <linux/log2.h>\n#include <linux/math.h>\n#include <linux/types.h>\n\nstatic inline unsigned long iommu_device_max_index(unsigned long size,\n\t\t\t\t\t\t   unsigned long offset,\n\t\t\t\t\t\t   u64 dma_mask)\n{\n\tif (size + offset > dma_mask)\n\t\treturn dma_mask - offset + 1;\n\telse\n\t\treturn size;\n}\n\nstatic inline int iommu_is_span_boundary(unsigned int index, unsigned int nr,\n\t\tunsigned long shift, unsigned long boundary_size)\n{\n\tBUG_ON(!is_power_of_2(boundary_size));\n\n\tshift = (shift + index) & (boundary_size - 1);\n\treturn shift + nr > boundary_size;\n}\n\nextern unsigned long iommu_area_alloc(unsigned long *map, unsigned long size,\n\t\t\t\t      unsigned long start, unsigned int nr,\n\t\t\t\t      unsigned long shift,\n\t\t\t\t      unsigned long boundary_size,\n\t\t\t\t      unsigned long align_mask);\n\nstatic inline unsigned long iommu_num_pages(unsigned long addr,\n\t\t\t\t\t    unsigned long len,\n\t\t\t\t\t    unsigned long io_page_size)\n{\n\tunsigned long size = (addr & (io_page_size - 1)) + len;\n\n\treturn DIV_ROUND_UP(size, io_page_size);\n}\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "287d4c43009cbca5edbc3921bc94d167c219c1bdfe489c22e21576f9d30efa32",
+      "scope": "whole-file",
+      "line_count": 44,
+      "authoring_source": "course/file_units/core_contract_headers.py",
+      "sections": [
+        "헤더 전체",
+        "최대 인덱스 계산",
+        "장치 경계 검사",
+        "페이지 수 계산",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/include/linux/iommu-helper.h"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "장치가 쓸 수 있는 주소 범위와 페이지 수를 계산합니다. 끝에 딱 맞는 것과 한 칸 넘는 것을 구분해야 합니다.",
+    "meaning": "포함 경계, 2의 거듭제곱 마스크와 올림 나눗셈을 읽습니다.",
+    "exercise": "4095번 주소부터 2바이트가 왜 4096바이트 페이지 두 개에 걸치는지 그려 보세요."
+  },
+  "goal": "포함 경계, 2의 거듭제곱 마스크와 올림 나눗셈을 읽습니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "4095번 주소부터 2바이트가 왜 4096바이트 페이지 두 개에 걸치는지 그려 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_a.json",
+    "authoring_sha256": "e09a8ad152e96ee636828db571e820c2d8f24101804dd8a778070cd0256366de",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 3,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

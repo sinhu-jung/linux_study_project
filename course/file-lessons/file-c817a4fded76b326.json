@@ -5,104 +5,124 @@
   "area": "우선순위 큐 · 이중 연결 리스트 · 불변식",
   "track": "files",
   "kind": "kernel",
-  "intro": "삽입과 삭제에서 두 연결 계층의 불변식을 유지하는 구현 및 디버그 검사입니다.",
+  "intro": "삽입은 대표 줄의 앞뒤에서 찾고 같은 순위 끝에 넣어요. 삭제와 requeue도 전체 줄과 대표 줄의 관계를 유지해야 해요.",
   "guide": [
-    "삽입은 우선순위 대표 링을 양쪽에서 탐색합니다. 대표를 삭제하면 같은 우선순위의 다음 노드가 필요한 대표 역할을 이어받습니다.",
-    "이미 연결된 노드를 다시 삽입하거나 공유 상태를 잠금 없이 변경하지 않습니다. 디버그 경고와 테스트는 호출 계약을 대신하지 않습니다."
+    "불변식은 작업 전후 계속 지켜야 하는 규칙이에요. 여기서는 정렬, 대표 수, 앞뒤 연결이 맞아야 해요.",
+    "requeue는 같은 우선순위 안에서 뒤로 옮기는 일이에요. 우선순위 숫자를 바꾸지 않아요.",
+    "디버그 경고는 잘못된 사용을 찾는 도움이며 호출자의 잠금·입력 조건을 대신 보장하지는 않아요."
   ],
   "deep_dive": [
     {
-      "title": "전체 파일",
-      "text": "SPDX와 구현 계보, bug/plist 포함 뒤에 CONFIG_DEBUG_PLIST의 연결 검사 helper가 있습니다. 항상 존재하는 add/del/requeue 세 함수 뒤에 디버그 전용 상태 검사·재배치 검사·랜덤 테스트·시간 측정과 module_init이 이어집니다. 디버그가 꺼지면 plist_check_head는 빈 매크로입니다."
+      "title": "일반 구현과 디버그 구현",
+      "text": "DEBUG_PLIST에 연결 검사 도우미가 있고 항상 있는 add·del·requeue 뒤에 디버그 상태·재배치·랜덤·시간 측정 검사가 이어져요. 디버그가 꺼지면 check_head는 아무 일 없는 매크로예요."
     },
     {
-      "title": "구조 검사",
-      "text": "plist_check_prev_next는 인접 포인터가 서로를 가리키는지 WARN으로 확인합니다. check_list는 원형 리스트를 한 바퀴 검사하고 check_head는 첫 노드의 대표 링과 전체 node_list를 확인합니다. WRITE_ONCE 사용은 이 검사를 임의의 동시 수정에도 안전하게 만드는 잠금이 아닙니다."
+      "title": "고리의 앞뒤가 맞는지 살펴요",
+      "text": "check_prev_next는 이웃의 prev·next가 서로를 가리키는지 경고로 확인해요. check_list는 원형 줄 한 바퀴, check_head는 첫 노드의 대표 줄과 전체 줄을 검사해요. WRITE_ONCE는 지정한 읽기·쓰기 형태를 유지하는 도구이지 동시에 아무렇게나 수정해도 안전하게 해 주는 잠금은 아니에요."
     },
     {
-      "title": "삽입의 빈 경우와 선행 조건",
-      "text": "plist_add는 노드가 전체 목록과 대표 링에 연결되어 있지 않은지 WARN_ON으로 점검합니다. 빈 헤드라면 바로 전체 node_list에 넣고 대표 링크는 자기참조 상태를 유지합니다. WARN 자체가 잘못된 입력을 안전하게 거부하는 조기 반환은 아닙니다."
+      "title": "빈 줄 삽입과 사전 조건",
+      "text": "add는 새 노드가 전체 줄과 대표 줄에 이미 연결돼 있지 않은지 WARN_ON해요. 빈 헤드면 전체 줄에 바로 넣고 대표 고리는 자기참조로 남겨요. 경고가 잘못된 입력을 조기 반환으로 안전하게 거절하는 것은 아니므로 이중 삽입을 해서는 안 돼요."
     },
     {
-      "title": "양방향 대표 탐색",
-      "text": "first/iter는 첫 대표, last/reverse_iter는 대표 링의 마지막에서 시작합니다. 새 우선순위가 iter보다 작으면 그 앞을 선택합니다. reverse_iter 이상이면 그 대표 뒤 그룹 경계를 선택합니다. 그렇지 않으면 앞 커서는 next, 뒤 커서는 prev로 이동합니다. 모든 객체를 스캔하는 대신 서로 다른 우선순위 대표들을 탐색합니다."
+      "title": "대표 줄 양끝에서 찾기",
+      "text": "앞 커서는 첫 대표, 뒤 커서는 마지막 대표에서 시작해요. 새 숫자가 앞 대표보다 작으면 그 앞을 골라요. 뒤 대표 이상이면 그 그룹 다음 경계를 골라요. 아니면 앞은 next, 뒤는 prev로 좁혀요. 같은 순위의 모든 객체 대신 서로 다른 순위 대표를 찾는 방식이에요."
     },
     {
-      "title": "동순위 FIFO와 새 대표",
-      "text": "prev가 없거나 prev->prio와 새 prio가 다르면 새 노드를 대표 링에 넣습니다. 같은 우선순위가 이미 있으면 대표 링크는 별도로 추가하지 않습니다. node_next로 선택한 다음 우선순위 그룹 앞 또는 헤드 끝에 node_list를 넣으므로 기존 동순위 객체들 뒤에 새 객체가 붙습니다."
+      "title": "동순위 끝과 새 대표",
+      "text": "앞선 대표가 없거나 새 순위와 다르면 대표 줄에도 새 노드를 넣어요. 이미 같은 순위가 있으면 대표는 더 만들지 않아요. 전체 줄에는 다음 순위 그룹 앞이나 전체 끝에 넣어 같은 순위 기존 객체들의 뒤에 붙여요. 그래서 기본 삽입의 FIFO가 유지돼요."
     },
     {
-      "title": "대표 삭제와 승계",
-      "text": "삭제할 노드의 prio_list가 비어 있지 않으면 다음 전체 노드를 확인합니다. 그 다음 노드의 prio_list가 비어 있으면 동일 그룹의 비대표라는 불변식을 이용해 대표 링에 끼워 넣습니다. 이후 원래 대표 링크를 list_del_init합니다. 모든 경우 마지막에 node_list를 제거·초기화합니다. 다음 노드의 prio를 직접 비교하지 않는 이유는 두 계층의 기존 불변식에 의존하기 때문입니다."
+      "title": "대표가 나갈 때 다음 노드로 잇기",
+      "text": "삭제 노드의 대표 고리가 비어 있지 않으면 전체 다음 노드를 봐요. 그 노드의 대표 고리가 비어 있으면 같은 그룹의 비대표라는 기존 규칙을 이용해 대표 줄에 넣어요. 원래 대표 고리는 제거·초기화하고 마지막에 전체 고리도 제거·초기화해요. 다음 prio를 직접 비교하지 않는 것은 이 두 계층 규칙에 기대기 때문이에요."
     },
     {
-      "title": "대표 링 하나의 예외 모양",
-      "text": "우선순위가 한 종류뿐이면 대표 링은 자기참조여서 list_empty가 참입니다. 이때 대표 링크를 옮길 필요 없이 전체 node_list에서 첫 노드가 바뀌면 새 첫 노드가 그 단일 그룹의 접근점이 됩니다. 따라서 비어 있지 않은 prio_list 검사와 일반적인 대표라는 개념을 완전히 동일시하지 않습니다."
+      "title": "순위 종류가 하나뿐인 모양",
+      "text": "대표가 한 종류면 대표 고리가 자기참조라 list_empty는 참이에요. 이때 별도 대표 고리를 옮길 필요 없이 전체 첫 노드가 바뀌면 새 접근점이 돼요. 따라서 대표라는 개념과 대표 고리가 비어 있지 않다는 조건을 언제나 같은 뜻으로 쓰면 안 돼요."
     },
     {
-      "title": "동순위 재배치",
-      "text": "plist_requeue는 빈 헤드나 미등록 노드에 BUG_ON을 수행합니다. 이미 전체 마지막이거나 다음 노드의 우선순위가 다르면 그룹의 끝이므로 그대로 반환합니다. 아니면 plist_del로 빼고 같은 우선순위의 나머지를 지나 다음 그룹 앞에 node_list만 다시 넣습니다. 기존 같은 우선순위 대표가 남기 때문에 새 대표 링크를 만들 필요가 없습니다. prio 자체는 바꾸지 않습니다."
+      "title": "같은 순위 안에서 뒤로 보내요",
+      "text": "requeue는 빈 헤드나 미등록 노드에 BUG_ON해요. 이미 전체 끝이거나 다음 노드 순위가 다르면 그룹 끝이라 그대로예요. 아니면 del로 빼고 같은 순위 나머지를 지나 다음 그룹 앞에 전체 고리만 넣어요. 같은 순위 대표가 남아 있어 새 대표를 만들 필요가 없고 prio 숫자도 바꾸지 않아요."
     },
     {
-      "title": "디버그 불변식 테스트",
-      "text": "test_check는 예상 개수, 전체 우선순위 순서, 동순위 비대표의 빈 prio_list, 대표 링의 다음 연결과 닫힘을 BUG_ON으로 확인합니다. test_requeue는 재배치 뒤 다음 노드가 같은 우선순위가 아닌지 확인합니다. 241개 노드를 초기화한 뒤 local_clock 기반 상태와 곱셈·나머지 갱신으로1000회 추가/삭제를 선택하고 매 단계 검사합니다. 마지막에 모든 남은 노드를 삭제합니다."
+      "title": "디버그 검사에서 살피는 규칙",
+      "text": "test_check는 예상 개수·우선순위 순서·동순위 비대표의 빈 고리·대표 연결과 닫힘을 BUG_ON으로 봐요. requeue 검사는 다음 노드가 같은 순위가 아닌지 봐요. 노드 241개를 준비해 local_clock에서 시작한 상태를 곱셈·나머지로 바꾸며 1000회 추가·삭제를 하고 매번 검사해요. 마지막에 남은 노드를 모두 삭제해요."
     },
     {
-      "title": "시간 측정과 검증 한계",
-      "text": "뒤의 worst case라는 이름의 테스트는0..240 우선순위 노드를 오름차순으로 삽입하며 ktime_get 차이를 누적해 출력합니다. 이 이름만으로 현재 양방향 탐색의 모든 입력 중 실제 최악이 증명되는 것은 아닙니다. 랜덤 검사는 시드와 제한된 반복에 의존하며 이 교재에서 해당 커널 init 테스트를 실행했다고 주장하지 않습니다."
+      "title": "시간 측정 이름은 증명이 아니에요",
+      "text": "뒤의 worst case 시험은 0~240 우선순위를 오름차순 삽입하며 ktime 차이를 더해요. 이름만으로 모든 입력 중 최악이라고 증명되지는 않아요. 랜덤 검사도 특정 시작 상태와 횟수에 한정돼요. 이 교재 작업에서 커널 init 시험을 실제 실행한 것은 아니에요."
     },
     {
-      "title": "CS 연결",
-      "text": "계층별 불변식, 대표 승계, 안정된 우선순위 큐, 큐 내 공정한 재배치, 상수 시간 삭제와 탐색 삽입의 비용 차이, 검사와 증명의 범위를 학습합니다. requeue는 같은 그룹을 순회할 수 있어 모든 연산이 O(1)인 자료구조가 아닙니다."
+      "title": "연산마다 비용과 역할이 달라요",
+      "text": "대표 승계와 안정된 순위 줄, 같은 그룹에서 차례를 바꾸는 공정성, 삭제와 삽입 탐색의 비용 차이를 배워요. requeue는 같은 순위 그룹을 훑을 수 있으므로 모든 연산이 O(1)인 자료구조는 아니에요. 검사 사례와 모든 입력의 증명도 구분해요."
     }
   ],
   "questions": [
     {
-      "prompt": "동순위 새 노드는 기존 동순위 그룹의 어디에 들어가는가?",
+      "prompt": "같은 순위 새 노드는 어디에 들어갈까요?",
       "options": [
+        "기존 같은 순위 뒤에 넣어 FIFO를 지켜요.",
+        "항상 앞에 넣어 LIFO가 돼요."
+      ],
+      "answer": 0,
+      "explanation": "다음 순위 그룹 앞에 넣으면 현재 그룹의 끝이에요.",
+      "original_prompt": "동순위 새 노드는 기존 동순위 그룹의 어디에 들어가는가?",
+      "original_options": [
         "뒤에 들어가 FIFO 순서를 유지한다",
         "항상 맨 앞에 들어가 LIFO가 된다"
       ],
-      "answer": 0,
-      "explanation": "삽입 위치는 다음 우선순위 그룹의 앞 또는 전체 끝입니다. 같은 우선순위 대표 앞에 무조건 삽입하는 것이 아닙니다."
+      "original_explanation": "삽입 위치는 다음 우선순위 그룹의 앞 또는 전체 끝입니다. 같은 우선순위 대표 앞에 무조건 삽입하는 것이 아닙니다."
     },
     {
-      "prompt": "대표 노드 삭제 시 같은 우선순위 노드가 남으면?",
+      "prompt": "대표를 지워도 같은 순위가 남으면 어떻게 할까요?",
       "options": [
+        "그 순위 노드를 전부 지워요.",
+        "필요하면 다음 노드가 대표 연결을 이어받아요."
+      ],
+      "answer": 1,
+      "explanation": "객체 전체를 지우는 것이 아니라 대표 역할을 넘겨요.",
+      "original_prompt": "대표 노드 삭제 시 같은 우선순위 노드가 남으면?",
+      "original_options": [
         "남은 동순위 노드를 모두 삭제한다",
         "필요한 경우 다음 노드가 대표 연결을 이어받는다"
       ],
-      "answer": 1,
-      "explanation": "전체 다음 노드의 대표 링크가 비어 있으면 대표 링에 추가한 뒤 원래 대표를 제거합니다. 객체들은 그대로 남습니다."
+      "original_explanation": "전체 다음 노드의 대표 링크가 비어 있으면 대표 링에 추가한 뒤 원래 대표를 제거합니다. 객체들은 그대로 남습니다."
     },
     {
-      "prompt": "plist_requeue는 우선순위 숫자를 낮추는 함수인가?",
+      "prompt": "requeue는 prio를 낮추는 함수일까요?",
       "options": [
+        "아니요. 같은 순위 그룹 끝으로 옮겨요.",
+        "네. prio를 1 줄여요."
+      ],
+      "answer": 0,
+      "explanation": "본문에는 prio 변경이 없어요.",
+      "original_prompt": "plist_requeue는 우선순위 숫자를 낮추는 함수인가?",
+      "original_options": [
         "아니다. 같은 우선순위 그룹의 끝으로 이동한다",
         "그렇다. prio를1 감소시킨다"
       ],
-      "answer": 0,
-      "explanation": "함수 본문에 prio 변경은 없습니다. 동일 우선순위 객체들의 처리 순서를 조정합니다."
+      "original_explanation": "함수 본문에 prio 변경은 없습니다. 동일 우선순위 객체들의 처리 순서를 조정합니다."
     },
     {
-      "prompt": "worst case라는 테스트 이름만으로 최악 복잡도가 증명되는가?",
+      "prompt": "worst case라는 이름만으로 최악 비용이 증명될까요?",
       "options": [
+        "네. 모든 입력을 자동으로 찾아요.",
+        "아니요. 정한 입력의 시간 측정이에요."
+      ],
+      "answer": 1,
+      "explanation": "241개 오름차순 입력이 모든 순서와 분포를 포괄하지는 않아요.",
+      "original_prompt": "worst case라는 테스트 이름만으로 최악 복잡도가 증명되는가?",
+      "original_options": [
         "그렇다. 모든 입력을 자동 탐색한다",
         "아니다. 특정 입력과 시간 측정일 뿐이다"
       ],
-      "answer": 1,
-      "explanation": "이 코드는 정해진 오름차순 입력241개를 삽입합니다. 모든 가능한 순서나 분포의 실행 비용을 비교하지 않습니다."
+      "original_explanation": "이 코드는 정해진 오름차순 입력241개를 삽입합니다. 모든 가능한 순서나 분포의 실행 비용을 비교하지 않습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "10a·10b·20a를 넣고 10a를 삭제할 때의 대표를 그린 뒤, 10a가 남아 있을 때 requeue하면 어느 자리로 가는지 비교해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/plist.c\n *\n * Descending-priority-sorted double-linked list\n *\n * (C) 2002-2003 Intel Corp\n * Inaky Perez-Gonzalez <inaky.perez-gonzalez@intel.com>.\n *\n * 2001-2005 (c) MontaVista Software, Inc.\n * Daniel Walker <dwalker@mvista.com>\n *\n * (C) 2005 Thomas Gleixner <tglx@linutronix.de>\n *\n * Simplifications of the original code by\n * Oleg Nesterov <oleg@tv-sign.ru>\n *\n * Based on simple lists (include/linux/list.h).\n *\n * This file contains the add / del functions which are considered to\n * be too large to inline. See include/linux/plist.h for further\n * information.\n */\n\n#include <linux/bug.h>\n#include <linux/plist.h>\n\n#ifdef CONFIG_DEBUG_PLIST\n\nstatic struct plist_head test_head;\n\nstatic void plist_check_prev_next(struct list_head *t, struct list_head *p,\n\t\t\t\t  struct list_head *n)\n{\n\tWARN(n->prev != p || p->next != n,\n\t\t\t\"top: %p, n: %p, p: %p\\n\"\n\t\t\t\"prev: %p, n: %p, p: %p\\n\"\n\t\t\t\"next: %p, n: %p, p: %p\\n\",\n\t\t\t t, t->next, t->prev,\n\t\t\tp, p->next, p->prev,\n\t\t\tn, n->next, n->prev);\n}\n\nstatic void plist_check_list(struct list_head *top)\n{\n\tstruct list_head *prev = top, *next = top->next;\n\n\tplist_check_prev_next(top, prev, next);\n\twhile (next != top) {\n\t\tWRITE_ONCE(prev, next);\n\t\tWRITE_ONCE(next, prev->next);\n\t\tplist_check_prev_next(top, prev, next);\n\t}\n}\n\nstatic void plist_check_head(struct plist_head *head)\n{\n\tif (!plist_head_empty(head))\n\t\tplist_check_list(&plist_first(head)->prio_list);\n\tplist_check_list(&head->node_list);\n}\n\n#else\n# define plist_check_head(h)\tdo { } while (0)\n#endif\n\n/**\n * plist_add - add @node to @head\n *\n * @node:\t&struct plist_node pointer\n * @head:\t&struct plist_head pointer\n */\nvoid plist_add(struct plist_node *node, struct plist_head *head)\n{\n\tstruct plist_node *first, *iter, *prev = NULL, *last, *reverse_iter;\n\tstruct list_head *node_next = &head->node_list;\n\n\tplist_check_head(head);\n\tWARN_ON(!plist_node_empty(node));\n\tWARN_ON(!list_empty(&node->prio_list));\n\n\tif (plist_head_empty(head))\n\t\tgoto ins_node;\n\n\tfirst = iter = plist_first(head);\n\tlast = reverse_iter = list_entry(first->prio_list.prev, struct plist_node, prio_list);\n\n\tdo {\n\t\tif (node->prio < iter->prio) {\n\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t} else if (node->prio >= reverse_iter->prio) {\n\t\t\tprev = reverse_iter;\n\t\t\titer = list_entry(reverse_iter->prio_list.next,\n\t\t\t\tstruct plist_node, prio_list);\n\t\t\tif (likely(reverse_iter != last))\n\t\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t}\n\n\t\tprev = iter;\n\t\titer = list_entry(iter->prio_list.next,\n\t\t\t\tstruct plist_node, prio_list);\n\t\treverse_iter = list_entry(reverse_iter->prio_list.prev,\n\t\t\t\tstruct plist_node, prio_list);\n\t} while (iter != first);\n\n\tif (!prev || prev->prio != node->prio)\n\t\tlist_add_tail(&node->prio_list, &iter->prio_list);\nins_node:\n\tlist_add_tail(&node->node_list, node_next);\n\n\tplist_check_head(head);\n}\n\n/**\n * plist_del - Remove a @node from plist.\n *\n * @node:\t&struct plist_node pointer - entry to be removed\n * @head:\t&struct plist_head pointer - list head\n */\nvoid plist_del(struct plist_node *node, struct plist_head *head)\n{\n\tplist_check_head(head);\n\n\tif (!list_empty(&node->prio_list)) {\n\t\tif (node->node_list.next != &head->node_list) {\n\t\t\tstruct plist_node *next;\n\n\t\t\tnext = list_entry(node->node_list.next,\n\t\t\t\t\tstruct plist_node, node_list);\n\n\t\t\t/* add the next plist_node into prio_list */\n\t\t\tif (list_empty(&next->prio_list))\n\t\t\t\tlist_add(&next->prio_list, &node->prio_list);\n\t\t}\n\t\tlist_del_init(&node->prio_list);\n\t}\n\n\tlist_del_init(&node->node_list);\n\n\tplist_check_head(head);\n}\n\n/**\n * plist_requeue - Requeue @node at end of same-prio entries.\n *\n * This is essentially an optimized plist_del() followed by\n * plist_add().  It moves an entry already in the plist to\n * after any other same-priority entries.\n *\n * @node:\t&struct plist_node pointer - entry to be moved\n * @head:\t&struct plist_head pointer - list head\n */\nvoid plist_requeue(struct plist_node *node, struct plist_head *head)\n{\n\tstruct plist_node *iter;\n\tstruct list_head *node_next = &head->node_list;\n\n\tplist_check_head(head);\n\tBUG_ON(plist_head_empty(head));\n\tBUG_ON(plist_node_empty(node));\n\n\tif (node == plist_last(head))\n\t\treturn;\n\n\titer = plist_next(node);\n\n\tif (node->prio != iter->prio)\n\t\treturn;\n\n\tplist_del(node, head);\n\n\tplist_for_each_continue(iter, head) {\n\t\tif (node->prio != iter->prio) {\n\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t}\n\t}\n\tlist_add_tail(&node->node_list, node_next);\n\n\tplist_check_head(head);\n}\n\n#ifdef CONFIG_DEBUG_PLIST\n#include <linux/sched.h>\n#include <linux/sched/clock.h>\n#include <linux/module.h>\n#include <linux/init.h>\n\nstatic struct plist_node __initdata test_node[241];\n\nstatic void __init plist_test_check(int nr_expect)\n{\n\tstruct plist_node *first, *prio_pos, *node_pos;\n\n\tif (plist_head_empty(&test_head)) {\n\t\tBUG_ON(nr_expect != 0);\n\t\treturn;\n\t}\n\n\tprio_pos = first = plist_first(&test_head);\n\tplist_for_each(node_pos, &test_head) {\n\t\tif (nr_expect-- < 0)\n\t\t\tbreak;\n\t\tif (node_pos == first)\n\t\t\tcontinue;\n\t\tif (node_pos->prio == prio_pos->prio) {\n\t\t\tBUG_ON(!list_empty(&node_pos->prio_list));\n\t\t\tcontinue;\n\t\t}\n\n\t\tBUG_ON(prio_pos->prio > node_pos->prio);\n\t\tBUG_ON(prio_pos->prio_list.next != &node_pos->prio_list);\n\t\tprio_pos = node_pos;\n\t}\n\n\tBUG_ON(nr_expect != 0);\n\tBUG_ON(prio_pos->prio_list.next != &first->prio_list);\n}\n\nstatic void __init plist_test_requeue(struct plist_node *node)\n{\n\tplist_requeue(node, &test_head);\n\n\tif (node != plist_last(&test_head))\n\t\tBUG_ON(node->prio == plist_next(node)->prio);\n}\n\nstatic int  __init plist_test(void)\n{\n\tint nr_expect = 0, i, loop;\n\tunsigned int r = local_clock();\n\n\tprintk(KERN_DEBUG \"start plist test\\n\");\n\tplist_head_init(&test_head);\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++)\n\t\tplist_node_init(test_node + i, 0);\n\n\tfor (loop = 0; loop < 1000; loop++) {\n\t\tr = r * 193939 % 47629;\n\t\ti = r % ARRAY_SIZE(test_node);\n\t\tif (plist_node_empty(test_node + i)) {\n\t\t\tr = r * 193939 % 47629;\n\t\t\ttest_node[i].prio = r % 99;\n\t\t\tplist_add(test_node + i, &test_head);\n\t\t\tnr_expect++;\n\t\t} else {\n\t\t\tplist_del(test_node + i, &test_head);\n\t\t\tnr_expect--;\n\t\t}\n\t\tplist_test_check(nr_expect);\n\t\tif (!plist_node_empty(test_node + i)) {\n\t\t\tplist_test_requeue(test_node + i);\n\t\t\tplist_test_check(nr_expect);\n\t\t}\n\t}\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tif (plist_node_empty(test_node + i))\n\t\t\tcontinue;\n\t\tplist_del(test_node + i, &test_head);\n\t\tnr_expect--;\n\t\tplist_test_check(nr_expect);\n\t}\n\n\tprintk(KERN_DEBUG \"end plist test\\n\");\n\n\t/* Worst case test for plist_add() */\n\tunsigned int test_data[241];\n\n\tfor (i = 0; i < ARRAY_SIZE(test_data); i++)\n\t\ttest_data[i] = i;\n\n\tktime_t start, end, time_elapsed = 0;\n\n\tplist_head_init(&test_head);\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tplist_node_init(test_node + i, 0);\n\t\ttest_node[i].prio = test_data[i];\n\t}\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tif (plist_node_empty(test_node + i)) {\n\t\t\tstart = ktime_get();\n\t\t\tplist_add(test_node + i, &test_head);\n\t\t\tend = ktime_get();\n\t\t\ttime_elapsed += (end - start);\n\t\t}\n\t}\n\n\tpr_debug(\"plist_add worst case test time elapsed %lld\\n\", time_elapsed);\n\treturn 0;\n}\n\nmodule_init(plist_test);\n\n#endif\n",
   "source_review": {
@@ -131,5 +151,168 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/plist.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c817a4fded76b326",
+    "path": "lib/plist.c",
+    "title": "Plist 구현 전체: 양방향 대표 탐색·대표 승계·동순위 재배치",
+    "area": "우선순위 큐 · 이중 연결 리스트 · 불변식",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "삽입과 삭제에서 두 연결 계층의 불변식을 유지하는 구현 및 디버그 검사입니다.",
+    "guide": [
+      "삽입은 우선순위 대표 링을 양쪽에서 탐색합니다. 대표를 삭제하면 같은 우선순위의 다음 노드가 필요한 대표 역할을 이어받습니다.",
+      "이미 연결된 노드를 다시 삽입하거나 공유 상태를 잠금 없이 변경하지 않습니다. 디버그 경고와 테스트는 호출 계약을 대신하지 않습니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "전체 파일",
+        "text": "SPDX와 구현 계보, bug/plist 포함 뒤에 CONFIG_DEBUG_PLIST의 연결 검사 helper가 있습니다. 항상 존재하는 add/del/requeue 세 함수 뒤에 디버그 전용 상태 검사·재배치 검사·랜덤 테스트·시간 측정과 module_init이 이어집니다. 디버그가 꺼지면 plist_check_head는 빈 매크로입니다."
+      },
+      {
+        "title": "구조 검사",
+        "text": "plist_check_prev_next는 인접 포인터가 서로를 가리키는지 WARN으로 확인합니다. check_list는 원형 리스트를 한 바퀴 검사하고 check_head는 첫 노드의 대표 링과 전체 node_list를 확인합니다. WRITE_ONCE 사용은 이 검사를 임의의 동시 수정에도 안전하게 만드는 잠금이 아닙니다."
+      },
+      {
+        "title": "삽입의 빈 경우와 선행 조건",
+        "text": "plist_add는 노드가 전체 목록과 대표 링에 연결되어 있지 않은지 WARN_ON으로 점검합니다. 빈 헤드라면 바로 전체 node_list에 넣고 대표 링크는 자기참조 상태를 유지합니다. WARN 자체가 잘못된 입력을 안전하게 거부하는 조기 반환은 아닙니다."
+      },
+      {
+        "title": "양방향 대표 탐색",
+        "text": "first/iter는 첫 대표, last/reverse_iter는 대표 링의 마지막에서 시작합니다. 새 우선순위가 iter보다 작으면 그 앞을 선택합니다. reverse_iter 이상이면 그 대표 뒤 그룹 경계를 선택합니다. 그렇지 않으면 앞 커서는 next, 뒤 커서는 prev로 이동합니다. 모든 객체를 스캔하는 대신 서로 다른 우선순위 대표들을 탐색합니다."
+      },
+      {
+        "title": "동순위 FIFO와 새 대표",
+        "text": "prev가 없거나 prev->prio와 새 prio가 다르면 새 노드를 대표 링에 넣습니다. 같은 우선순위가 이미 있으면 대표 링크는 별도로 추가하지 않습니다. node_next로 선택한 다음 우선순위 그룹 앞 또는 헤드 끝에 node_list를 넣으므로 기존 동순위 객체들 뒤에 새 객체가 붙습니다."
+      },
+      {
+        "title": "대표 삭제와 승계",
+        "text": "삭제할 노드의 prio_list가 비어 있지 않으면 다음 전체 노드를 확인합니다. 그 다음 노드의 prio_list가 비어 있으면 동일 그룹의 비대표라는 불변식을 이용해 대표 링에 끼워 넣습니다. 이후 원래 대표 링크를 list_del_init합니다. 모든 경우 마지막에 node_list를 제거·초기화합니다. 다음 노드의 prio를 직접 비교하지 않는 이유는 두 계층의 기존 불변식에 의존하기 때문입니다."
+      },
+      {
+        "title": "대표 링 하나의 예외 모양",
+        "text": "우선순위가 한 종류뿐이면 대표 링은 자기참조여서 list_empty가 참입니다. 이때 대표 링크를 옮길 필요 없이 전체 node_list에서 첫 노드가 바뀌면 새 첫 노드가 그 단일 그룹의 접근점이 됩니다. 따라서 비어 있지 않은 prio_list 검사와 일반적인 대표라는 개념을 완전히 동일시하지 않습니다."
+      },
+      {
+        "title": "동순위 재배치",
+        "text": "plist_requeue는 빈 헤드나 미등록 노드에 BUG_ON을 수행합니다. 이미 전체 마지막이거나 다음 노드의 우선순위가 다르면 그룹의 끝이므로 그대로 반환합니다. 아니면 plist_del로 빼고 같은 우선순위의 나머지를 지나 다음 그룹 앞에 node_list만 다시 넣습니다. 기존 같은 우선순위 대표가 남기 때문에 새 대표 링크를 만들 필요가 없습니다. prio 자체는 바꾸지 않습니다."
+      },
+      {
+        "title": "디버그 불변식 테스트",
+        "text": "test_check는 예상 개수, 전체 우선순위 순서, 동순위 비대표의 빈 prio_list, 대표 링의 다음 연결과 닫힘을 BUG_ON으로 확인합니다. test_requeue는 재배치 뒤 다음 노드가 같은 우선순위가 아닌지 확인합니다. 241개 노드를 초기화한 뒤 local_clock 기반 상태와 곱셈·나머지 갱신으로1000회 추가/삭제를 선택하고 매 단계 검사합니다. 마지막에 모든 남은 노드를 삭제합니다."
+      },
+      {
+        "title": "시간 측정과 검증 한계",
+        "text": "뒤의 worst case라는 이름의 테스트는0..240 우선순위 노드를 오름차순으로 삽입하며 ktime_get 차이를 누적해 출력합니다. 이 이름만으로 현재 양방향 탐색의 모든 입력 중 실제 최악이 증명되는 것은 아닙니다. 랜덤 검사는 시드와 제한된 반복에 의존하며 이 교재에서 해당 커널 init 테스트를 실행했다고 주장하지 않습니다."
+      },
+      {
+        "title": "CS 연결",
+        "text": "계층별 불변식, 대표 승계, 안정된 우선순위 큐, 큐 내 공정한 재배치, 상수 시간 삭제와 탐색 삽입의 비용 차이, 검사와 증명의 범위를 학습합니다. requeue는 같은 그룹을 순회할 수 있어 모든 연산이 O(1)인 자료구조가 아닙니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "동순위 새 노드는 기존 동순위 그룹의 어디에 들어가는가?",
+        "options": [
+          "뒤에 들어가 FIFO 순서를 유지한다",
+          "항상 맨 앞에 들어가 LIFO가 된다"
+        ],
+        "answer": 0,
+        "explanation": "삽입 위치는 다음 우선순위 그룹의 앞 또는 전체 끝입니다. 같은 우선순위 대표 앞에 무조건 삽입하는 것이 아닙니다."
+      },
+      {
+        "prompt": "대표 노드 삭제 시 같은 우선순위 노드가 남으면?",
+        "options": [
+          "남은 동순위 노드를 모두 삭제한다",
+          "필요한 경우 다음 노드가 대표 연결을 이어받는다"
+        ],
+        "answer": 1,
+        "explanation": "전체 다음 노드의 대표 링크가 비어 있으면 대표 링에 추가한 뒤 원래 대표를 제거합니다. 객체들은 그대로 남습니다."
+      },
+      {
+        "prompt": "plist_requeue는 우선순위 숫자를 낮추는 함수인가?",
+        "options": [
+          "아니다. 같은 우선순위 그룹의 끝으로 이동한다",
+          "그렇다. prio를1 감소시킨다"
+        ],
+        "answer": 0,
+        "explanation": "함수 본문에 prio 변경은 없습니다. 동일 우선순위 객체들의 처리 순서를 조정합니다."
+      },
+      {
+        "prompt": "worst case라는 테스트 이름만으로 최악 복잡도가 증명되는가?",
+        "options": [
+          "그렇다. 모든 입력을 자동 탐색한다",
+          "아니다. 특정 입력과 시간 측정일 뿐이다"
+        ],
+        "answer": 1,
+        "explanation": "이 코드는 정해진 오름차순 입력241개를 삽입합니다. 모든 가능한 순서나 분포의 실행 비용을 비교하지 않습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-or-later\n/*\n * lib/plist.c\n *\n * Descending-priority-sorted double-linked list\n *\n * (C) 2002-2003 Intel Corp\n * Inaky Perez-Gonzalez <inaky.perez-gonzalez@intel.com>.\n *\n * 2001-2005 (c) MontaVista Software, Inc.\n * Daniel Walker <dwalker@mvista.com>\n *\n * (C) 2005 Thomas Gleixner <tglx@linutronix.de>\n *\n * Simplifications of the original code by\n * Oleg Nesterov <oleg@tv-sign.ru>\n *\n * Based on simple lists (include/linux/list.h).\n *\n * This file contains the add / del functions which are considered to\n * be too large to inline. See include/linux/plist.h for further\n * information.\n */\n\n#include <linux/bug.h>\n#include <linux/plist.h>\n\n#ifdef CONFIG_DEBUG_PLIST\n\nstatic struct plist_head test_head;\n\nstatic void plist_check_prev_next(struct list_head *t, struct list_head *p,\n\t\t\t\t  struct list_head *n)\n{\n\tWARN(n->prev != p || p->next != n,\n\t\t\t\"top: %p, n: %p, p: %p\\n\"\n\t\t\t\"prev: %p, n: %p, p: %p\\n\"\n\t\t\t\"next: %p, n: %p, p: %p\\n\",\n\t\t\t t, t->next, t->prev,\n\t\t\tp, p->next, p->prev,\n\t\t\tn, n->next, n->prev);\n}\n\nstatic void plist_check_list(struct list_head *top)\n{\n\tstruct list_head *prev = top, *next = top->next;\n\n\tplist_check_prev_next(top, prev, next);\n\twhile (next != top) {\n\t\tWRITE_ONCE(prev, next);\n\t\tWRITE_ONCE(next, prev->next);\n\t\tplist_check_prev_next(top, prev, next);\n\t}\n}\n\nstatic void plist_check_head(struct plist_head *head)\n{\n\tif (!plist_head_empty(head))\n\t\tplist_check_list(&plist_first(head)->prio_list);\n\tplist_check_list(&head->node_list);\n}\n\n#else\n# define plist_check_head(h)\tdo { } while (0)\n#endif\n\n/**\n * plist_add - add @node to @head\n *\n * @node:\t&struct plist_node pointer\n * @head:\t&struct plist_head pointer\n */\nvoid plist_add(struct plist_node *node, struct plist_head *head)\n{\n\tstruct plist_node *first, *iter, *prev = NULL, *last, *reverse_iter;\n\tstruct list_head *node_next = &head->node_list;\n\n\tplist_check_head(head);\n\tWARN_ON(!plist_node_empty(node));\n\tWARN_ON(!list_empty(&node->prio_list));\n\n\tif (plist_head_empty(head))\n\t\tgoto ins_node;\n\n\tfirst = iter = plist_first(head);\n\tlast = reverse_iter = list_entry(first->prio_list.prev, struct plist_node, prio_list);\n\n\tdo {\n\t\tif (node->prio < iter->prio) {\n\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t} else if (node->prio >= reverse_iter->prio) {\n\t\t\tprev = reverse_iter;\n\t\t\titer = list_entry(reverse_iter->prio_list.next,\n\t\t\t\tstruct plist_node, prio_list);\n\t\t\tif (likely(reverse_iter != last))\n\t\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t}\n\n\t\tprev = iter;\n\t\titer = list_entry(iter->prio_list.next,\n\t\t\t\tstruct plist_node, prio_list);\n\t\treverse_iter = list_entry(reverse_iter->prio_list.prev,\n\t\t\t\tstruct plist_node, prio_list);\n\t} while (iter != first);\n\n\tif (!prev || prev->prio != node->prio)\n\t\tlist_add_tail(&node->prio_list, &iter->prio_list);\nins_node:\n\tlist_add_tail(&node->node_list, node_next);\n\n\tplist_check_head(head);\n}\n\n/**\n * plist_del - Remove a @node from plist.\n *\n * @node:\t&struct plist_node pointer - entry to be removed\n * @head:\t&struct plist_head pointer - list head\n */\nvoid plist_del(struct plist_node *node, struct plist_head *head)\n{\n\tplist_check_head(head);\n\n\tif (!list_empty(&node->prio_list)) {\n\t\tif (node->node_list.next != &head->node_list) {\n\t\t\tstruct plist_node *next;\n\n\t\t\tnext = list_entry(node->node_list.next,\n\t\t\t\t\tstruct plist_node, node_list);\n\n\t\t\t/* add the next plist_node into prio_list */\n\t\t\tif (list_empty(&next->prio_list))\n\t\t\t\tlist_add(&next->prio_list, &node->prio_list);\n\t\t}\n\t\tlist_del_init(&node->prio_list);\n\t}\n\n\tlist_del_init(&node->node_list);\n\n\tplist_check_head(head);\n}\n\n/**\n * plist_requeue - Requeue @node at end of same-prio entries.\n *\n * This is essentially an optimized plist_del() followed by\n * plist_add().  It moves an entry already in the plist to\n * after any other same-priority entries.\n *\n * @node:\t&struct plist_node pointer - entry to be moved\n * @head:\t&struct plist_head pointer - list head\n */\nvoid plist_requeue(struct plist_node *node, struct plist_head *head)\n{\n\tstruct plist_node *iter;\n\tstruct list_head *node_next = &head->node_list;\n\n\tplist_check_head(head);\n\tBUG_ON(plist_head_empty(head));\n\tBUG_ON(plist_node_empty(node));\n\n\tif (node == plist_last(head))\n\t\treturn;\n\n\titer = plist_next(node);\n\n\tif (node->prio != iter->prio)\n\t\treturn;\n\n\tplist_del(node, head);\n\n\tplist_for_each_continue(iter, head) {\n\t\tif (node->prio != iter->prio) {\n\t\t\tnode_next = &iter->node_list;\n\t\t\tbreak;\n\t\t}\n\t}\n\tlist_add_tail(&node->node_list, node_next);\n\n\tplist_check_head(head);\n}\n\n#ifdef CONFIG_DEBUG_PLIST\n#include <linux/sched.h>\n#include <linux/sched/clock.h>\n#include <linux/module.h>\n#include <linux/init.h>\n\nstatic struct plist_node __initdata test_node[241];\n\nstatic void __init plist_test_check(int nr_expect)\n{\n\tstruct plist_node *first, *prio_pos, *node_pos;\n\n\tif (plist_head_empty(&test_head)) {\n\t\tBUG_ON(nr_expect != 0);\n\t\treturn;\n\t}\n\n\tprio_pos = first = plist_first(&test_head);\n\tplist_for_each(node_pos, &test_head) {\n\t\tif (nr_expect-- < 0)\n\t\t\tbreak;\n\t\tif (node_pos == first)\n\t\t\tcontinue;\n\t\tif (node_pos->prio == prio_pos->prio) {\n\t\t\tBUG_ON(!list_empty(&node_pos->prio_list));\n\t\t\tcontinue;\n\t\t}\n\n\t\tBUG_ON(prio_pos->prio > node_pos->prio);\n\t\tBUG_ON(prio_pos->prio_list.next != &node_pos->prio_list);\n\t\tprio_pos = node_pos;\n\t}\n\n\tBUG_ON(nr_expect != 0);\n\tBUG_ON(prio_pos->prio_list.next != &first->prio_list);\n}\n\nstatic void __init plist_test_requeue(struct plist_node *node)\n{\n\tplist_requeue(node, &test_head);\n\n\tif (node != plist_last(&test_head))\n\t\tBUG_ON(node->prio == plist_next(node)->prio);\n}\n\nstatic int  __init plist_test(void)\n{\n\tint nr_expect = 0, i, loop;\n\tunsigned int r = local_clock();\n\n\tprintk(KERN_DEBUG \"start plist test\\n\");\n\tplist_head_init(&test_head);\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++)\n\t\tplist_node_init(test_node + i, 0);\n\n\tfor (loop = 0; loop < 1000; loop++) {\n\t\tr = r * 193939 % 47629;\n\t\ti = r % ARRAY_SIZE(test_node);\n\t\tif (plist_node_empty(test_node + i)) {\n\t\t\tr = r * 193939 % 47629;\n\t\t\ttest_node[i].prio = r % 99;\n\t\t\tplist_add(test_node + i, &test_head);\n\t\t\tnr_expect++;\n\t\t} else {\n\t\t\tplist_del(test_node + i, &test_head);\n\t\t\tnr_expect--;\n\t\t}\n\t\tplist_test_check(nr_expect);\n\t\tif (!plist_node_empty(test_node + i)) {\n\t\t\tplist_test_requeue(test_node + i);\n\t\t\tplist_test_check(nr_expect);\n\t\t}\n\t}\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tif (plist_node_empty(test_node + i))\n\t\t\tcontinue;\n\t\tplist_del(test_node + i, &test_head);\n\t\tnr_expect--;\n\t\tplist_test_check(nr_expect);\n\t}\n\n\tprintk(KERN_DEBUG \"end plist test\\n\");\n\n\t/* Worst case test for plist_add() */\n\tunsigned int test_data[241];\n\n\tfor (i = 0; i < ARRAY_SIZE(test_data); i++)\n\t\ttest_data[i] = i;\n\n\tktime_t start, end, time_elapsed = 0;\n\n\tplist_head_init(&test_head);\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tplist_node_init(test_node + i, 0);\n\t\ttest_node[i].prio = test_data[i];\n\t}\n\n\tfor (i = 0; i < ARRAY_SIZE(test_node); i++) {\n\t\tif (plist_node_empty(test_node + i)) {\n\t\t\tstart = ktime_get();\n\t\t\tplist_add(test_node + i, &test_head);\n\t\t\tend = ktime_get();\n\t\t\ttime_elapsed += (end - start);\n\t\t}\n\t}\n\n\tpr_debug(\"plist_add worst case test time elapsed %lld\\n\", time_elapsed);\n\treturn 0;\n}\n\nmodule_init(plist_test);\n\n#endif\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "c1088b1608a62a6c546ef0fd7199a73179b49f71c51dbebdbde87292fc182871",
+      "scope": "whole-file",
+      "line_count": 299,
+      "authoring_source": "course/file_units/priority_lists.py",
+      "sections": [
+        "전체 파일",
+        "구조 검사",
+        "삽입의 빈 경우와 선행 조건",
+        "양방향 대표 탐색",
+        "동순위 FIFO와 새 대표",
+        "대표 삭제와 승계",
+        "대표 링 하나의 예외 모양",
+        "동순위 재배치",
+        "디버그 불변식 테스트",
+        "시간 측정과 검증 한계",
+        "CS 연결"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/plist.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "순위별 대표를 보고 자리를 찾고, 대표가 나가면 같은 순위의 다음 친구가 대표를 이어받아요. plist 구현은 두 줄의 규칙을 함께 지키는 코드예요.",
+    "meaning": "삽입은 대표 줄의 앞뒤에서 찾고 같은 순위 끝에 넣어요. 삭제와 requeue도 전체 줄과 대표 줄의 관계를 유지해야 해요.",
+    "exercise": "10a·10b·20a를 넣고 10a를 삭제할 때의 대표를 그린 뒤, 10a가 남아 있을 때 requeue하면 어느 자리로 가는지 비교해 보세요."
+  },
+  "goal": "삽입은 대표 줄의 앞뒤에서 찾고 같은 순위 끝에 넣어요. 삭제와 requeue도 전체 줄과 대표 줄의 관계를 유지해야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "10a·10b·20a를 넣고 10a를 삭제할 때의 대표를 그린 뒤, 10a가 남아 있을 때 requeue하면 어느 자리로 가는지 비교해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "e63c281cefb94dfa157e869ccfa01f9f8836650b511e71a83db11f9cd15067c7",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 4,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

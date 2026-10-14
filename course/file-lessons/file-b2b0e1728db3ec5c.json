@@ -5,140 +5,184 @@
   "area": "PCI · 탐색 알고리즘 · 트리 · 비트맵 · 참조 수명",
   "track": "files",
   "kind": "kernel",
-  "intro": "버스·장치 검색과 ID wrapper, 존재 확인 및 DMA alias 순회 전체를 분석합니다.",
+  "intro": "버스는 나무처럼 찾아 내려가고 장치는 조건에 맞춰 검색해요. 다음 검색에 이전 결과를 넘기면 이전 참조를 돌려주는 규칙도 꼭 지켜야 해요.",
   "guide": [
-    "검색 결과의 존재와 객체 수명 보장은 다르며 다음 검색이 이전 참조를 소비하는 계약도 있습니다.",
-    "깊이 우선 검색, 비트맵 순회, 마스크 매칭, 참조 카운트와 관측값의 유효기간을 학습합니다."
+    "DMA alias는 메모리 직접 접근을 요청할 때 장치가 사용하는 다른 식별 번호예요. 콜백은 번호마다 부르는 함수예요.",
+    "참조를 얻으면 객체를 쓰는 동안 수명을 유지하는 데 도움을 줘요. 반환 포인터가 있다고 모든 검색이 참조를 얻는 것은 아니에요.",
+    "class는 장치 종류, base class는 그중 큰 분류예요. 마스크는 비교할 숫자 자리를 고르는 비트 묶음이에요."
   ],
   "deep_dive": [
     {
-      "title": "파일 구성과 공용 잠금",
-      "text": "GPL-2.0 파일은 PCI,slab,module,interrupt와 내부 pci.h를 포함하고 DECLARE_RWSEM(pci_bus_sem)으로 읽기·쓰기 세마포어를 정의합니다. 이 잠금이 파일 전체의 모든 함수를 자동 보호하지는 않습니다. find_next_bus와 get_slot의 명시적 잠금 구간, 다른 검색의 버스 코어 호출을 각각 구분해야 합니다."
+      "title": "공용 잠금의 실제 범위를 봐요",
+      "text": "파일은 pci_bus_sem이라는 읽기·쓰기 세마포어를 정의해요. 세마포어는 여러 읽기와 독점 쓰기의 차례를 관리하는 잠금이에요. 선언만으로 이 파일 모든 함수가 보호되지는 않아요. find_next_bus와 get_slot의 명시적인 잠금 구간, 다른 검색이 부르는 버스 코어 함수를 따로 읽어야 해요."
     },
     {
-      "title": "DMA alias의 시작과 비트맵",
-      "text": "pci_for_each_dma_alias는 입력 pdev를 pci_real_dma_dev로 바꾼 뒤 실제 장치 ID를 첫 콜백 인수로 전달합니다. 콜백의 int 결과가 0이 아니면 즉시 그 값을 반환하므로 음수뿐 아니라 양수도 중단입니다. dma_alias_mask가 있으면 MAX_NR_DEVFNS 범위의 설정 비트를 순회하고 같은 버스 번호와 해당 devfn을 합친 ID로 콜백을 호출합니다. 이 경로는 같은 ID가 다시 나오는 것을 따로 제거하지 않습니다."
+      "title": "실제 DMA 장치와 추가 번호",
+      "text": "DMA alias 순회는 pci_real_dma_dev로 실제 요청 장치를 고르고 그 ID로 첫 콜백을 불러요. 반환이 0이 아니면 양수든 음수든 즉시 종료해요. dma_alias_mask가 있으면 MAX_NR_DEVFNS 범위의 켜진 비트마다 같은 버스 번호와 devfn을 합친 ID를 줘요. 같은 ID가 다시 나오는 것을 제거하는 별도 처리는 없어요."
     },
     {
-      "title": "상위 브리지 alias 분기",
-      "text": "루트 버스 전까지 bus->parent로 올라가며 self 없는 가상 버스는 건너뜁니다. BRIDGE_XLATE_ROOT 플래그 브리지에서는 그 브리지를 콜백에 전달하기 전에 종료합니다. PCIe ROOT_PORT,UPSTREAM,DOWNSTREAM은 건너뛰고 PCI_BRIDGE는 subordinate 버스의 0:0 ID, PCIE_BRIDGE는 브리지 자체 ID를 전달합니다. 비PCIe 브리지는 PCIE_BRIDGE_ALIAS 플래그가 있으면 subordinate 0:0, 아니면 자체 ID입니다. PCIe switch에 명시되지 않은 타입에는 default 콜백이 없습니다. 모든 경로에서 첫 0 아닌 콜백 결과가 전파됩니다."
+      "title": "상위 브리지 종류에 따른 alias",
+      "text": "루트까지 부모로 올라가며 self 없는 가상 버스는 건너뛰어요. BRIDGE_XLATE_ROOT면 해당 브리지 콜백 전에 끝나요. PCIe ROOT_PORT·UPSTREAM·DOWNSTREAM은 건너뛰고 PCI_BRIDGE는 하위 버스 0:0 ID, PCIE_BRIDGE는 자기 ID를 줘요. 비PCIe 브리지는 PCIE_BRIDGE_ALIAS 표시가 있으면 하위 0:0, 없으면 자기 ID예요. PCIe의 다른 타입에 기본 콜백은 없어요. 언제나 첫 0 아닌 반환이 종료 값이에요."
     },
     {
-      "title": "버스의 선행 깊이 우선 검색",
-      "text": "pci_do_find_bus는 현재 bus 번호가 같으면 먼저 반환하고 그렇지 않으면 children 목록을 재귀 검색해 첫 결과를 반환합니다. 전체 실패는 NULL입니다. 정상 트리에서 최악의 방문은 버스 수 B에 대해 O(B), 호출 스택은 높이 H에 대해 O(H)입니다. 인수 busnr는 unsigned char인데 외부 pci_find_bus의 busnr는 int이므로 내부 호출에서 타입 폭이 줄어듭니다. 이 함수들에는 정수 범위 검증이 없습니다."
+      "title": "현재 버스를 먼저 보고 자식으로 내려가요",
+      "text": "pci_do_find_bus는 현재 번호가 맞으면 반환하고 아니면 자식들을 깊이 우선으로 찾아 첫 결과를 줘요. 없으면 NULL이에요. 버스 B개에서 최악 방문 수는 B에 비례하고 호출 저장 공간은 깊이 H에 비례해요. 외부 busnr는 int지만 내부는 unsigned char라 폭이 줄어요. 이 함수들에는 숫자 범위 검사가 없어요."
     },
     {
-      "title": "도메인과 루트 목록",
-      "text": "pci_find_bus는 pci_find_next_bus로 루트를 하나씩 얻어 도메인이 같은 루트만 재귀 검색합니다. find_next_bus는 읽기 잠금 아래 from->node.next 또는 pci_root_buses.next를 선택하고 sentinel이 아니면 list_entry로 반환합니다. 문서의 알려진 PCI 버스 순회 표현과 달리 이 helper가 직접 순회하는 목록은 root_buses이며 하위 버스는 별도 DFS가 담당합니다. 반환 버스에 참조를 증가시키는 코드가 없고 읽기 잠금도 반환 전에 해제됩니다. 전체 DFS가 이 잠금 안에서 실행되는 것은 아닙니다."
+      "title": "루트 목록 이동과 전체 검색은 달라요",
+      "text": "pci_find_bus는 루트를 하나씩 얻고 도메인이 같은 루트 아래만 재귀 검색해요. find_next_bus는 읽기 잠금 아래 root_buses의 다음 항목을 고르는 함수예요. 하위 버스까지 직접 반환하지 않아요. 버스 참조를 올리는 코드가 없고 잠금도 반환 전에 풀어요. 따라서 전체 재귀 검색이 그 잠금 안에서 실행되는 것은 아니에요."
     },
     {
-      "title": "슬롯과 전체 주소 검색",
-      "text": "pci_get_slot은 bus->devices를 읽기 잠금 아래 선형 검색해 devfn이 같은 장치를 고릅니다. 찾지 못하면 NULL로 만들며 공통 끝에서 pci_dev_get 후 잠금을 풉니다. 성공 참조는 호출자가 pci_dev_put해야 합니다. get_domain_bus_and_slot은 for_each_pci_dev로 전체 장치를 순회해 domain,bus number,devfn을 모두 비교합니다. 일치 시 반환된 장치 참조를 호출자가 해제해야 한다는 계약이 문서에 있습니다. 슬롯 번호만 맞는 장치를 반환하는 함수가 아닙니다."
+      "title": "정확한 슬롯·주소의 장치 찾기",
+      "text": "pci_get_slot은 버스 장치 목록에서 devfn이 같은 항목을 읽기 잠금 아래 찾아요. 끝에서 pci_dev_get으로 참조를 얻은 뒤 잠금을 풀므로 성공 결과는 사용 뒤 pci_dev_put해야 해요. domain_bus_and_slot은 전체 장치에서 도메인·버스 번호·devfn을 모두 비교해요. 이 결과도 참조를 돌려줘야 하며 슬롯만 같다고 고르지는 않아요."
     },
     {
-      "title": "ID 매칭과 이전 참조 소비",
-      "text": "match_pci_dev_by_id는 일반 device를 PCI 장치로 바꾸고 pci_match_one_device의 결과를 1 또는 0으로 돌려줍니다. pci_get_dev_by_id는 from이 있으면 &from->dev를 검색 시작점으로 bus_find_device에 전달합니다. 결과가 있으면 PCI 포인터로 바꾸고 성공 여부와 무관하게 pci_dev_put(from)을 호출한 뒤 반환합니다. 따라서 이전 항목을 다음 검색에 넘긴 뒤 다시 무조건 put하면 이 계약과 충돌할 수 있습니다. 조기 종료로 다음 검색을 하지 않으면 현재 보유 참조는 직접 해제해야 합니다."
+      "title": "다음 검색이 이전 참조를 소비해요",
+      "text": "일치 콜백은 pci_match_one_device 결과를 1 또는 0으로 바꿔요. 공통 ID 검색은 from 다음부터 bus_find_device로 찾고, 성공 여부와 상관없이 pci_dev_put(from)을 호출해요. 다음 검색에 넘긴 이전 결과를 다시 무조건 put하면 중복 반납이 될 수 있어요. 반대로 중간에 검색을 그만두어 다음 호출에 넘기지 않으면 현재 참조는 직접 반납해야 해요."
     },
     {
-      "title": "vendor와 subsystem wrapper",
-      "text": "pci_get_subsys는 vendor,device,subvendor,subdevice를 지정한 지역 pci_device_id를 만들어 공통 검색에 넘깁니다. 나머지 필드는 지정 초기화의 규칙으로 0입니다. pci_get_device는 subsystem 두 값을 PCI_ANY_ID로 지정해 subsys wrapper를 호출합니다. 필터를 담은 구조체와 공통 검색 알고리즘을 분리한 형태이며 검색 때 이 지역 구조체를 별도로 heap 할당하지 않습니다."
+      "title": "제조사와 하위 장치 조건",
+      "text": "get_subsys는 제조사·장치·하위 제조사·하위 장치 값을 지역 ID 구조체에 넣고 나머지 필드는 초기화 규칙으로 0이 돼요. 공통 검색에 이 조건을 넘겨요. get_device는 하위 두 값을 PCI_ANY_ID로 지정해 제한을 풀어요. 조건표와 검색 알고리즘을 나눈 모습이며 조건표를 별도로 힙 할당하지 않아요."
     },
     {
-      "title": "전체 class와 base class",
-      "text": "pci_get_class는 네 ID를 ANY로, class_mask를 PCI_ANY_ID로, class를 입력값으로 설정합니다. pci_get_base_class는 네 ID는 ANY지만 class_mask=0xFF0000,class=입력<<16입니다. base class만 고르는 경우 subclass와 programming interface까지 같은지 요구하는 전체 class 검색과 결과 범위가 다릅니다. 두 함수 모두 이전 from 참조를 소비하는 공통 helper를 사용합니다."
+      "title": "전체 종류와 큰 분류만 찾기의 차이",
+      "text": "get_class는 네 ID를 ANY, class_mask를 PCI_ANY_ID로 해서 전체 class를 비교해요. get_base_class는 mask 0xFF0000과 입력 << 16으로 큰 분류 자리만 봐요. 예를 들어 0x02는 0x020000이 되고 하위 종류·인터페이스는 따지지 않아요. 둘 다 공통 검색을 써서 from 참조를 소비해요."
     },
     {
-      "title": "존재 확인과 종료 sentinel",
-      "text": "pci_dev_present는 ids->vendor || ids->subvendor || ids->class_mask가 참인 동안 각 항목을 처음부터 검색합니다. device나 subdevice만 0 아닌 항목은 이 종료 조건을 통과시키지 않습니다. 찾으면 참조를 put하고 1, 끝까지 없으면 0입니다. 호출자에게 장치 참조가 전달되지 않으므로 반환 직후 제거가 일어나면 존재 관측은 오래된 정보가 됩니다. ID 수 M,장치 수 N일 때 반복 검색의 최악 방문 비용은 O(MN) 형태가 될 수 있습니다."
+      "title": "존재 확인은 순간 관측이에요",
+      "text": "present는 vendor·subvendor·class_mask 중 하나가 0이 아닐 동안 각 ID를 처음부터 검색해요. device만 1이어도 이 종료 조건은 통과하지 못해요. 찾으면 참조를 put하고 1, 없으면 0만 반환해요. 호출자에게 장치 참조를 남기지 않아 반환 직후 장치가 제거되면 관측은 오래된 정보가 돼요. ID M개·장치 N개라면 최악의 반복 검색은 M 곱하기 N에 비례할 수 있어요."
     },
     {
-      "title": "전체 범위와 한계",
-      "text": "DMA alias 순회, 재귀 버스 검색, 루트 순회, 슬롯·도메인 검색, 매칭 callback과 공통 ID helper, 네 ID/class wrapper, 존재 확인까지 모든 본문을 대조했습니다. find_bus/find_next_bus/get_slot/domain_bus_and_slot/subsys/device/class/base_class/dev_present에는 일반 EXPORT_SYMBOL이 있습니다. 실제 hotplug 동시 실행, DMA requester ID 전달 또는 커널 빌드는 검증하지 않았습니다."
+      "title": "확인한 검색 함수들",
+      "text": "DMA alias부터 버스 재귀·루트 이동·슬롯·전체 주소·ID·class·존재 확인까지 모든 본문을 읽었어요. 버스와 장치의 공개 검색 도우미에는 일반 EXPORT_SYMBOL이 있어요. 실제 핫플러그 동시 실행이나 DMA 요청 번호 전달, 커널 빌드는 시험하지 않았어요."
     }
   ],
   "questions": [
     {
-      "prompt": "pci_get_dev_by_id의 다음 검색이 실패하면 from 참조는 유지되는가?",
+      "prompt": "다음 ID 검색이 실패해도 이전 from 참조를 반납할까요?",
       "options": [
+        "네. 실패해도 pci_dev_put(from)을 불러요.",
+        "아니요. 성공할 때만 반납해요."
+      ],
+      "answer": 0,
+      "explanation": "NULL 결과라고 이전 참조가 남아 있는 것은 아니에요.",
+      "original_prompt": "pci_get_dev_by_id의 다음 검색이 실패하면 from 참조는 유지되는가?",
+      "original_options": [
         "아니다. 실패해도 pci_dev_put(from)을 호출한다",
         "그렇다. 성공할 때만 이전 항목을 해제한다"
       ],
-      "answer": 0,
-      "explanation": "put은 bus_find_device 결과 검사 뒤 공통 경로에 있습니다. NULL 결과가 이전 참조를 계속 보유한다는 뜻은 아닙니다."
+      "original_explanation": "put은 bus_find_device 결과 검사 뒤 공통 경로에 있습니다. NULL 결과가 이전 참조를 계속 보유한다는 뜻은 아닙니다."
     },
     {
-      "prompt": "pci_find_next_bus 하나만 반복하면 모든 하위 버스도 직접 나오는가?",
+      "prompt": "find_next_bus만 반복하면 하위 버스까지 직접 나올까요?",
       "options": [
+        "네. 안에서 자식을 재귀 검색해요.",
+        "아니요. 이 함수가 도는 목록은 루트 버스예요."
+      ],
+      "answer": 1,
+      "explanation": "하위 재귀는 별도 pci_do_find_bus가 맡아요.",
+      "original_prompt": "pci_find_next_bus 하나만 반복하면 모든 하위 버스도 직접 나오는가?",
+      "original_options": [
         "그렇다. 내부에서 children을 재귀 순회한다",
         "아니다. 이 함수의 목록은 pci_root_buses다"
       ],
-      "answer": 1,
-      "explanation": "하위 버스 재귀는 pci_do_find_bus에 있습니다. 루트 목록 이동과 깊이 우선 검색을 별개의 알고리즘으로 읽어야 합니다."
+      "original_explanation": "하위 버스 재귀는 pci_do_find_bus에 있습니다. 루트 목록 이동과 깊이 우선 검색을 별개의 알고리즘으로 읽어야 합니다."
     },
     {
-      "prompt": "pci_dev_present가 1이면 반환 이후 장치 수명이 보장되는가?",
+      "prompt": "present가 1이면 그 뒤에도 장치 수명이 보장될까요?",
       "options": [
+        "아니요. 참조를 놓고 참·거짓 결과만 줘요.",
+        "네. 숨겨진 영구 참조를 남겨요."
+      ],
+      "answer": 0,
+      "explanation": "존재 확인은 그 시점의 정보이며 사용 참조를 대신하지 않아요.",
+      "original_prompt": "pci_dev_present가 1이면 반환 이후 장치 수명이 보장되는가?",
+      "original_options": [
         "아니다. 찾은 참조를 내려놓고 불리언만 반환한다",
         "그렇다. 호출자에게 숨겨진 영구 참조를 남긴다"
       ],
-      "answer": 0,
-      "explanation": "found에 pci_dev_put을 한 다음 1을 반환합니다. 존재 확인은 특정 시점의 관측이며 실제 장치 사용을 위한 참조 획득을 대신하지 않습니다."
+      "original_explanation": "found에 pci_dev_put을 한 다음 1을 반환합니다. 존재 확인은 특정 시점의 관측이며 실제 장치 사용을 위한 참조 획득을 대신하지 않습니다."
     },
     {
-      "prompt": "base class 0x02 검색의 class와 mask는?",
+      "prompt": "base class 0x02의 class와 mask는 무엇일까요?",
       "options": [
+        "0x02와 0x0000FF예요.",
+        "0x020000과 0xFF0000이에요."
+      ],
+      "answer": 1,
+      "explanation": "입력을 16비트 왼쪽으로 옮겨 큰 분류 자리에 놓아요.",
+      "original_prompt": "base class 0x02 검색의 class와 mask는?",
+      "original_options": [
         "0x02와 0x0000FF",
         "0x020000과 0xFF0000"
       ],
-      "answer": 1,
-      "explanation": "입력 class를 16비트 왼쪽 이동해 상위 class 바이트에 놓습니다. 하위 subclass와 interface 비트는 mask에서 제외합니다."
+      "original_explanation": "입력 class를 16비트 왼쪽 이동해 상위 class 바이트에 놓습니다. 하위 subclass와 interface 비트는 mask에서 제외합니다."
     },
     {
-      "prompt": "DMA alias 콜백이 양수 1을 반환하면 계속하는가?",
+      "prompt": "DMA alias 콜백이 양수 1을 주면 계속할까요?",
       "options": [
+        "아니요. 즉시 1로 끝나요.",
+        "네. 음수일 때만 끝나요."
+      ],
+      "answer": 0,
+      "explanation": "조건은 if(ret)라 0이 아닌 모든 값이 중단해요.",
+      "original_prompt": "DMA alias 콜백이 양수 1을 반환하면 계속하는가?",
+      "original_options": [
         "아니다. 즉시 1로 종료한다",
         "그렇다. 음수 오류일 때만 중단한다"
       ],
-      "answer": 0,
-      "explanation": "조건은 if(ret)입니다. 이 인터페이스의 중단 규칙은 0 아닌 값 전체이므로 일반 errno 전파만으로 좁혀 읽으면 안 됩니다."
+      "original_explanation": "조건은 if(ret)입니다. 이 인터페이스의 중단 규칙은 0 아닌 값 전체이므로 일반 errno 전파만으로 좁혀 읽으면 안 됩니다."
     },
     {
-      "prompt": "BRIDGE_XLATE_ROOT가 설정된 브리지는 alias 콜백을 호출한 뒤 멈추는가?",
+      "prompt": "BRIDGE_XLATE_ROOT 브리지의 콜백을 부른 다음 멈출까요?",
       "options": [
+        "네. 그 alias도 한 번 추가해요.",
+        "아니요. 그 브리지의 콜백 분기 전에 끝나요."
+      ],
+      "answer": 1,
+      "explanation": "종료 검사와 콜백의 순서를 보세요.",
+      "original_prompt": "BRIDGE_XLATE_ROOT가 설정된 브리지는 alias 콜백을 호출한 뒤 멈추는가?",
+      "original_options": [
         "그렇다. 브리지의 alias를 반드시 한 번 추가한다",
         "아니다. 해당 브리지 콜백 분기 전에 반환한다"
       ],
-      "answer": 1,
-      "explanation": "플래그 검사가 PCIe 타입 분기보다 먼저 나옵니다. 탐색 경계 자체를 결과에 포함하는지 순서를 확인해야 합니다."
+      "original_explanation": "플래그 검사가 PCIe 타입 분기보다 먼저 나옵니다. 탐색 경계 자체를 결과에 포함하는지 순서를 확인해야 합니다."
     },
     {
-      "prompt": "vendor=0,subvendor=0,class_mask=0이고 device만 1인 ID 항목을 present가 검색하는가?",
+      "prompt": "vendor·subvendor·class_mask가 0이고 device만 1이면 present가 검색할까요?",
       "options": [
+        "아니요. 반복 조건이 거짓이에요.",
+        "네. 어느 필드든 0이 아니면 검색해요."
+      ],
+      "answer": 0,
+      "explanation": "끝 표시는 모든 필드가 아니라 정해진 세 필드로 판단해요.",
+      "original_prompt": "vendor=0,subvendor=0,class_mask=0이고 device만 1인 ID 항목을 present가 검색하는가?",
+      "original_options": [
         "아니다. while 종료 조건이 거짓이다",
         "그렇다. 구조체의 아무 필드나 0 아니면 계속한다"
       ],
-      "answer": 0,
-      "explanation": "실제 sentinel 판정은 세 필드의 OR입니다. null-terminated라는 문구를 구조체 모든 필드 검사로 확대해서는 안 됩니다."
+      "original_explanation": "실제 sentinel 판정은 세 필드의 OR입니다. null-terminated라는 문구를 구조체 모든 필드 검사로 확대해서는 안 됩니다."
     },
     {
-      "prompt": "pci_find_bus의 DFS 전체가 pci_bus_sem 읽기 잠금 아래 있는가?",
+      "prompt": "find_bus 전체 재귀가 pci_bus_sem 읽기 잠금 안일까요?",
       "options": [
+        "네. 모든 재귀가 끝날 때까지 유지해요.",
+        "아니요. find_next_bus가 반환하기 전에 잠금을 풀어요."
+      ],
+      "answer": 1,
+      "explanation": "전체 순회의 동시성은 호출 문맥까지 확인해야 해요.",
+      "original_prompt": "pci_find_bus의 DFS 전체가 pci_bus_sem 읽기 잠금 아래 있는가?",
+      "original_options": [
         "그렇다. 모든 재귀 호출까지 잠금을 유지한다",
         "아니다. find_next_bus의 잠금은 반환 전에 풀린다"
       ],
-      "answer": 1,
-      "explanation": "명시적 잠금 구간은 루트 다음 항목을 얻는 helper 안에 있습니다. 전체 순회의 동시성 보장은 호출 문맥까지 확인해야 하며 이 본문만으로 전역 잠금 보호를 주장할 수 없습니다."
+      "original_explanation": "명시적 잠금 구간은 루트 다음 항목을 얻는 helper 안에 있습니다. 전체 순회의 동시성 보장은 호출 문맥까지 확인해야 하며 이 본문만으로 전역 잠금 보호를 주장할 수 없습니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "get_device로 결과를 두 번 연속 찾는 그림을 그려 각 참조를 누가 put하는지 표시하고, present가 준 1로 장치를 계속 사용할 수 없는 이유를 적어 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * PCI searching functions\n *\n * Copyright (C) 1993 -- 1997 Drew Eckhardt, Frederic Potter,\n *\t\t\t\t\tDavid Mosberger-Tang\n * Copyright (C) 1997 -- 2000 Martin Mares <mj@ucw.cz>\n * Copyright (C) 2003 -- 2004 Greg Kroah-Hartman <greg@kroah.com>\n */\n\n#include <linux/pci.h>\n#include <linux/slab.h>\n#include <linux/module.h>\n#include <linux/interrupt.h>\n#include \"pci.h\"\n\nDECLARE_RWSEM(pci_bus_sem);\n\n/*\n * pci_for_each_dma_alias - Iterate over DMA aliases for a device\n * @pdev: starting downstream device\n * @fn: function to call for each alias\n * @data: opaque data to pass to @fn\n *\n * Starting @pdev, walk up the bus calling @fn for each possible alias\n * of @pdev at the root bus.\n */\nint pci_for_each_dma_alias(struct pci_dev *pdev,\n\t\t\t   int (*fn)(struct pci_dev *pdev,\n\t\t\t\t     u16 alias, void *data), void *data)\n{\n\tstruct pci_bus *bus;\n\tint ret;\n\n\t/*\n\t * The device may have an explicit alias requester ID for DMA where the\n\t * requester is on another PCI bus.\n\t */\n\tpdev = pci_real_dma_dev(pdev);\n\n\tret = fn(pdev, pci_dev_id(pdev), data);\n\tif (ret)\n\t\treturn ret;\n\n\t/*\n\t * If the device is broken and uses an alias requester ID for\n\t * DMA, iterate over that too.\n\t */\n\tif (unlikely(pdev->dma_alias_mask)) {\n\t\tunsigned int devfn;\n\n\t\tfor_each_set_bit(devfn, pdev->dma_alias_mask, MAX_NR_DEVFNS) {\n\t\t\tret = fn(pdev, PCI_DEVID(pdev->bus->number, devfn),\n\t\t\t\t data);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\t}\n\n\tfor (bus = pdev->bus; !pci_is_root_bus(bus); bus = bus->parent) {\n\t\tstruct pci_dev *tmp;\n\n\t\t/* Skip virtual buses */\n\t\tif (!bus->self)\n\t\t\tcontinue;\n\n\t\ttmp = bus->self;\n\n\t\t/* stop at bridge where translation unit is associated */\n\t\tif (tmp->dev_flags & PCI_DEV_FLAGS_BRIDGE_XLATE_ROOT)\n\t\t\treturn ret;\n\n\t\t/*\n\t\t * PCIe-to-PCI/X bridges alias transactions from downstream\n\t\t * devices using the subordinate bus number (PCI Express to\n\t\t * PCI/PCI-X Bridge Spec, rev 1.0, sec 2.3).  For all cases\n\t\t * where the upstream bus is PCI/X we alias to the bridge\n\t\t * (there are various conditions in the previous reference\n\t\t * where the bridge may take ownership of transactions, even\n\t\t * when the secondary interface is PCI-X).\n\t\t */\n\t\tif (pci_is_pcie(tmp)) {\n\t\t\tswitch (pci_pcie_type(tmp)) {\n\t\t\tcase PCI_EXP_TYPE_ROOT_PORT:\n\t\t\tcase PCI_EXP_TYPE_UPSTREAM:\n\t\t\tcase PCI_EXP_TYPE_DOWNSTREAM:\n\t\t\t\tcontinue;\n\t\t\tcase PCI_EXP_TYPE_PCI_BRIDGE:\n\t\t\t\tret = fn(tmp,\n\t\t\t\t\t PCI_DEVID(tmp->subordinate->number,\n\t\t\t\t\t\t   PCI_DEVFN(0, 0)), data);\n\t\t\t\tif (ret)\n\t\t\t\t\treturn ret;\n\t\t\t\tcontinue;\n\t\t\tcase PCI_EXP_TYPE_PCIE_BRIDGE:\n\t\t\t\tret = fn(tmp, pci_dev_id(tmp), data);\n\t\t\t\tif (ret)\n\t\t\t\t\treturn ret;\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t} else {\n\t\t\tif (tmp->dev_flags & PCI_DEV_FLAG_PCIE_BRIDGE_ALIAS)\n\t\t\t\tret = fn(tmp,\n\t\t\t\t\t PCI_DEVID(tmp->subordinate->number,\n\t\t\t\t\t\t   PCI_DEVFN(0, 0)), data);\n\t\t\telse\n\t\t\t\tret = fn(tmp, pci_dev_id(tmp), data);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\t}\n\n\treturn ret;\n}\n\nstatic struct pci_bus *pci_do_find_bus(struct pci_bus *bus, unsigned char busnr)\n{\n\tstruct pci_bus *child;\n\tstruct pci_bus *tmp;\n\n\tif (bus->number == busnr)\n\t\treturn bus;\n\n\tlist_for_each_entry(tmp, &bus->children, node) {\n\t\tchild = pci_do_find_bus(tmp, busnr);\n\t\tif (child)\n\t\t\treturn child;\n\t}\n\treturn NULL;\n}\n\n/**\n * pci_find_bus - locate PCI bus from a given domain and bus number\n * @domain: number of PCI domain to search\n * @busnr: number of desired PCI bus\n *\n * Given a PCI bus number and domain number, the desired PCI bus is located\n * in the global list of PCI buses.  If the bus is found, a pointer to its\n * data structure is returned.  If no bus is found, %NULL is returned.\n */\nstruct pci_bus *pci_find_bus(int domain, int busnr)\n{\n\tstruct pci_bus *bus = NULL;\n\tstruct pci_bus *tmp_bus;\n\n\twhile ((bus = pci_find_next_bus(bus)) != NULL)  {\n\t\tif (pci_domain_nr(bus) != domain)\n\t\t\tcontinue;\n\t\ttmp_bus = pci_do_find_bus(bus, busnr);\n\t\tif (tmp_bus)\n\t\t\treturn tmp_bus;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_find_bus);\n\n/**\n * pci_find_next_bus - begin or continue searching for a PCI bus\n * @from: Previous PCI bus found, or %NULL for new search.\n *\n * Iterates through the list of known PCI buses.  A new search is\n * initiated by passing %NULL as the @from argument.  Otherwise if\n * @from is not %NULL, searches continue from next device on the\n * global list.\n */\nstruct pci_bus *pci_find_next_bus(const struct pci_bus *from)\n{\n\tstruct list_head *n;\n\tstruct pci_bus *b = NULL;\n\n\tdown_read(&pci_bus_sem);\n\tn = from ? from->node.next : pci_root_buses.next;\n\tif (n != &pci_root_buses)\n\t\tb = list_entry(n, struct pci_bus, node);\n\tup_read(&pci_bus_sem);\n\treturn b;\n}\nEXPORT_SYMBOL(pci_find_next_bus);\n\n/**\n * pci_get_slot - locate PCI device for a given PCI slot\n * @bus: PCI bus on which desired PCI device resides\n * @devfn: encodes number of PCI slot in which the desired PCI\n * device resides and the logical device number within that slot\n * in case of multi-function devices.\n *\n * Given a PCI bus and slot/function number, the desired PCI device\n * is located in the list of PCI devices.\n * If the device is found, its reference count is increased and this\n * function returns a pointer to its data structure.  The caller must\n * decrement the reference count by calling pci_dev_put().\n * If no device is found, %NULL is returned.\n */\nstruct pci_dev *pci_get_slot(struct pci_bus *bus, unsigned int devfn)\n{\n\tstruct pci_dev *dev;\n\n\tdown_read(&pci_bus_sem);\n\n\tlist_for_each_entry(dev, &bus->devices, bus_list) {\n\t\tif (dev->devfn == devfn)\n\t\t\tgoto out;\n\t}\n\n\tdev = NULL;\n out:\n\tpci_dev_get(dev);\n\tup_read(&pci_bus_sem);\n\treturn dev;\n}\nEXPORT_SYMBOL(pci_get_slot);\n\n/**\n * pci_get_domain_bus_and_slot - locate PCI device for a given PCI domain (segment), bus, and slot\n * @domain: PCI domain/segment on which the PCI device resides.\n * @bus: PCI bus on which desired PCI device resides\n * @devfn: encodes number of PCI slot in which the desired PCI device\n * resides and the logical device number within that slot in case of\n * multi-function devices.\n *\n * Given a PCI domain, bus, and slot/function number, the desired PCI\n * device is located in the list of PCI devices. If the device is\n * found, its reference count is increased and this function returns a\n * pointer to its data structure.  The caller must decrement the\n * reference count by calling pci_dev_put().  If no device is found,\n * %NULL is returned.\n */\nstruct pci_dev *pci_get_domain_bus_and_slot(int domain, unsigned int bus,\n\t\t\t\t\t    unsigned int devfn)\n{\n\tstruct pci_dev *dev = NULL;\n\n\tfor_each_pci_dev(dev) {\n\t\tif (pci_domain_nr(dev->bus) == domain &&\n\t\t    (dev->bus->number == bus && dev->devfn == devfn))\n\t\t\treturn dev;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_get_domain_bus_and_slot);\n\nstatic int match_pci_dev_by_id(struct device *dev, const void *data)\n{\n\tstruct pci_dev *pdev = to_pci_dev(dev);\n\tconst struct pci_device_id *id = data;\n\n\tif (pci_match_one_device(id, pdev))\n\t\treturn 1;\n\treturn 0;\n}\n\n/*\n * pci_get_dev_by_id - begin or continue searching for a PCI device by id\n * @id: pointer to struct pci_device_id to match for the device\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is found\n * with a matching id a pointer to its device structure is returned, and the\n * reference count to the device is incremented.  Otherwise, %NULL is returned.\n * A new search is initiated by passing %NULL as the @from argument.  Otherwise\n * if @from is not %NULL, searches continue from next device on the global\n * list.  The reference count for @from is always decremented if it is not\n * %NULL.\n *\n * This is an internal function for use by the other search functions in\n * this file.\n */\nstatic struct pci_dev *pci_get_dev_by_id(const struct pci_device_id *id,\n\t\t\t\t\t struct pci_dev *from)\n{\n\tstruct device *dev;\n\tstruct device *dev_start = NULL;\n\tstruct pci_dev *pdev = NULL;\n\n\tif (from)\n\t\tdev_start = &from->dev;\n\tdev = bus_find_device(&pci_bus_type, dev_start, (void *)id,\n\t\t\t      match_pci_dev_by_id);\n\tif (dev)\n\t\tpdev = to_pci_dev(dev);\n\tpci_dev_put(from);\n\treturn pdev;\n}\n\n/**\n * pci_get_subsys - begin or continue searching for a PCI device by vendor/subvendor/device/subdevice id\n * @vendor: PCI vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @device: PCI device id to match, or %PCI_ANY_ID to match all device ids\n * @ss_vendor: PCI subsystem vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @ss_device: PCI subsystem device id to match, or %PCI_ANY_ID to match all device ids\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is found\n * with a matching @vendor, @device, @ss_vendor and @ss_device, a pointer to its\n * device structure is returned, and the reference count to the device is\n * incremented.  Otherwise, %NULL is returned.  A new search is initiated by\n * passing %NULL as the @from argument.  Otherwise if @from is not %NULL,\n * searches continue from next device on the global list.\n * The reference count for @from is always decremented if it is not %NULL.\n */\nstruct pci_dev *pci_get_subsys(unsigned int vendor, unsigned int device,\n\t\t\t       unsigned int ss_vendor, unsigned int ss_device,\n\t\t\t       struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = vendor,\n\t\t.device = device,\n\t\t.subvendor = ss_vendor,\n\t\t.subdevice = ss_device,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_subsys);\n\n/**\n * pci_get_device - begin or continue searching for a PCI device by vendor/device id\n * @vendor: PCI vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @device: PCI device id to match, or %PCI_ANY_ID to match all device ids\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is\n * found with a matching @vendor and @device, the reference count to the\n * device is incremented and a pointer to its device structure is returned.\n * Otherwise, %NULL is returned.  A new search is initiated by passing %NULL\n * as the @from argument.  Otherwise if @from is not %NULL, searches continue\n * from next device on the global list.  The reference count for @from is\n * always decremented if it is not %NULL.\n */\nstruct pci_dev *pci_get_device(unsigned int vendor, unsigned int device,\n\t\t\t       struct pci_dev *from)\n{\n\treturn pci_get_subsys(vendor, device, PCI_ANY_ID, PCI_ANY_ID, from);\n}\nEXPORT_SYMBOL(pci_get_device);\n\n/**\n * pci_get_class - begin or continue searching for a PCI device by class\n * @class: search for a PCI device with this class designation\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is\n * found with a matching @class, the reference count to the device is\n * incremented and a pointer to its device structure is returned.\n * Otherwise, %NULL is returned.\n * A new search is initiated by passing %NULL as the @from argument.\n * Otherwise if @from is not %NULL, searches continue from next device\n * on the global list.  The reference count for @from is always decremented\n * if it is not %NULL.\n */\nstruct pci_dev *pci_get_class(unsigned int class, struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = PCI_ANY_ID,\n\t\t.device = PCI_ANY_ID,\n\t\t.subvendor = PCI_ANY_ID,\n\t\t.subdevice = PCI_ANY_ID,\n\t\t.class_mask = PCI_ANY_ID,\n\t\t.class = class,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_class);\n\n/**\n * pci_get_base_class - searching for a PCI device by matching against the base class code only\n * @class: search for a PCI device with this base class code\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices. If a PCI device is found\n * with a matching base class code, the reference count to the device is\n * incremented. See pci_match_one_device() to figure out how does this works.\n * A new search is initiated by passing %NULL as the @from argument.\n * Otherwise if @from is not %NULL, searches continue from next device on the\n * global list. The reference count for @from is always decremented if it is\n * not %NULL.\n *\n * Returns:\n * A pointer to a matched PCI device, %NULL Otherwise.\n */\nstruct pci_dev *pci_get_base_class(unsigned int class, struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = PCI_ANY_ID,\n\t\t.device = PCI_ANY_ID,\n\t\t.subvendor = PCI_ANY_ID,\n\t\t.subdevice = PCI_ANY_ID,\n\t\t.class_mask = 0xFF0000,\n\t\t.class = class << 16,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_base_class);\n\n/**\n * pci_dev_present - Returns 1 if device matching the device list is present, 0 if not.\n * @ids: A pointer to a null terminated list of struct pci_device_id structures\n * that describe the type of PCI device the caller is trying to find.\n *\n * Obvious fact: You do not have a reference to any device that might be found\n * by this function, so if that device is removed from the system right after\n * this function is finished, the value will be stale.  Use this function to\n * find devices that are usually built into a system, or for a general hint as\n * to if another device happens to be present at this specific moment in time.\n */\nint pci_dev_present(const struct pci_device_id *ids)\n{\n\tstruct pci_dev *found = NULL;\n\n\twhile (ids->vendor || ids->subvendor || ids->class_mask) {\n\t\tfound = pci_get_dev_by_id(ids, NULL);\n\t\tif (found) {\n\t\t\tpci_dev_put(found);\n\t\t\treturn 1;\n\t\t}\n\t\tids++;\n\t}\n\n\treturn 0;\n}\nEXPORT_SYMBOL(pci_dev_present);\n",
   "source_review": {
@@ -167,5 +211,204 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/search.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-b2b0e1728db3ec5c",
+    "path": "drivers/pci/search.c",
+    "title": "PCI 검색: DFS·참조를 넘기는 반복·DMA alias",
+    "area": "PCI · 탐색 알고리즘 · 트리 · 비트맵 · 참조 수명",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "버스·장치 검색과 ID wrapper, 존재 확인 및 DMA alias 순회 전체를 분석합니다.",
+    "guide": [
+      "검색 결과의 존재와 객체 수명 보장은 다르며 다음 검색이 이전 참조를 소비하는 계약도 있습니다.",
+      "깊이 우선 검색, 비트맵 순회, 마스크 매칭, 참조 카운트와 관측값의 유효기간을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 구성과 공용 잠금",
+        "text": "GPL-2.0 파일은 PCI,slab,module,interrupt와 내부 pci.h를 포함하고 DECLARE_RWSEM(pci_bus_sem)으로 읽기·쓰기 세마포어를 정의합니다. 이 잠금이 파일 전체의 모든 함수를 자동 보호하지는 않습니다. find_next_bus와 get_slot의 명시적 잠금 구간, 다른 검색의 버스 코어 호출을 각각 구분해야 합니다."
+      },
+      {
+        "title": "DMA alias의 시작과 비트맵",
+        "text": "pci_for_each_dma_alias는 입력 pdev를 pci_real_dma_dev로 바꾼 뒤 실제 장치 ID를 첫 콜백 인수로 전달합니다. 콜백의 int 결과가 0이 아니면 즉시 그 값을 반환하므로 음수뿐 아니라 양수도 중단입니다. dma_alias_mask가 있으면 MAX_NR_DEVFNS 범위의 설정 비트를 순회하고 같은 버스 번호와 해당 devfn을 합친 ID로 콜백을 호출합니다. 이 경로는 같은 ID가 다시 나오는 것을 따로 제거하지 않습니다."
+      },
+      {
+        "title": "상위 브리지 alias 분기",
+        "text": "루트 버스 전까지 bus->parent로 올라가며 self 없는 가상 버스는 건너뜁니다. BRIDGE_XLATE_ROOT 플래그 브리지에서는 그 브리지를 콜백에 전달하기 전에 종료합니다. PCIe ROOT_PORT,UPSTREAM,DOWNSTREAM은 건너뛰고 PCI_BRIDGE는 subordinate 버스의 0:0 ID, PCIE_BRIDGE는 브리지 자체 ID를 전달합니다. 비PCIe 브리지는 PCIE_BRIDGE_ALIAS 플래그가 있으면 subordinate 0:0, 아니면 자체 ID입니다. PCIe switch에 명시되지 않은 타입에는 default 콜백이 없습니다. 모든 경로에서 첫 0 아닌 콜백 결과가 전파됩니다."
+      },
+      {
+        "title": "버스의 선행 깊이 우선 검색",
+        "text": "pci_do_find_bus는 현재 bus 번호가 같으면 먼저 반환하고 그렇지 않으면 children 목록을 재귀 검색해 첫 결과를 반환합니다. 전체 실패는 NULL입니다. 정상 트리에서 최악의 방문은 버스 수 B에 대해 O(B), 호출 스택은 높이 H에 대해 O(H)입니다. 인수 busnr는 unsigned char인데 외부 pci_find_bus의 busnr는 int이므로 내부 호출에서 타입 폭이 줄어듭니다. 이 함수들에는 정수 범위 검증이 없습니다."
+      },
+      {
+        "title": "도메인과 루트 목록",
+        "text": "pci_find_bus는 pci_find_next_bus로 루트를 하나씩 얻어 도메인이 같은 루트만 재귀 검색합니다. find_next_bus는 읽기 잠금 아래 from->node.next 또는 pci_root_buses.next를 선택하고 sentinel이 아니면 list_entry로 반환합니다. 문서의 알려진 PCI 버스 순회 표현과 달리 이 helper가 직접 순회하는 목록은 root_buses이며 하위 버스는 별도 DFS가 담당합니다. 반환 버스에 참조를 증가시키는 코드가 없고 읽기 잠금도 반환 전에 해제됩니다. 전체 DFS가 이 잠금 안에서 실행되는 것은 아닙니다."
+      },
+      {
+        "title": "슬롯과 전체 주소 검색",
+        "text": "pci_get_slot은 bus->devices를 읽기 잠금 아래 선형 검색해 devfn이 같은 장치를 고릅니다. 찾지 못하면 NULL로 만들며 공통 끝에서 pci_dev_get 후 잠금을 풉니다. 성공 참조는 호출자가 pci_dev_put해야 합니다. get_domain_bus_and_slot은 for_each_pci_dev로 전체 장치를 순회해 domain,bus number,devfn을 모두 비교합니다. 일치 시 반환된 장치 참조를 호출자가 해제해야 한다는 계약이 문서에 있습니다. 슬롯 번호만 맞는 장치를 반환하는 함수가 아닙니다."
+      },
+      {
+        "title": "ID 매칭과 이전 참조 소비",
+        "text": "match_pci_dev_by_id는 일반 device를 PCI 장치로 바꾸고 pci_match_one_device의 결과를 1 또는 0으로 돌려줍니다. pci_get_dev_by_id는 from이 있으면 &from->dev를 검색 시작점으로 bus_find_device에 전달합니다. 결과가 있으면 PCI 포인터로 바꾸고 성공 여부와 무관하게 pci_dev_put(from)을 호출한 뒤 반환합니다. 따라서 이전 항목을 다음 검색에 넘긴 뒤 다시 무조건 put하면 이 계약과 충돌할 수 있습니다. 조기 종료로 다음 검색을 하지 않으면 현재 보유 참조는 직접 해제해야 합니다."
+      },
+      {
+        "title": "vendor와 subsystem wrapper",
+        "text": "pci_get_subsys는 vendor,device,subvendor,subdevice를 지정한 지역 pci_device_id를 만들어 공통 검색에 넘깁니다. 나머지 필드는 지정 초기화의 규칙으로 0입니다. pci_get_device는 subsystem 두 값을 PCI_ANY_ID로 지정해 subsys wrapper를 호출합니다. 필터를 담은 구조체와 공통 검색 알고리즘을 분리한 형태이며 검색 때 이 지역 구조체를 별도로 heap 할당하지 않습니다."
+      },
+      {
+        "title": "전체 class와 base class",
+        "text": "pci_get_class는 네 ID를 ANY로, class_mask를 PCI_ANY_ID로, class를 입력값으로 설정합니다. pci_get_base_class는 네 ID는 ANY지만 class_mask=0xFF0000,class=입력<<16입니다. base class만 고르는 경우 subclass와 programming interface까지 같은지 요구하는 전체 class 검색과 결과 범위가 다릅니다. 두 함수 모두 이전 from 참조를 소비하는 공통 helper를 사용합니다."
+      },
+      {
+        "title": "존재 확인과 종료 sentinel",
+        "text": "pci_dev_present는 ids->vendor || ids->subvendor || ids->class_mask가 참인 동안 각 항목을 처음부터 검색합니다. device나 subdevice만 0 아닌 항목은 이 종료 조건을 통과시키지 않습니다. 찾으면 참조를 put하고 1, 끝까지 없으면 0입니다. 호출자에게 장치 참조가 전달되지 않으므로 반환 직후 제거가 일어나면 존재 관측은 오래된 정보가 됩니다. ID 수 M,장치 수 N일 때 반복 검색의 최악 방문 비용은 O(MN) 형태가 될 수 있습니다."
+      },
+      {
+        "title": "전체 범위와 한계",
+        "text": "DMA alias 순회, 재귀 버스 검색, 루트 순회, 슬롯·도메인 검색, 매칭 callback과 공통 ID helper, 네 ID/class wrapper, 존재 확인까지 모든 본문을 대조했습니다. find_bus/find_next_bus/get_slot/domain_bus_and_slot/subsys/device/class/base_class/dev_present에는 일반 EXPORT_SYMBOL이 있습니다. 실제 hotplug 동시 실행, DMA requester ID 전달 또는 커널 빌드는 검증하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "pci_get_dev_by_id의 다음 검색이 실패하면 from 참조는 유지되는가?",
+        "options": [
+          "아니다. 실패해도 pci_dev_put(from)을 호출한다",
+          "그렇다. 성공할 때만 이전 항목을 해제한다"
+        ],
+        "answer": 0,
+        "explanation": "put은 bus_find_device 결과 검사 뒤 공통 경로에 있습니다. NULL 결과가 이전 참조를 계속 보유한다는 뜻은 아닙니다."
+      },
+      {
+        "prompt": "pci_find_next_bus 하나만 반복하면 모든 하위 버스도 직접 나오는가?",
+        "options": [
+          "그렇다. 내부에서 children을 재귀 순회한다",
+          "아니다. 이 함수의 목록은 pci_root_buses다"
+        ],
+        "answer": 1,
+        "explanation": "하위 버스 재귀는 pci_do_find_bus에 있습니다. 루트 목록 이동과 깊이 우선 검색을 별개의 알고리즘으로 읽어야 합니다."
+      },
+      {
+        "prompt": "pci_dev_present가 1이면 반환 이후 장치 수명이 보장되는가?",
+        "options": [
+          "아니다. 찾은 참조를 내려놓고 불리언만 반환한다",
+          "그렇다. 호출자에게 숨겨진 영구 참조를 남긴다"
+        ],
+        "answer": 0,
+        "explanation": "found에 pci_dev_put을 한 다음 1을 반환합니다. 존재 확인은 특정 시점의 관측이며 실제 장치 사용을 위한 참조 획득을 대신하지 않습니다."
+      },
+      {
+        "prompt": "base class 0x02 검색의 class와 mask는?",
+        "options": [
+          "0x02와 0x0000FF",
+          "0x020000과 0xFF0000"
+        ],
+        "answer": 1,
+        "explanation": "입력 class를 16비트 왼쪽 이동해 상위 class 바이트에 놓습니다. 하위 subclass와 interface 비트는 mask에서 제외합니다."
+      },
+      {
+        "prompt": "DMA alias 콜백이 양수 1을 반환하면 계속하는가?",
+        "options": [
+          "아니다. 즉시 1로 종료한다",
+          "그렇다. 음수 오류일 때만 중단한다"
+        ],
+        "answer": 0,
+        "explanation": "조건은 if(ret)입니다. 이 인터페이스의 중단 규칙은 0 아닌 값 전체이므로 일반 errno 전파만으로 좁혀 읽으면 안 됩니다."
+      },
+      {
+        "prompt": "BRIDGE_XLATE_ROOT가 설정된 브리지는 alias 콜백을 호출한 뒤 멈추는가?",
+        "options": [
+          "그렇다. 브리지의 alias를 반드시 한 번 추가한다",
+          "아니다. 해당 브리지 콜백 분기 전에 반환한다"
+        ],
+        "answer": 1,
+        "explanation": "플래그 검사가 PCIe 타입 분기보다 먼저 나옵니다. 탐색 경계 자체를 결과에 포함하는지 순서를 확인해야 합니다."
+      },
+      {
+        "prompt": "vendor=0,subvendor=0,class_mask=0이고 device만 1인 ID 항목을 present가 검색하는가?",
+        "options": [
+          "아니다. while 종료 조건이 거짓이다",
+          "그렇다. 구조체의 아무 필드나 0 아니면 계속한다"
+        ],
+        "answer": 0,
+        "explanation": "실제 sentinel 판정은 세 필드의 OR입니다. null-terminated라는 문구를 구조체 모든 필드 검사로 확대해서는 안 됩니다."
+      },
+      {
+        "prompt": "pci_find_bus의 DFS 전체가 pci_bus_sem 읽기 잠금 아래 있는가?",
+        "options": [
+          "그렇다. 모든 재귀 호출까지 잠금을 유지한다",
+          "아니다. find_next_bus의 잠금은 반환 전에 풀린다"
+        ],
+        "answer": 1,
+        "explanation": "명시적 잠금 구간은 루트 다음 항목을 얻는 helper 안에 있습니다. 전체 순회의 동시성 보장은 호출 문맥까지 확인해야 하며 이 본문만으로 전역 잠금 보호를 주장할 수 없습니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * PCI searching functions\n *\n * Copyright (C) 1993 -- 1997 Drew Eckhardt, Frederic Potter,\n *\t\t\t\t\tDavid Mosberger-Tang\n * Copyright (C) 1997 -- 2000 Martin Mares <mj@ucw.cz>\n * Copyright (C) 2003 -- 2004 Greg Kroah-Hartman <greg@kroah.com>\n */\n\n#include <linux/pci.h>\n#include <linux/slab.h>\n#include <linux/module.h>\n#include <linux/interrupt.h>\n#include \"pci.h\"\n\nDECLARE_RWSEM(pci_bus_sem);\n\n/*\n * pci_for_each_dma_alias - Iterate over DMA aliases for a device\n * @pdev: starting downstream device\n * @fn: function to call for each alias\n * @data: opaque data to pass to @fn\n *\n * Starting @pdev, walk up the bus calling @fn for each possible alias\n * of @pdev at the root bus.\n */\nint pci_for_each_dma_alias(struct pci_dev *pdev,\n\t\t\t   int (*fn)(struct pci_dev *pdev,\n\t\t\t\t     u16 alias, void *data), void *data)\n{\n\tstruct pci_bus *bus;\n\tint ret;\n\n\t/*\n\t * The device may have an explicit alias requester ID for DMA where the\n\t * requester is on another PCI bus.\n\t */\n\tpdev = pci_real_dma_dev(pdev);\n\n\tret = fn(pdev, pci_dev_id(pdev), data);\n\tif (ret)\n\t\treturn ret;\n\n\t/*\n\t * If the device is broken and uses an alias requester ID for\n\t * DMA, iterate over that too.\n\t */\n\tif (unlikely(pdev->dma_alias_mask)) {\n\t\tunsigned int devfn;\n\n\t\tfor_each_set_bit(devfn, pdev->dma_alias_mask, MAX_NR_DEVFNS) {\n\t\t\tret = fn(pdev, PCI_DEVID(pdev->bus->number, devfn),\n\t\t\t\t data);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\t}\n\n\tfor (bus = pdev->bus; !pci_is_root_bus(bus); bus = bus->parent) {\n\t\tstruct pci_dev *tmp;\n\n\t\t/* Skip virtual buses */\n\t\tif (!bus->self)\n\t\t\tcontinue;\n\n\t\ttmp = bus->self;\n\n\t\t/* stop at bridge where translation unit is associated */\n\t\tif (tmp->dev_flags & PCI_DEV_FLAGS_BRIDGE_XLATE_ROOT)\n\t\t\treturn ret;\n\n\t\t/*\n\t\t * PCIe-to-PCI/X bridges alias transactions from downstream\n\t\t * devices using the subordinate bus number (PCI Express to\n\t\t * PCI/PCI-X Bridge Spec, rev 1.0, sec 2.3).  For all cases\n\t\t * where the upstream bus is PCI/X we alias to the bridge\n\t\t * (there are various conditions in the previous reference\n\t\t * where the bridge may take ownership of transactions, even\n\t\t * when the secondary interface is PCI-X).\n\t\t */\n\t\tif (pci_is_pcie(tmp)) {\n\t\t\tswitch (pci_pcie_type(tmp)) {\n\t\t\tcase PCI_EXP_TYPE_ROOT_PORT:\n\t\t\tcase PCI_EXP_TYPE_UPSTREAM:\n\t\t\tcase PCI_EXP_TYPE_DOWNSTREAM:\n\t\t\t\tcontinue;\n\t\t\tcase PCI_EXP_TYPE_PCI_BRIDGE:\n\t\t\t\tret = fn(tmp,\n\t\t\t\t\t PCI_DEVID(tmp->subordinate->number,\n\t\t\t\t\t\t   PCI_DEVFN(0, 0)), data);\n\t\t\t\tif (ret)\n\t\t\t\t\treturn ret;\n\t\t\t\tcontinue;\n\t\t\tcase PCI_EXP_TYPE_PCIE_BRIDGE:\n\t\t\t\tret = fn(tmp, pci_dev_id(tmp), data);\n\t\t\t\tif (ret)\n\t\t\t\t\treturn ret;\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t} else {\n\t\t\tif (tmp->dev_flags & PCI_DEV_FLAG_PCIE_BRIDGE_ALIAS)\n\t\t\t\tret = fn(tmp,\n\t\t\t\t\t PCI_DEVID(tmp->subordinate->number,\n\t\t\t\t\t\t   PCI_DEVFN(0, 0)), data);\n\t\t\telse\n\t\t\t\tret = fn(tmp, pci_dev_id(tmp), data);\n\t\t\tif (ret)\n\t\t\t\treturn ret;\n\t\t}\n\t}\n\n\treturn ret;\n}\n\nstatic struct pci_bus *pci_do_find_bus(struct pci_bus *bus, unsigned char busnr)\n{\n\tstruct pci_bus *child;\n\tstruct pci_bus *tmp;\n\n\tif (bus->number == busnr)\n\t\treturn bus;\n\n\tlist_for_each_entry(tmp, &bus->children, node) {\n\t\tchild = pci_do_find_bus(tmp, busnr);\n\t\tif (child)\n\t\t\treturn child;\n\t}\n\treturn NULL;\n}\n\n/**\n * pci_find_bus - locate PCI bus from a given domain and bus number\n * @domain: number of PCI domain to search\n * @busnr: number of desired PCI bus\n *\n * Given a PCI bus number and domain number, the desired PCI bus is located\n * in the global list of PCI buses.  If the bus is found, a pointer to its\n * data structure is returned.  If no bus is found, %NULL is returned.\n */\nstruct pci_bus *pci_find_bus(int domain, int busnr)\n{\n\tstruct pci_bus *bus = NULL;\n\tstruct pci_bus *tmp_bus;\n\n\twhile ((bus = pci_find_next_bus(bus)) != NULL)  {\n\t\tif (pci_domain_nr(bus) != domain)\n\t\t\tcontinue;\n\t\ttmp_bus = pci_do_find_bus(bus, busnr);\n\t\tif (tmp_bus)\n\t\t\treturn tmp_bus;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_find_bus);\n\n/**\n * pci_find_next_bus - begin or continue searching for a PCI bus\n * @from: Previous PCI bus found, or %NULL for new search.\n *\n * Iterates through the list of known PCI buses.  A new search is\n * initiated by passing %NULL as the @from argument.  Otherwise if\n * @from is not %NULL, searches continue from next device on the\n * global list.\n */\nstruct pci_bus *pci_find_next_bus(const struct pci_bus *from)\n{\n\tstruct list_head *n;\n\tstruct pci_bus *b = NULL;\n\n\tdown_read(&pci_bus_sem);\n\tn = from ? from->node.next : pci_root_buses.next;\n\tif (n != &pci_root_buses)\n\t\tb = list_entry(n, struct pci_bus, node);\n\tup_read(&pci_bus_sem);\n\treturn b;\n}\nEXPORT_SYMBOL(pci_find_next_bus);\n\n/**\n * pci_get_slot - locate PCI device for a given PCI slot\n * @bus: PCI bus on which desired PCI device resides\n * @devfn: encodes number of PCI slot in which the desired PCI\n * device resides and the logical device number within that slot\n * in case of multi-function devices.\n *\n * Given a PCI bus and slot/function number, the desired PCI device\n * is located in the list of PCI devices.\n * If the device is found, its reference count is increased and this\n * function returns a pointer to its data structure.  The caller must\n * decrement the reference count by calling pci_dev_put().\n * If no device is found, %NULL is returned.\n */\nstruct pci_dev *pci_get_slot(struct pci_bus *bus, unsigned int devfn)\n{\n\tstruct pci_dev *dev;\n\n\tdown_read(&pci_bus_sem);\n\n\tlist_for_each_entry(dev, &bus->devices, bus_list) {\n\t\tif (dev->devfn == devfn)\n\t\t\tgoto out;\n\t}\n\n\tdev = NULL;\n out:\n\tpci_dev_get(dev);\n\tup_read(&pci_bus_sem);\n\treturn dev;\n}\nEXPORT_SYMBOL(pci_get_slot);\n\n/**\n * pci_get_domain_bus_and_slot - locate PCI device for a given PCI domain (segment), bus, and slot\n * @domain: PCI domain/segment on which the PCI device resides.\n * @bus: PCI bus on which desired PCI device resides\n * @devfn: encodes number of PCI slot in which the desired PCI device\n * resides and the logical device number within that slot in case of\n * multi-function devices.\n *\n * Given a PCI domain, bus, and slot/function number, the desired PCI\n * device is located in the list of PCI devices. If the device is\n * found, its reference count is increased and this function returns a\n * pointer to its data structure.  The caller must decrement the\n * reference count by calling pci_dev_put().  If no device is found,\n * %NULL is returned.\n */\nstruct pci_dev *pci_get_domain_bus_and_slot(int domain, unsigned int bus,\n\t\t\t\t\t    unsigned int devfn)\n{\n\tstruct pci_dev *dev = NULL;\n\n\tfor_each_pci_dev(dev) {\n\t\tif (pci_domain_nr(dev->bus) == domain &&\n\t\t    (dev->bus->number == bus && dev->devfn == devfn))\n\t\t\treturn dev;\n\t}\n\treturn NULL;\n}\nEXPORT_SYMBOL(pci_get_domain_bus_and_slot);\n\nstatic int match_pci_dev_by_id(struct device *dev, const void *data)\n{\n\tstruct pci_dev *pdev = to_pci_dev(dev);\n\tconst struct pci_device_id *id = data;\n\n\tif (pci_match_one_device(id, pdev))\n\t\treturn 1;\n\treturn 0;\n}\n\n/*\n * pci_get_dev_by_id - begin or continue searching for a PCI device by id\n * @id: pointer to struct pci_device_id to match for the device\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is found\n * with a matching id a pointer to its device structure is returned, and the\n * reference count to the device is incremented.  Otherwise, %NULL is returned.\n * A new search is initiated by passing %NULL as the @from argument.  Otherwise\n * if @from is not %NULL, searches continue from next device on the global\n * list.  The reference count for @from is always decremented if it is not\n * %NULL.\n *\n * This is an internal function for use by the other search functions in\n * this file.\n */\nstatic struct pci_dev *pci_get_dev_by_id(const struct pci_device_id *id,\n\t\t\t\t\t struct pci_dev *from)\n{\n\tstruct device *dev;\n\tstruct device *dev_start = NULL;\n\tstruct pci_dev *pdev = NULL;\n\n\tif (from)\n\t\tdev_start = &from->dev;\n\tdev = bus_find_device(&pci_bus_type, dev_start, (void *)id,\n\t\t\t      match_pci_dev_by_id);\n\tif (dev)\n\t\tpdev = to_pci_dev(dev);\n\tpci_dev_put(from);\n\treturn pdev;\n}\n\n/**\n * pci_get_subsys - begin or continue searching for a PCI device by vendor/subvendor/device/subdevice id\n * @vendor: PCI vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @device: PCI device id to match, or %PCI_ANY_ID to match all device ids\n * @ss_vendor: PCI subsystem vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @ss_device: PCI subsystem device id to match, or %PCI_ANY_ID to match all device ids\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is found\n * with a matching @vendor, @device, @ss_vendor and @ss_device, a pointer to its\n * device structure is returned, and the reference count to the device is\n * incremented.  Otherwise, %NULL is returned.  A new search is initiated by\n * passing %NULL as the @from argument.  Otherwise if @from is not %NULL,\n * searches continue from next device on the global list.\n * The reference count for @from is always decremented if it is not %NULL.\n */\nstruct pci_dev *pci_get_subsys(unsigned int vendor, unsigned int device,\n\t\t\t       unsigned int ss_vendor, unsigned int ss_device,\n\t\t\t       struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = vendor,\n\t\t.device = device,\n\t\t.subvendor = ss_vendor,\n\t\t.subdevice = ss_device,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_subsys);\n\n/**\n * pci_get_device - begin or continue searching for a PCI device by vendor/device id\n * @vendor: PCI vendor id to match, or %PCI_ANY_ID to match all vendor ids\n * @device: PCI device id to match, or %PCI_ANY_ID to match all device ids\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is\n * found with a matching @vendor and @device, the reference count to the\n * device is incremented and a pointer to its device structure is returned.\n * Otherwise, %NULL is returned.  A new search is initiated by passing %NULL\n * as the @from argument.  Otherwise if @from is not %NULL, searches continue\n * from next device on the global list.  The reference count for @from is\n * always decremented if it is not %NULL.\n */\nstruct pci_dev *pci_get_device(unsigned int vendor, unsigned int device,\n\t\t\t       struct pci_dev *from)\n{\n\treturn pci_get_subsys(vendor, device, PCI_ANY_ID, PCI_ANY_ID, from);\n}\nEXPORT_SYMBOL(pci_get_device);\n\n/**\n * pci_get_class - begin or continue searching for a PCI device by class\n * @class: search for a PCI device with this class designation\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices.  If a PCI device is\n * found with a matching @class, the reference count to the device is\n * incremented and a pointer to its device structure is returned.\n * Otherwise, %NULL is returned.\n * A new search is initiated by passing %NULL as the @from argument.\n * Otherwise if @from is not %NULL, searches continue from next device\n * on the global list.  The reference count for @from is always decremented\n * if it is not %NULL.\n */\nstruct pci_dev *pci_get_class(unsigned int class, struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = PCI_ANY_ID,\n\t\t.device = PCI_ANY_ID,\n\t\t.subvendor = PCI_ANY_ID,\n\t\t.subdevice = PCI_ANY_ID,\n\t\t.class_mask = PCI_ANY_ID,\n\t\t.class = class,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_class);\n\n/**\n * pci_get_base_class - searching for a PCI device by matching against the base class code only\n * @class: search for a PCI device with this base class code\n * @from: Previous PCI device found in search, or %NULL for new search.\n *\n * Iterates through the list of known PCI devices. If a PCI device is found\n * with a matching base class code, the reference count to the device is\n * incremented. See pci_match_one_device() to figure out how does this works.\n * A new search is initiated by passing %NULL as the @from argument.\n * Otherwise if @from is not %NULL, searches continue from next device on the\n * global list. The reference count for @from is always decremented if it is\n * not %NULL.\n *\n * Returns:\n * A pointer to a matched PCI device, %NULL Otherwise.\n */\nstruct pci_dev *pci_get_base_class(unsigned int class, struct pci_dev *from)\n{\n\tstruct pci_device_id id = {\n\t\t.vendor = PCI_ANY_ID,\n\t\t.device = PCI_ANY_ID,\n\t\t.subvendor = PCI_ANY_ID,\n\t\t.subdevice = PCI_ANY_ID,\n\t\t.class_mask = 0xFF0000,\n\t\t.class = class << 16,\n\t};\n\n\treturn pci_get_dev_by_id(&id, from);\n}\nEXPORT_SYMBOL(pci_get_base_class);\n\n/**\n * pci_dev_present - Returns 1 if device matching the device list is present, 0 if not.\n * @ids: A pointer to a null terminated list of struct pci_device_id structures\n * that describe the type of PCI device the caller is trying to find.\n *\n * Obvious fact: You do not have a reference to any device that might be found\n * by this function, so if that device is removed from the system right after\n * this function is finished, the value will be stale.  Use this function to\n * find devices that are usually built into a system, or for a general hint as\n * to if another device happens to be present at this specific moment in time.\n */\nint pci_dev_present(const struct pci_device_id *ids)\n{\n\tstruct pci_dev *found = NULL;\n\n\twhile (ids->vendor || ids->subvendor || ids->class_mask) {\n\t\tfound = pci_get_dev_by_id(ids, NULL);\n\t\tif (found) {\n\t\t\tpci_dev_put(found);\n\t\t\treturn 1;\n\t\t}\n\t\tids++;\n\t}\n\n\treturn 0;\n}\nEXPORT_SYMBOL(pci_dev_present);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "b8810d5293b134e21708a8b5a8d20f3c49709825cd841a0ef6f11fecaa42fb40",
+      "scope": "whole-file",
+      "line_count": 423,
+      "authoring_source": "course/file_units/pci_search_lifetimes.py",
+      "sections": [
+        "파일 구성과 공용 잠금",
+        "DMA alias의 시작과 비트맵",
+        "상위 브리지 alias 분기",
+        "버스의 선행 깊이 우선 검색",
+        "도메인과 루트 목록",
+        "슬롯과 전체 주소 검색",
+        "ID 매칭과 이전 참조 소비",
+        "vendor와 subsystem wrapper",
+        "전체 class와 base class",
+        "존재 확인과 종료 sentinel",
+        "전체 범위와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/pci/search.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "주소록에서 사람을 찾는 일과 그 사람을 계속 붙잡아 두는 일은 달라요. PCI 검색에서도 “지금 있다”는 확인과 장치를 안전하게 쓸 참조를 얻는 일을 구분해요.",
+    "meaning": "버스는 나무처럼 찾아 내려가고 장치는 조건에 맞춰 검색해요. 다음 검색에 이전 결과를 넘기면 이전 참조를 돌려주는 규칙도 꼭 지켜야 해요.",
+    "exercise": "get_device로 결과를 두 번 연속 찾는 그림을 그려 각 참조를 누가 put하는지 표시하고, present가 준 1로 장치를 계속 사용할 수 없는 이유를 적어 보세요."
+  },
+  "goal": "버스는 나무처럼 찾아 내려가고 장치는 조건에 맞춰 검색해요. 다음 검색에 이전 결과를 넘기면 이전 참조를 돌려주는 규칙도 꼭 지켜야 해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "get_device로 결과를 두 번 연속 찾는 그림을 그려 각 참조를 누가 put하는지 표시하고, present가 준 1로 장치를 계속 사용할 수 없는 이유를 적어 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "a1baf96ae04d7e0f7ac111ef0b8d54e7e7e43ab2bbebba4347893498801dfaf6",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 8,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

@@ -5,54 +5,62 @@
   "area": "커널 구성 · 테스트 재현성 · 빌드 입력",
   "track": "files",
   "kind": "kernel",
-  "intro": "파일의 네 설정 전체를 빌드 대상과 연결해 해설합니다.",
+  "intro": "이 네 줄은 OF 관련 KUnit 테스트에 필요한 설정을 요청하는 조각이에요. 최종 설정 결정과 빌드, 테스트 실행은 별도 단계예요.",
   "guide": [
-    "구성 조각은 필요한 설정을 요청하며 전체 커널 설정과 의존성 해결을 대신하지 않습니다.",
-    "테스트 재현 입력과 구성·빌드·실행의 단계 구분을 학습합니다."
+    "KUnit은 커널의 기능을 검사하는 테스트 도구예요. CONFIG 이름은 커널을 만들 때 선택할 기능을 가리켜요.",
+    "설정 조각은 전체 설정에 합칠 요청 목록이에요. 모든 의존 기능을 이 작은 파일에 직접 적었다는 뜻은 아니에요.",
+    "=y를 확인한 뒤에도 실제 적용된 설정, 빌드 결과, 실행 결과가 따로 있어야 테스트 통과라고 말할 수 있어요."
   ],
   "deep_dive": [
     {
-      "title": "기반 두 설정",
-      "text": "CONFIG_KUNIT=y와 CONFIG_OF=y를 요청합니다. 테스트 프레임워크와 DeviceTree 기반 기능의 선택이며 파일에는 다른 값이나 주석,별도 실행 명령이 없습니다."
+      "title": "기반 기능 두 가지",
+      "text": "CONFIG_KUNIT=y는 테스트 도구를, CONFIG_OF=y는 장치 트리 기반 기능을 요청해요. 장치 트리는 하드웨어 정보를 나무 모양으로 담는 자료예요. 파일에는 다른 값이나 주석, 실행 명령은 없어요."
     },
     {
-      "title": "테스트 두 설정",
-      "text": "CONFIG_OF_KUNIT_TEST=y와 CONFIG_OF_OVERLAY_KUNIT_TEST=y를 요청합니다. 대응 Makefile에서 각각 of_test.o와 overlay-test.o를 선택하는 설정입니다. 일반 OF_UNITTEST 설정은 이 파일에 직접 적혀 있지 않습니다."
+      "title": "선택한 테스트 두 가지",
+      "text": "CONFIG_OF_KUNIT_TEST=y와 CONFIG_OF_OVERLAY_KUNIT_TEST=y도 요청해요. 해당 Makefile에서는 각각 of_test.o와 overlay-test.o를 선택해요. CONFIG_OF_UNITTEST=y라는 일반 OF 단위 테스트 설정은 여기에 직접 적혀 있지 않아요. 비슷한 이름이라고 모든 테스트가 들어간다고 생각하면 안 돼요."
     },
     {
-      "title": "전체 범위와 한계",
-      "text": "네 줄 전체를 확인했습니다. OVERLAY와 EARLY_FLATTREE 등 모든 관련 dependency를 여기서 직접 나열하지는 않습니다. 최종 값은 Kconfig 처리와 전체 설정에서 확인해야 하며 이 파일이 존재한다는 사실은 테스트 실행 성공이나 모든 OF 테스트 선택을 증명하지 않습니다."
+      "title": "요청과 결과의 차이",
+      "text": "네 줄 전체를 읽었어요. OVERLAY, EARLY_FLATTREE 같은 관련 의존 조건이 모두 직접 나열된 파일은 아니에요. 최종 값은 Kconfig 처리와 전체 설정에서 확인해야 해요. 이 파일이 있다는 사실이나 =y라는 글자만으로 모든 OF 테스트를 선택했다거나 실제 실행에 성공했다고 증명할 수 없어요."
     }
   ],
   "questions": [
     {
-      "prompt": "이 조각은 CONFIG_OF_UNITTEST=y도 직접 요청하는가?",
+      "prompt": "이 파일이 CONFIG_OF_UNITTEST=y도 직접 요청하나요?",
       "options": [
+        "아니요. 그 줄은 없어요.",
+        "네. 모든 OF 테스트 설정을 나열해요."
+      ],
+      "answer": 0,
+      "explanation": "실제 네 줄은 KUNIT, OF, OF_KUNIT_TEST, OF_OVERLAY_KUNIT_TEST예요.",
+      "original_prompt": "이 조각은 CONFIG_OF_UNITTEST=y도 직접 요청하는가?",
+      "original_options": [
         "아니다. 해당 줄은 없다",
         "그렇다. 모든 OF 테스트 설정을 나열한다"
       ],
-      "answer": 0,
-      "explanation": "파일에는 KUNIT,OF,OF_KUNIT_TEST,OF_OVERLAY_KUNIT_TEST 네 줄뿐입니다."
+      "original_explanation": "파일에는 KUNIT,OF,OF_KUNIT_TEST,OF_OVERLAY_KUNIT_TEST 네 줄뿐입니다."
     },
     {
-      "prompt": "구성 조각만 읽고 테스트가 실행되어 통과했다고 판단할 수 있는가?",
+      "prompt": "이 조각을 읽기만 해도 테스트가 통과했다고 알 수 있나요?",
       "options": [
+        "네. =y는 실행 성공을 뜻해요.",
+        "아니요. 최종 설정과 빌드·실행 결과가 따로 필요해요."
+      ],
+      "answer": 1,
+      "explanation": "설정 요청과 검사의 실행 결과는 다른 증거예요.",
+      "original_prompt": "구성 조각만 읽고 테스트가 실행되어 통과했다고 판단할 수 있는가?",
+      "original_options": [
         "그렇다. =y가 실행 성공을 의미한다",
         "아니다. 최종 설정·빌드·실행 증거가 별도로 필요하다"
       ],
-      "answer": 1,
-      "explanation": "설정 요청은 실행 결과와 다릅니다. 각 단계의 증거를 구분해야 합니다."
+      "original_explanation": "설정 요청은 실행 결과와 다릅니다. 각 단계의 증거를 구분해야 합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "이 파일의 네 이름을 적고 CONFIG_OF_UNITTEST라는 줄이 실제 있는지 확인해 보세요."
   },
   "annotated": "CONFIG_KUNIT=y\nCONFIG_OF=y\nCONFIG_OF_KUNIT_TEST=y\nCONFIG_OF_OVERLAY_KUNIT_TEST=y\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/.kunitconfig"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-4ffba29ca2ec91d7",
+    "path": "drivers/of/.kunitconfig",
+    "title": "OF KUnit 구성 조각: 네 가지 요청과 최종 설정의 차이",
+    "area": "커널 구성 · 테스트 재현성 · 빌드 입력",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "파일의 네 설정 전체를 빌드 대상과 연결해 해설합니다.",
+    "guide": [
+      "구성 조각은 필요한 설정을 요청하며 전체 커널 설정과 의존성 해결을 대신하지 않습니다.",
+      "테스트 재현 입력과 구성·빌드·실행의 단계 구분을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "기반 두 설정",
+        "text": "CONFIG_KUNIT=y와 CONFIG_OF=y를 요청합니다. 테스트 프레임워크와 DeviceTree 기반 기능의 선택이며 파일에는 다른 값이나 주석,별도 실행 명령이 없습니다."
+      },
+      {
+        "title": "테스트 두 설정",
+        "text": "CONFIG_OF_KUNIT_TEST=y와 CONFIG_OF_OVERLAY_KUNIT_TEST=y를 요청합니다. 대응 Makefile에서 각각 of_test.o와 overlay-test.o를 선택하는 설정입니다. 일반 OF_UNITTEST 설정은 이 파일에 직접 적혀 있지 않습니다."
+      },
+      {
+        "title": "전체 범위와 한계",
+        "text": "네 줄 전체를 확인했습니다. OVERLAY와 EARLY_FLATTREE 등 모든 관련 dependency를 여기서 직접 나열하지는 않습니다. 최종 값은 Kconfig 처리와 전체 설정에서 확인해야 하며 이 파일이 존재한다는 사실은 테스트 실행 성공이나 모든 OF 테스트 선택을 증명하지 않습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 조각은 CONFIG_OF_UNITTEST=y도 직접 요청하는가?",
+        "options": [
+          "아니다. 해당 줄은 없다",
+          "그렇다. 모든 OF 테스트 설정을 나열한다"
+        ],
+        "answer": 0,
+        "explanation": "파일에는 KUNIT,OF,OF_KUNIT_TEST,OF_OVERLAY_KUNIT_TEST 네 줄뿐입니다."
+      },
+      {
+        "prompt": "구성 조각만 읽고 테스트가 실행되어 통과했다고 판단할 수 있는가?",
+        "options": [
+          "그렇다. =y가 실행 성공을 의미한다",
+          "아니다. 최종 설정·빌드·실행 증거가 별도로 필요하다"
+        ],
+        "answer": 1,
+        "explanation": "설정 요청은 실행 결과와 다릅니다. 각 단계의 증거를 구분해야 합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "CONFIG_KUNIT=y\nCONFIG_OF=y\nCONFIG_OF_KUNIT_TEST=y\nCONFIG_OF_OVERLAY_KUNIT_TEST=y\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "5d60b8fa9d335f6b192897f5ee428552b939072b4d57d03ff5ee31ab0c16b4cf",
+      "scope": "whole-file",
+      "line_count": 4,
+      "authoring_source": "course/file_units/of_test_build.py",
+      "sections": [
+        "기반 두 설정",
+        "테스트 두 설정",
+        "전체 범위와 한계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/.kunitconfig"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "운동회 참가 신청서에 이름을 쓴 것과 실제 경기를 마친 것은 달라요. 설정 파일의 y도 실행 성공 표시가 아니에요.",
+    "meaning": "이 네 줄은 OF 관련 KUnit 테스트에 필요한 설정을 요청하는 조각이에요. 최종 설정 결정과 빌드, 테스트 실행은 별도 단계예요.",
+    "exercise": "이 파일의 네 이름을 적고 CONFIG_OF_UNITTEST라는 줄이 실제 있는지 확인해 보세요."
+  },
+  "goal": "이 네 줄은 OF 관련 KUnit 테스트에 필요한 설정을 요청하는 조각이에요. 최종 설정 결정과 빌드, 테스트 실행은 별도 단계예요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "이 파일의 네 이름을 적고 CONFIG_OF_UNITTEST라는 줄이 실제 있는지 확인해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_d.json",
+    "authoring_sha256": "0eb778227e7b75dbc7e6ec34bd4d699a8dc3a7231bc3d48ce70e8de7de257e1d",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

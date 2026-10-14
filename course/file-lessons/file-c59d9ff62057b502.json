@@ -5,54 +5,62 @@
   "area": "트리 자료구조 · 장치 트리 · 최소 fixture",
   "track": "files",
   "kind": "kernel",
-  "intro": "최소 DTS 입력의 선언과 비어 있는 루트 블록 전체를 확인합니다.",
+  "intro": "빈 루트 선언과 루트 자체가 없는 상태를 구별합니다.",
   "guide": [
-    "자식이 없는 루트 객체가 존재하는 상태와 루트 자체가 없는 상태는 다릅니다.",
-    "최소 입력 데이터,트리 구조와 전처리 없는 선언형 파일을 학습합니다."
+    "장치 트리는 하드웨어 설명을 부모·자식 관계로 담는 목록입니다. 루트 /는 그 목록의 맨 위 항목입니다.",
+    "이 입력에는 / { };라는 실제 루트 블록이 있습니다. 속성과 자식이 없다는 뜻이지 루트가 아예 없다는 뜻이 아닙니다.",
+    "/dts-v1/;은 DTS 형식 표시입니다. 여기에는 overlay용 /plugin/; 표시는 없으므로 옆의 다른 파일과 같은 내용을 가졌다고 추측하면 안 됩니다."
   ],
   "deep_dive": [
     {
-      "title": "라이선스와 형식",
-      "text": "SPDX는 GPL-2.0-only이고 /dts-v1/; 선언이 있습니다. /plugin/; 선언은 없으므로 앞선 overlay 입력과 같은 형식 표식을 모두 갖는 것은 아닙니다."
+      "title": "라이선스와 DTS 형식",
+      "text": "첫 줄의 라이선스 표시는 GPL-2.0-only입니다. /dts-v1/;로 장치 트리의 글 형식을 선언합니다. /plugin/;은 이 파일에 없으므로 overlay 입력에서 보았던 표시가 모두 들어 있다고 설명하면 틀립니다."
     },
     {
-      "title": "루트 내용",
-      "text": "/ { }; 형태의 루트 블록이 있으며 내부에는 속성도 자식 노드도 없습니다. 빈 루트가 있다는 기술과 소스가 아예 없거나 런타임 of_root가 NULL인 상태를 동일하게 보면 안 됩니다."
+      "title": "속성과 자식이 없는 루트",
+      "text": "/ { };는 루트 항목을 나타내고 중괄호 안은 비어 있습니다. 즉 속성 0개, 자식 0개인 루트를 기술합니다. 소스 파일이 전혀 없거나 실행 중인 커널의 of_root 포인터가 NULL인 상태와는 다릅니다. 빈 상자를 그렸다고 실제 실행 환경에서 그 상자가 이미 만들어졌다는 뜻도 아닙니다."
     },
     {
-      "title": "파일 범위와 역할",
-      "text": "이 파일은 최소 루트 구조를 기술할 뿐 CPU,메모리,장치 주소나 테스트 노드를 정의하지 않습니다. 입력의 전체를 검토했으며 이것만으로 어떤 런타임에 언제 루트가 설치되는지는 호출·빌드 경로를 별도로 확인해야 합니다. 실제 DTB 생성은 실행하지 않았습니다."
+      "title": "최소 입력의 역할과 확인 범위",
+      "text": "이 파일에는 CPU, 메모리, 장치 주소나 테스트용 노드가 없습니다. 가장 작은 루트 구조만 제공합니다. 실제 커널에 어느 시점에 루트가 설치되는지는 빌드 과정과 호출 경로를 별도로 확인해야 합니다. 전체 여섯 줄의 선언을 읽는 일은 실제 DTB 생성 도구를 실행하는 것과 구별됩니다."
     }
   ],
   "questions": [
     {
-      "prompt": "이 입력에는 루트 노드 기술이 있는가?",
+      "prompt": "이 입력에는 루트 노드를 나타내는 선언이 있나요?",
       "options": [
+        "네, 내부가 비어 있는 루트 블록이 있습니다.",
+        "아니요, 파일 전체가 주석뿐입니다."
+      ],
+      "answer": 0,
+      "explanation": "실제 / 블록이 있습니다. 자식이 0개라는 것과 루트가 없다는 것은 다른 구조입니다.",
+      "original_prompt": "이 입력에는 루트 노드 기술이 있는가?",
+      "original_options": [
         "있다. 내부가 빈 루트 블록이다",
         "없다. 파일 전체가 주석뿐이다"
       ],
-      "answer": 0,
-      "explanation": "/ 블록이 실제로 존재합니다. 자식 개수 0과 루트 부재는 다른 구조 상태입니다."
+      "original_explanation": "/ 블록이 실제로 존재합니다. 자식 개수 0과 루트 부재는 다른 구조 상태입니다."
     },
     {
-      "prompt": "이 파일에 plugin overlay 표식이 있는가?",
+      "prompt": "이 파일에는 /plugin/이라는 overlay 표시가 있나요?",
       "options": [
+        "네, /plugin/이 명시되어 있습니다.",
+        "아니요, 없습니다."
+      ],
+      "answer": 1,
+      "explanation": "형식 선언은 /dts-v1/이고 그 뒤는 빈 루트입니다. 다른 dtso 파일의 표시를 가져와 추측하면 안 됩니다.",
+      "original_prompt": "이 파일에 plugin overlay 표식이 있는가?",
+      "original_options": [
         "있다. /plugin/이 명시되어 있다",
         "없다"
       ],
-      "answer": 1,
-      "explanation": "선언은 /dts-v1/과 빈 루트뿐입니다. 인접한 dtso 파일의 내용을 이 파일에 추정해서는 안 됩니다."
+      "original_explanation": "선언은 /dts-v1/과 빈 루트뿐입니다. 인접한 dtso 파일의 내용을 이 파일에 추정해서는 안 됩니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "루트가 있고 자식이 0개인 그림과 루트가 없는 그림을 각각 그리세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/dts-v1/;\n\n/ {\n\n};\n",
   "source_review": {
@@ -73,5 +81,110 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/empty_root.dts"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-c59d9ff62057b502",
+    "path": "drivers/of/empty_root.dts",
+    "title": "빈 DeviceTree 루트: 빈 트리와 루트 부재의 차이",
+    "area": "트리 자료구조 · 장치 트리 · 최소 fixture",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "최소 DTS 입력의 선언과 비어 있는 루트 블록 전체를 확인합니다.",
+    "guide": [
+      "자식이 없는 루트 객체가 존재하는 상태와 루트 자체가 없는 상태는 다릅니다.",
+      "최소 입력 데이터,트리 구조와 전처리 없는 선언형 파일을 학습합니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "라이선스와 형식",
+        "text": "SPDX는 GPL-2.0-only이고 /dts-v1/; 선언이 있습니다. /plugin/; 선언은 없으므로 앞선 overlay 입력과 같은 형식 표식을 모두 갖는 것은 아닙니다."
+      },
+      {
+        "title": "루트 내용",
+        "text": "/ { }; 형태의 루트 블록이 있으며 내부에는 속성도 자식 노드도 없습니다. 빈 루트가 있다는 기술과 소스가 아예 없거나 런타임 of_root가 NULL인 상태를 동일하게 보면 안 됩니다."
+      },
+      {
+        "title": "파일 범위와 역할",
+        "text": "이 파일은 최소 루트 구조를 기술할 뿐 CPU,메모리,장치 주소나 테스트 노드를 정의하지 않습니다. 입력의 전체를 검토했으며 이것만으로 어떤 런타임에 언제 루트가 설치되는지는 호출·빌드 경로를 별도로 확인해야 합니다. 실제 DTB 생성은 실행하지 않았습니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "이 입력에는 루트 노드 기술이 있는가?",
+        "options": [
+          "있다. 내부가 빈 루트 블록이다",
+          "없다. 파일 전체가 주석뿐이다"
+        ],
+        "answer": 0,
+        "explanation": "/ 블록이 실제로 존재합니다. 자식 개수 0과 루트 부재는 다른 구조 상태입니다."
+      },
+      {
+        "prompt": "이 파일에 plugin overlay 표식이 있는가?",
+        "options": [
+          "있다. /plugin/이 명시되어 있다",
+          "없다"
+        ],
+        "answer": 1,
+        "explanation": "선언은 /dts-v1/과 빈 루트뿐입니다. 인접한 dtso 파일의 내용을 이 파일에 추정해서는 안 됩니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0-only\n/dts-v1/;\n\n/ {\n\n};\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "9f904954ea2a1f1e98816bc898f39bfbb1bb5f0955bb48d5000d9271f798ad37",
+      "scope": "whole-file",
+      "line_count": 6,
+      "authoring_source": "course/file_units/kunit_overlay_tests.py",
+      "sections": [
+        "라이선스와 형식",
+        "루트 내용",
+        "파일 범위와 역할"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/drivers/of/empty_root.dts"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "빈 상자가 있는 것과 상자 자체가 없는 것은 다릅니다. 이 파일에는 안에 아무것도 없는 장치 트리의 뿌리 상자가 있습니다.",
+    "meaning": "빈 루트 선언과 루트 자체가 없는 상태를 구별합니다.",
+    "exercise": "루트가 있고 자식이 0개인 그림과 루트가 없는 그림을 각각 그리세요."
+  },
+  "goal": "빈 루트 선언과 루트 자체가 없는 상태를 구별합니다.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "루트가 있고 자식이 0개인 그림과 루트가 없는 그림을 각각 그리세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files_c.json",
+    "authoring_sha256": "4515329ed93916bc1dcbbbb4fb6bea97cc7b6cb9a91d3498e20f297888787413",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 2,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }

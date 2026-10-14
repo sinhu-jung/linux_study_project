@@ -5,118 +5,150 @@
   "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
   "track": "files",
   "kind": "kernel",
-  "intro": "정수 문법·출력 타입·사용자 메모리 접근을 단계별로 분리한 변환 구현입니다.",
+  "intro": "kstrtox.c는 숫자의 문법과 범위를 검사한 뒤 결과를 쓰고, 참·거짓에는 별도의 접두사 규칙을 사용해요.",
   "guide": [
-    "진법 보정과 숫자 누적을 내부 helper로 수행한 뒤 오류·종료 문자를 검사합니다. 각 공개 정수 함수는 범위 검사를 통과한 후에만 출력값을 씁니다. 불리언은 별도의 접두사 규칙을 사용합니다.",
-    "정수 입력은 유효한 NUL 종료 문자열과 지원 진법을 제공해야 합니다. 모든 함수가 NULL 문자열을 검사하는 것은 아니며 불리언의 느슨한 문법을 숫자 변환에 적용하면 안 됩니다."
+    "파서는 문자를 규칙에 맞게 읽어 값으로 바꾸는 코드예요. NUL은 문자열이 끝났다는 0값 표시예요.",
+    "unsigned는 음수 없는 정수, signed는 음수도 표현하는 정수예요. 비트 수가 작으면 담을 수 있는 범위도 작아요.",
+    "공개 정수 함수는 실패하면 호출자의 결과 칸을 바꾸지 않아요. 하지만 내부 계산 도우미가 임시 칸에 쓰는 규칙은 달라요."
   ],
   "deep_dive": [
     {
-      "title": "파일 전체 구성",
-      "text": "SPDX·문법 설명,ctype/errno/export/kstrtox/math64/types/uaccess와 내부 헤더 포함,진법 보정·누적 helper,64비트 signed/unsigned 파서,좁은 타입 wrapper,불리언과 from_user 구현,10개 from_user 함수 생성으로 끝납니다. 주요 함수는 noinline과 export로 연결됩니다."
+      "title": "파일의 큰 순서",
+      "text": "라이선스와 입력 문법 설명 뒤 문자·오류·타입·사용자 메모리용 헤더를 포함해요. 진법 선택과 숫자 누적 도우미, 64비트 변환, 더 작은 타입 연결, 참·거짓 변환, 사용자 복사 함수 순서로 이어져요. 매크로로 정수 from_user 함수 열 개를 만들어요. noinline은 함수를 호출 위치에 펼치지 않도록 하고 export는 다른 커널 코드에 이름을 제공해요."
     },
     {
-      "title": "진법 보정",
-      "text": "_parse_integer_fixup_radix는 base0에서 선행0x와 뒤의 유효16진 숫자를 확인하면16,그 외 선행0은8,나머지는10을 선택합니다. base16이면0x/0X 접두사를 건너뜁니다. 따라서 자동진법 \"010\"은8이며 \"09\"는뒤의9가8진숫자가아니어서공개파서에서실패합니다. 선택한진법의지원범위는호출계약을지켜야합니다."
+      "title": "자동으로 진법 고르기",
+      "text": "base가 0이면 선행 0x와 뒤의 올바른 16진 숫자를 확인해 16진수를 골라요. 그 외 선행 0은 8진수, 나머지는 10진수예요. 16진수로 정해지면 0x/0X를 건너뛰어요. 그래서 010은 8이고 09는 9가 8진 숫자가 아니어서 공개 함수의 뒤쪽 검사에서 실패해요. 호출자는 지원되는 진법을 줘야 해요."
     },
     {
-      "title": "숫자 누적과 내부 오류 표현",
-      "text": "_parse_integer_limit는 최대 max_chars까지0..9,a..f를 해석하고 res=res*base+val로 누적합니다. 현재 결과의 상위4비트가 켜지면 (ULLONG_MAX-val)/base와 비교하여 overflow 비트를 켭니다. 오버플로가 있어도 내부 출력값을 쓰고 소비 문자 수와 bit31 오류 플래그를 함께 반환합니다. 내부 helper의 출력 규칙과 공개 API의 실패 시 출력 보존을 혼동하지 않습니다."
+      "title": "한 자리씩 누적하는 도우미",
+      "text": "_parse_integer_limit는 최대 max_chars만큼 0~9와 a~f를 읽으며 res=res*base+val로 계산해요. 예를 들어 10진수 12 뒤의 3은 12*10+3=123이에요. 결과의 위쪽 4비트가 켜지면 (ULLONG_MAX-val)/base와 비교해 다음 계산이 범위를 넘을지 확인해요. 범위를 넘으면 반환값의 31번 비트에 오류를 표시해요. 내부 함수는 이때도 계산값을 출력하고 읽은 글자 수와 오류 표시를 함께 반환해요."
     },
     {
-      "title": "엄격한 unsigned 종료 검사",
-      "text": "_parse_integer는 제한을 INT_MAX로 둡니다. _kstrtoull은 overflow면-ERANGE,숫자를하나도읽지못하면-EINVAL,숫자뒤에는선택적개행하나와NUL만허용합니다. 중간공백·뒤쪽문자·개행두개는통과하지않습니다. 성공시에만외부res를갱신합니다. kstrtoull은앞의+하나를허용하지만-는허용하지않습니다."
+      "title": "공개 unsigned 함수는 끝까지 확인해요",
+      "text": "_parse_integer는 글자 제한을 INT_MAX로 두어요. _kstrtoull은 범위 초과면 -ERANGE, 숫자를 하나도 못 읽으면 -EINVAL이에요. 숫자 뒤에는 개행 하나와 NUL만 허용해요. 공백, 다른 문자, 개행 두 개는 거부해요. 모든 검사가 성공해야 호출자의 res를 써요. kstrtoull은 앞의 + 하나는 허용하지만 -는 허용하지 않아요."
     },
     {
-      "title": "signed64와 최소값",
-      "text": "kstrtoll은-접두사를 별도로 처리하고 크기를 unsigned로 읽습니다. 음수 경로는 unsigned 부호 반전과 signed 변환 결과의 부호를 확인하고,양수 경로도 signed 최대 범위를 넘는지 검사합니다. 해당 커널 정수 표현에서 LLONG_MIN까지 다루도록 구성되며 임의의 사용자 공간 C 구현의 변환 규칙까지 동일하다고 주장하지 않습니다."
+      "title": "음수와 가장 작은 signed 값",
+      "text": "kstrtoll은 앞의 -를 따로 떼고 크기를 unsigned로 읽어요. 음수 경로에서는 부호를 뒤집은 뒤 signed로 보았을 때의 부호를 검사하고, 양수 경로도 signed 최대 범위를 넘는지 확인해요. 커널의 정수 표현에서 LLONG_MIN이라는 가장 작은 음수까지 다루기 위한 코드예요. 모든 사용자 공간 C 환경에서 같은 변환이 성립한다고 넓혀 말하지 않아요."
     },
     {
-      "title": "좁은 타입 wrapper 전체",
-      "text": "_kstrtoul/_kstrtol,kstrtouint/kstrtoint,kstrtou16/kstrtos16,kstrtou8/kstrtos8은 넓은 임시값으로 파싱한 뒤 대상 타입으로 변환한 값과 원래값을 비교합니다. 다르면-ERANGE이고 출력은 쓰지 않습니다. 파싱 오류도 그대로 전파합니다. 타입 폭 검사와 문자열 문법 검사를 단계적으로 결합합니다."
+      "title": "작은 상자에 맞는지 다시 확인하기",
+      "text": "long, int, 16비트, 8비트 변환들은 넓은 임시 타입으로 먼저 읽어요. 목표 타입으로 바꾼 값이 원래 값과 다르면 -ERANGE이며 호출자의 출력은 그대로 둬요. unsigned 8비트의 256은 바꾸면 0이 되어 서로 다르므로 오류예요. 문자열 파싱 오류도 그대로 전달해요."
     },
     {
-      "title": "불리언의 다른 문법",
-      "text": "kstrtobool은 NULL이면-EINVAL입니다. 첫문자Y/y/T/t/1은참,N/n/F/f/0은거짓이며,o/O로시작하면둘째문자N/n또는F/f를검사합니다. 따라서 \"yes-extra\"와 \"truejunk\"도참,\"of-anything\"은거짓이될수있습니다. \"off\"전체철자를검사하지않습니다. 일치한경로에서만res를씁니다."
+      "title": "참·거짓은 앞부분만 봐요",
+      "text": "kstrtobool은 NULL 입력이면 -EINVAL이에요. 첫 글자가 Y/y/T/t/1이면 참, N/n/F/f/0이면 거짓이에요. o/O로 시작하면 둘째 글자가 N/n인지 F/f인지 봐요. 그래서 truejunk와 yes-extra도 참이고 of-anything도 거짓일 수 있어요. off 전체 철자를 비교하지 않아요. 맞는 경우에만 res를 써요."
     },
     {
-      "title": "불리언 사용자 복사",
-      "text": "kstrtobool_from_user는4바이트지역버퍼를쓰고최대3바이트만복사한뒤NUL을붙입니다. copy_from_user의비영반환은-EFAULT입니다. 긴입력을전부검사하지않고필요한접두사만전달합니다. count0이면빈문자열파싱으로-EINVAL이됩니다."
+      "title": "참·거짓 사용자 입력의 복사",
+      "text": "kstrtobool_from_user는 4바이트 지역 버퍼에 최대 3바이트를 복사하고 NUL을 붙여요. copy_from_user가 0이 아닌 값을 반환하면 복사 실패를 뜻하므로 -EFAULT예요. 긴 입력 전체를 검사하지 않고 필요한 앞부분만 판단해요. count가 0이면 빈 문자열을 읽어 -EINVAL이에요."
     },
     {
-      "title": "숫자 사용자 복사10종",
-      "text": "kstrto_from_user 매크로는 부호+타입비트수의2진표현+개행+NUL 크기의 지역버퍼를 만듭니다. count를 버퍼크기-1로 제한하고 복사·NUL종료 후 대응 파서를 호출합니다. unsigned/signed long long,long,int,16비트,8비트의10종을 생성합니다. 입력 전체가 너무 길다고 별도 거부하는 것이 아니라 잘린 접두사를 파싱하므로 원래 count 전체를 검증했다고 표현하면 안 됩니다."
+      "title": "정수 사용자 입력 함수 열 개",
+      "text": "매크로의 버퍼 크기는 부호 한 글자, 타입 비트 수만큼의 2진 숫자, 개행, NUL을 담을 수 있게 정해요. count를 버퍼 크기-1 이하로 줄여 복사하고 NUL을 붙인 뒤 대응 파서를 불러요. unsigned/signed long long, long, int, 16비트, 8비트의 열 종류예요. 너무 긴 입력을 따로 거부하거나 반복하여 끝까지 읽지 않고 잘린 앞부분을 해석해요."
     },
     {
-      "title": "CS와 검증 경계",
-      "text": "접두사 기반 문법과 전체 문자열 문법,오버플로 전 검사,오류 플래그와 길이의 공동 인코딩,성공 후 출력 대입,사용자 메모리 복사 실패를 연결합니다. copy_from_user 이후 파싱은 커널 버퍼에서 이루어지지만 원본 문자열 전체의 원자적 스냅샷이나 실제 페이지 폴트 동작을 보장하는 검증은 별도입니다."
+      "title": "검사 범위를 정확하게 말하기",
+      "text": "접두사만 보는 참·거짓과 끝까지 보는 정수 문법을 구분해요. 복사 뒤에는 커널 버퍼에서 해석하지만 그것이 사용자 원문 전체를 한순간에 고정한 복사본이라는 보장은 아니에요. 실제 페이지 접근 오류 동작까지 시험한 결과와 원문 분석은 별개예요."
     }
   ],
   "questions": [
     {
-      "prompt": "자동진법에서 \"010\"과 \"09\"는?",
+      "prompt": "자동 진법에서 010과 09는 어떻게 되나요?",
       "options": [
+        "010은 8이고 09는 파싱 오류예요.",
+        "둘 다 10진수라 각각 10과 9예요."
+      ],
+      "answer": 0,
+      "explanation": "앞의 0은 8진수 선택이에요. 9를 읽지 못하고 남기므로 종료 검사에서 실패해요.",
+      "original_prompt": "자동진법에서 \"010\"과 \"09\"는?",
+      "original_options": [
         "각각8과파싱오류다",
         "둘다10진수로10과9다"
       ],
-      "answer": 0,
-      "explanation": "선행0은8진수 선택입니다.9를소비하지못하면뒤쪽문자검사에서-EINVAL이됩니다."
+      "original_explanation": "선행0은8진수 선택입니다.9를소비하지못하면뒤쪽문자검사에서-EINVAL이됩니다."
     },
     {
-      "prompt": "숫자 문자열 뒤 개행은 몇 개까지 허용하는가?",
+      "prompt": "숫자 뒤 개행은 몇 개까지 허용하나요?",
       "options": [
+        "몇 개든 모두 건너뛰어요.",
+        "하나까지 허용하고 바로 NUL이어야 해요."
+      ],
+      "answer": 1,
+      "explanation": "개행이면 한 번만 이동한 뒤 다른 문자가 남았는지 검사해요.",
+      "original_prompt": "숫자 문자열 뒤 개행은 몇 개까지 허용하는가?",
+      "original_options": [
         "개수와상관없이모두건너뛴다",
         "최대하나이며그뒤NUL이어야한다"
       ],
-      "answer": 1,
-      "explanation": "_kstrtoull은개행이면포인터를한번만증가시키고다음문자가있으면거부합니다."
+      "original_explanation": "_kstrtoull은개행이면포인터를한번만증가시키고다음문자가있으면거부합니다."
     },
     {
-      "prompt": "내부 누적 helper도 overflow 시 출력값을 보존하는가?",
+      "prompt": "내부 누적 도우미도 범위 초과 때 결과 칸을 그대로 두나요?",
       "options": [
+        "아니요. 내부 함수는 값을 쓰고 오류 표시를 반환해요.",
+        "네. 공개 함수와 완전히 같아요."
+      ],
+      "answer": 0,
+      "explanation": "공개 함수는 임시 칸으로 내부 계산을 받고 성공했을 때만 호출자의 칸에 옮겨요.",
+      "original_prompt": "내부 누적 helper도 overflow 시 출력값을 보존하는가?",
+      "original_options": [
         "아니다. 내부 helper는값을쓰고플래그를돌려준다",
         "그렇다.공개함수와완전히같다"
       ],
-      "answer": 0,
-      "explanation": "공개함수는지역임시값을사용해성공시에만호출자출력을갱신합니다. 계층별계약을구분해야합니다."
+      "original_explanation": "공개함수는지역임시값을사용해성공시에만호출자출력을갱신합니다. 계층별계약을구분해야합니다."
     },
     {
-      "prompt": "kstrtobool(\"of-anything\")은?",
+      "prompt": "kstrtobool로 of-anything을 읽으면 어떻게 되나요?",
       "options": [
+        "off와 똑같지 않아 실패해요.",
+        "성공하고 거짓이 돼요."
+      ],
+      "answer": 1,
+      "explanation": "첫 o와 둘째 f를 확인할 뿐 뒤쪽 전체 철자는 비교하지 않아요.",
+      "original_prompt": "kstrtobool(\"of-anything\")은?",
+      "original_options": [
         "off와정확히같지않아실패한다",
         "성공하며거짓으로판정한다"
       ],
-      "answer": 1,
-      "explanation": "첫문자o와둘째문자f만검사합니다. 뒤쪽문자전체의동등성을검사하지않습니다."
+      "original_explanation": "첫문자o와둘째문자f만검사합니다. 뒤쪽문자전체의동등성을검사하지않습니다."
     },
     {
-      "prompt": "kstrtou8의입력256은?",
+      "prompt": "kstrtou8로 256을 읽으면 어떻게 되나요?",
       "options": [
+        "-ERANGE이며 호출자의 출력은 바뀌지 않아요.",
+        "성공하고 조용히 0으로 잘려요."
+      ],
+      "answer": 0,
+      "explanation": "8비트로 바꾼 0과 원래 256을 비교하여 범위 초과를 발견해요.",
+      "original_prompt": "kstrtou8의입력256은?",
+      "original_options": [
         "-ERANGE이며출력은갱신하지않는다",
         "성공하며0으로조용히잘린다"
       ],
-      "answer": 0,
-      "explanation": "넓은값256과u8변환값0을비교해범위오류로판정합니다."
+      "original_explanation": "넓은값256과u8변환값0을비교해범위오류로판정합니다."
     },
     {
-      "prompt": "from_user가항상원래count전체를검증하는가?",
+      "prompt": "from_user는 원래 count 전체를 항상 검사하나요?",
       "options": [
+        "네. 나누어 복사하며 끝까지 검사해요.",
+        "아니요. 버퍼 한도만큼 복사한 앞부분을 해석해요."
+      ],
+      "answer": 1,
+      "explanation": "count를 버퍼 크기-1로 제한하며 추가 반복 복사는 없어요. 전체 입력 검증이라고 말하면 안 돼요.",
+      "original_prompt": "from_user가항상원래count전체를검증하는가?",
+      "original_options": [
         "그렇다. 긴입력을여러번나누어끝까지검사한다",
         "아니다. 지역버퍼한도만큼복사한접두사를파싱한다"
       ],
-      "answer": 1,
-      "explanation": "count=min(count,sizeof(buf)-1)이며추가반복복사가없습니다. 문자열전체검증과구분해야합니다."
+      "original_explanation": "count=min(count,sizeof(buf)-1)이며추가반복복사가없습니다. 문자열전체검증과구분해야합니다."
     }
   ],
-  "concepts": [
-    {
-      "title": "파일 전체를 읽는 순서",
-      "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
-    }
-  ],
+  "concepts": [],
   "practice": {
     "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
-    "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    "expected": "자동 진법으로 010과 09를 읽고, 참·거짓 함수로 of-anything을 읽을 때 결과가 다른 이유를 설명해 보세요."
   },
   "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Convert integer string representation to an integer.\n * If an integer doesn't fit into specified type, -E is returned.\n *\n * Integer starts with optional sign.\n * kstrtou*() functions do not accept sign \"-\".\n *\n * Radix 0 means autodetection: leading \"0x\" implies radix 16,\n * leading \"0\" implies radix 8, otherwise radix is 10.\n * Autodetection hints work after optional sign, but not before.\n *\n * If -E is returned, result is not touched.\n */\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/export.h>\n#include <linux/kstrtox.h>\n#include <linux/math64.h>\n#include <linux/types.h>\n#include <linux/uaccess.h>\n\n#include \"kstrtox.h\"\n\nnoinline\nconst char *_parse_integer_fixup_radix(const char *s, unsigned int *base)\n{\n\tif (*base == 0) {\n\t\tif (s[0] == '0') {\n\t\t\tif (_tolower(s[1]) == 'x' && isxdigit(s[2]))\n\t\t\t\t*base = 16;\n\t\t\telse\n\t\t\t\t*base = 8;\n\t\t} else\n\t\t\t*base = 10;\n\t}\n\tif (*base == 16 && s[0] == '0' && _tolower(s[1]) == 'x')\n\t\ts += 2;\n\treturn s;\n}\n\n/*\n * Convert non-negative integer string representation in explicitly given radix\n * to an integer. A maximum of max_chars characters will be converted.\n *\n * Return number of characters consumed maybe or-ed with overflow bit.\n * If overflow occurs, result integer (incorrect) is still returned.\n *\n * Don't you dare use this function.\n */\nnoinline\nunsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *p,\n\t\t\t\t  size_t max_chars)\n{\n\tunsigned long long res;\n\tunsigned int rv;\n\n\tres = 0;\n\trv = 0;\n\twhile (max_chars--) {\n\t\tunsigned int c = *s;\n\t\tunsigned int lc = _tolower(c);\n\t\tunsigned int val;\n\n\t\tif ('0' <= c && c <= '9')\n\t\t\tval = c - '0';\n\t\telse if ('a' <= lc && lc <= 'f')\n\t\t\tval = lc - 'a' + 10;\n\t\telse\n\t\t\tbreak;\n\n\t\tif (val >= base)\n\t\t\tbreak;\n\t\t/*\n\t\t * Check for overflow only if we are within range of\n\t\t * it in the max base we support (16)\n\t\t */\n\t\tif (unlikely(res & (~0ull << 60))) {\n\t\t\tif (res > div_u64(ULLONG_MAX - val, base))\n\t\t\t\trv |= KSTRTOX_OVERFLOW;\n\t\t}\n\t\tres = res * base + val;\n\t\trv++;\n\t\ts++;\n\t}\n\t*p = res;\n\treturn rv;\n}\n\nnoinline\nunsigned int _parse_integer(const char *s, unsigned int base, unsigned long long *p)\n{\n\treturn _parse_integer_limit(s, base, p, INT_MAX);\n}\n\nstatic int _kstrtoull(const char *s, unsigned int base, unsigned long long *res)\n{\n\tunsigned long long _res;\n\tunsigned int rv;\n\n\ts = _parse_integer_fixup_radix(s, &base);\n\trv = _parse_integer(s, base, &_res);\n\tif (rv & KSTRTOX_OVERFLOW)\n\t\treturn -ERANGE;\n\tif (rv == 0)\n\t\treturn -EINVAL;\n\ts += rv;\n\tif (*s == '\\n')\n\t\ts++;\n\tif (*s)\n\t\treturn -EINVAL;\n\t*res = _res;\n\treturn 0;\n}\n\n/**\n * kstrtoull - convert a string to an unsigned long long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoull(). Return code must be checked.\n */\nnoinline\nint kstrtoull(const char *s, unsigned int base, unsigned long long *res)\n{\n\tif (s[0] == '+')\n\t\ts++;\n\treturn _kstrtoull(s, base, res);\n}\nEXPORT_SYMBOL(kstrtoull);\n\n/**\n * kstrtoll - convert a string to a long long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoll(). Return code must be checked.\n */\nnoinline\nint kstrtoll(const char *s, unsigned int base, long long *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\tif (s[0] == '-') {\n\t\trv = _kstrtoull(s + 1, base, &tmp);\n\t\tif (rv < 0)\n\t\t\treturn rv;\n\t\tif ((long long)-tmp > 0)\n\t\t\treturn -ERANGE;\n\t\t*res = -tmp;\n\t} else {\n\t\trv = kstrtoull(s, base, &tmp);\n\t\tif (rv < 0)\n\t\t\treturn rv;\n\t\tif ((long long)tmp < 0)\n\t\t\treturn -ERANGE;\n\t\t*res = tmp;\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtoll);\n\n/* Internal, do not use. */\nint _kstrtoul(const char *s, unsigned int base, unsigned long *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (unsigned long)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(_kstrtoul);\n\n/* Internal, do not use. */\nint _kstrtol(const char *s, unsigned int base, long *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (long)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(_kstrtol);\n\n/**\n * kstrtouint - convert a string to an unsigned int\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoul(). Return code must be checked.\n */\nnoinline\nint kstrtouint(const char *s, unsigned int base, unsigned int *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (unsigned int)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtouint);\n\n/**\n * kstrtoint - convert a string to an int\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtol(). Return code must be checked.\n */\nnoinline\nint kstrtoint(const char *s, unsigned int base, int *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (int)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtoint);\n\nnoinline\nint kstrtou16(const char *s, unsigned int base, u16 *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (u16)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtou16);\n\nnoinline\nint kstrtos16(const char *s, unsigned int base, s16 *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (s16)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtos16);\n\nnoinline\nint kstrtou8(const char *s, unsigned int base, u8 *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (u8)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtou8);\n\nnoinline\nint kstrtos8(const char *s, unsigned int base, s8 *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (s8)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtos8);\n\n/**\n * kstrtobool - convert common user inputs into boolean values\n * @s: input string\n * @res: result\n *\n * This routine returns 0 iff the first character is one of 'YyTt1NnFf0', or\n * [oO][NnFf] for \"on\" and \"off\". Otherwise it will return -EINVAL.  Value\n * pointed to by res is updated upon finding a match.\n */\nnoinline\nint kstrtobool(const char *s, bool *res)\n{\n\tif (!s)\n\t\treturn -EINVAL;\n\n\tswitch (s[0]) {\n\tcase 'y':\n\tcase 'Y':\n\tcase 't':\n\tcase 'T':\n\tcase '1':\n\t\t*res = true;\n\t\treturn 0;\n\tcase 'n':\n\tcase 'N':\n\tcase 'f':\n\tcase 'F':\n\tcase '0':\n\t\t*res = false;\n\t\treturn 0;\n\tcase 'o':\n\tcase 'O':\n\t\tswitch (s[1]) {\n\t\tcase 'n':\n\t\tcase 'N':\n\t\t\t*res = true;\n\t\t\treturn 0;\n\t\tcase 'f':\n\t\tcase 'F':\n\t\t\t*res = false;\n\t\t\treturn 0;\n\t\tdefault:\n\t\t\tbreak;\n\t\t}\n\t\tbreak;\n\tdefault:\n\t\tbreak;\n\t}\n\n\treturn -EINVAL;\n}\nEXPORT_SYMBOL(kstrtobool);\n\n/*\n * Since \"base\" would be a nonsense argument, this open-codes the\n * _from_user helper instead of using the helper macro below.\n */\nint kstrtobool_from_user(const char __user *s, size_t count, bool *res)\n{\n\t/* Longest string needed to differentiate, newline, terminator */\n\tchar buf[4];\n\n\tcount = min(count, sizeof(buf) - 1);\n\tif (copy_from_user(buf, s, count))\n\t\treturn -EFAULT;\n\tbuf[count] = '\\0';\n\treturn kstrtobool(buf, res);\n}\nEXPORT_SYMBOL(kstrtobool_from_user);\n\n#define kstrto_from_user(f, g, type)\t\t\t\t\t\\\nint f(const char __user *s, size_t count, unsigned int base, type *res)\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t/* sign, base 2 representation, newline, terminator */\t\t\\\n\tchar buf[1 + sizeof(type) * 8 + 1 + 1];\t\t\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tcount = min(count, sizeof(buf) - 1);\t\t\t\t\\\n\tif (copy_from_user(buf, s, count))\t\t\t\t\\\n\t\treturn -EFAULT;\t\t\t\t\t\t\\\n\tbuf[count] = '\\0';\t\t\t\t\t\t\\\n\treturn g(buf, base, res);\t\t\t\t\t\\\n}\t\t\t\t\t\t\t\t\t\\\nEXPORT_SYMBOL(f)\n\nkstrto_from_user(kstrtoull_from_user,\tkstrtoull,\tunsigned long long);\nkstrto_from_user(kstrtoll_from_user,\tkstrtoll,\tlong long);\nkstrto_from_user(kstrtoul_from_user,\tkstrtoul,\tunsigned long);\nkstrto_from_user(kstrtol_from_user,\tkstrtol,\tlong);\nkstrto_from_user(kstrtouint_from_user,\tkstrtouint,\tunsigned int);\nkstrto_from_user(kstrtoint_from_user,\tkstrtoint,\tint);\nkstrto_from_user(kstrtou16_from_user,\tkstrtou16,\tu16);\nkstrto_from_user(kstrtos16_from_user,\tkstrtos16,\ts16);\nkstrto_from_user(kstrtou8_from_user,\tkstrtou8,\tu8);\nkstrto_from_user(kstrtos8_from_user,\tkstrtos8,\ts8);\n",
   "source_review": {
@@ -144,5 +176,181 @@
       "title": "고정 버전 전체 원본",
       "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kstrtox.c"
     }
-  ]
+  ],
+  "technical_original": {
+    "id": "file-4a07ae485d16074a",
+    "path": "lib/kstrtox.c",
+    "title": "문자열 변환 전체: 정수 범위 검사와 불리언 접두사",
+    "area": "파서 · 진법·범위 검사·실패 원자성·사용자 메모리",
+    "track": "files",
+    "kind": "kernel",
+    "intro": "정수 문법·출력 타입·사용자 메모리 접근을 단계별로 분리한 변환 구현입니다.",
+    "guide": [
+      "진법 보정과 숫자 누적을 내부 helper로 수행한 뒤 오류·종료 문자를 검사합니다. 각 공개 정수 함수는 범위 검사를 통과한 후에만 출력값을 씁니다. 불리언은 별도의 접두사 규칙을 사용합니다.",
+      "정수 입력은 유효한 NUL 종료 문자열과 지원 진법을 제공해야 합니다. 모든 함수가 NULL 문자열을 검사하는 것은 아니며 불리언의 느슨한 문법을 숫자 변환에 적용하면 안 됩니다."
+    ],
+    "deep_dive": [
+      {
+        "title": "파일 전체 구성",
+        "text": "SPDX·문법 설명,ctype/errno/export/kstrtox/math64/types/uaccess와 내부 헤더 포함,진법 보정·누적 helper,64비트 signed/unsigned 파서,좁은 타입 wrapper,불리언과 from_user 구현,10개 from_user 함수 생성으로 끝납니다. 주요 함수는 noinline과 export로 연결됩니다."
+      },
+      {
+        "title": "진법 보정",
+        "text": "_parse_integer_fixup_radix는 base0에서 선행0x와 뒤의 유효16진 숫자를 확인하면16,그 외 선행0은8,나머지는10을 선택합니다. base16이면0x/0X 접두사를 건너뜁니다. 따라서 자동진법 \"010\"은8이며 \"09\"는뒤의9가8진숫자가아니어서공개파서에서실패합니다. 선택한진법의지원범위는호출계약을지켜야합니다."
+      },
+      {
+        "title": "숫자 누적과 내부 오류 표현",
+        "text": "_parse_integer_limit는 최대 max_chars까지0..9,a..f를 해석하고 res=res*base+val로 누적합니다. 현재 결과의 상위4비트가 켜지면 (ULLONG_MAX-val)/base와 비교하여 overflow 비트를 켭니다. 오버플로가 있어도 내부 출력값을 쓰고 소비 문자 수와 bit31 오류 플래그를 함께 반환합니다. 내부 helper의 출력 규칙과 공개 API의 실패 시 출력 보존을 혼동하지 않습니다."
+      },
+      {
+        "title": "엄격한 unsigned 종료 검사",
+        "text": "_parse_integer는 제한을 INT_MAX로 둡니다. _kstrtoull은 overflow면-ERANGE,숫자를하나도읽지못하면-EINVAL,숫자뒤에는선택적개행하나와NUL만허용합니다. 중간공백·뒤쪽문자·개행두개는통과하지않습니다. 성공시에만외부res를갱신합니다. kstrtoull은앞의+하나를허용하지만-는허용하지않습니다."
+      },
+      {
+        "title": "signed64와 최소값",
+        "text": "kstrtoll은-접두사를 별도로 처리하고 크기를 unsigned로 읽습니다. 음수 경로는 unsigned 부호 반전과 signed 변환 결과의 부호를 확인하고,양수 경로도 signed 최대 범위를 넘는지 검사합니다. 해당 커널 정수 표현에서 LLONG_MIN까지 다루도록 구성되며 임의의 사용자 공간 C 구현의 변환 규칙까지 동일하다고 주장하지 않습니다."
+      },
+      {
+        "title": "좁은 타입 wrapper 전체",
+        "text": "_kstrtoul/_kstrtol,kstrtouint/kstrtoint,kstrtou16/kstrtos16,kstrtou8/kstrtos8은 넓은 임시값으로 파싱한 뒤 대상 타입으로 변환한 값과 원래값을 비교합니다. 다르면-ERANGE이고 출력은 쓰지 않습니다. 파싱 오류도 그대로 전파합니다. 타입 폭 검사와 문자열 문법 검사를 단계적으로 결합합니다."
+      },
+      {
+        "title": "불리언의 다른 문법",
+        "text": "kstrtobool은 NULL이면-EINVAL입니다. 첫문자Y/y/T/t/1은참,N/n/F/f/0은거짓이며,o/O로시작하면둘째문자N/n또는F/f를검사합니다. 따라서 \"yes-extra\"와 \"truejunk\"도참,\"of-anything\"은거짓이될수있습니다. \"off\"전체철자를검사하지않습니다. 일치한경로에서만res를씁니다."
+      },
+      {
+        "title": "불리언 사용자 복사",
+        "text": "kstrtobool_from_user는4바이트지역버퍼를쓰고최대3바이트만복사한뒤NUL을붙입니다. copy_from_user의비영반환은-EFAULT입니다. 긴입력을전부검사하지않고필요한접두사만전달합니다. count0이면빈문자열파싱으로-EINVAL이됩니다."
+      },
+      {
+        "title": "숫자 사용자 복사10종",
+        "text": "kstrto_from_user 매크로는 부호+타입비트수의2진표현+개행+NUL 크기의 지역버퍼를 만듭니다. count를 버퍼크기-1로 제한하고 복사·NUL종료 후 대응 파서를 호출합니다. unsigned/signed long long,long,int,16비트,8비트의10종을 생성합니다. 입력 전체가 너무 길다고 별도 거부하는 것이 아니라 잘린 접두사를 파싱하므로 원래 count 전체를 검증했다고 표현하면 안 됩니다."
+      },
+      {
+        "title": "CS와 검증 경계",
+        "text": "접두사 기반 문법과 전체 문자열 문법,오버플로 전 검사,오류 플래그와 길이의 공동 인코딩,성공 후 출력 대입,사용자 메모리 복사 실패를 연결합니다. copy_from_user 이후 파싱은 커널 버퍼에서 이루어지지만 원본 문자열 전체의 원자적 스냅샷이나 실제 페이지 폴트 동작을 보장하는 검증은 별도입니다."
+      }
+    ],
+    "questions": [
+      {
+        "prompt": "자동진법에서 \"010\"과 \"09\"는?",
+        "options": [
+          "각각8과파싱오류다",
+          "둘다10진수로10과9다"
+        ],
+        "answer": 0,
+        "explanation": "선행0은8진수 선택입니다.9를소비하지못하면뒤쪽문자검사에서-EINVAL이됩니다."
+      },
+      {
+        "prompt": "숫자 문자열 뒤 개행은 몇 개까지 허용하는가?",
+        "options": [
+          "개수와상관없이모두건너뛴다",
+          "최대하나이며그뒤NUL이어야한다"
+        ],
+        "answer": 1,
+        "explanation": "_kstrtoull은개행이면포인터를한번만증가시키고다음문자가있으면거부합니다."
+      },
+      {
+        "prompt": "내부 누적 helper도 overflow 시 출력값을 보존하는가?",
+        "options": [
+          "아니다. 내부 helper는값을쓰고플래그를돌려준다",
+          "그렇다.공개함수와완전히같다"
+        ],
+        "answer": 0,
+        "explanation": "공개함수는지역임시값을사용해성공시에만호출자출력을갱신합니다. 계층별계약을구분해야합니다."
+      },
+      {
+        "prompt": "kstrtobool(\"of-anything\")은?",
+        "options": [
+          "off와정확히같지않아실패한다",
+          "성공하며거짓으로판정한다"
+        ],
+        "answer": 1,
+        "explanation": "첫문자o와둘째문자f만검사합니다. 뒤쪽문자전체의동등성을검사하지않습니다."
+      },
+      {
+        "prompt": "kstrtou8의입력256은?",
+        "options": [
+          "-ERANGE이며출력은갱신하지않는다",
+          "성공하며0으로조용히잘린다"
+        ],
+        "answer": 0,
+        "explanation": "넓은값256과u8변환값0을비교해범위오류로판정합니다."
+      },
+      {
+        "prompt": "from_user가항상원래count전체를검증하는가?",
+        "options": [
+          "그렇다. 긴입력을여러번나누어끝까지검사한다",
+          "아니다. 지역버퍼한도만큼복사한접두사를파싱한다"
+        ],
+        "answer": 1,
+        "explanation": "count=min(count,sizeof(buf)-1)이며추가반복복사가없습니다. 문자열전체검증과구분해야합니다."
+      }
+    ],
+    "concepts": [
+      {
+        "title": "파일 전체를 읽는 순서",
+        "text": "아래 전체 해설과 원본을 함께 읽고 선언·데이터·함수·메타데이터를 구분합니다."
+      }
+    ],
+    "practice": {
+      "command": "본문의 숫자 예제를 먼저 계산하고 원본의 표 인덱스·중간 상태·최종 반환값을 대조하세요.",
+      "expected": "계산 단계와 경계 조건은 파일 전체 해설과 문제별 풀이에 제시되어 있습니다. CRC 묶음의 표 전체 검산은 tests/test_crc_file_lessons.py로 재현하며 일반 파일은 명시된 소스 분기와 대조합니다."
+    },
+    "annotated": "// SPDX-License-Identifier: GPL-2.0\n/*\n * Convert integer string representation to an integer.\n * If an integer doesn't fit into specified type, -E is returned.\n *\n * Integer starts with optional sign.\n * kstrtou*() functions do not accept sign \"-\".\n *\n * Radix 0 means autodetection: leading \"0x\" implies radix 16,\n * leading \"0\" implies radix 8, otherwise radix is 10.\n * Autodetection hints work after optional sign, but not before.\n *\n * If -E is returned, result is not touched.\n */\n#include <linux/ctype.h>\n#include <linux/errno.h>\n#include <linux/export.h>\n#include <linux/kstrtox.h>\n#include <linux/math64.h>\n#include <linux/types.h>\n#include <linux/uaccess.h>\n\n#include \"kstrtox.h\"\n\nnoinline\nconst char *_parse_integer_fixup_radix(const char *s, unsigned int *base)\n{\n\tif (*base == 0) {\n\t\tif (s[0] == '0') {\n\t\t\tif (_tolower(s[1]) == 'x' && isxdigit(s[2]))\n\t\t\t\t*base = 16;\n\t\t\telse\n\t\t\t\t*base = 8;\n\t\t} else\n\t\t\t*base = 10;\n\t}\n\tif (*base == 16 && s[0] == '0' && _tolower(s[1]) == 'x')\n\t\ts += 2;\n\treturn s;\n}\n\n/*\n * Convert non-negative integer string representation in explicitly given radix\n * to an integer. A maximum of max_chars characters will be converted.\n *\n * Return number of characters consumed maybe or-ed with overflow bit.\n * If overflow occurs, result integer (incorrect) is still returned.\n *\n * Don't you dare use this function.\n */\nnoinline\nunsigned int _parse_integer_limit(const char *s, unsigned int base, unsigned long long *p,\n\t\t\t\t  size_t max_chars)\n{\n\tunsigned long long res;\n\tunsigned int rv;\n\n\tres = 0;\n\trv = 0;\n\twhile (max_chars--) {\n\t\tunsigned int c = *s;\n\t\tunsigned int lc = _tolower(c);\n\t\tunsigned int val;\n\n\t\tif ('0' <= c && c <= '9')\n\t\t\tval = c - '0';\n\t\telse if ('a' <= lc && lc <= 'f')\n\t\t\tval = lc - 'a' + 10;\n\t\telse\n\t\t\tbreak;\n\n\t\tif (val >= base)\n\t\t\tbreak;\n\t\t/*\n\t\t * Check for overflow only if we are within range of\n\t\t * it in the max base we support (16)\n\t\t */\n\t\tif (unlikely(res & (~0ull << 60))) {\n\t\t\tif (res > div_u64(ULLONG_MAX - val, base))\n\t\t\t\trv |= KSTRTOX_OVERFLOW;\n\t\t}\n\t\tres = res * base + val;\n\t\trv++;\n\t\ts++;\n\t}\n\t*p = res;\n\treturn rv;\n}\n\nnoinline\nunsigned int _parse_integer(const char *s, unsigned int base, unsigned long long *p)\n{\n\treturn _parse_integer_limit(s, base, p, INT_MAX);\n}\n\nstatic int _kstrtoull(const char *s, unsigned int base, unsigned long long *res)\n{\n\tunsigned long long _res;\n\tunsigned int rv;\n\n\ts = _parse_integer_fixup_radix(s, &base);\n\trv = _parse_integer(s, base, &_res);\n\tif (rv & KSTRTOX_OVERFLOW)\n\t\treturn -ERANGE;\n\tif (rv == 0)\n\t\treturn -EINVAL;\n\ts += rv;\n\tif (*s == '\\n')\n\t\ts++;\n\tif (*s)\n\t\treturn -EINVAL;\n\t*res = _res;\n\treturn 0;\n}\n\n/**\n * kstrtoull - convert a string to an unsigned long long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoull(). Return code must be checked.\n */\nnoinline\nint kstrtoull(const char *s, unsigned int base, unsigned long long *res)\n{\n\tif (s[0] == '+')\n\t\ts++;\n\treturn _kstrtoull(s, base, res);\n}\nEXPORT_SYMBOL(kstrtoull);\n\n/**\n * kstrtoll - convert a string to a long long\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoll(). Return code must be checked.\n */\nnoinline\nint kstrtoll(const char *s, unsigned int base, long long *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\tif (s[0] == '-') {\n\t\trv = _kstrtoull(s + 1, base, &tmp);\n\t\tif (rv < 0)\n\t\t\treturn rv;\n\t\tif ((long long)-tmp > 0)\n\t\t\treturn -ERANGE;\n\t\t*res = -tmp;\n\t} else {\n\t\trv = kstrtoull(s, base, &tmp);\n\t\tif (rv < 0)\n\t\t\treturn rv;\n\t\tif ((long long)tmp < 0)\n\t\t\treturn -ERANGE;\n\t\t*res = tmp;\n\t}\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtoll);\n\n/* Internal, do not use. */\nint _kstrtoul(const char *s, unsigned int base, unsigned long *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (unsigned long)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(_kstrtoul);\n\n/* Internal, do not use. */\nint _kstrtol(const char *s, unsigned int base, long *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (long)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(_kstrtol);\n\n/**\n * kstrtouint - convert a string to an unsigned int\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign, but not a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtoul(). Return code must be checked.\n */\nnoinline\nint kstrtouint(const char *s, unsigned int base, unsigned int *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (unsigned int)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtouint);\n\n/**\n * kstrtoint - convert a string to an int\n * @s: The start of the string. The string must be null-terminated, and may also\n *  include a single newline before its terminating null. The first character\n *  may also be a plus sign or a minus sign.\n * @base: The number base to use. The maximum supported base is 16. If base is\n *  given as 0, then the base of the string is automatically detected with the\n *  conventional semantics - If it begins with 0x the number will be parsed as a\n *  hexadecimal (case insensitive), if it otherwise begins with 0, it will be\n *  parsed as an octal number. Otherwise it will be parsed as a decimal.\n * @res: Where to write the result of the conversion on success.\n *\n * Returns 0 on success, -ERANGE on overflow and -EINVAL on parsing error.\n * Preferred over simple_strtol(). Return code must be checked.\n */\nnoinline\nint kstrtoint(const char *s, unsigned int base, int *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (int)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtoint);\n\nnoinline\nint kstrtou16(const char *s, unsigned int base, u16 *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (u16)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtou16);\n\nnoinline\nint kstrtos16(const char *s, unsigned int base, s16 *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (s16)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtos16);\n\nnoinline\nint kstrtou8(const char *s, unsigned int base, u8 *res)\n{\n\tunsigned long long tmp;\n\tint rv;\n\n\trv = kstrtoull(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (u8)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtou8);\n\nnoinline\nint kstrtos8(const char *s, unsigned int base, s8 *res)\n{\n\tlong long tmp;\n\tint rv;\n\n\trv = kstrtoll(s, base, &tmp);\n\tif (rv < 0)\n\t\treturn rv;\n\tif (tmp != (s8)tmp)\n\t\treturn -ERANGE;\n\t*res = tmp;\n\treturn 0;\n}\nEXPORT_SYMBOL(kstrtos8);\n\n/**\n * kstrtobool - convert common user inputs into boolean values\n * @s: input string\n * @res: result\n *\n * This routine returns 0 iff the first character is one of 'YyTt1NnFf0', or\n * [oO][NnFf] for \"on\" and \"off\". Otherwise it will return -EINVAL.  Value\n * pointed to by res is updated upon finding a match.\n */\nnoinline\nint kstrtobool(const char *s, bool *res)\n{\n\tif (!s)\n\t\treturn -EINVAL;\n\n\tswitch (s[0]) {\n\tcase 'y':\n\tcase 'Y':\n\tcase 't':\n\tcase 'T':\n\tcase '1':\n\t\t*res = true;\n\t\treturn 0;\n\tcase 'n':\n\tcase 'N':\n\tcase 'f':\n\tcase 'F':\n\tcase '0':\n\t\t*res = false;\n\t\treturn 0;\n\tcase 'o':\n\tcase 'O':\n\t\tswitch (s[1]) {\n\t\tcase 'n':\n\t\tcase 'N':\n\t\t\t*res = true;\n\t\t\treturn 0;\n\t\tcase 'f':\n\t\tcase 'F':\n\t\t\t*res = false;\n\t\t\treturn 0;\n\t\tdefault:\n\t\t\tbreak;\n\t\t}\n\t\tbreak;\n\tdefault:\n\t\tbreak;\n\t}\n\n\treturn -EINVAL;\n}\nEXPORT_SYMBOL(kstrtobool);\n\n/*\n * Since \"base\" would be a nonsense argument, this open-codes the\n * _from_user helper instead of using the helper macro below.\n */\nint kstrtobool_from_user(const char __user *s, size_t count, bool *res)\n{\n\t/* Longest string needed to differentiate, newline, terminator */\n\tchar buf[4];\n\n\tcount = min(count, sizeof(buf) - 1);\n\tif (copy_from_user(buf, s, count))\n\t\treturn -EFAULT;\n\tbuf[count] = '\\0';\n\treturn kstrtobool(buf, res);\n}\nEXPORT_SYMBOL(kstrtobool_from_user);\n\n#define kstrto_from_user(f, g, type)\t\t\t\t\t\\\nint f(const char __user *s, size_t count, unsigned int base, type *res)\t\\\n{\t\t\t\t\t\t\t\t\t\\\n\t/* sign, base 2 representation, newline, terminator */\t\t\\\n\tchar buf[1 + sizeof(type) * 8 + 1 + 1];\t\t\t\t\\\n\t\t\t\t\t\t\t\t\t\\\n\tcount = min(count, sizeof(buf) - 1);\t\t\t\t\\\n\tif (copy_from_user(buf, s, count))\t\t\t\t\\\n\t\treturn -EFAULT;\t\t\t\t\t\t\\\n\tbuf[count] = '\\0';\t\t\t\t\t\t\\\n\treturn g(buf, base, res);\t\t\t\t\t\\\n}\t\t\t\t\t\t\t\t\t\\\nEXPORT_SYMBOL(f)\n\nkstrto_from_user(kstrtoull_from_user,\tkstrtoull,\tunsigned long long);\nkstrto_from_user(kstrtoll_from_user,\tkstrtoll,\tlong long);\nkstrto_from_user(kstrtoul_from_user,\tkstrtoul,\tunsigned long);\nkstrto_from_user(kstrtol_from_user,\tkstrtol,\tlong);\nkstrto_from_user(kstrtouint_from_user,\tkstrtouint,\tunsigned int);\nkstrto_from_user(kstrtoint_from_user,\tkstrtoint,\tint);\nkstrto_from_user(kstrtou16_from_user,\tkstrtou16,\tu16);\nkstrto_from_user(kstrtos16_from_user,\tkstrtos16,\ts16);\nkstrto_from_user(kstrtou8_from_user,\tkstrtou8,\tu8);\nkstrto_from_user(kstrtos8_from_user,\tkstrtos8,\ts8);\n",
+    "source_review": {
+      "sha": "adc218676eef25575469234709c2d87185ca223a",
+      "source_sha256": "624d0c0cd47d987682b75ff98d407bd067965a0e5364e6e1cfb6450441585917",
+      "scope": "whole-file",
+      "line_count": 431,
+      "authoring_source": "course/file_units/string_to_numbers.py",
+      "sections": [
+        "파일 전체 구성",
+        "진법 보정",
+        "숫자 누적과 내부 오류 표현",
+        "엄격한 unsigned 종료 검사",
+        "signed64와 최소값",
+        "좁은 타입 wrapper 전체",
+        "불리언의 다른 문법",
+        "불리언 사용자 복사",
+        "숫자 사용자 복사10종",
+        "CS와 검증 경계"
+      ],
+      "verification": "파일 전체를 읽고 데이터·정의·선언·메타데이터와 경계 조건을 개별 작성. source_sha256은 원본 동일성을 검사하며 실행 정확성이나 의미 완전성의 자동 증명이 아님."
+    },
+    "references": [
+      {
+        "title": "고정 버전 전체 원본",
+        "url": "https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/lib/kstrtox.c"
+      }
+    ]
+  },
+  "beginner": {
+    "story": "숫자 검사관은 종이 끝까지 살펴보지만 참·거짓 검사관은 앞의 짧은 표시만 보고 판단해요. 둘의 규칙을 바꾸어 쓰면 안 돼요.",
+    "meaning": "kstrtox.c는 숫자의 문법과 범위를 검사한 뒤 결과를 쓰고, 참·거짓에는 별도의 접두사 규칙을 사용해요.",
+    "exercise": "자동 진법으로 010과 09를 읽고, 참·거짓 함수로 of-anything을 읽을 때 결과가 다른 이유를 설명해 보세요."
+  },
+  "goal": "kstrtox.c는 숫자의 문법과 범위를 검사한 뒤 결과를 쓰고, 참·거짓에는 별도의 접두사 규칙을 사용해요.",
+  "reading_support": null,
+  "experiment": {
+    "title": "종이에 따라 해 보기",
+    "steps": [
+      "자동 진법으로 010과 09를 읽고, 참·거짓 함수로 of-anything을 읽을 때 결과가 다른 이유를 설명해 보세요."
+    ]
+  },
+  "easy_review": {
+    "version": 1,
+    "authoring_source": "tools/easy_batches/files.json",
+    "authoring_sha256": "c16a0a2b9bd2faaaa791ade8e626f781d06158f1adf8a1a40db0bbee887ee31b",
+    "scope": [
+      "intro",
+      "guide",
+      "questions.prompt",
+      "questions.options",
+      "questions.explanation"
+    ],
+    "question_count": 6,
+    "source_code_preserved": true,
+    "child_comprehension_tested": false
+  }
 }
